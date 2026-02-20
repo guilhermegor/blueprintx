@@ -45,7 +45,7 @@ Project templates separated into `templates/` directory:
 #### **hex-service** (Backend/Service)
 - `src/core/` - Domain, infrastructure, services
 - `src/modules/` - Business modules
-- FastAPI, SQLAlchemy, Pydantic ready
+- Uvicorn only (lightweight starter)
 - Clean hexagonal architecture
 
 #### **lib-minimal** (Library)

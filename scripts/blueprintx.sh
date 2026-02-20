@@ -56,8 +56,13 @@ prompt_project_name() {
 }
 
 prompt_project_root() {
+    local repo_root
+    repo_root="$(cd "$SCRIPT_DIR/.." && pwd)"
+    local default_parent
+    default_parent="$(cd "$repo_root/.." && pwd)"
+
     printf "${CYAN}Select directory${NC}\n" >&2
-    printf "  1) Current directory ($PWD)\n" >&2
+    printf "  1) Parent of repo ($default_parent)\n" >&2
     printf "  2) Another directory\n" >&2
     printf "${CYAN}Choice${NC} [1-2]: " >&2
     read -r choice
@@ -65,7 +70,7 @@ prompt_project_root() {
     
     case "$choice" in
         1)
-            echo "$PWD"
+            echo "$default_parent"
             return 0
             ;;
         2)
@@ -218,7 +223,7 @@ main() {
     
     echo
     printf "${GREEN}╔════════════════════════════════════════╗${NC}\n"
-    printf "${GREEN}║   ✓ Project created successfully!     ║${NC}\n"
+    printf "${GREEN}║   ✓ Project created successfully!      ║${NC}\n"
     printf "${GREEN}╚════════════════════════════════════════╝${NC}\n"
     echo
     print_status "config" "Project: $PROJECT_NAME"

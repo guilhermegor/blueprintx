@@ -4,10 +4,7 @@ version = "0.1.0"
 description = "Python service generated with blueprintx (hex-service)."
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi",
     "uvicorn[standard]",
-    "sqlalchemy",
-    "pydantic",
 ]
 
 [tool.uv]

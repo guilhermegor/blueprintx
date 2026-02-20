@@ -6,7 +6,7 @@ Generated with blueprintx (skeleton: hex-service).
 
 - Python (managed via pyenv: see `.python-version`)
 - Dependencies via `uv` using `pyproject.toml`
-- FastAPI, Uvicorn, SQLAlchemy, Pydantic
+- Uvicorn
 
 ## Quickstart
 
@@ -25,7 +25,7 @@ Generated with blueprintx (skeleton: hex-service).
    uv sync
    ```
 
-4. Run the app (example for FastAPI/Uvicorn):
+4. Run the app:
 
    ```bash
    uv run uvicorn src.main:main --reload
