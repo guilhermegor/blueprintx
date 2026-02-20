@@ -8,6 +8,7 @@ A lightweight Python project scaffolding tool based on Make + bash. Create consi
 - **Multiple project skeletons** for different use cases
 - **Python environment management** via pyenv and uv
 - **Clean, modular structure** with separated templates
+- **Common Python baseline** applied to all skeletons: templated pyproject (name from prompt, version 0.0.1, optional description), pre-commit, VS Code settings, CI workflows, CODEOWNERS, PR template, and standardized tests folders (integration, performance, unit)
 
 ## Supported Skeletons
 
@@ -50,5 +51,6 @@ blueprintx/
 │       └── python_lib_minimal.sh
 └── templates/              # Template files for each skeleton
     ├── hex-service/
-    └── lib-minimal/
+    ├── lib-minimal/
+    └── python-common/      # Shared assets copied into every Python project
 ```

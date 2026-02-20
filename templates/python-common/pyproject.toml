@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "${PROJECT_NAME}"
+version = "${PROJECT_VERSION}"
+description = "${PROJECT_DESCRIPTION}"
+authors = []
+readme = "README.md"
+license = "MIT"
+homepage = ""
+repository = ""
+keywords = ["python"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[tool.poetry.urls]
+"Bug Reports" = ""
+"Source" = ""
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+python-dotenv = ">=1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = ">=4.1.0"
+pretty-errors = ">=1.2.25"
+commitizen = ">=4.4.1"
+poetry-plugin-export = ">=1.8"
+
+[build-system]
+requires = ["poetry-core>=1.7.0"]
+build-backend = "poetry.core.masonry.api"

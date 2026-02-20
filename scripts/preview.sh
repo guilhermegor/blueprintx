@@ -17,6 +17,12 @@ show_languages() {
     print_status "config" "Skeletons:"
     print_status "config" "  * hex-service (default)"
     print_status "config" "  * lib-minimal"
+    print_status "info" "Common Python assets applied to all skeletons:"
+    print_status "config" "  * pyproject.toml (name from prompt, version 0.0.1 default, optional description)"
+    print_status "config" "  * .pre-commit-config.yaml, requirements.txt"
+    print_status "config" "  * .vscode/settings.json"
+    print_status "config" "  * .github/workflows (PR + tests), CODEOWNERS, PULL_REQUEST_TEMPLATE"
+    print_status "config" "  * tests/{integration,performance,unit}"
     echo
     print_status "info" "2) cancel"
     print_status "config" "Exit without creating a project"
@@ -43,12 +49,25 @@ show_hex_service() {
       config/
       main.py
     tests/
+      integration/
+      performance/
+      unit/
+    container/
+    bin/
     public/
-    scripts/
     docs/
+    .github/
+      workflows/
+        tests.yaml
+      CODEOWNERS
+      PULL_REQUEST_TEMPLATE.md
     .env
     .gitignore
+    .pre-commit-config.yaml
+    .vscode/
+      settings.json
     README.md
+    requirements.txt
     pyproject.toml
 EOF
 }
@@ -69,12 +88,26 @@ show_lib_minimal() {
         __init__.py
         main.py
     tests/
-      test_main.py
+      integration/
+      performance/
+      unit/
+        test_main.py
+    container/
+    bin/
     docs/
       index.md
+    .github/
+      workflows/
+        tests.yaml
+      CODEOWNERS
+      PULL_REQUEST_TEMPLATE.md
     pyproject.toml
     .env
     .gitignore
+    .pre-commit-config.yaml
+    .vscode/
+      settings.json
+    requirements.txt
     README.md
 EOF
 }

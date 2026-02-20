@@ -55,6 +55,12 @@ prompt_project_name() {
     echo "$PROJECT_NAME"
 }
 
+prompt_project_description() {
+    printf "${CYAN}Project description${NC} (optional, press Enter to skip): " >&2
+    read -r PROJECT_DESCRIPTION
+    echo "$PROJECT_DESCRIPTION"
+}
+
 prompt_project_root() {
     local repo_root
     repo_root="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -78,6 +84,7 @@ prompt_project_root() {
             if [ -z "$TARGET_DIR" ]; then
                 exit_error "Target directory cannot be empty."
             fi
+            TARGET_DIR="${TARGET_DIR/#\~/$HOME}"
             mkdir -p "$TARGET_DIR"
             echo "$TARGET_DIR"
             return 0
@@ -143,8 +150,9 @@ prompt_skeleton() {
 create_project() {
     local project_root="$1"
     local project_name="$2"
-    local lang="$3"
-    local skeleton="$4"
+    local project_description="$3"
+    local lang="$4"
+    local skeleton="$5"
     
     local full_path="$project_root/$project_name"
     
@@ -157,10 +165,10 @@ create_project() {
     
     case "$skeleton" in
         "hex-service")
-            bash "$SCRIPT_DIR/scaffold/python_hex_service.sh" "$project_root" "$project_name"
+            bash "$SCRIPT_DIR/scaffold/python_hex_service.sh" "$project_root" "$project_name" "$project_description"
             ;;
         "lib-minimal")
-            bash "$SCRIPT_DIR/scaffold/python_lib_minimal.sh" "$project_root" "$project_name"
+            bash "$SCRIPT_DIR/scaffold/python_lib_minimal.sh" "$project_root" "$project_name" "$project_description"
             ;;
         *)
             exit_error "Unknown skeleton '$skeleton'."
@@ -215,11 +223,12 @@ main() {
     fi
     
     PROJECT_NAME=$(prompt_project_name)
+    PROJECT_DESCRIPTION=$(prompt_project_description)
     PROJECT_ROOT=$(prompt_project_root)
     LANG_CHOICE=$(prompt_language)
     SKELETON_CHOICE=$(prompt_skeleton)
     
-    create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$LANG_CHOICE" "$SKELETON_CHOICE"
+    create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE"
     
     echo
     printf "${GREEN}╔════════════════════════════════════════╗${NC}\n"
