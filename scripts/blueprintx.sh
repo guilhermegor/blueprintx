@@ -11,34 +11,25 @@ source "$SCRIPT_DIR/lib/logging.sh"
 
 show_banner() {
     echo
-    printf "${MAGENTA}    ╔══════════════════════════════════════════════╗${NC}\n"
-    printf "${MAGENTA}    ║${NC}                                              ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ║${NC}  ${CYAN}██████╗ ██╗     ██╗   ██╗███████╗           ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ║${NC}  ${CYAN}██╔══██╗██║     ██║   ██║██╔════╝           ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ║${NC}  ${CYAN}██████╔╝██║     ██║   ██║█████╗             ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ║${NC}  ${CYAN}██╔══██╗██║     ██║   ██║██╔══╝             ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ║${NC}  ${CYAN}██████╔╝███████╗╚██████╔╝███████╗           ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ║${NC}  ${CYAN}╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝           ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ║${NC}                                              ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ║${NC}      ${GREEN}Blueprints. Expansible.${MAGENTA}                 ║${NC}\n"
-    printf "${MAGENTA}    ║${NC}                                              ${MAGENTA}║${NC}\n"
-    printf "${MAGENTA}    ╚══════════════════════════════════════════════╝${NC}\n"
+    printf "${CYAN}  ██████╗ ██╗     ██╗   ██╗███████╗           ${NC}\n"
+    printf "${CYAN}  ██╔══██╗██║     ██║   ██║██╔════╝           ${NC}\n"
+    printf "${CYAN}  ██████╔╝██║     ██║   ██║█████╗             ${NC}\n"
+    printf "${CYAN}  ██╔══██╗██║     ██║   ██║██╔══╝             ${NC}\n"
+    printf "${CYAN}  ██████╔╝███████╗╚██████╔╝███████╗           ${NC}\n"
+    printf "${CYAN}  ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝           ${NC}\n"
+    echo
+    printf "${GREEN}  Blueprints. Expansible.${NC}\n"
     echo
 }
 
 show_main_menu() {
     show_banner
     echo
-    printf "${MAGENTA}    ┌──────────────────────────────────────────────────────────┐${NC}\n"
-    printf "${MAGENTA}    │${NC} ${BLUE}What would you like to do?${MAGENTA}${NC}                                       ${MAGENTA}│${NC}\n"
-    printf "${MAGENTA}    ├──────────────────────────────────────────────────────────┤${NC}\n"
-    printf "${MAGENTA}    │${NC}                                                          ${MAGENTA}│${NC}\n"
-    printf "${MAGENTA}    │${NC}    ${GREEN}1) ➜${NC}  Create a project                              ${MAGENTA}│${NC}\n"
-    printf "${MAGENTA}    │${NC}    ${YELLOW}2) ?${NC}  Help (what can blueprintx do?)              ${MAGENTA}│${NC}\n"
-    printf "${MAGENTA}    │${NC}    ${BLUE}3) ▦${NC}  Show scaffolding structures and examples    ${MAGENTA}│${NC}\n"
-    printf "${MAGENTA}    │${NC}    ${RED}4) ✕${NC}  Cancel                                       ${MAGENTA}│${NC}\n"
-    printf "${MAGENTA}    │${NC}                                                          ${MAGENTA}│${NC}\n"
-    printf "${MAGENTA}    └──────────────────────────────────────────────────────────┘${NC}\n"
+    printf "${BLUE}What would you like to do?${NC}\n"
+    printf "  ${GREEN}1) ➜${NC}  Create a project\n"
+    printf "  ${YELLOW}2) ?${NC}  Help (what can blueprintx do?)\n"
+    printf "  ${BLUE}3) ▦${NC}  Show scaffolding structures and examples\n"
+    printf "  ${RED}4) ✕${NC}  Cancel\n"
     echo
 }
 
