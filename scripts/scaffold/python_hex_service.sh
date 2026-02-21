@@ -87,6 +87,15 @@ create_directory_structure() {
     mkdir -p "$project_path"/docs
     mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
+
+    # Ensure empty dirs are tracked by git
+    touch "$project_path"/tests/integration/.keep
+    touch "$project_path"/tests/performance/.keep
+    touch "$project_path"/tests/unit/.keep
+    touch "$project_path"/container/.keep
+    touch "$project_path"/bin/.keep
+    touch "$project_path"/data/.keep
+    touch "$project_path"/docs/.keep
     
     print_status "success" "Directory structure created"
 }
