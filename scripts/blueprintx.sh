@@ -17,7 +17,7 @@ printf "${CYAN} ██████╔╝██║     ██║   ██║█�
 printf "${CYAN} ██╔══██╗██║     ██║   ██║██╔══╝  ██╔═══╝ ██╔══██╗██║██║╚██╗██║   ██║    ██╔██╗  ${NC}\n"
 printf "${CYAN} ██████╔╝███████╗╚██████╔╝███████╗██║     ██║  ██║██║██║ ╚████║   ██║   ██╔╝ ██╗ ${NC}\n"
 printf "${CYAN} ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝ ${NC}\n"    echo
-    printf "${GREEN}  Blueprints. Expansible.${NC}\n"
+    printf "${MAGENTA}  Blueprints. Expansible.${NC}\n"
     echo
 }
 
