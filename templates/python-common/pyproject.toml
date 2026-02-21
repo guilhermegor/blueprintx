@@ -5,8 +5,8 @@ description = "${PROJECT_DESCRIPTION}"
 authors = []
 readme = "README.md"
 license = "MIT"
-homepage = ""
-repository = ""
+homepage = "${HOMEPAGE}"
+repository = "${REPOSITORY}"
 keywords = ["python"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -15,8 +15,8 @@ classifiers = [
 ]
 
 [tool.poetry.urls]
-"Bug Reports" = ""
-"Source" = ""
+"Bug Reports" = "${BUG_REPORTS_URL}"
+"Source" = "${SOURCE_URL}"
 
 [tool.poetry.dependencies]
 python = ">=3.10"

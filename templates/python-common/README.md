@@ -1,15 +1,11 @@
-# ${PROJECT_NAME} <img src="./public/logo.png" align="right" width="200" style="border-radius: 15px;" alt="${PROJECT_NAME}">
+# ${PROJECT_DISPLAY_NAME} <img src="public/logo_lorem_ipsum.png" align="right" width="200" style="border-radius: 15px;" alt="${PROJECT_DISPLAY_NAME}">
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![Python Version](https://img.shields.io/badge/python-${PYTHON_VERSIONS}-blue.svg)
-![PyPI Version](https://img.shields.io/pypi/v/${PYPI_NAME})
 [![Linting](https://img.shields.io/badge/linting-ruff_|_codespell-blue)](https://github.com/astral-sh/ruff+https://github.com/codespell-project/codespell)
 ![Formatting: isort](https://img.shields.io/badge/formatting-isort-%231674b1)
 ![Test Coverage](./coverage.svg)
-[![Snyk Vulnerabilities](https://snyk.io/test/github/${GITHUB_USER}/${PROJECT_SLUG}/badge.svg)](https://snyk.io/test/github/${GITHUB_USER}/${PROJECT_SLUG})
-[![Snyk License](https://snyk.io/advisor/python/${PYPI_NAME}/badge.svg)](https://snyk.io/advisor/python/${PYPI_NAME})
 ![License](https://img.shields.io/badge/license-${PROJECT_LICENSE}-green.svg)
-![PyPI Downloads](https://static.pepy.tech/badge/${PYPI_NAME})
 ![Open Issues](https://img.shields.io/github/issues/${GITHUB_USER}/${PROJECT_SLUG})
 ![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
 
