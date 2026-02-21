@@ -37,7 +37,25 @@ format_display_name() {
     echo "$formatted"
 }
 
-prompt_github_username() {
+resolve_github_username() {
+    # 1) GH_USERNAME env override
+    if [ -n "$GITHUB_USERNAME" ]; then
+        print_status "config" "GitHub username (env): $GITHUB_USERNAME"
+        return
+    fi
+
+    # 2) gh CLI (authenticated)
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+        local gh_user
+        gh_user=$(gh api user -q .login 2>/dev/null || true)
+        if [ -n "$gh_user" ]; then
+            GITHUB_USERNAME="$gh_user"
+            print_status "config" "GitHub username (gh): $GITHUB_USERNAME"
+            return
+        fi
+    fi
+
+    # 3) Fallback prompt
     local input
     read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
     if [ -n "$input" ]; then
@@ -45,7 +63,7 @@ prompt_github_username() {
     else
         GITHUB_USERNAME="$DEFAULT_GITHUB_USERNAME"
     fi
-    print_status "config" "GitHub username: $GITHUB_USERNAME"
+    print_status "config" "GitHub username (prompt): $GITHUB_USERNAME"
 }
 
 create_directory_structure() {
@@ -205,7 +223,7 @@ main() {
     print_status "config" "Target: $PROJECT_PATH"
     
     validate_inputs
-    prompt_github_username
+    resolve_github_username
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"

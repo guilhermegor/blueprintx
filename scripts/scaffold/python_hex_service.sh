@@ -37,7 +37,25 @@ format_display_name() {
     echo "$formatted"
 }
 
-prompt_github_username() {
+resolve_github_username() {
+    # 1) GH_USERNAME env override
+    if [ -n "$GITHUB_USERNAME" ]; then
+        print_status "config" "GitHub username (env): $GITHUB_USERNAME"
+        return
+    fi
+
+    # 2) gh CLI (authenticated)
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+        local gh_user
+        gh_user=$(gh api user -q .login 2>/dev/null || true)
+        if [ -n "$gh_user" ]; then
+            GITHUB_USERNAME="$gh_user"
+            print_status "config" "GitHub username (gh): $GITHUB_USERNAME"
+            return
+        fi
+    fi
+
+    # 3) Fallback prompt
     local input
     read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
     if [ -n "$input" ]; then
@@ -45,7 +63,7 @@ prompt_github_username() {
     else
         GITHUB_USERNAME="$DEFAULT_GITHUB_USERNAME"
     fi
-    print_status "config" "GitHub username: $GITHUB_USERNAME"
+    print_status "config" "GitHub username (prompt): $GITHUB_USERNAME"
 }
 
 create_directory_structure() {
@@ -64,6 +82,7 @@ create_directory_structure() {
     mkdir -p "$project_path"/tests/unit
     mkdir -p "$project_path"/container
     mkdir -p "$project_path"/bin
+    mkdir -p "$project_path"/data
     mkdir -p "$project_path"/public
     mkdir -p "$project_path"/docs
     mkdir -p "$project_path"/.github/workflows
@@ -95,7 +114,7 @@ copy_templates() {
     
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
-    PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
+    PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}" 
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/public/logo_lorem_ipsum.png" "$project_path/public/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/hex-service/.env" "$project_path/.env"
@@ -199,7 +218,7 @@ main() {
     print_status "config" "Target: $PROJECT_PATH"
     
     validate_inputs
-    prompt_github_username
+    resolve_github_username
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
