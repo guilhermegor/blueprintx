@@ -38,7 +38,7 @@ show_help() {
     print_status "info" "It can currently:"
     print_status "info" "  - Create Python projects with different folder structures (skeletons)"
     print_status "info" "  - Ask interactively for language, project name, target directory, and structure"
-    print_status "info" "  - Generate Python-ready projects that use pyenv + uv (inside the generated project)"
+    print_status "info" "  - Generate Python-ready projects that use pyenv + poetry (inside the generated project)"
     echo
     print_status "info" "To create a project, run:"
     print_status "info" "  make init"
