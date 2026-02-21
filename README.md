@@ -9,6 +9,7 @@ A lightweight Python project scaffolding tool based on Make + bash. Create consi
 - **Python environment management** via pyenv and uv
 - **Clean, modular structure** with separated templates
 - **Common Python baseline** applied to all skeletons: templated pyproject (name from prompt, version 0.0.1, optional description), pre-commit, VS Code settings, CI workflows, CODEOWNERS, PR template, and standardized tests folders (integration, performance, unit)
+- **Optional main-branch protection** via GitHub CLI after repo creation
 
 ## Supported Skeletons
 

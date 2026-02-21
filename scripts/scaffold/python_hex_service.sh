@@ -146,6 +146,59 @@ copy_common_templates() {
     print_status "success" "Common templates applied"
 }
 
+apply_branch_protection() {
+    local branch="main"
+    local repo="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
+
+    if ! command -v gh >/dev/null 2>&1; then
+        print_status "info" "gh CLI not found; skipping main branch protection."
+        return
+    fi
+
+    if ! gh auth status >/dev/null 2>&1; then
+        print_status "warn" "gh not authenticated; skipping main branch protection."
+        return
+    fi
+
+    if ! gh repo view "$repo" >/dev/null 2>&1; then
+        print_status "warn" "GitHub repo $repo not reachable; skipping branch protection."
+        return
+    fi
+
+    read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
+    case "$protect_ans" in
+        y|Y)
+            if gh api --method PUT \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/$repo/branches/$branch/protection" \
+                --input - <<'EOF'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": []
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 1
+  },
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_linear_history": true
+}
+EOF
+            then
+                print_status "success" "Branch '$branch' protected on GitHub."
+            else
+                print_status "warn" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
+            fi
+            ;;
+        *) print_status "info" "Skipped branch protection";;
+    esac
+}
+
 prompt_git_remote_setup() {
     local project_path="$1"
 
@@ -205,6 +258,8 @@ prompt_git_remote_setup() {
             print_status "info" "Skipped git initialization"
             ;;
     esac
+
+    apply_branch_protection "$project_path"
 }
 
 # ============================================================================
