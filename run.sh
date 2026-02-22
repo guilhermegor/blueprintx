@@ -11,6 +11,9 @@ Usage: ./run.sh <target>
 Targets:
   init     Run the interactive blueprintx scaffolder
   preview  Show available skeletons and examples
+    dev      Scaffold into a temporary directory
+    dev-clean Scaffold into a temp directory and delete it on exit
+    dry-run  Show structure only, no files created
   help     Show this help message
 EOF
 }
@@ -24,6 +27,15 @@ main() {
             ;;
         preview)
             bash "$SCRIPT_DIR/scripts/preview.sh"
+            ;;
+        dev)
+            bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dev
+            ;;
+        dev-clean)
+            bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dev --clean
+            ;;
+        dry-run)
+            bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dry-run
             ;;
         help|-h|--help)
             usage
