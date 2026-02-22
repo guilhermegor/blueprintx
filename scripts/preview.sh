@@ -45,6 +45,10 @@ show_hex_service() {
         infrastructure/
         services/
       modules/
+        example_feature/
+          domain/
+          services/
+          infrastructure/
       utils/
       config/
       main.py
