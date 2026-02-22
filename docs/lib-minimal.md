@@ -33,7 +33,7 @@ Shared Python assets (pyproject, pre-commit, README boilerplate, VS Code, CI) co
 - `.vscode`: sensible editor defaults for Python projects.
 
 ## Starting points
-Sample entrypoint: [templates/lib-minimal/main.py](templates/lib-minimal/main.py#L1-L2)
+Sample entrypoint: [templates/lib-minimal/main.py](https://github.com/guilhermegor/blueprintx/blob/main/templates/lib-minimal/main.py#L1-L2)
 ```python
 def main():
     print("Hello from lib-minimal!")

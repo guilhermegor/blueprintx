@@ -1,6 +1,8 @@
+
 .PHONY: init preview dev dev-clean dry-run init_venv update_venv mkdocs-serve mkdocs-build
 
 PY_VERSION := $(shell cat .python-version 2>/dev/null || echo 3.12.0)
+WIKI_REPO ?= https://github.com/guilhermegor/blueprintx.wiki.git
 
 init:
 	@bash scripts/blueprintx.sh

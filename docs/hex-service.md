@@ -26,7 +26,7 @@ project/
 ## Domain (core/domain or modules/<feature>/domain)
 What goes here: Entities, value objects, domain services (pure business logic), and the ports (interfaces) the domain needs. No framework or I/O.
 
-Example entity: [templates/hex-service/src/modules/example_feature/domain/entities.py](templates/hex-service/src/modules/example_feature/domain/entities.py#L1-L15)
+Example entity: [templates/hex-service/src/modules/example_feature/domain/entities.py](https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/modules/example_feature/domain/entities.py#L1-L15)
 ```python
 from dataclasses import dataclass
 from datetime import datetime
@@ -38,7 +38,7 @@ class Note:
     created_at: datetime
 ```
 
-Example port: [templates/hex-service/src/modules/example_feature/domain/ports.py](templates/hex-service/src/modules/example_feature/domain/ports.py#L1-L24)
+Example port: [templates/hex-service/src/modules/example_feature/domain/ports.py](https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/modules/example_feature/domain/ports.py#L1-L24)
 ```python
 from abc import ABC, abstractmethod
 from typing import Iterable
@@ -56,7 +56,7 @@ class NoteRepository(ABC):
 ## Application/Services (core/services or modules/<feature>/services)
 What goes here: Use-case orchestration; coordinates domain objects and ports. Enforces transaction boundaries and policies; still framework-free.
 
-Example use-case: [templates/hex-service/src/modules/example_feature/services/use_cases.py](templates/hex-service/src/modules/example_feature/services/use_cases.py#L1-L30)
+Example use-case: [templates/hex-service/src/modules/example_feature/services/use_cases.py](https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/modules/example_feature/services/use_cases.py#L1-L30)
 ```python
 from datetime import datetime
 import uuid
@@ -75,7 +75,7 @@ class CreateNote:
 ## Infrastructure (core/infrastructure or modules/<feature>/infrastructure)
 What goes here: Adapters implementing ports (DB, HTTP clients, brokers), configuration glue, persistence mappers. Keep side effects here.
 
-Example adapter implementing the repository port: [templates/hex-service/src/modules/example_feature/infrastructure/repositories.py](templates/hex-service/src/modules/example_feature/infrastructure/repositories.py#L1-L25)
+Example adapter implementing the repository port: [templates/hex-service/src/modules/example_feature/infrastructure/repositories.py](https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/modules/example_feature/infrastructure/repositories.py#L1-L25)
 ```python
 from ..domain.entities import Note
 from ..domain.ports import NoteRepository
@@ -89,7 +89,7 @@ class InMemoryNoteRepository(NoteRepository):
         return note
 ```
 
-Shared database backends live under `core/infrastructure/database/`, with runtime selection handled in [templates/hex-service/src/main.py](templates/hex-service/src/main.py#L22-L133) using `DB_BACKEND` (json, csv, sqlite, postgresql, mariadb, mysql).
+Shared database backends live under `core/infrastructure/database/`, with runtime selection handled in [templates/hex-service/src/main.py](https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/main.py#L22-L133) using `DB_BACKEND` (json, csv, sqlite, postgresql, mariadb, mysql).
 
 ## Modules (modules/<feature>)
 What goes here: Feature/bounded-context composition—wire domain + app + infra for that feature. Also entrypoints like API/CLI handlers.

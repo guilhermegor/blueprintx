@@ -143,7 +143,7 @@
 
 <h2 id="domain-coredomain-or-modulesdomain">Domain (core/domain or modules/<feature>/domain)<a class="headerlink" href="#domain-coredomain-or-modulesdomain" title="Permanent link">&para;</a></h2>
 <p>What goes here: Entities, value objects, domain services (pure business logic), and the ports (interfaces) the domain needs. No framework or I/O.</p>
-<p>Example entity: <a href="templates/hex-service/src/modules/example_feature/domain/entities.py#L1-L15">templates/hex-service/src/modules/example_feature/domain/entities.py</a></p>
+<p>Example entity: <a href="https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/modules/example_feature/domain/entities.py#L1-L15">templates/hex-service/src/modules/example_feature/domain/entities.py</a></p>
 <pre class="codehilite"><code class="language-python">from dataclasses import dataclass
 from datetime import datetime
 
@@ -154,7 +154,7 @@ class Note:
     created_at: datetime
 </code></pre>
 
-<p>Example port: <a href="templates/hex-service/src/modules/example_feature/domain/ports.py#L1-L24">templates/hex-service/src/modules/example_feature/domain/ports.py</a></p>
+<p>Example port: <a href="https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/modules/example_feature/domain/ports.py#L1-L24">templates/hex-service/src/modules/example_feature/domain/ports.py</a></p>
 <pre class="codehilite"><code class="language-python">from abc import ABC, abstractmethod
 from typing import Iterable
 from .entities import Note
@@ -170,7 +170,7 @@ class NoteRepository(ABC):
 
 <h2 id="applicationservices-coreservices-or-modulesservices">Application/Services (core/services or modules/<feature>/services)<a class="headerlink" href="#applicationservices-coreservices-or-modulesservices" title="Permanent link">&para;</a></h2>
 <p>What goes here: Use-case orchestration; coordinates domain objects and ports. Enforces transaction boundaries and policies; still framework-free.</p>
-<p>Example use-case: <a href="templates/hex-service/src/modules/example_feature/services/use_cases.py#L1-L30">templates/hex-service/src/modules/example_feature/services/use_cases.py</a></p>
+<p>Example use-case: <a href="https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/modules/example_feature/services/use_cases.py#L1-L30">templates/hex-service/src/modules/example_feature/services/use_cases.py</a></p>
 <pre class="codehilite"><code class="language-python">from datetime import datetime
 import uuid
 from ..domain.entities import Note
@@ -187,7 +187,7 @@ class CreateNote:
 
 <h2 id="infrastructure-coreinfrastructure-or-modulesinfrastructure">Infrastructure (core/infrastructure or modules/<feature>/infrastructure)<a class="headerlink" href="#infrastructure-coreinfrastructure-or-modulesinfrastructure" title="Permanent link">&para;</a></h2>
 <p>What goes here: Adapters implementing ports (DB, HTTP clients, brokers), configuration glue, persistence mappers. Keep side effects here.</p>
-<p>Example adapter implementing the repository port: <a href="templates/hex-service/src/modules/example_feature/infrastructure/repositories.py#L1-L25">templates/hex-service/src/modules/example_feature/infrastructure/repositories.py</a></p>
+<p>Example adapter implementing the repository port: <a href="https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/modules/example_feature/infrastructure/repositories.py#L1-L25">templates/hex-service/src/modules/example_feature/infrastructure/repositories.py</a></p>
 <pre class="codehilite"><code class="language-python">from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
@@ -200,7 +200,7 @@ class InMemoryNoteRepository(NoteRepository):
         return note
 </code></pre>
 
-<p>Shared database backends live under <code>core/infrastructure/database/</code>, with runtime selection handled in <a href="templates/hex-service/src/main.py#L22-L133">templates/hex-service/src/main.py</a> using <code>DB_BACKEND</code> (json, csv, sqlite, postgresql, mariadb, mysql).</p>
+<p>Shared database backends live under <code>core/infrastructure/database/</code>, with runtime selection handled in <a href="https://github.com/guilhermegor/blueprintx/blob/main/templates/hex-service/src/main.py#L22-L133">templates/hex-service/src/main.py</a> using <code>DB_BACKEND</code> (json, csv, sqlite, postgresql, mariadb, mysql).</p>
 <h2 id="modules-modules">Modules (modules/<feature>)<a class="headerlink" href="#modules-modules" title="Permanent link">&para;</a></h2>
 <p>What goes here: Feature/bounded-context composition—wire domain + app + infra for that feature. Also entrypoints like API/CLI handlers.</p>
 <p>Example wiring and handler sketch:</p>
