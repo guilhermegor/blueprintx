@@ -1,4 +1,4 @@
-# BlueprintX documentation
+# **BlueprintX Documentation**
 
 ![BlueprintX logo](https://raw.githubusercontent.com/guilhermegor/blueprintx/main/public/logo.png)
 
