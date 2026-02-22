@@ -7,7 +7,18 @@ nav:
   - Hex Service: hex-service.md
   - Lib Minimal: lib-minimal.md
 theme:
-  name: mkdocs
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/white-balance-sunny
+        name: Switch to light mode
 markdown_extensions:
   - admonition
   - codehilite
