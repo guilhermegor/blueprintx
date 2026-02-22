@@ -1,12 +1,12 @@
 <!-- markdownlint-disable MD013 -->
-# blueprintx <img src="public/logo.png" align="right" width="180" style="border-radius: 12px;" alt="blueprintx logo">
+# BlueprintX <img src="public/logo.png" align="right" width="180" style="border-radius: 12px;" alt="blueprintx logo">
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Open Issues](https://img.shields.io/github/issues/guilhermegor/blueprintx)
 ![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
 
-**blueprintx** is a lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
+**BlueprintX** is a lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
 
 ## ✨ Highlights
 - Interactive CLI (`make init`) with skeleton choice
