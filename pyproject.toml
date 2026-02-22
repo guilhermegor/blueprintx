@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "blueprintx"
+version = "0.1.0"
+description = "Docs and tooling for the blueprintx scaffolder"
+authors = []
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/guilhermegor/blueprintx"
+repository = "https://github.com/guilhermegor/blueprintx"
+keywords = ["python", "scaffolding", "mkdocs"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+package-mode = false
+
+[tool.poetry.urls]
+"Bug Reports" = "https://github.com/guilhermegor/blueprintx/issues"
+"Source" = "https://github.com/guilhermegor/blueprintx"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<4.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = ">=4.1.0"
+pretty-errors = ">=1.2.25"
+commitizen = ">=4.4.1"
+poetry-plugin-export = ">=1.8"
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = ">=1.6.0"
+
+[build-system]
+requires = ["poetry-core>=1.7.0"]
+build-backend = "poetry.core.masonry.api"
