@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "blueprintx"
+name = "BlueprintX"
 version = "0.1.0"
-description = "Docs and tooling for the blueprintx scaffolder"
+description = "Docs and tooling for the BlueprintX scaffolder"
 authors = []
 readme = "README.md"
 license = "MIT"
-homepage = "https://github.com/guilhermegor/blueprintx"
-repository = "https://github.com/guilhermegor/blueprintx"
+homepage = "https://github.com/guilhermegor/BlueprintX"
+repository = "https://github.com/guilhermegor/BlueprintX"
 keywords = ["python", "scaffolding", "mkdocs"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -16,8 +16,8 @@ classifiers = [
 package-mode = false
 
 [tool.poetry.urls]
-"Bug Reports" = "https://github.com/guilhermegor/blueprintx/issues"
-"Source" = "https://github.com/guilhermegor/blueprintx"
+"Bug Reports" = "https://github.com/guilhermegor/BlueprintX/issues"
+"Source" = "https://github.com/guilhermegor/BlueprintX"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"

@@ -1,10 +1,10 @@
 <!-- markdownlint-disable MD013 -->
-# BlueprintX <img src="public/logo.png" align="right" width="180" style="border-radius: 12px;" alt="blueprintx logo">
+# BlueprintX <img src="public/logo.png" align="right" width="180" style="border-radius: 12px;" alt="BlueprintX logo">
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Open Issues](https://img.shields.io/github/issues/guilhermegor/blueprintx)
+![Open Issues](https://img.shields.io/github/issues/guilhermegor/BlueprintX)
 ![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
 
 **BlueprintX** is a lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
@@ -76,11 +76,11 @@ Lean library starter: package under `src/<project_name>/`, tests, CI, VS Code co
 ## 📂 Repo layout (this tool)
 
 ```
-blueprintx/
+BlueprintX/
 ├── Makefile                 # entry targets: init, preview, dev, dev-clean, dry-run
 ├── run.sh                   # same targets for non-make usage
 ├── scripts/
-│   ├── blueprintx.sh        # interactive menu + modes
+│   ├── BlueprintX.sh        # interactive menu + modes
 │   ├── preview.sh           # skeleton previews
 │   └── scaffold/            # per-skeleton scaffolders
 │       ├── python_hex_service.sh
@@ -100,9 +100,9 @@ blueprintx/
 
 ## 🔗 Useful Links
 
-* [GitHub Repository](https://github.com/guilhermegor/blueprintx)
+* [GitHub Repository](https://github.com/guilhermegor/BlueprintX)
 
-* [Issue Tracker](https://github.com/guilhermegor/blueprintx/issues)
+* [Issue Tracker](https://github.com/guilhermegor/BlueprintX/issues)
 
 ## 🤝 Contributing
 Issues and PRs are welcome. Please keep templates minimal, opinionated, and consistent across skeletons.

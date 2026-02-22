@@ -33,7 +33,7 @@ Shared Python assets (pyproject, pre-commit, README boilerplate, VS Code, CI) co
 - `.vscode`: sensible editor defaults for Python projects.
 
 ## Starting points
-Sample entrypoint: [templates/lib-minimal/main.py](https://github.com/guilhermegor/blueprintx/blob/main/templates/lib-minimal/main.py#L1-L2)
+Sample entrypoint: [templates/lib-minimal/main.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/lib-minimal/main.py#L1-L2)
 ```python
 def main():
     print("Hello from lib-minimal!")
@@ -44,7 +44,7 @@ The generated `tests/unit/test_main.py` asserts that this output appears.
 1. Add library functions/classes under `src/<project_name>/`.
 2. Add or expand tests in `tests/unit/` (and integration/performance as needed).
 3. Run tests with Poetry: `poetry run pytest`.
-4. Keep the docs (`docs/`) in sync with public APIs; you can host them with mkdocs like the blueprintx docs.
+4. Keep the docs (`docs/`) in sync with public APIs; you can host them with mkdocs like the BlueprintX docs.
 
 ## Example feature addition
 ```python

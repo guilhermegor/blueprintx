@@ -2,27 +2,31 @@
 .PHONY: init preview dev dev-clean dry-run init_venv update_venv mkdocs-serve mkdocs-build
 
 PY_VERSION := $(shell cat .python-version 2>/dev/null || echo 3.12.0)
-WIKI_REPO ?= https://github.com/guilhermegor/blueprintx.wiki.git
+WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
+
+# -------------------
+# BLUEPRINTX SCRIPTS
+# -------------------
 
 init:
-	@bash scripts/blueprintx.sh
+	@bash scripts/BlueprintX.sh
 
 preview:
 	@bash scripts/preview.sh
 
 dev:
-	@bash scripts/blueprintx.sh --dev
+	@bash scripts/BlueprintX.sh --dev
 
 dev-clean:
-	@bash scripts/blueprintx.sh --dev --clean
+	@bash scripts/BlueprintX.sh --dev --clean
 
 dry-run:
-	@bash scripts/blueprintx.sh --dry-run
+	@bash scripts/BlueprintX.sh --dry-run
 
 # -------------------
 # DEV ENVIRONMENT
 # -------------------
-init_venv:
+init-venv:
 	@if [ -z "$(PY_VERSION)" ]; then echo "PY_VERSION is empty; set .python-version"; exit 1; fi
 	@if command -v pyenv >/dev/null 2>&1; then \
 		if ! pyenv versions --bare | grep -Fx "$(PY_VERSION)" >/dev/null 2>&1; then \
@@ -39,12 +43,13 @@ init_venv:
 	@echo "Virtual environment created in ./.venv"
 	@echo "Poetry project installed"
 
-update_venv:
+update-venv:
 	@poetry update
 	@echo "Poetry project updated"
 
 mkdocs-serve:
-	@poetry run mkdocs serve -a 0.0.0.0:8000
+	@poetry install --with docs
+	@poetry run mkdocs serve -a 0.0.0.0:8000 --livereload
 
 mkdocs-build:
 	@poetry run mkdocs build

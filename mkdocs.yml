@@ -1,7 +1,7 @@
-site_name: blueprintx
-site_description: Documentation for blueprintx scaffolds (hex-service and lib-minimal)
-site_url: https://github.com/guilhermegor/blueprintx
-repo_url: https://github.com/guilhermegor/blueprintx
+site_name: BlueprintX
+site_description: Documentation for BlueprintX scaffolds (hex-service and lib-minimal)
+site_url: https://github.com/guilhermegor/BlueprintX
+repo_url: https://github.com/guilhermegor/BlueprintX
 nav:
   - Home: index.md
   - Hex Service: hex-service.md

@@ -122,7 +122,7 @@ copy_templates() {
     sed "s/\${PROJECT_NAME}/$PROJECT_NAME/g" << 'EOF' > "$project_path/docs/index.md"
 # ${PROJECT_NAME}
 
-Minimal library generated with blueprintx (lib-minimal).
+Minimal library generated with BlueprintX (lib-minimal).
 EOF
     
     print_status "success" "Templates copied and configured"

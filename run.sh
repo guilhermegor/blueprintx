@@ -9,7 +9,7 @@ usage() {
 Usage: ./run.sh <target>
 
 Targets:
-  init     Run the interactive blueprintx scaffolder
+  init     Run the interactive BlueprintX scaffolder
   preview  Show available skeletons and examples
   dev      Scaffold into a temporary directory
   dev-clean Scaffold into a temp directory and delete it on exit
@@ -67,19 +67,19 @@ main() {
 
     case "$target" in
         init)
-            bash "$SCRIPT_DIR/scripts/blueprintx.sh"
+            bash "$SCRIPT_DIR/scripts/BlueprintX.sh"
             ;;
         preview)
             bash "$SCRIPT_DIR/scripts/preview.sh"
             ;;
         dev)
-            bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dev
+            bash "$SCRIPT_DIR/scripts/BlueprintX.sh" --dev
             ;;
         dev-clean)
-            bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dev --clean
+            bash "$SCRIPT_DIR/scripts/BlueprintX.sh" --dev --clean
             ;;
         dry-run)
-            bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dry-run
+            bash "$SCRIPT_DIR/scripts/BlueprintX.sh" --dry-run
             ;;
         init_venv)
             init_venv

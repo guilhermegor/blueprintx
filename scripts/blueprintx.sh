@@ -70,7 +70,7 @@ show_main_menu() {
     echo
     printf "${BLUE}What would you like to do?${NC}\n"
     printf "  ${GREEN}1) ➜${NC}  Create a project\n"
-    printf "  ${YELLOW}2) ?${NC}  Help (what can blueprintx do?)\n"
+    printf "  ${YELLOW}2) ?${NC}  Help (what can BlueprintX do?)\n"
     printf "  ${BLUE}3) ▦${NC}  Show scaffolding structures and examples\n"
     printf "  ${RED}4) ✕${NC}  Cancel\n"
     echo
@@ -90,8 +90,8 @@ show_help() {
     print_status "info" "Then choose 'Create a project' in the menu."
     echo
     print_status "info" "You can also run in dev/preview modes:"
-    print_status "config" "  scripts/blueprintx.sh --dev      # scaffold into a temp dir"
-    print_status "config" "  scripts/blueprintx.sh --dry-run  # preview only, no files created"
+    print_status "config" "  scripts/BlueprintX.sh --dev      # scaffold into a temp dir"
+    print_status "config" "  scripts/BlueprintX.sh --dry-run  # preview only, no files created"
 }
 
 show_hex_service() {
@@ -377,7 +377,7 @@ main() {
     if [ "$DRY_RUN" -eq 1 ]; then
         PROJECT_ROOT="(dry-run)"
     elif [ "$DEV_MODE" -eq 1 ]; then
-        TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/blueprintx.XXXXXX")
+        TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/BlueprintX.XXXXXX")
         PROJECT_ROOT="$TEMP_ROOT"
         print_status "config" "Dev mode: using temp root $PROJECT_ROOT"
         if [ "$CLEAN_TEMP" -eq 1 ]; then
