@@ -1,57 +1,110 @@
-# blueprintx
+<!-- markdownlint-disable MD013 -->
+# blueprintx <img src="public/logo.png" align="right" width="180" style="border-radius: 12px;" alt="blueprintx logo">
 
-A lightweight Python project scaffolding tool based on Make + bash. Create consistent, production-ready project structures interactively.
+[![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Open Issues](https://img.shields.io/github/issues/guilhermegor/blueprintx)
+![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
 
-## Features
+**blueprintx** is a lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
 
-- **Interactive project creation** with configurable options
-- **Multiple project skeletons** for different use cases
-- **Python environment management** via pyenv and uv
-- **Clean, modular structure** with separated templates
-- **Common Python baseline** applied to all skeletons: templated pyproject (name from prompt, version 0.0.1, optional description), pre-commit, VS Code settings, CI workflows, CODEOWNERS, PR template, and standardized tests folders (integration, performance, unit)
-- **Optional main-branch protection** via GitHub CLI after repo creation
+## ✨ Highlights
+- Interactive CLI (`make init`) with skeleton choice
+- Ready-made skeletons (currently Python): **hex-service** (hex/DDD-leaning) and **lib-minimal**
+- Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders (unit/integration/performance)
+- Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 
-## Supported Skeletons
+## 🚀 Quick start
+
+```bash
+make init        # interactive scaffolder
+make preview     # show skeleton structures
+make dev         # scaffold into a temp dir (kept)
+make dev-clean   # scaffold into temp dir and auto-delete on exit
+make dry-run     # print structure; no files written
+```
+
+Requirements: `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetry` (or your Python toolchain of choice) in the generated project.
+
+## 🏗️ Supported skeletons
 
 ### hex-service
-Backend/service-oriented structure with core/modules separation, suitable for APIs and services using clean/hexagonal-ish design.
+Service/backend oriented with a per-feature layout. `core` stays minimal (shared utilities/infra); `modules/<feature>` hosts the feature’s domain, services, and adapters.
 
-### lib-minimal  
-Minimal library-style project, good for small libraries, tools, or starting points for simple CLIs or packages.
-
-## Quick Start
-
-```bash
-make init
+```
+project/
+    src/
+        core/
+            domain/            # shared-only if truly cross-cutting
+            infrastructure/    # shared infra building blocks
+            services/          # shared application services (optional)
+        modules/
+            example_feature/   # rename per bounded context/feature
+                domain/          # entities, value objects, domain services, ports
+                services/        # use-cases orchestrating domain + ports
+                infrastructure/  # adapters implementing ports (DB, APIs, queues)
+        utils/
+        config/
+        main.py              # entrypoint; selects DB backend via .env
+    tests/{unit,integration,performance}/
+    container/
+    bin/
+    public/
+    docs/
+    .github/
+    .vscode/
+    .env
+    pyproject.toml
+    requirements.txt
+    README.md
 ```
 
-Then follow the interactive prompts to create your project.
+Per-feature example (in template): `modules/example_feature/` with `Note` entity, ports, in-memory repo, and use-cases.
 
-To preview available structures:
+### lib-minimal
+Lean library starter: package under `src/<project_name>/`, tests, CI, VS Code config, and pre-commit ready to go.
 
-```bash
-make preview
-```
+## 🧭 Folder attribution (hex-service intent)
+- `core/`: cross-cutting pieces only (shared infra, shared types). Keep lean to avoid a “god domain.”
+- `modules/<feature>/domain`: feature/bounded-context domain (entities, value objects, domain services, ports).
+- `modules/<feature>/services`: application/use-case layer orchestrating domain + ports; no framework code.
+- `modules/<feature>/infrastructure`: adapters implementing ports (DB handlers, HTTP clients, brokers, files).
+- `utils/`: generic helpers not tied to a feature.
+- `config/`: configuration loading, settings.
 
-## Requirements
-
-- `bash` >= 4.0
-- `pyenv` (for Python version management)
-- `uv` (for dependency management)
-
-## Project Structure
+## 📂 Repo layout (this tool)
 
 ```
 blueprintx/
-├── Makefile
+├── Makefile                 # entry targets: init, preview, dev, dev-clean, dry-run
+├── run.sh                   # same targets for non-make usage
 ├── scripts/
-│   ├── blueprintx.sh       # Main bootstrap script
-│   ├── preview.sh          # Preview available skeletons
-│   └── scaffold/
+│   ├── blueprintx.sh        # interactive menu + modes
+│   ├── preview.sh           # skeleton previews
+│   └── scaffold/            # per-skeleton scaffolders
 │       ├── python_hex_service.sh
 │       └── python_lib_minimal.sh
-└── templates/              # Template files for each skeleton
-    ├── hex-service/
-    ├── lib-minimal/
-    └── python-common/      # Shared assets copied into every Python project
+├── templates/               # skeleton contents
+│   ├── hex-service/         # hex/DDD-leaning template with per-feature modules
+│   ├── lib-minimal/         # minimal library template
+│   └── python-common/       # shared assets copied to all Python projects
+└── public/logo.png          # logo used in this README
 ```
+
+## 👨‍💻 Authors
+
+**Guilherme Rodrigues**  
+[![GitHub](https://img.shields.io/badge/GitHub-guilhermegor-181717?style=flat&logo=github)](https://github.com/guilhermegor)  
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Guilherme_Rodrigues-0077B5?style=flat&logo=linkedin)](https://www.linkedin.com/in/guilhermegor/)
+
+## 🔗 Useful Links
+
+* [GitHub Repository](https://github.com/guilhermegor/blueprintx)
+
+* [Issue Tracker](https://github.com/guilhermegor/blueprintx/issues)
+
+## 🤝 Contributing
+Issues and PRs are welcome. Please keep templates minimal, opinionated, and consistent across skeletons.
+
+## 📜 License
+MIT. See [LICENSE](LICENSE).
