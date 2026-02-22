@@ -110,8 +110,8 @@ create_python_files() {
     touch "$project_path"/src/modules/__init__.py
     touch "$project_path"/src/utils/__init__.py
     touch "$project_path"/src/config/__init__.py
-    
-    cp "$BLUEPRINTX_ROOT/templates/hex-service/main.py" "$project_path/src/main.py"
+    mkdir -p "$project_path"/src/core/infrastructure/database
+    cp -r "$BLUEPRINTX_ROOT/templates/hex-service/src/." "$project_path/src"
     
     print_status "success" "Python files created"
 }
