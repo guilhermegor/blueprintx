@@ -158,6 +158,7 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$COMMON_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    cp -r "$COMMON_TEMPLATE_ROOT/prompts" "$project_path/prompts"
     
     print_status "success" "Common templates applied"
 }
