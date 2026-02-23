@@ -127,22 +127,10 @@ create_note.execute("First note")
 print(list_notes.execute())
 ```
 
-## Bank balance alert example (split by layer)
-This variant shows imports across files to clarify boundaries.
+## Bank balance alert example (docs-only)
+Not scaffolded—illustrative only. Shows per-layer files and imports.
 
-```
-modules/banking/
-  domain/
-    entities.py
-    ports.py
-  application/
-    balance_alert.py
-  infrastructure/
-    repositories.py
-    notifications.py
-```
-
-[modules/banking/domain/entities.py](templates/hex-service/src/modules/banking/domain/entities.py)
+`modules/banking/domain/entities.py`
 ```python
 from dataclasses import dataclass
 from datetime import datetime
@@ -156,7 +144,7 @@ class Account:
     updated_at: datetime
 ```
 
-[modules/banking/domain/ports.py](templates/hex-service/src/modules/banking/domain/ports.py)
+`modules/banking/domain/ports.py`
 ```python
 from typing import Protocol
 from .entities import Account
@@ -171,7 +159,7 @@ class NotificationPort(Protocol):
     def send_balance_alert(self, to_email: str, current_balance: float, threshold: float) -> None: ...
 ```
 
-[modules/banking/application/balance_alert.py](templates/hex-service/src/modules/banking/application/balance_alert.py)
+`modules/banking/application/balance_alert.py`
 ```python
 from .domain.entities import Account
 from .domain.ports import AccountRepository, NotificationPort
@@ -196,7 +184,7 @@ class BalanceAlertService:
         return False
 ```
 
-[modules/banking/infrastructure/repositories.py](templates/hex-service/src/modules/banking/infrastructure/repositories.py)
+`modules/banking/infrastructure/repositories.py`
 ```python
 from ..domain.entities import Account
 from ..domain.ports import AccountRepository
@@ -213,7 +201,7 @@ class InMemoryAccountRepository(AccountRepository):
         self.items[account.id] = account
 ```
 
-[modules/banking/infrastructure/notifications.py](templates/hex-service/src/modules/banking/infrastructure/notifications.py)
+`modules/banking/infrastructure/notifications.py`
 ```python
 from ..domain.ports import NotificationPort
 
@@ -223,7 +211,7 @@ class EmailNotificationAdapter(NotificationPort):
         print(f"Email -> {to_email}: balance ${current_balance:.2f} is below ${threshold:.2f}")
 ```
 
-[modules/banking/main.py](templates/hex-service/src/modules/banking/main.py)
+`modules/banking/main.py`
 ```python
 from datetime import datetime
 from .application.balance_alert import BalanceAlertService

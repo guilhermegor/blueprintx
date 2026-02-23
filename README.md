@@ -60,7 +60,7 @@ project/
     README.md
 ```
 
-Per-feature example (in template): `modules/example_feature/` with `Note` entity, ports, in-memory repo, and use-cases.
+Per-feature example (in template): `modules/example_feature/` with `Note` entity, ports, in-memory repo, and use-cases. Banking balance alert remains a docs-only illustration.
 
 ### lib-minimal
 Lean library starter: package under `src/<project_name>/`, tests, CI, VS Code config, and pre-commit ready to go.
