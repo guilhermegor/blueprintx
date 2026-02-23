@@ -11,7 +11,7 @@
 
 ## ✨ Highlights
 - Interactive CLI (`make init`) with skeleton choice
-- Ready-made skeletons (currently Python): **hex-service** (hex/DDD-leaning) and **lib-minimal**
+- Ready-made skeletons (currently Python): **DDD service** (Domain-Driven Design, hexagonal/ports-and-adapters; template folder `templates/ddd-service`) and **lib-minimal**
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders (unit/integration/performance)
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 
@@ -29,8 +29,8 @@ Requirements: `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetr
 
 ## 🏗️ Supported skeletons
 
-### hex-service
-Service/backend oriented with a per-feature layout. `core` stays minimal (shared utilities/infra); `modules/<feature>` hosts the feature’s domain, application layer, and adapters.
+### DDD service (templates/ddd-service)
+Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. `core` stays minimal (shared utilities/infra); `modules/<feature>` hosts the feature’s domain, application layer, and adapters.
 
 ```
 project/
@@ -79,7 +79,7 @@ project/
     README.md
 ```
 
-## 🧭 Folder attribution (hex-service intent)
+## 🧭 Folder attribution (ddd-service intent)
 - `core/`: cross-cutting pieces only (shared infra, shared types). Keep lean to avoid a “god domain.”
 - `modules/<feature>/domain`: feature/bounded-context domain (entities, value objects, domain services, ports).
 - `modules/<feature>/application`: application/use-case layer orchestrating domain + ports; no framework code.
@@ -99,10 +99,10 @@ BlueprintX/
 │   ├── help.sh              # usage tips and targets
 │   ├── init_venv.sh         # convenience venv bootstrap
 │   └── scaffold/            # per-skeleton scaffolders
-│       ├── python_hex_service.sh
+│       ├── python_ddd_service.sh
 │       └── python_lib_minimal.sh
 ├── templates/               # skeleton contents
-│   ├── hex-service/         # hex/DDD-leaning template with per-feature modules
+│   ├── ddd-service/         # DDD/hexagonal template with per-feature modules
 │   ├── lib-minimal/         # minimal library template
 │   └── python-common/       # shared assets copied to all Python projects (scripts, pyproject, CI, VS Code)
 ├── docs/                    # mkdocs sources

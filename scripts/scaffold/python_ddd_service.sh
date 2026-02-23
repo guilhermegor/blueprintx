@@ -111,7 +111,7 @@ create_python_files() {
     touch "$project_path"/src/utils/__init__.py
     touch "$project_path"/src/config/__init__.py
     mkdir -p "$project_path"/src/core/infrastructure/database
-    cp -r "$BLUEPRINTX_ROOT/templates/hex-service/src/." "$project_path/src"
+    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service/src/." "$project_path/src"
     
     print_status "success" "Python files created"
 }
@@ -126,7 +126,7 @@ copy_templates() {
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}" 
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/public/logo_lorem_ipsum.png" "$project_path/public/logo_lorem_ipsum.png"
-    cp "$BLUEPRINTX_ROOT/templates/hex-service/.env" "$project_path/.env"
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service/.env" "$project_path/.env"
     
     print_status "success" "Templates copied and configured"
 }
@@ -148,6 +148,13 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
     cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
+    cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.txt" "$project_path/.vscode/extensions.txt"
+    cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
+    cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
+    cp "$COMMON_TEMPLATE_ROOT/LICENSE" "$project_path/LICENSE"
+    cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
+    cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
+    cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$COMMON_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
@@ -278,7 +285,7 @@ prompt_git_remote_setup() {
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
     
-    print_section "Python hex-service scaffold"
+    print_section "Python ddd-service scaffold"
     print_status "config" "Target: $PROJECT_PATH"
     
     validate_inputs

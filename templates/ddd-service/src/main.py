@@ -1,4 +1,4 @@
-"""Service entrypoint and database handler selection for the hex-service template."""
+"""Service entrypoint and database handler selection for the ddd-service template."""
 
 from __future__ import annotations
 

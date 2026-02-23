@@ -15,7 +15,7 @@ show_languages() {
     print_status "info" "1) python"
     print_status "config" "Status: supported"
     print_status "config" "Skeletons:"
-    print_status "config" "  * hex-service (default)"
+    print_status "config" "  * ddd-service (default)"
     print_status "config" "  * lib-minimal"
     print_status "info" "Common Python assets applied to all skeletons:"
     print_status "config" "  * pyproject.toml (name from prompt, version 0.0.1 default, optional description)"
@@ -30,7 +30,7 @@ show_languages() {
 
 show_hex_service() {
     echo
-    print_section "hex-service skeleton"
+    print_section "ddd-service skeleton"
     
     print_status "info" "Description:"
     print_status "config" "Backend/service-oriented structure with core/modules separation,"

@@ -1,11 +1,11 @@
 site_name: BlueprintX
-site_description: Documentation for BlueprintX scaffolds (hex-service and lib-minimal)
+site_description: Documentation for BlueprintX scaffolds (DDD service and lib-minimal)
 site_url: https://github.com/guilhermegor/BlueprintX
 repo_url: https://github.com/guilhermegor/BlueprintX
 nav:
   - Home: index.md
   - Python:
-      - Hex Service: hex-service.md
+      - DDD Service: ddd-service.md
       - Lib Minimal: lib-minimal.md
 theme:
   name: material
