@@ -30,7 +30,7 @@ Requirements: `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetr
 ## 🏗️ Supported skeletons
 
 ### hex-service
-Service/backend oriented with a per-feature layout. `core` stays minimal (shared utilities/infra); `modules/<feature>` hosts the feature’s domain, services, and adapters.
+Service/backend oriented with a per-feature layout. `core` stays minimal (shared utilities/infra); `modules/<feature>` hosts the feature’s domain, application layer, and adapters.
 
 ```
 project/
@@ -38,11 +38,11 @@ project/
         core/
             domain/            # shared-only if truly cross-cutting
             infrastructure/    # shared infra building blocks
-            services/          # shared application services (optional)
+            application/       # shared application services (optional)
         modules/
             example_feature/   # rename per bounded context/feature
                 domain/          # entities, value objects, domain services, ports
-                services/        # use-cases orchestrating domain + ports
+                application/     # use-cases orchestrating domain + ports
                 infrastructure/  # adapters implementing ports (DB, APIs, queues)
         utils/
         config/
@@ -68,7 +68,7 @@ Lean library starter: package under `src/<project_name>/`, tests, CI, VS Code co
 ## 🧭 Folder attribution (hex-service intent)
 - `core/`: cross-cutting pieces only (shared infra, shared types). Keep lean to avoid a “god domain.”
 - `modules/<feature>/domain`: feature/bounded-context domain (entities, value objects, domain services, ports).
-- `modules/<feature>/services`: application/use-case layer orchestrating domain + ports; no framework code.
+- `modules/<feature>/application`: application/use-case layer orchestrating domain + ports; no framework code.
 - `modules/<feature>/infrastructure`: adapters implementing ports (DB handlers, HTTP clients, brokers, files).
 - `utils/`: generic helpers not tied to a feature.
 - `config/`: configuration loading, settings.

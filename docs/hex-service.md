@@ -6,8 +6,8 @@ A pragmatic, per-feature layout that keeps business logic isolated from I/O whil
 ```
 project/
   src/
-    core/{domain,infrastructure,services}
-    modules/<feature>/{domain,services,infrastructure}
+    core/{domain,infrastructure,application}
+    modules/<feature>/{domain,application,infrastructure}
     utils/
     config/
     main.py
@@ -53,10 +53,10 @@ class NoteRepository(ABC):
     def list(self) -> Iterable[Note]: ...
 ```
 
-## Application/Services (core/services or modules/<feature>/services)
+## Application (core/application or modules/<feature>/application)
 What goes here: Use-case orchestration; coordinates domain objects and ports. Enforces transaction boundaries and policies; still framework-free.
 
-Example use-case: [templates/hex-service/src/modules/example_feature/services/use_cases.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/hex-service/src/modules/example_feature/services/use_cases.py#L1-L30)
+Example use-case: [templates/hex-service/src/modules/example_feature/application/use_cases.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/hex-service/src/modules/example_feature/application/use_cases.py#L1-L30)
 ```python
 from datetime import datetime
 import uuid
@@ -113,7 +113,7 @@ def create_note_endpoint(payload: CreateNotePayload):
 
 ## Rules of thumb
 - Domain: pure logic and contracts; no I/O or frameworks.
-- Services/App: orchestrate use-cases, transactions, and policies; still framework-free.
+- Application: orchestrate use-cases, transactions, and policies; still framework-free.
 - Infrastructure: all I/O adapters implementing ports (DB, HTTP, queues, files).
 - Modules: group everything per feature/context and provide entrypoints/wiring. Keep core only for truly shared cross-cutting pieces.
 
@@ -125,4 +125,122 @@ list_notes = ListNotes(repo)
 
 create_note.execute("First note")
 print(list_notes.execute())
+```
+
+## Bank balance alert example (split by layer)
+This variant shows imports across files to clarify boundaries.
+
+```
+modules/banking/
+  domain/
+    entities.py
+    ports.py
+  application/
+    balance_alert.py
+  infrastructure/
+    repositories.py
+    notifications.py
+```
+
+[modules/banking/domain/entities.py](templates/hex-service/src/modules/banking/domain/entities.py)
+```python
+from dataclasses import dataclass
+from datetime import datetime
+
+
+@dataclass
+class Account:
+    id: str
+    owner_email: str
+    balance: float
+    updated_at: datetime
+```
+
+[modules/banking/domain/ports.py](templates/hex-service/src/modules/banking/domain/ports.py)
+```python
+from typing import Protocol
+from .entities import Account
+
+
+class AccountRepository(Protocol):
+    def get(self, account_id: str) -> Account | None: ...
+    def save(self, account: Account) -> None: ...
+
+
+class NotificationPort(Protocol):
+    def send_balance_alert(self, to_email: str, current_balance: float, threshold: float) -> None: ...
+```
+
+[modules/banking/application/balance_alert.py](templates/hex-service/src/modules/banking/application/balance_alert.py)
+```python
+from .domain.entities import Account
+from .domain.ports import AccountRepository, NotificationPort
+
+
+class BalanceAlertService:
+    def __init__(self, accounts: AccountRepository, notifier: NotificationPort):
+        self.accounts = accounts
+        self.notifier = notifier
+
+    def execute(self, account_id: str, threshold: float) -> bool:
+        account = self.accounts.get(account_id)
+        if account is None:
+            return False
+        if account.balance < threshold:
+            self.notifier.send_balance_alert(
+                to_email=account.owner_email,
+                current_balance=account.balance,
+                threshold=threshold,
+            )
+            return True
+        return False
+```
+
+[modules/banking/infrastructure/repositories.py](templates/hex-service/src/modules/banking/infrastructure/repositories.py)
+```python
+from ..domain.entities import Account
+from ..domain.ports import AccountRepository
+
+
+class InMemoryAccountRepository(AccountRepository):
+    def __init__(self):
+        self.items: dict[str, Account] = {}
+
+    def get(self, account_id: str) -> Account | None:
+        return self.items.get(account_id)
+
+    def save(self, account: Account) -> None:
+        self.items[account.id] = account
+```
+
+[modules/banking/infrastructure/notifications.py](templates/hex-service/src/modules/banking/infrastructure/notifications.py)
+```python
+from ..domain.ports import NotificationPort
+
+
+class EmailNotificationAdapter(NotificationPort):
+    def send_balance_alert(self, to_email: str, current_balance: float, threshold: float) -> None:
+        print(f"Email -> {to_email}: balance ${current_balance:.2f} is below ${threshold:.2f}")
+```
+
+[modules/banking/main.py](templates/hex-service/src/modules/banking/main.py)
+```python
+from datetime import datetime
+from .application.balance_alert import BalanceAlertService
+from .infrastructure.notifications import EmailNotificationAdapter
+from .infrastructure.repositories import InMemoryAccountRepository
+from .domain.entities import Account
+
+
+def run_demo() -> None:
+    accounts = InMemoryAccountRepository()
+    notifier = EmailNotificationAdapter()
+    service = BalanceAlertService(accounts, notifier)
+
+    accounts.save(Account(id="acc-123", owner_email="user@example.com", balance=49.0, updated_at=datetime.utcnow()))
+    service.execute(account_id="acc-123", threshold=50.0)
+
+
+if __name__ == "__main__":
+    run_demo()
 ```

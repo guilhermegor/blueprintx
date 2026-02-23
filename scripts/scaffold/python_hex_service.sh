@@ -73,7 +73,7 @@ create_directory_structure() {
     
     mkdir -p "$project_path"/src/core/domain
     mkdir -p "$project_path"/src/core/infrastructure
-    mkdir -p "$project_path"/src/core/services
+    mkdir -p "$project_path"/src/core/application
     mkdir -p "$project_path"/src/modules
     mkdir -p "$project_path"/src/utils
     mkdir -p "$project_path"/src/config

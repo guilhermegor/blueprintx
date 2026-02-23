@@ -1,4 +1,4 @@
-"""Use-case services orchestrating the example feature's domain and ports."""
+"""Application use-cases orchestrating the example feature's domain and ports."""
 
 from __future__ import annotations
 

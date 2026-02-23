@@ -108,11 +108,11 @@ show_hex_service() {
             core/
                 domain/
                 infrastructure/
-                services/
+                application/
             modules/
                 example_feature/
                     domain/
-                    services/
+                    application/
                     infrastructure/
             utils/
             config/
