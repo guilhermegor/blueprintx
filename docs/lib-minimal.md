@@ -14,7 +14,7 @@ project/
     performance/
   docs/
   container/
-  bin/
+  scripts/
   .github/workflows/tests.yaml
   .vscode/settings.json
   .env
@@ -28,7 +28,7 @@ Shared Python assets (pyproject, pre-commit, README boilerplate, VS Code, CI) co
 - `tests/unit`: fast tests; scaffold adds a sample `test_main.py` that invokes the entrypoint.
 - `tests/integration` and `tests/performance`: reserved for slower suites.
 - `docs`: place project documentation (a starter `docs/index.md` is created).
-- `container` and `bin`: optional CLI and container tooling.
+- `container` and `scripts`: optional CLI and container tooling.
 - `.github/workflows`: CI pipeline (pytest + lint hooks once you add tools).
 - `.vscode`: sensible editor defaults for Python projects.
 

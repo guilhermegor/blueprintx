@@ -13,7 +13,7 @@ project/
     main.py
   tests/{unit,integration,performance}/
   container/
-  bin/
+    scripts/
   data/
   docs/
   public/

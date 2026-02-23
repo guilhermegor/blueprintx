@@ -4,8 +4,8 @@
 .PHONY: vscode_init export_deps
 
 vscode_init:
-	@bash bin/vscode_keybindings.sh
-	@bash bin/vscode_extensions.sh
+	@bash scripts/vscode_keybindings.sh
+	@bash scripts/vscode_extensions.sh
 
 export_deps:
-	@bash bin/export_deps.sh
+	@bash scripts/export_deps.sh

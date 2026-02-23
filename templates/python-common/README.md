@@ -93,7 +93,7 @@ ${PROJECT_SLUG}/
 │   ├── CODEOWNERS
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── .vscode/
-├── bin/
+├── scripts/
 ├── data/
 ├── docs/
 ├── examples/

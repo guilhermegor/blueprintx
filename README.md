@@ -49,7 +49,7 @@ project/
         main.py              # entrypoint; selects DB backend via .env
     tests/{unit,integration,performance}/
     container/
-    bin/
+    scripts/
     public/
     docs/
     .github/

@@ -81,7 +81,7 @@ create_directory_structure() {
     mkdir -p "$project_path"/tests/performance
     mkdir -p "$project_path"/tests/unit
     mkdir -p "$project_path"/container
-    mkdir -p "$project_path"/bin
+    mkdir -p "$project_path"/scripts
     mkdir -p "$project_path"/data
     mkdir -p "$project_path"/public
     mkdir -p "$project_path"/docs
@@ -93,7 +93,7 @@ create_directory_structure() {
     touch "$project_path"/tests/performance/.keep
     touch "$project_path"/tests/unit/.keep
     touch "$project_path"/container/.keep
-    touch "$project_path"/bin/.keep
+    touch "$project_path"/scripts/.keep
     touch "$project_path"/data/.keep
     touch "$project_path"/docs/.keep
     

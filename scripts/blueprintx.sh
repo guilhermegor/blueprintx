@@ -122,7 +122,7 @@ show_hex_service() {
             performance/
             unit/
         container/
-        bin/
+        scripts/
         public/
         docs/
         .github/
@@ -161,7 +161,7 @@ show_lib_minimal() {
             unit/
                 test_main.py
         container/
-        bin/
+        scripts/
         docs/
             index.md
         .github/
