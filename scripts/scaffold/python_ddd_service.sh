@@ -160,6 +160,7 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     cp -r "$COMMON_TEMPLATE_ROOT/prompts" "$project_path/prompts"
     cp -r "$COMMON_TEMPLATE_ROOT/scripts/." "$project_path/scripts/"
+    cp "$COMMON_TEMPLATE_ROOT/run.sh" "$project_path/run.sh"
     
     print_status "success" "Common templates applied"
 }
