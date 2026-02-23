@@ -116,7 +116,7 @@ copy_templates() {
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/public/logo_lorem_ipsum.png" "$project_path/public/logo_lorem_ipsum.png"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.env" "$project_path/.env"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.env.example" "$project_path/.env"
     
     # Create docs/index.md with project name
     sed "s/\${PROJECT_NAME}/$PROJECT_NAME/g" << 'EOF' > "$project_path/docs/index.md"
