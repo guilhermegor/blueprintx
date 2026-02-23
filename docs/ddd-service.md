@@ -8,7 +8,7 @@ A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It
 
 ## Expected layout (after scaffold)
 
-```
+```bash
 project/
   src/
     core/{domain,infrastructure,application}
@@ -133,4 +133,12 @@ Keep `core/` only for truly shared cross-cutting pieces.
 - [Example - External API Calls](examples/ddd-external-api.md) — Stock exchange data, swapping providers
 - [Example - Wiring with FastAPI](examples/ddd-usage-examples.md) — Wiring, FastAPI integration, testing
 - [Example - Bank Balance Alert](examples/ddd-bank-balance-alert.md) — Complete multi-port example
+
+---
+
+## 📚 Acknowledgments
+
+This skeleton is inspired by the foundational work of **Eric Evans** in his seminal book *Domain-Driven Design: Tackling Complexity in the Heart of Software*. If you're new to DDD or want to deepen your understanding of the patterns used here, we highly recommend reading it.
+
+📖 [Domain-Driven Design: Tackling Complexity in the Heart of Software](https://www.amazon.com.br/Domain-Driven-Design-Tackling-Complexity-Software/dp/0321125215) — Eric Evans
 
