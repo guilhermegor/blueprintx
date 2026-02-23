@@ -14,7 +14,8 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     mysql_connector = None
 
-from .base import DatabaseHandler, Record, ensure_id
+from .base import DatabaseHandler, ensure_id
+from .dto import Record
 
 
 class MySQLDatabaseHandler(DatabaseHandler):

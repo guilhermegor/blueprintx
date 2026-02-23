@@ -1,28 +1,29 @@
-"""MariaDB implementation of the database handler using mysql-connector-python."""
+"""Microsoft SQL Server implementation of the database handler using pyodbc."""
 
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
 
 try:
-    import mysql.connector as mysql_connector  # type: ignore
+    import pyodbc  # type: ignore
 except ImportError:  # pragma: no cover - optional dependency
-    mysql_connector = None
+    pyodbc = None
 
 from .base import DatabaseHandler, ensure_id
 from .dto import Record
 
 
-class MariaDBDatabaseHandler(DatabaseHandler):
-    """MariaDB handler using mysql-connector-python.
+class MSSQLDatabaseHandler(DatabaseHandler):
+    """SQL Server handler using pyodbc.
 
     Parameters
     ----------
-    dsn : str
-        Connection string for mysql-connector.
+    connection_string : str
+        ODBC connection string for ``pyodbc.connect``.
     table : str, optional
         Table name used for storage, by default ``"records"``.
     id_field : str, optional
@@ -31,27 +32,24 @@ class MariaDBDatabaseHandler(DatabaseHandler):
     Raises
     ------
     ImportError
-        If ``mysql-connector-python`` is not installed when instantiating the handler.
+        If ``pyodbc`` is not installed when instantiating the handler.
     """
 
-    def __init__(self, dsn: str, table: str = "records", id_field: str = "id"):
-        if mysql_connector is None:
-            raise ImportError(
-                "mysql-connector-python is required for MariaDBDatabaseHandler; install it to use this backend."
-            )
-        self.dsn = dsn
+    def __init__(self, connection_string: str, table: str = "records", id_field: str = "id"):
+        if pyodbc is None:
+            raise ImportError("pyodbc is required for MSSQLDatabaseHandler; install it to use this backend.")
+        self.connection_string = connection_string
         self.table = table
         self.id_field = id_field
-        self.connection_kwargs = self._parse_dsn(dsn)
         self._ensure_table()
 
     def create(self, record: Record) -> str:
-        """Insert or update a record using an upsert.
+        """Insert or update a record.
 
         Parameters
         ----------
         record : Record
-            Data to persist.
+            Data to persist; an ``id`` is generated if missing.
 
         Returns
         -------
@@ -64,8 +62,10 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         with self._connect() as conn:
             cur = conn.cursor()
             cur.execute(
-                f"INSERT INTO {self.table} ({self.id_field}, data) VALUES (%s, %s) "
-                f"ON DUPLICATE KEY UPDATE data = VALUES(data)",
+                f"MERGE {self.table} AS t USING (SELECT ? AS {self.id_field}, ? AS data) AS s "
+                f"ON t.{self.id_field} = s.{self.id_field} "
+                f"WHEN MATCHED THEN UPDATE SET data = s.data "
+                f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) VALUES (s.{self.id_field}, s.data);",
                 (record[self.id_field], payload),
             )
             conn.commit()
@@ -82,33 +82,31 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         Returns
         -------
         Record or None
-            Stored record when present, otherwise ``None``.
+            Stored record if found, else ``None``.
         """
 
         with self._connect() as conn:
             cur = conn.cursor()
-            cur.execute(
-                f"SELECT data FROM {self.table} WHERE {self.id_field} = %s", (record_id,)
-            )
+            cur.execute(f"SELECT data FROM {self.table} WHERE {self.id_field} = ?", (record_id,))
             row = cur.fetchone()
         if not row:
             return None
         return json.loads(row[0])
 
     def update(self, record_id: str, updates: Record) -> Optional[Record]:
-        """Update an existing record.
+        """Merge updates into an existing record.
 
         Parameters
         ----------
         record_id : str
             Identifier of the record to update.
         updates : Record
-            Fields to merge into the existing record.
+            Partial payload containing fields to override.
 
         Returns
         -------
         Record or None
-            Updated record when it exists, otherwise ``None``.
+            Updated record when found, else ``None``.
         """
 
         existing = self.read(record_id)
@@ -129,20 +127,29 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         Returns
         -------
         bool
-            ``True`` when a record was deleted, ``False`` otherwise.
+            ``True`` when a row was deleted, otherwise ``False``.
         """
 
         with self._connect() as conn:
             cur = conn.cursor()
-            cur.execute(
-                f"DELETE FROM {self.table} WHERE {self.id_field} = %s", (record_id,)
-            )
+            cur.execute(f"DELETE FROM {self.table} WHERE {self.id_field} = ?", (record_id,))
             deleted = cur.rowcount > 0
             conn.commit()
         return deleted
 
     def backup(self, target_path: str | Path) -> Path:
-        """Stream all records to a JSON file as a backup artifact."""
+        """Stream all records to a JSON file as a backup artifact.
+
+        Parameters
+        ----------
+        target_path : str or Path
+            Destination path for the JSON backup.
+
+        Returns
+        -------
+        Path
+            Path to the created backup file.
+        """
 
         target = Path(target_path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -155,14 +162,14 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         return target
 
     def close(self) -> None:
-        """No-op because connections are created per call."""
+        """Release resources (no-op, connections are per-call)."""
 
         return None
 
     def _connect(self):
-        """Create a mysql-connector connection using the parsed DSN."""
+        """Create a pyodbc connection using the configured connection string."""
 
-        return mysql_connector.connect(**self.connection_kwargs)  # type: ignore[arg-type]
+        return pyodbc.connect(self.connection_string)
 
     def _ensure_table(self) -> None:
         """Create the backing table when it does not exist."""
@@ -171,22 +178,13 @@ class MariaDBDatabaseHandler(DatabaseHandler):
             cur = conn.cursor()
             cur.execute(
                 f"""
-                CREATE TABLE IF NOT EXISTS {self.table} (
-                    {self.id_field} VARCHAR(255) PRIMARY KEY,
-                    data JSON NOT NULL
-                )
+                IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='{self.table}' AND xtype='U')
+                BEGIN
+                    CREATE TABLE {self.table} (
+                        {self.id_field} NVARCHAR(255) PRIMARY KEY,
+                        data NVARCHAR(MAX) NOT NULL
+                    );
+                END
                 """
             )
             conn.commit()
-
-    def _parse_dsn(self, dsn: str) -> dict[str, object]:
-        """Parse a MariaDB DSN into keyword arguments for mysql-connector."""
-
-        parsed = urlparse(dsn)
-        return {
-            "user": parsed.username or "",
-            "password": parsed.password or "",
-            "host": parsed.hostname or "localhost",
-            "port": parsed.port or 3306,
-            "database": parsed.path.lstrip("/") or None,
-        }

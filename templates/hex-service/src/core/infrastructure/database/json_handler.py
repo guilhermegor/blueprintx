@@ -7,7 +7,8 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from .base import DatabaseHandler, Record, ensure_id
+from .base import DatabaseHandler, ensure_id
+from .dto import Record
 
 
 class JSONDatabaseHandler(DatabaseHandler):

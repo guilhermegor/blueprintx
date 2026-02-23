@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 import uuid
 
-Record = dict[str, Any]
+from .dto import Record
 
 
 def ensure_id(record: Record, id_field: str = "id") -> Record:
@@ -25,7 +25,6 @@ def ensure_id(record: Record, id_field: str = "id") -> Record:
     Record
         Record with the identifier guaranteed to be present.
     """
-
     value = record.get(id_field)
     if value:
         return {**record, id_field: str(value)}
