@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Optional
 import uuid
 
@@ -102,4 +103,19 @@ class DatabaseHandler(ABC):
         -------
         bool
             ``True`` when a row was deleted, ``False`` otherwise.
+        """
+
+    @abstractmethod
+    def backup(self, target_path: str | Path) -> Path:
+        """Create a backup of all stored data.
+
+        Parameters
+        ----------
+        target_path : str or Path
+            Destination file path for the backup artifact.
+
+        Returns
+        -------
+        Path
+            Path to the created backup artifact.
         """

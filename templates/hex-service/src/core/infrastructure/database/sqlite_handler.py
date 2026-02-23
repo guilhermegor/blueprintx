@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -118,6 +119,14 @@ class SQLiteDatabaseHandler(DatabaseHandler):
                 f"DELETE FROM {self.table} WHERE {self.id_field} = ?", (record_id,)
             )
             return cursor.rowcount > 0
+
+    def backup(self, target_path: str | Path) -> Path:
+        """Copy the SQLite database file to the destination path."""
+
+        target = Path(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.db_path, target)
+        return target
 
     def _connect(self) -> sqlite3.Connection:
         """Create a new SQLite connection.

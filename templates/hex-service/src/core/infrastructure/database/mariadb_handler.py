@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -138,6 +139,19 @@ class MariaDBDatabaseHandler(DatabaseHandler):
             deleted = cur.rowcount > 0
             conn.commit()
         return deleted
+
+    def backup(self, target_path: str | Path) -> Path:
+        """Stream all records to a JSON file as a backup artifact."""
+
+        target = Path(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("w", encoding="utf-8") as handle:
+            with self._connect() as conn:
+                cur = conn.cursor()
+                cur.execute(f"SELECT data FROM {self.table}")
+                rows = (json.loads(row[0]) for row in cur)
+                handle.write(json.dumps(list(rows), indent=2, ensure_ascii=False))
+        return target
 
     def _connect(self):
         """Create a mysql-connector connection using the parsed DSN."""

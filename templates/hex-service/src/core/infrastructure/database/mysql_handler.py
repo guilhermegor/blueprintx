@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -40,7 +43,19 @@ class MySQLDatabaseHandler(DatabaseHandler):
         self.dsn = dsn
         self.table = table
         self.id_field = id_field
-        self.connection_kwargs = self._parse_dsn(dsn)
+        parsed = self._parse_dsn(dsn)
+        self.connection_kwargs = {
+            "user": parsed.get("user"),
+            "password": parsed.get("password"),
+            "host": parsed.get("host", "localhost"),
+            "port": parsed.get("port", 3306),
+            "database": parsed.get("database"),
+        }
+        self.host = self.connection_kwargs["host"] or "localhost"
+        self.port = int(self.connection_kwargs["port"] or 3306)
+        self.user = self.connection_kwargs["user"] or "root"
+        self.password = self.connection_kwargs["password"] or ""
+        self.dbname = self.connection_kwargs["database"] or parsed.get("database") or "app"
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -139,6 +154,37 @@ class MySQLDatabaseHandler(DatabaseHandler):
             conn.commit()
         return deleted
 
+    def backup(self, target_path: str | Path) -> Path:
+        """Create a MySQL backup using mysqldump."""
+
+        target = Path(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        env = os.environ.copy()
+        if self.password:
+            env["MYSQL_PWD"] = self.password
+
+        command = [
+            "mysqldump",
+            "-h",
+            self.host,
+            "-P",
+            str(self.port),
+            "-u",
+            self.user,
+            self.dbname,
+        ]
+
+        try:
+            with target.open("w", encoding="utf-8") as handle:
+                subprocess.run(command, stdout=handle, check=True, env=env)  # noqa: S603
+        except FileNotFoundError as err:
+            raise RuntimeError("mysqldump is required for MySQL backups but was not found in PATH") from err
+        except subprocess.CalledProcessError as err:
+            raise RuntimeError(f"mysqldump failed with exit code {err.returncode}") from err
+
+        return target
+
     def _connect(self):
         """Create a mysql-connector connection using the parsed DSN."""
 
@@ -164,9 +210,9 @@ class MySQLDatabaseHandler(DatabaseHandler):
 
         parsed = urlparse(dsn)
         return {
-            "user": parsed.username or "",
-            "password": parsed.password or "",
-            "host": parsed.hostname or "localhost",
-            "port": parsed.port or 3306,
-            "database": parsed.path.lstrip("/") or None,
+            "user": parsed.username or os.getenv("MYSQL_USER"),
+            "password": parsed.password or os.getenv("MYSQL_PASSWORD"),
+            "host": parsed.hostname or os.getenv("MYSQL_HOST", "localhost"),
+            "port": parsed.port or int(os.getenv("MYSQL_PORT", "3306")),
+            "database": parsed.path.lstrip("/") or os.getenv("MYSQL_DB"),
         }

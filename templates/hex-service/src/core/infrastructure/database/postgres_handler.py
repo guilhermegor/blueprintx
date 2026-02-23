@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 try:
     import psycopg
@@ -37,6 +41,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
         self.dsn = dsn
         self.table = table
         self.id_field = id_field
+        parsed = self._parse_dsn(dsn)
+        self.host = parsed.get("host") or "localhost"
+        self.port = parsed.get("port") or 5432
+        self.user = parsed.get("user") or os.getenv("POSTGRES_USER", "user")
+        self.password = parsed.get("password") or os.getenv("POSTGRES_PASSWORD", "password")
+        self.dbname = parsed.get("dbname") or parsed.get("database") or os.getenv("POSTGRES_DB", "app")
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -129,10 +139,57 @@ class PostgresDatabaseHandler(DatabaseHandler):
             )
             return cur.rowcount > 0
 
+    def backup(self, target_path: str | Path) -> Path:
+        """Create a PostgreSQL backup using pg_dump in custom format."""
+
+        target = Path(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        env = os.environ.copy()
+        if self.password:
+            env["PGPASSWORD"] = self.password
+
+        command = [
+            "pg_dump",
+            "-h",
+            self.host,
+            "-p",
+            str(self.port),
+            "-U",
+            self.user,
+            "-F",
+            "c",  # custom format for pg_restore
+            "-b",  # include large objects
+            "-f",
+            str(target),
+            self.dbname,
+        ]
+
+        try:
+            subprocess.run(command, check=True, env=env)  # noqa: S603
+        except FileNotFoundError as err:
+            raise RuntimeError("pg_dump is required for PostgreSQL backups but was not found in PATH") from err
+        except subprocess.CalledProcessError as err:
+            raise RuntimeError(f"pg_dump failed with exit code {err.returncode}") from err
+
+        return target
+
     def _connect(self):
         """Create a psycopg connection using the configured DSN."""
 
         return psycopg.connect(self.dsn)
+
+    def _parse_dsn(self, dsn: str) -> dict[str, object]:
+        """Parse a PostgreSQL DSN into connection parts for pg_dump."""
+
+        parsed = urlparse(dsn)
+        return {
+            "user": parsed.username,
+            "password": parsed.password,
+            "host": parsed.hostname,
+            "port": parsed.port,
+            "dbname": (parsed.path.lstrip("/") if parsed.path else None),
+        }
 
     def _ensure_table(self) -> None:
         """Create the backing table when it does not exist."""

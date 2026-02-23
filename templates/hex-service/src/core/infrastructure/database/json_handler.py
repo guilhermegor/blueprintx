@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -113,6 +114,14 @@ class JSONDatabaseHandler(DatabaseHandler):
             return False
         self._write_all(remaining)
         return True
+
+    def backup(self, target_path: str | Path) -> Path:
+        """Create a file copy as a backup artifact."""
+
+        target = Path(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.file_path, target)
+        return target
 
     def _read_all(self) -> list[Record]:
         """Load all records from disk.
