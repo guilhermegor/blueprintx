@@ -89,7 +89,7 @@ class InMemoryNoteRepository(NoteRepository):
         return note
 ```
 
-Shared database backends live under `core/infrastructure/database/`, with runtime selection handled in [templates/ddd-service/src/main.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/ddd-service/src/main.py#L22-L133) using `DB_BACKEND` (json, csv, sqlite, postgresql, mariadb, mysql).
+Shared database backends live under `core/infrastructure/database/`, with runtime selection handled in [templates/ddd-service/src/main.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/ddd-service/src/main.py#L22-L133) using `DB_BACKEND` (json, csv, sqlite, postgresql, mariadb, mysql, mssql, oracle).
 
 ## Modules (modules/<feature>)
 What goes here: Feature/bounded-context composition—wire domain + app + infra for that feature. Also entrypoints like API/CLI handlers.

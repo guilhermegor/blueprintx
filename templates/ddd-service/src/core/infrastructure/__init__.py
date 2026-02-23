@@ -7,6 +7,8 @@ from .database import (
     PostgresDatabaseHandler,
     MariaDBDatabaseHandler,
     MySQLDatabaseHandler,
+    MSSQLDatabaseHandler,
+    OracleDatabaseHandler,
     DatabaseHandler,
     Record,
 )
@@ -18,6 +20,8 @@ __all__ = [
     "PostgresDatabaseHandler",
     "MariaDBDatabaseHandler",
     "MySQLDatabaseHandler",
+    "MSSQLDatabaseHandler",
+    "OracleDatabaseHandler",
     "DatabaseHandler",
     "Record",
 ]

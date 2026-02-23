@@ -15,6 +15,8 @@ from core.infrastructure.database import (
     PostgresDatabaseHandler,
     MariaDBDatabaseHandler,
     MySQLDatabaseHandler,
+    MSSQLDatabaseHandler,
+    OracleDatabaseHandler,
     DatabaseHandler,
 )
 
@@ -50,6 +52,28 @@ def _mysql_dsn() -> str:
     port = os.getenv("MYSQL_PORT", "3306")
     database = os.getenv("MYSQL_DB", "app")
     return f"mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}"
+
+
+def _mssql_dsn() -> str:
+    """Build a MSSQL (SQL Server) DSN from environment variables."""
+
+    user = os.getenv("MSSQL_USER", "sa")
+    password = os.getenv("MSSQL_PASSWORD", "password")
+    host = os.getenv("MSSQL_HOST", "localhost")
+    port = os.getenv("MSSQL_PORT", "1433")
+    database = os.getenv("MSSQL_DB", "app")
+    return f"mssql+pyodbc://{user}:{password}@{host}:{port}/{database}?driver=ODBC+Driver+17+for+SQL+Server"
+
+
+def _oracle_dsn() -> str:
+    """Build an Oracle DSN from environment variables."""
+
+    user = os.getenv("ORACLE_USER", "user")
+    password = os.getenv("ORACLE_PASSWORD", "password")
+    host = os.getenv("ORACLE_HOST", "localhost")
+    port = os.getenv("ORACLE_PORT", "1521")
+    service = os.getenv("ORACLE_SERVICE", "XEPDB1")
+    return f"oracle+oracledb://{user}:{password}@{host}:{port}/?service_name={service}"
 
 
 def build_database_handler() -> DatabaseHandler:
@@ -89,6 +113,12 @@ def build_database_handler() -> DatabaseHandler:
         ),
         "mysql": lambda: MySQLDatabaseHandler(
             os.getenv("MYSQL_DSN", _mysql_dsn())
+        ),
+        "mssql": lambda: MSSQLDatabaseHandler(
+            os.getenv("MSSQL_DSN", _mssql_dsn())
+        ),
+        "oracle": lambda: OracleDatabaseHandler(
+            os.getenv("ORACLE_DSN", _oracle_dsn())
         ),
     }
 

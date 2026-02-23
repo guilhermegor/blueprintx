@@ -1,4 +1,16 @@
 # -------------------
+# VIRTUAL ENVIRONMENT
+# -------------------
+.PHONY: init-venv update-venv
+
+init-venv:
+	@bash scripts/init_venv.sh
+
+update-venv:
+	@poetry update
+	@echo "Poetry project updated"
+
+# -------------------
 # VSCODE CONFIG
 # -------------------
 .PHONY: vscode_init export_deps
