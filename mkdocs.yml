@@ -5,7 +5,11 @@ repo_url: https://github.com/guilhermegor/BlueprintX
 nav:
   - Home: index.md
   - Python:
-      - DDD Service: ddd-service.md
+      - DDD Service:
+          - Overview: ddd-service.md
+          - Example - External API Calls: examples/ddd-external-api.md
+          - Example - Wiring with FastAPI: examples/ddd-usage-examples.md
+          - Example - Bank Balance Alert: examples/ddd-bank-balance-alert.md
       - Lib Minimal: lib-minimal.md
 theme:
   name: material
@@ -22,7 +26,12 @@ theme:
         name: Switch to light mode
 markdown_extensions:
   - admonition
-  - codehilite
   - toc:
       permalink: true
   - tables
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences

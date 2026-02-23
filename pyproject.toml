@@ -32,6 +32,7 @@ poetry-plugin-export = ">=1.8"
 [tool.poetry.group.docs.dependencies]
 mkdocs = ">=1.6.0"
 mkdocs-material = ">=9.5.0"
+pymdown-extensions = ">=10.0"
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]

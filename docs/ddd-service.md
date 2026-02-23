@@ -1,8 +1,13 @@
 # DDD Service (Domain-Driven Design, hexagonal service)
 
-A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It keeps business logic isolated from I/O while allowing shared infrastructure when it is truly cross-cutting. Template folder name remains `templates/ddd-service` in this repository.
+A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It keeps business logic isolated from I/O while allowing shared infrastructure when it is truly cross-cutting.
+
+> **Examples:** [External API Calls](examples/ddd-external-api.md) · [Wiring with FastAPI](examples/ddd-usage-examples.md) · [Bank Balance Alert](examples/ddd-bank-balance-alert.md)
+
+---
 
 ## Expected layout (after scaffold)
+
 ```
 project/
   src/
@@ -23,11 +28,16 @@ project/
   pyproject.toml
 ```
 
-## Domain (core/domain or modules/<feature>/domain)
-What goes here: Entities, value objects, domain services (pure business logic), and the ports (interfaces) the domain needs. No framework or I/O.
+---
 
-Example entity: [templates/ddd-service/src/modules/example_feature/domain/entities.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/ddd-service/src/modules/example_feature/domain/entities.py#L1-L15)
+## Layers
+
+### Domain (`core/domain` or `modules/<feature>/domain`)
+
+**What goes here:** Entities, value objects, domain services (pure business logic), and the ports (interfaces) the domain needs. No framework or I/O.
+
 ```python
+# entities.py
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -38,8 +48,8 @@ class Note:
     created_at: datetime
 ```
 
-Example port: [templates/ddd-service/src/modules/example_feature/domain/ports.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/ddd-service/src/modules/example_feature/domain/ports.py#L1-L24)
 ```python
+# ports.py
 from abc import ABC, abstractmethod
 from typing import Iterable
 from .entities import Note
@@ -53,11 +63,14 @@ class NoteRepository(ABC):
     def list(self) -> Iterable[Note]: ...
 ```
 
-## Application (core/application or modules/<feature>/application)
-What goes here: Use-case orchestration; coordinates domain objects and ports. Enforces transaction boundaries and policies; still framework-free.
+---
 
-Example use-case: [templates/ddd-service/src/modules/example_feature/application/use_cases.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/ddd-service/src/modules/example_feature/application/use_cases.py#L1-L30)
+### Application (`core/application` or `modules/<feature>/application`)
+
+**What goes here:** Use-case orchestration; coordinates domain objects and ports. Enforces transaction boundaries and policies; still framework-free.
+
 ```python
+# use_cases.py
 from datetime import datetime
 import uuid
 from ..domain.entities import Note
@@ -72,11 +85,14 @@ class CreateNote:
         return self.repo.add(note)
 ```
 
-## Infrastructure (core/infrastructure or modules/<feature>/infrastructure)
-What goes here: Adapters implementing ports (DB, HTTP clients, brokers), configuration glue, persistence mappers. Keep side effects here.
+---
 
-Example adapter implementing the repository port: [templates/ddd-service/src/modules/example_feature/infrastructure/repositories.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/ddd-service/src/modules/example_feature/infrastructure/repositories.py#L1-L25)
+### Infrastructure (`core/infrastructure` or `modules/<feature>/infrastructure`)
+
+**What goes here:** Adapters implementing ports (DB, HTTP clients, brokers), configuration glue, persistence mappers. Keep side effects here.
+
 ```python
+# repositories.py
 from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
@@ -89,146 +105,32 @@ class InMemoryNoteRepository(NoteRepository):
         return note
 ```
 
-Shared database backends live under `core/infrastructure/database/`, with runtime selection handled in [templates/ddd-service/src/main.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/ddd-service/src/main.py#L22-L133) using `DB_BACKEND` (json, csv, sqlite, postgresql, mariadb, mysql, mssql, oracle).
+Shared database backends live under `core/infrastructure/database/`, with runtime selection via `DB_BACKEND` env var (json, csv, sqlite, postgresql, mariadb, mysql, mssql, oracle).
 
-## Modules (modules/<feature>)
-What goes here: Feature/bounded-context composition—wire domain + app + infra for that feature. Also entrypoints like API/CLI handlers.
+---
 
-Example wiring and handler sketch:
-```python
-# composition
-repo = InMemoryNoteRepository()
-create_note = CreateNote(repo)
-list_notes = ListNotes(repo)
+### Modules (`modules/<feature>`)
 
-# API handler (FastAPI-style example)
-from fastapi import APIRouter
-router = APIRouter()
+**What goes here:** Feature/bounded-context composition — wire domain + app + infra for that feature. Also entrypoints like API/CLI handlers.
 
-@router.post("/notes")
-def create_note_endpoint(payload: CreateNotePayload):
-    note = create_note.execute(title=payload.title)
-    return {"id": note.id, "title": note.title, "created_at": note.created_at.isoformat()}
-```
+---
 
 ## Rules of thumb
-- Domain: pure logic and contracts; no I/O or frameworks.
-- Application: orchestrate use-cases, transactions, and policies; still framework-free.
-- Infrastructure: all I/O adapters implementing ports (DB, HTTP, queues, files).
-- Modules: group everything per feature/context and provide entrypoints/wiring. Keep core only for truly shared cross-cutting pieces.
 
-## Minimal end-to-end demo (in-memory)
-```python
-repo = InMemoryNoteRepository()
-create_note = CreateNote(repo)
-list_notes = ListNotes(repo)
+| Layer | Responsibility |
+|-------|----------------|
+| **Domain** | Pure logic and contracts; no I/O or frameworks |
+| **Application** | Orchestrate use-cases, transactions, and policies; still framework-free |
+| **Infrastructure** | All I/O adapters implementing ports (DB, HTTP, queues, files) |
+| **Modules** | Group everything per feature/context and provide entrypoints/wiring |
 
-create_note.execute("First note")
-print(list_notes.execute())
-```
+Keep `core/` only for truly shared cross-cutting pieces.
 
-## Bank balance alert example (docs-only)
-Not scaffolded—illustrative only. Shows per-layer files and imports.
+---
 
-`modules/banking/domain/entities.py`
-```python
-from dataclasses import dataclass
-from datetime import datetime
+## Learn more
 
+- [Example - External API Calls](examples/ddd-external-api.md) — Stock exchange data, swapping providers
+- [Example - Wiring with FastAPI](examples/ddd-usage-examples.md) — Wiring, FastAPI integration, testing
+- [Example - Bank Balance Alert](examples/ddd-bank-balance-alert.md) — Complete multi-port example
 
-@dataclass
-class Account:
-    id: str
-    owner_email: str
-    balance: float
-    updated_at: datetime
-```
-
-`modules/banking/domain/ports.py`
-```python
-from typing import Protocol
-from .entities import Account
-
-
-class AccountRepository(Protocol):
-    def get(self, account_id: str) -> Account | None: ...
-    def save(self, account: Account) -> None: ...
-
-
-class NotificationPort(Protocol):
-    def send_balance_alert(self, to_email: str, current_balance: float, threshold: float) -> None: ...
-```
-
-`modules/banking/application/balance_alert.py`
-```python
-from .domain.entities import Account
-from .domain.ports import AccountRepository, NotificationPort
-
-
-class BalanceAlertService:
-    def __init__(self, accounts: AccountRepository, notifier: NotificationPort):
-        self.accounts = accounts
-        self.notifier = notifier
-
-    def execute(self, account_id: str, threshold: float) -> bool:
-        account = self.accounts.get(account_id)
-        if account is None:
-            return False
-        if account.balance < threshold:
-            self.notifier.send_balance_alert(
-                to_email=account.owner_email,
-                current_balance=account.balance,
-                threshold=threshold,
-            )
-            return True
-        return False
-```
-
-`modules/banking/infrastructure/repositories.py`
-```python
-from ..domain.entities import Account
-from ..domain.ports import AccountRepository
-
-
-class InMemoryAccountRepository(AccountRepository):
-    def __init__(self):
-        self.items: dict[str, Account] = {}
-
-    def get(self, account_id: str) -> Account | None:
-        return self.items.get(account_id)
-
-    def save(self, account: Account) -> None:
-        self.items[account.id] = account
-```
-
-`modules/banking/infrastructure/notifications.py`
-```python
-from ..domain.ports import NotificationPort
-
-
-class EmailNotificationAdapter(NotificationPort):
-    def send_balance_alert(self, to_email: str, current_balance: float, threshold: float) -> None:
-        print(f"Email -> {to_email}: balance ${current_balance:.2f} is below ${threshold:.2f}")
-```
-
-`modules/banking/main.py`
-```python
-from datetime import datetime
-from .application.balance_alert import BalanceAlertService
-from .infrastructure.notifications import EmailNotificationAdapter
-from .infrastructure.repositories import InMemoryAccountRepository
-from .domain.entities import Account
-
-
-def run_demo() -> None:
-    accounts = InMemoryAccountRepository()
-    notifier = EmailNotificationAdapter()
-    service = BalanceAlertService(accounts, notifier)
-
-    accounts.save(Account(id="acc-123", owner_email="user@example.com", balance=49.0, updated_at=datetime.utcnow()))
-    service.execute(account_id="acc-123", threshold=50.0)
-
-
-if __name__ == "__main__":
-    run_demo()
-```
