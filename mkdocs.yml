@@ -4,8 +4,9 @@ site_url: https://github.com/guilhermegor/BlueprintX
 repo_url: https://github.com/guilhermegor/BlueprintX
 nav:
   - Home: index.md
-  - Hex Service: hex-service.md
-  - Lib Minimal: lib-minimal.md
+  - Python:
+      - Hex Service: hex-service.md
+      - Lib Minimal: lib-minimal.md
 theme:
   name: material
   palette:

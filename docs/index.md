@@ -5,7 +5,7 @@
 
 Lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
 
-## Scaffolds covered
+## Python scaffolds
 - Hex Service: hex/DDD-leaning service skeleton with per-feature modules and shared infrastructure. See [Hex Service](hex-service.md).
 - Lib Minimal: lean library starter with packaging, tests, and CI ready. See [Lib Minimal](lib-minimal.md).
 
