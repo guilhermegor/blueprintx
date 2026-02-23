@@ -4,6 +4,7 @@ site_url: https://github.com/guilhermegor/BlueprintX
 repo_url: https://github.com/guilhermegor/BlueprintX
 nav:
   - Home: index.md
+  - Get Started: get-started.md
   - Python:
       - DDD Service:
           - Overview: ddd-service.md

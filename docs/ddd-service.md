@@ -1,4 +1,4 @@
-# DDD Service (Domain-Driven Design, hexagonal service)
+# **DDD Service (Domain-Driven Design, hexagonal service)**
 
 A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It keeps business logic isolated from I/O while allowing shared infrastructure when it is truly cross-cutting.
 

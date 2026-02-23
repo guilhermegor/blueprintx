@@ -1,4 +1,4 @@
-# DDD Service — Usage Examples
+# **DDD Service — Usage Examples**
 
 Basic examples demonstrating the DDD hexagonal architecture in practice.
 

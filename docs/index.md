@@ -1,9 +1,18 @@
-# **BlueprintX Documentation**
-
+# **Home**
 ![BlueprintX logo](https://raw.githubusercontent.com/guilhermegor/blueprintx/main/public/logo.png)
 
 
 Lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
+
+📦 **GitHub Repository:** [github.com/guilhermegor/blueprintx](https://github.com/guilhermegor/blueprintx)
+
+---
+
+## 🚀 Get Started
+
+New to BlueprintX? See the [Get Started guide](get-started.md) for installation and quick start instructions.
+
+---
 
 ## Python scaffolds
 - DDD Service: Domain-Driven Design, hexagonal service skeleton with per-feature modules and shared infrastructure. See [DDD Service](ddd-service.md).

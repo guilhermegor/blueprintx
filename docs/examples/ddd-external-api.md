@@ -1,4 +1,4 @@
-# DDD Service — External API Calls
+# **DDD Service — External API Calls**
 
 How to integrate external APIs (stock exchanges, payment gateways, third-party services) using the ports-and-adapters pattern.
 

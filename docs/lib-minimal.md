@@ -1,4 +1,4 @@
-# Lib Minimal (library starter)
+# **Lib Minimal (library starter)**
 
 A lean Python library skeleton with packaging, testing, CI, and editor settings ready to go.
 

@@ -1,4 +1,4 @@
-# DDD Service — Bank Balance Alert Example
+# **DDD Service — Bank Balance Alert Example**
 
 A complete illustrative example showing how to structure a banking feature with balance alerts using DDD hexagonal architecture.
 
