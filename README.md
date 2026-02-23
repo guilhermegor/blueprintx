@@ -2,7 +2,7 @@
 # BlueprintX <img src="public/logo.png" align="right" width="180" style="border-radius: 12px;" alt="BlueprintX logo">
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)
+![Bash](https://img.shields.io/badge/bash-%3E%3D4-4EAA25?logo=gnubash&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Open Issues](https://img.shields.io/github/issues/guilhermegor/BlueprintX)
 ![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
