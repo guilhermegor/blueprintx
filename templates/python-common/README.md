@@ -94,6 +94,9 @@ ${PROJECT_SLUG}/
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── .vscode/
 ├── scripts/
+│   ├── export_deps.sh
+│   ├── vscode_extensions.sh
+│   └── vscode_keybindings.sh
 ├── data/
 ├── docs/
 ├── examples/

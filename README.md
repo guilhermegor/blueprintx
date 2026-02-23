@@ -65,6 +65,20 @@ Per-feature example (in template): `modules/example_feature/` with `Note` entity
 ### lib-minimal
 Lean library starter: package under `src/<project_name>/`, tests, CI, VS Code config, and pre-commit ready to go.
 
+```
+project/
+    src/<project_name>/
+    tests/{unit,integration,performance}/
+    docs/
+    container/
+    scripts/
+    .github/
+    .vscode/
+    .env
+    pyproject.toml
+    README.md
+```
+
 ## 🧭 Folder attribution (hex-service intent)
 - `core/`: cross-cutting pieces only (shared infra, shared types). Keep lean to avoid a “god domain.”
 - `modules/<feature>/domain`: feature/bounded-context domain (entities, value objects, domain services, ports).
@@ -80,15 +94,19 @@ BlueprintX/
 ├── Makefile                 # entry targets: init, preview, dev, dev-clean, dry-run
 ├── run.sh                   # same targets for non-make usage
 ├── scripts/
-│   ├── BlueprintX.sh        # interactive menu + modes
+│   ├── blueprintx.sh        # interactive menu + modes
 │   ├── preview.sh           # skeleton previews
+│   ├── help.sh              # usage tips and targets
+│   ├── init_venv.sh         # convenience venv bootstrap
 │   └── scaffold/            # per-skeleton scaffolders
 │       ├── python_hex_service.sh
 │       └── python_lib_minimal.sh
 ├── templates/               # skeleton contents
 │   ├── hex-service/         # hex/DDD-leaning template with per-feature modules
 │   ├── lib-minimal/         # minimal library template
-│   └── python-common/       # shared assets copied to all Python projects
+│   └── python-common/       # shared assets copied to all Python projects (scripts, pyproject, CI, VS Code)
+├── docs/                    # mkdocs sources
+├── mkdocs.yml               # mkdocs config
 └── public/logo.png          # logo used in this README
 ```
 
