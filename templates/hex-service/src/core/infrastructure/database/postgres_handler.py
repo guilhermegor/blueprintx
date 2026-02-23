@@ -141,7 +141,18 @@ class PostgresDatabaseHandler(DatabaseHandler):
             return cur.rowcount > 0
 
     def backup(self, target_path: str | Path) -> Path:
-        """Create a PostgreSQL backup using pg_dump in custom format."""
+        """Create a PostgreSQL backup using pg_dump in custom format.
+        
+        Parameters
+        ----------
+        target_path : str or Path
+            Destination path for the backup file.
+
+        Returns
+        -------
+        Path
+            Path to the created backup file.
+        """
 
         target = Path(target_path)
         target.parent.mkdir(parents=True, exist_ok=True)

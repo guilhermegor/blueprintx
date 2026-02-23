@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -43,6 +45,11 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         self.table = table
         self.id_field = id_field
         self.connection_kwargs = self._parse_dsn(dsn)
+        self.host = self.connection_kwargs.get("host") or "localhost"
+        self.port = int(self.connection_kwargs.get("port") or 3306)
+        self.user = self.connection_kwargs.get("user") or "root"
+        self.password = self.connection_kwargs.get("password") or ""
+        self.dbname = self.connection_kwargs.get("database") or "app"
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -142,20 +149,58 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         return deleted
 
     def backup(self, target_path: str | Path) -> Path:
-        """Stream all records to a JSON file as a backup artifact."""
+        """Create a MariaDB backup using mariadb-dump (falls back to mysqldump).
+
+        Parameters
+        ----------
+        target_path : str or Path
+            Destination path for the backup artifact.
+
+        Returns
+        -------
+        Path
+            Path to the created backup file.
+        """
 
         target = Path(target_path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("w", encoding="utf-8") as handle:
-            with self._connect() as conn:
-                cur = conn.cursor()
-                cur.execute(f"SELECT data FROM {self.table}")
-                rows = (json.loads(row[0]) for row in cur)
-                handle.write(json.dumps(list(rows), indent=2, ensure_ascii=False))
+
+        env = os.environ.copy()
+        if self.password:
+            env["MARIADB_PWD"] = self.password
+            env["MYSQL_PWD"] = self.password
+
+        dump_cmd = [
+            "mariadb-dump",
+            "-h",
+            self.host,
+            "-P",
+            str(self.port),
+            "-u",
+            self.user,
+            self.dbname,
+        ]
+
+        try:
+            with target.open("w", encoding="utf-8") as handle:
+                subprocess.run(dump_cmd, stdout=handle, check=True, env=env)  # noqa: S603
+        except FileNotFoundError:
+            fallback = dump_cmd[:]
+            fallback[0] = "mysqldump"
+            try:
+                with target.open("w", encoding="utf-8") as handle:
+                    subprocess.run(fallback, stdout=handle, check=True, env=env)  # noqa: S603
+            except FileNotFoundError as err:
+                raise RuntimeError("mariadb-dump/mysqldump is required for MariaDB backups but was not found in PATH") from err
+            except subprocess.CalledProcessError as err:
+                raise RuntimeError(f"mysqldump failed with exit code {err.returncode}") from err
+        except subprocess.CalledProcessError as err:
+            raise RuntimeError(f"mariadb-dump failed with exit code {err.returncode}") from err
+
         return target
 
     def close(self) -> None:
-        """No-op because connections are created per call."""
+        """Release resources (no-op; connections are per-call)."""
 
         return None
 
@@ -184,9 +229,9 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 
         parsed = urlparse(dsn)
         return {
-            "user": parsed.username or "",
-            "password": parsed.password or "",
-            "host": parsed.hostname or "localhost",
-            "port": parsed.port or 3306,
-            "database": parsed.path.lstrip("/") or None,
+            "user": parsed.username or os.getenv("MARIADB_USER") or os.getenv("MYSQL_USER"),
+            "password": parsed.password or os.getenv("MARIADB_PASSWORD") or os.getenv("MYSQL_PASSWORD"),
+            "host": parsed.hostname or os.getenv("MARIADB_HOST", os.getenv("MYSQL_HOST", "localhost")),
+            "port": parsed.port or int(os.getenv("MARIADB_PORT", os.getenv("MYSQL_PORT", "3306"))),
+            "database": parsed.path.lstrip("/") or os.getenv("MARIADB_DB") or os.getenv("MYSQL_DB"),
         }
