@@ -128,6 +128,11 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         shutil.copy2(self.db_path, target)
         return target
 
+    def close(self) -> None:
+        """No-op because connections are short-lived per operation."""
+
+        return None
+
     def _connect(self) -> sqlite3.Connection:
         """Create a new SQLite connection.
 

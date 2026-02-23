@@ -119,3 +119,7 @@ class DatabaseHandler(ABC):
         Path
             Path to the created backup artifact.
         """
+
+    @abstractmethod
+    def close(self) -> None:
+        """Release any resources held by the handler."""

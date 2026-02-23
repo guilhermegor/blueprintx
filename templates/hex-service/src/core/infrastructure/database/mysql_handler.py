@@ -185,6 +185,11 @@ class MySQLDatabaseHandler(DatabaseHandler):
 
         return target
 
+    def close(self) -> None:
+        """No-op because connections are created per call."""
+
+        return None
+
     def _connect(self):
         """Create a mysql-connector connection using the parsed DSN."""
 

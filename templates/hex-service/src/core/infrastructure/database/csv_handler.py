@@ -123,6 +123,11 @@ class CSVDatabaseHandler(DatabaseHandler):
         shutil.copy2(self.file_path, target)
         return target
 
+    def close(self) -> None:
+        """No-op for file-based storage."""
+
+        return None
+
     def _read_all(self) -> list[Record]:
         """Load all records from disk.
 

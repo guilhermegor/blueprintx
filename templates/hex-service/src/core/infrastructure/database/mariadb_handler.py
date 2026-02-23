@@ -153,6 +153,11 @@ class MariaDBDatabaseHandler(DatabaseHandler):
                 handle.write(json.dumps(list(rows), indent=2, ensure_ascii=False))
         return target
 
+    def close(self) -> None:
+        """No-op because connections are created per call."""
+
+        return None
+
     def _connect(self):
         """Create a mysql-connector connection using the parsed DSN."""
 
