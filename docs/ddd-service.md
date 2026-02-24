@@ -19,14 +19,39 @@ project/
   tests/{unit,integration,performance}/
   container/
     scripts/
+  assets/
   data/
   docs/
-  public/
   .github/workflows/
   .vscode/
   .env
   pyproject.toml
 ```
+
+---
+
+## Folder Descriptions
+
+| Folder | Purpose | Expected Content |
+|--------|---------|------------------|
+| `src/` | Main source code | All Python modules, organized by DDD layers |
+| `src/core/` | Shared cross-cutting code | Domain entities, infrastructure adapters, and application services used across multiple features |
+| `src/core/domain/` | Shared domain layer | Base entities, value objects, shared domain services |
+| `src/core/application/` | Shared application layer | Factories, shared use-cases, cross-cutting orchestration |
+| `src/core/infrastructure/` | Shared infrastructure | Database handlers, HTTP clients, message brokers, external integrations |
+| `src/modules/<feature>/` | Feature-specific code | Bounded context with its own domain, application, and infrastructure layers |
+| `src/utils/` | Utility functions | Helpers, formatters, validators, decorators |
+| `src/config/` | Configuration | Settings, environment loaders, constants |
+| `tests/unit/` | Unit tests | Fast, isolated tests for domain logic and use-cases |
+| `tests/integration/` | Integration tests | Tests with real databases, APIs, or external services |
+| `tests/performance/` | Performance tests | Load tests, benchmarks, stress tests |
+| `container/` | Container configuration | Dockerfile, docker-compose.yaml, container scripts |
+| `container/scripts/` | Container scripts | Entrypoint scripts, health checks, init scripts |
+| `assets/` | Static resources | Images, icons, fonts, static files |
+| `data/` | Data storage | SQLite databases, CSV files, XLSX files, JSON data, seed data |
+| `docs/` | Documentation | API docs, architecture diagrams, user guides |
+| `.github/workflows/` | CI/CD pipelines | GitHub Actions workflows for tests, linting, deployment |
+| `.vscode/` | Editor settings | VS Code workspace settings, extensions, launch configs |
 
 ---
 

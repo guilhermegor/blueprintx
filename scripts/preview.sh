@@ -58,7 +58,7 @@ show_hex_service() {
       unit/
     container/
     scripts/
-    public/
+    assets/
     docs/
     .github/
       workflows/

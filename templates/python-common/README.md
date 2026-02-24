@@ -1,4 +1,4 @@
-# ${PROJECT_DISPLAY_NAME} <img src="public/logo_lorem_ipsum.png" align="right" width="200" style="border-radius: 15px;" alt="${PROJECT_DISPLAY_NAME}">
+# ${PROJECT_DISPLAY_NAME} <img src="assets/logo_lorem_ipsum.png" align="right" width="200" style="border-radius: 15px;" alt="${PROJECT_DISPLAY_NAME}">
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![Python Version](https://img.shields.io/badge/python-${PYTHON_VERSIONS}-blue.svg)
@@ -101,7 +101,7 @@ ${PROJECT_SLUG}/
 ├── docs/
 ├── examples/
 ├── img/
-├── public/
+├── assets/
 │   └── logo.png
 ├── src/${PACKAGE_IMPORT_PATH}/
 ├── tests/

@@ -1,5 +1,5 @@
 # **Home**
-![BlueprintX logo](https://raw.githubusercontent.com/guilhermegor/blueprintx/main/public/logo.png)
+![BlueprintX logo](https://raw.githubusercontent.com/guilhermegor/blueprintx/main/assets/logo.png)
 
 
 Lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.

@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD013 -->
-# BlueprintX <img src="public/logo.png" align="right" width="180" style="border-radius: 12px;" alt="BlueprintX logo">
+# BlueprintX <img src="assets/logo.png" align="right" width="180" style="border-radius: 12px;" alt="BlueprintX logo">
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![Bash](https://img.shields.io/badge/bash-%3E%3D4-4EAA25?logo=gnubash&logoColor=white)
@@ -50,7 +50,7 @@ project/
     tests/{unit,integration,performance}/
     container/
     scripts/
-    public/
+    assets/
     docs/
     .github/
     .vscode/
@@ -107,7 +107,7 @@ BlueprintX/
 │   └── python-common/       # shared assets copied to all Python projects (scripts, pyproject, CI, VS Code)
 ├── docs/                    # mkdocs sources
 ├── mkdocs.yml               # mkdocs config
-└── public/logo.png          # logo used in this README
+└── assets/logo.png          # logo used in this README
 ```
 
 ## 👨‍💻 Authors

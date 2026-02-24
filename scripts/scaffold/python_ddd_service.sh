@@ -83,7 +83,7 @@ create_directory_structure() {
     mkdir -p "$project_path"/container
     mkdir -p "$project_path"/scripts
     mkdir -p "$project_path"/data
-    mkdir -p "$project_path"/public
+    mkdir -p "$project_path"/assets
     mkdir -p "$project_path"/docs
     mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
@@ -125,7 +125,7 @@ copy_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}" 
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
-    cp "$COMMON_TEMPLATE_ROOT/public/logo_lorem_ipsum.png" "$project_path/public/logo_lorem_ipsum.png"
+    cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service/.env.example" "$project_path/.env"
     
     print_status "success" "Templates copied and configured"
@@ -246,7 +246,7 @@ prompt_git_remote_setup() {
                     y|Y)
                         (
                             cd "$project_path"
-                            if gh repo create "${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}" --source . --remote origin --public --push; then
+                            if gh repo create "${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}" --source . --remote origin --assets --push; then
                                 push_done=1
                                 print_status "success" "Repository created and pushed via gh."
                             else

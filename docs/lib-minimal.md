@@ -12,6 +12,8 @@ project/
     unit/test_main.py
     integration/
     performance/
+  assets/
+  data/
   docs/
   container/
   scripts/
@@ -23,14 +25,21 @@ project/
 ```
 Shared Python assets (pyproject, pre-commit, README boilerplate, VS Code, CI) come from `templates/python-common`.
 
-## Purpose of each folder
-- `src/<project_name>`: your library code. The scaffold seeds `main.py` with a tiny entrypoint.
-- `tests/unit`: fast tests; scaffold adds a sample `test_main.py` that invokes the entrypoint.
-- `tests/integration` and `tests/performance`: reserved for slower suites.
-- `docs`: place project documentation (a starter `docs/index.md` is created).
-- `container` and `scripts`: optional CLI and container tooling.
-- `.github/workflows`: CI pipeline (pytest + lint hooks once you add tools).
-- `.vscode`: sensible editor defaults for Python projects.
+## Folder Descriptions
+
+| Folder | Purpose | Expected Content |
+|--------|---------|------------------|
+| `src/<project_name>/` | Library source code | Python modules, classes, functions — your library's public API |
+| `tests/unit/` | Unit tests | Fast, isolated tests for individual functions and classes |
+| `tests/integration/` | Integration tests | Tests with external dependencies (databases, APIs, file systems) |
+| `tests/performance/` | Performance tests | Benchmarks, load tests, memory profiling |
+| `assets/` | Static resources | Images, icons, fonts, static files bundled with the library |
+| `data/` | Data storage | SQLite databases, CSV files, XLSX files, JSON data, fixtures, seed data |
+| `docs/` | Documentation | API reference, tutorials, user guides (starter `index.md` created) |
+| `container/` | Container configuration | Dockerfile, docker-compose.yaml for containerized environments |
+| `scripts/` | Utility scripts | Build scripts, automation, CLI helpers |
+| `.github/workflows/` | CI/CD pipelines | GitHub Actions for tests, linting, publishing to PyPI |
+| `.vscode/` | Editor settings | VS Code workspace settings, recommended extensions, debug configs |
 
 ## Starting points
 Sample entrypoint: [templates/lib-minimal/main.py](https://github.com/guilhermegor/BlueprintX/blob/main/templates/lib-minimal/main.py#L1-L2)
@@ -44,7 +53,7 @@ The generated `tests/unit/test_main.py` asserts that this output appears.
 1. Add library functions/classes under `src/<project_name>/`.
 2. Add or expand tests in `tests/unit/` (and integration/performance as needed).
 3. Run tests with Poetry: `poetry run pytest`.
-4. Keep the docs (`docs/`) in sync with public APIs; you can host them with mkdocs like the BlueprintX docs.
+4. Keep the docs (`docs/`) in sync with assets APIs; you can host them with mkdocs like the BlueprintX docs.
 
 ## Example feature addition
 ```python
