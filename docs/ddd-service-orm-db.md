@@ -4,7 +4,7 @@ A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It
 
 This template uses **SQLAlchemy ORM** for database operations, providing a unified abstraction layer that works with PostgreSQL, MySQL, SQLite, Oracle, MSSQL, and other SQLAlchemy-supported databases.
 
-> **Examples:** [External API Calls](examples/ddd-external-api.md) · [Wiring with FastAPI](examples/ddd-usage-examples.md) · [Bank Balance Alert](examples/ddd-bank-balance-alert.md)
+> **Examples:** [Usage with SQLAlchemy](examples-orm/ddd-orm-usage-examples.md) · [External API Calls](examples-orm/ddd-orm-external-api.md) · [Bank Balance Alert](examples-orm/ddd-orm-bank-balance-alert.md)
 
 ---
 

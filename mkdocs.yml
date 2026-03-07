@@ -13,6 +13,9 @@ nav:
           - Example - Bank Balance Alert: examples/ddd-bank-balance-alert.md
       - DDD Service (ORM DB):
           - Overview: ddd-service-orm-db.md
+          - Example - Usage with SQLAlchemy: examples-orm/ddd-orm-usage-examples.md
+          - Example - External API Calls: examples-orm/ddd-orm-external-api.md
+          - Example - Bank Balance Alert: examples-orm/ddd-orm-bank-balance-alert.md
       - Lib Minimal: lib-minimal.md
 theme:
   name: material
