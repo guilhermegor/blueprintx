@@ -2,7 +2,7 @@
 
 How to integrate external APIs (stock exchanges, payment gateways, third-party services) using the ports-and-adapters pattern.
 
-> **See also:** [Core concepts](../ddd-service.md) · [Usage examples](ddd-usage-examples.md) · [Bank balance alert](ddd-bank-balance-alert.md)
+> **See also:** [Core concepts](../ddd-service-native-db.md) · [Usage examples](ddd-usage-examples.md) · [Bank balance alert](ddd-bank-balance-alert.md)
 
 ---
 

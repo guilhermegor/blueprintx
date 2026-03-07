@@ -2,7 +2,7 @@
 
 A complete illustrative example showing how to structure a banking feature with balance alerts using DDD hexagonal architecture.
 
-> **See also:** [Core concepts](../ddd-service.md) · [Usage examples](ddd-usage-examples.md) · [External API calls](ddd-external-api.md)
+> **See also:** [Core concepts](../ddd-service-native-db.md) · [Usage examples](ddd-usage-examples.md) · [External API calls](ddd-external-api.md)
 
 ---
 

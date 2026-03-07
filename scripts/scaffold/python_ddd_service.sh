@@ -111,7 +111,7 @@ create_python_files() {
     touch "$project_path"/src/utils/__init__.py
     touch "$project_path"/src/config/__init__.py
     mkdir -p "$project_path"/src/core/infrastructure/database
-    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service/src/." "$project_path/src"
+    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/src/." "$project_path/src"
     
     print_status "success" "Python files created"
 }
@@ -126,7 +126,7 @@ copy_templates() {
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}" 
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
-    cp "$BLUEPRINTX_ROOT/templates/ddd-service/.env.example" "$project_path/.env"
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.env.example" "$project_path/.env"
     
     print_status "success" "Templates copied and configured"
 }
@@ -288,7 +288,7 @@ prompt_git_remote_setup() {
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
     
-    print_section "Python ddd-service scaffold"
+    print_section "Python ddd-service-native-db scaffold"
     print_status "config" "Target: $PROJECT_PATH"
     
     validate_inputs

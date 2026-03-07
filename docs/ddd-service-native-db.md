@@ -1,6 +1,8 @@
-# **DDD Service (Domain-Driven Design, hexagonal service)**
+# **DDD Service — Native DB (Domain-Driven Design, hexagonal service)**
 
 A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It keeps business logic isolated from I/O while allowing shared infrastructure when it is truly cross-cutting.
+
+This template uses **native database libraries** (psycopg2, sqlite3, cx_Oracle, pyodbc, pymysql, etc.) for direct database access, giving you fine-grained control over queries and connections.
 
 > **Examples:** [External API Calls](examples/ddd-external-api.md) · [Wiring with FastAPI](examples/ddd-usage-examples.md) · [Bank Balance Alert](examples/ddd-bank-balance-alert.md)
 

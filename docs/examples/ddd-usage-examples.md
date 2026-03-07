@@ -2,7 +2,7 @@
 
 Basic examples demonstrating the DDD hexagonal architecture in practice.
 
-> **See also:** [Core concepts](../ddd-service.md) · [External API calls](ddd-external-api.md) · [Bank balance alert](ddd-bank-balance-alert.md)
+> **See also:** [Core concepts](../ddd-service-native-db.md) · [External API calls](ddd-external-api.md) · [Bank balance alert](ddd-bank-balance-alert.md)
 
 ---
 

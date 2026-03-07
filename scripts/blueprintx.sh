@@ -96,7 +96,7 @@ show_help() {
 
 show_hex_service() {
         echo
-        print_section "ddd-service skeleton"
+        print_section "ddd-service-native-db skeleton"
         print_status "info" "Description:"
         print_status "config" "Backend/service-oriented structure with core/modules separation,"
         print_status "config" "suitable for APIs and services using clean/hexagonal-ish design."
@@ -234,7 +234,7 @@ prompt_project_root() {
 show_skeleton_structure() {
     local skeleton="$1"
     case "$skeleton" in
-        "ddd-service")
+        "ddd-service-native-db")
             show_hex_service
             ;;
         "lib-minimal")
@@ -273,7 +273,7 @@ prompt_language() {
 
 prompt_skeleton() {
     printf "${CYAN}Select project skeleton${NC}\n" >&2
-    printf "  ${BLUE}1) ddd-service${NC} (default)\n" >&2
+    printf "  ${BLUE}1) ddd-service-native-db${NC} (default)\n" >&2
     printf "  ${BLUE}2) lib-minimal${NC}\n" >&2
     printf "${CYAN}Choice${NC} [1-2]: " >&2
     read -r choice
@@ -281,7 +281,7 @@ prompt_skeleton() {
     
     case "$choice" in
         1)
-            echo "ddd-service"
+            echo "ddd-service-native-db"
             return 0
             ;;
         2)
@@ -313,7 +313,7 @@ create_project() {
     fi
     
     case "$skeleton" in
-        "ddd-service")
+        "ddd-service-native-db")
             bash "$SCRIPT_DIR/scaffold/python_ddd_service.sh" "$project_root" "$project_name" "$project_description"
             ;;
         "lib-minimal")

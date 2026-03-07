@@ -15,7 +15,7 @@ New to BlueprintX? See the [Get Started guide](get-started.md) for installation 
 ---
 
 ## Python scaffolds
-- DDD Service: Domain-Driven Design, hexagonal service skeleton with per-feature modules and shared infrastructure. See [DDD Service](ddd-service.md).
+- DDD Service (Native DB): Domain-Driven Design, hexagonal service skeleton with per-feature modules and shared infrastructure. Uses native database libraries (psycopg2, sqlite3, cx_Oracle, etc.). See [DDD Service (Native DB)](ddd-service-native-db.md).
 - Lib Minimal: lean library starter with packaging, tests, and CI ready. See [Lib Minimal](lib-minimal.md).
 
 ## View these docs locally (Poetry)

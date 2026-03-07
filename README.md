@@ -11,7 +11,7 @@
 
 ## ✨ Highlights
 - Interactive CLI (`make init`) with skeleton choice
-- Ready-made skeletons (currently Python): **DDD service** (Domain-Driven Design, hexagonal/ports-and-adapters; template folder `templates/ddd-service`) and **lib-minimal**
+- Ready-made skeletons (currently Python): **DDD service (Native DB)** (Domain-Driven Design, hexagonal/ports-and-adapters, uses native DB libraries; template folder `templates/ddd-service-native-db`) and **lib-minimal**
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders (unit/integration/performance)
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 
@@ -29,8 +29,8 @@ Requirements: `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetr
 
 ## 🏗️ Supported skeletons
 
-### DDD service (templates/ddd-service)
-Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. `core` stays minimal (shared utilities/infra); `modules/<feature>` hosts the feature’s domain, application layer, and adapters.
+### DDD service — Native DB (templates/ddd-service-native-db)
+Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. Uses **native database libraries** (psycopg2, sqlite3, cx_Oracle, pyodbc, etc.) for direct DB access. `core` stays minimal (shared utilities/infra); `modules/<feature>` hosts the feature's domain, application layer, and adapters.
 
 ```
 project/
@@ -79,7 +79,7 @@ project/
     README.md
 ```
 
-## 🧭 Folder attribution (ddd-service intent)
+## 🧭 Folder attribution (ddd-service-native-db intent)
 - `core/`: cross-cutting pieces only (shared infra, shared types). Keep lean to avoid a “god domain.”
 - `modules/<feature>/domain`: feature/bounded-context domain (entities, value objects, domain services, ports).
 - `modules/<feature>/application`: application/use-case layer orchestrating domain + ports; no framework code.
@@ -102,7 +102,7 @@ BlueprintX/
 │       ├── python_ddd_service.sh
 │       └── python_lib_minimal.sh
 ├── templates/               # skeleton contents
-│   ├── ddd-service/         # DDD/hexagonal template with per-feature modules
+│   ├── ddd-service-native-db/  # DDD/hexagonal template with native DB libraries
 │   ├── lib-minimal/         # minimal library template
 │   └── python-common/       # shared assets copied to all Python projects (scripts, pyproject, CI, VS Code)
 ├── docs/                    # mkdocs sources

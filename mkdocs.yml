@@ -6,8 +6,8 @@ nav:
   - Home: index.md
   - Get Started: get-started.md
   - Python:
-      - DDD Service:
-          - Overview: ddd-service.md
+      - DDD Service (Native DB):
+          - Overview: ddd-service-native-db.md
           - Example - External API Calls: examples/ddd-external-api.md
           - Example - Wiring with FastAPI: examples/ddd-usage-examples.md
           - Example - Bank Balance Alert: examples/ddd-bank-balance-alert.md
