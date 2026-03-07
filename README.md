@@ -11,7 +11,7 @@
 
 ## ✨ Highlights
 - Interactive CLI (`make init`) with skeleton choice
-- Ready-made skeletons (currently Python): **DDD service (Native DB)** (Domain-Driven Design, hexagonal/ports-and-adapters, uses native DB libraries; template folder `templates/ddd-service-native-db`) and **lib-minimal**
+- Ready-made skeletons (currently Python): **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, and **lib-minimal**
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders (unit/integration/performance)
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 
@@ -62,6 +62,32 @@ project/
 
 Per-feature example (in template): `modules/example_feature/` with `Note` entity, ports, in-memory repo, and use-cases. Banking balance alert remains a docs-only illustration.
 
+### DDD service — ORM DB (templates/ddd-service-orm-db)
+Same DDD hexagonal structure, but uses **SQLAlchemy ORM** for database operations. Works with any SQLAlchemy-supported database (PostgreSQL, MySQL, SQLite, Oracle, MSSQL).
+
+```
+project/
+    src/
+        core/
+            domain/
+            infrastructure/
+                database/
+                    base.py          # SQLAlchemy base, session manager
+                    models.py        # ORM models
+                    repository.py    # Generic SQLAlchemy repository
+            application/
+        modules/
+            example_feature/
+                domain/
+                application/
+                infrastructure/
+        utils/
+        config/
+        main.py
+    tests/{unit,integration,performance}/
+    ... (same structure as native-db)
+```
+
 ### lib-minimal
 Lean library starter: package under `src/<project_name>/`, tests, CI, VS Code config, and pre-commit ready to go.
 
@@ -79,7 +105,7 @@ project/
     README.md
 ```
 
-## 🧭 Folder attribution (ddd-service-native-db intent)
+## 🧭 Folder attribution (ddd-service templates)
 - `core/`: cross-cutting pieces only (shared infra, shared types). Keep lean to avoid a “god domain.”
 - `modules/<feature>/domain`: feature/bounded-context domain (entities, value objects, domain services, ports).
 - `modules/<feature>/application`: application/use-case layer orchestrating domain + ports; no framework code.
@@ -99,12 +125,14 @@ BlueprintX/
 │   ├── help.sh              # usage tips and targets
 │   ├── init_venv.sh         # convenience venv bootstrap
 │   └── scaffold/            # per-skeleton scaffolders
-│       ├── python_ddd_service.sh
+│       ├── python_ddd_service.sh      # native DB scaffold
+│       ├── python_ddd_service_orm.sh  # SQLAlchemy ORM scaffold
 │       └── python_lib_minimal.sh
 ├── templates/               # skeleton contents
-│   ├── ddd-service-native-db/  # DDD/hexagonal template with native DB libraries
-│   ├── lib-minimal/         # minimal library template
-│   └── python-common/       # shared assets copied to all Python projects (scripts, pyproject, CI, VS Code)
+│   ├── ddd-service-native-db/  # DDD/hexagonal with native DB libraries
+│   ├── ddd-service-orm-db/     # DDD/hexagonal with SQLAlchemy ORM
+│   ├── lib-minimal/            # minimal library template
+│   └── python-common/          # shared assets for all Python projects
 ├── docs/                    # mkdocs sources
 ├── mkdocs.yml               # mkdocs config
 └── assets/logo.png          # logo used in this README

@@ -141,6 +141,62 @@ show_hex_service() {
 EOF
 }
 
+show_orm_service() {
+        echo
+        print_section "ddd-service-orm-db skeleton"
+        print_status "info" "Description:"
+        print_status "config" "Same DDD/hexagonal structure as native-db, but uses SQLAlchemy ORM"
+        print_status "config" "for database operations. Supports PostgreSQL, MySQL, SQLite, Oracle, MSSQL."
+        echo
+        print_status "info" "Key differences from native-db:"
+        print_status "config" "  - Uses SQLAlchemy ORM models instead of raw SQL"
+        print_status "config" "  - Single repository pattern works with any SQLAlchemy-supported DB"
+        print_status "config" "  - Built-in session management and connection pooling"
+        echo
+        print_status "info" "Example structure:"
+        cat << 'EOF'
+    project/
+        src/
+            core/
+                domain/
+                infrastructure/
+                    database/
+                        base.py         # SQLAlchemy base, session manager
+                        models.py       # ORM models
+                        repository.py   # Generic SQLAlchemy repository
+                application/
+            modules/
+                example_feature/
+                    domain/
+                    application/
+                    infrastructure/
+            utils/
+            config/
+            main.py
+        tests/
+            integration/
+            performance/
+            unit/
+        container/
+        scripts/
+        assets/
+        docs/
+        .github/
+            workflows/
+                tests.yaml
+            CODEOWNERS
+            PULL_REQUEST_TEMPLATE.md
+        .env
+        .gitignore
+        .pre-commit-config.yaml
+        .vscode/
+            settings.json
+        README.md
+        requirements.txt
+        pyproject.toml
+EOF
+}
+
 show_lib_minimal() {
         echo
         print_section "lib-minimal skeleton"
@@ -237,6 +293,9 @@ show_skeleton_structure() {
         "ddd-service-native-db")
             show_hex_service
             ;;
+        "ddd-service-orm-db")
+            show_orm_service
+            ;;
         "lib-minimal")
             show_lib_minimal
             ;;
@@ -273,9 +332,10 @@ prompt_language() {
 
 prompt_skeleton() {
     printf "${CYAN}Select project skeleton${NC}\n" >&2
-    printf "  ${BLUE}1) ddd-service-native-db${NC} (default)\n" >&2
-    printf "  ${BLUE}2) lib-minimal${NC}\n" >&2
-    printf "${CYAN}Choice${NC} [1-2]: " >&2
+    printf "  ${BLUE}1) ddd-service-native-db${NC} (native DB libraries)\n" >&2
+    printf "  ${BLUE}2) ddd-service-orm-db${NC} (SQLAlchemy ORM)\n" >&2
+    printf "  ${BLUE}3) lib-minimal${NC}\n" >&2
+    printf "${CYAN}Choice${NC} [1-3]: " >&2
     read -r choice
     printf "\n" >&2
     
@@ -285,6 +345,10 @@ prompt_skeleton() {
             return 0
             ;;
         2)
+            echo "ddd-service-orm-db"
+            return 0
+            ;;
+        3)
             echo "lib-minimal"
             return 0
             ;;
@@ -315,6 +379,9 @@ create_project() {
     case "$skeleton" in
         "ddd-service-native-db")
             bash "$SCRIPT_DIR/scaffold/python_ddd_service.sh" "$project_root" "$project_name" "$project_description"
+            ;;
+        "ddd-service-orm-db")
+            bash "$SCRIPT_DIR/scaffold/python_ddd_service_orm.sh" "$project_root" "$project_name" "$project_description"
             ;;
         "lib-minimal")
             bash "$SCRIPT_DIR/scaffold/python_lib_minimal.sh" "$project_root" "$project_name" "$project_description"

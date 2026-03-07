@@ -11,6 +11,8 @@ nav:
           - Example - External API Calls: examples/ddd-external-api.md
           - Example - Wiring with FastAPI: examples/ddd-usage-examples.md
           - Example - Bank Balance Alert: examples/ddd-bank-balance-alert.md
+      - DDD Service (ORM DB):
+          - Overview: ddd-service-orm-db.md
       - Lib Minimal: lib-minimal.md
 theme:
   name: material

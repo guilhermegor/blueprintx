@@ -15,7 +15,8 @@ show_languages() {
     print_status "info" "1) python"
     print_status "config" "Status: supported"
     print_status "config" "Skeletons:"
-    print_status "config" "  * ddd-service-native-db (default)"
+    print_status "config" "  * ddd-service-native-db (native DB libraries)"
+    print_status "config" "  * ddd-service-orm-db (SQLAlchemy ORM)"
     print_status "config" "  * lib-minimal"
     print_status "info" "Common Python assets applied to all skeletons:"
     print_status "config" "  * pyproject.toml (name from prompt, version 0.0.1 default, optional description)"
@@ -76,6 +77,47 @@ show_hex_service() {
 EOF
 }
 
+show_orm_service() {
+    echo
+    print_section "ddd-service-orm-db skeleton"
+    
+    print_status "info" "Description:"
+    print_status "config" "Same DDD/hexagonal structure as native-db, but uses SQLAlchemy ORM"
+    print_status "config" "for database operations. Supports PostgreSQL, MySQL, SQLite, Oracle, MSSQL."
+    echo
+    print_status "info" "Key differences from native-db:"
+    print_status "config" "  - Uses SQLAlchemy ORM models instead of raw SQL"
+    print_status "config" "  - Single repository pattern works with any SQLAlchemy-supported DB"
+    print_status "config" "  - Built-in session management and connection pooling"
+    echo
+    print_status "info" "Example structure:"
+    cat << 'EOF'
+  project/
+    src/
+      core/
+        domain/
+        infrastructure/
+          database/
+            base.py         # SQLAlchemy base, session manager
+            models.py       # ORM models
+            repository.py   # Generic SQLAlchemy repository
+        application/
+      modules/
+        example_feature/
+          domain/
+          application/
+          infrastructure/
+      utils/
+      config/
+      main.py
+    tests/
+      integration/
+      performance/
+      unit/
+    ... (same common files as native-db)
+EOF
+}
+
 show_lib_minimal() {
     echo
     print_section "lib-minimal skeleton"
@@ -119,6 +161,7 @@ EOF
 main() {
     show_languages
     show_hex_service
+    show_orm_service
     show_lib_minimal
     echo
     print_status "success" "Preview complete."
