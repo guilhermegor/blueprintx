@@ -143,7 +143,7 @@ copy_common_templates() {
 
     export PROJECT_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
         PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME
-    envsubst < "$COMMON_TEMPLATE_ROOT/pyproject.toml" > "$project_path/pyproject.toml"
+    envsubst < "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/pyproject.toml" > "$project_path/pyproject.toml"
     
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
