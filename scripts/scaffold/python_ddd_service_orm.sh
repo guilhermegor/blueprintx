@@ -147,7 +147,6 @@ copy_common_templates() {
     
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
-    cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
     cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.txt" "$project_path/.vscode/extensions.txt"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"

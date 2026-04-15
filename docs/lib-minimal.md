@@ -18,7 +18,7 @@ project/
   container/
   scripts/
   .github/workflows/tests.yaml
-  .vscode/settings.json
+  .vscode/
   .env
   pyproject.toml
   README.md

@@ -21,7 +21,6 @@ show_languages() {
     print_status "info" "Common Python assets applied to all skeletons:"
     print_status "config" "  * pyproject.toml (name from prompt, version 0.0.1 default, optional description)"
     print_status "config" "  * .pre-commit-config.yaml, requirements.txt"
-    print_status "config" "  * .vscode/settings.json"
     print_status "config" "  * .github/workflows (PR + tests), CODEOWNERS, PULL_REQUEST_TEMPLATE"
     print_status "config" "  * tests/{integration,performance,unit}"
     echo
@@ -70,7 +69,6 @@ show_hex_service() {
     .gitignore
     .pre-commit-config.yaml
     .vscode/
-      settings.json
     README.md
     requirements.txt
     pyproject.toml
@@ -152,7 +150,6 @@ show_lib_minimal() {
     .gitignore
     .pre-commit-config.yaml
     .vscode/
-      settings.json
     requirements.txt
     README.md
 EOF

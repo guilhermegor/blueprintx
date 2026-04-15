@@ -134,7 +134,6 @@ show_hex_service() {
         .gitignore
         .pre-commit-config.yaml
         .vscode/
-            settings.json
         README.md
         requirements.txt
         pyproject.toml
@@ -190,7 +189,6 @@ show_orm_service() {
         .gitignore
         .pre-commit-config.yaml
         .vscode/
-            settings.json
         README.md
         requirements.txt
         pyproject.toml
@@ -230,7 +228,6 @@ show_lib_minimal() {
         .gitignore
         .pre-commit-config.yaml
         .vscode/
-            settings.json
         requirements.txt
         README.md
 EOF

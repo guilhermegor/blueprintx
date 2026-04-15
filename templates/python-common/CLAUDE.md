@@ -26,7 +26,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.github/workflows/tests.yaml` | CI workflow for unit + integration tests |
 | `.github/CODEOWNERS` | CODEOWNERS template |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR template |
-| `.vscode/settings.json` | VS Code workspace settings |
 | `.vscode/extensions.txt` | Recommended VS Code extensions list |
 | `scripts/` | `export_deps.sh`, `vscode_extensions.sh`, `vscode_keybindings.sh`, `init_venv.sh` |
 | `prompts/` | AI prompt templates: `unit_test.md`, `refactoring.md`, `readme.md` |
