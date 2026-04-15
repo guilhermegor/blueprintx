@@ -1,10 +1,5 @@
-# Slack-compatible webhook configurations.
-# Add as many named entries as needed.
-<name_webhook>:
-  url:
-  id_channel:
-  username:
-  icon_emoji:
+ms_teams:
+  url: "https://outlook.office.com/webhook/WEBHOOK_URL"
   title: TITLE
   message: >
     ROUTINE: {}
@@ -14,4 +9,4 @@
     \n \n \t - Evidence available at: {}
     \n \n \t - Logs available at: {}
     \n \n \t Regards,
-  bool_debug_mode: false
+  bool_print_message: False
