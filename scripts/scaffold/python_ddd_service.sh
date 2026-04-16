@@ -146,8 +146,6 @@ copy_common_templates() {
     envsubst < "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/pyproject.toml" > "$project_path/pyproject.toml"
     
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
-    cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.txt" "$project_path/.vscode/extensions.txt"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     cp "$COMMON_TEMPLATE_ROOT/LICENSE" "$project_path/LICENSE"
@@ -157,8 +155,6 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$COMMON_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
-    cp -r "$COMMON_TEMPLATE_ROOT/prompts" "$project_path/prompts"
-    cp -r "$COMMON_TEMPLATE_ROOT/scripts/." "$project_path/scripts/"
     cp "$COMMON_TEMPLATE_ROOT/run.sh" "$project_path/run.sh"
     
     print_status "success" "Common templates applied"
