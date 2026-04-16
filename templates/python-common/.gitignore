@@ -11,9 +11,6 @@ __pycache__/
 venv/
 env/
 
-# pyenv
-.python-version
-
 # uv
 .uv/
 
