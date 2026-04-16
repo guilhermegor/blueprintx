@@ -1,53 +1,79 @@
-"""Service entrypoint demonstrating core and module wiring with SQLAlchemy ORM."""
+"""Service entrypoint demonstrating core and module wiring."""
 
 from __future__ import annotations
 
 import os
+import warnings
+from time import time
 
 from dotenv import load_dotenv
+from stpstone.utils.calendars.calendar_br import DatesBRAnbima
+from stpstone.utils.loggs.create_logs import CreateLog
+from stpstone.utils.loggs.init_setup import initiate_logging
 
-from core.application import build_database_session
-from core.infrastructure.database import SQLAlchemyRecordRepository
+from src.config.global_slots import (
+	CLS_MS_TEAMS,
+	DIR_PARENT,
+	ENVIRONMENT,
+	HOSTNAME,
+	LOGGER,
+	MSG_MS_TEAMS,
+	USER,
+	YAML_OUTPUTS,
+	YAML_WEBHOOKS,
+)
+from core.application import build_database_handler
 from modules.example_feature.application.use_cases import CreateNote, ListNotes
 from modules.example_feature.infrastructure.repositories import InMemoryNoteRepository
 
 
-def main() -> None:
-    """Run the service entrypoint.
+# --- initialisation ---
+load_dotenv()
+cls_create_log = CreateLog()
+cls_dates_br_anbima = DatesBRAnbima()
+float_start_time = time()
+warnings.simplefilter(action="ignore", category=FutureWarning)
+initiate_logging(LOGGER, DIR_PARENT)
 
-    Demonstrates:
-    - SQLAlchemy database session from ``build_database_session``
-    - Feature module wiring with use-cases and repositories
-    """
-    load_dotenv()
+# --- database handler ---
+cls_create_log.log_message(logger=LOGGER, message="Building database handler", log_level="info")
+db_handler = build_database_handler()
+cls_create_log.log_message(
+	logger=LOGGER,
+	message=f"Database backend: {db_handler.__class__.__name__}",
+	log_level="info",
+)
 
-    # Core: SQLAlchemy database session from environment config
-    db = build_database_session(echo=os.getenv("SQL_ECHO", "false").lower() == "true")
-    db.create_tables()
-    print(f"Database URL: {db.engine.url}")
+# --- module wiring ---
+cls_create_log.log_message(logger=LOGGER, message="Wiring example_feature module", log_level="info")
+note_repo = InMemoryNoteRepository()
+create_note = CreateNote(note_repo)
+list_notes = ListNotes(note_repo)
 
-    # Example: Using the generic SQLAlchemy repository
-    with db.session() as session:
-        repo = SQLAlchemyRecordRepository(session)
-        # Demo: add a record
-        if os.getenv("RUN_DEMO", "false").lower() == "true":
-            record_id = repo.add({"title": "Hello from SQLAlchemy!", "content": "ORM-based storage"})
-            session.commit()
-            print(f"Created record: {record_id}")
-            print(f"All records: {repo.list_all()}")
+# --- demo execution ---
+if os.getenv("RUN_DEMO", "false").lower() == "true":
+	note = create_note.execute("Hello from DDD service!")
+	cls_create_log.log_message(logger=LOGGER, message=f"Created note: {note}", log_level="info")
+	all_notes = list_notes.execute()
+	cls_create_log.log_message(
+		logger=LOGGER, message=f"All notes: {list(all_notes)}", log_level="info"
+	)
 
-    # Module: example_feature wiring (domain-specific, uses in-memory by default)
-    note_repo = InMemoryNoteRepository()
-    create_note = CreateNote(note_repo)
-    list_notes = ListNotes(note_repo)
+# --- notifications ---
+if ENVIRONMENT == "production":
+	CLS_MS_TEAMS.send_message(str_msg=MSG_MS_TEAMS, str_title=YAML_WEBHOOKS["ms_teams"]["title"])
 
-    # Demo usage for feature module
-    if os.getenv("RUN_DEMO", "false").lower() == "true":
-        note = create_note.execute("Hello from DDD service with SQLAlchemy!")
-        print(f"Created note: {note}")
-        all_notes = list_notes.execute()
-        print(f"All notes: {list(all_notes)}")
-
-
-if __name__ == "__main__":
-    main()
+# --- teardown ---
+float_elapsed_time = time() - float_start_time
+hours, remainder = divmod(float_elapsed_time, 3600)
+minutes, seconds = divmod(remainder, 60)
+cls_create_log.log_message(
+	logger=LOGGER,
+	message=f"Time elapsed(HH:MM:SS): {int(hours)}:{int(minutes)}:{seconds:.2f}",
+	log_level="info",
+)
+cls_create_log.log_message(
+	logger=LOGGER,
+	message="Routine ended in {}".format(str(cls_dates_br_anbima.curr_datetime())),
+	log_level="info",
+)

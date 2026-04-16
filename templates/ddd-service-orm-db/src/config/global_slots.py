@@ -28,8 +28,8 @@ ENVIRONMENT: str = os.getenv("ENV", "development").lower()
 YAML_OUTPUTS: dict = reading_yaml(_CONFIG_DIR / "outputs.yaml")
 YAML_WEBHOOKS: dict = reading_yaml(_CONFIG_DIR / "webhooks.yaml")
 
-_log_dir = Path(YAML_OUTPUTS["path_log"]).parent
-DirFilesManagement().mk_new_directory(_log_dir)
+DIR_PARENT = Path(YAML_OUTPUTS["path_log"]).parent
+DirFilesManagement().mk_new_directory(DIR_PARENT)
 LOGGER = CreateLog().basic_conf(complete_path=YAML_OUTPUTS["path_log"], basic_level="info")
 
 CLS_MS_TEAMS = WebhookTeams(YAML_WEBHOOKS["ms_teams"]["url"])
