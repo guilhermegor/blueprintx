@@ -22,6 +22,7 @@ classifiers = [
 python = ">=3.10"
 python-dotenv = ">=1.0.0"
 sqlalchemy = ">=2.0"
+stpstone = ">=3.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = ">=4.1.0"
