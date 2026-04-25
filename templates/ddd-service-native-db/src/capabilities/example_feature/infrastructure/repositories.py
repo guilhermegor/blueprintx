@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from chassis.typing import TypeChecker
+
 from ..domain.entities import Note
 
 
-class InMemoryNoteRepository:
+class InMemoryNoteRepository(metaclass=TypeChecker):
 	"""In-memory repository for quick starts and tests."""
 
 	def __init__(self) -> None:

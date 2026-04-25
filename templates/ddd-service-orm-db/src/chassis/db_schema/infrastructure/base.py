@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Any, Generator, Optional, TypeVar
 import uuid
+
+from chassis.typing import ABCTypeCheckerMeta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker, DeclarativeBase
@@ -92,7 +94,7 @@ class DatabaseSession:
             session.close()
 
 
-class Repository(ABC):
+class Repository(metaclass=ABCTypeCheckerMeta):
     """Abstract repository for ORM-based data access.
 
     Parameters

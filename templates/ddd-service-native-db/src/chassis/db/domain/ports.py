@@ -1,21 +1,24 @@
 """Shared database contract for all storage backends.
 
 Named ``ports.py`` to signal its role as a contract definition.
-Uses ``ABC`` instead of ``Protocol`` because chassis implementations are
-internal and must be complete — ``@abstractmethod`` provides runtime enforcement.
+Uses ``ABCTypeCheckerMeta`` instead of ``Protocol`` because chassis implementations
+are internal and must be complete — ``@abstractmethod`` provides runtime enforcement
+and ``TypeChecker`` validates argument types on every call.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from pathlib import Path
 from typing import Any, Optional
+
+from chassis.typing import ABCTypeCheckerMeta
 
 
 Record = dict[str, Any]
 
 
-class DatabaseHandler(ABC):
+class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
 	"""Abstract handler exposing CRUD operations for any storage backend.
 
 	Attributes
