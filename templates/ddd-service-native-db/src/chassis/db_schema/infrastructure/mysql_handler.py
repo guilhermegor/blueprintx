@@ -39,7 +39,8 @@ class MySQLDatabaseHandler(DatabaseHandler):
     def __init__(self, dsn: str, table: str = "records", id_field: str = "id"):
         if mysql_connector is None:
             raise ImportError(
-                "mysql-connector-python is required for MySQLDatabaseHandler; install it to use this backend."
+                "mysql-connector-python is required for MySQLDatabaseHandler; "
+                "install it to use this backend."
             )
         self.dsn = dsn
         self.table = table
@@ -180,7 +181,9 @@ class MySQLDatabaseHandler(DatabaseHandler):
             with target.open("w", encoding="utf-8") as handle:
                 subprocess.run(command, stdout=handle, check=True, env=env)  # noqa: S603
         except FileNotFoundError as err:
-            raise RuntimeError("mysqldump is required for MySQL backups but was not found in PATH") from err
+            raise RuntimeError(
+                "mysqldump is required for MySQL backups but was not found in PATH"
+            ) from err
         except subprocess.CalledProcessError as err:
             raise RuntimeError(f"mysqldump failed with exit code {err.returncode}") from err
 

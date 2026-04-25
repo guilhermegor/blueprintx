@@ -38,7 +38,9 @@ class PostgresDatabaseHandler(DatabaseHandler):
 
     def __init__(self, dsn: str, table: str = "records", id_field: str = "id"):
         if psycopg is None:
-            raise ImportError("psycopg is required for PostgresDatabaseHandler; install psycopg[binary].")
+            raise ImportError(
+                "psycopg is required for PostgresDatabaseHandler; install psycopg[binary]."
+            )
         self.dsn = dsn
         self.table = table
         self.id_field = id_field
@@ -47,7 +49,9 @@ class PostgresDatabaseHandler(DatabaseHandler):
         self.port = parsed.get("port") or 5432
         self.user = parsed.get("user") or os.getenv("POSTGRES_USER", "user")
         self.password = parsed.get("password") or os.getenv("POSTGRES_PASSWORD", "password")
-        self.dbname = parsed.get("dbname") or parsed.get("database") or os.getenv("POSTGRES_DB", "app")
+        self.dbname = (
+            parsed.get("dbname") or parsed.get("database") or os.getenv("POSTGRES_DB", "app")
+        )
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -180,7 +184,9 @@ class PostgresDatabaseHandler(DatabaseHandler):
         try:
             subprocess.run(command, check=True, env=env)  # noqa: S603
         except FileNotFoundError as err:
-            raise RuntimeError("pg_dump is required for PostgreSQL backups but was not found in PATH") from err
+            raise RuntimeError(
+                "pg_dump is required for PostgreSQL backups but was not found in PATH"
+            ) from err
         except subprocess.CalledProcessError as err:
             raise RuntimeError(f"pg_dump failed with exit code {err.returncode}") from err
 

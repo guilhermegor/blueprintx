@@ -56,7 +56,8 @@ def _mssql_dsn() -> str:
     host = os.getenv("MSSQL_HOST", "localhost")
     port = os.getenv("MSSQL_PORT", "1433")
     database = os.getenv("MSSQL_DB", "app")
-    return f"mssql+pyodbc://{user}:{password}@{host}:{port}/{database}?driver=ODBC+Driver+17+for+SQL+Server"
+    str_driver = "ODBC+Driver+17+for+SQL+Server"
+    return f"mssql+pyodbc://{user}:{password}@{host}:{port}/{database}?driver={str_driver}"
 
 
 def _oracle_dsn() -> str:

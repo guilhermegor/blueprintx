@@ -31,6 +31,8 @@ repos:
       - id: check-illegal-windows-names
       - id: check-case-conflict
       - id: name-tests-test
+        args:
+          - --pytest-test-first
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.8.3
@@ -49,7 +51,7 @@ repos:
           - commit-msg
           - manual
         always_run: true
-  
+
   # module decoupled from ruff, due to DAR absence
   - repo: https://github.com/PyCQA/pydocstyle
     rev: 6.3.0
@@ -57,9 +59,8 @@ repos:
       - id: pydocstyle
         name: pydocstyle (docstring conventions)
         args:
-          - --convention=numpy
-          - --select=D412,D417,DAR # missing returns, missing params, docstring argument checks
-  
+          - --select=D412,D417 # missing blank lines between summary/description, missing arg descriptions
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.13
     hooks:
@@ -67,7 +68,7 @@ repos:
         name: ruff check
         args:
           - --config=ruff.toml
-  
+
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
@@ -87,7 +88,7 @@ repos:
     hooks:
       - id: check-unix-filenames
         name: check unix/linux filename validity
-        entry: bash scripts/check_unix_filenames.sh
+        entry: bash bin/check_unix_filenames.sh
         language: system
         types:
           - file
@@ -102,7 +103,7 @@ repos:
 
       - id: unit-tests
         name: checking unit tests
-        entry: poetry run python -m unittest discover -s tests/unit -p "*.py"
+        entry: poetry run pytest tests/unit/
         language: system
         types:
           - file
@@ -110,7 +111,7 @@ repos:
 
       - id: integration-tests
         name: checking integration tests
-        entry: poetry run python -m unittest discover -s tests/integration -p "*.py"
+        entry: poetry run pytest tests/integration/
         language: system
         types:
           - file
@@ -118,24 +119,26 @@ repos:
 
       - id: coverage-check
         name: test coverage check
-        entry: bash -c "poetry run coverage run --source=stpstone -m unittest discover tests/unit/ && poetry run coverage report --fail-under=80 -m"
+        entry: bash -c "poetry run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-fail-under=80"
         language: system
         types:
           - python
         pass_filenames: false
         verbose: true
-      
+
       - id: coverage-badge
         name: coverage badge
-        entry: bash -c "poetry run coverage run --source=stpstone -m unittest discover tests/unit/ && poetry run coverage-badge -o coverage.svg -f"
+        entry: bash -c "poetry run pytest tests/unit/ --cov=src --cov-report=term-missing && poetry run coverage-badge -o coverage.svg -f"
         language: system
         types:
           - python
         pass_filenames: false
-      
+        stages:
+          - manual
+
       - id: check-urls
         name: check urls in docstrings
-        entry: bash scripts/test_urls_docstrings.sh
+        entry: bash bin/test_urls_docstrings.sh
         language: system
         types:
           - file

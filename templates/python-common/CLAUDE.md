@@ -36,6 +36,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Editing rules
 
 - **`ruff.toml`**: The active rule sets are `UP E F ANN B SIM I AIR ERA S PD D`. Only `D206` is ignored (tab-indent + docstring conflict). Do not remove rule sets without a documented reason.
-- **`.pre-commit-config.yaml`**: Hook versions must stay pinned (`rev:`). The `coverage-check` and `coverage-badge` hooks reference `stpstone` as the source package — update that reference when adapting for a specific project; it is a known placeholder in the common template.
+- **`.pre-commit-config.yaml`**: Hook versions must stay pinned (`rev:`).
 - **`README.md`**: Uses `${VARIABLE}` placeholders — do not replace them with literal values; they are resolved by `envsubst` during scaffolding.
 - All shell scripts must remain POSIX-compatible (bash ≥ 4).

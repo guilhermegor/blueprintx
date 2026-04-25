@@ -47,7 +47,10 @@ class OracleDatabaseHandler(DatabaseHandler):
         id_field: str = "id",
     ):
         if oracledb is None:
-            raise ImportError("oracledb (cx_Oracle) is required for OracleDatabaseHandler; install it to use this backend.")
+            raise ImportError(
+                "oracledb (cx_Oracle) is required for OracleDatabaseHandler; "
+                "install it to use this backend."
+            )
         self.dsn = dsn
         self.user = user or os.getenv("ORACLE_USER") or os.getenv("ORA_USER")
         self.password = password or os.getenv("ORACLE_PASSWORD") or os.getenv("ORA_PASSWORD")
@@ -74,10 +77,12 @@ class OracleDatabaseHandler(DatabaseHandler):
         with self._connect() as conn:
             cur = conn.cursor()
             cur.execute(
-                f"MERGE INTO {self.table} t USING (SELECT :1 AS {self.id_field}, :2 AS data FROM dual) s "
+                f"MERGE INTO {self.table} t USING "
+                f"(SELECT :1 AS {self.id_field}, :2 AS data FROM dual) s "
                 f"ON (t.{self.id_field} = s.{self.id_field}) "
                 f"WHEN MATCHED THEN UPDATE SET data = s.data "
-                f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) VALUES (s.{self.id_field}, s.data)",
+                f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) "
+                f"VALUES (s.{self.id_field}, s.data)",
                 [record[self.id_field], payload],
             )
             conn.commit()

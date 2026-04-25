@@ -37,7 +37,9 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 
     def __init__(self, connection_string: str, table: str = "records", id_field: str = "id"):
         if pyodbc is None:
-            raise ImportError("pyodbc is required for MSSQLDatabaseHandler; install it to use this backend.")
+            raise ImportError(
+                "pyodbc is required for MSSQLDatabaseHandler; install it to use this backend."
+            )
         self.connection_string = connection_string
         self.table = table
         self.id_field = id_field
@@ -65,7 +67,8 @@ class MSSQLDatabaseHandler(DatabaseHandler):
                 f"MERGE {self.table} AS t USING (SELECT ? AS {self.id_field}, ? AS data) AS s "
                 f"ON t.{self.id_field} = s.{self.id_field} "
                 f"WHEN MATCHED THEN UPDATE SET data = s.data "
-                f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) VALUES (s.{self.id_field}, s.data);",
+                f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) "
+                f"VALUES (s.{self.id_field}, s.data);",
                 (record[self.id_field], payload),
             )
             conn.commit()
