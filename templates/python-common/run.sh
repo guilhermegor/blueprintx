@@ -75,12 +75,11 @@ test_slowest() {
 }
 
 test_feat() {
-    local feat="${2:-}"
-    if [[ -z "$feat" ]]; then
-        echo "Usage: ./run.sh test-feat <keyword>"
+    if [[ -z "${FEAT:-}" ]]; then
+        echo "Usage: FEAT=<keyword> ./run.sh test_feat"
         exit 1
     fi
-    poetry run pytest tests/unit/ -k "$feat"
+    poetry run pytest tests/unit/ -k "$FEAT"
 }
 
 test_urls_docstrings() {
@@ -103,6 +102,14 @@ lint() {
 }
 
 # -------------------
+# RUN
+# -------------------
+
+start() {
+    bash "$SCRIPT_DIR/bin/start.sh"
+}
+
+# -------------------
 # HELP
 # -------------------
 
@@ -118,22 +125,23 @@ Virtual Environment
   precommit            Install pre-commit hooks (push + commit-msg)
 
 VS Code
-  vscode-init          Install VS Code extensions and keybindings
-  export-deps          Export Poetry deps to requirements.txt
+  vscode_init          Install VS Code extensions and keybindings
+  export_deps          Export Poetry deps to requirements.txt
 
 Testing
-  unit-tests           Run unit tests with pytest
-  integration-tests    Run integration tests with pytest
-  test-cov             Run unit tests with coverage report and badge
-  test-slowest         Report the 20 slowest unit tests
-  test-feat <keyword>  Run unit tests matching keyword
-  test-urls            Check all URLs inside docstrings
-  fix-playwright       Reinstall Playwright browsers
+  unit_tests           Run unit tests with pytest
+  integration_tests    Run integration tests with pytest
+  test_cov             Run unit tests with coverage report and badge
+  test_slowest         Report the 20 slowest unit tests
+  FEAT=<kw> test_feat  Run unit tests matching keyword <kw>
+  test_urls_docstrings Check all URLs inside docstrings
+  fix_playwright       Reinstall Playwright browsers
 
 Linting
   lint                 Run ruff, codespell, pydocstyle
 
-  help                 Show this help message
+Run
+  start                Run src/main.py (auto-installs Poetry if missing)
 
 EOF
 }
@@ -143,21 +151,22 @@ EOF
 # -------------------
 
 case "${1:-help}" in
-    init)              init ;;
-    venv)              venv ;;
-    update-venv)       update_venv ;;
-    precommit)         precommit ;;
-    vscode-init)       vscode_init ;;
-    export-deps)       export_deps ;;
-    unit-tests)        unit_tests ;;
-    integration-tests) integration_tests ;;
-    test-cov)          test_cov ;;
-    test-slowest)      test_slowest ;;
-    test-feat)         test_feat "$@" ;;
-    test-urls)         test_urls_docstrings ;;
-    fix-playwright)    fix_playwright ;;
-    lint)              lint ;;
-    help|--help|-h)    show_help ;;
+    init)                init ;;
+    venv)                venv ;;
+    update-venv)         update_venv ;;
+    precommit)           precommit ;;
+    vscode_init)         vscode_init ;;
+    export_deps)         export_deps ;;
+    unit_tests)          unit_tests ;;
+    integration_tests)   integration_tests ;;
+    test_cov)            test_cov ;;
+    test_slowest)        test_slowest ;;
+    test_feat)           test_feat ;;
+    test_urls_docstrings) test_urls_docstrings ;;
+    fix_playwright)      fix_playwright ;;
+    lint)                lint ;;
+    start)               start ;;
+    help|--help|-h)      show_help ;;
     *)
         echo "Unknown command: $1"
         show_help

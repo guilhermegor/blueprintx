@@ -10,7 +10,7 @@
 **BlueprintX** is a lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
 
 ## ✨ Highlights
-- Interactive CLI (`make init`) with skeleton choice
+- Interactive CLI (`make new`) with skeleton choice
 - Ready-made skeletons (currently Python): **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, and **lib-minimal**
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders (unit/integration/performance)
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
@@ -18,7 +18,7 @@
 ## 🚀 Quick start
 
 ```bash
-make init        # interactive scaffolder
+make new         # interactive scaffolder
 make preview     # show skeleton structures
 make dev         # scaffold into a temp dir (kept)
 make dev-clean   # scaffold into temp dir and auto-delete on exit
@@ -117,7 +117,7 @@ project/
 
 ```
 BlueprintX/
-├── Makefile                 # entry targets: init, preview, dev, dev-clean, dry-run
+├── Makefile                 # entry targets: new, preview, dev, dev-clean, dry-run
 ├── run.sh                   # same targets for non-make usage
 ├── scripts/
 │   ├── blueprintx.sh        # interactive menu + modes

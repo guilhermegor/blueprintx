@@ -30,7 +30,7 @@ New to BlueprintX? See the [Get Started guide](get-started.md) for installation 
 2. `make mkdocs-build` (builds static site)
 
 ## Scaffolder quick reference
-- Interactive menu: `make init`
+- Interactive menu: `make new`
 - Preview structures: `make preview`
 - Temp sandbox: `make dev` or `make dev-clean`
 - Structure-only preview: `make dry-run`

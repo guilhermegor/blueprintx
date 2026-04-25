@@ -1,5 +1,5 @@
 
-.PHONY: init preview dev dev-clean dry-run init_venv init-venv update_venv update-venv mkdocs-serve help
+.PHONY: new preview dev dev-clean dry-run init_venv init-venv update_venv update-venv mkdocs-serve help
 
 WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
 
@@ -7,7 +7,7 @@ WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
 # BLUEPRINTX SCRIPTS
 # -------------------
 
-init:
+new:
 	@bash scripts/blueprintx.sh
 
 preview:

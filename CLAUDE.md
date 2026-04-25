@@ -10,7 +10,7 @@ BlueprintX is a **Make + bash scaffolding tool** — not a Python application. T
 
 ### Scaffolding (primary usage)
 ```bash
-make init          # interactive scaffolder — prompts for language, skeleton, project name
+make new           # interactive scaffolder — prompts for language, skeleton, project name
 make preview       # show all skeleton structures without creating anything
 make dev           # scaffold into a temp dir (preserved)
 make dev-clean     # scaffold into temp dir, auto-deleted on exit

@@ -79,6 +79,14 @@ lint:
 	@poetry run pydocstyle .
 
 # -------------------
+# RUN
+# -------------------
+.PHONY: start
+
+start:
+	@bash bin/start.sh
+
+# -------------------
 # HELP
 # -------------------
 .PHONY: help
@@ -108,4 +116,7 @@ help:
 	@echo ""
 	@echo "Linting"
 	@echo "  lint                 Run ruff, codespell, pydocstyle"
+	@echo ""
+	@echo "Run"
+	@echo "  start                Run src/main.py (auto-installs Poetry if missing)"
 	@echo ""

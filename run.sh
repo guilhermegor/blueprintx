@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() { bash "$SCRIPT_DIR/scripts/help.sh"; }
 
-cmd_init() { bash "$SCRIPT_DIR/scripts/blueprintx.sh"; }
+cmd_new() { bash "$SCRIPT_DIR/scripts/blueprintx.sh"; }
 cmd_preview() { bash "$SCRIPT_DIR/scripts/preview.sh"; }
 cmd_dev() { bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dev; }
 cmd_dev_clean() { bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dev --clean; }
@@ -29,7 +29,7 @@ main() {
 	shift || true
 
 	case "$target" in
-		init) cmd_init ;;
+		new) cmd_new ;;
 		preview) cmd_preview ;;
 		dev) cmd_dev ;;
 		dev-clean|dev_clean) cmd_dev_clean ;;

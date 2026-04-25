@@ -7,7 +7,7 @@ Usage: ./run.sh <target>
    or: make <target>
 
 Targets (no make required):
-  init          Run interactive BlueprintX scaffolder
+  new           Run interactive BlueprintX scaffolder
   preview       Show available skeletons and examples
   dev           Scaffold into a temporary directory
   dev-clean     Scaffold into a temp directory and delete it on exit
