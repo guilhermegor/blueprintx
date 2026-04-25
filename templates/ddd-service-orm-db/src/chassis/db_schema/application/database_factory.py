@@ -7,7 +7,7 @@ from typing import Callable
 
 from dotenv import load_dotenv
 
-from core.infrastructure.database import DatabaseSession
+from chassis.db_schema.infrastructure import DatabaseSession
 
 
 def _sqlite_url() -> str:

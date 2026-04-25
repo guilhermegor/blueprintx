@@ -12,39 +12,99 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 
 | Layer | Location | Rule |
 |-------|----------|------|
-| Domain | `src/modules/<feature>/domain/` | Pure Python only. No I/O, no framework imports. |
-| Application | `src/modules/<feature>/application/` | Depends on domain interfaces only. No DB/HTTP libs. |
-| Infrastructure | `src/modules/<feature>/infrastructure/` | Implements domain ports. Only place for DB/HTTP calls. |
-| Core infra | `src/core/infrastructure/database/` | Shared DB handlers extending `DatabaseHandler` ABC. |
-| Core application | `src/core/application/` | `build_database_handler()` factory — reads `DB_BACKEND` env. |
-| Core domain | `src/core/domain/` | Shared entities/value objects only if truly cross-cutting. |
+| Domain | `src/capabilities/<feature>/domain/` | Pure Python only. No I/O, no framework imports. `entities.py` (DB shape), `dto.py` (network shape), `enums.py` (types), `ports.py` (Protocols). |
+| Application | `src/capabilities/<feature>/application/` | Depends on domain interfaces only. No DB/HTTP libs. |
+| Infrastructure | `src/capabilities/<feature>/infrastructure/` | Implements domain ports. Only place for DB/HTTP calls. |
+| Chassis infra | `src/chassis/db_schema/infrastructure/` | Shared DB handlers extending `DatabaseHandler` ABC. |
+| Chassis application | `src/chassis/db_schema/application/` | `build_database_handler()` factory — reads `DB_BACKEND` env. |
+| Chassis domain | `src/chassis/db_schema/domain/` | Shared entities/value objects only if truly cross-cutting. |
+
+## Domain file conventions
+
+Each capability domain uses four files with distinct responsibilities:
+
+| File | Purpose | Example |
+|------|---------|---------|
+| `entities.py` | Persistence shape — maps to a DB row. Has `id`, timestamps, status. | `Note` dataclass |
+| `dto.py` | Network shape — what goes over the wire. Inbound (no `id`) and outbound. | `NoteCreateDTO`, `NoteResponseDTO` |
+| `enums.py` | Domain-typed constants used by entities and DTOs. | `NoteStatus` |
+| `ports.py` | `Protocol` interfaces the infrastructure must satisfy. No inheritance required. | `NoteRepository` |
+
+**`ports.py` uses `Protocol`, not `ABC`** — infrastructure adapters satisfy the contract structurally (duck typing) without importing or inheriting from the domain. This maximises hexagonal decoupling and lets `MagicMock` satisfy ports in tests without any setup.
 
 ## Key abstractions
 
-**`DatabaseHandler` ABC** (`src/core/infrastructure/database/base.py`):  
-All DB backends implement `create / read / update / delete / backup / close`. The `ensure_id` helper assigns a UUID hex when no `id` is present.
+**`DatabaseHandler` ABC** (`src/chassis/db/domain/ports.py`):  
+Shared contract for all storage backends: `create / read / update / delete / backup / close`. Named `ports.py` to signal its role; uses `ABC` (not `Protocol`) for runtime enforcement of complete implementations. `ensure_id` helper lives in `src/chassis/db/infrastructure/helpers.py`.
 
-**`build_database_handler()`** (`src/core/application/database_factory.py`):  
-Reads `DB_BACKEND` from `.env` and returns the matching handler. Supported values: `json`, `csv`, `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`.
+**Chassis providers:**
 
-**Port/Repository pattern** (`src/modules/example_feature/domain/ports.py`):  
-`NoteRepository` is the ABC port. `InMemoryNoteRepository` in `infrastructure/repositories.py` implements it. Add a real DB-backed implementation there; never in the domain or application layers.
+| Provider | Location | Backends |
+|----------|----------|---------|
+| `db` | `chassis/db/` | Shared `DatabaseHandler` ABC + `Record` type + `ensure_id` helper |
+| `db_schema` | `chassis/db_schema/` | SQL-backed: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle` |
+| `db_wschema` | `chassis/db_wschema/` | Schema-less: `json`, `csv`, `joblib` |
+
+**`build_database_handler()`** (`src/chassis/db_schema/application/database_factory.py`):  
+Reads `DB_BACKEND` from `.env`. Supported values: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`.
+
+**`build_storage_handler()`** (`src/chassis/db_wschema/application/storage_factory.py`):  
+Reads `STORAGE_BACKEND` from `.env`. Supported values: `json`, `csv`, `joblib`.
+
+**`JoblibHandler`** (`src/chassis/db_wschema/infrastructure/joblib_handler.py`):  
+Immutable binary artifact store. Each artifact is a file named `{name}_{YYYYMMDD_HHMMSS}_{sha256_prefix8}.joblib`. Three-factor integrity on load: SHA256 prefix in filename, `_saved_at` metadata match, optional HMAC sidecar. `update()` raises `NotImplementedError` — save new artifacts with `create()`.
+
+**`SanityCheck`** (`src/chassis/db_wschema/infrastructure/sanity_check.py`):  
+Post-load semantic validator. Pass `expected_class_name` and `required_attrs`; call `.validate(obj)` after loading.
+
+**Port/Repository pattern** (`src/capabilities/example_feature/domain/ports.py`):  
+`NoteRepository` is a `Protocol` port. `InMemoryNoteRepository` in `infrastructure/repositories.py` satisfies it without inheritance. Add a real DB-backed implementation there; never in the domain or application layers.
 
 **`src/main.py`**:  
-Wires everything together: loads `.env`, calls `build_database_handler()`, instantiates repos and use-cases. The `RUN_DEMO=true` env flag triggers demo execution.
+Wires everything together: loads `.env`, calls `build_database_handler()` or `build_storage_handler()`, instantiates repos and use-cases.
 
-## Adding a new feature module
+## Adding a new capability
 
-1. Create `src/modules/<feature>/{domain,application,infrastructure}/__init__.py`.
-2. Define entities in `domain/entities.py` and the repository ABC in `domain/ports.py`.
-3. Write use-cases in `application/use_cases.py` — accept ports as constructor args (DI).
-4. Implement the port in `infrastructure/repositories.py` using a `DatabaseHandler` from `core`.
+1. Create `src/capabilities/<feature>/{domain,application,infrastructure}/__init__.py`.
+2. Add `enums.py` for domain types, `entities.py` for the persistence model, `dto.py` for API shapes, `ports.py` for `Protocol` interfaces.
+3. Write use-cases in `application/use_cases.py` — accept port Protocols as constructor args (DI).
+4. Implement the port in `infrastructure/repositories.py` using a `DatabaseHandler` from `chassis`.
 5. Wire in `main.py`.
-6. One class per file. Ports (ABCs) stay in `domain/`; no framework code in `application/`.
+6. One class per file. No framework code in `application/`.
 
 ## Adding a new DB backend
 
-Subclass `DatabaseHandler` in `src/core/infrastructure/database/<name>_handler.py`, implement all six abstract methods, export from `src/core/infrastructure/database/__init__.py`, and add the key to the `builders` dict in `database_factory.py`.
+Subclass `DatabaseHandler` in `src/chassis/db_schema/infrastructure/<name>_handler.py`, implement all six abstract methods, export from `src/chassis/db_schema/infrastructure/__init__.py`, and add the key to the `builders` dict in `database_factory.py`.
+
+## Adding a new chassis provider
+
+Create a new subfolder under `src/chassis/` (e.g. `queues/`, `cache/`) following the same DDD layout:
+`domain/`, `application/`, `infrastructure/`. Each provider is self-contained and exposes a clean interface consumed by capabilities.
+
+## Naming conventions
+
+Every variable name starts with a type prefix. No bare names, no underscore prefixes for instances.
+
+| Prefix | Type | Prefix | Type |
+|--------|------|--------|------|
+| `cls_` | class instance | `list_` | `list` |
+| `float_` | `float` | `tuple_` | `tuple` |
+| `decimal_` | `Decimal` | `dict_` | `dict` (parsed) |
+| `int_` | `int` | `json_` | raw JSON string |
+| `str_` | `str` | `df_` | `pd.DataFrame` |
+| `bool_` | `bool` (or `is_`/`has_`/`can_`) | `series_` | `pd.Series` |
+| `dt_` | `datetime`/`date` | `arr_` | `np.ndarray` |
+| `path_` | `pathlib.Path` | `bytes_` | `bytes` |
+| `fn_` | `Callable` (standalone vars only — not class methods/attrs) | `re_` | `re.Pattern` |
+
+`json_` = raw unparsed JSON string; `dict_` = already a Python dict.
+
+## File naming conventions
+
+Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYMMDD_HHMMSS.<ext>`
+- Name: kebab-case (dashes, no underscores)
+- Timestamp: `YYYYMMDD_HHMMSS` (uppercase, sortable)
+- Exception — joblib artifacts: `name-like-this_YYYYMMDD_HHMMSS_{sha256_prefix8}.joblib`
 
 ## Tooling (copied from `templates/python-common/`)
 

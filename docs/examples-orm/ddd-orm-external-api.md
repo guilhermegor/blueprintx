@@ -22,7 +22,7 @@ When fetching data from external services and persisting with SQLAlchemy:
 
 ### Domain Layer
 
-**`modules/market_data/domain/entities.py`**
+**`capabilities/market_data/domain/entities.py`**
 ```python
 from dataclasses import dataclass
 from datetime import date
@@ -41,7 +41,7 @@ class OHLCV:
     volume: int
 ```
 
-**`modules/market_data/domain/ports.py`**
+**`capabilities/market_data/domain/ports.py`**
 ```python
 from abc import ABC, abstractmethod
 from datetime import date
@@ -79,7 +79,7 @@ class OHLCVRepository(ABC):
 
 ### Infrastructure Layer — SQLAlchemy Models
 
-**`modules/market_data/infrastructure/models.py`**
+**`capabilities/market_data/infrastructure/models.py`**
 ```python
 from datetime import date as date_type
 from sqlalchemy import String, Date, Float, Integer, UniqueConstraint
@@ -133,7 +133,7 @@ class OHLCVModel(Base):
 
 ### Infrastructure Layer — Repository
 
-**`modules/market_data/infrastructure/repositories.py`**
+**`capabilities/market_data/infrastructure/repositories.py`**
 ```python
 from datetime import date
 from typing import Optional
@@ -187,7 +187,7 @@ class SQLAlchemyOHLCVRepository(OHLCVRepository, Repository):
 
 ### Infrastructure Layer — API Adapter
 
-**`modules/market_data/infrastructure/stock_api_adapter.py`**
+**`capabilities/market_data/infrastructure/stock_api_adapter.py`**
 ```python
 import requests
 from datetime import date
@@ -234,7 +234,7 @@ class AlphaVantageAdapter(StockDataPort):
 
 ### Application Layer
 
-**`modules/market_data/application/use_cases.py`**
+**`capabilities/market_data/application/use_cases.py`**
 ```python
 from datetime import date
 from ..domain.ports import StockDataPort, OHLCVRepository
@@ -275,7 +275,7 @@ class GetStoredPrices:
 
 ### Wiring it together
 
-**`modules/market_data/main.py`**
+**`capabilities/market_data/main.py`**
 ```python
 import os
 from datetime import date
@@ -328,9 +328,9 @@ import pytest
 from unittest.mock import Mock
 from datetime import date
 from core.infrastructure.database import DatabaseSession
-from modules.market_data.infrastructure.repositories import SQLAlchemyOHLCVRepository
-from modules.market_data.application.use_cases import FetchAndStoreHistoricalPrices
-from modules.market_data.domain.entities import OHLCV
+from capabilities.market_data.infrastructure.repositories import SQLAlchemyOHLCVRepository
+from capabilities.market_data.application.use_cases import FetchAndStoreHistoricalPrices
+from capabilities.market_data.domain.entities import OHLCV
 
 
 @pytest.fixture

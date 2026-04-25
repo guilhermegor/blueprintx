@@ -1,30 +1,31 @@
-"""Application use-cases orchestrating the example feature's domain and ports."""
+"""Domain use-cases for the example_feature capability.
+
+Operate exclusively on domain entities and port interfaces — no DTOs, no I/O libs.
+"""
 
 from __future__ import annotations
-
-from datetime import datetime
-import uuid
 
 from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
 
 class CreateNote:
-    """Create a new note using the repository port."""
+	"""Persist a new note via the repository port."""
 
-    def __init__(self, repo: NoteRepository):
-        self.repo = repo
+	def __init__(self, cls_repo: NoteRepository) -> None:
+		self._cls_repo = cls_repo
 
-    def execute(self, title: str) -> Note:
-        note = Note(id=uuid.uuid4().hex, title=title, created_at=datetime.utcnow())
-        return self.repo.add(note)
+	def execute(self, cls_note: Note) -> Note:
+		"""Save and return the persisted note."""
+		return self._cls_repo.add(cls_note)
 
 
 class ListNotes:
-    """List all notes from the repository."""
+	"""Retrieve all notes from the repository."""
 
-    def __init__(self, repo: NoteRepository):
-        self.repo = repo
+	def __init__(self, cls_repo: NoteRepository) -> None:
+		self._cls_repo = cls_repo
 
-    def execute(self):
-        return list(self.repo.list())
+	def execute(self) -> list[Note]:
+		"""Return all stored notes."""
+		return list(self._cls_repo.list())

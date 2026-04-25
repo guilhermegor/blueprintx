@@ -8,9 +8,7 @@ from typing import Callable
 
 from dotenv import load_dotenv
 
-from core.infrastructure.database import (
-    CSVDatabaseHandler,
-    JSONDatabaseHandler,
+from chassis.db_schema.infrastructure import (
     SQLiteDatabaseHandler,
     PostgresDatabaseHandler,
     MariaDBDatabaseHandler,
@@ -86,18 +84,17 @@ def build_database_handler() -> DatabaseHandler:
 
     Notes
     -----
-    Reads ``DB_BACKEND`` to pick the backend and uses related variables such as
-    ``DATA_DIR``, ``DB_FILE_JSON``, ``DB_FILE_CSV``, ``SQLITE_PATH``,
-    and per-backend credentials in the ``.env`` file to construct the handler.
+    Reads ``DB_BACKEND`` to pick the SQL backend. Supported: ``sqlite``, ``postgresql``,
+    ``mariadb``, ``mysql``, ``mssql``, ``oracle``.
+    For schema-less backends (JSON, CSV, joblib) use ``build_storage_handler()`` from
+    ``chassis.db_wschema.application``.
     """
     load_dotenv()
-    backend = os.getenv("DB_BACKEND", "json").lower()
+    backend = os.getenv("DB_BACKEND", "sqlite").lower()
     data_dir = Path(os.getenv("DATA_DIR", "./data"))
     data_dir.mkdir(parents=True, exist_ok=True)
 
     builders: dict[str, Callable[[], DatabaseHandler]] = {
-        "csv": lambda: CSVDatabaseHandler(data_dir / os.getenv("DB_FILE_CSV", "records.csv")),
-        "json": lambda: JSONDatabaseHandler(data_dir / os.getenv("DB_FILE_JSON", "records.json")),
         "sqlite": lambda: SQLiteDatabaseHandler(data_dir / os.getenv("SQLITE_PATH", "app.db")),
         "postgresql": lambda: PostgresDatabaseHandler(
             os.getenv("POSTGRES_DSN") or _postgres_dsn()

@@ -23,7 +23,7 @@ This example demonstrates:
 
 ### Entities
 
-**`modules/banking/domain/entities.py`**
+**`capabilities/banking/domain/entities.py`**
 ```python
 from dataclasses import dataclass
 from datetime import datetime
@@ -51,7 +51,7 @@ class AlertLog:
 
 ### Ports
 
-**`modules/banking/domain/ports.py`**
+**`capabilities/banking/domain/ports.py`**
 ```python
 from typing import Protocol, Optional
 from datetime import datetime
@@ -106,7 +106,7 @@ class NotificationPort(Protocol):
 
 ## Infrastructure Layer — SQLAlchemy Models
 
-**`modules/banking/infrastructure/models.py`**
+**`capabilities/banking/infrastructure/models.py`**
 ```python
 from datetime import datetime
 from sqlalchemy import String, Float, DateTime, ForeignKey, func
@@ -188,7 +188,7 @@ class AlertLogModel(Base):
 
 ## Infrastructure Layer — Repositories
 
-**`modules/banking/infrastructure/repositories.py`**
+**`capabilities/banking/infrastructure/repositories.py`**
 ```python
 from datetime import datetime
 from typing import Optional
@@ -266,7 +266,7 @@ class SQLAlchemyAlertLogRepository(AlertLogRepository, Repository):
 
 ## Infrastructure Layer — Notification Adapters
 
-**`modules/banking/infrastructure/notifications.py`**
+**`capabilities/banking/infrastructure/notifications.py`**
 ```python
 from ..domain.ports import NotificationPort
 
@@ -313,7 +313,7 @@ class SlackNotificationAdapter(NotificationPort):
 
 ## Application Layer
 
-**`modules/banking/application/balance_alert.py`**
+**`capabilities/banking/application/balance_alert.py`**
 ```python
 from datetime import datetime, timedelta
 from ..domain.entities import AlertLog
@@ -416,7 +416,7 @@ class BulkBalanceAlertService:
 
 ## Wiring & Running
 
-**`modules/banking/main.py`**
+**`capabilities/banking/main.py`**
 ```python
 from datetime import datetime
 from core.application import build_database_session
@@ -498,12 +498,12 @@ import pytest
 from unittest.mock import Mock
 from datetime import datetime, timedelta
 from core.infrastructure.database import DatabaseSession, generate_uuid
-from modules.banking.infrastructure.repositories import (
+from capabilities.banking.infrastructure.repositories import (
     SQLAlchemyAccountRepository,
     SQLAlchemyAlertLogRepository,
 )
-from modules.banking.application.balance_alert import BalanceAlertService
-from modules.banking.domain.entities import Account, AlertLog
+from capabilities.banking.application.balance_alert import BalanceAlertService
+from capabilities.banking.domain.entities import Account, AlertLog
 
 
 @pytest.fixture

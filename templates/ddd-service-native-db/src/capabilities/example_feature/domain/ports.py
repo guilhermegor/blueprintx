@@ -1,24 +1,19 @@
-"""Ports (interfaces) the domain expects infrastructure to implement."""
+"""Ports (structural interfaces) the domain expects infrastructure to implement."""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Iterable
+from typing import Iterable, Protocol
 
 from .entities import Note
 
 
-class NoteRepository(ABC):
-    """Repository port for persisting notes."""
+class NoteRepository(Protocol):
+	"""Repository port for persisting notes.
 
-    @abstractmethod
-    def add(self, note: Note) -> Note:
-        """Persist a note and return it."""
+	Any class that implements add / get / list satisfies this port —
+	no inheritance required.
+	"""
 
-    @abstractmethod
-    def get(self, note_id: str) -> Note | None:
-        """Fetch a note by identifier."""
-
-    @abstractmethod
-    def list(self) -> Iterable[Note]:
-        """Return all notes."""
+	def add(self, cls_note: Note) -> Note: ...
+	def get(self, str_note_id: str) -> Note | None: ...
+	def list(self) -> Iterable[Note]: ...

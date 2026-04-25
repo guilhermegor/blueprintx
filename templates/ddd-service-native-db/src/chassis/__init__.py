@@ -1,1 +1,1 @@
-"""Core layer containing domain and infrastructure building blocks."""
+"""Chassis layer: shared infrastructure providers available to all capabilities."""

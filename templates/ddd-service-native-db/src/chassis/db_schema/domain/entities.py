@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
 import uuid
 
-Record = dict[str, Any]
+from chassis.db.domain.ports import Record
 
 
 @dataclass

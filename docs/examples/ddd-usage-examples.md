@@ -11,8 +11,8 @@ Basic examples demonstrating the DDD hexagonal architecture in practice.
 A quick example wiring all layers together:
 
 ```python
-from modules.example_feature.infrastructure.repositories import InMemoryNoteRepository
-from modules.example_feature.application.use_cases import CreateNote, ListNotes
+from capabilities.example_feature.infrastructure.repositories import InMemoryNoteRepository
+from capabilities.example_feature.application.use_cases import CreateNote, ListNotes
 
 repo = InMemoryNoteRepository()
 create_note = CreateNote(repo)
@@ -30,8 +30,8 @@ Example composition and HTTP handler:
 
 ```python
 # composition.py
-from modules.example_feature.infrastructure.repositories import InMemoryNoteRepository
-from modules.example_feature.application.use_cases import CreateNote, ListNotes
+from capabilities.example_feature.infrastructure.repositories import InMemoryNoteRepository
+from capabilities.example_feature.application.use_cases import CreateNote, ListNotes
 
 repo = InMemoryNoteRepository()
 create_note = CreateNote(repo)
@@ -77,11 +77,11 @@ The power of ports-and-adapters: swap the repository without touching use-cases.
 
 ```python
 # For tests — use in-memory
-from modules.example_feature.infrastructure.repositories import InMemoryNoteRepository
+from capabilities.example_feature.infrastructure.repositories import InMemoryNoteRepository
 repo = InMemoryNoteRepository()
 
 # For production — use PostgreSQL (same interface)
-from modules.example_feature.infrastructure.postgres_repository import PostgresNoteRepository
+from capabilities.example_feature.infrastructure.postgres_repository import PostgresNoteRepository
 repo = PostgresNoteRepository(connection_string="postgresql://...")
 
 # Use-case stays the same
@@ -95,8 +95,8 @@ create_note = CreateNote(repo)
 ```python
 import pytest
 from unittest.mock import Mock
-from modules.example_feature.application.use_cases import CreateNote
-from modules.example_feature.domain.ports import NoteRepository
+from capabilities.example_feature.application.use_cases import CreateNote
+from capabilities.example_feature.domain.ports import NoteRepository
 
 
 def test_create_note():

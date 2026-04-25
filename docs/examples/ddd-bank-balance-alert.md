@@ -22,7 +22,7 @@ This example demonstrates:
 
 ### Entities
 
-**`modules/banking/domain/entities.py`**
+**`capabilities/banking/domain/entities.py`**
 ```python
 from dataclasses import dataclass
 from datetime import datetime
@@ -38,7 +38,7 @@ class Account:
 
 ### Ports
 
-**`modules/banking/domain/ports.py`**
+**`capabilities/banking/domain/ports.py`**
 ```python
 from typing import Protocol
 from .entities import Account
@@ -73,7 +73,7 @@ class NotificationPort(Protocol):
 
 ## Application Layer
 
-**`modules/banking/application/balance_alert.py`**
+**`capabilities/banking/application/balance_alert.py`**
 ```python
 from ..domain.entities import Account
 from ..domain.ports import AccountRepository, NotificationPort
@@ -114,7 +114,7 @@ class BalanceAlertService:
 
 ### Repository Adapter
 
-**`modules/banking/infrastructure/repositories.py`**
+**`capabilities/banking/infrastructure/repositories.py`**
 ```python
 from ..domain.entities import Account
 from ..domain.ports import AccountRepository
@@ -135,7 +135,7 @@ class InMemoryAccountRepository(AccountRepository):
 
 ### Notification Adapter
 
-**`modules/banking/infrastructure/notifications.py`**
+**`capabilities/banking/infrastructure/notifications.py`**
 ```python
 from ..domain.ports import NotificationPort
 
@@ -177,7 +177,7 @@ class SlackNotificationAdapter(NotificationPort):
 
 ## Wiring & Running
 
-**`modules/banking/main.py`**
+**`capabilities/banking/main.py`**
 ```python
 from datetime import datetime
 from .application.balance_alert import BalanceAlertService
@@ -223,8 +223,8 @@ Alert sent: True
 import pytest
 from unittest.mock import Mock
 from datetime import datetime
-from modules.banking.application.balance_alert import BalanceAlertService
-from modules.banking.domain.entities import Account
+from capabilities.banking.application.balance_alert import BalanceAlertService
+from capabilities.banking.domain.entities import Account
 
 
 class TestBalanceAlertService:

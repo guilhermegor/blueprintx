@@ -71,10 +71,10 @@ create_directory_structure() {
     
     print_status "info" "Creating directory structure..."
     
-    mkdir -p "$project_path"/src/core/domain
-    mkdir -p "$project_path"/src/core/infrastructure
-    mkdir -p "$project_path"/src/core/application
-    mkdir -p "$project_path"/src/modules
+    mkdir -p "$project_path"/src/chassis/db_schema/domain
+    mkdir -p "$project_path"/src/chassis/db_schema/infrastructure
+    mkdir -p "$project_path"/src/chassis/db_schema/application
+    mkdir -p "$project_path"/src/capabilities
     mkdir -p "$project_path"/src/utils
     mkdir -p "$project_path"/src/config
     mkdir -p "$project_path"/tests/integration
@@ -106,11 +106,11 @@ create_python_files() {
     print_status "info" "Creating Python files..."
     
     touch "$project_path"/src/__init__.py
-    touch "$project_path"/src/core/__init__.py
-    touch "$project_path"/src/modules/__init__.py
+    touch "$project_path"/src/chassis/__init__.py
+    touch "$project_path"/src/chassis/db_schema/__init__.py
+    touch "$project_path"/src/capabilities/__init__.py
     touch "$project_path"/src/utils/__init__.py
     touch "$project_path"/src/config/__init__.py
-    mkdir -p "$project_path"/src/core/infrastructure/database
     cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/src/." "$project_path/src"
     
     print_status "success" "Python files created"

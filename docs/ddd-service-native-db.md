@@ -13,8 +13,9 @@ This template uses **native database libraries** (psycopg2, sqlite3, cx_Oracle, 
 ```bash
 project/
   src/
-    core/{domain,infrastructure,application}
-    modules/<feature>/{domain,application,infrastructure}
+    chassis/
+      db_schema/{domain,infrastructure,application}
+    capabilities/<feature>/{domain,application,infrastructure}
     utils/
     config/
     main.py
@@ -37,11 +38,11 @@ project/
 | Folder | Purpose | Expected Content |
 |--------|---------|------------------|
 | `src/` | Main source code | All Python modules, organized by DDD layers |
-| `src/core/` | Shared cross-cutting code | Domain entities, infrastructure adapters, and application services used across multiple features |
-| `src/core/domain/` | Shared domain layer | Base entities, value objects, shared domain services |
-| `src/core/application/` | Shared application layer | Factories, shared use-cases, cross-cutting orchestration |
-| `src/core/infrastructure/` | Shared infrastructure | Database handlers, HTTP clients, message brokers, external integrations |
-| `src/modules/<feature>/` | Feature-specific code | Bounded context with its own domain, application, and infrastructure layers |
+| `src/chassis/` | Shared infrastructure providers | Self-contained providers (db_schema, queues, cache, …) each with their own DDD layers |
+| `src/chassis/db_schema/domain/` | Shared domain layer | Base entities, value objects, shared domain services |
+| `src/chassis/db_schema/application/` | Shared application layer | Factories, shared use-cases, cross-cutting orchestration |
+| `src/chassis/db_schema/infrastructure/` | Shared infrastructure | Database handlers, HTTP clients, message brokers, external integrations |
+| `src/capabilities/<feature>/` | Feature-specific code | Bounded context with its own domain, application, and infrastructure layers |
 | `src/utils/` | Utility functions | Helpers, formatters, validators, decorators |
 | `src/config/` | Configuration | Settings, environment loaders, constants |
 | `tests/unit/` | Unit tests | Fast, isolated tests for domain logic and use-cases |
@@ -59,40 +60,74 @@ project/
 
 ## Layers
 
-### Domain (`core/domain` or `modules/<feature>/domain`)
+### Domain (`chassis/db_schema/domain` or `capabilities/<feature>/domain`)
 
-**What goes here:** Entities, value objects, domain services (pure business logic), and the ports (interfaces) the domain needs. No framework or I/O.
+**What goes here:** Four files with distinct responsibilities — no framework or I/O anywhere in this layer.
+
+| File | Purpose |
+|------|---------|
+| `entities.py` | Persistence shape — maps to a DB row (`id`, timestamps, status) |
+| `dto.py` | Network shape — inbound payload (no `id`) and outbound response |
+| `enums.py` | Domain-typed constants shared by entities and DTOs |
+| `ports.py` | `Protocol` interfaces infrastructure must satisfy (no inheritance needed) |
 
 ```python
-# entities.py
-from dataclasses import dataclass
-from datetime import datetime
+# enums.py
+from enum import Enum
 
-@dataclass
-class Note:
-    id: str
-    title: str
-    created_at: datetime
+class NoteStatus(Enum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
 ```
 
 ```python
-# ports.py
-from abc import ABC, abstractmethod
-from typing import Iterable
+# entities.py — persistence model (maps to a DB row)
+from dataclasses import dataclass, field
+from datetime import datetime
+import uuid
+from .enums import NoteStatus
+
+@dataclass
+class Note:
+    id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    title: str = ""
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    status: NoteStatus = NoteStatus.DRAFT
+```
+
+```python
+# dto.py — network model (what goes over the wire)
+from dataclasses import dataclass
+from datetime import datetime
+from .enums import NoteStatus
+
+@dataclass
+class NoteCreateDTO:      # inbound — no id, assigned by the system
+    title: str
+
+@dataclass
+class NoteResponseDTO:    # outbound
+    id: str
+    title: str
+    created_at: datetime
+    status: NoteStatus
+```
+
+```python
+# ports.py — Protocol, not ABC: infra satisfies it structurally, no import needed
+from typing import Iterable, Protocol
 from .entities import Note
 
-class NoteRepository(ABC):
-    @abstractmethod
+class NoteRepository(Protocol):
     def add(self, note: Note) -> Note: ...
-    @abstractmethod
     def get(self, note_id: str) -> Note | None: ...
-    @abstractmethod
     def list(self) -> Iterable[Note]: ...
 ```
 
 ---
 
-### Application (`core/application` or `modules/<feature>/application`)
+### Application (`chassis/db_schema/application` or `capabilities/<feature>/application`)
 
 **What goes here:** Use-case orchestration; coordinates domain objects and ports. Enforces transaction boundaries and policies; still framework-free.
 
@@ -114,7 +149,7 @@ class CreateNote:
 
 ---
 
-### Infrastructure (`core/infrastructure` or `modules/<feature>/infrastructure`)
+### Infrastructure (`chassis/db_schema/infrastructure` or `capabilities/<feature>/infrastructure`)
 
 **What goes here:** Adapters implementing ports (DB, HTTP clients, brokers), configuration glue, persistence mappers. Keep side effects here.
 
@@ -132,11 +167,11 @@ class InMemoryNoteRepository(NoteRepository):
         return note
 ```
 
-Shared database backends live under `core/infrastructure/database/`, with runtime selection via `DB_BACKEND` env var (json, csv, sqlite, postgresql, mariadb, mysql, mssql, oracle).
+Shared database backends live under `chassis/db_schema/infrastructure/`, with runtime selection via `DB_BACKEND` env var (json, csv, sqlite, postgresql, mariadb, mysql, mssql, oracle).
 
 ---
 
-### Modules (`modules/<feature>`)
+### Capabilities (`capabilities/<feature>`)
 
 **What goes here:** Feature/bounded-context composition — wire domain + app + infra for that feature. Also entrypoints like API/CLI handlers.
 
@@ -149,9 +184,9 @@ Shared database backends live under `core/infrastructure/database/`, with runtim
 | **Domain** | Pure logic and contracts; no I/O or frameworks |
 | **Application** | Orchestrate use-cases, transactions, and policies; still framework-free |
 | **Infrastructure** | All I/O adapters implementing ports (DB, HTTP, queues, files) |
-| **Modules** | Group everything per feature/context and provide entrypoints/wiring |
+| **Capabilities** | Group everything per feature/context and provide entrypoints/wiring |
 
-Keep `core/` only for truly shared cross-cutting pieces.
+Keep `chassis/` only for truly shared cross-cutting providers (db_schema, queues, cache, …).
 
 ---
 

@@ -22,7 +22,7 @@ When fetching data from external services, apply the same hexagonal pattern:
 
 ### Domain Layer
 
-**`modules/market_data/domain/entities.py`**
+**`capabilities/market_data/domain/entities.py`**
 ```python
 from dataclasses import dataclass
 from datetime import date
@@ -40,7 +40,7 @@ class OHLCV:
     volume: int
 ```
 
-**`modules/market_data/domain/ports.py`**
+**`capabilities/market_data/domain/ports.py`**
 ```python
 from abc import ABC, abstractmethod
 from datetime import date
@@ -57,7 +57,7 @@ class StockDataPort(ABC):
 
 ### Infrastructure Layer
 
-**`modules/market_data/infrastructure/stock_api_adapter.py`**
+**`capabilities/market_data/infrastructure/stock_api_adapter.py`**
 ```python
 import requests
 from datetime import date
@@ -103,7 +103,7 @@ class AlphaVantageAdapter(StockDataPort):
 
 ### Application Layer
 
-**`modules/market_data/application/use_cases.py`**
+**`capabilities/market_data/application/use_cases.py`**
 ```python
 from datetime import date
 from ..domain.ports import StockDataPort
@@ -120,7 +120,7 @@ class GetHistoricalPrices:
 
 ### Wiring it together
 
-**`modules/market_data/main.py`**
+**`capabilities/market_data/main.py`**
 ```python
 import os
 from datetime import date
@@ -191,8 +191,8 @@ get_prices = GetHistoricalPrices(adapter)
 import pytest
 from unittest.mock import Mock
 from datetime import date
-from modules.market_data.application.use_cases import GetHistoricalPrices
-from modules.market_data.domain.entities import OHLCV
+from capabilities.market_data.application.use_cases import GetHistoricalPrices
+from capabilities.market_data.domain.entities import OHLCV
 
 
 def test_get_historical_prices():

@@ -13,8 +13,8 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     pyodbc = None
 
-from .base import DatabaseHandler, ensure_id
-from .dto import Record
+from chassis.db.domain.ports import DatabaseHandler, Record
+from chassis.db.infrastructure.helpers import ensure_id
 
 
 class MSSQLDatabaseHandler(DatabaseHandler):

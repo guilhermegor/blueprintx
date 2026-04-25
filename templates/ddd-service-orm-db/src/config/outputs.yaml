@@ -1,2 +1,3 @@
-path_log:
-path_json:
+folder: "logs"
+path_log: "log-{}_{}_{}_{}_{}_{}.log"
+path_json: "{}_{}_{}_{}_{}_{}.json"

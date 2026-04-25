@@ -32,14 +32,14 @@ with db.session() as session:
 
 ---
 
-## Using feature modules with SQLAlchemy
+## Using feature capabilities with SQLAlchemy
 
-The feature modules work the same way — inject SQLAlchemy-based repositories:
+The feature capabilities work the same way — inject SQLAlchemy-based repositories:
 
 ```python
 from core.application import build_database_session
-from modules.example_feature.application.use_cases import CreateNote, ListNotes
-from modules.example_feature.infrastructure.repositories import InMemoryNoteRepository
+from capabilities.example_feature.application.use_cases import CreateNote, ListNotes
+from capabilities.example_feature.infrastructure.repositories import InMemoryNoteRepository
 
 # For demos/tests — use in-memory
 repo = InMemoryNoteRepository()
@@ -152,7 +152,7 @@ with db.session() as session:
 Extend the base to create your own models:
 
 ```python
-# modules/notes/infrastructure/models.py
+# capabilities/notes/infrastructure/models.py
 from sqlalchemy import String, Text, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
 from core.infrastructure.database import Base, generate_uuid
@@ -181,7 +181,7 @@ class NoteModel(Base):
 ## Custom repository with SQLAlchemy
 
 ```python
-# modules/notes/infrastructure/repositories.py
+# capabilities/notes/infrastructure/repositories.py
 from typing import Optional
 from sqlalchemy.orm import Session
 from core.infrastructure.database import Repository
@@ -234,8 +234,8 @@ class SQLAlchemyNoteRepository(NoteRepository, Repository):
 ```python
 import pytest
 from core.infrastructure.database import DatabaseSession, Base
-from modules.notes.infrastructure.repositories import SQLAlchemyNoteRepository
-from modules.notes.domain.entities import Note
+from capabilities.notes.infrastructure.repositories import SQLAlchemyNoteRepository
+from capabilities.notes.domain.entities import Note
 
 
 @pytest.fixture

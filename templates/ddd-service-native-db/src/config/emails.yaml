@@ -1,0 +1,13 @@
+example_email:
+  bool_auto_send: false
+  subject: "Subject: {}"
+  body: |
+    Hello,
+
+    {}
+
+    Regards,
+  to:
+    - "recipient@example.com"
+  cc:
+  bcc:

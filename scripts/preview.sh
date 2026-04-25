@@ -33,18 +33,19 @@ show_hex_service() {
     print_section "ddd-service-native-db skeleton"
     
     print_status "info" "Description:"
-    print_status "config" "Backend/service-oriented structure with core/modules separation,"
+    print_status "config" "Backend/service-oriented structure with chassis/capabilities separation,"
     print_status "config" "suitable for APIs and services using clean/hexagonal-ish design."
     echo
     print_status "info" "Example structure:"
     cat << 'EOF'
   project/
     src/
-      core/
-        domain/
-        infrastructure/
-        application/
-      modules/
+      chassis/
+        db_schema/
+          domain/
+          infrastructure/
+          application/
+      capabilities/
         example_feature/
           domain/
           application/
@@ -92,15 +93,15 @@ show_orm_service() {
     cat << 'EOF'
   project/
     src/
-      core/
-        domain/
-        infrastructure/
-          database/
+      chassis/
+        db_schema/
+          domain/
+          infrastructure/
             base.py         # SQLAlchemy base, session manager
             models.py       # ORM models
             repository.py   # Generic SQLAlchemy repository
-        application/
-      modules/
+          application/
+      capabilities/
         example_feature/
           domain/
           application/
