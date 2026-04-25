@@ -233,15 +233,9 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 
         parsed = urlparse(dsn)
         return {
-            "user": parsed.username or os.getenv("MARIADB_USER") or os.getenv("MYSQL_USER"),
-            "password": (
-                parsed.password or os.getenv("MARIADB_PASSWORD") or os.getenv("MYSQL_PASSWORD")
-            ),
-            "host": (
-                parsed.hostname or os.getenv("MARIADB_HOST", os.getenv("MYSQL_HOST", "localhost"))
-            ),
-            "port": parsed.port or int(os.getenv("MARIADB_PORT", os.getenv("MYSQL_PORT", "3306"))),
-            "database": (
-                parsed.path.lstrip("/") or os.getenv("MARIADB_DB") or os.getenv("MYSQL_DB")
-            ),
+            "user": parsed.username or os.getenv("DB_USER"),
+            "password": parsed.password or os.getenv("DB_PASSWORD"),
+            "host": parsed.hostname or os.getenv("DB_HOST", "localhost"),
+            "port": parsed.port or int(os.getenv("DB_PORT", "3306")),
+            "database": parsed.path.lstrip("/") or os.getenv("DB_NAME"),
         }

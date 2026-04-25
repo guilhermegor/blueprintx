@@ -9,112 +9,92 @@ from typing import Callable
 from dotenv import load_dotenv
 
 from chassis.db_schema.infrastructure import (
-    SQLiteDatabaseHandler,
-    PostgresDatabaseHandler,
-    MariaDBDatabaseHandler,
-    MySQLDatabaseHandler,
-    MSSQLDatabaseHandler,
-    OracleDatabaseHandler,
-    DatabaseHandler,
+	SQLiteDatabaseHandler,
+	PostgresDatabaseHandler,
+	MariaDBDatabaseHandler,
+	MySQLDatabaseHandler,
+	MSSQLDatabaseHandler,
+	OracleDatabaseHandler,
+	DatabaseHandler,
 )
 
 
-def _postgres_dsn() -> str:
-    """Build a PostgreSQL DSN from environment variables."""
-    user = os.getenv("POSTGRES_USER", "user")
-    password = os.getenv("POSTGRES_PASSWORD", "password")
-    host = os.getenv("POSTGRES_HOST", "localhost")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    database = os.getenv("POSTGRES_DB", "app")
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
-
-
-def _mariadb_dsn() -> str:
-    """Build a MariaDB DSN from environment variables."""
-    user = os.getenv("MARIADB_USER", "user")
-    password = os.getenv("MARIADB_PASSWORD", "password")
-    host = os.getenv("MARIADB_HOST", "localhost")
-    port = os.getenv("MARIADB_PORT", "3306")
-    database = os.getenv("MARIADB_DB", "app")
-    return f"mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}"
-
-
-def _mysql_dsn() -> str:
-    """Build a MySQL DSN from environment variables."""
-    user = os.getenv("MYSQL_USER", "user")
-    password = os.getenv("MYSQL_PASSWORD", "password")
-    host = os.getenv("MYSQL_HOST", "localhost")
-    port = os.getenv("MYSQL_PORT", "3306")
-    database = os.getenv("MYSQL_DB", "app")
-    return f"mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}"
-
-
-def _mssql_dsn() -> str:
-    """Build a MSSQL (SQL Server) DSN from environment variables."""
-    user = os.getenv("MSSQL_USER", "sa")
-    password = os.getenv("MSSQL_PASSWORD", "password")
-    host = os.getenv("MSSQL_HOST", "localhost")
-    port = os.getenv("MSSQL_PORT", "1433")
-    database = os.getenv("MSSQL_DB", "app")
-    str_driver = "ODBC+Driver+17+for+SQL+Server"
-    return f"mssql+pyodbc://{user}:{password}@{host}:{port}/{database}?driver={str_driver}"
-
-
-def _oracle_dsn() -> str:
-    """Build an Oracle DSN from environment variables."""
-    user = os.getenv("ORACLE_USER", "user")
-    password = os.getenv("ORACLE_PASSWORD", "password")
-    host = os.getenv("ORACLE_HOST", "localhost")
-    port = os.getenv("ORACLE_PORT", "1521")
-    service = os.getenv("ORACLE_SERVICE", "XEPDB1")
-    return f"oracle+oracledb://{user}:{password}@{host}:{port}/?service_name={service}"
+def _compose_dsn(str_backend: str) -> str:
+	"""Build a connection DSN from generic environment variables."""
+	str_user = os.getenv("DB_USER", "user")
+	str_password = os.getenv("DB_PASSWORD", "password")
+	str_host = os.getenv("DB_HOST", "localhost")
+	dict_default_ports: dict[str, str] = {
+		"postgresql": "5432",
+		"mariadb": "3306",
+		"mysql": "3306",
+		"mssql": "1433",
+		"oracle": "1521",
+	}
+	str_port = os.getenv("DB_PORT", dict_default_ports[str_backend])
+	str_name = os.getenv("DB_NAME", "app")
+	dict_schemes: dict[str, str] = {
+		"postgresql": "postgresql",
+		"mariadb": "mysql+mysqlconnector",
+		"mysql": "mysql+mysqlconnector",
+		"mssql": "mssql+pyodbc",
+		"oracle": "oracle+oracledb",
+	}
+	str_scheme = dict_schemes[str_backend]
+	if str_backend == "oracle":
+		str_service = os.getenv("DB_SERVICE", "XEPDB1")
+		return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/?service_name={str_service}"
+	if str_backend == "mssql":
+		str_driver = "ODBC+Driver+17+for+SQL+Server"
+		return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}?driver={str_driver}"
+	return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
 
 
 def build_database_handler() -> DatabaseHandler:
-    """Build a database handler based on environment configuration.
+	"""Build a database handler based on environment configuration.
 
-    Returns
-    -------
-    DatabaseHandler
-        Configured backend handler ready for CRUD operations.
+	Returns
+	-------
+	DatabaseHandler
+		Configured backend handler ready for CRUD operations.
 
-    Raises
-    ------
-    ValueError
-        If ``DB_BACKEND`` does not match a supported backend.
+	Raises
+	------
+	ValueError
+		If ``DB_BACKEND`` does not match a supported backend.
 
-    Notes
-    -----
-    Reads ``DB_BACKEND`` to pick the SQL backend. Supported: ``sqlite``, ``postgresql``,
-    ``mariadb``, ``mysql``, ``mssql``, ``oracle``.
-    For schema-less backends (JSON, CSV, joblib) use ``build_storage_handler()`` from
-    ``chassis.db_wschema.application``.
-    """
-    load_dotenv()
-    str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
-    path_data_dir = Path(os.getenv("DATA_DIR", "./data"))
-    path_data_dir.mkdir(parents=True, exist_ok=True)
+	Notes
+	-----
+	Reads ``DB_BACKEND`` to pick the SQL backend. Supported: ``sqlite``, ``postgresql``,
+	``mariadb``, ``mysql``, ``mssql``, ``oracle``.
 
-    dict_builders: dict[str, Callable[[], DatabaseHandler]] = {
-        "sqlite": lambda: SQLiteDatabaseHandler(path_data_dir / os.getenv("SQLITE_PATH", "app.db")),
-        "postgresql": lambda: PostgresDatabaseHandler(
-            os.getenv("POSTGRES_DSN") or _postgres_dsn()
-        ),
-        "mariadb": lambda: MariaDBDatabaseHandler(
-            os.getenv("MARIADB_DSN") or _mariadb_dsn()
-        ),
-        "mysql": lambda: MySQLDatabaseHandler(
-            os.getenv("MYSQL_DSN") or _mysql_dsn()
-        ),
-        "mssql": lambda: MSSQLDatabaseHandler(
-            os.getenv("MSSQL_DSN") or _mssql_dsn()
-        ),
-        "oracle": lambda: OracleDatabaseHandler(
-            os.getenv("ORACLE_DSN") or _oracle_dsn()
-        ),
-    }
+	SQLite uses ``DB_PATH`` (default: ``./data/app.db``).
 
-    if str_backend not in dict_builders:
-        str_supported = ", ".join(dict_builders)
-        raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
-    return dict_builders[str_backend]()
+	All other backends read ``DB_DSN`` first; if unset, they compose a DSN from
+	``DB_USER``, ``DB_PASSWORD``, ``DB_HOST``, ``DB_PORT``, and ``DB_NAME``.
+	Oracle additionally reads ``DB_SERVICE`` (default: ``XEPDB1``).
+
+	For schema-less backends (JSON, CSV, joblib) use ``build_storage_handler()`` from
+	``chassis.db_wschema.application``.
+	"""
+	load_dotenv()
+	str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
+
+	def _sqlite() -> SQLiteDatabaseHandler:
+		path_db = Path(os.getenv("DB_PATH", "./data/app.db"))
+		path_db.parent.mkdir(parents=True, exist_ok=True)
+		return SQLiteDatabaseHandler(path_db)
+
+	dict_builders: dict[str, Callable[[], DatabaseHandler]] = {
+		"sqlite": _sqlite,
+		"postgresql": lambda: PostgresDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
+		"mariadb": lambda: MariaDBDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
+		"mysql": lambda: MySQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
+		"mssql": lambda: MSSQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
+		"oracle": lambda: OracleDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
+	}
+
+	if str_backend not in dict_builders:
+		str_supported = ", ".join(dict_builders)
+		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
+	return dict_builders[str_backend]()

@@ -47,10 +47,10 @@ class PostgresDatabaseHandler(DatabaseHandler):
         parsed = self._parse_dsn(dsn)
         self.host = parsed.get("host") or "localhost"
         self.port = parsed.get("port") or 5432
-        self.user = parsed.get("user") or os.getenv("POSTGRES_USER", "user")
-        self.password = parsed.get("password") or os.getenv("POSTGRES_PASSWORD", "password")
+        self.user = parsed.get("user") or os.getenv("DB_USER", "user")
+        self.password = parsed.get("password") or os.getenv("DB_PASSWORD", "password")
         self.dbname = (
-            parsed.get("dbname") or parsed.get("database") or os.getenv("POSTGRES_DB", "app")
+            parsed.get("dbname") or parsed.get("database") or os.getenv("DB_NAME", "app")
         )
         self._ensure_table()
 

@@ -24,9 +24,9 @@ class OracleDatabaseHandler(DatabaseHandler):
     dsn : str
         Oracle DSN string (e.g., ``host:port/service`` or EZCONNECT).
     user : str, optional
-        Database user; falls back to ``ORACLE_USER``/``ORA_USER``.
+        Database user; falls back to ``DB_USER``.
     password : str, optional
-        Database password; falls back to ``ORACLE_PASSWORD``/``ORA_PASSWORD``.
+        Database password; falls back to ``DB_PASSWORD``.
     table : str, optional
         Table name used for storage, by default ``"records"``.
     id_field : str, optional
@@ -52,8 +52,8 @@ class OracleDatabaseHandler(DatabaseHandler):
                 "install it to use this backend."
             )
         self.dsn = dsn
-        self.user = user or os.getenv("ORACLE_USER") or os.getenv("ORA_USER")
-        self.password = password or os.getenv("ORACLE_PASSWORD") or os.getenv("ORA_PASSWORD")
+        self.user = user or os.getenv("DB_USER")
+        self.password = password or os.getenv("DB_PASSWORD")
         self.table = table
         self.id_field = id_field
         self._ensure_table()
