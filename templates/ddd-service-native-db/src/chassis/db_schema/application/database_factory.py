@@ -91,12 +91,12 @@ def build_database_handler() -> DatabaseHandler:
     ``chassis.db_wschema.application``.
     """
     load_dotenv()
-    backend = os.getenv("DB_BACKEND", "sqlite").lower()
-    data_dir = Path(os.getenv("DATA_DIR", "./data"))
-    data_dir.mkdir(parents=True, exist_ok=True)
+    str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
+    path_data_dir = Path(os.getenv("DATA_DIR", "./data"))
+    path_data_dir.mkdir(parents=True, exist_ok=True)
 
-    builders: dict[str, Callable[[], DatabaseHandler]] = {
-        "sqlite": lambda: SQLiteDatabaseHandler(data_dir / os.getenv("SQLITE_PATH", "app.db")),
+    dict_builders: dict[str, Callable[[], DatabaseHandler]] = {
+        "sqlite": lambda: SQLiteDatabaseHandler(path_data_dir / os.getenv("SQLITE_PATH", "app.db")),
         "postgresql": lambda: PostgresDatabaseHandler(
             os.getenv("POSTGRES_DSN") or _postgres_dsn()
         ),
@@ -114,7 +114,7 @@ def build_database_handler() -> DatabaseHandler:
         ),
     }
 
-    if backend not in builders:
-        supported = ", ".join(builders)
-        raise ValueError(f"Unsupported DB_BACKEND '{backend}'. Supported: {supported}")
-    return builders[backend]()
+    if str_backend not in dict_builders:
+        str_supported = ", ".join(dict_builders)
+        raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
+    return dict_builders[str_backend]()

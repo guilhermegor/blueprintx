@@ -5,8 +5,10 @@ from __future__ import annotations
 import uuid
 
 from chassis.db.domain.ports import Record
+from chassis.typing.decorators import type_checker
 
 
+@type_checker
 def ensure_id(record: Record, id_field: str = "id") -> Record:
 	"""Ensure a record carries a string identifier.
 
