@@ -27,18 +27,6 @@ precommit:
 	@poetry run pre-commit install --hook-type commit-msg
 
 # -------------------
-# VSCODE CONFIG
-# -------------------
-.PHONY: vscode_init export_deps
-
-vscode_init:
-	@bash scripts/vscode_keybindings.sh
-	@bash scripts/vscode_extensions.sh
-
-export_deps:
-	@bash scripts/export_deps.sh
-
-# -------------------
 # TESTING
 # -------------------
 .PHONY: unit_tests integration_tests test_cov test_slowest test_feat test_urls_docstrings fix_playwright
@@ -100,10 +88,6 @@ help:
 	@echo "  venv                 Create Poetry venv and install Playwright"
 	@echo "  update-venv          Update all Poetry dependencies"
 	@echo "  precommit            Install pre-commit hooks (push + commit-msg)"
-	@echo ""
-	@echo "VS Code"
-	@echo "  vscode_init          Install VS Code extensions and keybindings"
-	@echo "  export_deps          Export Poetry deps to requirements.txt"
 	@echo ""
 	@echo "Testing"
 	@echo "  unit_tests           Run unit tests with pytest"

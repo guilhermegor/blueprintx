@@ -93,10 +93,11 @@ ${PROJECT_SLUG}/
 │   ├── CODEOWNERS
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── .vscode/
-├── scripts/
-│   ├── export_deps.sh
-│   ├── vscode_extensions.sh
-│   └── vscode_keybindings.sh
+├── bin/
+│   ├── check_unix_filenames.sh
+│   ├── fix_playwright.sh
+│   ├── start.sh
+│   └── test_urls_docstrings.sh
 ├── data/
 ├── docs/
 ├── examples/

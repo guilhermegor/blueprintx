@@ -97,4 +97,4 @@ Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYM
 - **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings. Config: `ruff.toml`.
 - **Pre-commit**: ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
 - **Tests**: `unittest` discovered with `python -m unittest discover -s tests/unit -p "*.py"`.
-- **Makefile**: `init-venv`, `update-venv`, `vscode_init`, `export_deps`.
+- **Makefile**: `init`, `venv`, `update-venv`, `precommit`, testing, linting, `start`.

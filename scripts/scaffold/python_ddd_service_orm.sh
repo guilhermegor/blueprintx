@@ -93,7 +93,6 @@ create_directory_structure() {
     touch "$project_path"/tests/performance/.keep
     touch "$project_path"/tests/unit/.keep
     touch "$project_path"/container/.keep
-    touch "$project_path"/bin/.keep
     touch "$project_path"/data/.keep
     touch "$project_path"/docs/.keep
     
@@ -157,7 +156,8 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$COMMON_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     cp "$COMMON_TEMPLATE_ROOT/run.sh" "$project_path/run.sh"
-    
+    cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
+
     print_status "success" "Common templates applied"
 }
 

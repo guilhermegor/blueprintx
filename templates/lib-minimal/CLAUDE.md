@@ -28,7 +28,7 @@ tests/
 - **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings (`ruff.toml`).
 - **Pre-commit**: ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge.
 - **Tests**: `unittest` — `python -m unittest discover -s tests/unit -p "*.py"`.
-- **Makefile**: `init-venv`, `update-venv`, `vscode_init`, `export_deps`.
+- **Makefile**: `init`, `venv`, `update-venv`, `precommit`, testing, linting, `start`.
 
 ## Extending this template
 

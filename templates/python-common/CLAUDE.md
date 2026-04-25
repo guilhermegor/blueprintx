@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `ruff.toml` | Ruff lint + format config (line-length 99, tab indent, double quotes, NumPy docstrings, full rule set) |
 | `.pre-commit-config.yaml` | Hooks: ruff, pydocstyle (DAR), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge |
 | `pytest.ini` | Pytest configuration shared by all generated projects |
-| `Makefile` | Targets: `init-venv`, `update-venv`, `vscode_init`, `export_deps` |
+| `Makefile` | Targets: `init`, `venv`, `update-venv`, `precommit`, testing, linting, `start` |
 | `requirements.txt` | Pins the Poetry version only — not application dependencies |
 | `.python-version` | pyenv Python version pin |
 | `.gitignore` | Python + Poetry + common IDE patterns |
@@ -26,8 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.github/workflows/tests.yaml` | CI workflow for unit + integration tests |
 | `.github/CODEOWNERS` | CODEOWNERS template |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR template |
-| `.vscode/extensions.txt` | Recommended VS Code extensions list |
-| `scripts/` | `export_deps.sh`, `vscode_extensions.sh`, `vscode_keybindings.sh`, `init_venv.sh` |
+| `bin/` | `check_unix_filenames.sh`, `fix_playwright.sh`, `start.sh`, `test_urls_docstrings.sh` |
 | `prompts/` | AI prompt templates: `unit_test.md`, `refactoring.md`, `readme.md` |
 | `assets/logo_lorem_ipsum.png` | Placeholder logo copied into new projects |
 | `CONTRIBUTING.md` | Contribution guide template |

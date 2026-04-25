@@ -39,19 +39,6 @@ init() {
 }
 
 # -------------------
-# VSCODE CONFIG
-# -------------------
-
-vscode_init() {
-    bash "$SCRIPT_DIR/scripts/vscode_keybindings.sh"
-    bash "$SCRIPT_DIR/scripts/vscode_extensions.sh"
-}
-
-export_deps() {
-    bash "$SCRIPT_DIR/scripts/export_deps.sh"
-}
-
-# -------------------
 # TESTING
 # -------------------
 
@@ -124,10 +111,6 @@ Virtual Environment
   update-venv          Update all Poetry dependencies
   precommit            Install pre-commit hooks (push + commit-msg)
 
-VS Code
-  vscode_init          Install VS Code extensions and keybindings
-  export_deps          Export Poetry deps to requirements.txt
-
 Testing
   unit_tests           Run unit tests with pytest
   integration_tests    Run integration tests with pytest
@@ -155,8 +138,6 @@ case "${1:-help}" in
     venv)                venv ;;
     update-venv)         update_venv ;;
     precommit)           precommit ;;
-    vscode_init)         vscode_init ;;
-    export_deps)         export_deps ;;
     unit_tests)          unit_tests ;;
     integration_tests)   integration_tests ;;
     test_cov)            test_cov ;;

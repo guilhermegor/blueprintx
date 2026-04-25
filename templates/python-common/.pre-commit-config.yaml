@@ -93,14 +93,6 @@ repos:
         types:
           - file
 
-      - id: export-dependencies
-        name: export dependencies
-        entry: bash scripts/export_deps.sh
-        language: system
-        types:
-          - file
-        pass_filenames: false
-
       - id: unit-tests
         name: checking unit tests
         entry: poetry run pytest tests/unit/
