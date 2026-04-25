@@ -126,7 +126,9 @@ copy_templates() {
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/.env.example" "$project_path/.env"
-    
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/.env.example" "$project_path/.env.example"
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/CLAUDE.md" "$project_path/CLAUDE.md"
+
     print_status "success" "Templates copied and configured"
 }
 
@@ -145,6 +147,7 @@ copy_common_templates() {
     envsubst < "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/pyproject.toml" > "$project_path/pyproject.toml"
     
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
