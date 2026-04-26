@@ -49,5 +49,8 @@ jobs:
           git add choco/
           git diff --cached --quiet && exit 0
           git commit -m "chore(choco): bump chocolatey to v${VERSION}"
-          git pull --rebase
-          git push
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase && git push && break
+            echo "Push attempt $attempt failed — retrying in 5s"
+            sleep 5
+          done
