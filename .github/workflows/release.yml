@@ -34,3 +34,11 @@ jobs:
       contents: write
     with:
       version: ${{ github.event.inputs.version }}
+
+  chocolatey:
+    needs: tag
+    uses: ./.github/workflows/release_chocolatey.yml
+    permissions:
+      contents: write
+    with:
+      version: ${{ github.event.inputs.version }}

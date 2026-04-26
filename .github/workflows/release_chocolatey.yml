@@ -1,0 +1,51 @@
+name: Release — Chocolatey
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version being released (e.g. 0.2.0)"
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  update-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Compute SHA256 of release tarball
+        id: sha
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          URL="https://github.com/guilhermegor/blueprintx/archive/refs/tags/v${VERSION}.tar.gz"
+          sleep 5
+          SHA=$(curl -sL "$URL" | shasum -a 256 | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Update package files
+        env:
+          VERSION: ${{ inputs.version }}
+          SHA256: ${{ steps.sha.outputs.sha256 }}
+        run: |
+          sed -i "s|<version>.*</version>|<version>${VERSION}</version>|" choco/blueprintx.nuspec
+          sed -i "s|\$version    = '.*'|\$version    = '${VERSION}'|" choco/tools/chocolateyInstall.ps1
+          sed -i "s|\$sha256     = '.*'|\$sha256     = '${SHA256}'|" choco/tools/chocolateyInstall.ps1
+          sed -i "s|v[0-9]\+\.[0-9]\+\.[0-9]\+\.tar\.gz|v${VERSION}.tar.gz|" choco/tools/chocolateyInstall.ps1
+
+      - name: Commit updated package
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add choco/
+          git commit -m "chore(choco): bump chocolatey to v${VERSION}"
+          git push

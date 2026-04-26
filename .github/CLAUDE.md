@@ -39,13 +39,15 @@ release.yml                  ← single entry point (workflow_dispatch, manual b
      with:
        version: ${{ github.event.inputs.version }}
    ```
-3. No other files change.
+3. Add the new installation method to `README.md` — every supported package manager must have a documented install command there.
+4. No other files change.
 
 ### Current sub-workflows
 
 | File | Package manager | What it updates |
 |------|----------------|-----------------|
 | `release_homebrew.yml` | Homebrew (macOS / Linux) | `Formula/blueprintx.rb` — `url`, `sha256`, `version` fields |
+| `release_chocolatey.yml` | Chocolatey (Windows) | `choco/blueprintx.nuspec` — `version` field; `choco/tools/chocolateyInstall.ps1` — `$version`, `$sha256`, tarball URL |
 
 ## Security rule for all workflow files
 

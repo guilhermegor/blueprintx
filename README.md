@@ -35,6 +35,23 @@ brew untap guilhermegor/blueprintx
 </details>
 
 <details>
+<summary><strong>Chocolatey</strong> (Windows)</summary>
+
+Requires [Git for Windows](https://gitforwindows.org/) (provides `bash.exe`).
+
+```powershell
+choco install blueprintx
+```
+
+To uninstall:
+
+```powershell
+choco uninstall blueprintx
+```
+
+</details>
+
+<details>
 <summary><strong>Git clone</strong> (any platform)</summary>
 
 ```bash
@@ -45,18 +62,35 @@ make new
 
 </details>
 
-## 🚀 Quick start
+## 🚀 Usage
+
+### After a package manager installation
+
+The `blueprintx` command is available system-wide:
 
 ```bash
-make new          # interactive scaffolder
-make preview      # show skeleton structures
-make dev          # scaffold into a temp dir (kept)
-make dev-clean    # scaffold into temp dir and auto-delete on exit
-make dry-run      # print structure; no files written
-make docs_server  # serve this docs site locally at http://0.0.0.0:8000
+blueprintx new          # interactive scaffolder — choose a skeleton and project name
+blueprintx preview      # show all available skeleton structures
+blueprintx dev          # scaffold into a temp dir (kept after exit)
+blueprintx dev-clean    # scaffold into temp dir, auto-deleted on exit
+blueprintx dry-run      # print chosen skeleton structure; no files written
+blueprintx --help       # show all commands and options
 ```
 
-Requirements: `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetry` (or your Python toolchain of choice) in the generated project.
+### After git clone
+
+The same targets are available via `make` or `./run.sh` from the repo root:
+
+```bash
+make new          # equivalent to blueprintx new
+make preview      # equivalent to blueprintx preview
+make dev
+make dev-clean
+make dry-run
+make docs_server  # serve the docs site locally at http://0.0.0.0:8000
+```
+
+**Requirements:** `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetry` (or your Python toolchain of choice) in the generated project. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
 
 ## 🏗️ Supported skeletons
 
