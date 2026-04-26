@@ -36,10 +36,13 @@ case "$choice" in
 		;;
 esac
 
+BLUEPRINTX_SH="$(dirname "$0")/blueprintx.sh"
+
 sed -i "s/^version = \"${current}\"/version = \"${new_version}\"/" "$PYPROJECT"
+sed -i "s/^BLUEPRINTX_VERSION=\"${current}\"/BLUEPRINTX_VERSION=\"${new_version}\"/" "$BLUEPRINTX_SH"
 
 echo ""
 echo "Bumped: $current → $new_version"
-echo "Updated: pyproject.toml"
+echo "Updated: pyproject.toml, bin/blueprintx.sh"
 echo ""
 echo "Next: trigger the release workflow with version ${new_version}"
