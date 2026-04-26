@@ -54,6 +54,10 @@ jobs:
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
+          if [ -z "${SNAPCRAFT_STORE_CREDENTIALS:-}" ]; then
+            echo "SNAPCRAFT_STORE_CREDENTIALS not set — skipping Snap Store publish"
+            exit 0
+          fi
           SNAP_FILE=$(ls /tmp/bpx-src/blueprintx_*.snap)
           snapcraft upload --release=stable "$SNAP_FILE"
 

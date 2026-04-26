@@ -139,7 +139,7 @@ jobs:
 
           dpkg-scanpackages --arch all pool/main \
               > dists/stable/main/binary-all/Packages
-          gzip -k dists/stable/main/binary-all/Packages
+          gzip -kf dists/stable/main/binary-all/Packages
 
           apt-ftparchive \
             -o "APT::FTPArchive::Release::Origin=blueprintx" \
