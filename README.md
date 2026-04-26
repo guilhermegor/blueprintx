@@ -78,6 +78,21 @@ sudo rm /etc/apt/sources.list.d/blueprintx.list /usr/share/keyrings/blueprintx.g
 </details>
 
 <details>
+<summary><strong>Snap</strong> (Linux)</summary>
+
+```bash
+sudo snap install blueprintx --classic
+```
+
+To uninstall:
+
+```bash
+sudo snap remove blueprintx
+```
+
+</details>
+
+<details>
 <summary><strong>Git clone</strong> (any platform)</summary>
 
 ```bash

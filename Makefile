@@ -1,5 +1,5 @@
 
-.PHONY: new preview dev dev-clean dry-run bump_version init_venv init_venv update_venv update_venv mkdocs_server update_licenses help
+.PHONY: new preview dev dev-clean dry-run bump_version init_venv init_venv update_venv update_venv mkdocs_server update_licenses help install
 
 WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
 
@@ -9,6 +9,11 @@ WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
 
 new:
 	@bash bin/blueprintx.sh
+
+install:
+	@sudo rsync -a bin/ /usr/share/blueprintx/bin/
+	@sudo rsync -a templates/ /usr/share/blueprintx/templates/
+	@echo "Installed to /usr/share/blueprintx"
 
 preview:
 	@bash bin/preview.sh

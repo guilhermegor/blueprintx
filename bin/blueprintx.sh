@@ -2,10 +2,13 @@
 
 set -e
 
+BLUEPRINTX_VERSION="0.1.6"
+
 DEV_MODE=0
 DRY_RUN=0
 CLEAN_TEMP=0
 TEMP_ROOT=""
+SUBCOMMAND=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/logging.sh"
@@ -15,16 +18,37 @@ source "$SCRIPT_DIR/lib/logging.sh"
 # =========================================================================
 
 print_usage() {
-    echo "Usage: $0 [--dev] [--dry-run] [--clean]"
+    echo "Usage: blueprintx [subcommand] [options]"
+    echo
+    echo "Subcommands:"
+    echo "  new        Create a new project interactively"
+    echo "  preview    Show available skeleton structures"
+    echo "  help       Show this help message"
     echo
     echo "Options:"
-    echo "  --dev        Create project in a temporary directory"
-    echo "  --dry-run    Only preview structure; do not scaffold"
-    echo "  --clean      When combined with --dev, delete the temp directory on exit"
+    echo "  --dev        Scaffold into a temp directory (preserved on exit)"
+    echo "  --dry-run    Preview structure without creating files"
+    echo "  --clean      Delete temp dir on exit (use with --dev)"
+    echo "  -V, --version  Print version and exit"
+    echo "  -h, --help     Show this help"
+    echo
+    echo "Examples:"
+    echo "  blueprintx new"
+    echo "  blueprintx new --dev"
+    echo "  blueprintx new --dry-run"
+    echo "  blueprintx preview"
+}
+
+print_version() {
+    echo "blueprintx $BLUEPRINTX_VERSION"
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        new|preview|help)
+            SUBCOMMAND="$1"
+            shift
+            ;;
         --dev)
             DEV_MODE=1
             shift
@@ -41,9 +65,13 @@ while [[ $# -gt 0 ]]; do
             print_usage
             exit 0
             ;;
+        -V|--version)
+            print_version
+            exit 0
+            ;;
         *)
             echo "Unknown option: $1" >&2
-            print_usage
+            print_usage >&2
             exit 1
             ;;
     esac
@@ -85,13 +113,12 @@ show_help() {
     print_status "info" "  - Generate Python-ready projects that use pyenv + poetry (inside the generated project)"
     echo
     print_status "info" "To create a project, run:"
-    print_status "info" "  make init"
-    echo
-    print_status "info" "Then choose 'Create a project' in the menu."
+    print_status "config" "  blueprintx new"
     echo
     print_status "info" "You can also run in dev/preview modes:"
-    print_status "config" "  bin/blueprintx.sh --dev      # scaffold into a temp dir"
-    print_status "config" "  bin/blueprintx.sh --dry-run  # preview only, no files created"
+    print_status "config" "  blueprintx new --dev      # scaffold into a temp dir"
+    print_status "config" "  blueprintx new --dry-run  # preview only, no files created"
+    print_status "config" "  blueprintx preview        # browse available skeletons"
 }
 
 show_hex_service() {
@@ -250,21 +277,16 @@ prompt_project_description() {
 }
 
 prompt_project_root() {
-    local repo_root
-    repo_root="$(cd "$SCRIPT_DIR/.." && pwd)"
-    local default_parent
-    default_parent="$(cd "$repo_root/.." && pwd)"
-
     printf "${CYAN}Select directory${NC}\n" >&2
-    printf "  1) Parent of repo ($default_parent)\n" >&2
+    printf "  1) Current directory ($PWD)\n" >&2
     printf "  2) Another directory\n" >&2
     printf "${CYAN}Choice${NC} [1-2]: " >&2
     read -r choice
     printf "\n" >&2
-    
+
     case "$choice" in
         1)
-            echo "$default_parent"
+            echo "$PWD"
             return 0
             ;;
         2)
@@ -437,48 +459,7 @@ create_project() {
 # MAIN
 # ============================================================================
 
-main() {
-    show_main_menu
-    
-    read -r -p "$(printf "    ${CYAN}Choose an option [1-4]: ${NC}")" choice
-    
-    case "$choice" in
-        1)
-            MAIN_ACTION="create"
-            ;;
-        2)
-            show_help
-            exit 0
-            ;;
-        3)
-            bash "$SCRIPT_DIR/preview.sh"
-            echo
-            read -r -p "Do you want to proceed to create a project now? [Y/n] " go_create
-            case "$go_create" in
-                n|N|no|NO)
-                    print_status "info" "Ok, not creating a project now."
-                    exit 0
-                    ;;
-                *)
-                    MAIN_ACTION="create"
-                    ;;
-            esac
-            ;;
-        4)
-            print_status "warning" "Aborting. Bye."
-            exit 0
-            ;;
-        *)
-            print_status "warning" "Invalid option. Try again."
-                main
-                return
-            ;;
-    esac
-    
-    if [ "$MAIN_ACTION" != "create" ]; then
-        exit_error "No creation action selected."
-    fi
-    
+run_create_flow() {
     PROJECT_NAME=$(prompt_project_name)
     PROJECT_DESCRIPTION=$(prompt_project_description)
 
@@ -507,7 +488,7 @@ main() {
     fi
 
     create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE" "$LICENSE_CHOICE"
-    
+
     echo
     printf "${GREEN}╔════════════════════════════════════════╗${NC}\n"
     printf "${GREEN}║   ✓ Project created successfully!      ║${NC}\n"
@@ -524,6 +505,67 @@ main() {
         fi
     fi
     print_status "info" "Log file: $LOG_FILE"
+}
+
+main() {
+    case "$SUBCOMMAND" in
+        new)
+            show_banner
+            run_create_flow
+            return
+            ;;
+        preview)
+            bash "$SCRIPT_DIR/preview.sh"
+            exit 0
+            ;;
+        help)
+            print_usage
+            exit 0
+            ;;
+    esac
+
+    show_main_menu
+
+    read -r -p "$(printf "    ${CYAN}Choose an option [1-4]: ${NC}")" choice
+
+    case "$choice" in
+        1)
+            MAIN_ACTION="create"
+            ;;
+        2)
+            show_help
+            exit 0
+            ;;
+        3)
+            bash "$SCRIPT_DIR/preview.sh"
+            echo
+            read -r -p "Do you want to proceed to create a project now? [Y/n] " go_create
+            case "$go_create" in
+                n|N|no|NO)
+                    print_status "info" "Ok, not creating a project now."
+                    exit 0
+                    ;;
+                *)
+                    MAIN_ACTION="create"
+                    ;;
+            esac
+            ;;
+        4)
+            print_status "warning" "Aborting. Bye."
+            exit 0
+            ;;
+        *)
+            print_status "warning" "Invalid option. Try again."
+            main
+            return
+            ;;
+    esac
+
+    if [ "$MAIN_ACTION" != "create" ]; then
+        exit_error "No creation action selected."
+    fi
+
+    run_create_flow
 }
 
 main

@@ -1,0 +1,22 @@
+name: blueprintx
+base: core24
+version: '0.1.6'
+summary: Make + bash scaffolding for opinionated Python project skeletons
+description: |
+  BlueprintX provides an interactive CLI to scaffold Python projects with DDD
+  architecture, pre-commit hooks, CI/CD workflows, and test structure.
+  Run `blueprintx` to start the interactive menu.
+grade: stable
+confinement: classic
+
+apps:
+  blueprintx:
+    command: bin/blueprintx.sh
+
+parts:
+  blueprintx:
+    plugin: dump
+    source: .
+    stage:
+      - bin/
+      - templates/
