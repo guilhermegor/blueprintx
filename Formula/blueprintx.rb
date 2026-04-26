@@ -1,10 +1,10 @@
 class Blueprintx < Formula
   desc "Make + bash scaffolding tool for opinionated Python project skeletons"
   homepage "https://github.com/guilhermegor/blueprintx"
-  url "https://github.com/guilhermegor/blueprintx/archive/refs/tags/v0.1.5.tar.gz"
-  sha256 "b4a6fdbd4e0b3e998b9207bea1c33a06dda7314db28a05c8f7680f470163f345"
+  url "https://github.com/guilhermegor/blueprintx/archive/refs/tags/v0.1.6.tar.gz"
+  sha256 "572b668d5a8b9fc5444b1c6c23c5226c4a42f97272a9ad941c5c1810e83f8172"
   license "MIT"
-  version "0.1.5"
+  version "0.1.6"
 
   def install
     # Install bin/ and templates/ under libexec so SCRIPT_DIR-based path navigation works.
