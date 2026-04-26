@@ -2,7 +2,7 @@ class Blueprintx < Formula
   desc "Make + bash scaffolding tool for opinionated Python project skeletons"
   homepage "https://github.com/guilhermegor/blueprintx"
   url "https://github.com/guilhermegor/blueprintx/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "REPLACE_WITH_COMPUTED_SHA256"
+  sha256 "1ecedf56d06fffae930112432947b5803b52818bed24c4a273fbbeee2ee45a75"
   license "MIT"
   version "0.1.0"
 
