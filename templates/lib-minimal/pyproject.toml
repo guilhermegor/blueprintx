@@ -8,7 +8,8 @@ license = "MIT"
 homepage = "${HOMEPAGE}"
 repository = "${REPOSITORY}"
 keywords = ["python"]
-package-mode = false
+packages = [{ include = "${PROJECT_NAME}", from = "src" }]
+package-mode = true
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -22,8 +23,6 @@ classifiers = [
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
 python-dotenv = ">=1.0.0"
-sqlalchemy = ">=2.0"
-stpstone = ">=3.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = ">=4.1.0"

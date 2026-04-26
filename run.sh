@@ -35,7 +35,7 @@ main() {
 		dev-clean|dev_clean) cmd_dev_clean ;;
 		dry-run|dry_run) cmd_dry_run ;;
 		init-venv|init_venv) cmd_init_venv ;;
-		update-venv|update_venv) cmd_update_venv ;;
+		update_venv|update_venv) cmd_update_venv ;;
 		mkdocs-serve|mkdocs_serve) cmd_mkdocs_serve ;;
 		help|-h|--help) usage ;;
 		*) echo "Unknown target: $target" >&2; usage >&2; exit 1 ;;

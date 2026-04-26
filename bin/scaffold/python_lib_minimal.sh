@@ -78,6 +78,7 @@ create_directory_structure() {
     mkdir -p "$project_path"/container
     mkdir -p "$project_path"/bin
     mkdir -p "$project_path"/docs
+    mkdir -p "$project_path"/assets
     mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
     
@@ -120,13 +121,6 @@ copy_templates() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.env.example" "$project_path/.env.example"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
 
-    # Create docs/index.md with project name
-    sed "s/\${PROJECT_NAME}/$PROJECT_NAME/g" << 'EOF' > "$project_path/docs/index.md"
-# ${PROJECT_NAME}
-
-Minimal library generated with BlueprintX (lib-minimal).
-EOF
-    
     print_status "success" "Templates copied and configured"
 }
 
@@ -142,17 +136,43 @@ copy_common_templates() {
 
     export PROJECT_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
         PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME
-    envsubst < "$COMMON_TEMPLATE_ROOT/pyproject.toml" > "$project_path/pyproject.toml"
+    envsubst < "$BLUEPRINTX_ROOT/templates/lib-minimal/pyproject.toml" > "$project_path/pyproject.toml"
 
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
+    cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
+    cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
+    cp "$COMMON_TEMPLATE_ROOT/LICENSE" "$project_path/LICENSE"
+    cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
+    cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
+    cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$COMMON_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    cp "$COMMON_TEMPLATE_ROOT/run.sh" "$project_path/run.sh"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
 
     print_status "success" "Common templates applied"
+}
+
+copy_mkdocs_templates() {
+    local project_path="$1"
+
+    print_status "info" "Copying MkDocs templates..."
+
+    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
+        < "$BLUEPRINTX_ROOT/templates/lib-minimal/mkdocs.yml" \
+        > "$project_path/mkdocs.yml"
+    envsubst '${PROJECT_DISPLAY_NAME}' \
+        < "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/index.md" \
+        > "$project_path/docs/index.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/usage.md" \
+        "$project_path/docs/usage.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/api.md" \
+        "$project_path/docs/api.md"
+
+    print_status "success" "MkDocs templates copied"
 }
 
 apply_branch_protection() {
@@ -287,8 +307,9 @@ main() {
     create_python_files "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    copy_mkdocs_templates "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
-    
+
     print_status "success" "Lib-minimal scaffold complete!"
     print_status "info" "Project path: $PROJECT_PATH"
 }

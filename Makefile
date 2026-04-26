@@ -1,5 +1,5 @@
 
-.PHONY: new preview dev dev-clean dry-run init_venv init-venv update_venv update-venv mkdocs-serve help
+.PHONY: new preview dev dev-clean dry-run init_venv init-venv update_venv update_venv mkdocs-serve help
 
 WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
 
@@ -28,7 +28,7 @@ dry-run:
 init-venv:
 	@bash bin/init_venv.sh
 
-update-venv:
+update_venv:
 	@poetry update
 	@echo "Poetry project updated"
 

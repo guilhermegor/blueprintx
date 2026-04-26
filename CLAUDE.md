@@ -25,7 +25,7 @@ make mkdocs-serve  # installs docs deps then serves at http://0.0.0.0:8000
 ### Dev environment (root project)
 ```bash
 make init-venv     # run bin/init_venv.sh to bootstrap poetry venv
-make update-venv   # poetry update
+make update_venv   # poetry update
 ```
 
 ### Generated project commands (inside a scaffolded project)

@@ -117,7 +117,7 @@ Usage: ./run.sh <command>
 Virtual Environment
   init                 Bootstrap venv + install pre-commit hooks
   venv                 Create Poetry venv and install Playwright
-  update-venv          Update all Poetry dependencies
+  update_venv          Update all Poetry dependencies
   precommit            Install pre-commit hooks (push + commit-msg)
 
 Testing
@@ -133,7 +133,7 @@ Linting
   lint                 Run ruff, codespell, pydocstyle
 
 Docs
-  docs-server          Serve MkDocs site locally at http://0.0.0.0:8000
+  docs_server          Serve MkDocs site locally at http://0.0.0.0:8000
 
 Run
   start                Run src/main.py (auto-installs Poetry if missing)
@@ -148,7 +148,7 @@ EOF
 case "${1:-help}" in
     init)                init ;;
     venv)                venv ;;
-    update-venv)         update_venv ;;
+    update_venv)         update_venv ;;
     precommit)           precommit ;;
     unit_tests)          unit_tests ;;
     integration_tests)   integration_tests ;;
@@ -158,7 +158,7 @@ case "${1:-help}" in
     test_urls_docstrings) test_urls_docstrings ;;
     fix_playwright)      fix_playwright ;;
     lint)                lint ;;
-    docs-server)         docs_server ;;
+    docs_server)         docs_server ;;
     start)               start ;;
     help|--help|-h)      show_help ;;
     *)

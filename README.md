@@ -23,7 +23,7 @@ make preview      # show skeleton structures
 make dev          # scaffold into a temp dir (kept)
 make dev-clean    # scaffold into temp dir and auto-delete on exit
 make dry-run      # print structure; no files written
-make docs-server  # serve this docs site locally at http://0.0.0.0:8000
+make docs_server  # serve this docs site locally at http://0.0.0.0:8000
 ```
 
 Requirements: `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetry` (or your Python toolchain of choice) in the generated project.

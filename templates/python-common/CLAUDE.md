@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `ruff.toml` | Ruff lint + format config (line-length 99, tab indent, double quotes, NumPy docstrings, full rule set) |
 | `.pre-commit-config.yaml` | Hooks: ruff, pydocstyle (DAR), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge |
 | `pytest.ini` | Pytest configuration shared by all generated projects |
-| `Makefile` | Targets: `init`, `venv`, `update-venv`, `precommit`, testing, linting, `start` |
+| `Makefile` | Targets: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `start` |
 | `requirements.txt` | Pins the Poetry version only — not application dependencies |
 | `.python-version` | pyenv Python version pin |
 | `.gitignore` | Python + Poetry + common IDE patterns |

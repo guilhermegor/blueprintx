@@ -13,7 +13,7 @@ Targets (no make required):
   dev-clean     Scaffold into a temp directory and delete it on exit
   dry-run       Show structure only, no files created
   init-venv     Create local Poetry venv using .python-version (installs deps)
-  update-venv   Update Poetry dependencies
+  update_venv   Update Poetry dependencies
   mkdocs-serve  Install docs deps (if needed) and serve with live reload
   help          Show this help
 EOF

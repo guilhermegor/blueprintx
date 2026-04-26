@@ -94,7 +94,6 @@ create_directory_structure() {
     touch "$project_path"/tests/unit/.keep
     touch "$project_path"/container/.keep
     touch "$project_path"/data/.keep
-    touch "$project_path"/docs/.keep
     
     print_status "success" "Directory structure created"
 }
@@ -162,6 +161,25 @@ copy_common_templates() {
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
 
     print_status "success" "Common templates applied"
+}
+
+copy_mkdocs_templates() {
+    local project_path="$1"
+
+    print_status "info" "Copying MkDocs templates..."
+
+    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
+        < "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/mkdocs.yml" \
+        > "$project_path/mkdocs.yml"
+    envsubst '${PROJECT_DISPLAY_NAME}' \
+        < "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/docs/index.md" \
+        > "$project_path/docs/index.md"
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/docs/architecture.md" \
+        "$project_path/docs/architecture.md"
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/docs/api.md" \
+        "$project_path/docs/api.md"
+
+    print_status "success" "MkDocs templates copied"
 }
 
 apply_branch_protection() {
@@ -297,8 +315,9 @@ main() {
     create_python_files "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    copy_mkdocs_templates "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
-    
+
     print_status "success" "Hex-service scaffold complete!"
     print_status "info" "Project path: $PROJECT_PATH"
 }

@@ -1,7 +1,7 @@
 # -------------------
 # VIRTUAL ENVIRONMENT
 # -------------------
-.PHONY: init venv update-venv precommit
+.PHONY: init venv update_venv precommit
 
 init: venv precommit
 
@@ -18,7 +18,7 @@ venv:
 	poetry run playwright install; \
 	echo "Playwright installed"
 
-update-venv:
+update_venv:
 	@poetry update
 	@echo "Poetry project updated"
 
@@ -77,11 +77,11 @@ start:
 # -------------------
 # DOCS
 # -------------------
-.PHONY: docs-server
+.PHONY: docs_server
 
-docs-server:
-	@pip install --quiet mkdocs-material
-	@mkdocs serve -a 0.0.0.0:8000 --livereload
+docs_server:
+	@poetry install --with docs
+	@poetry run mkdocs serve -a 0.0.0.0:8000 --livereload
 
 # -------------------
 # HELP
@@ -95,7 +95,7 @@ help:
 	@echo "Virtual Environment"
 	@echo "  init                 Bootstrap venv + install pre-commit hooks"
 	@echo "  venv                 Create Poetry venv and install Playwright"
-	@echo "  update-venv          Update all Poetry dependencies"
+	@echo "  update_venv          Update all Poetry dependencies"
 	@echo "  precommit            Install pre-commit hooks (push + commit-msg)"
 	@echo ""
 	@echo "Testing"
@@ -111,7 +111,7 @@ help:
 	@echo "  lint                 Run ruff, codespell, pydocstyle"
 	@echo ""
 	@echo "Docs"
-	@echo "  docs-server          Serve MkDocs site locally at http://0.0.0.0:8000"
+	@echo "  docs_server          Serve MkDocs site locally at http://0.0.0.0:8000"
 	@echo ""
 	@echo "Run"
 	@echo "  start                Run src/main.py (auto-installs Poetry if missing)"
