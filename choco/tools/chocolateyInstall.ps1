@@ -1,8 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
-$version    = '0.1.7'
+$version    = '0.1.8'
 $url        = "https://github.com/guilhermegor/blueprintx/archive/refs/tags/v${version}.tar.gz"
-$sha256     = '2aa795e6cb04ee191a0025b5e1f356152b920c85f49405c134f35729a7fbdcbe'
+$sha256     = 'd9f394049a611903efd06f77cc1613b36c49394fd9c193269cdb5225efa86238'
 $installDir = Join-Path $env:LOCALAPPDATA 'blueprintx'
 $toolsDir   = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
