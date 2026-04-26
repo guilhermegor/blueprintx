@@ -90,8 +90,8 @@ show_help() {
     print_status "info" "Then choose 'Create a project' in the menu."
     echo
     print_status "info" "You can also run in dev/preview modes:"
-    print_status "config" "  scripts/BlueprintX.sh --dev      # scaffold into a temp dir"
-    print_status "config" "  scripts/BlueprintX.sh --dry-run  # preview only, no files created"
+    print_status "config" "  bin/blueprintx.sh --dev      # scaffold into a temp dir"
+    print_status "config" "  bin/blueprintx.sh --dry-run  # preview only, no files created"
 }
 
 show_hex_service() {
@@ -123,7 +123,7 @@ show_hex_service() {
             performance/
             unit/
         container/
-        scripts/
+        bin/
         assets/
         docs/
         .github/
@@ -178,7 +178,7 @@ show_orm_service() {
             performance/
             unit/
         container/
-        scripts/
+        bin/
         assets/
         docs/
         .github/
@@ -216,7 +216,7 @@ show_lib_minimal() {
             unit/
                 test_main.py
         container/
-        scripts/
+        bin/
         docs/
             index.md
         .github/

@@ -18,11 +18,12 @@
 ## 🚀 Quick start
 
 ```bash
-make new         # interactive scaffolder
-make preview     # show skeleton structures
-make dev         # scaffold into a temp dir (kept)
-make dev-clean   # scaffold into temp dir and auto-delete on exit
-make dry-run     # print structure; no files written
+make new          # interactive scaffolder
+make preview      # show skeleton structures
+make dev          # scaffold into a temp dir (kept)
+make dev-clean    # scaffold into temp dir and auto-delete on exit
+make dry-run      # print structure; no files written
+make docs-server  # serve this docs site locally at http://0.0.0.0:8000
 ```
 
 Requirements: `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetry` (or your Python toolchain of choice) in the generated project.
@@ -30,26 +31,35 @@ Requirements: `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetr
 ## 🏗️ Supported skeletons
 
 ### DDD service — Native DB (templates/ddd-service-native-db)
-Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. Uses **native database libraries** (psycopg2, sqlite3, cx_Oracle, pyodbc, etc.) for direct DB access. `core` stays minimal (shared utilities/infra); `modules/<feature>` hosts the feature's domain, application layer, and adapters.
+Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. Uses **native database libraries** (psycopg2, sqlite3, cx_Oracle, pyodbc, pymysql) for direct DB access. `chassis/` holds shared cross-cutting providers; `capabilities/<feature>/` hosts each bounded context's domain, application layer, and adapters.
 
 ```
 project/
     src/
-        core/
-            domain/            # shared-only if truly cross-cutting
-            infrastructure/    # shared infra building blocks
-            application/       # shared application services (optional)
-        modules/
-            example_feature/   # rename per bounded context/feature
-                domain/          # entities, value objects, domain services, ports
-                application/     # use-cases orchestrating domain + ports
-                infrastructure/  # adapters implementing ports (DB, APIs, queues)
-        utils/
+        chassis/
+            db/domain/ports.py            # DatabaseHandler ABC
+            db_schema/
+                domain/
+                infrastructure/           # sqlite, postgres, mariadb, mysql, mssql, oracle
+                application/              # build_database_handler() factory
+            db_wschema/
+                infrastructure/           # json, csv, joblib handlers + SanityCheck
+                application/              # build_storage_handler() factory
+            typing/                       # ABCTypeCheckerMeta, ProtocolTypeCheckerMeta
+        capabilities/
+            example_feature/
+                domain/                   # entities, DTOs, enums, Protocol ports
+                application/              # use-cases, factories
+                infrastructure/           # repositories implementing domain ports
+        app/
+            bootstrap.py                  # env loading, logging, timing
+            container.py                  # composition root (AppContainer)
         config/
-        main.py              # entrypoint; selects DB backend via .env
+            startup.py                    # logger, webhooks, runtime constants
+        main.py
     tests/{unit,integration,performance}/
     container/
-    scripts/
+    bin/
     assets/
     docs/
     .github/
@@ -60,28 +70,27 @@ project/
     README.md
 ```
 
-Per-feature example (in template): `modules/example_feature/` with `Note` entity, ports, in-memory repo, and use-cases. Banking balance alert remains a docs-only illustration.
-
 ### DDD service — ORM DB (templates/ddd-service-orm-db)
-Same DDD hexagonal structure, but uses **SQLAlchemy ORM** for database operations. Works with any SQLAlchemy-supported database (PostgreSQL, MySQL, SQLite, Oracle, MSSQL).
+Same DDD hexagonal structure, but uses **SQLAlchemy ORM (≥ 2.0)** for database operations. Works with PostgreSQL, MySQL, SQLite, Oracle, and MSSQL through a unified `DatabaseSession` / `Repository` ABC.
 
 ```
 project/
     src/
-        core/
-            domain/
-            infrastructure/
-                database/
-                    base.py          # SQLAlchemy base, session manager
+        chassis/
+            db_schema/
+                domain/
+                infrastructure/
+                    base.py          # Base (DeclarativeBase) + DatabaseSession + Repository ABC
                     models.py        # ORM models
-                    repository.py    # Generic SQLAlchemy repository
-            application/
-        modules/
+                    repository.py    # SQLAlchemyRecordRepository (generic reference impl)
+                application/         # build_database_session() factory
+            typing/
+        capabilities/
             example_feature/
                 domain/
                 application/
                 infrastructure/
-        utils/
+        app/
         config/
         main.py
     tests/{unit,integration,performance}/
@@ -97,7 +106,7 @@ project/
     tests/{unit,integration,performance}/
     docs/
     container/
-    scripts/
+    bin/
     .github/
     .vscode/
     .env
@@ -106,12 +115,16 @@ project/
 ```
 
 ## 🧭 Folder attribution (ddd-service templates)
-- `core/`: cross-cutting pieces only (shared infra, shared types). Keep lean to avoid a “god domain.”
-- `modules/<feature>/domain`: feature/bounded-context domain (entities, value objects, domain services, ports).
-- `modules/<feature>/application`: application/use-case layer orchestrating domain + ports; no framework code.
-- `modules/<feature>/infrastructure`: adapters implementing ports (DB handlers, HTTP clients, brokers, files).
-- `utils/`: generic helpers not tied to a feature.
-- `config/`: configuration loading, settings.
+- `chassis/`: shared cross-cutting providers (DB handlers, storage, type enforcement).
+- `chassis/db/`: `DatabaseHandler` ABC — contract all backends implement.
+- `chassis/db_schema/`: SQL-backed handlers + `build_database_handler()` factory.
+- `chassis/db_wschema/`: schema-less handlers (JSON, CSV, joblib) + `build_storage_handler()`.
+- `chassis/typing/`: runtime type enforcement (`ABCTypeCheckerMeta`, `ProtocolTypeCheckerMeta`).
+- `capabilities/<feature>/domain/`: feature entities, DTOs, enums, `Protocol` ports.
+- `capabilities/<feature>/application/`: use-case orchestration; no I/O or framework code.
+- `capabilities/<feature>/infrastructure/`: adapters implementing domain ports.
+- `app/`: `bootstrap.py` (env/logging) + `container.py` (composition root).
+- `config/`: module-level singletons and YAML config; secrets stay in `.env`.
 
 ## 📂 Repo layout (this tool)
 
@@ -119,7 +132,7 @@ project/
 BlueprintX/
 ├── Makefile                 # entry targets: new, preview, dev, dev-clean, dry-run
 ├── run.sh                   # same targets for non-make usage
-├── scripts/
+├── bin/
 │   ├── blueprintx.sh        # interactive menu + modes
 │   ├── preview.sh           # skeleton previews
 │   ├── help.sh              # usage tips and targets

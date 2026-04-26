@@ -8,25 +8,25 @@ WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
 # -------------------
 
 new:
-	@bash scripts/blueprintx.sh
+	@bash bin/blueprintx.sh
 
 preview:
-	@bash scripts/preview.sh
+	@bash bin/preview.sh
 
 dev:
-	@bash scripts/blueprintx.sh --dev
+	@bash bin/blueprintx.sh --dev
 
 dev-clean:
-	@bash scripts/blueprintx.sh --dev --clean
+	@bash bin/blueprintx.sh --dev --clean
 
 dry-run:
-	@bash scripts/blueprintx.sh --dry-run
+	@bash bin/blueprintx.sh --dry-run
 
 # -------------------
 # DEV ENVIRONMENT
 # -------------------
 init-venv:
-	@bash scripts/init_venv.sh
+	@bash bin/init_venv.sh
 
 update-venv:
 	@poetry update
@@ -37,4 +37,4 @@ mkdocs-serve:
 	@poetry run mkdocs serve -a 0.0.0.0:8000 --livereload
 
 help:
-	@bash scripts/help.sh
+	@bash bin/help.sh

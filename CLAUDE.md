@@ -24,7 +24,7 @@ make mkdocs-serve  # installs docs deps then serves at http://0.0.0.0:8000
 
 ### Dev environment (root project)
 ```bash
-make init-venv     # run scripts/init_venv.sh to bootstrap poetry venv
+make init-venv     # run bin/init_venv.sh to bootstrap poetry venv
 make update-venv   # poetry update
 ```
 
@@ -44,7 +44,7 @@ poetry run python -m unittest discover -s tests/integration -p "*.py" -v
 BlueprintX/
 ├── Makefile                        # top-level entry points
 ├── run.sh                          # same targets for non-make usage
-├── scripts/
+├── bin/
 │   ├── blueprintx.sh               # interactive menu + mode parsing (--dev, --dry-run, --clean)
 │   ├── preview.sh                  # skeleton structure previews
 │   ├── help.sh                     # usage tips
@@ -64,7 +64,7 @@ BlueprintX/
 
 ## How scaffolding works
 
-Each scaffold script in `scripts/scaffold/` follows this sequence:
+Each scaffold script in `bin/scaffold/` follows this sequence:
 1. `validate_inputs` — checks required args.
 2. `resolve_github_username` — env var → `gh` CLI → interactive prompt.
 3. `create_directory_structure` — `mkdir -p` for the target layout.

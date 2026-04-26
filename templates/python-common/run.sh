@@ -97,6 +97,15 @@ start() {
 }
 
 # -------------------
+# DOCS
+# -------------------
+
+docs_server() {
+    pip install --quiet mkdocs-material
+    mkdocs serve -a 0.0.0.0:8000 --livereload
+}
+
+# -------------------
 # HELP
 # -------------------
 
@@ -123,6 +132,9 @@ Testing
 Linting
   lint                 Run ruff, codespell, pydocstyle
 
+Docs
+  docs-server          Serve MkDocs site locally at http://0.0.0.0:8000
+
 Run
   start                Run src/main.py (auto-installs Poetry if missing)
 
@@ -146,6 +158,7 @@ case "${1:-help}" in
     test_urls_docstrings) test_urls_docstrings ;;
     fix_playwright)      fix_playwright ;;
     lint)                lint ;;
+    docs-server)         docs_server ;;
     start)               start ;;
     help|--help|-h)      show_help ;;
     *)

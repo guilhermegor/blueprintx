@@ -75,6 +75,15 @@ start:
 	@bash bin/start.sh
 
 # -------------------
+# DOCS
+# -------------------
+.PHONY: docs-server
+
+docs-server:
+	@pip install --quiet mkdocs-material
+	@mkdocs serve -a 0.0.0.0:8000 --livereload
+
+# -------------------
 # HELP
 # -------------------
 .PHONY: help
@@ -100,6 +109,9 @@ help:
 	@echo ""
 	@echo "Linting"
 	@echo "  lint                 Run ruff, codespell, pydocstyle"
+	@echo ""
+	@echo "Docs"
+	@echo "  docs-server          Serve MkDocs site locally at http://0.0.0.0:8000"
 	@echo ""
 	@echo "Run"
 	@echo "  start                Run src/main.py (auto-installs Poetry if missing)"

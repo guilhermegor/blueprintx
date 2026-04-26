@@ -4,15 +4,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-usage() { bash "$SCRIPT_DIR/scripts/help.sh"; }
+usage() { bash "$SCRIPT_DIR/bin/help.sh"; }
 
-cmd_new() { bash "$SCRIPT_DIR/scripts/blueprintx.sh"; }
-cmd_preview() { bash "$SCRIPT_DIR/scripts/preview.sh"; }
-cmd_dev() { bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dev; }
-cmd_dev_clean() { bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dev --clean; }
-cmd_dry_run() { bash "$SCRIPT_DIR/scripts/blueprintx.sh" --dry-run; }
+cmd_new() { bash "$SCRIPT_DIR/bin/blueprintx.sh"; }
+cmd_preview() { bash "$SCRIPT_DIR/bin/preview.sh"; }
+cmd_dev() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dev; }
+cmd_dev_clean() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dev --clean; }
+cmd_dry_run() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dry-run; }
 
-cmd_init_venv() { bash "$SCRIPT_DIR/scripts/init_venv.sh"; }
+cmd_init_venv() { bash "$SCRIPT_DIR/bin/init_venv.sh"; }
 
 cmd_update_venv() {
 	poetry update
