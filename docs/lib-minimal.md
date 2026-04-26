@@ -89,7 +89,7 @@ class TestMain(unittest.TestCase):
 | **unittest** | Test runner | Discovered with `python -m unittest discover -s tests/unit -p "*.py"` |
 | **pytest** | Alternative runner | `pytest.ini` included for compatibility; `poetry run pytest` also works |
 | **GitHub Actions** | CI | `.github/workflows/tests.yaml` — runs linting and tests on every push |
-| **Makefile + `bin/`** | Dev automation | `make init-venv`, `make update_venv`, `make start`, linting and test recipes |
+| **Makefile + `bin/`** | Dev automation | `make init_venv`, `make update_venv`, `make start`, linting and test recipes |
 
 ---
 

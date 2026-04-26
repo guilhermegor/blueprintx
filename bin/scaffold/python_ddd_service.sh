@@ -9,8 +9,10 @@ PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
 PROJECT_DESCRIPTION="${3:-}"
 PROJECT_VERSION="${4:-0.0.1}"
+LICENSE_CHOICE="${LICENSE_CHOICE:-MIT}"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/python-common"
+LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 PROJECT_DISPLAY_NAME=""
 
@@ -141,16 +143,21 @@ copy_common_templates() {
     BUG_REPORTS_URL="${BUG_REPORTS_URL:-${REPOSITORY}/issues}"
     SOURCE_URL="${SOURCE_URL:-${REPOSITORY}}"
 
+    COPYRIGHT_YEAR="$(date +%Y)"
+    AUTHOR_NAME="${GITHUB_USERNAME}"
+    PROJECT_LICENSE="${LICENSE_CHOICE}"
+
     export PROJECT_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
-        PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME
+        PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME \
+        COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE
     envsubst < "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/pyproject.toml" > "$project_path/pyproject.toml"
-    
+
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
-    cp "$COMMON_TEMPLATE_ROOT/LICENSE" "$project_path/LICENSE"
+    envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
     cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"

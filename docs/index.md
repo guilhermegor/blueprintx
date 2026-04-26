@@ -26,7 +26,7 @@ New to BlueprintX? See the [Get Started guide](get-started.md) for installation 
 3. Build static site: `poetry run mkdocs build`
 
 **Option B (Make recipes)**
-1. `make mkdocs-serve` (installs docs deps, serves with live reload)
+1. `make mkdocs_server` (installs docs deps, serves with live reload)
 2. `make mkdocs-build` (builds static site)
 
 ## Scaffolder quick reference

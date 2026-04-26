@@ -12,6 +12,8 @@ cmd_dev() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dev; }
 cmd_dev_clean() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dev --clean; }
 cmd_dry_run() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dry-run; }
 
+cmd_update_licenses() { bash "$SCRIPT_DIR/bin/update_licenses.sh"; }
+
 cmd_init_venv() { bash "$SCRIPT_DIR/bin/init_venv.sh"; }
 
 cmd_update_venv() {
@@ -34,9 +36,10 @@ main() {
 		dev) cmd_dev ;;
 		dev-clean|dev_clean) cmd_dev_clean ;;
 		dry-run|dry_run) cmd_dry_run ;;
-		init-venv|init_venv) cmd_init_venv ;;
+		update_licenses|update_licenses) cmd_update_licenses ;;
+		init_venv|init_venv) cmd_init_venv ;;
 		update_venv|update_venv) cmd_update_venv ;;
-		mkdocs-serve|mkdocs_serve) cmd_mkdocs_serve ;;
+		mkdocs_server|mkdocs_serve) cmd_mkdocs_serve ;;
 		help|-h|--help) usage ;;
 		*) echo "Unknown target: $target" >&2; usage >&2; exit 1 ;;
 	esac

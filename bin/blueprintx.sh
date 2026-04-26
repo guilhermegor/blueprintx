@@ -358,31 +358,74 @@ prompt_skeleton() {
     esac
 }
 
+prompt_license() {
+    local licenses_dir
+    licenses_dir="$(cd "$SCRIPT_DIR/.." && pwd)/templates/licenses"
+
+    printf "${CYAN}Select license${NC}\n" >&2
+    printf "  ${BLUE} 1) MIT${NC}          — Do whatever you want; keep the copyright notice. (default)\n" >&2
+    printf "  ${BLUE} 2) Apache-2.0${NC}   — Like MIT, adds an explicit patent grant.\n" >&2
+    printf "  ${BLUE} 3) GPL-3.0${NC}      — Copyleft; modifications must stay GPL-3.0.\n" >&2
+    printf "  ${BLUE} 4) AGPL-3.0${NC}     — Strongest copyleft; closes the SaaS loophole.\n" >&2
+    printf "               Ideal for dual-licensing: open for all, commercial users\n" >&2
+    printf "               must obtain a separate proprietary license.\n" >&2
+    printf "  ${BLUE} 5) LGPL-2.1${NC}     — Weak copyleft; allows linking from proprietary code.\n" >&2
+    printf "  ${BLUE} 6) MPL-2.0${NC}      — File-level copyleft; compatible with proprietary projects.\n" >&2
+    printf "  ${BLUE} 7) BSD-2-Clause${NC} — Permissive; minimal restrictions on redistribution.\n" >&2
+    printf "  ${BLUE} 8) BSD-3-Clause${NC} — Like BSD-2, adds a non-endorsement clause.\n" >&2
+    printf "  ${BLUE} 9) BSL-1.0${NC}      — Very permissive; no warranty, no restrictions.\n" >&2
+    printf "  ${BLUE}10) CC0-1.0${NC}      — Public domain dedication; waives all rights.\n" >&2
+    printf "  ${BLUE}11) Unlicense${NC}    — Public domain; maximally free, no conditions.\n" >&2
+    printf "${CYAN}Choice${NC} [1-11, default 1]: " >&2
+    read -r choice
+    printf "\n" >&2
+
+    case "$choice" in
+        1|"") echo "MIT" ;;
+        2)    echo "Apache-2.0" ;;
+        3)    echo "GPL-3.0" ;;
+        4)    echo "AGPL-3.0" ;;
+        5)    echo "LGPL-2.1" ;;
+        6)    echo "MPL-2.0" ;;
+        7)    echo "BSD-2-Clause" ;;
+        8)    echo "BSD-3-Clause" ;;
+        9)    echo "BSL-1.0" ;;
+        10)   echo "CC0-1.0" ;;
+        11)   echo "Unlicense" ;;
+        *)
+            print_status "warning" "Invalid option. Try again."
+            prompt_license
+            return
+            ;;
+    esac
+}
+
 create_project() {
     local project_root="$1"
     local project_name="$2"
     local project_description="$3"
     local lang="$4"
     local skeleton="$5"
-    
+    local license_choice="$6"
+
     local full_path="$project_root/$project_name"
-    
+
     print_status "info" "Creating project '$project_name' under '$project_root'"
     print_status "config" "Full path: $full_path"
-    
+
     if [ "$lang" != "python" ]; then
         exit_error "Language '$lang' not supported yet."
     fi
-    
+
     case "$skeleton" in
         "ddd-service-native-db")
-            bash "$SCRIPT_DIR/scaffold/python_ddd_service.sh" "$project_root" "$project_name" "$project_description"
+            LICENSE_CHOICE="$license_choice" bash "$SCRIPT_DIR/scaffold/python_ddd_service.sh" "$project_root" "$project_name" "$project_description"
             ;;
         "ddd-service-orm-db")
-            bash "$SCRIPT_DIR/scaffold/python_ddd_service_orm.sh" "$project_root" "$project_name" "$project_description"
+            LICENSE_CHOICE="$license_choice" bash "$SCRIPT_DIR/scaffold/python_ddd_service_orm.sh" "$project_root" "$project_name" "$project_description"
             ;;
         "lib-minimal")
-            bash "$SCRIPT_DIR/scaffold/python_lib_minimal.sh" "$project_root" "$project_name" "$project_description"
+            LICENSE_CHOICE="$license_choice" bash "$SCRIPT_DIR/scaffold/python_lib_minimal.sh" "$project_root" "$project_name" "$project_description"
             ;;
         *)
             exit_error "Unknown skeleton '$skeleton'."
@@ -455,6 +498,7 @@ main() {
 
     LANG_CHOICE=$(prompt_language)
     SKELETON_CHOICE=$(prompt_skeleton)
+    LICENSE_CHOICE=$(prompt_license)
 
     if [ "$DRY_RUN" -eq 1 ]; then
         print_status "info" "Dry-run: showing structure for '$SKELETON_CHOICE'"
@@ -462,7 +506,7 @@ main() {
         exit 0
     fi
 
-    create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE"
+    create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE" "$LICENSE_CHOICE"
     
     echo
     printf "${GREEN}╔════════════════════════════════════════╗${NC}\n"
@@ -472,6 +516,7 @@ main() {
     print_status "config" "Project: $PROJECT_NAME"
     print_status "config" "Location: $PROJECT_ROOT/$PROJECT_NAME"
     print_status "config" "Skeleton: $SKELETON_CHOICE"
+    print_status "config" "License: $LICENSE_CHOICE"
     if [ "$DEV_MODE" -eq 1 ]; then
         print_status "warning" "Dev mode: project scaffolded in temp directory"
         if [ "$CLEAN_TEMP" -ne 1 ]; then

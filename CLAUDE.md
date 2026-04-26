@@ -19,19 +19,19 @@ make dry-run       # print chosen skeleton structure; no files written
 
 ### Docs site (MkDocs)
 ```bash
-make mkdocs-serve  # installs docs deps then serves at http://0.0.0.0:8000
+make mkdocs_server  # installs docs deps then serves at http://0.0.0.0:8000
 ```
 
 ### Dev environment (root project)
 ```bash
-make init-venv     # run bin/init_venv.sh to bootstrap poetry venv
+make init_venv     # run bin/init_venv.sh to bootstrap poetry venv
 make update_venv   # poetry update
 ```
 
 ### Generated project commands (inside a scaffolded project)
 Once a project is created the template Makefile provides:
 ```bash
-make init-venv     # bootstrap poetry venv
+make init_venv     # bootstrap poetry venv
 make vscode_init   # install VS Code extensions + keybindings
 make export_deps   # export poetry deps to requirements.txt via pre-commit hook
 poetry run python -m unittest discover -s tests/unit -p "*.py" -v

@@ -4,7 +4,7 @@ version = "${PROJECT_VERSION}"
 description = "${PROJECT_DESCRIPTION}"
 authors = []
 readme = "README.md"
-license = "MIT"
+license = "${PROJECT_LICENSE}"
 homepage = "${HOMEPAGE}"
 repository = "${REPOSITORY}"
 keywords = ["python"]
@@ -12,7 +12,6 @@ packages = [{ include = "${PROJECT_NAME}", from = "src" }]
 package-mode = true
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
