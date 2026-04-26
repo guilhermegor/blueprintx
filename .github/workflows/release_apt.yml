@@ -12,6 +12,8 @@ on:
         required: true
       APT_GPG_KEY_ID:
         required: true
+      APT_GPG_PASSPHRASE:
+        required: false
 
 permissions:
   contents: write
@@ -122,6 +124,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           APT_GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
         run: |
           mkdir -p gh-pages-out/apt/pool/main
           mkdir -p gh-pages-out/apt/dists/stable/main/binary-all
@@ -144,14 +147,14 @@ jobs:
             -o "APT::FTPArchive::Release::Components=main" \
             release dists/stable > dists/stable/Release
 
-          gpg --batch --yes --armor --pinentry-mode loopback \
-              --passphrase "" --detach-sign \
+          echo "$APT_GPG_PASSPHRASE" | gpg --batch --yes --armor \
+              --pinentry-mode loopback --passphrase-fd 0 --detach-sign \
               -u "$APT_GPG_KEY_ID" \
               -o dists/stable/Release.gpg \
               dists/stable/Release
 
-          gpg --batch --yes --armor --pinentry-mode loopback \
-              --passphrase "" --clearsign \
+          echo "$APT_GPG_PASSPHRASE" | gpg --batch --yes --armor \
+              --pinentry-mode loopback --passphrase-fd 0 --clearsign \
               -u "$APT_GPG_KEY_ID" \
               -o dists/stable/InRelease \
               dists/stable/Release
