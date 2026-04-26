@@ -1,5 +1,5 @@
 
-.PHONY: new preview dev dev-clean dry-run init_venv init_venv update_venv update_venv mkdocs_server update_licenses help
+.PHONY: new preview dev dev-clean dry-run bump_version init_venv init_venv update_venv update_venv mkdocs_server update_licenses help
 
 WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
 
@@ -21,6 +21,9 @@ dev-clean:
 
 dry-run:
 	@bash bin/blueprintx.sh --dry-run
+
+bump_version:
+	@bash bin/bump_version.sh
 
 # -------------------
 # DEV ENVIRONMENT
