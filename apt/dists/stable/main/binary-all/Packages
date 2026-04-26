@@ -1,0 +1,17 @@
+Package: blueprintx
+Version: 0.1.6
+Architecture: all
+Maintainer: guilhermegor <guilhermegor.m1@gmail.com>
+Depends: bash (>= 4.0), git
+Filename: pool/main/blueprintx_0.1.6_all.deb
+Size: 106846
+MD5sum: 4aec9bed5b677ca24172abc21038f33d
+SHA1: 597ae8602783da984a7546f0d9b208c85809912a
+SHA256: 000357020c741415804f8eaab36f2b48716dc85d0872cbad4bb097b8e8dfc1d6
+Section: devel
+Priority: optional
+Homepage: https://github.com/guilhermegor/blueprintx
+Description: Make + bash scaffolding for opinionated Python project skeletons
+ BlueprintX provides an interactive CLI to scaffold Python projects with DDD
+ architecture, pre-commit hooks, CI/CD workflows, and test structure.
+

@@ -1,0 +1,23 @@
+Architectures: all
+Codename: stable
+Components: main
+Date: Sun, 26 Apr 2026 15:05:07 +0000
+Label: blueprintx
+Origin: blueprintx
+Suite: stable
+MD5Sum:
+ 55d39391fbcee40ff13f53338869d2ff              142 Release
+ 12a5fcf31fbbd978370dc0ab284d4fc2              666 main/binary-all/Packages
+ a22851b151c6c6c0caea87313206731b              478 main/binary-all/Packages.gz
+SHA1:
+ 97363c98cad03ab7b791b3fdcbd0e6d129d34df1              142 Release
+ 8b425288797d13f3cd482d0e8a1cae07c77f9640              666 main/binary-all/Packages
+ 3f2adc587942752193cf74a8eaf67582dc884c68              478 main/binary-all/Packages.gz
+SHA256:
+ 8a46944436d0acdc25108c127df2ffaea5977f3811baa567d0bf481defbb4975              142 Release
+ be82b2865d395bfeb7f391eb754f1c2bddcdca8577f466e03266687ad2d166de              666 main/binary-all/Packages
+ 73106db42d09d03d66f2155eb9778326a81447815435d49a35f2613aeb138dd9              478 main/binary-all/Packages.gz
+SHA512:
+ ca5a5bf16cd6d115d8520f11e84495540d5c7b934d5a408f24895b7f4baa9e4ab7e76f0b486d1124f26e4d2e3349519cd1cd3a8016cb4379eaf4b0bc3b2d5a06              142 Release
+ e5653e53226290652de209cbc4ac969cf68a8056c798589c3607a57c684340f5610cfb806cf841866f9c7750e4e64371233d5625adbaa19e25e0ae5f946be065              666 main/binary-all/Packages
+ 0b762e009365615e2749a8c6d6ce87875e43b5983a6916b9aef908f1977dabcadfc7d11842880f6cacad7d9aede80e0139f5cd0a13afb36f0c148e42fbcbb4ca              478 main/binary-all/Packages.gz
