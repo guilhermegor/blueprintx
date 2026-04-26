@@ -1,0 +1,73 @@
+name: Release — Snap
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version being released (e.g. 0.2.0)"
+        type: string
+        required: true
+    secrets:
+      SNAPCRAFT_STORE_CREDENTIALS:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Update snap/snapcraft.yaml version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          sed -i "s/^version: '.*'/version: '${VERSION}'/" snap/snapcraft.yaml
+
+      - name: Download and extract release tarball
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          URL="https://github.com/guilhermegor/blueprintx/archive/refs/tags/v${VERSION}.tar.gz"
+          sleep 5
+          curl -sL "$URL" -o blueprintx.tar.gz
+          mkdir -p /tmp/bpx-src
+          tar -xzf blueprintx.tar.gz --strip-components=1 -C /tmp/bpx-src
+
+      - name: Copy snap manifest into build directory
+        run: cp -r snap /tmp/bpx-src/snap
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      - name: Build snap
+        run: |
+          cd /tmp/bpx-src
+          snapcraft --destructive-mode
+
+      - name: Publish to Snap Store
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          SNAP_FILE=$(ls /tmp/bpx-src/blueprintx_*.snap)
+          snapcraft upload --release=stable "$SNAP_FILE"
+
+      - name: Commit updated snap/snapcraft.yaml
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add snap/snapcraft.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(snap): bump snapcraft to v${VERSION}"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase && git push && break
+            echo "Push attempt $attempt failed — retrying in 5s"
+            sleep 5
+          done
