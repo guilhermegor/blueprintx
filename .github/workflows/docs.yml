@@ -26,4 +26,20 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - run: pip install mkdocs-material 
-      - run: mkdocs gh-deploy --force
+      - run: mkdocs build
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages-docs
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sync docs preserving apt/
+        run: rsync -av --delete --exclude='.git' --exclude='apt/' site/ gh-pages-docs/
+      - name: Push to gh-pages
+        run: |
+          cd gh-pages-docs
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .
+          git diff-index --quiet HEAD -- || git commit -m "docs: deploy mkdocs site"
+          git push origin HEAD:gh-pages

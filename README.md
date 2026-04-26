@@ -51,6 +51,32 @@ choco uninstall blueprintx
 
 </details>
 
+
+<details>
+<summary><strong>apt</strong> (Debian / Ubuntu)</summary>
+
+```bash
+# One-time: add the repository and signing key
+curl -fsSL https://guilhermegor.github.io/blueprintx/apt/gpg.key \
+    | sudo gpg --dearmor -o /usr/share/keyrings/blueprintx.gpg
+
+echo "deb [arch=all signed-by=/usr/share/keyrings/blueprintx.gpg] \
+    https://guilhermegor.github.io/blueprintx/apt stable main" \
+    | sudo tee /etc/apt/sources.list.d/blueprintx.list
+
+sudo apt update
+sudo apt install blueprintx
+```
+
+To uninstall:
+
+```bash
+sudo apt remove blueprintx
+sudo rm /etc/apt/sources.list.d/blueprintx.list /usr/share/keyrings/blueprintx.gpg
+```
+
+</details>
+
 <details>
 <summary><strong>Git clone</strong> (any platform)</summary>
 

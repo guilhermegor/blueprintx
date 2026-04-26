@@ -42,3 +42,14 @@ jobs:
       contents: write
     with:
       version: ${{ github.event.inputs.version }}
+
+  apt:
+    needs: tag
+    uses: ./.github/workflows/release_apt.yml
+    permissions:
+      contents: write
+    with:
+      version: ${{ github.event.inputs.version }}
+    secrets:
+      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      APT_GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}

@@ -1,0 +1,160 @@
+name: Release — APT
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version being released (e.g. 0.2.0)"
+        type: string
+        required: true
+    secrets:
+      APT_GPG_PRIVATE_KEY:
+        required: true
+      APT_GPG_KEY_ID:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Install packaging tools
+        run: sudo apt-get install -y dpkg-dev apt-utils
+
+      - name: Download release tarball
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          URL="https://github.com/guilhermegor/blueprintx/archive/refs/tags/v${VERSION}.tar.gz"
+          sleep 5
+          curl -sL "$URL" -o blueprintx.tar.gz
+
+      - name: Build .deb package
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p pkg/DEBIAN
+          mkdir -p pkg/usr/share/blueprintx
+          mkdir -p pkg/usr/bin
+          mkdir -p /tmp/bpx-src
+
+          tar -xzf blueprintx.tar.gz --strip-components=1 -C /tmp/bpx-src
+
+          cp -r /tmp/bpx-src/bin      pkg/usr/share/blueprintx/
+          cp -r /tmp/bpx-src/templates pkg/usr/share/blueprintx/
+          find pkg/usr/share/blueprintx/bin -name '*.sh' -exec chmod 755 {} +
+
+          cat > pkg/usr/bin/blueprintx << 'EOF'
+          #!/usr/bin/env bash
+          exec /usr/share/blueprintx/bin/blueprintx.sh "$@"
+          EOF
+          chmod 755 pkg/usr/bin/blueprintx
+
+          printf '%s\n' \
+            "Package: blueprintx" \
+            "Version: ${VERSION}" \
+            "Architecture: all" \
+            "Maintainer: guilhermegor <guilhermegor.m1@gmail.com>" \
+            "Depends: bash (>= 4.0), git" \
+            "Description: Make + bash scaffolding for opinionated Python project skeletons" \
+            " BlueprintX provides an interactive CLI to scaffold Python projects with DDD" \
+            " architecture, pre-commit hooks, CI/CD workflows, and test structure." \
+            "Section: devel" \
+            "Priority: optional" \
+            "Homepage: https://github.com/guilhermegor/blueprintx" \
+            > pkg/DEBIAN/control
+
+          dpkg-deb --build pkg "blueprintx_${VERSION}_all.deb"
+
+      - name: Create GitHub Release if absent
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "v${VERSION}" >/dev/null 2>&1 \
+            || gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes
+
+      - name: Upload .deb to GitHub Release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "v${VERSION}" "blueprintx_${VERSION}_all.deb" --clobber
+
+      - name: Update debian/control on main
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          sed -i "s/^Version: .*/Version: ${VERSION}/" debian/control
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add debian/control
+          git commit -m "chore(apt): bump debian control to v${VERSION}"
+          git push
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages-out
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Import GPG key
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: echo "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Build apt repository
+        env:
+          VERSION: ${{ inputs.version }}
+          APT_GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
+        run: |
+          mkdir -p gh-pages-out/apt/pool/main
+          mkdir -p gh-pages-out/apt/dists/stable/main/binary-all
+
+          rm -f gh-pages-out/apt/pool/main/*.deb
+          cp "blueprintx_${VERSION}_all.deb" gh-pages-out/apt/pool/main/
+
+          cd gh-pages-out/apt
+
+          dpkg-scanpackages --arch all pool/main \
+              > dists/stable/main/binary-all/Packages
+          gzip -k dists/stable/main/binary-all/Packages
+
+          apt-ftparchive \
+            -o "APT::FTPArchive::Release::Origin=blueprintx" \
+            -o "APT::FTPArchive::Release::Label=blueprintx" \
+            -o "APT::FTPArchive::Release::Suite=stable" \
+            -o "APT::FTPArchive::Release::Codename=stable" \
+            -o "APT::FTPArchive::Release::Architectures=all" \
+            -o "APT::FTPArchive::Release::Components=main" \
+            release dists/stable > dists/stable/Release
+
+          gpg --batch --yes --armor --detach-sign \
+              -u "$APT_GPG_KEY_ID" \
+              -o dists/stable/Release.gpg \
+              dists/stable/Release
+
+          gpg --batch --yes --armor --clearsign \
+              -u "$APT_GPG_KEY_ID" \
+              -o dists/stable/InRelease \
+              dists/stable/Release
+
+          gpg --armor --export "$APT_GPG_KEY_ID" > gpg.key
+
+      - name: Commit apt repository to gh-pages
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          cd gh-pages-out
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apt/
+          git commit -m "chore(apt): publish blueprintx v${VERSION}"
+          git push
