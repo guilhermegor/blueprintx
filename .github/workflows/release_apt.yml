@@ -115,10 +115,13 @@ jobs:
       - name: Import GPG key
         env:
           APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
         run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          printf 'allow-loopback-pinentry\n' >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent || true
           echo "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          gpg-connect-agent reloadagent /bye || true
 
       - name: Build apt repository
         env:
@@ -147,17 +150,22 @@ jobs:
             -o "APT::FTPArchive::Release::Components=main" \
             release dists/stable > dists/stable/Release
 
-          echo "$APT_GPG_PASSPHRASE" | gpg --batch --yes --armor \
-              --pinentry-mode loopback --passphrase-fd 0 --detach-sign \
-              -u "$APT_GPG_KEY_ID" \
-              -o dists/stable/Release.gpg \
-              dists/stable/Release
+          gpg_sign() {
+            if [ -n "${APT_GPG_PASSPHRASE:-}" ]; then
+              printf '%s\n' "$APT_GPG_PASSPHRASE" \
+                | gpg --batch --yes --armor \
+                    --pinentry-mode loopback --passphrase-fd 0 "$@"
+            else
+              gpg --batch --yes --armor \
+                  --pinentry-mode loopback --passphrase "" "$@"
+            fi
+          }
 
-          echo "$APT_GPG_PASSPHRASE" | gpg --batch --yes --armor \
-              --pinentry-mode loopback --passphrase-fd 0 --clearsign \
-              -u "$APT_GPG_KEY_ID" \
-              -o dists/stable/InRelease \
-              dists/stable/Release
+          gpg_sign --detach-sign -u "$APT_GPG_KEY_ID" \
+              -o dists/stable/Release.gpg dists/stable/Release
+
+          gpg_sign --clearsign -u "$APT_GPG_KEY_ID" \
+              -o dists/stable/InRelease dists/stable/Release
 
           gpg --armor --export "$APT_GPG_KEY_ID" > gpg.key
 
