@@ -15,6 +15,36 @@
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders (unit/integration/performance)
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 
+## 📦 Installation
+
+<details>
+<summary><strong>Homebrew</strong> (macOS / Linux)</summary>
+
+```bash
+brew tap guilhermegor/blueprintx https://github.com/guilhermegor/blueprintx
+brew install blueprintx
+```
+
+To uninstall:
+
+```bash
+brew uninstall blueprintx
+brew untap guilhermegor/blueprintx
+```
+
+</details>
+
+<details>
+<summary><strong>Git clone</strong> (any platform)</summary>
+
+```bash
+git clone https://github.com/guilhermegor/blueprintx.git
+cd blueprintx
+make new
+```
+
+</details>
+
 ## 🚀 Quick start
 
 ```bash

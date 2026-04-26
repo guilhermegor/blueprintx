@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "release: v${VERSION}"
+          git push origin "v${VERSION}"
+
+  homebrew:
+    needs: tag
+    uses: ./.github/workflows/release_homebrew.yml
+    permissions:
+      contents: write
+    with:
+      version: ${{ github.event.inputs.version }}
