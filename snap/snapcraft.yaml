@@ -1,6 +1,6 @@
 name: blueprintx
 base: core24
-version: '0.1.8'
+version: '0.2.0'
 summary: Make + bash scaffolding for opinionated Python project skeletons
 description: |
   BlueprintX provides an interactive CLI to scaffold Python projects with DDD
