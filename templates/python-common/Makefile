@@ -58,13 +58,17 @@ fix_playwright:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint
+.PHONY: lint check_consistency
 
 lint:
 	@poetry run ruff check --fix .
 	@poetry run ruff format .
 	@poetry run codespell .
 	@poetry run pydocstyle .
+	@poetry run python bin/check_consistency.py
+
+check_consistency:
+	@poetry run python bin/check_consistency.py
 
 # -------------------
 # RUN
@@ -108,7 +112,8 @@ help:
 	@echo "  fix_playwright       Reinstall Playwright browsers"
 	@echo ""
 	@echo "Linting"
-	@echo "  lint                 Run ruff, codespell, pydocstyle"
+	@echo "  lint                 Run ruff, codespell, pydocstyle, check_consistency"
+	@echo "  check_consistency    Check docstring type/raises consistency"
 	@echo ""
 	@echo "Docs"
 	@echo "  docs_server          Serve MkDocs site locally at http://0.0.0.0:8000"
