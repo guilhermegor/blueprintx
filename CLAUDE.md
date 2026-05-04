@@ -50,21 +50,48 @@ BlueprintX/
 │   ├── help.sh                     # usage tips
 │   ├── init_venv.sh                # venv bootstrap for this repo
 │   └── scaffold/
-│       ├── python_ddd_service.sh   # native-DB scaffold logic
+│       ├── python_ddd_service.sh      # native-DB scaffold logic
 │       ├── python_ddd_service_orm.sh  # SQLAlchemy ORM scaffold logic
-│       └── python_lib_minimal.sh   # lib-minimal scaffold logic
+│       ├── python_lib_minimal.sh      # lib-minimal scaffold logic
+│       └── ts_react_app.sh            # React SPA (Webpack) scaffold logic
 ├── templates/
 │   ├── python-common/              # shared assets copied into ALL Python skeletons
+│   ├── ts-common/                  # shared assets copied into ALL TypeScript skeletons
 │   ├── ddd-service-native-db/      # DDD skeleton with native DB drivers
+│   │   └── skeleton.meta           # discovery descriptor (language, display_name, scaffold)
 │   ├── ddd-service-orm-db/         # DDD skeleton with SQLAlchemy ORM
-│   └── lib-minimal/                # minimal library skeleton
+│   │   └── skeleton.meta
+│   ├── lib-minimal/                # minimal library skeleton
+│   │   └── skeleton.meta
+│   ├── react-spa-webpack/          # React 19 + TypeScript + Webpack 5 SPA skeleton
+│   │   └── skeleton.meta
+│   └── licenses/                   # license text files (MIT, Apache-2.0, GPL-3.0, …)
 ├── docs/                           # MkDocs source pages
 └── mkdocs.yml
 ```
 
+## Discovery system
+
+`bin/blueprintx.sh` builds the language and skeleton menus at runtime by scanning every `templates/*/skeleton.meta` file. A `skeleton.meta` is a shell-sourceable KEY=VALUE file with four fields:
+
+```
+language=<python|typescript|…>
+display_name=<Human-readable name shown in the menu>
+description=<One-line description shown in previews>
+scaffold=<relative path from repo root, e.g. bin/scaffold/ts_react_app.sh>
+```
+
+- `prompt_language` de-duplicates `language=` values across all discovered metas.
+- `prompt_skeleton` shows only skeletons whose `language=` matches the user's choice.
+- `create_project` reads `scaffold=` from the matched meta and delegates to that script.
+- Directories without `skeleton.meta` (`python-common`, `ts-common`, `licenses`) are ignored.
+
+To add a new skeleton: create its directory under `templates/`, add a `skeleton.meta`, write a scaffold script under `bin/scaffold/`, and the menu updates automatically — no changes to `blueprintx.sh` required.
+
 ## How scaffolding works
 
-Each scaffold script in `bin/scaffold/` follows this sequence:
+### Python skeletons (`python_ddd_service.sh`, `python_ddd_service_orm.sh`, `python_lib_minimal.sh`)
+
 1. `validate_inputs` — checks required args.
 2. `resolve_github_username` — env var → `gh` CLI → interactive prompt.
 3. `create_directory_structure` — `mkdir -p` for the target layout.
@@ -73,7 +100,16 @@ Each scaffold script in `bin/scaffold/` follows this sequence:
 6. `copy_common_templates` — `envsubst` renders `pyproject.toml`, then copies everything from `templates/python-common/` (ruff.toml, pre-commit config, Makefile, CI workflow, etc.).
 7. `prompt_git_remote_setup` — optionally initialises git, creates GitHub repo via `gh`, and applies branch protection.
 
-The `templates/python-common/` directory is the **single source of truth** for shared tooling (ruff, pre-commit, pytest, VS Code settings). Changes there propagate to all three skeletons on the next `make init` run.
+### TypeScript skeletons (`ts_react_app.sh`)
+
+1. `validate_inputs` — checks required args.
+2. `resolve_github_username` — env var → `gh` CLI → interactive prompt.
+3. `create_directory_structure` — `mkdir -p` for the target layout.
+4. `copy_skeleton_files` — copies `templates/react-spa-webpack/` verbatim.
+5. `copy_common_templates` — `envsubst` renders `ts-common/package.json`; copies `.gitignore`, `.vscode/settings.json`, `CONTRIBUTING.md`, license file.
+6. `prompt_git_remote_setup` — optionally initialises git, creates GitHub repo via `gh`, and applies branch protection.
+
+The `templates/python-common/` directory is the **single source of truth** for shared Python tooling. The `templates/ts-common/` directory is the **single source of truth** for shared TypeScript tooling. Changes to either propagate to all skeletons of that language on the next scaffold run.
 
 ## Template Python conventions (must be respected in all template files)
 
