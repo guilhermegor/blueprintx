@@ -1,5 +1,5 @@
 site_name: BlueprintX
-site_description: Documentation for BlueprintX scaffolds (DDD service and lib-minimal)
+site_description: Documentation for BlueprintX scaffolds (Python and TypeScript)
 site_url: https://github.com/guilhermegor/BlueprintX
 repo_url: https://github.com/guilhermegor/BlueprintX
 nav:
@@ -17,6 +17,8 @@ nav:
           - Example - External API Calls: examples-orm/ddd-orm-external-api.md
           - Example - Bank Balance Alert: examples-orm/ddd-orm-bank-balance-alert.md
       - Lib Minimal: lib-minimal.md
+  - TypeScript:
+      - React SPA (Webpack): react-spa-webpack.md
 theme:
   name: material
   palette:

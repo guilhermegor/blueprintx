@@ -14,6 +14,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
 | `lib-minimal.md` | Skeleton overview | Lean Python library starter with packaging, tests, and CI |
+| `react-spa-webpack.md` | Skeleton overview | React 19 + TypeScript 5 + Webpack 5 SPA skeleton |
 | `examples/ddd-usage-examples.md` | Example walkthrough | Wiring DDD layers end-to-end; FastAPI integration; swapping implementations |
 | `examples/ddd-external-api.md` | Example walkthrough | Consuming external APIs (stock exchange); swapping providers via ports |
 | `examples/ddd-bank-balance-alert.md` | Example walkthrough | Complete multi-port DDD example (native DB) |
@@ -58,9 +59,11 @@ nav:
           - Overview: ddd-service-orm-db.md
           - Example - <title>: examples-orm/<filename>.md
       - Lib Minimal: lib-minimal.md
+  - TypeScript:
+      - React SPA (Webpack): react-spa-webpack.md
 ```
 
-When adding a new skeleton, add a new group under `Python:`. When adding a new example, append it under the relevant skeleton group.
+When adding a new Python skeleton, add a new group under `Python:`. When adding a new TypeScript skeleton, add a new entry under `TypeScript:`. When adding a new example, append it under the relevant skeleton group. TypeScript example walkthroughs follow the same `examples-<skeleton-name>/` subdirectory pattern as Python examples.
 
 ---
 

@@ -10,10 +10,13 @@
 **BlueprintX** is a lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
 
 ## ✨ Highlights
-- Interactive CLI (`make new`) with skeleton choice
-- Ready-made skeletons (currently Python): **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, and **lib-minimal**
-- Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders (unit/integration/performance)
+- Interactive CLI (`make new`) with auto-discovered language and skeleton menus
+- **Python skeletons**: **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, and **lib-minimal**
+- **TypeScript skeletons**: **React SPA (Webpack)** — React 19 + TypeScript + Webpack 5 + Babel + ESLint + Prettier
+- Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders
+- Common TypeScript baseline: `package.json` with pinned deps, `.gitignore`, VS Code settings, `CONTRIBUTING.md`
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
+- **Extensible by design**: drop a `skeleton.meta` file into any `templates/` directory and it appears in the menu automatically
 
 ## 📦 Installation
 
@@ -131,7 +134,7 @@ make dry-run
 make docs_server  # serve the docs site locally at http://0.0.0.0:8000
 ```
 
-**Requirements:** `bash` ≥ 4. For the current Python skeletons, use `pyenv`/`poetry` (or your Python toolchain of choice) in the generated project. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
+**Requirements:** `bash` ≥ 4. For Python skeletons, use `pyenv`/`poetry` in the generated project. For TypeScript skeletons, use Node.js ≥ 20 and run `npm install` after scaffolding. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
 
 ## 🏗️ Supported skeletons
 
@@ -219,6 +222,41 @@ project/
     README.md
 ```
 
+### React SPA — Webpack (templates/react-spa-webpack)
+Single-page application skeleton using **React 19**, **TypeScript 5**, **Webpack 5**, and **Babel**. ESLint (flat config) and Prettier are pre-configured. The `src/` directory has placeholder subdirectories for the most common SPA concerns.
+
+```
+project/
+    src/
+        App.tsx
+        index.tsx
+        adapters/
+        assets/
+        components/
+        contexts/
+        models/
+        pages/
+        routers/
+        styles/
+        templates/
+        utils/
+        workers/
+    public/
+        index.html
+    .babelrc
+    eslint.config.js
+    .prettierrc.js
+    tsconfig.json
+    webpack.config.js
+    package.json
+    .gitignore
+    .vscode/
+    CONTRIBUTING.md
+    LICENSE
+```
+
+After scaffolding, run `npm install && npm start` to launch the dev server on `http://localhost:3000`.
+
 ## 🧭 Folder attribution (ddd-service templates)
 - `chassis/`: shared cross-cutting providers (DB handlers, storage, type enforcement).
 - `chassis/db/`: `DatabaseHandler` ABC — contract all backends implement.
@@ -238,19 +276,27 @@ BlueprintX/
 ├── Makefile                 # entry targets: new, preview, dev, dev-clean, dry-run
 ├── run.sh                   # same targets for non-make usage
 ├── bin/
-│   ├── blueprintx.sh        # interactive menu + modes
+│   ├── blueprintx.sh        # interactive menu + auto-discovery
 │   ├── preview.sh           # skeleton previews
 │   ├── help.sh              # usage tips and targets
 │   ├── init_venv.sh         # convenience venv bootstrap
 │   └── scaffold/            # per-skeleton scaffolders
 │       ├── python_ddd_service.sh      # native DB scaffold
 │       ├── python_ddd_service_orm.sh  # SQLAlchemy ORM scaffold
-│       └── python_lib_minimal.sh
-├── templates/               # skeleton contents
+│       ├── python_lib_minimal.sh      # lib-minimal scaffold
+│       └── ts_react_app.sh            # React SPA (Webpack) scaffold
+├── templates/               # skeleton contents + discovery metadata
+│   ├── python-common/          # shared assets for all Python skeletons
+│   ├── ts-common/              # shared assets for all TypeScript skeletons
 │   ├── ddd-service-native-db/  # DDD/hexagonal with native DB libraries
+│   │   └── skeleton.meta
 │   ├── ddd-service-orm-db/     # DDD/hexagonal with SQLAlchemy ORM
+│   │   └── skeleton.meta
 │   ├── lib-minimal/            # minimal library template
-│   └── python-common/          # shared assets for all Python projects
+│   │   └── skeleton.meta
+│   ├── react-spa-webpack/      # React 19 + TypeScript + Webpack 5 SPA
+│   │   └── skeleton.meta
+│   └── licenses/               # license text files
 ├── docs/                    # mkdocs sources
 ├── mkdocs.yml               # mkdocs config
 └── assets/logo.png          # logo used in this README

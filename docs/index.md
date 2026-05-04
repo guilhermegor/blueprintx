@@ -19,6 +19,9 @@ New to BlueprintX? See the [Get Started guide](get-started.md) for installation 
 - DDD Service (ORM DB): Same DDD/hexagonal structure, but uses SQLAlchemy ORM for database operations. See [DDD Service (ORM DB)](ddd-service-orm-db.md).
 - Lib Minimal: lean library starter with packaging, tests, and CI ready. See [Lib Minimal](lib-minimal.md).
 
+## TypeScript scaffolds
+- React SPA (Webpack): Single-page application using React 19, TypeScript 5, Webpack 5, Babel, ESLint (flat config), and Prettier. Src directories pre-created for components, pages, contexts, models, routers, utils, and more. See [React SPA (Webpack)](react-spa-webpack.md).
+
 ## View these docs locally (Poetry)
 **Option A (direct)**
 1. Install docs deps: `poetry install --with docs`
@@ -35,4 +38,4 @@ New to BlueprintX? See the [Get Started guide](get-started.md) for installation 
 - Temp sandbox: `make dev` or `make dev-clean`
 - Structure-only preview: `make dry-run`
 
-Each scaffold copies shared Python assets from `templates/python-common` (pyproject, pre-commit, VS Code, CI, README boilerplate) and then applies its template-specific layout.
+Each scaffold copies shared assets from a common template directory (`templates/python-common` for Python, `templates/ts-common` for TypeScript) and then applies its skeleton-specific layout. New skeletons are discovered automatically via `skeleton.meta` files — no changes to the menu code needed.
