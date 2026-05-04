@@ -1,0 +1,4 @@
+language=python
+display_name=Library (Minimal)
+description=Minimal Python library starter with packaging, tests, and CI
+scaffold=bin/scaffold/python_lib_minimal.sh

@@ -1,0 +1,4 @@
+language=python
+display_name=DDD Service (Native DB)
+description=Hexagonal DDD service with native DB drivers (psycopg2, sqlite3, mysql-connector, etc.)
+scaffold=bin/scaffold/python_ddd_service.sh
