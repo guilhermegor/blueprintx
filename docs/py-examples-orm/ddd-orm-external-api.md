@@ -2,7 +2,7 @@
 
 How to integrate external APIs using the ports-and-adapters pattern with SQLAlchemy for persistence.
 
-> **See also:** [Core concepts](../ddd-service-orm-db.md) · [Usage examples](ddd-orm-usage-examples.md) · [Bank balance alert](ddd-orm-bank-balance-alert.md)
+> **See also:** [Core concepts](../py-ddd-service-orm-db.md) · [Usage examples](ddd-orm-usage-examples.md) · [Bank balance alert](ddd-orm-bank-balance-alert.md)
 
 ---
 

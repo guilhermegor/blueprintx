@@ -7,18 +7,18 @@ nav:
   - Get Started: get-started.md
   - Python:
       - DDD Service (Native DB):
-          - Overview: ddd-service-native-db.md
-          - Example - External API Calls: examples/ddd-external-api.md
-          - Example - Wiring with FastAPI: examples/ddd-usage-examples.md
-          - Example - Bank Balance Alert: examples/ddd-bank-balance-alert.md
+          - Overview: py-ddd-service-native-db.md
+          - Example - External API Calls: py-examples/ddd-external-api.md
+          - Example - Wiring with FastAPI: py-examples/ddd-usage-examples.md
+          - Example - Bank Balance Alert: py-examples/ddd-bank-balance-alert.md
       - DDD Service (ORM DB):
-          - Overview: ddd-service-orm-db.md
-          - Example - Usage with SQLAlchemy: examples-orm/ddd-orm-usage-examples.md
-          - Example - External API Calls: examples-orm/ddd-orm-external-api.md
-          - Example - Bank Balance Alert: examples-orm/ddd-orm-bank-balance-alert.md
-      - Lib Minimal: lib-minimal.md
+          - Overview: py-ddd-service-orm-db.md
+          - Example - Usage with SQLAlchemy: py-examples-orm/ddd-orm-usage-examples.md
+          - Example - External API Calls: py-examples-orm/ddd-orm-external-api.md
+          - Example - Bank Balance Alert: py-examples-orm/ddd-orm-bank-balance-alert.md
+      - Lib Minimal: py-lib-minimal.md
   - TypeScript:
-      - React SPA (Webpack): react-spa-webpack.md
+      - React SPA (Webpack): ts-react-spa-webpack.md
 theme:
   name: material
   palette:

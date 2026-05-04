@@ -4,7 +4,7 @@ A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It
 
 This template uses **SQLAlchemy ORM (≥ 2.0)** for database operations, providing a unified abstraction layer that works with PostgreSQL, MySQL, SQLite, Oracle, MSSQL, and any other SQLAlchemy-supported database. Schema creation, session management, and the generic repository are all handled by the chassis — feature code only touches domain types.
 
-> **Examples:** [Usage with SQLAlchemy](examples-orm/ddd-orm-usage-examples.md) · [External API Calls](examples-orm/ddd-orm-external-api.md) · [Bank Balance Alert](examples-orm/ddd-orm-bank-balance-alert.md)
+> **Examples:** [Usage with SQLAlchemy](py-examples-orm/ddd-orm-usage-examples.md) · [External API Calls](py-examples-orm/ddd-orm-external-api.md) · [Bank Balance Alert](py-examples-orm/ddd-orm-bank-balance-alert.md)
 
 ---
 
@@ -337,9 +337,9 @@ Keep `chassis/` only for truly shared cross-cutting providers. Feature-specific 
 
 ## 🔗 Learn more
 
-- [Example - Usage with SQLAlchemy](examples-orm/ddd-orm-usage-examples.md) — Wiring ORM layers, session management, FastAPI integration
-- [Example - External API Calls](examples-orm/ddd-orm-external-api.md) — Consuming external APIs in an ORM-based service
-- [Example - Bank Balance Alert](examples-orm/ddd-orm-bank-balance-alert.md) — Complete multi-port ORM example
+- [Example - Usage with SQLAlchemy](py-examples-orm/ddd-orm-usage-examples.md) — Wiring ORM layers, session management, FastAPI integration
+- [Example - External API Calls](py-examples-orm/ddd-orm-external-api.md) — Consuming external APIs in an ORM-based service
+- [Example - Bank Balance Alert](py-examples-orm/ddd-orm-bank-balance-alert.md) — Complete multi-port ORM example
 
 ---
 
