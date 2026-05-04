@@ -1,48 +1,47 @@
+import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
+import HtmlWebpackPlugin from 'html-webpack-plugin';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const isDevelopment = process.env.NODE_ENV !== 'production';
 
-/** @type {import('webpack').Configuration} */
-export default (env, argv) => {
-  const isDev = argv.mode !== 'production';
-
-  return {
-    entry: './src/index.tsx',
-    output: {
-      path: path.resolve(__dirname, 'dist'),
-      filename: isDev ? '[name].js' : '[name].[contenthash].js',
-      clean: true,
-      publicPath: '/',
-    },
-    resolve: {
-      extensions: ['.tsx', '.ts', '.js'],
-      alias: { '@': path.resolve(__dirname, 'src') },
-    },
-    module: {
-      rules: [
-        {
-          test: /\.(ts|tsx)$/,
-          exclude: /node_modules/,
-          use: 'babel-loader',
+export default {
+  entry: './src/index.tsx',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'bundle.[contenthash].js',
+    clean: true,
+  },
+  devServer: {
+    static: './dist',
+    port: 3000,
+    hot: true,
+    open: true,
+  },
+  resolve: {
+    extensions: ['.tsx', '.ts', '.js'],
+  },
+  module: {
+    rules: [
+      {
+        test: /\.(ts|tsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            plugins: isDevelopment ? ['react-refresh/babel'] : [],
+          },
         },
-        {
-          test: /\.(png|svg|jpg|jpeg|gif|webp)$/i,
-          type: 'asset/resource',
-        },
-      ],
-    },
-    plugins: [
-      new HtmlWebpackPlugin({
-        template: './public/index.html',
-      }),
+      },
     ],
-    devServer: {
-      port: 3000,
-      hot: true,
-      historyApiFallback: true,
-    },
-    devtool: isDev ? 'eval-source-map' : 'source-map',
-  };
+  },
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: './public/index.html',
+      filename: 'index.html',
+    }),
+    isDevelopment && new ReactRefreshWebpackPlugin(),
+  ].filter(Boolean),
 };

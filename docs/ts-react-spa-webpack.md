@@ -32,7 +32,10 @@ project/
 ├── package.json         # deps + scripts: start, build, typecheck, lint, format
 ├── .gitignore
 ├── .vscode/
-│   └── settings.json    # format-on-save, ESLint fix-on-save, workspace TS SDK
+│   └── settings.json    # format-on-save, ESLint fix-on-save
+├── docs/
+├── .github/
+│   └── workflows/
 ├── CONTRIBUTING.md
 └── LICENSE
 ```

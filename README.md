@@ -251,6 +251,8 @@ project/
     package.json
     .gitignore
     .vscode/
+    docs/
+    .github/
     CONTRIBUTING.md
     LICENSE
 ```

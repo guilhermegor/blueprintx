@@ -59,8 +59,6 @@ create_directory_structure() {
 
     mkdir -p "$project_path"/src
     mkdir -p "$project_path"/public
-    mkdir -p "$project_path"/assets
-    mkdir -p "$project_path"/bin
     mkdir -p "$project_path"/docs
     mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
