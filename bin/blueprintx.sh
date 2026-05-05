@@ -429,9 +429,6 @@ prompt_skeleton() {
 }
 
 prompt_license() {
-    local licenses_dir
-    licenses_dir="$(cd "$SCRIPT_DIR/.." && pwd)/templates/licenses"
-
     printf "${CYAN}Select license${NC}\n" >&2
     printf "  ${BLUE} 1) MIT${NC}          — Do whatever you want; keep the copyright notice. (default)\n" >&2
     printf "  ${BLUE} 2) Apache-2.0${NC}   — Like MIT, adds an explicit patent grant.\n" >&2
@@ -514,7 +511,7 @@ run_create_flow() {
         PROJECT_ROOT="$TEMP_ROOT"
         print_status "config" "Dev mode: using temp root $PROJECT_ROOT"
         if [ "$CLEAN_TEMP" -eq 1 ]; then
-            trap "rm -rf '$TEMP_ROOT'" EXIT
+            trap 'rm -rf "$TEMP_ROOT"' EXIT
             print_status "info" "Temp directory will be cleaned on exit"
         fi
     else
