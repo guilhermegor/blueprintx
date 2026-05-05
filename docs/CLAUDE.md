@@ -11,15 +11,16 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 |------|------|---------|
 | `index.md` | Utility page | Site home — logo, tagline, scaffold quick reference, links to all sections |
 | `get-started.md` | Utility page | Installation and first-run instructions, requirements, key highlights |
-| `ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
-| `ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
-| `lib-minimal.md` | Skeleton overview | Lean Python library starter with packaging, tests, and CI |
-| `examples/ddd-usage-examples.md` | Example walkthrough | Wiring DDD layers end-to-end; FastAPI integration; swapping implementations |
-| `examples/ddd-external-api.md` | Example walkthrough | Consuming external APIs (stock exchange); swapping providers via ports |
-| `examples/ddd-bank-balance-alert.md` | Example walkthrough | Complete multi-port DDD example (native DB) |
-| `examples-orm/ddd-orm-usage-examples.md` | Example walkthrough | Wiring DDD layers with SQLAlchemy ORM; session management |
-| `examples-orm/ddd-orm-external-api.md` | Example walkthrough | Consuming external APIs in an ORM-based DDD service |
-| `examples-orm/ddd-orm-bank-balance-alert.md` | Example walkthrough | Complete multi-port DDD example (ORM) |
+| `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
+| `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
+| `py-lib-minimal.md` | Skeleton overview | Lean Python library starter with packaging, tests, and CI |
+| `ts-react-spa-webpack.md` | Skeleton overview | React 19 + TypeScript 5 + Webpack 5 SPA skeleton |
+| `py-examples/ddd-usage-examples.md` | Example walkthrough | Wiring DDD layers end-to-end; FastAPI integration; swapping implementations |
+| `py-examples/ddd-external-api.md` | Example walkthrough | Consuming external APIs (stock exchange); swapping providers via ports |
+| `py-examples/ddd-bank-balance-alert.md` | Example walkthrough | Complete multi-port DDD example (native DB) |
+| `py-examples-orm/ddd-orm-usage-examples.md` | Example walkthrough | Wiring DDD layers with SQLAlchemy ORM; session management |
+| `py-examples-orm/ddd-orm-external-api.md` | Example walkthrough | Consuming external APIs in an ORM-based DDD service |
+| `py-examples-orm/ddd-orm-bank-balance-alert.md` | Example walkthrough | Complete multi-port DDD example (ORM) |
 
 ---
 
@@ -28,17 +29,17 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 ### File naming
 
 - All filenames must be **kebab-case** with a `.md` extension.
-- Skeleton overview files are named after their skeleton: `ddd-service-native-db.md`, `lib-minimal.md`.
-- Example files are prefixed with the skeleton they illustrate: `ddd-external-api.md`, `ddd-orm-bank-balance-alert.md`.
+- Skeleton overview files are prefixed with the language (`py-` or `ts-`) followed by the skeleton name: `py-ddd-service-native-db.md`, `py-lib-minimal.md`, `ts-react-spa-webpack.md`.
+- Example files are prefixed with the skeleton they illustrate (no language prefix — the parent directory carries it): `ddd-external-api.md`, `ddd-orm-bank-balance-alert.md`.
 
 ### Subdirectory pattern
 
 | Directory | Contents |
 |-----------|----------|
-| `examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
-| `examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
+| `py-examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
+| `py-examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
 
-Future skeletons follow the same pattern: `examples-<skeleton-name>/`.
+Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
 
 ### MkDocs nav coupling
 
@@ -52,15 +53,17 @@ nav:
   - Get Started: get-started.md
   - Python:
       - DDD Service (Native DB):
-          - Overview: ddd-service-native-db.md
-          - Example - <title>: examples/<filename>.md
+          - Overview: py-ddd-service-native-db.md
+          - Example - <title>: py-examples/<filename>.md
       - DDD Service (ORM DB):
-          - Overview: ddd-service-orm-db.md
-          - Example - <title>: examples-orm/<filename>.md
-      - Lib Minimal: lib-minimal.md
+          - Overview: py-ddd-service-orm-db.md
+          - Example - <title>: py-examples-orm/<filename>.md
+      - Lib Minimal: py-lib-minimal.md
+  - TypeScript:
+      - React SPA (Webpack): ts-react-spa-webpack.md
 ```
 
-When adding a new skeleton, add a new group under `Python:`. When adding a new example, append it under the relevant skeleton group.
+When adding a new Python skeleton, add a new group under `Python:` and name the file `py-<skeleton>.md`. When adding a new TypeScript skeleton, add a new entry under `TypeScript:` and name the file `ts-<skeleton>.md`. When adding a new example, append it under the relevant skeleton group. TypeScript example walkthroughs follow the same `ts-examples-<skeleton-name>/` subdirectory pattern as Python examples.
 
 ---
 

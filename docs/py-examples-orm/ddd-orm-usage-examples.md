@@ -2,7 +2,7 @@
 
 Basic examples demonstrating the DDD hexagonal architecture with SQLAlchemy ORM.
 
-> **See also:** [Core concepts](../ddd-service-orm-db.md) · [External API calls](ddd-orm-external-api.md) · [Bank balance alert](ddd-orm-bank-balance-alert.md)
+> **See also:** [Core concepts](../py-ddd-service-orm-db.md) · [External API calls](ddd-orm-external-api.md) · [Bank balance alert](ddd-orm-bank-balance-alert.md)
 
 ---
 

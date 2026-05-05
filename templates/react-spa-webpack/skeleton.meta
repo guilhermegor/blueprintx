@@ -1,0 +1,4 @@
+language=typescript
+display_name=React SPA (Webpack)
+description=React 19 + TypeScript 5 + Webpack 5 + Babel + ESLint + Prettier
+scaffold=bin/scaffold/ts_react_app.sh

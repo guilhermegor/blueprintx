@@ -2,7 +2,7 @@
 
 A complete illustrative example showing how to structure a banking feature with balance alerts using DDD hexagonal architecture and SQLAlchemy ORM.
 
-> **See also:** [Core concepts](../ddd-service-orm-db.md) · [Usage examples](ddd-orm-usage-examples.md) · [External API calls](ddd-orm-external-api.md)
+> **See also:** [Core concepts](../py-ddd-service-orm-db.md) · [Usage examples](ddd-orm-usage-examples.md) · [External API calls](ddd-orm-external-api.md)
 
 ---
 

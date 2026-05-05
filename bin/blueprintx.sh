@@ -2,7 +2,7 @@
 
 set -e
 
-BLUEPRINTX_VERSION="0.2.0"
+BLUEPRINTX_VERSION="0.3.0"
 
 DEV_MODE=0
 DRY_RUN=0
@@ -11,6 +11,8 @@ TEMP_ROOT=""
 SUBCOMMAND=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+TEMPLATES_ROOT="$BLUEPRINTX_ROOT/templates"
 source "$SCRIPT_DIR/lib/logging.sh"
 
 # =========================================================================
@@ -320,64 +322,110 @@ show_skeleton_structure() {
             show_lib_minimal
             ;;
         *)
-            print_status "warning" "No preview available for skeleton '$skeleton'"
+            # Fall back to description from skeleton.meta
+            local meta="$TEMPLATES_ROOT/$skeleton/skeleton.meta"
+            if [ -f "$meta" ]; then
+                local description=""
+                description=$(grep '^description=' "$meta" | cut -d= -f2-)
+                print_status "info" "$skeleton: $description"
+            else
+                print_status "warning" "No preview available for skeleton '$skeleton'"
+            fi
             ;;
     esac
+}
+
+_discover_languages() {
+    local seen=""
+    for meta in "$TEMPLATES_ROOT"/*/skeleton.meta; do
+        [ -f "$meta" ] || continue
+        local lang
+        lang=$(grep '^language=' "$meta" | cut -d= -f2-)
+        [ -z "$lang" ] && continue
+        case " $seen " in
+            *" $lang "*) ;;
+            *) seen="$seen $lang" ;;
+        esac
+    done
+    echo "$seen"
+}
+
+_discover_skeletons_for_lang() {
+    local target_lang="$1"
+    for meta in "$TEMPLATES_ROOT"/*/skeleton.meta; do
+        [ -f "$meta" ] || continue
+        local lang
+        lang=$(grep '^language=' "$meta" | cut -d= -f2-)
+        [ "$lang" = "$target_lang" ] || continue
+        local dir
+        dir=$(basename "$(dirname "$meta")")
+        echo "$dir"
+    done
 }
 
 prompt_language() {
+    local languages
+    languages=$(_discover_languages)
+
+    local idx=1
+    local lang_list=()
     printf "${CYAN}Select language${NC}\n" >&2
-    printf "  ${GREEN}1) Python${NC}\n" >&2
-    printf "  ${RED}2) Cancel${NC}\n" >&2
-    printf "${CYAN}Choice${NC} [1-2]: " >&2
+    for lang in $languages; do
+        printf "  ${GREEN}%d) %s${NC}\n" "$idx" "$lang" >&2
+        lang_list+=("$lang")
+        idx=$((idx + 1))
+    done
+    local cancel_idx="$idx"
+    printf "  ${RED}%d) Cancel${NC}\n" "$cancel_idx" >&2
+    printf "${CYAN}Choice${NC} [1-%d]: " "$cancel_idx" >&2
     read -r choice
     printf "\n" >&2
-    
-    case "$choice" in
-        1)
-            echo "python"
-            return 0
-            ;;
-        2)
-            print_status "warning" "Aborting..."
-            exit 0
-            ;;
-        *)
-            print_status "warning" "Invalid option. Try again."
-            prompt_language
-            return
-            ;;
-    esac
+
+    if [ "$choice" = "$cancel_idx" ]; then
+        print_status "warning" "Aborting..."
+        exit 0
+    fi
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -lt "$cancel_idx" ]; then
+        echo "${lang_list[$((choice - 1))]}"
+        return 0
+    fi
+
+    print_status "warning" "Invalid option. Try again."
+    prompt_language
 }
 
 prompt_skeleton() {
+    local lang="$1"
+    local skeletons=()
+    while IFS= read -r s; do
+        skeletons+=("$s")
+    done < <(_discover_skeletons_for_lang "$lang")
+
+    if [ "${#skeletons[@]}" -eq 0 ]; then
+        exit_error "No skeletons found for language '$lang'."
+    fi
+
     printf "${CYAN}Select project skeleton${NC}\n" >&2
-    printf "  ${BLUE}1) ddd-service-native-db${NC} (native DB libraries)\n" >&2
-    printf "  ${BLUE}2) ddd-service-orm-db${NC} (SQLAlchemy ORM)\n" >&2
-    printf "  ${BLUE}3) lib-minimal${NC}\n" >&2
-    printf "${CYAN}Choice${NC} [1-3]: " >&2
+    local idx=1
+    for skeleton in "${skeletons[@]}"; do
+        local meta="$TEMPLATES_ROOT/$skeleton/skeleton.meta"
+        local display_name="$skeleton"
+        [ -f "$meta" ] && display_name=$(grep '^display_name=' "$meta" | cut -d= -f2-)
+        printf "  ${BLUE}%d) %s${NC}\n" "$idx" "$display_name" >&2
+        idx=$((idx + 1))
+    done
+    printf "${CYAN}Choice${NC} [1-%d]: " "$((idx - 1))" >&2
     read -r choice
     printf "\n" >&2
-    
-    case "$choice" in
-        1)
-            echo "ddd-service-native-db"
-            return 0
-            ;;
-        2)
-            echo "ddd-service-orm-db"
-            return 0
-            ;;
-        3)
-            echo "lib-minimal"
-            return 0
-            ;;
-        *)
-            print_status "warning" "Invalid option. Try again."
-            prompt_skeleton
-            return
-            ;;
-    esac
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -lt "$idx" ]; then
+        echo "${skeletons[$((choice - 1))]}"
+        return 0
+    fi
+
+    print_status "warning" "Invalid option. Try again."
+    prompt_skeleton "$lang"
 }
 
 prompt_license() {
@@ -435,24 +483,20 @@ create_project() {
     print_status "info" "Creating project '$project_name' under '$project_root'"
     print_status "config" "Full path: $full_path"
 
-    if [ "$lang" != "python" ]; then
-        exit_error "Language '$lang' not supported yet."
+    local meta="$TEMPLATES_ROOT/$skeleton/skeleton.meta"
+    if [ ! -f "$meta" ]; then
+        exit_error "No skeleton.meta found for '$skeleton'."
     fi
 
-    case "$skeleton" in
-        "ddd-service-native-db")
-            LICENSE_CHOICE="$license_choice" bash "$SCRIPT_DIR/scaffold/python_ddd_service.sh" "$project_root" "$project_name" "$project_description"
-            ;;
-        "ddd-service-orm-db")
-            LICENSE_CHOICE="$license_choice" bash "$SCRIPT_DIR/scaffold/python_ddd_service_orm.sh" "$project_root" "$project_name" "$project_description"
-            ;;
-        "lib-minimal")
-            LICENSE_CHOICE="$license_choice" bash "$SCRIPT_DIR/scaffold/python_lib_minimal.sh" "$project_root" "$project_name" "$project_description"
-            ;;
-        *)
-            exit_error "Unknown skeleton '$skeleton'."
-            ;;
-    esac
+    local scaffold_rel
+    scaffold_rel=$(grep '^scaffold=' "$meta" | cut -d= -f2-)
+    local scaffold_script="$BLUEPRINTX_ROOT/$scaffold_rel"
+
+    if [ ! -f "$scaffold_script" ]; then
+        exit_error "Scaffold script not found: $scaffold_script"
+    fi
+
+    LICENSE_CHOICE="$license_choice" bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
 }
 
 # ============================================================================
@@ -478,7 +522,7 @@ run_create_flow() {
     fi
 
     LANG_CHOICE=$(prompt_language)
-    SKELETON_CHOICE=$(prompt_skeleton)
+    SKELETON_CHOICE=$(prompt_skeleton "$LANG_CHOICE")
     LICENSE_CHOICE=$(prompt_license)
 
     if [ "$DRY_RUN" -eq 1 ]; then
