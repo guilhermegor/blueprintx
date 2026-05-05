@@ -10,9 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/CLAUDE/">
+        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/py-lib-minimal/">
       
       
+        <link rel="prev" href="../py-examples-orm/ddd-orm-bank-balance-alert/">
+      
+      
+        <link rel="next" href="../ts-react-spa-webpack/">
       
       
         
@@ -23,7 +27,7 @@
     
     
       
-        <title>CLAUDE.md — docs/ - BlueprintX</title>
+        <title>Lib Minimal - BlueprintX</title>
       
     
     
@@ -74,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#claudemd-docs" class="md-skip">
+        <a href="#lib-minimal-library-starter" class="md-skip">
           Skip to content
         </a>
       
@@ -110,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CLAUDE.md — docs/
+              Lib Minimal
             
           </span>
         </div>
@@ -307,18 +311,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -339,7 +345,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -688,10 +694,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../py-lib-minimal/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lib Minimal
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -707,6 +740,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#expected-layout-after-scaffold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🗂️ Expected layout (after scaffold)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#folder-descriptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📁 Folder Descriptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#starting-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🚀 Starting point
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tooling-inherited-from-python-common" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🛠️ Tooling (inherited from python-common)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#typical-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔄 Typical workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-feature-addition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💡 Example feature addition
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -828,10 +947,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-file-index" class="md-nav__link">
+  <a href="#expected-layout-after-scaffold" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. File index
+        🗂️ Expected layout (after scaffold)
       
     </span>
   </a>
@@ -839,110 +958,54 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-naming-and-nav-rules" class="md-nav__link">
+  <a href="#folder-descriptions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Naming and nav rules
+        📁 Folder Descriptions
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="2. Naming and nav rules">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#file-naming" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        File naming
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#subdirectory-pattern" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Subdirectory pattern
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mkdocs-nav-coupling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        MkDocs nav coupling
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-content-structure-per-document-type" class="md-nav__link">
+  <a href="#starting-point" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Content structure per document type
+        🚀 Starting point
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="3. Content structure per document type">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#type-a-skeleton-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Type A: Skeleton overview
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#type-b-example-walkthrough" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Type B: Example walkthrough
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#type-c-utility-page" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Type C: Utility page
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-maintenance-rules" class="md-nav__link">
+  <a href="#tooling-inherited-from-python-common" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Maintenance rules
+        🛠️ Tooling (inherited from python-common)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#typical-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔄 Typical workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-feature-addition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💡 Example feature addition
       
     </span>
   </a>
@@ -969,215 +1032,187 @@
   
 
 
-<h1 id="claudemd-docs">CLAUDE.md — docs/<a class="headerlink" href="#claudemd-docs" title="Permanent link">&para;</a></h1>
-<p>This file guides Claude Code when working inside the <code>docs/</code> directory.
-It must be updated whenever a new file is added, a file is removed, or a major structural change is made to any document.</p>
+<h1 id="lib-minimal-library-starter"><strong>Lib Minimal (library starter)</strong><a class="headerlink" href="#lib-minimal-library-starter" title="Permanent link">&para;</a></h1>
+<p>A lean Python library skeleton with packaging, testing, CI, and editor settings ready to go. No DDD structure, no database wiring — just a clean package layout so you can focus on writing library code from the first commit.</p>
+<p>Shared tooling (Ruff, pre-commit, pytest.ini, GitHub Actions CI, Makefile, <code>bin/</code> helpers, VS Code config) comes from <code>templates/python-common</code> and is copied verbatim at scaffold time.</p>
 <hr />
-<h2 id="1-file-index">1. File index<a class="headerlink" href="#1-file-index" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Path</th>
-<th>Type</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>index.md</code></td>
-<td>Utility page</td>
-<td>Site home — logo, tagline, scaffold quick reference, links to all sections</td>
-</tr>
-<tr>
-<td><code>get-started.md</code></td>
-<td>Utility page</td>
-<td>Installation and first-run instructions, requirements, key highlights</td>
-</tr>
-<tr>
-<td><code>py-ddd-service-native-db.md</code></td>
-<td>Skeleton overview</td>
-<td>DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.)</td>
-</tr>
-<tr>
-<td><code>py-ddd-service-orm-db.md</code></td>
-<td>Skeleton overview</td>
-<td>DDD hexagonal scaffold using SQLAlchemy ORM</td>
-</tr>
-<tr>
-<td><code>py-lib-minimal.md</code></td>
-<td>Skeleton overview</td>
-<td>Lean Python library starter with packaging, tests, and CI</td>
-</tr>
-<tr>
-<td><code>ts-react-spa-webpack.md</code></td>
-<td>Skeleton overview</td>
-<td>React 19 + TypeScript 5 + Webpack 5 SPA skeleton</td>
-</tr>
-<tr>
-<td><code>py-examples/ddd-usage-examples.md</code></td>
-<td>Example walkthrough</td>
-<td>Wiring DDD layers end-to-end; FastAPI integration; swapping implementations</td>
-</tr>
-<tr>
-<td><code>py-examples/ddd-external-api.md</code></td>
-<td>Example walkthrough</td>
-<td>Consuming external APIs (stock exchange); swapping providers via ports</td>
-</tr>
-<tr>
-<td><code>py-examples/ddd-bank-balance-alert.md</code></td>
-<td>Example walkthrough</td>
-<td>Complete multi-port DDD example (native DB)</td>
-</tr>
-<tr>
-<td><code>py-examples-orm/ddd-orm-usage-examples.md</code></td>
-<td>Example walkthrough</td>
-<td>Wiring DDD layers with SQLAlchemy ORM; session management</td>
-</tr>
-<tr>
-<td><code>py-examples-orm/ddd-orm-external-api.md</code></td>
-<td>Example walkthrough</td>
-<td>Consuming external APIs in an ORM-based DDD service</td>
-</tr>
-<tr>
-<td><code>py-examples-orm/ddd-orm-bank-balance-alert.md</code></td>
-<td>Example walkthrough</td>
-<td>Complete multi-port DDD example (ORM)</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="2-naming-and-nav-rules">2. Naming and nav rules<a class="headerlink" href="#2-naming-and-nav-rules" title="Permanent link">&para;</a></h2>
-<h3 id="file-naming">File naming<a class="headerlink" href="#file-naming" title="Permanent link">&para;</a></h3>
-<ul>
-<li>All filenames must be <strong>kebab-case</strong> with a <code>.md</code> extension.</li>
-<li>Skeleton overview files are prefixed with the language (<code>py-</code> or <code>ts-</code>) followed by the skeleton name: <code>py-ddd-service-native-db.md</code>, <code>py-lib-minimal.md</code>, <code>ts-react-spa-webpack.md</code>.</li>
-<li>Example files are prefixed with the skeleton they illustrate (no language prefix — the parent directory carries it): <code>ddd-external-api.md</code>, <code>ddd-orm-bank-balance-alert.md</code>.</li>
-</ul>
-<h3 id="subdirectory-pattern">Subdirectory pattern<a class="headerlink" href="#subdirectory-pattern" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Directory</th>
-<th>Contents</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>py-examples/</code></td>
-<td>Example walkthroughs for the <strong>native-DB</strong> DDD skeleton</td>
-</tr>
-<tr>
-<td><code>py-examples-orm/</code></td>
-<td>Example walkthroughs for the <strong>ORM</strong> DDD skeleton</td>
-</tr>
-</tbody>
-</table>
-<p>Future skeletons follow the same pattern: <code>&lt;lang&gt;-examples-&lt;skeleton-name&gt;/</code>.</p>
-<h3 id="mkdocs-nav-coupling">MkDocs nav coupling<a class="headerlink" href="#mkdocs-nav-coupling" title="Permanent link">&para;</a></h3>
-<p>Every new file <strong>must</strong> be registered in <code>mkdocs.yml</code> under <code>nav:</code> in the same commit it is created. Never leave a file unregistered — MkDocs will silently omit it from navigation.</p>
-<p>Current nav shape for reference:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">nav</span><span class="p">:</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Home</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">index.md</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Get Started</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">get-started.md</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Python</span><span class="p">:</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">DDD Service (Native DB)</span><span class="p">:</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Overview</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-ddd-service-native-db.md</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Example - &lt;title&gt;</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-examples/&lt;filename&gt;.md</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">DDD Service (ORM DB)</span><span class="p">:</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Overview</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-ddd-service-orm-db.md</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Example - &lt;title&gt;</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-examples-orm/&lt;filename&gt;.md</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Lib Minimal</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-lib-minimal.md</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">TypeScript</span><span class="p">:</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">React SPA (Webpack)</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ts-react-spa-webpack.md</span>
+<h2 id="expected-layout-after-scaffold">🗂️ Expected layout (after scaffold)<a class="headerlink" href="#expected-layout-after-scaffold" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>project/
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>src/&lt;project_name&gt;/
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>__init__.py
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>main.py<span class="w">               </span><span class="c1"># single entry-point; rename or split as the lib grows</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>tests/
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>unit/test_main.py
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>integration/
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>performance/
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span>bin/<span class="w">                    </span><span class="c1"># shell helpers called by the Makefile</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span>container/
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>assets/
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>data/
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>docs/
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>.github/workflows/tests.yaml
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>.env
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>pyproject.toml
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>README.md
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>ruff.toml
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>pytest.ini
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>.pre-commit-config.yaml
 </span></code></pre></div>
-<p>When adding a new Python skeleton, add a new group under <code>Python:</code> and name the file <code>py-&lt;skeleton&gt;.md</code>. When adding a new TypeScript skeleton, add a new entry under <code>TypeScript:</code> and name the file <code>ts-&lt;skeleton&gt;.md</code>. When adding a new example, append it under the relevant skeleton group. TypeScript example walkthroughs follow the same <code>ts-examples-&lt;skeleton-name&gt;/</code> subdirectory pattern as Python examples.</p>
 <hr />
-<h2 id="3-content-structure-per-document-type">3. Content structure per document type<a class="headerlink" href="#3-content-structure-per-document-type" title="Permanent link">&para;</a></h2>
-<h3 id="type-a-skeleton-overview">Type A: Skeleton overview<a class="headerlink" href="#type-a-skeleton-overview" title="Permanent link">&para;</a></h3>
-<p>Files: <code>ddd-service-native-db.md</code>, <code>ddd-service-orm-db.md</code>, <code>lib-minimal.md</code></p>
-<p>Required sections in order:</p>
-<ol>
-<li><strong>H1 title</strong> — bold, descriptive: <code># **Skeleton Name (subtitle)**</code></li>
-<li><strong>Intro blurb</strong> — 1-2 paragraphs: what the skeleton is, its design philosophy, and the key technology it uses.</li>
-<li><strong>Key differences table</strong> <em>(optional)</em> — used when a skeleton is a variant of another (e.g., ORM vs native). Columns: Aspect | Native DB | This template.</li>
-<li><strong>Expected layout</strong> — fenced code block (<code>bash</code>) showing the full directory tree after scaffolding.</li>
-<li><strong>Folder descriptions</strong> — table with columns: <code>Folder | Purpose | Expected Content</code>. Cover every top-level directory in the layout.</li>
-<li><strong>Layers</strong> — one <code>###</code> subsection per DDD layer (Domain, Application, Infrastructure, Modules). Each subsection includes:</li>
-<li>Bold "What goes here:" sentence.</li>
-<li>At least one annotated Python code snippet.</li>
-<li><strong>Rules of thumb</strong> — table with columns: <code>Layer | Responsibility</code>. Summarises each layer in one line.</li>
-<li><strong>Learn more</strong> — bulleted list of links to the skeleton's example walkthroughs, each with a one-line description.</li>
-<li><strong>Acknowledgments</strong> <em>(optional)</em> — credit to foundational works (e.g., Eric Evans for DDD skeletons).</li>
-</ol>
-<h3 id="type-b-example-walkthrough">Type B: Example walkthrough<a class="headerlink" href="#type-b-example-walkthrough" title="Permanent link">&para;</a></h3>
-<p>Files: <code>examples/*.md</code>, <code>examples-orm/*.md</code></p>
-<p>Required sections in order:</p>
-<ol>
-<li><strong>H1 title</strong> — bold, descriptive: <code># **Skeleton — Example Title**</code></li>
-<li><strong>Intro line</strong> — one sentence describing what this example demonstrates, followed by a <code>&gt; **See also:**</code> blockquote linking back to the overview and sibling examples.</li>
-<li><strong>Scenario sections</strong> — one <code>##</code> section per scenario or concept demonstrated. Each section contains:</li>
-<li>A brief context sentence (what problem this solves or pattern it shows).</li>
-<li>One or more annotated code blocks. Comments in code must explain <em>why</em>, not just what.</li>
-<li><strong>No standalone "Key takeaways" section</strong> — insights should be embedded naturally as comments or brief prose within each scenario section.</li>
-</ol>
-<h3 id="type-c-utility-page">Type C: Utility page<a class="headerlink" href="#type-c-utility-page" title="Permanent link">&para;</a></h3>
-<p>Files: <code>index.md</code>, <code>get-started.md</code></p>
-<p>No fixed section template — these pages serve different purposes. Preserve the intent of each:</p>
+<h2 id="folder-descriptions">📁 Folder Descriptions<a class="headerlink" href="#folder-descriptions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>File</th>
-<th>Intent</th>
-<th>Key sections to maintain</th>
+<th>Folder</th>
+<th>Purpose</th>
+<th>Expected Content</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>index.md</code></td>
-<td>Landing page / hub</td>
-<td>Logo, tagline, Python scaffolds overview, local docs instructions, scaffold quick reference</td>
+<td><code>src/&lt;project_name&gt;/</code></td>
+<td>Library source code</td>
+<td>Python modules, classes, functions — your library's public API</td>
 </tr>
 <tr>
-<td><code>get-started.md</code></td>
-<td>First-run guide</td>
-<td>Numbered setup steps, requirements, feature highlights</td>
+<td><code>tests/unit/</code></td>
+<td>Unit tests</td>
+<td>Fast, isolated tests for individual functions and classes</td>
+</tr>
+<tr>
+<td><code>tests/integration/</code></td>
+<td>Integration tests</td>
+<td>Tests with external dependencies (databases, APIs, file systems)</td>
+</tr>
+<tr>
+<td><code>tests/performance/</code></td>
+<td>Performance tests</td>
+<td>Benchmarks, load tests, memory profiling</td>
+</tr>
+<tr>
+<td><code>bin/</code></td>
+<td>Shell helpers</td>
+<td>Entry-point scripts called by the <code>Makefile</code>; keeps recipes thin</td>
+</tr>
+<tr>
+<td><code>assets/</code></td>
+<td>Static resources</td>
+<td>Images, icons, fonts, static files bundled with the library</td>
+</tr>
+<tr>
+<td><code>data/</code></td>
+<td>Data storage</td>
+<td>SQLite databases, CSV files, JSON fixtures, seed data</td>
+</tr>
+<tr>
+<td><code>docs/</code></td>
+<td>Documentation</td>
+<td>API reference, tutorials, user guides (starter <code>index.md</code> created)</td>
+</tr>
+<tr>
+<td><code>container/</code></td>
+<td>Container configuration</td>
+<td>Dockerfile, docker-compose.yaml for containerised environments</td>
+</tr>
+<tr>
+<td><code>.github/workflows/</code></td>
+<td>CI/CD pipelines</td>
+<td>GitHub Actions for tests, linting, publishing to PyPI</td>
 </tr>
 </tbody>
 </table>
-<p>When adding a new utility page, document its intent and key sections in the table above.</p>
 <hr />
-<h2 id="4-maintenance-rules">4. Maintenance rules<a class="headerlink" href="#4-maintenance-rules" title="Permanent link">&para;</a></h2>
-<p>Apply these rules every time a change is made to the <code>docs/</code> directory:</p>
+<h2 id="starting-point">🚀 Starting point<a class="headerlink" href="#starting-point" title="Permanent link">&para;</a></h2>
+<p>The generated <code>main.py</code> contains one bare function — the intended starting point for the library's public API or CLI entry point:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># src/&lt;project_name&gt;/main.py</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Hello from lib-minimal!&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The generated <code>tests/unit/test_main.py</code> asserts that this output appears using <code>unittest</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># tests/unit/test_main.py</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kn">from</span><span class="w"> </span><span class="o">&lt;</span><span class="n">project_name</span><span class="o">&gt;.</span><span class="n">main</span> <span class="kn">import</span><span class="w"> </span><span class="nn">main</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestMain</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_main_prints_hello</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="n">cls_buffer</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">cls_buffer</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>        <span class="n">main</span><span class="p">()</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">__stdout__</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">assertIn</span><span class="p">(</span><span class="s2">&quot;Hello&quot;</span><span class="p">,</span> <span class="n">cls_buffer</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
+</span></code></pre></div>
+<hr />
+<h2 id="tooling-inherited-from-python-common">🛠️ Tooling (inherited from <code>python-common</code>)<a class="headerlink" href="#tooling-inherited-from-python-common" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Event</th>
-<th>Required actions</th>
+<th>Tool</th>
+<th>Role</th>
+<th>Config file</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>New file added</td>
-<td>1. Add a row to the <strong>file index</strong> (Section 1). 2. Register the file in <code>mkdocs.yml</code> nav. Both changes go in the same commit.</td>
+<td><strong>Ruff</strong></td>
+<td>Linter + formatter</td>
+<td><code>ruff.toml</code> — line-length 99, tab indent, double quotes, NumPy docstrings</td>
 </tr>
 <tr>
-<td>File removed</td>
-<td>1. Remove its row from the <strong>file index</strong>. 2. Remove its entry from <code>mkdocs.yml</code> nav. Fix any cross-links in other docs that pointed to it.</td>
+<td><strong>pre-commit</strong></td>
+<td>Git hooks</td>
+<td><code>.pre-commit-config.yaml</code> — ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge</td>
 </tr>
 <tr>
-<td>File renamed</td>
-<td>Update the file index path, the <code>mkdocs.yml</code> nav entry, and all internal cross-links.</td>
+<td><strong>unittest</strong></td>
+<td>Test runner</td>
+<td>Discovered with <code>python -m unittest discover -s tests/unit -p "*.py"</code></td>
 </tr>
 <tr>
-<td>New skeleton added</td>
-<td>1. Create its overview file following Type A structure. 2. Create its <code>examples-&lt;skeleton&gt;/</code> subdirectory and at least one example following Type B. 3. Add both to the nav under a new group. 4. Update Sections 1, 2, and 3 of this CLAUDE.md.</td>
+<td><strong>pytest</strong></td>
+<td>Alternative runner</td>
+<td><code>pytest.ini</code> included for compatibility; <code>poetry run pytest</code> also works</td>
 </tr>
 <tr>
-<td>Major content restructure</td>
-<td>Update the relevant content structure description in Section 3 to reflect the new pattern.</td>
+<td><strong>GitHub Actions</strong></td>
+<td>CI</td>
+<td><code>.github/workflows/tests.yaml</code> — runs linting and tests on every push</td>
+</tr>
+<tr>
+<td><strong>Makefile + <code>bin/</code></strong></td>
+<td>Dev automation</td>
+<td><code>make init_venv</code>, <code>make update_venv</code>, <code>make start</code>, linting and test recipes</td>
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="typical-workflow">🔄 Typical workflow<a class="headerlink" href="#typical-workflow" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Add library functions and classes under <code>src/&lt;project_name&gt;/</code>.</li>
+<li>Mirror the source structure under <code>tests/unit/</code> — one test module per source module.</li>
+<li>Run tests: <code>python -m unittest discover -s tests/unit -p "*.py" -v</code></li>
+<li>Add integration tests in <code>tests/integration/</code> for any I/O-dependent code.</li>
+<li>Keep <code>docs/</code> in sync with the public API; host locally with <code>make docs_server</code>.</li>
+</ol>
+<hr />
+<h2 id="example-feature-addition">💡 Example feature addition<a class="headerlink" href="#example-feature-addition" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># src/&lt;project_name&gt;/math_utils.py</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="n">int_a</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">int_b</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the sum of two integers.&quot;&quot;&quot;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="k">return</span> <span class="n">int_a</span> <span class="o">+</span> <span class="n">int_b</span>
+</span></code></pre></div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># tests/unit/test_math_utils.py</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="o">&lt;</span><span class="n">project_name</span><span class="o">&gt;.</span><span class="n">math_utils</span> <span class="kn">import</span><span class="w"> </span><span class="nn">add</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestMathUtils</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_add_two_positive_ints_returns_sum</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="mi">5</span><span class="p">)</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_add_negative_int_returns_correct_sum</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>
+</span></code></pre></div>
 
 
 

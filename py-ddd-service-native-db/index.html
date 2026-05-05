@@ -6,17 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Documentation for BlueprintX scaffolds (DDD service and lib-minimal)">
+        <meta name="description" content="Documentation for BlueprintX scaffolds (Python and TypeScript)">
       
       
       
-        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/ddd-service-native-db/">
+        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/py-ddd-service-native-db/">
       
       
         <link rel="prev" href="../get-started/">
       
       
-        <link rel="next" href="../examples/ddd-external-api/">
+        <link rel="next" href="../py-examples/ddd-external-api/">
       
       
         
@@ -625,7 +625,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-external-api/" class="md-nav__link">
+      <a href="../py-examples/ddd-external-api/" class="md-nav__link">
         
   
   
@@ -653,7 +653,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-usage-examples/" class="md-nav__link">
+      <a href="../py-examples/ddd-usage-examples/" class="md-nav__link">
         
   
   
@@ -681,7 +681,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-bank-balance-alert/" class="md-nav__link">
+      <a href="../py-examples/ddd-bank-balance-alert/" class="md-nav__link">
         
   
   
@@ -764,7 +764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ddd-service-orm-db/" class="md-nav__link">
+      <a href="../py-ddd-service-orm-db/" class="md-nav__link">
         
   
   
@@ -792,7 +792,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-usage-examples/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-usage-examples/" class="md-nav__link">
         
   
   
@@ -820,7 +820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-external-api/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-external-api/" class="md-nav__link">
         
   
   
@@ -848,7 +848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-bank-balance-alert/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-bank-balance-alert/" class="md-nav__link">
         
   
   
@@ -884,7 +884,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lib-minimal/" class="md-nav__link">
+      <a href="../py-lib-minimal/" class="md-nav__link">
         
   
   
@@ -892,6 +892,88 @@
     
   
     Lib Minimal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ts-react-spa-webpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    React SPA (Webpack)
   
 
     
@@ -1100,7 +1182,7 @@
 <p>A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It keeps business logic isolated from I/O while allowing shared infrastructure when it is truly cross-cutting.</p>
 <p>This template uses <strong>native database libraries</strong> (psycopg2, sqlite3, cx_Oracle, pyodbc, pymysql, etc.) for direct database access, giving you fine-grained control over queries and connections. For schema-less persistence the same <code>DatabaseHandler</code> contract covers JSON, CSV, and joblib backends via <code>chassis/db_wschema/</code>.</p>
 <blockquote>
-<p><strong>Examples:</strong> <a href="../examples/ddd-external-api/">External API Calls</a> · <a href="../examples/ddd-usage-examples/">Wiring with FastAPI</a> · <a href="../examples/ddd-bank-balance-alert/">Bank Balance Alert</a></p>
+<p><strong>Examples:</strong> <a href="../py-examples/ddd-external-api/">External API Calls</a> · <a href="../py-examples/ddd-usage-examples/">Wiring with FastAPI</a> · <a href="../py-examples/ddd-bank-balance-alert/">Bank Balance Alert</a></p>
 </blockquote>
 <hr />
 <h2 id="expected-layout-after-scaffold">🗂️ Expected layout (after scaffold)<a class="headerlink" href="#expected-layout-after-scaffold" title="Permanent link">&para;</a></h2>
@@ -1506,9 +1588,9 @@ All non-SQLite backends read <code>DB_DSN</code> first; if unset they compose a 
 <hr />
 <h2 id="learn-more">🔗 Learn more<a class="headerlink" href="#learn-more" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../examples/ddd-external-api/">Example - External API Calls</a> — Stock exchange data, swapping providers</li>
-<li><a href="../examples/ddd-usage-examples/">Example - Wiring with FastAPI</a> — Wiring, FastAPI integration, testing</li>
-<li><a href="../examples/ddd-bank-balance-alert/">Example - Bank Balance Alert</a> — Complete multi-port example</li>
+<li><a href="../py-examples/ddd-external-api/">Example - External API Calls</a> — Stock exchange data, swapping providers</li>
+<li><a href="../py-examples/ddd-usage-examples/">Example - Wiring with FastAPI</a> — Wiring, FastAPI integration, testing</li>
+<li><a href="../py-examples/ddd-bank-balance-alert/">Example - Bank Balance Alert</a> — Complete multi-port example</li>
 </ul>
 <hr />
 <h2 id="acknowledgments">🙏 Acknowledgments<a class="headerlink" href="#acknowledgments" title="Permanent link">&para;</a></h2>

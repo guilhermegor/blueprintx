@@ -6,17 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Documentation for BlueprintX scaffolds (DDD service and lib-minimal)">
+        <meta name="description" content="Documentation for BlueprintX scaffolds (Python and TypeScript)">
       
       
       
-        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/ddd-service-orm-db/">
+        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/py-ddd-service-orm-db/">
       
       
-        <link rel="prev" href="../examples/ddd-bank-balance-alert/">
+        <link rel="prev" href="../py-examples/ddd-bank-balance-alert/">
       
       
-        <link rel="next" href="../examples-orm/ddd-orm-usage-examples/">
+        <link rel="next" href="../py-examples-orm/ddd-orm-usage-examples/">
       
       
         
@@ -410,7 +410,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ddd-service-native-db/" class="md-nav__link">
+      <a href="../py-ddd-service-native-db/" class="md-nav__link">
         
   
   
@@ -438,7 +438,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-external-api/" class="md-nav__link">
+      <a href="../py-examples/ddd-external-api/" class="md-nav__link">
         
   
   
@@ -466,7 +466,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-usage-examples/" class="md-nav__link">
+      <a href="../py-examples/ddd-usage-examples/" class="md-nav__link">
         
   
   
@@ -494,7 +494,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-bank-balance-alert/" class="md-nav__link">
+      <a href="../py-examples/ddd-bank-balance-alert/" class="md-nav__link">
         
   
   
@@ -814,7 +814,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-usage-examples/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-usage-examples/" class="md-nav__link">
         
   
   
@@ -842,7 +842,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-external-api/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-external-api/" class="md-nav__link">
         
   
   
@@ -870,7 +870,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-bank-balance-alert/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-bank-balance-alert/" class="md-nav__link">
         
   
   
@@ -906,7 +906,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lib-minimal/" class="md-nav__link">
+      <a href="../py-lib-minimal/" class="md-nav__link">
         
   
   
@@ -914,6 +914,88 @@
     
   
     Lib Minimal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ts-react-spa-webpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    React SPA (Webpack)
   
 
     
@@ -1144,7 +1226,7 @@
 <p>A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It keeps business logic isolated from I/O while allowing shared infrastructure when it is truly cross-cutting.</p>
 <p>This template uses <strong>SQLAlchemy ORM (≥ 2.0)</strong> for database operations, providing a unified abstraction layer that works with PostgreSQL, MySQL, SQLite, Oracle, MSSQL, and any other SQLAlchemy-supported database. Schema creation, session management, and the generic repository are all handled by the chassis — feature code only touches domain types.</p>
 <blockquote>
-<p><strong>Examples:</strong> <a href="../examples-orm/ddd-orm-usage-examples/">Usage with SQLAlchemy</a> · <a href="../examples-orm/ddd-orm-external-api/">External API Calls</a> · <a href="../examples-orm/ddd-orm-bank-balance-alert/">Bank Balance Alert</a></p>
+<p><strong>Examples:</strong> <a href="../py-examples-orm/ddd-orm-usage-examples/">Usage with SQLAlchemy</a> · <a href="../py-examples-orm/ddd-orm-external-api/">External API Calls</a> · <a href="../py-examples-orm/ddd-orm-bank-balance-alert/">Bank Balance Alert</a></p>
 </blockquote>
 <hr />
 <h2 id="key-differences-from-native-db">⚖️ Key Differences from Native DB<a class="headerlink" href="#key-differences-from-native-db" title="Permanent link">&para;</a></h2>
@@ -1578,9 +1660,9 @@ All non-SQLite backends read <code>DB_DSN</code> first; if unset they compose a 
 <hr />
 <h2 id="learn-more">🔗 Learn more<a class="headerlink" href="#learn-more" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../examples-orm/ddd-orm-usage-examples/">Example - Usage with SQLAlchemy</a> — Wiring ORM layers, session management, FastAPI integration</li>
-<li><a href="../examples-orm/ddd-orm-external-api/">Example - External API Calls</a> — Consuming external APIs in an ORM-based service</li>
-<li><a href="../examples-orm/ddd-orm-bank-balance-alert/">Example - Bank Balance Alert</a> — Complete multi-port ORM example</li>
+<li><a href="../py-examples-orm/ddd-orm-usage-examples/">Example - Usage with SQLAlchemy</a> — Wiring ORM layers, session management, FastAPI integration</li>
+<li><a href="../py-examples-orm/ddd-orm-external-api/">Example - External API Calls</a> — Consuming external APIs in an ORM-based service</li>
+<li><a href="../py-examples-orm/ddd-orm-bank-balance-alert/">Example - Bank Balance Alert</a> — Complete multi-port ORM example</li>
 </ul>
 <hr />
 <h2 id="acknowledgments">🙏 Acknowledgments<a class="headerlink" href="#acknowledgments" title="Permanent link">&para;</a></h2>

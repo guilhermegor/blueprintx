@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Documentation for BlueprintX scaffolds (DDD service and lib-minimal)">
+        <meta name="description" content="Documentation for BlueprintX scaffolds (Python and TypeScript)">
       
       
       
@@ -16,7 +16,7 @@
         <link rel="prev" href="..">
       
       
-        <link rel="next" href="../ddd-service-native-db/">
+        <link rel="next" href="../py-ddd-service-native-db/">
       
       
         
@@ -499,7 +499,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ddd-service-native-db/" class="md-nav__link">
+      <a href="../py-ddd-service-native-db/" class="md-nav__link">
         
   
   
@@ -527,7 +527,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-external-api/" class="md-nav__link">
+      <a href="../py-examples/ddd-external-api/" class="md-nav__link">
         
   
   
@@ -555,7 +555,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-usage-examples/" class="md-nav__link">
+      <a href="../py-examples/ddd-usage-examples/" class="md-nav__link">
         
   
   
@@ -583,7 +583,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ddd-bank-balance-alert/" class="md-nav__link">
+      <a href="../py-examples/ddd-bank-balance-alert/" class="md-nav__link">
         
   
   
@@ -666,7 +666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ddd-service-orm-db/" class="md-nav__link">
+      <a href="../py-ddd-service-orm-db/" class="md-nav__link">
         
   
   
@@ -694,7 +694,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-usage-examples/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-usage-examples/" class="md-nav__link">
         
   
   
@@ -722,7 +722,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-external-api/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-external-api/" class="md-nav__link">
         
   
   
@@ -750,7 +750,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples-orm/ddd-orm-bank-balance-alert/" class="md-nav__link">
+      <a href="../py-examples-orm/ddd-orm-bank-balance-alert/" class="md-nav__link">
         
   
   
@@ -786,7 +786,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lib-minimal/" class="md-nav__link">
+      <a href="../py-lib-minimal/" class="md-nav__link">
         
   
   
@@ -794,6 +794,88 @@
     
   
     Lib Minimal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ts-react-spa-webpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    React SPA (Webpack)
   
 
     
@@ -920,15 +1002,19 @@
 <h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>bash</code> ≥ 4</li>
-<li>For Python skeletons: <code>pyenv</code>/<code>poetry</code> (or your Python toolchain of choice) in the generated project</li>
+<li>For <strong>Python skeletons</strong>: <code>pyenv</code> + <code>poetry</code> (or your Python toolchain of choice) in the generated project</li>
+<li>For <strong>TypeScript skeletons</strong>: Node.js ≥ 20; run <code>npm install</code> after scaffolding</li>
 </ul>
 <hr />
 <h2 id="highlights">✨ Highlights<a class="headerlink" href="#highlights" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Interactive CLI</strong> (<code>make new</code>) with skeleton choice</li>
-<li><strong>Ready-made skeletons</strong> (currently Python): DDD service (hexagonal/ports-and-adapters) and lib-minimal</li>
+<li><strong>Interactive CLI</strong> (<code>make new</code>) with auto-discovered language and skeleton menus</li>
+<li><strong>Python skeletons</strong>: DDD service (hexagonal/ports-and-adapters, native DB or SQLAlchemy ORM) and lib-minimal</li>
+<li><strong>TypeScript skeletons</strong>: React SPA with Webpack 5, Babel, ESLint, and Prettier</li>
 <li><strong>Common Python baseline</strong>: templated <code>pyproject.toml</code>, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders</li>
+<li><strong>Common TypeScript baseline</strong>: <code>package.json</code> with pinned deps, <code>.gitignore</code>, VS Code settings, <code>CONTRIBUTING.md</code></li>
 <li><strong>Dev/preview modes</strong>: temp scaffolds, dry-run structure previews, optional auto-clean</li>
+<li><strong>Extensible</strong>: add a <code>skeleton.meta</code> to any <code>templates/</code> directory and it appears in the menu automatically</li>
 </ul>
 <hr />
 <p>📦 <strong>GitHub Repository:</strong> <a href="https://github.com/guilhermegor/blueprintx">github.com/guilhermegor/blueprintx</a></p>
