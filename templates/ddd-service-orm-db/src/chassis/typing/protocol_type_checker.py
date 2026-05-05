@@ -18,7 +18,7 @@ class ProtocolTypeCheckerMeta(_ProtocolMeta, TypeChecker):
 
     Use as ``metaclass=ProtocolTypeCheckerMeta`` when defining a Protocol port
     to enforce annotated argument types on direct calls to the stub.  Structural
-    implementors that do not explicitly inherit must apply
+    implementers that do not explicitly inherit must apply
     :class:`~chassis.typing.type_checker.TypeChecker` or the
     :func:`~chassis.typing.decorators.type_checker` decorator independently.
 
