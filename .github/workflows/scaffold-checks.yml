@@ -1,0 +1,131 @@
+name: Scaffold Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scaffold-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  lint-shell:
+    name: ShellCheck — bin/**/*.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y --no-install-recommends shellcheck
+
+      - name: Lint all shell scripts (severity ≥ warning)
+        run: find bin -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
+
+  validate-meta:
+    name: Validate skeleton.meta integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required fields and scaffold paths
+        run: bash bin/ci/validate_meta.sh
+
+  docs-build:
+    name: MkDocs build — strict mode
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-mkdocs-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pip-mkdocs-
+
+      - name: Install MkDocs Material
+        run: pip install "mkdocs-material>=9.5.0"
+
+      - name: Build documentation (--strict catches broken refs)
+        run: mkdocs build --strict
+
+  dry-run-smoke:
+    name: Dry-run smoke — ${{ matrix.skeleton }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        skeleton:
+          - ddd-service-native-db
+          - ddd-service-orm-db
+          - lib-minimal
+          - react-spa-webpack
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run blueprintx new --dry-run for ${{ matrix.skeleton }}
+        env:
+          GITHUB_USERNAME: ci-bot
+          SKELETON: ${{ matrix.skeleton }}
+        run: bash bin/ci/smoke_test.sh "$SKELETON"
+
+  typecheck-ts:
+    name: TypeScript typecheck — react-spa-webpack template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: templates/ts-common/package.json
+
+      - name: Assemble typecheck workspace
+        run: |
+          mkdir -p /tmp/ts-typecheck/src
+          export PROJECT_NAME="ci-typecheck"
+          export PROJECT_DESCRIPTION="CI typecheck workspace"
+          envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
+            < templates/ts-common/package.json \
+            > /tmp/ts-typecheck/package.json
+          cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
+          cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
+
+      - name: Install npm dependencies
+        working-directory: /tmp/ts-typecheck
+        run: npm install
+
+      - name: Run tsc --noEmit (type errors only, no output files)
+        working-directory: /tmp/ts-typecheck
+        run: npx tsc --noEmit
+
+  spell-check:
+    name: Spell check — docs/ and templates/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install codespell
+        run: pip install codespell
+
+      - name: Run codespell (skips binaries and lockfiles)
+        run: |
+          codespell docs/ templates/ \
+            --skip="*.png,*.svg,*.ico,*.jpg,*.json,*.lock,*.po,*.pyc" \
+            --quiet-level=3 \
+            --ignore-words-list="nd,fpr,strat,enty,filetest,nome,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX"
