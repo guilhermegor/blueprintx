@@ -12,6 +12,10 @@
     /* Modules */
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "resolveJsonModule": true,
 
     /* JavaScript Support */
