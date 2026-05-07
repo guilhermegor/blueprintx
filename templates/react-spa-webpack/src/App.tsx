@@ -1,6 +1,4 @@
-import React from 'react';
-import { NoteProvider } from '@/capabilities/example';
-import { ExamplePage } from '@/capabilities/example';
+import { ExamplePage, NoteProvider } from '@/capabilities/example';
 
 const App = () => (
   <NoteProvider>
