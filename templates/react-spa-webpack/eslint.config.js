@@ -4,6 +4,7 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import boundaries from 'eslint-plugin-boundaries';
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -96,6 +97,39 @@ export default [
     },
   },
 
-  // 6. Prettier config (must be last)
+  // 6. DDD import boundary rules
+  {
+    plugins: { boundaries },
+    settings: {
+      'boundaries/elements': [
+        { type: 'domain',         pattern: 'capabilities/*/domain/**' },
+        { type: 'application',    pattern: 'capabilities/*/application/**' },
+        { type: 'infrastructure', pattern: 'capabilities/*/infrastructure/**' },
+        { type: 'ui',             pattern: 'capabilities/*/ui/**' },
+        { type: 'context',        pattern: 'capabilities/*/context.tsx' },
+        { type: 'barrel',         pattern: 'capabilities/*/index.ts' },
+        { type: 'shared',         pattern: 'shared/**' },
+        { type: 'routes',         pattern: 'routes/**' },
+      ],
+      'boundaries/ignore': ['**/*.test.*', '**/*.spec.*'],
+    },
+    rules: {
+      'boundaries/element-types': ['error', {
+        default: 'disallow',
+        rules: [
+          { from: ['domain'],         allow: [] },
+          { from: ['application'],    allow: ['domain'] },
+          { from: ['infrastructure'], allow: ['domain'] },
+          { from: ['ui'],             allow: ['application', 'domain'] },
+          { from: ['context'],        allow: ['domain', 'application', 'infrastructure'] },
+          { from: ['barrel'],         allow: ['domain', 'application', 'ui', 'context'] },
+          { from: ['shared'],         allow: ['shared'] },
+          { from: ['routes'],         allow: ['barrel', 'shared'] },
+        ],
+      }],
+    },
+  },
+
+  // 7. Prettier config (must be last)
   prettierConfig,
 ];
