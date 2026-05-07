@@ -1,0 +1,14 @@
+:root {
+  --color-background: var(--neutral-900);
+  --color-surface:    var(--neutral-800);
+  --color-border:     var(--neutral-700);
+}
+
+[data-theme='light'] {
+  --color-background:    var(--neutral-100);
+  --color-surface:       var(--neutral-200);
+  --color-border:        var(--neutral-300);
+  --color-text-default:  #1a1d27;
+  --color-text-muted:    #555f7d;
+  --color-text-disabled: #aab3cc;
+}
