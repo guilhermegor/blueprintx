@@ -15,7 +15,7 @@ interface NoteContextValue {
   createNote: (dto: NoteCreateDTO) => Promise<NoteResponseDTO | null>;
   listNotes: () => Promise<void>;
   loading: boolean;
-  error: string | null;
+  error: Error | null;
 }
 
 const NoteContext = createContext<NoteContextValue | null>(null);
@@ -34,7 +34,7 @@ function NoteContextBridge({ children, repository }: NoteProviderProps) {
     () => ({
       notes,
       loading,
-      error,
+      error: error ? new Error(error) : null,
       createNote: async (dto) => {
         const result = await dispatch(createNoteThunk({ repo, dto }));
         return createNoteThunk.fulfilled.match(result) ? result.payload : null;
