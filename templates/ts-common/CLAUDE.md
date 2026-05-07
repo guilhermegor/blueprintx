@@ -22,3 +22,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **`package.json`**: Uses `${PROJECT_NAME}` and `${PROJECT_DESCRIPTION}` placeholders — do not replace them with literal values; they are resolved by `envsubst` during scaffolding. Keep dependency versions pinned to a major range (`^X.0.0`).
 - When bumping a dependency here, verify it is compatible with all TypeScript skeletons that consume it.
 - Do not add skeleton-specific files here — only files that belong in every TypeScript project.
+
+## State management dependencies (scaffold-time variants)
+
+Dependencies specific to a state management variant are NOT in this `package.json`. The scaffold script (`bin/scaffold/ts_react_app.sh`) adds them at project generation time:
+
+| Variant | Added dependency |
+|---------|-----------------|
+| Zustand | `zustand ^5.0.0` |
+| Redux Toolkit | `@reduxjs/toolkit ^2.0.0`, `react-redux ^9.0.0` |
+
+React Context (default) adds no extra dependencies.
