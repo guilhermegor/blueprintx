@@ -1,0 +1,23 @@
+.page {
+  padding: var(--space-5);
+}
+
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.8rem;
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.card h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-default);
+  margin-bottom: var(--space-2);
+}
+
+.card span {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
