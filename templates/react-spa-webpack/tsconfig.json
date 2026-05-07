@@ -23,7 +23,6 @@
     /* Emit */
     "noEmit": true,
     "sourceMap": true,
-    "declaration": true,
 
     /* Interop Constraints */
     "isolatedModules": true,
