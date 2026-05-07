@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { ApiNoteRepository } from './infrastructure/api-adapter';
 import { useCreateNote, useListNotes } from './application/use-cases';
 import type { NoteCreateDTO, NoteResponseDTO } from './domain/dto';
+import type { NoteRepository } from './domain/ports';
 
 interface NoteContextValue {
   notes: NoteResponseDTO[];
@@ -17,7 +18,7 @@ const NoteContext = createContext<NoteContextValue | null>(null);
 
 interface NoteProviderProps {
   children: React.ReactNode;
-  repository?: ApiNoteRepository;
+  repository?: NoteRepository;
 }
 
 export function NoteProvider({ children, repository }: NoteProviderProps) {
