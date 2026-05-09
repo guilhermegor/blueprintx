@@ -11,8 +11,8 @@ new:
 	@bash bin/blueprintx.sh
 
 install:
-	@sudo rsync -a bin/ /usr/share/blueprintx/bin/
-	@sudo rsync -a templates/ /usr/share/blueprintx/templates/
+	@sudo rsync -a --delete bin/ /usr/share/blueprintx/bin/
+	@sudo rsync -a --delete templates/ /usr/share/blueprintx/templates/
 	@echo "Installed to /usr/share/blueprintx"
 
 preview:

@@ -246,8 +246,7 @@ prompt_git_remote_setup() {
             push_done=0
             (
                 cd "$project_path"
-                git init -q || true
-                git checkout -b main 2>/dev/null || git branch -M main || true
+                git init -q -b main || true
                 git add . || true
                 git commit -m "feat: first commit" >/dev/null 2>&1 || true
                 if git remote get-url origin >/dev/null 2>&1; then
@@ -260,10 +259,16 @@ prompt_git_remote_setup() {
                 read -r -p "Create GitHub repo ${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME} and push now? [y/N]: " create_ans || true
                 case "$create_ans" in
                     y|Y)
+                        local vis_choice vis_flag repo_slug
+                        read -r -p "Visibility [1] Public (default)  [2] Private: " vis_choice || true
+                        vis_flag="--public"
+                        [ "$vis_choice" = "2" ] && vis_flag="--private"
+                        repo_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
                         (
                             cd "$project_path"
-                            if gh repo create "${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}" --source . --remote origin --assets --push; then
+                            if gh repo create "$repo_slug" --source . --remote origin --push "$vis_flag"; then
                                 push_done=1
+                                gh repo edit "$repo_slug" --default-branch main >/dev/null 2>&1 || true
                                 print_status "success" "Repository created and pushed via gh."
                             else
                                 print_status "warn" "gh repo create failed; check authentication or if the repo already exists."

@@ -12,6 +12,9 @@
     /* Modules */
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "resolveJsonModule": true,
 
     /* JavaScript Support */
@@ -20,7 +23,6 @@
     /* Emit */
     "noEmit": true,
     "sourceMap": true,
-    "declaration": true,
 
     /* Interop Constraints */
     "isolatedModules": true,
@@ -37,5 +39,13 @@
     "skipLibCheck": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.rtk.ts",
+    "src/**/*.rtk.tsx",
+    "src/**/*.zustand.ts",
+    "src/**/*.zustand.tsx",
+    "src/**/*.context.tsx"
+  ]
 }

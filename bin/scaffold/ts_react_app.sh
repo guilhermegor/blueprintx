@@ -52,6 +52,34 @@ resolve_github_username() {
     print_status "config" "GitHub username (prompt): $GITHUB_USERNAME"
 }
 
+prompt_state_management() {
+    echo ""
+    print_status "info" "State management strategy:"
+    echo "  1) React Context  (zero deps, default)"
+    echo "  2) Zustand        (lightweight store)"
+    echo "  3) Redux Toolkit  (enterprise, RTK Query)"
+    read -r -p "Choice [1]: " sm_choice || true
+    STATE_MGMT_CHOICE="${sm_choice:-1}"
+    case "$STATE_MGMT_CHOICE" in
+        1) print_status "config" "State management: React Context" ;;
+        2) print_status "config" "State management: Zustand" ;;
+        3) print_status "config" "State management: Redux Toolkit" ;;
+        *) print_status "warning" "Invalid choice; defaulting to React Context"
+           STATE_MGMT_CHOICE=1 ;;
+    esac
+}
+
+prompt_module_federation() {
+    echo ""
+    read -r -p "Enable Webpack Module Federation? [y/N]: " mf_answer || true
+    case "$mf_answer" in
+        y|Y) USE_MODULE_FEDERATION=1
+             print_status "config" "Module Federation: enabled" ;;
+        *)   USE_MODULE_FEDERATION=0
+             print_status "config" "Module Federation: disabled" ;;
+    esac
+}
+
 create_directory_structure() {
     local project_path="$1"
 
@@ -80,6 +108,64 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/webpack.config.js" "$project_path/webpack.config.js"
 
     print_status "success" "Skeleton files copied"
+}
+
+apply_variants() {
+    local project_path="$1"
+    local capabilities_path="$project_path/src/capabilities/example"
+    local application_path="$capabilities_path/application"
+
+    print_status "info" "Applying state management variant..."
+
+    case "$STATE_MGMT_CHOICE" in
+        2)
+            mv "$application_path/use-cases.zustand.ts" "$application_path/use-cases.ts"
+            mv "$capabilities_path/context.zustand.tsx" "$capabilities_path/context.tsx"
+            rm -f "$application_path/use-cases.context.ts" \
+                  "$application_path/use-cases.rtk.ts" \
+                  "$capabilities_path/context.context.tsx" \
+                  "$capabilities_path/context.rtk.tsx"
+            python3 -c "
+import json
+pkg = json.load(open('$project_path/package.json'))
+pkg['dependencies']['zustand'] = '^5.0.0'
+json.dump(pkg, open('$project_path/package.json', 'w'), indent=2)
+print('')
+"
+            ;;
+        3)
+            mv "$application_path/use-cases.rtk.ts" "$application_path/use-cases.ts"
+            mv "$capabilities_path/context.rtk.tsx" "$capabilities_path/context.tsx"
+            rm -f "$application_path/use-cases.context.ts" \
+                  "$application_path/use-cases.zustand.ts" \
+                  "$capabilities_path/context.context.tsx" \
+                  "$capabilities_path/context.zustand.tsx"
+            python3 -c "
+import json
+pkg = json.load(open('$project_path/package.json'))
+pkg['dependencies']['@reduxjs/toolkit'] = '^2.0.0'
+pkg['dependencies']['react-redux'] = '^9.0.0'
+json.dump(pkg, open('$project_path/package.json', 'w'), indent=2)
+print('')
+"
+            ;;
+        *)
+            mv "$application_path/use-cases.context.ts" "$application_path/use-cases.ts"
+            mv "$capabilities_path/context.context.tsx" "$capabilities_path/context.tsx"
+            rm -f "$application_path/use-cases.zustand.ts" \
+                  "$application_path/use-cases.rtk.ts" \
+                  "$capabilities_path/context.zustand.tsx" \
+                  "$capabilities_path/context.rtk.tsx"
+            ;;
+    esac
+
+    if [ "$USE_MODULE_FEDERATION" -eq 1 ]; then
+        print_status "info" "Applying Module Federation webpack config..."
+        cp "$SKELETON_TEMPLATE_ROOT/webpack.mf.config.js" "$project_path/webpack.config.js"
+        sed -i "s/__APP_NAME__/$PROJECT_NAME/g" "$project_path/webpack.config.js"
+    fi
+
+    print_status "success" "Variants applied"
 }
 
 copy_common_templates() {
@@ -161,8 +247,7 @@ prompt_git_remote_setup() {
             push_done=0
             (
                 cd "$project_path"
-                git init -q || true
-                git checkout -b main 2>/dev/null || git branch -M main || true
+                git init -q -b main || true
                 git add . || true
                 git commit -m "feat: first commit" >/dev/null 2>&1 || true
                 if git remote get-url origin >/dev/null 2>&1; then
@@ -175,10 +260,16 @@ prompt_git_remote_setup() {
                 read -r -p "Create GitHub repo ${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME} and push now? [y/N]: " create_ans || true
                 case "$create_ans" in
                     y|Y)
+                        local vis_choice vis_flag repo_slug
+                        read -r -p "Visibility [1] Public (default)  [2] Private: " vis_choice || true
+                        vis_flag="--public"
+                        [ "$vis_choice" = "2" ] && vis_flag="--private"
+                        repo_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
                         (
                             cd "$project_path"
-                            if gh repo create "${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}" --source . --remote origin --push; then
+                            if gh repo create "$repo_slug" --source . --remote origin --push "$vis_flag"; then
                                 push_done=1
+                                gh repo edit "$repo_slug" --default-branch main >/dev/null 2>&1 || true
                                 print_status "success" "Repository created and pushed via gh."
                             else
                                 print_status "warning" "gh repo create failed; check authentication or if the repo already exists."
@@ -224,9 +315,12 @@ main() {
 
     validate_inputs
     resolve_github_username
+    prompt_state_management
+    prompt_module_federation
     create_directory_structure "$PROJECT_PATH"
     copy_skeleton_files "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    apply_variants "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
     print_status "success" "React SPA scaffold complete!"

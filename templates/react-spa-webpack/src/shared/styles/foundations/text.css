@@ -1,0 +1,9 @@
+:root {
+  --slate-100: #e6e9f0;
+  --slate-400: #aab3cc;
+  --slate-600: #555f7d;
+
+  --color-text-default:  var(--slate-100);
+  --color-text-muted:    var(--slate-400);
+  --color-text-disabled: var(--slate-600);
+}

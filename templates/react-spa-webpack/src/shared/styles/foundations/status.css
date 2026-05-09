@@ -1,0 +1,11 @@
+:root {
+  --green-500:  #22c55e;
+  --yellow-400: #eab308;
+  --red-800:    #991b1b;
+  --sky-500:    #0ea5e9;
+
+  --color-success: var(--green-500);
+  --color-warning: var(--yellow-400);
+  --color-error:   var(--red-800);
+  --color-info:    var(--sky-500);
+}
