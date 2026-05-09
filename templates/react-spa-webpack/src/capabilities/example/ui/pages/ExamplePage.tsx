@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNoteContext } from '../../context';
 import { ExampleCard } from '../components/ExampleCard';
 import styles from '../styles.module.css';

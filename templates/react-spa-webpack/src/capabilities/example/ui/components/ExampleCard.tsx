@@ -1,4 +1,3 @@
-import React from 'react';
 import type { NoteResponseDTO } from '../../domain/dto';
 import styles from '../styles.module.css';
 
