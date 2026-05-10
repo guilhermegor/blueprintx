@@ -7,9 +7,11 @@ import type { NoteRepository } from './domain/ports';
 interface NoteContextValue {
   notes: NoteResponseDTO[];
   createNote: (dto: NoteCreateDTO) => Promise<NoteResponseDTO | null>;
+  createLoading: boolean;
+  createError: Error | null;
   listNotes: () => Promise<void>;
-  loading: boolean;
-  error: Error | null;
+  listLoading: boolean;
+  listError: Error | null;
 }
 
 const NoteContext = createContext<NoteContextValue | null>(null);
@@ -26,8 +28,10 @@ export function NoteProvider({ children, repository }: NoteProviderProps) {
   const value = useMemo<NoteContextValue>(
     () => ({
       notes,
-      loading,
-      error,
+      createLoading: loading,
+      createError: error,
+      listLoading: loading,
+      listError: error,
       createNote: (dto) => storeCreate(repo, dto),
       listNotes: () => storeList(repo),
     }),
@@ -37,6 +41,7 @@ export function NoteProvider({ children, repository }: NoteProviderProps) {
   return <NoteContext.Provider value={value}>{children}</NoteContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useNoteContext(): NoteContextValue {
   const ctx = useContext(NoteContext);
   if (!ctx) throw new Error('useNoteContext must be used within NoteProvider');

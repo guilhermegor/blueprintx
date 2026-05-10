@@ -16,6 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.gitignore` | Node + dist + env patterns |
 | `.vscode/settings.json` | Format-on-save (Prettier), ESLint fix-on-save, workspace TypeScript SDK |
 | `CONTRIBUTING.md` | Branch naming, commit style, and code-style guide template |
+| `.github/workflows/ci.yml` | GitHub Actions CI — three parallel jobs: `type-check` (`tsc --noEmit`), `lint` (`eslint`), `build` (`webpack --mode production`) on push/PR to `main` |
 
 ## Editing rules
 

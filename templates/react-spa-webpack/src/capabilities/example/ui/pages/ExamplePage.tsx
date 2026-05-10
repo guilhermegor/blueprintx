@@ -4,14 +4,14 @@ import { ExampleCard } from '../components/ExampleCard';
 import styles from '../styles.module.css';
 
 export function ExamplePage() {
-  const { listNotes, notes, loading, error } = useNoteContext();
+  const { listNotes, notes, listLoading, listError } = useNoteContext();
 
   useEffect(() => {
     void listNotes();
   }, [listNotes]);
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p>Error: {error.message}</p>;
+  if (listLoading) return <p>Loading...</p>;
+  if (listError) return <p>Error: {listError.message}</p>;
 
   return (
     <main className={styles.page}>

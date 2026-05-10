@@ -13,9 +13,11 @@ type AppDispatch = typeof store.dispatch;
 interface NoteContextValue {
   notes: NoteResponseDTO[];
   createNote: (dto: NoteCreateDTO) => Promise<NoteResponseDTO | null>;
+  createLoading: boolean;
+  createError: Error | null;
   listNotes: () => Promise<void>;
-  loading: boolean;
-  error: Error | null;
+  listLoading: boolean;
+  listError: Error | null;
 }
 
 const NoteContext = createContext<NoteContextValue | null>(null);
@@ -33,8 +35,10 @@ function NoteContextBridge({ children, repository }: NoteProviderProps) {
   const value = useMemo<NoteContextValue>(
     () => ({
       notes,
-      loading,
-      error: error ? new Error(error) : null,
+      createLoading: loading,
+      createError: error ? new Error(error) : null,
+      listLoading: loading,
+      listError: error ? new Error(error) : null,
       createNote: async (dto) => {
         const result = await dispatch(createNoteThunk({ repo, dto }));
         return createNoteThunk.fulfilled.match(result) ? result.payload : null;
@@ -55,6 +59,7 @@ export function NoteProvider({ children, repository }: NoteProviderProps) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useNoteContext(): NoteContextValue {
   const ctx = useContext(NoteContext);
   if (!ctx) throw new Error('useNoteContext must be used within NoteProvider');
