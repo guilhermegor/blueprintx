@@ -35,6 +35,7 @@ export function NoteProvider({ children, repository }: NoteProviderProps) {
   return <NoteContext.Provider value={value}>{children}</NoteContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useNoteContext(): NoteContextValue {
   const ctx = useContext(NoteContext);
   if (!ctx) throw new Error('useNoteContext must be used within NoteProvider');
