@@ -1,55 +1,158 @@
-# React SPA (Webpack) — Architecture Guide
+# CLAUDE.md
 
-## Folder Structure
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository.
+
+## What this project is
+
+`${PROJECT_NAME}` is a React 19 + TypeScript + Webpack 5 SPA scaffolded from
+BlueprintX using the **react-spa-webpack** skeleton with
+**${STATE_MANAGEMENT_VARIANT}** as the state management layer.
+
+## Commands
+
+```bash
+npm run dev        # Webpack dev server with HMR at http://localhost:3000
+npm run build      # Production build → dist/
+npm run type-check # tsc --noEmit — type errors only, no emit
+npm run lint       # ESLint with auto-fix
+```
+
+## Architecture
+
+Features are organised as **capabilities** under `src/capabilities/<feature>/`.
+Each capability owns its full vertical slice.
 
 ```
 src/
-├── capabilities/   # one folder per business capability (≡ Python capabilities/)
-├── shared/         # cross-cutting: components, templates, utils, workers, styles
-├── routes/         # app-level routing config
-├── App.tsx         # root component — wires capability providers
-└── index.tsx       # entry point — imports global styles, renders App
+├── capabilities/
+│   └── <feature>/
+│       ├── domain/
+│       │   ├── entities.ts    # Core data shapes — no imports outside domain/
+│       │   ├── dto.ts         # Input / output transfer objects
+│       │   ├── enums.ts       # Domain enumerations
+│       │   └── ports.ts       # Repository / service interfaces
+│       ├── application/
+│       │   ├── factories.ts   # DTO ↔ entity conversions only
+│       │   └── use-cases.ts   # ${STATE_MANAGEMENT_DESC}
+│       ├── infrastructure/
+│       │   └── api-adapter.ts # Implements ports.ts against the real API
+│       ├── ui/
+│       │   ├── components/    # Presentational components
+│       │   ├── pages/         # Route-level components
+│       │   └── styles.module.css
+│       ├── context.tsx        # Composition root — wires infra → state → React tree
+│       └── index.ts           # Public barrel export
+├── shared/
+│   └── styles/
+│       ├── foundations/       # Design tokens (spacing, colour, typography)
+│       └── theme.css          # Dark/light switching via [data-theme] on <html>
+├── routes/                    # App-level routing config
+├── App.tsx                    # Root component — wires capability providers
+└── index.tsx                  # Entry point — global styles, renders App
 ```
 
-## DDD Layers (per capability)
+## Layer import rules
 
-| Folder | Imports from | Responsibility |
-|--------|-------------|----------------|
-| `domain/` | nothing | DTOs, entities, enums, port interfaces |
-| `application/` | `domain/` only | hooks (use-cases), DTO↔entity assemblers |
-| `infrastructure/` | `domain/` only | API adapters implementing domain ports |
-| `ui/` | `application/` + `domain/` | components, pages, scoped CSS Modules |
-| `context.tsx` | all layers | composition root — wires infrastructure into application |
-| `index.ts` | all layers | public barrel — only intended public exports |
+Cross-layer imports that violate the table below are caught at lint time via
+`eslint-plugin-boundaries`. Run `npm run lint` to verify. Cross-capability
+imports must go through the capability's `index.ts` barrel — never import from
+internal paths of another capability.
 
-`context.tsx` is the only file that imports infrastructure. It is the React equivalent of Python's `container.py`.
+| Layer | May import | Must never import |
+|-------|-----------|-------------------|
+| `domain/` | Nothing outside `domain/` | application, infrastructure, ui, React |
+| `application/` | `domain/` only | infrastructure, ui, React DOM |
+| `infrastructure/` | `domain/ports` + external libs | application, ui |
+| `ui/` | context hook, `domain/dto` | infrastructure directly |
+| `context.tsx` | `application/`, `infrastructure/` | ui internals |
 
-## Import Rules (enforced by ESLint)
+`context.tsx` is the **only** file that imports infrastructure. It is the
+React equivalent of Python's `container.py`.
 
-Cross-layer imports that violate the table above are caught at lint time via `eslint-plugin-boundaries`. Run `npm run lint` to verify.
+## State management: ${STATE_MANAGEMENT_VARIANT}
 
-Cross-capability imports must go through the barrel `index.ts` — never import from internal paths of another capability.
+${STATE_MANAGEMENT_DESC}
 
-## Adding a New Capability
+`context.tsx` is the **composition root**: it creates the repository instance
+and passes it into the state layer. Components consume state only through the
+context hook — never by importing `use-cases.ts` directly.
 
-1. Create `src/capabilities/<name>/domain/{dto,entities,enums,ports}.ts`
-2. Create `src/capabilities/<name>/application/{use-cases,factories}.ts`
-3. Create `src/capabilities/<name>/infrastructure/api-adapter.ts`
-4. Create `src/capabilities/<name>/ui/{components/,pages/,styles.module.css}`
-5. Create `src/capabilities/<name>/context.tsx` (composition root)
-6. Create `src/capabilities/<name>/index.ts` (public barrel)
+> **Anti-pattern:** ${STATE_MANAGEMENT_ANTIPATTERN}
+
+## Adding a new capability
+
+Follow this order — skipping steps breaks layer boundaries:
+
+1. Create `src/capabilities/<feature>/domain/{dto,entities,enums,ports}.ts`
+2. Write `application/factories.ts` (mappings) then `application/use-cases.ts`
+3. Implement `infrastructure/api-adapter.ts` against the port interface
+4. Build `ui/{components/,pages/,styles.module.css}`
+5. Wire `context.tsx` last — the only file allowed to import from both
+   `application/` and `infrastructure/` simultaneously
+6. Export the public surface from `index.ts`
 7. Add the new provider to `App.tsx`
 
-## CSS Conventions
+## `factories.ts` rules
 
-- Global design tokens live in `shared/styles/foundations/` — import via `shared/styles/foundations/index.css`
-- `shared/styles/theme.css` controls dark/light switching via `[data-theme='light']` on `<html>`
-- Component styles use CSS Modules (`*.module.css`). Reference tokens via `var(--space-4)` etc.
-- Never use magic numbers — always reference a token variable
+`factories.ts` maps DTOs to entities and entities to response DTOs. Nothing
+else. Validation and business logic do not belong here.
 
-## Custom Fonts
+```ts
+// Correct — pure mapping, no side effects
+export function noteFromCreateDTO(dto: NoteCreateDTO): Note {
+  return {
+    id: crypto.randomUUID(),
+    title: dto.title,
+    createdAt: new Date(),
+    status: NoteStatus.Draft,
+  };
+}
 
-The scaffold uses a system font stack. To add a custom font without a Google CDN request:
+// Wrong — validation inside a factory; belongs in the use-case
+export function noteFromCreateDTO(dto: NoteCreateDTO): Note {
+  if (!dto.title) throw new Error('title is required');
+  return { id: crypto.randomUUID(), title: dto.title, createdAt: new Date(), status: NoteStatus.Draft };
+}
+```
+
+## Do / Don't
+
+| Do | Don't |
+|----|-------|
+| Call `fetch` only inside `infrastructure/` | Call `fetch` from a component or use-case |
+| Keep `domain/` free of any React import | Import `useState` or React in `domain/` |
+| Accept a port interface as a parameter | Accept a concrete adapter class in use-cases |
+| Use `factories.ts` for every DTO ↔ entity conversion | Inline object construction in components |
+| Export only the public surface from `index.ts` | Re-export every internal type from `index.ts` |
+| Add a new capability for each distinct feature area | Grow one capability into a monolith |
+
+## Testing
+
+| Layer | What to test | How |
+|-------|-------------|-----|
+| `domain/` | Entity invariants, enum values | Pure unit tests — no mocks |
+| `application/factories` | Correct field mapping | Pure unit tests |
+| `application/use-cases` | State transitions on success / error | Mock the port interface inline — never the adapter |
+| `infrastructure/` | HTTP request / response mapping | Integration tests against MSW or a test server |
+| `ui/` | User interactions and rendered output | React Testing Library — behaviour, not internals |
+
+Tests live in `src/capabilities/<feature>/__tests__/`.
+
+## CSS conventions
+
+Global design tokens live in `shared/styles/foundations/` — import via
+`shared/styles/foundations/index.css`. Component styles use CSS Modules
+(`*.module.css`). Reference tokens via `var(--space-4)` etc. — never use
+magic numbers.
+
+`shared/styles/theme.css` controls dark/light switching via
+`[data-theme='light']` on `<html>`.
+
+## Custom fonts
+
+The scaffold uses a system font stack. To add a custom font without a Google
+CDN request:
 
 ```bash
 npm install @fontsource/inter
@@ -63,10 +166,8 @@ import '@fontsource/inter/700.css';
 
 Then update `--font-sans` in `shared/styles/foundations/typography.css`.
 
-## State Management
-
-The active variant (`context`, `zustand`, or `rtk`) was selected at scaffold time. Only `application/use-cases.ts` and `context.tsx` differ between variants — all other layers are identical.
-
 ## Module Federation
 
-If enabled at scaffold time, `webpack.config.js` uses `ModuleFederationPlugin`. Each capability's `index.ts` is the natural `exposes` entry point. To add a new exposed capability, add it to the `exposes` map in `webpack.config.js`.
+If enabled at scaffold time, `webpack.config.js` uses `ModuleFederationPlugin`.
+Each capability's `index.ts` is the natural `exposes` entry point. To expose a
+new capability, add it to the `exposes` map in `webpack.config.js`.

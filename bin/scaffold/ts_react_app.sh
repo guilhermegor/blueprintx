@@ -119,18 +119,27 @@ apply_file_variants() {
 
     case "$STATE_MGMT_CHOICE" in
         2)
+            STATE_MANAGEMENT_VARIANT="Zustand"
+            STATE_MANAGEMENT_DESC="use-cases.ts is a Zustand store (create<Store>()). State and async actions are co-located; the store is a singleton not tied to the React tree."
+            STATE_MANAGEMENT_ANTIPATTERN="Don't create more than one Zustand store per capability — merge new actions into the existing store."
             mv "$application_path/use-cases.zustand.ts" "$application_path/use-cases.ts"
             mv "$capabilities_path/context.zustand.tsx" "$capabilities_path/context.tsx"
             rm -f "$application_path/use-cases.rtk.ts" \
                   "$capabilities_path/context.rtk.tsx"
             ;;
         3)
+            STATE_MANAGEMENT_VARIANT="Redux Toolkit"
+            STATE_MANAGEMENT_DESC="use-cases.ts is an RTK slice with createAsyncThunk actions. initialState, reducers, and thunks are co-located in one file."
+            STATE_MANAGEMENT_ANTIPATTERN="Don't dispatch actions outside of thunks or hooks — keep all side effects inside the RTK layer."
             mv "$application_path/use-cases.rtk.ts" "$application_path/use-cases.ts"
             mv "$capabilities_path/context.rtk.tsx" "$capabilities_path/context.tsx"
             rm -f "$application_path/use-cases.zustand.ts" \
                   "$capabilities_path/context.zustand.tsx"
             ;;
         *)
+            STATE_MANAGEMENT_VARIANT="React Context"
+            STATE_MANAGEMENT_DESC="use-cases.ts exports one custom hook per use-case (useState + useCallback). Each hook owns its loading, error, and result state."
+            STATE_MANAGEMENT_ANTIPATTERN="Don't lift hook state into a shared module — each hook is intentionally isolated."
             rm -f "$application_path/use-cases.zustand.ts" \
                   "$application_path/use-cases.rtk.ts" \
                   "$capabilities_path/context.zustand.tsx" \
@@ -187,10 +196,14 @@ copy_common_templates() {
 
     print_status "info" "Applying common TypeScript templates..."
 
-    export PROJECT_NAME PROJECT_DESCRIPTION
+    export PROJECT_NAME PROJECT_DESCRIPTION \
+           STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
         < "$COMMON_TEMPLATE_ROOT/package.json" \
         > "$project_path/package.json"
+    envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
+        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
+        > "$project_path/CLAUDE.md"
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
