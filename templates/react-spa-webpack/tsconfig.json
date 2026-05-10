@@ -45,7 +45,6 @@
     "src/**/*.rtk.ts",
     "src/**/*.rtk.tsx",
     "src/**/*.zustand.ts",
-    "src/**/*.zustand.tsx",
-    "src/**/*.context.tsx"
+    "src/**/*.zustand.tsx"
   ]
 }

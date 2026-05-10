@@ -1,41 +1,64 @@
 # **React SPA (Webpack)**
 
-A single-page application skeleton built on **React 19**, **TypeScript 5**, **Webpack 5**, and **Babel**. ESLint (flat config, v9) and Prettier are pre-configured. The `src/` directory ships with placeholder subdirectories for every common SPA concern so the project structure is immediately navigable without any initial housekeeping.
+A single-page application skeleton built on **React 19**, **TypeScript 6**, **Webpack 5**, and **Babel**, structured around **hexagonal / Domain-Driven Design principles**. Each business capability lives in its own `src/capabilities/<name>/` folder with isolated DDD layers. ESLint (flat config, v9) and Prettier are pre-configured; layer boundary violations are caught at lint time by `eslint-plugin-boundaries`.
 
-This skeleton is intentionally thin on opinions about routing, styling, and state management — those choices belong to the application, not the scaffold.
+At scaffold time you are prompted for:
+
+- **State management strategy** — React Context (default, zero deps), Zustand, or Redux Toolkit. Only the chosen variant's files are written.
+- **Webpack Module Federation** — optional; replaces `webpack.config.js` with a Module Federation-aware config.
 
 ## Expected layout
 
-```bash
+```
 project/
 ├── src/
-│   ├── App.tsx
-│   ├── index.tsx
-│   ├── adapters/        # external service adapters (API clients, mappers)
-│   ├── assets/          # static files imported by components
-│   ├── components/      # reusable UI components
-│   ├── contexts/        # React context providers
-│   ├── models/          # TypeScript interfaces and type definitions
-│   ├── pages/           # route-level page components
-│   ├── routers/         # routing configuration
-│   ├── styles/          # global styles and CSS modules
-│   ├── templates/       # layout wrappers and page shells
-│   ├── utils/           # pure utility functions
-│   └── workers/         # Web Workers and background tasks
+│   ├── App.tsx                        # root component — wires capability providers
+│   ├── index.tsx                      # entry point — imports global styles, renders App
+│   ├── declarations.d.ts             # ambient type declarations for CSS modules
+│   ├── capabilities/
+│   │   └── <feature>/
+│   │       ├── domain/
+│   │       │   ├── dto.ts            # input / output DTOs
+│   │       │   ├── entities.ts       # domain entity types
+│   │       │   ├── enums.ts          # domain enumerations
+│   │       │   └── ports.ts          # repository / service port interfaces
+│   │       ├── application/
+│   │       │   ├── use-cases.ts      # use-case hooks (varies by state management variant)
+│   │       │   └── factories.ts      # DTO ↔ entity assemblers
+│   │       ├── infrastructure/
+│   │       │   └── api-adapter.ts    # port implementation (fetch-based)
+│   │       ├── ui/
+│   │       │   ├── components/       # capability-scoped presentational components
+│   │       │   ├── pages/            # route-level page components
+│   │       │   └── styles.module.css # CSS Modules referencing shared design tokens
+│   │       ├── context.tsx           # composition root — wires infrastructure into application
+│   │       └── index.ts             # public barrel — only intended exports
+│   ├── routes/                        # app-level routing configuration
+│   └── shared/
+│       ├── assets/                    # static files imported by components
+│       ├── components/                # cross-capability UI primitives
+│       ├── styles/
+│       │   ├── foundations/           # design token CSS variables (space, color, type…)
+│       │   ├── global.css             # body resets and base rules
+│       │   └── theme.css             # dark/light theme switching via [data-theme]
+│       ├── templates/                 # persistent layout shells (nav, sidebar)
+│       ├── utils/                     # pure functions with no React dependency
+│       └── workers/                   # Web Workers and service workers
 ├── public/
-│   └── index.html       # Webpack HtmlWebpackPlugin template
-├── .babelrc             # Babel presets (env, react, typescript)
-├── eslint.config.js     # ESLint flat config (v9+)
-├── .prettierrc.js       # Prettier config
-├── tsconfig.json        # TypeScript strict config, moduleResolution: bundler
-├── webpack.config.js    # Webpack 5 dev/prod config, HMR, aliases
-├── package.json         # deps + scripts: start, build, typecheck, lint, format
+│   └── index.html                     # HtmlWebpackPlugin template
+├── .babelrc                           # Babel presets: env, react (automatic), typescript
+├── eslint.config.js                   # ESLint v9 flat config with boundaries, hooks, a11y
+├── .prettierrc.js                     # Prettier config
+├── tsconfig.json                      # strict mode, moduleResolution: bundler, noEmit: true
+├── webpack.config.js                  # dev/prod config, HMR, @/ alias, CSS Modules
+├── package.json                       # scripts: start, build, type-check, lint, lint:fix
 ├── .gitignore
 ├── .vscode/
-│   └── settings.json    # format-on-save, ESLint fix-on-save
+│   └── settings.json                  # format-on-save, ESLint fix-on-save
 ├── docs/
 ├── .github/
 │   └── workflows/
+│       └── ci.yml                     # type-check → lint → build (parallel jobs)
 ├── CONTRIBUTING.md
 └── LICENSE
 ```
@@ -44,54 +67,176 @@ project/
 
 | Folder / File | Purpose | Expected content |
 |---------------|---------|-----------------|
-| `src/App.tsx` | Root component | Top-level layout, router outlet |
-| `src/index.tsx` | Entry point | `createRoot` + `<App />` mount |
-| `src/adapters/` | External integrations | API client wrappers, DTO mappers |
-| `src/assets/` | Static resources | Images, fonts, SVGs imported in components |
-| `src/components/` | Reusable UI | Stateless or lightly stateful presentational components |
-| `src/contexts/` | React contexts | Context definitions and provider components |
-| `src/models/` | Type definitions | TypeScript interfaces, enums, type aliases |
-| `src/pages/` | Route pages | One file per route; composes components |
-| `src/routers/` | Routing | React Router config, guards, lazy imports |
-| `src/styles/` | Styles | Global CSS, CSS Modules, design tokens |
-| `src/templates/` | Layout shells | Persistent page shells (nav bar, sidebar) |
-| `src/utils/` | Utilities | Pure functions with no React dependency |
-| `src/workers/` | Background tasks | Web Workers, service workers |
-| `public/` | Static assets served as-is | `index.html` (HtmlWebpackPlugin template) |
-| `webpack.config.js` | Build config | Entry, output, loaders, HMR, `@/` alias |
-| `tsconfig.json` | TypeScript config | Strict mode, `moduleResolution: bundler`, `noEmit: true` |
-| `.babelrc` | Transpilation | `@babel/preset-env`, `@babel/preset-react` (automatic runtime), `@babel/preset-typescript` |
-| `eslint.config.js` | Linting | Flat config with `@typescript-eslint`, `eslint-plugin-react`, `eslint-plugin-react-hooks` |
-| `.prettierrc.js` | Formatting | Single quotes, trailing commas, 100-char width |
+| `src/App.tsx` | Root component | Wraps each capability's provider; no business logic |
+| `src/index.tsx` | Entry point | Imports global styles, mounts `<App />` via `createRoot` |
+| `src/declarations.d.ts` | Ambient declarations | CSS module types (`*.module.css`, `*.css`) |
+| `capabilities/<name>/domain/` | Pure domain model | Entities, DTOs, enums, port interfaces — no I/O |
+| `capabilities/<name>/application/` | Use-case layer | Hooks that orchestrate domain + repo; DTO assemblers |
+| `capabilities/<name>/infrastructure/` | Adapter layer | `fetch`-based implementations of domain port interfaces |
+| `capabilities/<name>/ui/` | Presentation layer | Components, pages, and scoped CSS Modules |
+| `capabilities/<name>/context.tsx` | Composition root | The only file that imports infrastructure; wires the capability |
+| `capabilities/<name>/index.ts` | Public barrel | Only exports intended for use by other capabilities or `App.tsx` |
+| `shared/styles/foundations/` | Design tokens | CSS custom properties: `--space-*`, `--color-*`, `--text-*`, etc. |
+| `shared/styles/global.css` | Global resets | Body, box-sizing, base element styles |
+| `shared/styles/theme.css` | Theme switching | `[data-theme='light']` / default (dark) overrides |
+| `routes/` | Routing config | React Router route definitions, lazy imports, guards |
+| `public/index.html` | Webpack template | `<div id="root">` — injected by HtmlWebpackPlugin |
+
+## DDD Layers
+
+### Domain
+
+**What goes here:** pure TypeScript — interfaces, enums, and entity types. No imports from React, infrastructure, or application code.
+
+```ts
+// capabilities/example/domain/ports.ts
+import type { Note } from './entities';
+
+export interface NoteRepository {
+  add(note: Note): Promise<Note>;
+  list(): Promise<Note[]>;
+  get(id: string): Promise<Note | null>;
+}
+```
+
+### Application
+
+**What goes here:** use-case hooks that orchestrate domain objects through a port interface. Imports `domain/` only. The shape of the hook depends on the state management variant chosen at scaffold time.
+
+```ts
+// capabilities/example/application/use-cases.ts  (React Context variant)
+export function useCreateNote(repo: NoteRepository) {
+  const [loading, setLoading] = useState(false);
+  const execute = useCallback(async (dto: NoteCreateDTO) => { … }, [repo]);
+  return { execute, loading };
+}
+```
+
+```ts
+// capabilities/example/application/factories.ts
+export function noteFromCreateDTO(dto: NoteCreateDTO): Note { … }
+export function noteToResponseDTO(note: Note): NoteResponseDTO { … }
+```
+
+### Infrastructure
+
+**What goes here:** concrete implementations of domain port interfaces. Imports `domain/` only — never `application/` or `ui/`.
+
+```ts
+// capabilities/example/infrastructure/api-adapter.ts
+export class ApiNoteRepository implements NoteRepository {
+  async add(note: Note): Promise<Note> { … }
+  async list(): Promise<Note[]> { … }
+}
+```
+
+### UI
+
+**What goes here:** presentational components and pages. Imports `application/` (hooks), `domain/` (types), and the capability's `context.tsx`. Uses CSS Modules that reference shared design token variables.
+
+```tsx
+// capabilities/example/ui/pages/ExamplePage.tsx
+export function ExamplePage() {
+  const { notes, loading } = useNoteContext();
+  return <main>{notes.map(n => <ExampleCard key={n.id} note={n} />)}</main>;
+}
+```
+
+### context.tsx — Composition Root
+
+**What goes here:** the only file in the capability that imports infrastructure. Wires the repository implementation into the application hooks and exposes a React context with a uniform interface across all state management variants.
+
+```tsx
+interface NoteContextValue {
+  notes: NoteResponseDTO[];
+  createNote: (dto: NoteCreateDTO) => Promise<NoteResponseDTO | null>;
+  createLoading: boolean;
+  createError: Error | null;
+  listNotes: () => Promise<void>;
+  listLoading: boolean;
+  listError: Error | null;
+}
+
+export function NoteProvider({ children, repository }: NoteProviderProps) {
+  const repo = useMemo(() => repository ?? new ApiNoteRepository(), [repository]);
+  const { execute: createNote, loading: createLoading, error: createError } = useCreateNote(repo);
+  const { notes, execute: listNotes, loading: listLoading, error: listError } = useListNotes(repo);
+
+  const value = useMemo<NoteContextValue>(
+    () => ({ notes, createNote, createLoading, createError, listNotes, listLoading, listError }),
+    [notes, createNote, createLoading, createError, listNotes, listLoading, listError],
+  );
+
+  return <NoteContext.Provider value={value}>{children}</NoteContext.Provider>;
+}
+```
+
+The React Context variant exposes separate `createLoading/createError` and `listLoading/listError` because each use-case hook manages its own state. The Zustand and Redux Toolkit variants expose the same interface shape, mapping their unified store state to both pairs.
 
 ## Key configuration notes
 
-### Webpack aliases
+### Webpack alias
 
-`webpack.config.js` maps `@/` → `src/`. Use this for absolute imports instead of relative `../../../` paths:
+`webpack.config.js` maps `@/` → `src/`. The same alias is declared in `tsconfig.json` under `paths`:
 
 ```ts
-import { Button } from '@/components/Button';
+import { NoteProvider } from '@/capabilities/example';
 ```
-
-The same alias is registered in `tsconfig.json` under `paths` so TypeScript resolves it correctly.
 
 ### Babel vs TypeScript compiler
 
-`tsconfig.json` sets `"noEmit": true` — TypeScript only type-checks; it never produces output files. Babel handles the actual transpilation via `babel-loader` in Webpack. This is intentional: Babel is faster for large projects and the TypeScript checker runs separately (`npm run typecheck`).
+`tsconfig.json` sets `"noEmit": true` — TypeScript only type-checks. Babel handles transpilation via `babel-loader`. Run type-checking separately:
 
-### ESLint flat config
+```bash
+npm run type-check   # tsc --noEmit
+npm run lint         # eslint
+npm run build        # webpack --mode production
+```
 
-`eslint.config.js` uses the ESLint v9 flat config format. To add rules, extend the exported array — do not create a legacy `.eslintrc.*` file alongside it.
+### ESLint boundaries
+
+`eslint.config.js` uses `eslint-plugin-boundaries` to enforce the import rules in the table above. The allowed dependency matrix:
+
+| From | May import |
+|------|-----------|
+| `domain` | *(nothing)* |
+| `application` | `domain` |
+| `infrastructure` | `domain` |
+| `ui` | `application`, `domain`, `context` |
+| `context` | `domain`, `application`, `infrastructure` |
+| `barrel (index.ts)` | `domain`, `application`, `ui`, `context` |
+| `shared` | `shared` |
+| `routes` | `barrel`, `shared` |
+
+### State management variants
+
+| Choice | Files that differ | Extra deps |
+|--------|------------------|-----------|
+| React Context (default) | `use-cases.ts`, `context.tsx` | none |
+| Zustand | `use-cases.ts`, `context.tsx` | `zustand ^5` |
+| Redux Toolkit | `use-cases.ts`, `context.tsx` | `@reduxjs/toolkit ^2`, `react-redux ^9` |
+
+All other files (`domain/`, `infrastructure/`, `ui/`, `factories.ts`) are identical across variants.
+
+### CSS design tokens
+
+Global CSS custom properties are defined in `shared/styles/foundations/`. Import the index in any CSS file to access them:
+
+```css
+/* styles.module.css */
+.card { padding: var(--space-4); color: var(--color-text-default); }
+```
+
+Dark/light switching is handled by toggling `data-theme="light"` on `<html>` — no JavaScript class manipulation needed.
 
 ## Rules of thumb
 
-| Concern | Where it lives |
-|---------|---------------|
-| Reusable UI primitives | `src/components/` |
-| Route-level views | `src/pages/` |
-| External data fetching | `src/adapters/` |
-| Shared TypeScript types | `src/models/` |
-| Global React state | `src/contexts/` |
-| Pure helpers | `src/utils/` |
-| Layout chrome | `src/templates/` |
+| Layer | Responsibility |
+|-------|---------------|
+| `domain/` | Types and contracts — no runtime behaviour, no I/O |
+| `application/` | Orchestration — calls ports, transforms DTOs |
+| `infrastructure/` | Side effects — network, storage, external services |
+| `ui/` | Presentation — renders state, dispatches actions |
+| `context.tsx` | Wiring — the only place infrastructure meets application |
+| `index.ts` | API surface — controls what leaks out of a capability |
+| `shared/` | Reuse — only code with no single owner goes here |

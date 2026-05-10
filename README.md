@@ -14,7 +14,7 @@
 - **Python skeletons**: **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, and **lib-minimal**
 - **TypeScript skeletons**: **React SPA (Webpack)** — React 19 + TypeScript + Webpack 5 + Babel + ESLint + Prettier
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders
-- Common TypeScript baseline: `package.json` with pinned deps, `.gitignore`, VS Code settings, `CONTRIBUTING.md`
+- Common TypeScript baseline: `package.json` with pinned deps, `.gitignore`, VS Code settings, `CONTRIBUTING.md`, GitHub Actions CI (type-check + lint + build)
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 - **Extensible by design**: drop a `skeleton.meta` file into any `templates/` directory and it appears in the menu automatically
 
@@ -223,24 +223,24 @@ project/
 ```
 
 ### React SPA — Webpack (templates/react-spa-webpack)
-Single-page application skeleton using **React 19**, **TypeScript 5**, **Webpack 5**, and **Babel**. ESLint (flat config) and Prettier are pre-configured. The `src/` directory has placeholder subdirectories for the most common SPA concerns.
+Full-stack SPA skeleton using **React 19**, **TypeScript 6**, **Webpack 5**, and **Babel**, structured around **hexagonal / DDD principles**. Each business capability lives in `src/capabilities/<name>/` with isolated `domain/`, `application/`, `infrastructure/`, and `ui/` layers. Layer boundaries are enforced at lint time via `eslint-plugin-boundaries`. At scaffold time you choose a **state management strategy** (React Context, Zustand, or Redux Toolkit) — only the chosen variant's files are written.
 
 ```
 project/
     src/
-        App.tsx
-        index.tsx
-        adapters/
-        assets/
-        components/
-        contexts/
-        models/
-        pages/
-        routers/
-        styles/
-        templates/
-        utils/
-        workers/
+        App.tsx                          # wires capability providers
+        index.tsx                        # entry point
+        declarations.d.ts               # CSS module type declarations
+        capabilities/
+            <feature>/
+                domain/                  # DTOs, entities, enums, port interfaces
+                application/             # use-case hooks, DTO↔entity assemblers
+                infrastructure/          # API adapters implementing domain ports
+                ui/                      # components, pages, CSS Modules
+                context.tsx              # composition root (wires infra into app)
+                index.ts                 # public barrel
+        routes/
+        shared/                          # cross-cutting styles, components, utils
     public/
         index.html
     .babelrc
@@ -253,6 +253,8 @@ project/
     .vscode/
     docs/
     .github/
+        workflows/
+            ci.yml                       # type-check, lint, build
     CONTRIBUTING.md
     LICENSE
 ```

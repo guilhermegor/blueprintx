@@ -7,9 +7,11 @@ import type { NoteRepository } from './domain/ports';
 interface NoteContextValue {
   notes: NoteResponseDTO[];
   createNote: (dto: NoteCreateDTO) => Promise<NoteResponseDTO | null>;
+  createLoading: boolean;
+  createError: Error | null;
   listNotes: () => Promise<void>;
-  loading: boolean;
-  error: Error | null;
+  listLoading: boolean;
+  listError: Error | null;
 }
 
 const NoteContext = createContext<NoteContextValue | null>(null);
@@ -26,14 +28,8 @@ export function NoteProvider({ children, repository }: NoteProviderProps) {
   const { notes, execute: listNotes, loading: listLoading, error: listError } = useListNotes(repo);
 
   const value = useMemo<NoteContextValue>(
-    () => ({
-      notes,
-      createNote,
-      listNotes,
-      loading: createLoading || listLoading,
-      error: createError ?? listError,
-    }),
-    [notes, createNote, listNotes, createLoading, listLoading, createError, listError],
+    () => ({ notes, createNote, createLoading, createError, listNotes, listLoading, listError }),
+    [notes, createNote, createLoading, createError, listNotes, listLoading, listError],
   );
 
   return <NoteContext.Provider value={value}>{children}</NoteContext.Provider>;

@@ -110,48 +110,27 @@ copy_skeleton_files() {
     print_status "success" "Skeleton files copied"
 }
 
-apply_variants() {
+apply_file_variants() {
     local project_path="$1"
     local capabilities_path="$project_path/src/capabilities/example"
     local application_path="$capabilities_path/application"
 
-    print_status "info" "Applying state management variant..."
+    print_status "info" "Applying state management variant files..."
 
     case "$STATE_MGMT_CHOICE" in
         2)
             mv "$application_path/use-cases.zustand.ts" "$application_path/use-cases.ts"
             mv "$capabilities_path/context.zustand.tsx" "$capabilities_path/context.tsx"
-            rm -f "$application_path/use-cases.context.ts" \
-                  "$application_path/use-cases.rtk.ts" \
-                  "$capabilities_path/context.context.tsx" \
+            rm -f "$application_path/use-cases.rtk.ts" \
                   "$capabilities_path/context.rtk.tsx"
-            python3 -c "
-import json
-pkg = json.load(open('$project_path/package.json'))
-pkg['dependencies']['zustand'] = '^5.0.0'
-json.dump(pkg, open('$project_path/package.json', 'w'), indent=2)
-print('')
-"
             ;;
         3)
             mv "$application_path/use-cases.rtk.ts" "$application_path/use-cases.ts"
             mv "$capabilities_path/context.rtk.tsx" "$capabilities_path/context.tsx"
-            rm -f "$application_path/use-cases.context.ts" \
-                  "$application_path/use-cases.zustand.ts" \
-                  "$capabilities_path/context.context.tsx" \
+            rm -f "$application_path/use-cases.zustand.ts" \
                   "$capabilities_path/context.zustand.tsx"
-            python3 -c "
-import json
-pkg = json.load(open('$project_path/package.json'))
-pkg['dependencies']['@reduxjs/toolkit'] = '^2.0.0'
-pkg['dependencies']['react-redux'] = '^9.0.0'
-json.dump(pkg, open('$project_path/package.json', 'w'), indent=2)
-print('')
-"
             ;;
         *)
-            mv "$application_path/use-cases.context.ts" "$application_path/use-cases.ts"
-            mv "$capabilities_path/context.context.tsx" "$capabilities_path/context.tsx"
             rm -f "$application_path/use-cases.zustand.ts" \
                   "$application_path/use-cases.rtk.ts" \
                   "$capabilities_path/context.zustand.tsx" \
@@ -165,7 +144,42 @@ print('')
         sed -i "s/__APP_NAME__/$PROJECT_NAME/g" "$project_path/webpack.config.js"
     fi
 
-    print_status "success" "Variants applied"
+    print_status "success" "File variants applied"
+}
+
+apply_package_variants() {
+    local project_path="$1"
+
+    case "$STATE_MGMT_CHOICE" in
+        2)
+            print_status "info" "Adding Zustand dependency..."
+            python3 -c "
+import json
+with open('$project_path/package.json') as f:
+    pkg = json.load(f)
+pkg['dependencies']['zustand'] = '^5.0.0'
+with open('$project_path/package.json', 'w') as f:
+    json.dump(pkg, f, indent=2)
+    f.write('\n')
+"
+            ;;
+        3)
+            print_status "info" "Adding Redux Toolkit dependencies..."
+            python3 -c "
+import json
+with open('$project_path/package.json') as f:
+    pkg = json.load(f)
+pkg['dependencies']['@reduxjs/toolkit'] = '^2.0.0'
+pkg['dependencies']['react-redux'] = '^9.0.0'
+with open('$project_path/package.json', 'w') as f:
+    json.dump(pkg, f, indent=2)
+    f.write('\n')
+"
+            ;;
+        *) ;;
+    esac
+
+    print_status "success" "Package variants applied"
 }
 
 copy_common_templates() {
@@ -181,6 +195,7 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     cp -r "$COMMON_TEMPLATE_ROOT/.vscode/." "$project_path/.vscode"
+    cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
 
     print_status "success" "Common templates applied"
@@ -319,8 +334,9 @@ main() {
     prompt_module_federation
     create_directory_structure "$PROJECT_PATH"
     copy_skeleton_files "$PROJECT_PATH"
+    apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
-    apply_variants "$PROJECT_PATH"
+    apply_package_variants "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
     print_status "success" "React SPA scaffold complete!"
