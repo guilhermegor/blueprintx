@@ -1,10 +1,17 @@
 # CLAUDE.md
 
+> **Audience: BlueprintX contributors only.** This file does **not** ship to
+> scaffolded projects — it documents how the `templates/ts-common/` directory
+> works inside the BlueprintX repo. Per-project Claude guidance for scaffolded
+> TypeScript projects lives in each skeleton's own root `CLAUDE.md`
+> (e.g. `templates/react-spa-webpack/CLAUDE.md`), which **is** rendered into
+> every scaffolded project via `envsubst`.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this directory is
 
-`templates/ts-common/` is the **single source of truth for shared tooling** across all BlueprintX TypeScript skeletons. Every file here is copied verbatim (or rendered via `envsubst`) into scaffolded projects by each `bin/scaffold/ts_*.sh` script.
+`templates/ts-common/` is the **single source of truth for shared tooling** across all BlueprintX TypeScript skeletons. Each tooling file in this directory is copied verbatim (or rendered via `envsubst`) into scaffolded projects by each `bin/scaffold/ts_*.sh` script. This `CLAUDE.md` itself is the exception — see the *Audience* note above.
 
 **Changes here propagate to all TypeScript skeletons on the next scaffold run.**
 
