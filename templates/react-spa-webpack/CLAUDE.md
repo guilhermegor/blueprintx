@@ -70,6 +70,34 @@ internal paths of another capability.
 `context.tsx` is the **only** file that imports infrastructure. It is the
 React equivalent of Python's `container.py`.
 
+## Module structure
+
+### One class per module
+
+Each source file declares **exactly one** `class`. The filename matches
+the class name in kebab-case (`api-adapter.ts` → `ApiAdapter`).
+
+In a function-first codebase this rule mostly governs `infrastructure/`
+adapters and any error / state-machine classes. It does **not** apply to:
+
+- **Function components** — small private subcomponents may share a file
+  with the primary component if they are not exported.
+- **Custom hooks** — one *public* hook per file; private helpers may sit
+  beside the public hook.
+- **Types, interfaces, enums** — `domain/{entities,dto,enums}.ts`
+  deliberately group related declarations by topic; they form a
+  vocabulary, not separate concerns.
+- **Plain utility functions** — group by topic in a single module
+  (`utils/dates.ts`), never wrap them in a utility class.
+
+Private or shared base classes live in their own underscore-prefixed file
+(`_base-adapter.ts` exports `BaseAdapter`). Never co-locate a base class
+with a concrete subclass in the same module.
+
+**Why:** Single-class files keep `git blame` accurate, let tests target
+one class per `__tests__/` file, and remove the implicit coupling that
+appears when two classes share a module boundary.
+
 ## State management: ${STATE_MANAGEMENT_VARIANT}
 
 ${STATE_MANAGEMENT_DESC}
@@ -126,6 +154,7 @@ export function noteFromCreateDTO(dto: NoteCreateDTO): Note {
 | Use `factories.ts` for every DTO ↔ entity conversion | Inline object construction in components |
 | Export only the public surface from `index.ts` | Re-export every internal type from `index.ts` |
 | Add a new capability for each distinct feature area | Grow one capability into a monolith |
+| One class per file; filename matches class name | Co-locate a base class with its subclass in one file |
 
 ## Testing
 
