@@ -130,6 +130,16 @@ export default [
     },
   },
 
-  // 7. Prettier config (must be last)
+  // 7. Web worker files - use Worker globals, not DOM
+  {
+    files: ['src/**/*-worker.js'],
+    languageOptions: {
+      globals: {
+        ...globals.worker,
+      },
+    },
+  },
+
+  // 8. Prettier config (must be last)
   prettierConfig,
 ];
