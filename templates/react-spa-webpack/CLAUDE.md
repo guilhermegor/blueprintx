@@ -98,6 +98,35 @@ with a concrete subclass in the same module.
 one class per `__tests__/` file, and remove the implicit coupling that
 appears when two classes share a module boundary.
 
+## TypeScript code conventions
+
+Conventions that apply to all TypeScript code in this project — every
+layer (`domain/`, `application/`, `infrastructure/`, `ui/`), every file.
+
+### Numeric separators
+
+Use `_` separators in numeric literals **≥ 1000** to keep digit groups
+readable. Required for time durations, byte sizes, and any large magic
+constant — not optional once a number crosses four digits.
+
+```ts
+// ✅ Easy to read at a glance
+const ONE_SECOND_MS = 1_000;
+const ONE_MEGABYTE = 1_048_576;
+const SLOW_REQUEST_TIMEOUT_MS = 30_000;
+const MAX_PAYLOAD_BYTES = 5_242_880;
+
+// ❌ Forces digit-counting
+const ONE_SECOND_MS = 1000;
+const ONE_MEGABYTE = 1048576;
+const SLOW_REQUEST_TIMEOUT_MS = 30000;
+const MAX_PAYLOAD_BYTES = 5242880;
+```
+
+Numeric separators are an **ES2021** feature with universal Node and
+modern-browser support — no transpilation concern, no polyfill needed.
+The separator is purely syntactic; `1_000 === 1000` is `true` at runtime.
+
 ## State management: ${STATE_MANAGEMENT_VARIANT}
 
 ${STATE_MANAGEMENT_DESC}
@@ -155,6 +184,7 @@ export function noteFromCreateDTO(dto: NoteCreateDTO): Note {
 | Export only the public surface from `index.ts` | Re-export every internal type from `index.ts` |
 | Add a new capability for each distinct feature area | Grow one capability into a monolith |
 | One class per file; filename matches class name | Co-locate a base class with its subclass in one file |
+| Use `_` separators in numeric literals ≥ 1000 (`30_000`, `1_048_576`) | Write 4+ digit literals without separators |
 
 ## Testing
 
