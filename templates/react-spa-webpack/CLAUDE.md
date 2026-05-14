@@ -64,11 +64,21 @@ internal paths of another capability.
 | `domain/` | Nothing outside `domain/` | application, infrastructure, ui, React |
 | `application/` | `domain/` only | infrastructure, ui, React DOM |
 | `infrastructure/` | `domain/ports` + external libs | application, ui |
-| `ui/` | context hook, `domain/dto` | infrastructure directly |
-| `context.tsx` | `application/`, `infrastructure/` | ui internals |
+| `ui/` | composition-root hook (`useTaskContext`), `application/`, `domain/` | infrastructure directly |
+| composition root (`context.tsx`) | `domain/`, `application/`, `infrastructure/` | ui internals |
 
-`context.tsx` is the **only** file that imports infrastructure. It is the
-React equivalent of Python's `container.py`.
+The **composition root** (`context.tsx` or `<Name>ContextProvider.tsx`
+at the capability root) is the only file that imports from all three
+lower layers. It is a *kind of file*, not a fifth layer — the four
+layers stay pure, and the composition root sits one level above them
+to wire infrastructure → application → React tree. The React equivalent
+of Python's `container.py`.
+
+A composition root contains **no business decisions** — only
+instantiation, lifecycle, and passing things around. If you find a
+business rule in here ("a task completes when secondsRemaining hits
+zero"), move it to `application/`; the composition root just wires the
+worker's tick stream to a dispatch.
 
 ## Module structure
 

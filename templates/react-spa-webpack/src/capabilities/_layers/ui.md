@@ -36,7 +36,7 @@ UI files **can** import from:
 |---|---|---|
 | `ui/*` | `../domain/entities`, `../domain/enums`, `../domain/dto` | Render and accept typed data |
 | `ui/*` | `../application/use-cases`, `../application/task-utils` | Trigger intents, format data |
-| `ui/*` | `../context.tsx` (or wherever the capability context lives) | Read state, dispatch |
+| `ui/*` | The capability composition root (e.g. `../context.tsx`, `../TaskContextProvider.tsx`) | Read state, dispatch |
 | `ui/*` | `@/shared/components/*`, `@/shared/templates/*` | Reuse generic UI primitives |
 | `ui/*` | Other `ui/*` files in the same capability | Capability-internal composition |
 | `ui/*` | Third-party UI libs (`lucide-react`, etc.) | Icon and primitive imports |

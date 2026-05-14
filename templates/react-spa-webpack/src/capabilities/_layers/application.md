@@ -285,6 +285,29 @@ For DTO ↔ entity mapping rules, see the parent CLAUDE.md.
 | Keep action type enums in `domain/` | Define action types in `application/` |
 | Test reducers and factories with pure assertions | Mount React just to test a pure transition |
 
+## Where the composition root is NOT
+
+A capability's **composition root** (`context.tsx` or
+`<Name>ContextProvider.tsx` at the capability root) consumes everything
+this layer exports — the reducer, the initial state, the use-case hooks
+— and it lives **outside** `application/`. Future readers may be
+tempted to file the provider here. Don't. The composition root sits one
+level above all four layers because it imports `infrastructure/` too —
+and `application/` is forbidden from doing that.
+
+What `application/` exports (consumed by the composition root):
+
+- `reducer.ts` → the pure transition function passed to `useReducer`
+- `state.ts`, `actions.ts`, `initial-state.ts` → the shapes the reducer reads
+- `use-cases.ts` → hooks that wrap dispatch with intent-named callbacks
+- `factories.ts`, `task-utils.ts` → pure helpers consumers can call
+
+The composition root imports these AND the infrastructure adapters,
+then wires them inside a React Provider. The wiring isn't business
+logic; if you find a *rule* sneaking into the composition root, move
+it back here. See the template's root `CLAUDE.md` for where the
+composition root file sits in the directory layout.
+
 ## Testing notes specific to this layer
 
 Reducers and factories are pure — assert on input/output, no React
