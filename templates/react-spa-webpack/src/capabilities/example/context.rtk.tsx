@@ -1,26 +1,14 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { configureStore } from '@reduxjs/toolkit';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { ApiNoteRepository } from './infrastructure/api-adapter';
 import { noteSlice, createNoteThunk, listNotesThunk } from './application/use-cases';
-import type { NoteCreateDTO, NoteResponseDTO } from './domain/dto';
+import { NoteContext, type NoteContextValue } from './use-context.rtk';
 import type { NoteRepository } from './domain/ports';
 
 const store = configureStore({ reducer: { notes: noteSlice.reducer } });
 type RootState = ReturnType<typeof store.getState>;
 type AppDispatch = typeof store.dispatch;
-
-interface NoteContextValue {
-  notes: NoteResponseDTO[];
-  createNote: (dto: NoteCreateDTO) => Promise<NoteResponseDTO | null>;
-  createLoading: boolean;
-  createError: Error | null;
-  listNotes: () => Promise<void>;
-  listLoading: boolean;
-  listError: Error | null;
-}
-
-const NoteContext = createContext<NoteContextValue | null>(null);
 
 interface NoteProviderProps {
   children: React.ReactNode;
@@ -57,11 +45,4 @@ export function NoteProvider({ children, repository }: NoteProviderProps) {
       <NoteContextBridge repository={repository}>{children}</NoteContextBridge>
     </Provider>
   );
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function useNoteContext(): NoteContextValue {
-  const ctx = useContext(NoteContext);
-  if (!ctx) throw new Error('useNoteContext must be used within NoteProvider');
-  return ctx;
 }
