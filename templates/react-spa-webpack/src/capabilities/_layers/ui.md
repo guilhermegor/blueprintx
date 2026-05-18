@@ -183,7 +183,7 @@ component inside a provider that supplies a stub context value:
 
 ```tsx
 function renderWithStub(state: Partial<TaskStateModel>) {
-  const stub = { state: { ...initialTaskState, ...state }, dispatch: vi.fn() };
+  const stub = { state: { ...initialTaskState, ...state }, dispatch: jest.fn() };
   return render(
     <TaskContext.Provider value={stub}>
       <ComponentUnderTest />

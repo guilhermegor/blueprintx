@@ -249,7 +249,7 @@ system**, not via inner mocks. The right tools per resource type:
 
 **Anti-pattern: mocking the adapter to test the use case.** The use
 case accepts the **port interface** as a parameter — pass a hand-rolled
-stub (`{ add: vi.fn(), list: vi.fn() }`) that satisfies the port.
+stub (`{ add: jest.fn(), list: jest.fn() }`) that satisfies the port.
 `jest.mock('./api-adapter')` couples your test to a path that may
 not exist in the next refactor.
 

@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     /* Project Files */
-    "rootDir": "./src",
     "outDir": "./dist",
 
     /* Language and Environment */
@@ -38,7 +37,7 @@
     /* Completeness */
     "skipLibCheck": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "jest.setup.ts"],
   "exclude": [
     "node_modules",
     "dist",
