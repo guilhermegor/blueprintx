@@ -43,7 +43,7 @@ poetry run python -m unittest discover -s tests/integration -p "*.py" -v
 ```
 BlueprintX/
 ├── Makefile                        # top-level entry points
-├── run.sh                          # same targets for non-make usage
+├── tasks.sh                        # same targets for non-make usage
 ├── bin/
 │   ├── blueprintx.sh               # interactive menu + mode parsing (--dev, --dry-run, --clean)
 │   ├── preview.sh                  # skeleton structure previews

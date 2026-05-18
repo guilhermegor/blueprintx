@@ -3,7 +3,7 @@
 set -euo pipefail
 
 cat <<'EOF'
-Usage: ./run.sh <target>
+Usage: ./tasks.sh <target>
    or: make <target>
 
 Targets (no make required):

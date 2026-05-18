@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.codespellrc` | codespell configuration |
 | `.pydocstyle` | pydocstyle config (NumPy convention, DAR checks) |
 | `README.md` | Template README with `${VARIABLE}` placeholders for `envsubst` |
-| `run.sh` | Non-make equivalent of the project Makefile targets |
+| `tasks.sh` | Non-make equivalent of the project Makefile targets |
 | `.github/workflows/tests.yaml` | CI workflow for unit + integration tests |
 | `.github/CODEOWNERS` | CODEOWNERS template |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR template |

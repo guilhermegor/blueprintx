@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh — Bash alternative to Makefile (no make required)
+# tasks.sh — Bash alternative to Makefile (no make required)
 
 set -euo pipefail
 
@@ -63,7 +63,7 @@ test_slowest() {
 
 test_feat() {
     if [[ -z "${FEAT:-}" ]]; then
-        echo "Usage: FEAT=<keyword> ./run.sh test_feat"
+        echo "Usage: FEAT=<keyword> ./tasks.sh test_feat"
         exit 1
     fi
     poetry run pytest tests/unit/ -k "$FEAT"
@@ -117,7 +117,7 @@ docs_server() {
 show_help() {
     cat <<EOF
 
-Usage: ./run.sh <command>
+Usage: ./tasks.sh <command>
 
 Virtual Environment
   init                 Bootstrap venv + install pre-commit hooks
