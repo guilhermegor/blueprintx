@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import prettierConfig from 'eslint-config-prettier';
 import boundaries from 'eslint-plugin-boundaries';
+import importPlugin from 'eslint-plugin-import';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -103,7 +104,7 @@ export default [
         { type: 'application', pattern: 'capabilities/*/application/**' },
         { type: 'infrastructure', pattern: 'capabilities/*/infrastructure/**' },
         { type: 'ui', pattern: 'capabilities/*/ui/**' },
-        { type: 'context', pattern: 'capabilities/*/context.tsx' },
+        { type: 'composition-root', pattern: 'capabilities/*/{context,*ContextProvider,use-*-context}*' },
         { type: 'barrel', pattern: 'capabilities/*/index.ts' },
         { type: 'shared', pattern: 'shared/**' },
         { type: 'routes', pattern: 'routes/**' },
@@ -116,12 +117,15 @@ export default [
         {
           default: 'disallow',
           rules: [
+            // Classical hexagonal: domain has no deps; application depends only
+            // on domain (ports). Infrastructure implements ports — also only
+            // domain. composition-root is the DI assembly point.
             { from: ['domain'], allow: [] },
             { from: ['application'], allow: ['domain'] },
             { from: ['infrastructure'], allow: ['domain'] },
-            { from: ['ui'], allow: ['application', 'domain', 'context'] },
-            { from: ['context'], allow: ['domain', 'application', 'infrastructure'] },
-            { from: ['barrel'], allow: ['domain', 'application', 'ui', 'context'] },
+            { from: ['ui'], allow: ['application', 'domain', 'composition-root', 'shared'] },
+            { from: ['composition-root'], allow: ['domain', 'application', 'infrastructure', 'shared'] },
+            { from: ['barrel'], allow: ['domain', 'application', 'ui', 'composition-root'] },
             { from: ['shared'], allow: ['shared'] },
             { from: ['routes'], allow: ['barrel', 'shared'] },
           ],
@@ -140,6 +144,36 @@ export default [
     },
   },
 
-  // 8. Prettier config (must be last)
+  // 8. Import resolution and ordering
+  {
+    files: ['src/**/*.{ts,tsx,js,jsx}'],
+    plugins: { import: importPlugin },
+    settings: {
+      'import/resolver': {
+        typescript: {
+          alwaysTryTypes: true,
+          project: './tsconfig.json',
+        },
+        node: {
+          extensions: ['.js', '.jsx', '.ts', '.tsx', '.json', '.css'],
+        },
+      },
+    },
+    rules: {
+      'import/no-unresolved': 'error',
+      'import/no-duplicates': 'error',
+      'import/no-cycle': ['error', { maxDepth: 10 }],
+      'import/order': [
+        'error',
+        {
+          groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
+          'newlines-between': 'always',
+          alphabetize: { order: 'asc', caseInsensitive: true },
+        },
+      ],
+    },
+  },
+
+  // 9. Prettier config (must be last)
   prettierConfig,
 ];

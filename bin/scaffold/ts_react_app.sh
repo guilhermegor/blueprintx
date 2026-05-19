@@ -101,11 +101,14 @@ copy_skeleton_files() {
 
     cp -r "$SKELETON_TEMPLATE_ROOT/src/." "$project_path/src"
     cp -r "$SKELETON_TEMPLATE_ROOT/public/." "$project_path/public"
+    mkdir -p "$project_path/tests/e2e"
+    cp -r "$SKELETON_TEMPLATE_ROOT/tests/." "$project_path/tests"
     cp "$SKELETON_TEMPLATE_ROOT/.babelrc" "$project_path/.babelrc"
     cp "$SKELETON_TEMPLATE_ROOT/eslint.config.js" "$project_path/eslint.config.js"
     cp "$SKELETON_TEMPLATE_ROOT/.prettierrc.js" "$project_path/.prettierrc.js"
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.json" "$project_path/tsconfig.json"
     cp "$SKELETON_TEMPLATE_ROOT/webpack.config.js" "$project_path/webpack.config.js"
+    cp "$SKELETON_TEMPLATE_ROOT/lint-staged.config.js" "$project_path/lint-staged.config.js"
 
     print_status "success" "Skeleton files copied"
 }
@@ -209,7 +212,11 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.stylelintrc.json" "$project_path/.stylelintrc.json"
     cp "$COMMON_TEMPLATE_ROOT/jest.config.cjs" "$project_path/jest.config.cjs"
     cp "$COMMON_TEMPLATE_ROOT/jest.setup.ts" "$project_path/jest.setup.ts"
+    cp "$COMMON_TEMPLATE_ROOT/playwright.config.ts" "$project_path/playwright.config.ts"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
+    mkdir -p "$project_path/.husky"
+    cp -r "$COMMON_TEMPLATE_ROOT/.husky/." "$project_path/.husky"
+    chmod +x "$project_path/.husky/pre-commit" "$project_path/.husky/pre-push" 2>/dev/null || true
     cp -r "$COMMON_TEMPLATE_ROOT/.vscode/." "$project_path/.vscode"
     cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
