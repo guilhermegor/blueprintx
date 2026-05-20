@@ -1,6 +1,6 @@
-import { NoteStatus } from '../domain/enums';
-import type { Note } from '../domain/entities';
 import type { NoteCreateDTO, NoteResponseDTO } from '../domain/dto';
+import type { Note } from '../domain/entities';
+import { NoteStatus } from '../domain/enums';
 
 export function noteFromCreateDTO(dto: NoteCreateDTO): Note {
   return {

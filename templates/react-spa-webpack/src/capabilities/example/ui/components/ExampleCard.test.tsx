@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { NoteStatus } from '../../domain/enums';
+
 import type { NoteResponseDTO } from '../../domain/dto';
+import { NoteStatus } from '../../domain/enums';
+
 import { ExampleCard } from './ExampleCard';
 
 function buildNote(overrides: Partial<NoteResponseDTO> = {}): NoteResponseDTO {

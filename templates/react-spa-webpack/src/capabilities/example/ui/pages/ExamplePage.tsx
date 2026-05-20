@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+
 import { useNoteContext } from '../../use-context';
 import { ExampleCard } from '../components/ExampleCard';
 import styles from '../styles.module.css';

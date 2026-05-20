@@ -12,10 +12,10 @@ BlueprintX using the **react-spa-webpack** skeleton with
 ## Commands
 
 ```bash
-npm run dev        # Webpack dev server with HMR at http://localhost:3000
+npm start          # Webpack dev server with HMR at http://localhost:3000
 npm run build      # Production build → dist/
 npm run type-check # tsc --noEmit — type errors only, no emit
-npm run lint       # ESLint with auto-fix
+npm run lint       # ESLint (run `npm run lint:fix` to apply auto-fixes)
 ```
 
 ## Deployment — GitHub Pages
@@ -39,7 +39,15 @@ to `main`:
 **GitHub stopped auto-enabling Pages on `gh-pages` pushes in ~2022.** Even
 though the workflow successfully pushes to `gh-pages` on first deploy,
 the site returns 404 until Pages itself is explicitly enabled for the
-repo. This is a one-time, per-repo step. Pick one:
+repo. This is a one-time, per-repo step.
+
+> **The scaffold offers to do this for you.** If you opted into remote
+> setup during `blueprintx new` (and `gh` is authenticated), it prompts
+> "Enable GitHub Pages now?" and runs the call below. Because the
+> `gh-pages` branch only exists after the first deploy, accept it *after*
+> your first workflow run — or use one of the options below manually.
+
+Pick one:
 
 #### Option A — `gh` CLI (zero clicks)
 
