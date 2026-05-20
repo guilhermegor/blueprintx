@@ -123,7 +123,7 @@ blueprintx --help       # show all commands and options
 
 ### After git clone
 
-The same targets are available via `make` or `./run.sh` from the repo root:
+The same targets are available via `make` or `./tasks.sh` from the repo root:
 
 ```bash
 make new          # equivalent to blueprintx new
@@ -278,7 +278,7 @@ After scaffolding, run `npm install && npm start` to launch the dev server on `h
 ```
 BlueprintX/
 ├── Makefile                 # entry targets: new, preview, dev, dev-clean, dry-run
-├── run.sh                   # same targets for non-make usage
+├── tasks.sh                 # same targets for non-make usage
 ├── bin/
 │   ├── blueprintx.sh        # interactive menu + auto-discovery
 │   ├── preview.sh           # skeleton previews

@@ -1,10 +1,17 @@
 # CLAUDE.md
 
+> **Audience: BlueprintX contributors only.** This file does **not** ship to
+> scaffolded projects — it documents how the `templates/ts-common/` directory
+> works inside the BlueprintX repo. Per-project Claude guidance for scaffolded
+> TypeScript projects lives in each skeleton's own root `CLAUDE.md`
+> (e.g. `templates/react-spa-webpack/CLAUDE.md`), which **is** rendered into
+> every scaffolded project via `envsubst`.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this directory is
 
-`templates/ts-common/` is the **single source of truth for shared tooling** across all BlueprintX TypeScript skeletons. Every file here is copied verbatim (or rendered via `envsubst`) into scaffolded projects by each `bin/scaffold/ts_*.sh` script.
+`templates/ts-common/` is the **single source of truth for shared tooling** across all BlueprintX TypeScript skeletons. Each tooling file in this directory is copied verbatim (or rendered via `envsubst`) into scaffolded projects by each `bin/scaffold/ts_*.sh` script. This `CLAUDE.md` itself is the exception — see the *Audience* note above.
 
 **Changes here propagate to all TypeScript skeletons on the next scaffold run.**
 
@@ -16,7 +23,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.gitignore` | Node + dist + env patterns |
 | `.vscode/settings.json` | Format-on-save (Prettier), ESLint fix-on-save, workspace TypeScript SDK |
 | `CONTRIBUTING.md` | Branch naming, commit style, and code-style guide template |
-| `.github/workflows/ci.yml` | GitHub Actions CI — three parallel jobs: `type-check` (`tsc --noEmit`), `lint` (`eslint`), `build` (`webpack --mode production`) on push/PR to `main` |
+| `.github/workflows/` | GitHub Actions CI — split per-job workflows: `build.yml`, `lint.yml`, `test.yml`, `type-check.yml` on push/PR to `main` |
+| _(CODEOWNERS, PR template)_ | Sourced from language-agnostic `templates/common/.github/` — copied into every scaffolded project |
 
 ## Editing rules
 

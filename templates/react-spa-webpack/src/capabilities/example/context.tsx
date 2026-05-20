@@ -1,20 +1,10 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import { ApiNoteRepository } from './infrastructure/api-adapter';
+import React, { useMemo } from 'react';
+
 import { useCreateNote, useListNotes } from './application/use-cases';
-import type { NoteCreateDTO, NoteResponseDTO } from './domain/dto';
 import type { NoteRepository } from './domain/ports';
-
-interface NoteContextValue {
-  notes: NoteResponseDTO[];
-  createNote: (dto: NoteCreateDTO) => Promise<NoteResponseDTO | null>;
-  createLoading: boolean;
-  createError: Error | null;
-  listNotes: () => Promise<void>;
-  listLoading: boolean;
-  listError: Error | null;
-}
-
-const NoteContext = createContext<NoteContextValue | null>(null);
+import { ApiNoteRepository } from './infrastructure/api-adapter';
+import { consoleNotifier } from './infrastructure/console-notifier';
+import { NoteContext, type NoteContextValue } from './use-context';
 
 interface NoteProviderProps {
   children: React.ReactNode;
@@ -23,21 +13,24 @@ interface NoteProviderProps {
 
 export function NoteProvider({ children, repository }: NoteProviderProps) {
   const repo = useMemo(() => repository ?? new ApiNoteRepository(), [repository]);
+  const notifier = consoleNotifier;
 
-  const { execute: createNote, loading: createLoading, error: createError } = useCreateNote(repo);
-  const { notes, execute: listNotes, loading: listLoading, error: listError } = useListNotes(repo);
+  const { execute: createNote, loading: createLoading, error: createError } = useCreateNote(repo, notifier);
+  const { notes, execute: listNotes, loading: listLoading, error: listError } = useListNotes(repo, notifier);
 
   const value = useMemo<NoteContextValue>(
-    () => ({ notes, createNote, createLoading, createError, listNotes, listLoading, listError }),
-    [notes, createNote, createLoading, createError, listNotes, listLoading, listError],
+    () => ({
+      notes,
+      createNote,
+      createLoading,
+      createError,
+      listNotes,
+      listLoading,
+      listError,
+      notifier,
+    }),
+    [notes, createNote, createLoading, createError, listNotes, listLoading, listError, notifier],
   );
 
   return <NoteContext.Provider value={value}>{children}</NoteContext.Provider>;
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function useNoteContext(): NoteContextValue {
-  const ctx = useContext(NoteContext);
-  if (!ctx) throw new Error('useNoteContext must be used within NoteProvider');
-  return ctx;
 }

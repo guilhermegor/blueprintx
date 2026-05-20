@@ -36,6 +36,15 @@ jobs:
       - name: Check required fields and scaffold paths
         run: bash bin/ci/validate_meta.sh
 
+  version-sync:
+    name: Version sync — pyproject vs CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert pyproject.toml and blueprintx.sh versions match
+        run: bash bin/ci/check_version_sync.sh
+
   docs-build:
     name: MkDocs build — strict mode
     runs-on: ubuntu-latest

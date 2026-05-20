@@ -43,7 +43,7 @@ poetry run python -m unittest discover -s tests/integration -p "*.py" -v
 ```
 BlueprintX/
 ├── Makefile                        # top-level entry points
-├── run.sh                          # same targets for non-make usage
+├── tasks.sh                        # same targets for non-make usage
 ├── bin/
 │   ├── blueprintx.sh               # interactive menu + mode parsing (--dev, --dry-run, --clean)
 │   ├── preview.sh                  # skeleton structure previews
@@ -55,6 +55,7 @@ BlueprintX/
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold logic
 │       └── ts_react_app.sh            # React SPA (Webpack) scaffold logic
 ├── templates/
+│   ├── common/                     # language-agnostic assets copied into EVERY skeleton (CODEOWNERS, PR template)
 │   ├── python-common/              # shared assets copied into ALL Python skeletons
 │   ├── ts-common/                  # shared assets copied into ALL TypeScript skeletons
 │   ├── ddd-service-native-db/      # DDD skeleton with native DB drivers

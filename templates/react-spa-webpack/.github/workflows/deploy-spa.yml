@@ -1,0 +1,83 @@
+name: Deploy SPA to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pushes the built SPA to the gh-pages branch. Avoids the manual
+# "Settings → Pages → Source = GitHub Actions" toggle required by
+# actions/deploy-pages. The default GITHUB_TOKEN with contents: write
+# is enough to push to the repo's own branch.
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Repository name → SPA basepath. Safe (slug); env-quoted to satisfy
+      # GitHub Actions injection-safety guidelines.
+      REPO_NAME: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # GitHub Pages serves the SPA under /<repo-name>/. Webpack reads
+      # PUBLIC_PATH at build time to set output.publicPath accordingly.
+      - name: Build with GH Pages basepath
+        env:
+          PUBLIC_PATH: /${{ env.REPO_NAME }}/
+        run: npm run build
+
+      # GH Pages serves 404.html for unknown paths; copying index.html
+      # lets the SPA take over and resolve client-side routes.
+      - name: Add SPA 404 fallback
+        run: cp dist/index.html dist/404.html
+
+      # Bypass Jekyll processing; Jekyll otherwise hides files whose names
+      # start with an underscore (some webpack chunks may use that naming).
+      - name: Disable Jekyll on Pages
+        run: touch dist/.nojekyll
+
+      # Prepare the gh-pages working directory. If the branch already exists
+      # on origin, clone it; otherwise initialise a fresh orphan branch on
+      # first deploy.
+      - name: Prepare gh-pages working dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          mkdir -p gh-pages-work
+          cd gh-pages-work
+          REMOTE_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "${REMOTE_URL}" gh-pages > /dev/null; then
+            git clone --branch gh-pages --depth 1 "${REMOTE_URL}" .
+          else
+            git init -b gh-pages
+            git remote add origin "${REMOTE_URL}"
+          fi
+
+      # rsync the freshly built dist/ into the gh-pages working dir.
+      # --delete removes stale assets; --exclude='.git' protects the branch's
+      # own git metadata.
+      - name: Sync dist/ into gh-pages working dir
+        run: rsync -av --delete --exclude='.git' dist/ gh-pages-work/
+
+      - name: Commit and push to gh-pages
+        run: |
+          cd gh-pages-work
+          git add .
+          git diff-index --quiet HEAD -- || git commit -m "deploy: SPA build from ${GITHUB_SHA::7}"
+          git push origin HEAD:gh-pages

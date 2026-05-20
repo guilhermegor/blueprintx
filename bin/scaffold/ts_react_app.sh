@@ -12,6 +12,8 @@ LICENSE_CHOICE="${LICENSE_CHOICE:-MIT}"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SKELETON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/react-spa-webpack"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/ts-common"
+# Language-agnostic assets shared by every skeleton (CODEOWNERS, PR template)
+SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 
@@ -101,11 +103,14 @@ copy_skeleton_files() {
 
     cp -r "$SKELETON_TEMPLATE_ROOT/src/." "$project_path/src"
     cp -r "$SKELETON_TEMPLATE_ROOT/public/." "$project_path/public"
+    mkdir -p "$project_path/tests/e2e"
+    cp -r "$SKELETON_TEMPLATE_ROOT/tests/." "$project_path/tests"
     cp "$SKELETON_TEMPLATE_ROOT/.babelrc" "$project_path/.babelrc"
     cp "$SKELETON_TEMPLATE_ROOT/eslint.config.js" "$project_path/eslint.config.js"
     cp "$SKELETON_TEMPLATE_ROOT/.prettierrc.js" "$project_path/.prettierrc.js"
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.json" "$project_path/tsconfig.json"
     cp "$SKELETON_TEMPLATE_ROOT/webpack.config.js" "$project_path/webpack.config.js"
+    cp "$SKELETON_TEMPLATE_ROOT/lint-staged.config.js" "$project_path/lint-staged.config.js"
 
     print_status "success" "Skeleton files copied"
 }
@@ -196,7 +201,8 @@ copy_common_templates() {
 
     print_status "info" "Applying common TypeScript templates..."
 
-    export PROJECT_NAME PROJECT_DESCRIPTION \
+    PROJECT_LICENSE="${LICENSE_CHOICE}"
+    export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME \
            STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
         < "$COMMON_TEMPLATE_ROOT/package.json" \
@@ -204,11 +210,29 @@ copy_common_templates() {
     envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
         < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
         > "$project_path/CLAUDE.md"
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
+        < "$SKELETON_TEMPLATE_ROOT/README.md" \
+        > "$project_path/README.md"
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
+    cp "$COMMON_TEMPLATE_ROOT/.stylelintrc.json" "$project_path/.stylelintrc.json"
+    cp "$COMMON_TEMPLATE_ROOT/jest.config.cjs" "$project_path/jest.config.cjs"
+    cp "$COMMON_TEMPLATE_ROOT/jest.setup.ts" "$project_path/jest.setup.ts"
+    cp "$COMMON_TEMPLATE_ROOT/playwright.config.ts" "$project_path/playwright.config.ts"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
+    mkdir -p "$project_path/.husky"
+    cp -r "$COMMON_TEMPLATE_ROOT/.husky/." "$project_path/.husky"
+    chmod +x "$project_path/.husky/pre-commit" "$project_path/.husky/pre-push" 2>/dev/null || true
     cp -r "$COMMON_TEMPLATE_ROOT/.vscode/." "$project_path/.vscode"
     cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
+    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
+    cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    # Overlay react-spa-webpack-specific .github contents (e.g. deploy-spa.yml)
+    # on top of the universal ts-common .github. Skeleton overlays win on
+    # name collision; ts-common files survive when the skeleton is silent.
+    if [ -d "$SKELETON_TEMPLATE_ROOT/.github" ]; then
+        cp -r "$SKELETON_TEMPLATE_ROOT/.github/." "$project_path/.github"
+    fi
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
 
     print_status "success" "Common templates applied"
