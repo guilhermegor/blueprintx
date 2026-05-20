@@ -55,6 +55,7 @@ BlueprintX/
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold logic
 │       └── ts_react_app.sh            # React SPA (Webpack) scaffold logic
 ├── templates/
+│   ├── common/                     # language-agnostic assets copied into EVERY skeleton (CODEOWNERS, PR template)
 │   ├── python-common/              # shared assets copied into ALL Python skeletons
 │   ├── ts-common/                  # shared assets copied into ALL TypeScript skeletons
 │   ├── ddd-service-native-db/      # DDD skeleton with native DB drivers
