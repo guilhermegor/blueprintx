@@ -40,6 +40,12 @@ jobs:
       # lets the SPA take over and resolve client-side routes.
       - name: Add SPA 404 fallback
         run: cp dist/index.html dist/404.html
+      # One-time manual setup required before first deploy:
+      # github.com/<owner>/<repo>/settings/pages → Source → "GitHub Actions".
+      # The default GITHUB_TOKEN cannot create a Pages site (Resource not
+      # accessible by integration), even with `pages: write`. This is a
+      # deliberate GitHub restriction; `enablement: true` only works with
+      # a PAT or app token, not the default workflow token.
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -151,6 +151,103 @@ Avoid inline `style={{}}` props except for runtime-computed values
 (percentages from state, computed colors). Even then, prefer a CSS
 custom property set on the element so the styling stays declarative.
 
+## Responsive design — fluid-first
+
+Don't chase per-device pixel-perfection. The browser DevTools device list
+has dozens of presets and grows every year. Match the shape of the
+viewport, not the name of the phone — write **one design that has no
+fixed width**.
+
+### Hierarchy (use the first that solves the problem)
+
+1. **Fluid math** — `clamp(min, preferred, max)`, `min(a, b)`, `max(a, b)`.
+   Continuous interpolation across viewports, **zero breakpoints**.
+2. **Flexbox / Grid auto-fit** — `flex-wrap: wrap`, `grid-template-columns:
+   repeat(auto-fit, minmax(20rem, 1fr))`. The browser handles reflow.
+3. **`overflow-x: auto` on data-dense containers** — tables, code blocks,
+   timelines. Don't try to fit a 64rem table into a 320px screen; let
+   the user scroll horizontally inside a bounded box.
+4. **Media queries** — only when the layout fundamentally **changes**
+   (e.g. sidebar collapses into a hamburger). Not for "tweak a margin."
+
+### Worked examples from this template family
+
+```css
+/* ✅ Fluid: never overflows, no breakpoint */
+.button { min-width: min(24rem, 100%); }
+
+/* ✅ Fluid edge spacing: ~14px on phones, 32px on desktop */
+.content { margin: clamp(1.6rem, 5vw, 3.2rem); }
+
+/* ✅ Fluid type, scales with viewport but bounded */
+.heading { font-size: clamp(2rem, 5vw, 4rem); }
+
+/* ✅ Data table that doesn't reflow — controlled horizontal scroll */
+.tableWrapper { overflow-x: auto; }
+.tableWrapper table { min-width: 64rem; }
+```
+
+### Content-based breakpoints, not device-based
+
+When a media query is genuinely needed, **add it at the width where
+*your content* visually breaks**, not at "iPhone width." Pick the value
+empirically by shrinking the browser and watching when the layout
+fails. Mobile-first (`min-width`) is the recommended convention.
+
+```css
+/* ✅ Mobile-first: base styles target the smallest viewport;
+       media queries widen the layout as space allows. */
+.layout { display: flex; flex-direction: column; }
+
+@media (min-width: 48rem) {
+  /* Tablet+: side-by-side */
+  .layout { flex-direction: row; }
+}
+```
+
+### Custom properties don't work in media-query conditions
+
+**This is the responsive footgun that costs an hour the first time**:
+
+```css
+:root { --bp-md: 48rem; }
+
+/* ❌ Silently does nothing — CSS custom properties cannot be used
+       in media query conditions. The media query is parsed before
+       custom properties resolve. */
+@media (min-width: var(--bp-md)) { /* ... */ }
+
+/* ✅ Use a literal value */
+@media (min-width: 48rem) { /* ... */ }
+```
+
+Workarounds (`@custom-media` via PostCSS, Sass variables) exist but
+aren't part of this template's stack. The honest answer: **breakpoint
+values stay as literal `rem` in media queries**, and you tolerate the
+repetition for the ~2-3 breakpoints a typical SPA needs.
+
+### Test at the extremes
+
+Open DevTools device-mode and check the narrowest viewport you support
+(Galaxy Fold outer ~280px is a stress test) and the widest. Skip the
+38 devices in between — they all fit between those bounds. The two
+manual breakpoints to add to muscle memory:
+
+| Viewport | Why |
+| --- | --- |
+| ~280px (Galaxy Fold outer) | Narrowest realistic phone; catches "min-width too large" bugs |
+| ~1920px (wide desktop) | Catches "max-width too small / content awkwardly stretched" bugs |
+
+If both extremes look reasonable, the in-between sizes will too. Test
+at your own content's breakpoints separately if you have any.
+
+### `<meta name="viewport">` is the prerequisite
+
+Without `<meta name="viewport" content="width=device-width, initial-scale=1">`
+in `public/index.html`, mobile browsers render at a fake 980px and zoom
+out — none of your CSS breakpoints fire. The scaffold ships this tag
+by default; don't remove it.
+
 ## Pages — the contract
 
 A page component sits at the top of a route and is responsible for:
