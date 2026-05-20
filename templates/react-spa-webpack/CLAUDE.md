@@ -24,7 +24,10 @@ The scaffold ships `.github/workflows/deploy-spa.yml`, which on every push
 to `main`:
 
 1. Builds the SPA with `PUBLIC_PATH=/<repo-name>/` so assets resolve under
-   the project-site subpath.
+   the project-site subpath. The same value is inlined into the bundle
+   via webpack's `DefinePlugin` as `process.env.PUBLIC_PATH`, so React
+   code (specifically `<BrowserRouter basename={...}>`) can read it at
+   runtime and route correctly under the subpath.
 2. Adds a `404.html` fallback (copy of `index.html`) so client-side
    routes survive Pages's default 404 behaviour.
 3. Touches `.nojekyll` to bypass Jekyll's underscore-file filtering.
@@ -67,6 +70,34 @@ approaches require the same one-time manual step; the `gh-pages` branch
 approach used here has the advantage that pushes work with the default
 token and the artifact lives in branch history rather than an opaque
 GitHub-managed store.
+
+### Router basename for project sites
+
+Project sites live at `https://<owner>.github.io/<repo>/`. The browser's
+`pathname` includes the `/<repo>/` prefix, but client-side routers (e.g.
+react-router) compare against the raw pathname — so a `<Route path="/">`
+never matches `/<repo>/` and the SPA's own 404 catches every request.
+
+Fix it by passing `basename` to your router. The deploy workflow exposes
+the subpath via `process.env.PUBLIC_PATH` (inlined by `DefinePlugin`);
+strip the trailing slash because react-router rejects it:
+
+```tsx
+// src/routes/MainRouter.tsx
+const basename = (process.env.PUBLIC_PATH || '/').replace(/\/$/, '');
+
+export function MainRouter() {
+  return (
+    <BrowserRouter basename={basename}>
+      {/* routes... */}
+    </BrowserRouter>
+  );
+}
+```
+
+Locally `PUBLIC_PATH` is unset → defaults to `/` → basename becomes `''`
+(react-router's "no prefix"). Under deploy → `PUBLIC_PATH=/<repo>/` →
+basename becomes `/<repo>`. Both environments serve the same code.
 
 ### Custom domain
 

@@ -3,6 +3,7 @@ import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import webpack from 'webpack';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,6 +80,12 @@ export default {
     new HtmlWebpackPlugin({
       template: './public/index.html',
       filename: 'index.html',
+    }),
+    // Inline PUBLIC_PATH into the bundle so React code can read it at
+    // runtime — react-router needs the subpath as `basename` to route
+    // correctly under GitHub Pages's /<repo>/ project-site URL.
+    new webpack.DefinePlugin({
+      'process.env.PUBLIC_PATH': JSON.stringify(publicPath),
     }),
     !isDevelopment && new MiniCssExtractPlugin({ filename: '[name].[contenthash].css' }),
     isDevelopment && new ReactRefreshWebpackPlugin(),
