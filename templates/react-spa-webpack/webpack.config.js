@@ -8,11 +8,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
+// GitHub Pages serves project sites under `/<repo-name>/`. Set
+// PUBLIC_PATH (e.g. via the deploy workflow) to point webpack at the
+// right subpath. Default `/` works for local dev and root-served hosts.
+const publicPath = process.env.PUBLIC_PATH || '/';
+
 export default {
   entry: './src/index.tsx',
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.[contenthash].js',
+    publicPath,
     clean: true,
   },
   devServer: {
@@ -45,6 +51,12 @@ export default {
             loader: 'css-loader',
             options: {
               modules: {
+                // css-loader v7 changed namedExport default to true. The app uses
+                // `import styles from '...'` everywhere, so we opt back into the
+                // default-export shape. Without this, `styles.container` becomes
+                // `undefined.container` at runtime.
+                namedExport: false,
+                exportLocalsConvention: 'as-is',
                 localIdentName: isDevelopment
                   ? '[name]__[local]--[hash:base64:5]'
                   : '[hash:base64]',

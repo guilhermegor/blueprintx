@@ -219,6 +219,12 @@ copy_common_templates() {
     chmod +x "$project_path/.husky/pre-commit" "$project_path/.husky/pre-push" 2>/dev/null || true
     cp -r "$COMMON_TEMPLATE_ROOT/.vscode/." "$project_path/.vscode"
     cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
+    # Overlay react-spa-webpack-specific .github contents (e.g. deploy-spa.yml)
+    # on top of the universal ts-common .github. Skeleton overlays win on
+    # name collision; ts-common files survive when the skeleton is silent.
+    if [ -d "$SKELETON_TEMPLATE_ROOT/.github" ]; then
+        cp -r "$SKELETON_TEMPLATE_ROOT/.github/." "$project_path/.github"
+    fi
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
 
     print_status "success" "Common templates applied"

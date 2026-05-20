@@ -1,0 +1,56 @@
+name: Deploy SPA to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one in-flight deploy at a time; cancel queued ones when a newer commit lands.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Repository name is a structurally safe slug. Pulled into an env var
+      # (not interpolated directly into a shell command) per the workflow
+      # injection-safety guidelines.
+      REPO_NAME: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # GitHub Pages serves the SPA under /<repo-name>/. Webpack reads
+      # PUBLIC_PATH at build time to set output.publicPath accordingly.
+      - name: Build with GH Pages basepath
+        env:
+          PUBLIC_PATH: /${{ env.REPO_NAME }}/
+        run: npm run build
+      # GH Pages serves 404.html for unknown paths; copying index.html
+      # lets the SPA take over and resolve client-side routes.
+      - name: Add SPA 404 fallback
+        run: cp dist/index.html dist/404.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
