@@ -8,7 +8,7 @@ function buildNote(overrides: Partial<NoteResponseDTO> = {}): NoteResponseDTO {
     id: 'n-1',
     title: 'Sample note',
     createdAt: new Date('2026-01-01T00:00:00Z'),
-    status: NoteStatus.Active,
+    status: NoteStatus.Draft,
     ...overrides,
   };
 }
