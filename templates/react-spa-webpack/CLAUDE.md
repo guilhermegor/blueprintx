@@ -18,6 +18,63 @@ npm run type-check # tsc --noEmit — type errors only, no emit
 npm run lint       # ESLint with auto-fix
 ```
 
+## Deployment — GitHub Pages
+
+The scaffold ships `.github/workflows/deploy-spa.yml`, which on every push
+to `main`:
+
+1. Builds the SPA with `PUBLIC_PATH=/<repo-name>/` so assets resolve under
+   the project-site subpath.
+2. Adds a `404.html` fallback (copy of `index.html`) so client-side
+   routes survive Pages's default 404 behaviour.
+3. Touches `.nojekyll` to bypass Jekyll's underscore-file filtering.
+4. Pushes the `dist/` tree to a `gh-pages` branch via the default
+   `GITHUB_TOKEN` (no PAT needed; `contents: write` is enough).
+
+### One-time Pages enablement
+
+**GitHub stopped auto-enabling Pages on `gh-pages` pushes in ~2022.** Even
+though the workflow successfully pushes to `gh-pages` on first deploy,
+the site returns 404 until Pages itself is explicitly enabled for the
+repo. This is a one-time, per-repo step. Pick one:
+
+#### Option A — `gh` CLI (zero clicks)
+
+After your first successful workflow run, run locally:
+
+```bash
+gh api -X POST repos/<owner>/<repo>/pages \
+  -f 'source[branch]=gh-pages' -f 'source[path]=/'
+```
+
+Your local `gh` CLI's token has the `repo` scope that the workflow's
+default `GITHUB_TOKEN` lacks, so this works without a PAT. The site
+goes live at `https://<owner>.github.io/<repo>/` within ~1 minute.
+
+#### Option B — repo Settings UI
+
+Visit `https://github.com/<owner>/<repo>/settings/pages` →
+**Source**: "Deploy from a branch" → **Branch**: `gh-pages` →
+**Folder**: `/ (root)` → **Save**.
+
+### Why not `actions/deploy-pages` (modern approach)?
+
+The newer "Deploy from GitHub Actions" path (using `actions/configure-pages`
++ `actions/upload-pages-artifact` + `actions/deploy-pages`) cannot
+enable Pages on its own either — the default `GITHUB_TOKEN` lacks the
+`administration:write` permission needed to create a Pages site. Both
+approaches require the same one-time manual step; the `gh-pages` branch
+approach used here has the advantage that pushes work with the default
+token and the artifact lives in branch history rather than an opaque
+GitHub-managed store.
+
+### Custom domain
+
+If you set a custom domain, add a `CNAME` file at the repo root of the
+`gh-pages` branch (or via the Pages settings UI), and the workflow's
+`rsync --delete` will preserve it because the action commits to the
+existing branch each run rather than rebuilding it from scratch.
+
 ## Architecture
 
 Features are organised as **capabilities** under `src/capabilities/<feature>/`.
