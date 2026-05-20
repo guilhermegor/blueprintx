@@ -27,6 +27,10 @@ export default {
     port: 3000,
     hot: true,
     open: true,
+    // Serve index.html for any unmatched path so client-side routes
+    // (e.g. /about) survive a direct load or refresh in dev. Production
+    // mirrors this via the deploy workflow's 404.html fallback.
+    historyApiFallback: true,
   },
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],

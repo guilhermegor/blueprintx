@@ -11,19 +11,15 @@ import type { INotifier } from '../domain/ports';
  */
 export const consoleNotifier: INotifier = {
   success: (msg) => {
-    // eslint-disable-next-line no-console
     console.info('[notifier:success]', msg);
   },
   error: (msg) => {
-    // eslint-disable-next-line no-console
     console.error('[notifier:error]', msg);
   },
   warning: (msg) => {
-    // eslint-disable-next-line no-console
     console.warn('[notifier:warning]', msg);
   },
   info: (msg) => {
-    // eslint-disable-next-line no-console
     console.info('[notifier:info]', msg);
   },
   dismiss: () => {

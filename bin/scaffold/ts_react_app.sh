@@ -129,8 +129,10 @@ apply_file_variants() {
             STATE_MANAGEMENT_ANTIPATTERN="Don't create more than one Zustand store per capability — merge new actions into the existing store."
             mv "$application_path/use-cases.zustand.ts" "$application_path/use-cases.ts"
             mv "$capabilities_path/context.zustand.tsx" "$capabilities_path/context.tsx"
+            mv "$capabilities_path/use-context.zustand.ts" "$capabilities_path/use-context.ts"
             rm -f "$application_path/use-cases.rtk.ts" \
-                  "$capabilities_path/context.rtk.tsx"
+                  "$capabilities_path/context.rtk.tsx" \
+                  "$capabilities_path/use-context.rtk.ts"
             ;;
         3)
             STATE_MANAGEMENT_VARIANT="Redux Toolkit"
@@ -138,8 +140,10 @@ apply_file_variants() {
             STATE_MANAGEMENT_ANTIPATTERN="Don't dispatch actions outside of thunks or hooks — keep all side effects inside the RTK layer."
             mv "$application_path/use-cases.rtk.ts" "$application_path/use-cases.ts"
             mv "$capabilities_path/context.rtk.tsx" "$capabilities_path/context.tsx"
+            mv "$capabilities_path/use-context.rtk.ts" "$capabilities_path/use-context.ts"
             rm -f "$application_path/use-cases.zustand.ts" \
-                  "$capabilities_path/context.zustand.tsx"
+                  "$capabilities_path/context.zustand.tsx" \
+                  "$capabilities_path/use-context.zustand.ts"
             ;;
         *)
             STATE_MANAGEMENT_VARIANT="React Context"
@@ -148,7 +152,9 @@ apply_file_variants() {
             rm -f "$application_path/use-cases.zustand.ts" \
                   "$application_path/use-cases.rtk.ts" \
                   "$capabilities_path/context.zustand.tsx" \
-                  "$capabilities_path/context.rtk.tsx"
+                  "$capabilities_path/context.rtk.tsx" \
+                  "$capabilities_path/use-context.zustand.ts" \
+                  "$capabilities_path/use-context.rtk.ts"
             ;;
     esac
 
@@ -260,18 +266,29 @@ apply_branch_protection() {
     read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
     case "$protect_ans" in
         y|Y)
+            # A solo maintainer cannot satisfy a required-approving-review
+            # rule — GitHub forbids self-approval, so the first PR's merge
+            # would be permanently blocked. Ask whether human reviewers will
+            # gate merges, and build the protection payload accordingly.
+            local reviews_json
+            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            case "$reviews_ans" in
+                y|Y)
+                    reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
+                    ;;
+                *)
+                    # Solo: keep status checks + linear history, drop required reviews.
+                    reviews_json='"required_pull_request_reviews": null,'
+                    ;;
+            esac
             if gh api --method PUT \
                 -H "Accept: application/vnd.github+json" \
                 "/repos/$repo/branches/$branch/protection" \
-                --input - <<'EOF'
+                --input - <<EOF
 {
   "required_status_checks": { "strict": true, "contexts": [] },
   "enforce_admins": true,
-  "required_pull_request_reviews": {
-    "dismiss_stale_reviews": true,
-    "require_code_owner_reviews": false,
-    "required_approving_review_count": 1
-  },
+  $reviews_json
   "restrictions": null,
   "allow_force_pushes": false,
   "allow_deletions": false,
@@ -285,6 +302,41 @@ EOF
             fi
             ;;
         *) print_status "info" "Skipped branch protection" ;;
+    esac
+}
+
+prompt_pages_setup() {
+    # GitHub stopped auto-enabling Pages on gh-pages pushes (~2022). The
+    # deploy-spa workflow pushes the build to gh-pages, but the Pages
+    # service stays off — and a fresh deploy 404s — until it's enabled
+    # once. The default GITHUB_TOKEN lacks the permission to do it from
+    # the workflow, so we offer it here using the local gh token.
+    local repo="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
+    local owner="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}"
+
+    if ! command -v gh >/dev/null 2>&1; then
+        return
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        return
+    fi
+    if ! gh repo view "$repo" >/dev/null 2>&1; then
+        return
+    fi
+
+    print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
+    read -r -p "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: " pages_ans || true
+    case "$pages_ans" in
+        y|Y)
+            if gh api --method POST "/repos/$repo/pages" \
+                -f 'source[branch]=gh-pages' -f 'source[path]=/' >/dev/null 2>&1; then
+                print_status "success" "GitHub Pages enabled — live at https://$owner.github.io/${PROJECT_NAME}/ after the first deploy."
+            else
+                print_status "warning" "Could not enable Pages yet — the 'gh-pages' branch must exist first (the deploy workflow creates it on the first push to main)."
+                print_status "info" "After the first deploy, run: gh api -X POST repos/$repo/pages -f 'source[branch]=gh-pages' -f 'source[path]=/'"
+            fi
+            ;;
+        *) print_status "info" "Skipped GitHub Pages setup" ;;
     esac
 }
 
@@ -353,6 +405,7 @@ prompt_git_remote_setup() {
     esac
 
     apply_branch_protection "$project_path"
+    prompt_pages_setup
 }
 
 # ============================================================================

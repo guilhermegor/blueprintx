@@ -19,6 +19,13 @@ export default [
       '**/coverage/**',
       '**/*.config.js',
       '**/*.config.cjs',
+      // Keep in sync with tsconfig.json's `exclude`. The inactive
+      // state-manager variants are excluded from the TS project, so the
+      // type-aware parser cannot lint them — ignore them here too.
+      '**/*.rtk.ts',
+      '**/*.rtk.tsx',
+      '**/*.zustand.ts',
+      '**/*.zustand.tsx',
     ],
   },
 

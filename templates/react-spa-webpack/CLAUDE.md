@@ -12,10 +12,10 @@ BlueprintX using the **react-spa-webpack** skeleton with
 ## Commands
 
 ```bash
-npm run dev        # Webpack dev server with HMR at http://localhost:3000
+npm start          # Webpack dev server with HMR at http://localhost:3000
 npm run build      # Production build → dist/
 npm run type-check # tsc --noEmit — type errors only, no emit
-npm run lint       # ESLint with auto-fix
+npm run lint       # ESLint (run `npm run lint:fix` to apply auto-fixes)
 ```
 
 ## Deployment — GitHub Pages
