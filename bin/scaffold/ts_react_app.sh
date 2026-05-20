@@ -201,7 +201,8 @@ copy_common_templates() {
 
     print_status "info" "Applying common TypeScript templates..."
 
-    export PROJECT_NAME PROJECT_DESCRIPTION \
+    PROJECT_LICENSE="${LICENSE_CHOICE}"
+    export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME \
            STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
         < "$COMMON_TEMPLATE_ROOT/package.json" \
@@ -209,6 +210,9 @@ copy_common_templates() {
     envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
         < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
         > "$project_path/CLAUDE.md"
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
+        < "$SKELETON_TEMPLATE_ROOT/README.md" \
+        > "$project_path/README.md"
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.stylelintrc.json" "$project_path/.stylelintrc.json"

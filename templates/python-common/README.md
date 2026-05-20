@@ -13,42 +13,22 @@ ${PROJECT_DESCRIPTION}
 
 ## ✨ Key Features
 
-### 🌍 Data Extraction
+> Replace these placeholder groups with your project's actual capabilities.
+> Group features by domain or capability — one `###` heading per area.
 
-#### Region A / Domain 1
+### 🧩 Capability Group 1
 - [Feature placeholder 1](${LINK_PLACEHOLDER})
 - [Feature placeholder 2](${LINK_PLACEHOLDER})
 - [Feature placeholder 3](${LINK_PLACEHOLDER})
 
-#### Region B / Domain 2
+### 🧩 Capability Group 2
 - [Feature placeholder 4](${LINK_PLACEHOLDER})
 - [Feature placeholder 5](${LINK_PLACEHOLDER})
 - [Feature placeholder 6](${LINK_PLACEHOLDER})
 
-### 🔄 Data Transformation
-- [Transformation placeholder 1](${LINK_PLACEHOLDER})
-- [Transformation placeholder 2](${LINK_PLACEHOLDER})
-- [Transformation placeholder 3](${LINK_PLACEHOLDER})
-
-### 📥 Data Loading
-- [Loader placeholder 1](${LINK_PLACEHOLDER})
-- [Loader placeholder 2](${LINK_PLACEHOLDER})
-- [Loader placeholder 3](${LINK_PLACEHOLDER})
-
-### 📊 Analytics
-- [Analytics placeholder 1](${LINK_PLACEHOLDER})
-- [Analytics placeholder 2](${LINK_PLACEHOLDER})
-- [Analytics placeholder 3](${LINK_PLACEHOLDER})
-
 ### ⚙️ Utilities
 - [Utility placeholder 1](${LINK_PLACEHOLDER})
 - [Utility placeholder 2](${LINK_PLACEHOLDER})
-- [Utility placeholder 3](${LINK_PLACEHOLDER})
-
-### 🏗️ Data Structures & Algorithms
-- [DSA placeholder 1](${LINK_PLACEHOLDER})
-- [DSA placeholder 2](${LINK_PLACEHOLDER})
-- [DSA placeholder 3](${LINK_PLACEHOLDER})
 
 ## 🚀 Getting Started
 
