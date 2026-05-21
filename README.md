@@ -11,10 +11,11 @@
 
 ## ✨ Highlights
 - Interactive CLI (`make new`) with auto-discovered language and skeleton menus
-- **Python skeletons**: **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, and **lib-minimal**
+- **Python skeletons**: **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, **MVC service (Native DB)**, **MVC service (ORM DB)**, and **lib-minimal**
 - **TypeScript skeletons**: **React SPA (Webpack)** — React 19 + TypeScript + Webpack 5 + Babel + ESLint + Prettier
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders
 - Common TypeScript baseline: `package.json` with pinned deps, `.gitignore`, VS Code settings, `CONTRIBUTING.md`, GitHub Actions CI (type-check + lint + build)
+- **Offline git-diff sync**: when you scaffold a project without connecting it to GitHub, BlueprintX adds a `git_diff_export` / `git_diff_check` / `git_diff_apply` workflow for moving changes between machines via patch files (e.g. email) — no GitHub required
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 - **Extensible by design**: drop a `skeleton.meta` file into any `templates/` directory and it appears in the menu automatically
 
@@ -205,6 +206,40 @@ project/
     ... (same structure as native-db)
 ```
 
+### MVC service — Native DB (templates/mvc-service-native-db)
+Layered **Model–View–Controller** skeleton for script/pipeline-style projects, using **native database drivers** (sqlite3, psycopg, mysql-connector, pyodbc, oracledb). The controller (`src/controller/main.py`) is a script-style, top-to-bottom pipeline that wires config → model → view. The model returns pandas DataFrames; the view renders them (e.g. `RenderToExcel`). Flatter than DDD — ideal for data/analytics pipelines and reports. Tests use pytest.
+
+```
+project/
+    src/
+        controller/main.py    # script-style entry-point: config → model → view
+        model/
+            conexao_db.py     # build_connection() — native DB-API connection factory
+            example_entity.py # service-style class: SQL in, pandas DataFrame out
+        view/report_renderer.py  # RenderToExcel — DataFrame → .xlsx
+        utils/                # project helpers (calendars/parsers come from stpstone)
+        config/               # startup.py singletons + YAML (shared with DDD skeletons)
+    tests/{unit,integration,performance}/
+    bin/ · data/ · assets/ · docs/
+    .env · pyproject.toml · ruff.toml · pytest.ini
+```
+
+### MVC service — ORM DB (templates/mvc-service-orm-db)
+Same flat MVC structure, but the model uses the **SQLAlchemy ORM (≥ 2.0)** — `build_engine()` / `build_session_factory()`, declarative models, and `pd.read_sql` reads. Works with PostgreSQL, MySQL, SQLite, Oracle, and MSSQL.
+
+```
+project/
+    src/
+        controller/main.py
+        model/
+            conexao_db.py     # build_engine() / build_session_factory()
+            example_entity.py # DeclarativeBase + ORM model + service class
+        view/report_renderer.py
+        utils/ · config/
+    tests/{unit,integration,performance}/
+    ... (same structure as native-db)
+```
+
 ### lib-minimal
 Lean library starter: package under `src/<project_name>/`, tests, CI, VS Code config, and pre-commit ready to go.
 
@@ -261,6 +296,18 @@ project/
 
 After scaffolding, run `npm install && npm start` to launch the dev server on `http://localhost:3000`.
 
+## 🔁 Offline git-diff sync
+
+When you scaffold a project and **decline** connecting it to a GitHub remote, BlueprintX adds a small offline-sync workflow so you can move changes between machines as patch files (e.g. attach to an email) — useful in restricted/air-gapped environments. It is **only** added in this no-GitHub case; projects pushed to GitHub stay clean.
+
+| Command (Python: `make` / TypeScript: `npm run`) | Action |
+|---------------------------------------------------|--------|
+| `git_diff_export` (`git:diff:export`) | Export commits in `DIFF_RANGE` (default `main..HEAD`) to a dated `git_diffs/<branch>_<timestamp>.diff` |
+| `git_diff_check FILE=<path>` (`git:diff:check`) | Check whether a `.diff` applies cleanly — no changes made |
+| `git_diff_apply FILE=<path>` (`git:diff:apply`) | Apply a `.diff` to the working tree (does **not** stage or commit — you review and commit yourself) |
+
+Cross-platform (Windows Git Bash, macOS, Linux); the scripts live in `bin/` and source a shared `bin/lib/common.sh` status helper.
+
 ## 🧭 Folder attribution (ddd-service templates)
 - `chassis/`: shared cross-cutting providers (DB handlers, storage, type enforcement).
 - `chassis/db/`: `DatabaseHandler` ABC — contract all backends implement.
@@ -285,16 +332,26 @@ BlueprintX/
 │   ├── help.sh              # usage tips and targets
 │   ├── init_venv.sh         # convenience venv bootstrap
 │   └── scaffold/            # per-skeleton scaffolders
-│       ├── python_ddd_service.sh      # native DB scaffold
-│       ├── python_ddd_service_orm.sh  # SQLAlchemy ORM scaffold
+│       ├── python_ddd_service.sh      # DDD native DB scaffold
+│       ├── python_ddd_service_orm.sh  # DDD SQLAlchemy ORM scaffold
+│       ├── python_mvc_service.sh      # MVC native DB scaffold
+│       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold
 │       └── ts_react_app.sh            # React SPA (Webpack) scaffold
 ├── templates/               # skeleton contents + discovery metadata
+│   ├── common/                 # language-agnostic shared assets (CODEOWNERS, PR template,
+│   │   │                       #   bin/ git-diff scripts + lib/common.sh, make/git_diff.mk)
+│   │   ├── bin/
+│   │   └── make/
 │   ├── python-common/          # shared assets for all Python skeletons
 │   ├── ts-common/              # shared assets for all TypeScript skeletons
 │   ├── ddd-service-native-db/  # DDD/hexagonal with native DB libraries
 │   │   └── skeleton.meta
 │   ├── ddd-service-orm-db/     # DDD/hexagonal with SQLAlchemy ORM
+│   │   └── skeleton.meta
+│   ├── mvc-service-native-db/  # layered MVC with native DB drivers
+│   │   └── skeleton.meta
+│   ├── mvc-service-orm-db/     # layered MVC with SQLAlchemy ORM
 │   │   └── skeleton.meta
 │   ├── lib-minimal/            # minimal library template
 │   │   └── skeleton.meta

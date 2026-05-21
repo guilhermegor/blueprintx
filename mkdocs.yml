@@ -16,6 +16,10 @@ nav:
           - Example - Usage with SQLAlchemy: py-examples-orm/ddd-orm-usage-examples.md
           - Example - External API Calls: py-examples-orm/ddd-orm-external-api.md
           - Example - Bank Balance Alert: py-examples-orm/ddd-orm-bank-balance-alert.md
+      - MVC Service (Native DB):
+          - Overview: py-mvc-service-native-db.md
+      - MVC Service (ORM DB):
+          - Overview: py-mvc-service-orm-db.md
       - Lib Minimal: py-lib-minimal.md
   - TypeScript:
       - React SPA (Webpack): ts-react-spa-webpack.md

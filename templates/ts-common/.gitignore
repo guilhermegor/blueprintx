@@ -1,5 +1,9 @@
 node_modules/
 dist/
+
+# Git-diff offline-sync exports (present only when scaffolded without GitHub)
+/git_diffs/
+
 .env
 .env.local
 *.log

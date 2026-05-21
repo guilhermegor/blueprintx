@@ -13,6 +13,8 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `get-started.md` | Utility page | Installation and first-run instructions, requirements, key highlights |
 | `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
+| `py-mvc-service-native-db.md` | Skeleton overview | Layered MVC scaffold using native DB drivers (script/pipeline style) |
+| `py-mvc-service-orm-db.md` | Skeleton overview | Layered MVC scaffold using SQLAlchemy ORM (script/pipeline style) |
 | `py-lib-minimal.md` | Skeleton overview | Lean Python library starter with packaging, tests, and CI |
 | `ts-react-spa-webpack.md` | Skeleton overview | React 19 + TypeScript 5 + Webpack 5 SPA skeleton |
 | `py-examples/ddd-usage-examples.md` | Example walkthrough | Wiring DDD layers end-to-end; FastAPI integration; swapping implementations |

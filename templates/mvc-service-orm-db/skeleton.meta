@@ -1,0 +1,4 @@
+language=python
+display_name=MVC Service (ORM)
+description=Layered MVC service with SQLAlchemy ORM (PostgreSQL, MySQL, SQLite, Oracle, MSSQL)
+scaffold=bin/scaffold/python_mvc_service_orm.sh

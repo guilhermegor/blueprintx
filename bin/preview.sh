@@ -17,6 +17,8 @@ show_languages() {
     print_status "config" "Skeletons:"
     print_status "config" "  * ddd-service-native-db (native DB libraries)"
     print_status "config" "  * ddd-service-orm-db (SQLAlchemy ORM)"
+    print_status "config" "  * mvc-service-native-db (layered MVC, native DB libraries)"
+    print_status "config" "  * mvc-service-orm-db (layered MVC, SQLAlchemy ORM)"
     print_status "config" "  * lib-minimal"
     print_status "info" "Common Python assets applied to all skeletons:"
     print_status "config" "  * pyproject.toml (name from prompt, version 0.0.1 default, optional description)"
@@ -117,6 +119,72 @@ show_orm_service() {
 EOF
 }
 
+show_mvc_native() {
+    echo
+    print_section "mvc-service-native-db skeleton"
+
+    print_status "info" "Description:"
+    print_status "config" "Layered Model-View-Controller structure for script/pipeline projects,"
+    print_status "config" "using native DB drivers. Flatter than DDD; model returns pandas DataFrames."
+    echo
+    print_status "info" "Example structure:"
+    cat << 'EOF'
+  project/
+    src/
+      controller/
+        main.py           # script-style: config -> model -> view
+      model/
+        conexao_db.py     # build_connection() — native DB-API factory
+        example_entity.py # SQL in, pandas DataFrame out
+      view/
+        report_renderer.py  # RenderToExcel — DataFrame -> .xlsx
+      utils/
+      config/             # startup.py singletons + YAML (shared with DDD)
+    tests/
+      integration/
+      performance/
+      unit/
+    bin/
+    data/
+    assets/
+    docs/
+    ... (same common files as the other Python skeletons)
+EOF
+}
+
+show_mvc_orm() {
+    echo
+    print_section "mvc-service-orm-db skeleton"
+
+    print_status "info" "Description:"
+    print_status "config" "Same layered MVC structure as native-db, but the model uses the"
+    print_status "config" "SQLAlchemy ORM. Supports PostgreSQL, MySQL, SQLite, Oracle, MSSQL."
+    echo
+    print_status "info" "Key differences from mvc native-db:"
+    print_status "config" "  - build_engine() / build_session_factory() instead of raw connection"
+    print_status "config" "  - DeclarativeBase + ORM models; reads via pd.read_sql"
+    echo
+    print_status "info" "Example structure:"
+    cat << 'EOF'
+  project/
+    src/
+      controller/
+        main.py
+      model/
+        conexao_db.py     # build_engine() / build_session_factory()
+        example_entity.py # DeclarativeBase + ORM model + service class
+      view/
+        report_renderer.py
+      utils/
+      config/
+    tests/
+      integration/
+      performance/
+      unit/
+    ... (same common files as native-db)
+EOF
+}
+
 show_lib_minimal() {
     echo
     print_section "lib-minimal skeleton"
@@ -160,6 +228,8 @@ main() {
     show_languages
     show_hex_service
     show_orm_service
+    show_mvc_native
+    show_mvc_orm
     show_lib_minimal
     echo
     print_status "success" "Preview complete."

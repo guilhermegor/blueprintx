@@ -408,6 +408,39 @@ prompt_git_remote_setup() {
     prompt_pages_setup
 }
 
+apply_offline_mode() {
+    local project_path="$1"
+
+    print_status "info" "No GitHub remote connected — switching to offline mode"
+    # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
+    # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
+    rm -rf "$project_path/.github"
+    print_status "info" "Removed .github (GitHub-only assets)"
+    mkdir -p "$project_path/bin/lib"
+    cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_apply.sh" "$project_path/bin/git_diff_apply.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_check.sh" "$project_path/bin/git_diff_check.sh"
+    chmod +x "$project_path/bin/git_diff_export.sh" \
+        "$project_path/bin/git_diff_apply.sh" \
+        "$project_path/bin/git_diff_check.sh"
+    mkdir -p "$project_path/git_diffs"
+    touch "$project_path/git_diffs/.keep"
+    python3 -c "
+import json
+with open('$project_path/package.json') as f:
+    pkg = json.load(f)
+pkg.setdefault('scripts', {})
+pkg['scripts']['git:diff:export'] = 'bash bin/git_diff_export.sh'
+pkg['scripts']['git:diff:check'] = 'bash bin/git_diff_check.sh'
+pkg['scripts']['git:diff:apply'] = 'bash bin/git_diff_apply.sh'
+with open('$project_path/package.json', 'w') as f:
+    json.dump(pkg, f, indent=2)
+    f.write('\n')
+"
+    print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
+}
+
 # ============================================================================
 # MAIN
 # ============================================================================
@@ -428,6 +461,13 @@ main() {
     copy_common_templates "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
+
+    # When the project is not connected to a GitHub remote (no upstream tracking
+    # branch after setup), switch to offline mode: drop GitHub-only assets and
+    # ship the git-diff sync workflow instead.
+    if ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        apply_offline_mode "$PROJECT_PATH"
+    fi
 
     print_status "success" "React SPA scaffold complete!"
     print_status "info" "Project path: $PROJECT_PATH"
