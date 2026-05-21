@@ -55,6 +55,14 @@ PATH_JSON: Path = _folder / YAML_OUTPUTS["path_json"].format(
 	_dt_run.strftime("%Y%m%d"),
 	_dt_run_time.strftime("%H%M%S"),
 )
+PATH_REPORT: Path = Path(YAML_OUTPUTS["report_folder"]) / YAML_OUTPUTS["path_report"].format(
+	ENVIRONMENT,
+	APP_NAME,
+	USER,
+	HOSTNAME,
+	_dt_run.strftime("%Y%m%d"),
+	_dt_run_time.strftime("%H%M%S"),
+)
 
 DIR_PARENT = str(_folder)
 cls_dir_files_management.mk_new_directory(DIR_PARENT)
