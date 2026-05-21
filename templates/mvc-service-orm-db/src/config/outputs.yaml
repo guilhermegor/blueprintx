@@ -1,5 +1,7 @@
-folder: "logs"
-report_folder: "data"
-path_log: "log-{}_{}_{}_{}_{}_{}.log"
-path_json: "{}_{}_{}_{}_{}_{}.json"
-path_report: "report-{}_{}_{}_{}_{}_{}.xlsx"
+# Output path templates. The per-machine base directory is set via OUTPUT_DIR in
+# .env; outputs land under <OUTPUT_DIR>/<daily_subfolder>/<YYYY-MM-DD>/.
+# Filename templates take, in order: app-name (kebab), user, YYYYMMDD, HHMMSS.
+daily_subfolder: "daily_infos"
+path_log: "log-{}_{}_{}_{}.txt"
+path_json: "{}_{}_{}_{}.json"
+path_report: "{}_{}_{}_{}.xlsx"

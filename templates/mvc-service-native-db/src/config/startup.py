@@ -37,34 +37,26 @@ CLS_MS_TEAMS = WebhookTeams(YAML_WEBHOOKS["ms_teams"]["url"])
 
 _dt_run = cls_dates_br.curr_date()
 _dt_run_time = cls_dates_br.curr_time()
-_folder = Path(YAML_OUTPUTS["folder"])
+_str_date = _dt_run.strftime("%Y%m%d")
+_str_time = _dt_run_time.strftime("%H%M%S")
 
-PATH_LOG: Path = _folder / YAML_OUTPUTS["path_log"].format(
-	ENVIRONMENT,
-	APP_NAME,
-	USER,
-	HOSTNAME,
-	_dt_run.strftime("%Y%m%d"),
-	_dt_run_time.strftime("%H%M%S"),
+# Base output dir is per-machine (relative, absolute POSIX, or Windows UNC) and is read
+# from .env so the same code runs on macOS, Linux, and Windows. Outputs are partitioned
+# into a daily subfolder: <OUTPUT_DIR>/<daily_subfolder>/<YYYY-MM-DD>/.
+_path_output_dir = Path(os.getenv("OUTPUT_DIR", "logs"))
+_path_daily = _path_output_dir / YAML_OUTPUTS["daily_subfolder"] / _dt_run.strftime("%Y-%m-%d")
+
+PATH_LOG: Path = _path_daily / YAML_OUTPUTS["path_log"].format(
+	APP_NAME, USER, _str_date, _str_time
 )
-PATH_JSON: Path = _folder / YAML_OUTPUTS["path_json"].format(
-	ENVIRONMENT,
-	APP_NAME,
-	USER,
-	HOSTNAME,
-	_dt_run.strftime("%Y%m%d"),
-	_dt_run_time.strftime("%H%M%S"),
+PATH_JSON: Path = _path_daily / YAML_OUTPUTS["path_json"].format(
+	APP_NAME, USER, _str_date, _str_time
 )
-PATH_REPORT: Path = Path(YAML_OUTPUTS["report_folder"]) / YAML_OUTPUTS["path_report"].format(
-	ENVIRONMENT,
-	APP_NAME,
-	USER,
-	HOSTNAME,
-	_dt_run.strftime("%Y%m%d"),
-	_dt_run_time.strftime("%H%M%S"),
+PATH_REPORT: Path = _path_daily / YAML_OUTPUTS["path_report"].format(
+	APP_NAME, USER, _str_date, _str_time
 )
 
-DIR_PARENT = str(_folder)
+DIR_PARENT = str(_path_daily)
 cls_dir_files_management.mk_new_directory(DIR_PARENT)
 LOGGER = cls_create_log.basic_conf(complete_path=str(PATH_LOG), basic_level="info")
 
