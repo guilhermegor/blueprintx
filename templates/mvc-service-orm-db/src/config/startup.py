@@ -40,11 +40,10 @@ _dt_run_time = cls_dates_br.curr_time()
 _str_date = _dt_run.strftime("%Y%m%d")
 _str_time = _dt_run_time.strftime("%H%M%S")
 
-# Base output dir comes from outputs.yaml (relative, absolute POSIX, or Windows UNC);
-# pathlib handles separators so the same code runs on macOS, Linux, and Windows. Outputs
-# are partitioned into a daily subfolder: <output_dir>/<daily_subfolder>/<YYYY-MM-DD>/.
-_path_output_dir = Path(YAML_OUTPUTS["output_dir"])
-_path_daily = _path_output_dir / YAML_OUTPUTS["daily_subfolder"] / _dt_run.strftime("%Y-%m-%d")
+# Single output root from outputs.yaml (relative, absolute POSIX, or Windows UNC);
+# pathlib handles separators so the same code runs on macOS, Linux, and Windows. Runs
+# are partitioned by date: <output_dir>/<YYYY-MM-DD>/.
+_path_daily = Path(YAML_OUTPUTS["output_dir"]) / _dt_run.strftime("%Y-%m-%d")
 
 PATH_LOG: Path = _path_daily / YAML_OUTPUTS["path_log"].format(
 	APP_NAME, USER, _str_date, _str_time
