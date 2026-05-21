@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/py-lib-minimal/">
+        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/py-mvc-service-orm-db/">
       
       
-        <link rel="prev" href="../py-mvc-service-orm-db/">
+        <link rel="prev" href="../py-mvc-service-native-db/">
       
       
-        <link rel="next" href="../ts-react-spa-webpack/">
+        <link rel="next" href="../py-lib-minimal/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Lib Minimal - BlueprintX</title>
+        <title>Overview - BlueprintX</title>
       
     
     
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#lib-minimal-library-starter" class="md-skip">
+        <a href="#mvc-service-orm-db" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Lib Minimal
+              Overview
             
           </span>
         </div>
@@ -777,18 +777,20 @@
                 
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" checked>
         
           
           <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
@@ -809,7 +811,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -819,42 +821,6 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../py-mvc-service-orm-db/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
             
               
                 
@@ -879,7 +845,7 @@
   <span class="md-ellipsis">
     
   
-    Lib Minimal
+    Overview
   
 
     
@@ -897,7 +863,7 @@
   <span class="md-ellipsis">
     
   
-    Lib Minimal
+    Overview
   
 
     
@@ -923,6 +889,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#key-differences-vs-mvc-service-native-db" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔑 Key differences vs MVC Service (Native DB)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#expected-layout-after-scaffold" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -937,7 +914,7 @@
   <a href="#folder-descriptions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📁 Folder Descriptions
+        📁 Folder descriptions
       
     </span>
   </a>
@@ -945,10 +922,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#starting-point" class="md-nav__link">
+  <a href="#layers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🚀 Starting point
+        🧱 Layers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🧱 Layers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-srcmodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model (src/model)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#view-srcview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        View (src/view)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#controller-srccontroller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller (src/controller)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#session-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔄 Session lifecycle
       
     </span>
   </a>
@@ -956,10 +983,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#tooling-inherited-from-python-common" class="md-nav__link">
+  <a href="#rules-of-thumb" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🛠️ Tooling (inherited from python-common)
+        📏 Rules of thumb
       
     </span>
   </a>
@@ -967,21 +994,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#typical-workflow" class="md-nav__link">
+  <a href="#database-backends" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔄 Typical workflow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#example-feature-addition" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        💡 Example feature addition
+        🔌 Database backends
       
     </span>
   </a>
@@ -992,6 +1008,42 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-lib-minimal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lib Minimal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1113,6 +1165,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#key-differences-vs-mvc-service-native-db" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔑 Key differences vs MVC Service (Native DB)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#expected-layout-after-scaffold" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1127,7 +1190,7 @@
   <a href="#folder-descriptions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📁 Folder Descriptions
+        📁 Folder descriptions
       
     </span>
   </a>
@@ -1135,10 +1198,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#starting-point" class="md-nav__link">
+  <a href="#layers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🚀 Starting point
+        🧱 Layers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🧱 Layers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-srcmodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model (src/model)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#view-srcview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        View (src/view)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#controller-srccontroller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller (src/controller)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#session-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔄 Session lifecycle
       
     </span>
   </a>
@@ -1146,10 +1259,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#tooling-inherited-from-python-common" class="md-nav__link">
+  <a href="#rules-of-thumb" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🛠️ Tooling (inherited from python-common)
+        📏 Rules of thumb
       
     </span>
   </a>
@@ -1157,21 +1270,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#typical-workflow" class="md-nav__link">
+  <a href="#database-backends" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔄 Typical workflow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#example-feature-addition" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        💡 Example feature addition
+        🔌 Database backends
       
     </span>
   </a>
@@ -1198,187 +1300,194 @@
   
 
 
-<h1 id="lib-minimal-library-starter"><strong>Lib Minimal (library starter)</strong><a class="headerlink" href="#lib-minimal-library-starter" title="Permanent link">&para;</a></h1>
-<p>A lean Python library skeleton with packaging, testing, CI, and editor settings ready to go. No DDD structure, no database wiring — just a clean package layout so you can focus on writing library code from the first commit.</p>
-<p>Shared tooling (Ruff, pre-commit, pytest.ini, GitHub Actions CI, Makefile, <code>bin/</code> helpers, VS Code config) comes from <code>templates/python-common</code> and is copied verbatim at scaffold time.</p>
+<h1 id="mvc-service-orm-db"><strong>MVC Service (ORM DB)</strong><a class="headerlink" href="#mvc-service-orm-db" title="Permanent link">&para;</a></h1>
+<p>A layered <strong>Model–View–Controller</strong> service skeleton for script/pipeline-style Python projects, using the <strong>SQLAlchemy ORM (≥ 2.0)</strong>. The controller reads top-to-bottom and wires the layers; the model declares mapped classes, opens sessions, and shapes query results into pandas DataFrames via <code>pd.read_sql</code>; the view renders output. Works with PostgreSQL, MySQL, SQLite, Oracle, and MSSQL.</p>
+<p>Shared tooling (Ruff, pre-commit, pytest.ini, GitHub Actions CI, Makefile, <code>bin/</code> helpers, VS Code config) comes from <code>templates/python-common</code> and is copied verbatim at scaffold time. The <code>config/</code> bundle (logger, MS Teams webhook, runtime singletons + YAML) is shared with the DDD skeletons.</p>
+<hr />
+<h2 id="key-differences-vs-mvc-service-native-db">🔑 Key differences vs MVC Service (Native DB)<a class="headerlink" href="#key-differences-vs-mvc-service-native-db" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>MVC Native DB</th>
+<th>MVC ORM DB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data access</td>
+<td>Raw DB-API connection + cursor SQL</td>
+<td>SQLAlchemy <code>Engine</code> + <code>sessionmaker</code> + ORM models</td>
+</tr>
+<tr>
+<td>Reads</td>
+<td><code>cursor.fetchall()</code> → <code>pd.DataFrame.from_records</code></td>
+<td><code>pd.read_sql(select(...))</code></td>
+</tr>
+<tr>
+<td>Writes</td>
+<td><code>cursor.execute(INSERT ...)</code></td>
+<td><code>session.add(...)</code> + <code>commit()</code></td>
+</tr>
+<tr>
+<td>Dependencies</td>
+<td>native drivers (psycopg, pyodbc, …)</td>
+<td><code>sqlalchemy&gt;=2.0</code></td>
+</tr>
+<tr>
+<td>Schema</td>
+<td>hand-written SQL</td>
+<td>declarative mapped classes</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="expected-layout-after-scaffold">🗂️ Expected layout (after scaffold)<a class="headerlink" href="#expected-layout-after-scaffold" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>project/
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>src/&lt;project_name&gt;/
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>__init__.py
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>main.py<span class="w">               </span><span class="c1"># single entry-point; rename or split as the lib grows</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>tests/
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>unit/test_main.py
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>integration/
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>performance/
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span>bin/<span class="w">                    </span><span class="c1"># shell helpers called by the Makefile</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span>container/
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>assets/
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>data/
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>docs/
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>.github/workflows/tests.yaml
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>.env
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>pyproject.toml
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>README.md
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>ruff.toml
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>pytest.ini
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>.pre-commit-config.yaml
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>src/
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>controller/
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">      </span>main.py<span class="w">            </span><span class="c1"># script-style entry-point: config → model → view</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>model/
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span>conexao_db.py<span class="w">      </span><span class="c1"># build_engine() / build_session_factory() — SQLAlchemy factories</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span>example_entity.py<span class="w">  </span><span class="c1"># DeclarativeBase + ORM model + service class (Session → DataFrame)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>view/
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span>report_renderer.py<span class="w"> </span><span class="c1"># RenderToExcel — DataFrame → .xlsx</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span>utils/
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span>__init__.py<span class="w">        </span><span class="c1"># project-specific helpers; shared utilities come from stpstone</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>config/
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span>startup.py<span class="w">         </span><span class="c1"># logger, MS Teams webhook, runtime constants (singletons)</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">      </span>inputs.yaml<span class="w"> </span>·<span class="w"> </span>outputs.yaml<span class="w"> </span>·<span class="w"> </span>webhooks.yaml<span class="w"> </span>·<span class="w"> </span>emails.yaml
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">      </span>signatures/<span class="w"> </span>·<span class="w"> </span>queries/
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>tests/<span class="o">{</span>unit,integration,performance<span class="o">}</span>/
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>bin/<span class="w">                   </span><span class="c1"># shell helpers called by the Makefile</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>data/<span class="w"> </span>·<span class="w"> </span>assets/<span class="w"> </span>·<span class="w"> </span>docs/
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>.github/workflows/tests.yaml
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>.env<span class="w"> </span>·<span class="w"> </span>pyproject.toml<span class="w"> </span>·<span class="w"> </span>ruff.toml<span class="w"> </span>·<span class="w"> </span>pytest.ini<span class="w"> </span>·<span class="w"> </span>.pre-commit-config.yaml
 </span></code></pre></div>
 <hr />
-<h2 id="folder-descriptions">📁 Folder Descriptions<a class="headerlink" href="#folder-descriptions" title="Permanent link">&para;</a></h2>
+<h2 id="folder-descriptions">📁 Folder descriptions<a class="headerlink" href="#folder-descriptions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
 <th>Folder</th>
 <th>Purpose</th>
-<th>Expected Content</th>
+<th>Expected content</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>src/&lt;project_name&gt;/</code></td>
-<td>Library source code</td>
-<td>Python modules, classes, functions — your library's public API</td>
+<td><code>src/controller/</code></td>
+<td>Orchestration</td>
+<td><code>main.py</code> — script-style pipeline wiring config, model, and view</td>
 </tr>
 <tr>
-<td><code>tests/unit/</code></td>
-<td>Unit tests</td>
-<td>Fast, isolated tests for individual functions and classes</td>
+<td><code>src/model/</code></td>
+<td>Data access</td>
+<td>ORM models + service classes; <code>conexao_db.py</code> engine/session factory; returns DataFrames</td>
 </tr>
 <tr>
-<td><code>tests/integration/</code></td>
-<td>Integration tests</td>
-<td>Tests with external dependencies (databases, APIs, file systems)</td>
+<td><code>src/view/</code></td>
+<td>Output rendering</td>
+<td>Renderers (Excel/JSON/HTML/console) — no DB, no business logic</td>
 </tr>
 <tr>
-<td><code>tests/performance/</code></td>
-<td>Performance tests</td>
-<td>Benchmarks, load tests, memory profiling</td>
+<td><code>src/utils/</code></td>
+<td>Project helpers</td>
+<td>Calendars/parsers/dates come from the <code>stpstone</code> dependency</td>
+</tr>
+<tr>
+<td><code>src/config/</code></td>
+<td>Runtime config</td>
+<td><code>startup.py</code> singletons + YAML config; secrets in <code>.env</code></td>
+</tr>
+<tr>
+<td><code>tests/{unit,integration,performance}/</code></td>
+<td>Tests</td>
+<td>pytest, mirrors <code>src/</code></td>
 </tr>
 <tr>
 <td><code>bin/</code></td>
 <td>Shell helpers</td>
-<td>Entry-point scripts called by the <code>Makefile</code>; keeps recipes thin</td>
-</tr>
-<tr>
-<td><code>assets/</code></td>
-<td>Static resources</td>
-<td>Images, icons, fonts, static files bundled with the library</td>
-</tr>
-<tr>
-<td><code>data/</code></td>
-<td>Data storage</td>
-<td>SQLite databases, CSV files, JSON fixtures, seed data</td>
-</tr>
-<tr>
-<td><code>docs/</code></td>
-<td>Documentation</td>
-<td>API reference, tutorials, user guides (starter <code>index.md</code> created)</td>
-</tr>
-<tr>
-<td><code>container/</code></td>
-<td>Container configuration</td>
-<td>Dockerfile, docker-compose.yaml for containerised environments</td>
-</tr>
-<tr>
-<td><code>.github/workflows/</code></td>
-<td>CI/CD pipelines</td>
-<td>GitHub Actions for tests, linting, publishing to PyPI</td>
+<td>Entry-point scripts called by the <code>Makefile</code></td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="starting-point">🚀 Starting point<a class="headerlink" href="#starting-point" title="Permanent link">&para;</a></h2>
-<p>The generated <code>main.py</code> contains one bare function — the intended starting point for the library's public API or CLI entry point:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># src/&lt;project_name&gt;/main.py</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Hello from lib-minimal!&quot;</span><span class="p">)</span>
+<h2 id="layers">🧱 Layers<a class="headerlink" href="#layers" title="Permanent link">&para;</a></h2>
+<h3 id="model-srcmodel">Model (<code>src/model</code>)<a class="headerlink" href="#model-srcmodel" title="Permanent link">&para;</a></h3>
+<p><strong>What goes here:</strong> A <code>DeclarativeBase</code>, ORM-mapped classes, and a service class that opens sessions for writes and uses <code>pd.read_sql</code> for reads.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># model/example_entity.py</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">Base</span><span class="p">(</span><span class="n">DeclarativeBase</span><span class="p">):</span> <span class="o">...</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">ExampleRecord</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;example&quot;</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">autoincrement</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">title</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">class</span><span class="w"> </span><span class="nc">ExampleEntity</span><span class="p">:</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cls_engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">cls_engine</span> <span class="o">=</span> <span class="n">cls_engine</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_session_factory</span> <span class="o">=</span> <span class="n">sessionmaker</span><span class="p">(</span><span class="n">bind</span><span class="o">=</span><span class="n">cls_engine</span><span class="p">,</span> <span class="n">expire_on_commit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">fetch_all</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">cls_engine</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">cls_conn</span><span class="p">:</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>            <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_sql</span><span class="p">(</span><span class="n">select</span><span class="p">(</span><span class="n">ExampleRecord</span><span class="p">),</span> <span class="n">cls_conn</span><span class="p">)</span>
 </span></code></pre></div>
-<p>The generated <code>tests/unit/test_main.py</code> asserts that this output appears using <code>unittest</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># tests/unit/test_main.py</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kn">from</span><span class="w"> </span><span class="o">&lt;</span><span class="n">project_name</span><span class="o">&gt;.</span><span class="n">main</span> <span class="kn">import</span><span class="w"> </span><span class="nn">main</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestMain</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_main_prints_hello</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="n">cls_buffer</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">cls_buffer</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>        <span class="n">main</span><span class="p">()</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">__stdout__</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">assertIn</span><span class="p">(</span><span class="s2">&quot;Hello&quot;</span><span class="p">,</span> <span class="n">cls_buffer</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
+<h3 id="view-srcview">View (<code>src/view</code>)<a class="headerlink" href="#view-srcview" title="Permanent link">&para;</a></h3>
+<p><strong>What goes here:</strong> Output rendering only — identical to the native variant. No DB, no business logic.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># view/report_renderer.py</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">RenderToExcel</span><span class="p">:</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df_report</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="n">df_report</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path_out</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;openpyxl&quot;</span><span class="p">)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_out</span>
+</span></code></pre></div>
+<h3 id="controller-srccontroller">Controller (<code>src/controller</code>)<a class="headerlink" href="#controller-srccontroller" title="Permanent link">&para;</a></h3>
+<p><strong>What goes here:</strong> Orchestration. Script-style — read top to bottom.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># controller/main.py</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">model.conexao_db</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_engine</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">model.example_entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExampleEntity</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">view.report_renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">RenderToExcel</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">cls_engine</span> <span class="o">=</span> <span class="n">build_engine</span><span class="p">()</span>                    <span class="c1"># reads DB_BACKEND from .env</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">cls_example</span> <span class="o">=</span> <span class="n">ExampleEntity</span><span class="p">(</span><span class="n">cls_engine</span><span class="p">)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">cls_example</span><span class="o">.</span><span class="n">ensure_table</span><span class="p">()</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">df_report</span> <span class="o">=</span> <span class="n">cls_example</span><span class="o">.</span><span class="n">fetch_all</span><span class="p">()</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">RenderToExcel</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/report.xlsx&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">df_report</span><span class="p">)</span>
 </span></code></pre></div>
 <hr />
-<h2 id="tooling-inherited-from-python-common">🛠️ Tooling (inherited from <code>python-common</code>)<a class="headerlink" href="#tooling-inherited-from-python-common" title="Permanent link">&para;</a></h2>
+<h2 id="session-lifecycle">🔄 Session lifecycle<a class="headerlink" href="#session-lifecycle" title="Permanent link">&para;</a></h2>
+<p>The service class owns the <code>sessionmaker</code>. Open a session per write and close it in a <code>finally</code>; reads use <code>pd.read_sql</code> on an engine connection. Keep <code>commit()</code> at the service boundary — never inside a lower-level helper.</p>
+<hr />
+<h2 id="rules-of-thumb">📏 Rules of thumb<a class="headerlink" href="#rules-of-thumb" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Tool</th>
-<th>Role</th>
-<th>Config file</th>
+<th>Layer</th>
+<th>Responsibility</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Ruff</strong></td>
-<td>Linter + formatter</td>
-<td><code>ruff.toml</code> — line-length 99, tab indent, double quotes, NumPy docstrings</td>
+<td><strong>Model</strong></td>
+<td>ORM models + data access; returns DataFrames; the only layer importing SQLAlchemy</td>
 </tr>
 <tr>
-<td><strong>pre-commit</strong></td>
-<td>Git hooks</td>
-<td><code>.pre-commit-config.yaml</code> — ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge</td>
+<td><strong>View</strong></td>
+<td>Output rendering only; no DB, no logic</td>
 </tr>
 <tr>
-<td><strong>unittest</strong></td>
-<td>Test runner</td>
-<td>Discovered with <code>python -m unittest discover -s tests/unit -p "*.py"</code></td>
+<td><strong>Controller</strong></td>
+<td>Orchestration; the only layer that knows all three</td>
 </tr>
 <tr>
-<td><strong>pytest</strong></td>
-<td>Alternative runner</td>
-<td><code>pytest.ini</code> included for compatibility; <code>poetry run pytest</code> also works</td>
-</tr>
-<tr>
-<td><strong>GitHub Actions</strong></td>
-<td>CI</td>
-<td><code>.github/workflows/tests.yaml</code> — runs linting and tests on every push</td>
-</tr>
-<tr>
-<td><strong>Makefile + <code>bin/</code></strong></td>
-<td>Dev automation</td>
-<td><code>make init_venv</code>, <code>make update_venv</code>, <code>make start</code>, linting and test recipes</td>
+<td><strong>Config</strong></td>
+<td>Runtime singletons; secrets stay in <code>.env</code></td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="typical-workflow">🔄 Typical workflow<a class="headerlink" href="#typical-workflow" title="Permanent link">&para;</a></h2>
-<ol>
-<li>Add library functions and classes under <code>src/&lt;project_name&gt;/</code>.</li>
-<li>Mirror the source structure under <code>tests/unit/</code> — one test module per source module.</li>
-<li>Run tests: <code>python -m unittest discover -s tests/unit -p "*.py" -v</code></li>
-<li>Add integration tests in <code>tests/integration/</code> for any I/O-dependent code.</li>
-<li>Keep <code>docs/</code> in sync with the public API; host locally with <code>make docs_server</code>.</li>
-</ol>
-<hr />
-<h2 id="example-feature-addition">💡 Example feature addition<a class="headerlink" href="#example-feature-addition" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># src/&lt;project_name&gt;/math_utils.py</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="n">int_a</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">int_b</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the sum of two integers.&quot;&quot;&quot;</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="k">return</span> <span class="n">int_a</span> <span class="o">+</span> <span class="n">int_b</span>
-</span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># tests/unit/test_math_utils.py</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="o">&lt;</span><span class="n">project_name</span><span class="o">&gt;.</span><span class="n">math_utils</span> <span class="kn">import</span><span class="w"> </span><span class="nn">add</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestMathUtils</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_add_two_positive_ints_returns_sum</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="mi">5</span><span class="p">)</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_add_negative_int_returns_correct_sum</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>
-</span></code></pre></div>
+<h2 id="database-backends">🔌 Database backends<a class="headerlink" href="#database-backends" title="Permanent link">&para;</a></h2>
+<p><code>build_engine()</code> reads <code>DB_BACKEND</code> from <code>.env</code>. Supported: <code>sqlite</code>, <code>postgresql</code>, <code>mariadb</code>, <code>mysql</code>, <code>mssql</code>, <code>oracle</code>. SQLite is the zero-config default. Set <code>SQL_ECHO=true</code> to log SQL statements.</p>
 
 
 
