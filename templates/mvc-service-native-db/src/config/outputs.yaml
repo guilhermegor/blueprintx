@@ -1,6 +1,10 @@
-# Output path templates. The per-machine base directory is set via OUTPUT_DIR in
-# .env; outputs land under <OUTPUT_DIR>/<daily_subfolder>/<YYYY-MM-DD>/.
+# Output path configuration. Outputs land under:
+#   <output_dir>/<daily_subfolder>/<YYYY-MM-DD>/
+# output_dir may be relative, an absolute POSIX path, or a Windows UNC path.
+# For a Windows UNC path use SINGLE quotes so backslashes stay literal, e.g.:
+#   output_dir: '\\server\share\Team\DAILY INFOS'
 # Filename templates take, in order: app-name (kebab), user, YYYYMMDD, HHMMSS.
+output_dir: "logs"
 daily_subfolder: "daily_infos"
 path_log: "log-{}_{}_{}_{}.txt"
 path_json: "{}_{}_{}_{}.json"
