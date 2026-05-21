@@ -57,6 +57,7 @@ cls_create_log.log_message(LOGGER, f"JSON export path: {PATH_JSON}", "info")
 cls_create_log.log_message(LOGGER, f"Report export path: {PATH_REPORT}", "info")
 cls_create_log.log_message(LOGGER, "Finishing variable-definition process", "info")
 
+# --- model: read source data into a DataFrame ---
 cls_create_log.log_message(LOGGER, "Starting data-read process", "info")
 cls_connection = build_connection()
 cls_example = ExampleEntity(cls_connection)
@@ -67,6 +68,7 @@ cls_connection.close()
 dict_xpt["rows_read"] = len(df_report)
 cls_create_log.log_message(LOGGER, f"Finishing data-read process ({len(df_report)} rows)", "info")
 
+# --- view: render outputs (report + run summary) ---
 cls_create_log.log_message(LOGGER, "Starting report-export process", "info")
 RenderToExcel(PATH_REPORT).render(df_report)
 dict_xpt["report_path"] = str(PATH_REPORT)
