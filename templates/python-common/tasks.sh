@@ -102,6 +102,16 @@ start() {
 }
 
 # -------------------
+# GIT DIFF (offline sync — defined only when scaffolded without GitHub)
+# -------------------
+
+if [ -f "$SCRIPT_DIR/bin/git_diff_export.sh" ]; then
+    git_diff_export() { bash "$SCRIPT_DIR/bin/git_diff_export.sh"; }
+    git_diff_check() { bash "$SCRIPT_DIR/bin/git_diff_check.sh" "${1:-}"; }
+    git_diff_apply() { bash "$SCRIPT_DIR/bin/git_diff_apply.sh" "${1:-}"; }
+fi
+
+# -------------------
 # DOCS
 # -------------------
 
@@ -144,6 +154,11 @@ Docs
 Run
   start                Run src/main.py (auto-installs Poetry if missing)
 
+Git Diff (offline sync — only present when scaffolded without GitHub)
+  git_diff_export             Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/
+  git_diff_check <path>       Check whether a .diff applies cleanly
+  git_diff_apply <path>       Apply a .diff to the working tree (no commit)
+
 EOF
 }
 
@@ -167,6 +182,9 @@ case "${1:-help}" in
     check_consistency)   check_consistency ;;
     docs_server)         docs_server ;;
     start)               start ;;
+    git_diff_export)     git_diff_export ;;
+    git_diff_check)      git_diff_check "${2:-}" ;;
+    git_diff_apply)      git_diff_apply "${2:-}" ;;
     help|--help|-h)      show_help ;;
     *)
         echo "Unknown command: $1"

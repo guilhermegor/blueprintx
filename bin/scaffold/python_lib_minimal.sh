@@ -304,6 +304,29 @@ prompt_git_remote_setup() {
     apply_branch_protection "$project_path"
 }
 
+apply_offline_mode() {
+    local project_path="$1"
+
+    print_status "info" "No GitHub remote connected — switching to offline mode"
+    # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
+    # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
+    rm -rf "$project_path/.github"
+    print_status "info" "Removed .github (GitHub-only assets)"
+    mkdir -p "$project_path/bin/lib"
+    cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_apply.sh" "$project_path/bin/git_diff_apply.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_check.sh" "$project_path/bin/git_diff_check.sh"
+    chmod +x "$project_path/bin/git_diff_export.sh" \
+        "$project_path/bin/git_diff_apply.sh" \
+        "$project_path/bin/git_diff_check.sh"
+    mkdir -p "$project_path/make"
+    cp "$SHARED_TEMPLATE_ROOT/make/git_diff.mk" "$project_path/make/git_diff.mk"
+    mkdir -p "$project_path/git_diffs"
+    touch "$project_path/git_diffs/.keep"
+    print_status "success" "git-diff workflow enabled (make git_diff_export | git_diff_check | git_diff_apply)"
+}
+
 # ============================================================================
 # MAIN
 # ============================================================================
@@ -323,6 +346,13 @@ main() {
     copy_common_templates "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
+
+    # When the project is not connected to a GitHub remote (no upstream tracking
+    # branch after setup), switch to offline mode: drop GitHub-only assets and
+    # ship the git-diff sync workflow instead.
+    if ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        apply_offline_mode "$PROJECT_PATH"
+    fi
 
     print_status "success" "Lib-minimal scaffold complete!"
     print_status "info" "Project path: $PROJECT_PATH"

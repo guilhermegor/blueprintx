@@ -28,6 +28,9 @@ dist/
 .coverage
 htmlcov/
 
+# Git-diff offline-sync exports (present only when scaffolded without GitHub)
+/git_diffs/
+
 # Environment files — ignore real env files, keep .env.example tracked
 .env
 .env.local

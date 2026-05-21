@@ -77,6 +77,8 @@ jobs:
         skeleton:
           - ddd-service-native-db
           - ddd-service-orm-db
+          - mvc-service-native-db
+          - mvc-service-orm-db
           - lib-minimal
           - react-spa-webpack
     steps:

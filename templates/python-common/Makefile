@@ -121,3 +121,12 @@ help:
 	@echo "Run"
 	@echo "  start                Run src/main.py (auto-installs Poetry if missing)"
 	@echo ""
+	@echo "Git Diff (offline sync — only present when scaffolded without GitHub)"
+	@echo "  git_diff_export              Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/"
+	@echo "  git_diff_check FILE=<path>   Check whether a .diff applies cleanly"
+	@echo "  git_diff_apply FILE=<path>   Apply a .diff to the working tree (no commit)"
+	@echo ""
+
+# Offline git-diff sync targets — present only when scaffolded without GitHub.
+# The leading '-' makes this silently skipped when the fragment is absent.
+-include make/git_diff.mk
