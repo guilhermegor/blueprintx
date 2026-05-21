@@ -111,8 +111,20 @@ create_python_files() {
     touch "$project_path"/src/utils/__init__.py
     touch "$project_path"/src/config/__init__.py
     cp -r "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/src/." "$project_path/src"
-    
+
     print_status "success" "Python files created"
+}
+
+copy_tests() {
+    local project_path="$1"
+
+    print_status "info" "Copying sample tests..."
+
+    cp -r "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/tests/." "$project_path/tests"
+    # unit/ now ships a real sample test, so drop its placeholder
+    rm -f "$project_path/tests/unit/.keep"
+
+    print_status "success" "Sample tests copied"
 }
 
 copy_templates() {
@@ -347,6 +359,7 @@ main() {
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
+    copy_tests "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
