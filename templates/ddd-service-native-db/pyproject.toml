@@ -27,7 +27,7 @@ oracledb = ">=2.0"
 psycopg = ">=3.1"
 # 9.x requires system libmysqlclient; pin to 8.x for portable wheels
 mysql-connector-python = ">=8.3,<9.0"
-stpstone = ">=3.0.0"
+stpstone = ">=3.1.1"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = ">=4.1.0"
