@@ -222,21 +222,28 @@ apply_branch_protection() {
     read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
     case "$protect_ans" in
         y|Y)
+            # A solo maintainer cannot satisfy a required-approving-review
+            # rule — GitHub forbids self-approval, so the first PR's merge
+            # would be permanently blocked. Ask whether human reviewers will
+            # gate merges, and build the protection payload accordingly.
+            local reviews_json
+            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            case "$reviews_ans" in
+                y|Y)
+                    reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
+                    ;;
+                *)
+                    reviews_json='"required_pull_request_reviews": null,'
+                    ;;
+            esac
             if gh api --method PUT \
                 -H "Accept: application/vnd.github+json" \
                 "/repos/$repo/branches/$branch/protection" \
-                --input - <<'EOF'
+                --input - <<EOF
 {
-  "required_status_checks": {
-    "strict": true,
-    "contexts": []
-  },
+  "required_status_checks": { "strict": true, "contexts": [] },
   "enforce_admins": true,
-  "required_pull_request_reviews": {
-    "dismiss_stale_reviews": true,
-    "require_code_owner_reviews": false,
-    "required_approving_review_count": 1
-  },
+  $reviews_json
   "restrictions": null,
   "allow_force_pushes": false,
   "allow_deletions": false,
