@@ -47,8 +47,9 @@ class ExampleEntity:
 			Value for the ``title`` column.
 		"""
 		cls_cursor = self.cls_connection.cursor()
-		cls_cursor.execute(  # noqa: S608
-			f"INSERT INTO {self.str_table} (title) VALUES (?)",
+		# noqa justified: str_table is a developer-controlled identifier, never user input.
+		cls_cursor.execute(
+			f"INSERT INTO {self.str_table} (title) VALUES (?)",  # noqa: S608
 			(str_title,),
 		)
 		self.cls_connection.commit()

@@ -42,6 +42,11 @@ exclude = [
     ".ipynb_checkpoints",
     ".vscode",
 
+    # project-specific generated / chassis
+    "alembic",
+    "src/chassis",
+    "src/capabilities/example_feature",
+
     # other
     ".pants.d",
     ".pyenv",
@@ -97,3 +102,7 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 "tests/**/*.py" = [
     "S101",  # use of assert
 ]
+# Native DB-API 2.0 connections have no shared stdlib type, so `Any` is the honest
+# return/param annotation for the raw-driver model layer (MVC native skeleton only).
+"src/model/conexao_db.py" = ["ANN401"]
+"src/model/example_entity.py" = ["ANN401"]

@@ -17,6 +17,13 @@ SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 PROJECT_DISPLAY_NAME=""
+INCLUDE_DOCKER_COMPOSE=false
+DB_COMPOSE_BACKEND="postgresql"
+INCLUDE_DATA_DIR=false
+DATA_DIR_BASE="logs"
+DATA_DIR_DATED=false
+INCLUDE_WEBHOOK=false
+WEBHOOK_PLATFORM="teams"
 
 # ============================================================================
 # FUNCTIONS
@@ -87,7 +94,6 @@ create_directory_structure() {
     mkdir -p "$project_path"/data
     mkdir -p "$project_path"/assets
     mkdir -p "$project_path"/docs
-    mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
 
     # Ensure empty dirs are tracked by git
@@ -172,9 +178,6 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
-    cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
 
@@ -260,6 +263,158 @@ EOF
     esac
 }
 
+prompt_docker_compose() {
+    local ans
+    read -r -p "Include Docker Compose for database infrastructure? [y/N] " ans
+    if [[ "$ans" =~ ^[Yy]$ ]]; then
+        INCLUDE_DOCKER_COMPOSE=true
+        local db_ans
+        read -r -p "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): " db_ans
+        case "$db_ans" in
+            mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
+            *) DB_COMPOSE_BACKEND="postgresql" ;;
+        esac
+        print_status "config" "Docker Compose backend: $DB_COMPOSE_BACKEND"
+    else
+        INCLUDE_DOCKER_COMPOSE=false
+    fi
+}
+
+conditional_copy_docker_compose() {
+    local project_path="$1"
+    if [[ "$INCLUDE_DOCKER_COMPOSE" != "true" ]]; then return; fi
+    local src="$COMMON_TEMPLATE_ROOT/docker-compose.${DB_COMPOSE_BACKEND}.yml"
+    cp "$src" "$project_path/docker-compose.yml"
+    print_status "success" "docker-compose.yml (${DB_COMPOSE_BACKEND}) copied"
+}
+
+prompt_data_dir() {
+    local answer base_ans dated_ans
+    read -r -p "Customise the output directory (logs/artifacts root)? [y/N]: " answer || true
+    case "$answer" in
+        y|Y)
+            INCLUDE_DATA_DIR=true
+            read -r -p "Output base directory [logs]: " base_ans || true
+            DATA_DIR_BASE="${base_ans:-logs}"
+            read -r -p "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: " dated_ans || true
+            case "$dated_ans" in
+                y|Y) DATA_DIR_DATED=true ;;
+                *) DATA_DIR_DATED=false ;;
+            esac
+            print_status "config" "Output dir: $DATA_DIR_BASE (date-organised: $DATA_DIR_DATED)"
+            ;;
+        *)
+            INCLUDE_DATA_DIR=false
+            ;;
+    esac
+}
+
+prompt_webhook() {
+    local answer platform_ans
+    read -r -p "Include outbound webhook notifications? [y/N]: " answer || true
+    case "$answer" in
+        y|Y)
+            INCLUDE_WEBHOOK=true
+            read -r -p "Which platform? [teams/slack] (default: teams): " platform_ans || true
+            case "${platform_ans:-teams}" in
+                slack) WEBHOOK_PLATFORM="slack" ;;
+                *) WEBHOOK_PLATFORM="teams" ;;
+            esac
+            print_status "config" "Webhook platform: $WEBHOOK_PLATFORM"
+            ;;
+        *)
+            INCLUDE_WEBHOOK=false
+            ;;
+    esac
+}
+
+copy_global_config() {
+    local project_path="$1"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/startup.py" "$project_path/src/config/startup.py"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/inputs.yaml" "$project_path/src/config/inputs.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/outputs.yaml" "$project_path/src/config/outputs.yaml"
+    print_status "success" "Global config (startup/inputs/outputs) applied"
+}
+
+# Output directory is data-driven from inputs.yaml (no startup.py patching).
+conditional_patch_inputs_yaml() {
+    local project_path="$1"
+    if [[ "$INCLUDE_DATA_DIR" != "true" ]]; then return; fi
+    local f="$project_path/src/config/inputs.yaml"
+    sed -i "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
+    sed -i "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
+    print_status "success" "Output directory configured in inputs.yaml"
+}
+
+# Webhook provider lands under src/utils/ for MVC; rewrite the package's internal
+# absolute imports from the canonical chassis.webhook prefix to utils.webhook.
+conditional_copy_webhooks_yaml() {
+    local project_path="$1"
+    if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
+    cp "$COMMON_TEMPLATE_ROOT/optional/webhooks.yaml" "$project_path/src/config/webhooks.yaml"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/webhook" "$project_path/src/utils/webhook"
+    grep -rl "chassis.webhook" "$project_path/src/utils/webhook" \
+        | xargs -r sed -i "s|chassis\.webhook|utils.webhook|g"
+    printf '\n# Webhook\nWEBHOOK_PLATFORM=%s\nWEBHOOK_URL=\nWEBHOOK_ENV_GATE=production\n' \
+        "$WEBHOOK_PLATFORM" >> "$project_path/.env"
+    printf '\n# Webhook\nWEBHOOK_PLATFORM=%s\nWEBHOOK_URL=\nWEBHOOK_ENV_GATE=production\n' \
+        "$WEBHOOK_PLATFORM" >> "$project_path/.env.example"
+    print_status "success" "Webhook provider (utils/webhook) + webhooks.yaml added"
+}
+
+# Webhook wiring depends only on the WebhookNotifier port (utils/webhook).
+conditional_patch_startup() {
+    local project_path="$1"
+    local startup_path="$project_path/src/config/startup.py"
+    if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
+    cat >> "$startup_path" <<'PYBLOCK'
+
+# Webhook notifications (opt-in) — depends only on the WebhookNotifier port.
+from utils.webhook.application.webhook_factory import build_webhook  # noqa: E402
+
+
+YAML_WEBHOOKS: dict = reading_yaml(str(_CONFIG_DIR / "webhooks.yaml"))
+WEBHOOK_ENV_GATE: str = os.getenv("WEBHOOK_ENV_GATE", "production")
+CLS_WEBHOOK = build_webhook(os.getenv("WEBHOOK_PLATFORM", "teams"), os.getenv("WEBHOOK_URL", ""))
+MSG_WEBHOOK: str = YAML_WEBHOOKS["message"].format(
+	app_name=APP_NAME,
+	environment=ENVIRONMENT,
+	hostname=HOSTNAME,
+	user=USER,
+	log_path=str(PATH_LOG),
+)
+PYBLOCK
+    print_status "success" "Webhook wiring appended to startup.py"
+}
+
+# Conditional webhook send in the controller, gated by the deployment environment.
+# ENVIRONMENT is already imported at the top of controller/main.py, so it is not re-imported.
+conditional_patch_main_py() {
+    local project_path="$1"
+    local main_path="$project_path/src/controller/main.py"
+    if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
+    cat >> "$main_path" <<'PYBLOCK'
+
+# --- notify: send the run summary when running in the gated environment ---
+from config.startup import CLS_WEBHOOK, MSG_WEBHOOK, WEBHOOK_ENV_GATE  # noqa: E402
+
+
+if ENVIRONMENT == WEBHOOK_ENV_GATE:
+	CLS_WEBHOOK.send(MSG_WEBHOOK)
+PYBLOCK
+    print_status "success" "Webhook send appended to controller/main.py"
+}
+
+# GitHub-only assets are copied only when a GitHub remote is established (see main()).
+copy_github_assets() {
+    local project_path="$1"
+    mkdir -p "$project_path/.github/workflows"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
+    cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    print_status "success" "GitHub assets copied (.github)"
+}
+
 prompt_git_remote_setup() {
     local project_path="$1"
 
@@ -332,10 +487,8 @@ apply_offline_mode() {
     local project_path="$1"
 
     print_status "info" "No GitHub remote connected — switching to offline mode"
-    # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
-    # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
-    rm -rf "$project_path/.github"
-    print_status "info" "Removed .github (GitHub-only assets)"
+    # GitHub-only assets are never created offline (see copy_github_assets in main);
+    # ship the offline git-diff workflow instead.
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
@@ -364,18 +517,28 @@ main() {
     validate_inputs
     resolve_github_username
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
+    prompt_docker_compose
+    prompt_data_dir
+    prompt_webhook
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
+    copy_global_config "$PROJECT_PATH"
     copy_tests "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_copy_docker_compose "$PROJECT_PATH"
+    conditional_patch_inputs_yaml "$PROJECT_PATH"
+    conditional_copy_webhooks_yaml "$PROJECT_PATH"
+    conditional_patch_startup "$PROJECT_PATH"
+    conditional_patch_main_py "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
-    # When the project is not connected to a GitHub remote (no upstream tracking
-    # branch after setup), switch to offline mode: drop GitHub-only assets and
-    # ship the git-diff sync workflow instead.
-    if ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    # GitHub-only assets exist iff a GitHub remote was established. With an upstream
+    # tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
+    if git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        copy_github_assets "$PROJECT_PATH"
+    else
         apply_offline_mode "$PROJECT_PATH"
     fi
 

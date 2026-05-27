@@ -1,0 +1,7 @@
+# Output filename templates. Named fields are substituted in src/config/startup.py:
+# environment, app_name, user, date (YYYYMMDD), time (HHMMSS).
+log_name:  "{environment}-{app_name}_{user}_{date}_{time}.log"
+json_name: "{environment}-{app_name}_{user}_{date}_{time}.json"
+txt_name:  "{environment}-{app_name}_{user}_{date}_{time}.txt"
+csv_name:  "{environment}-{app_name}_{user}_{date}_{time}.csv"
+xlsx_name: "{environment}-{app_name}_{user}_{date}_{time}.xlsx"

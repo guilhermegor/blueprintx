@@ -6,7 +6,7 @@
 ![Formatting: isort](https://img.shields.io/badge/formatting-isort-%231674b1)
 ![Test Coverage](./coverage.svg)
 ![License](https://img.shields.io/badge/license-${PROJECT_LICENSE}-green.svg)
-![Open Issues](https://img.shields.io/github/issues/${GITHUB_USER}/${PROJECT_SLUG})
+![Open Issues](https://img.shields.io/github/issues/${GITHUB_USERNAME}/${PROJECT_SLUG})
 ![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
 
 ${PROJECT_DESCRIPTION}
@@ -46,7 +46,7 @@ pip install ${PYPI_NAME}
 
 **Option 2: Build from source**
 ```bash
-git clone https://github.com/${GITHUB_USER}/${PROJECT_SLUG}.git
+git clone https://github.com/${GITHUB_USERNAME}/${PROJECT_SLUG}.git
 cd ${PROJECT_SLUG}
 pyenv install ${PYTHON_VERSION_PIN}
 pyenv local ${PYTHON_VERSION_PIN}
@@ -102,7 +102,7 @@ ${PROJECT_SLUG}/
 ```
 
 ## 👨‍💻 Authors
-- ${AUTHOR_NAME} — [GitHub](https://github.com/${GITHUB_USER}) | [LinkedIn](${LINKEDIN_URL})
+- ${AUTHOR_NAME} — [GitHub](https://github.com/${GITHUB_USERNAME}) | [LinkedIn](${LINKEDIN_URL})
 
 ## 📜 License
 This project is licensed under ${PROJECT_LICENSE}. Update this section if you use a different license.
@@ -112,5 +112,5 @@ This project is licensed under ${PROJECT_LICENSE}. Update this section if you us
 - Thank contributors and the community.
 
 ## 🔗 Useful Links
-- [GitHub Repository](https://github.com/${GITHUB_USER}/${PROJECT_SLUG})
-- [Issue Tracker](https://github.com/${GITHUB_USER}/${PROJECT_SLUG}/issues)
+- [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_SLUG})
+- [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_SLUG}/issues)

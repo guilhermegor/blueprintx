@@ -8,6 +8,11 @@ A **DDD / hexagonal-architecture service skeleton** using **SQLAlchemy ORM** (�
 
 The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at scaffold time. Do not replace them with literal values.
 
+**Scaffold-injected vs authored.** Some code is *not* authored in this skeleton dir — it is injected by the scaffold so it stays a single source of truth:
+- `src/config/{startup.py,inputs.yaml,outputs.yaml}` — the **global config** copied from `templates/python-common/src/config/`. Edit it there, not here.
+- `src/chassis/db_wschema/` (plus its `chassis/db/` dependency) — **opt-in** schema-less storage (the "schema-less file storage?" prompt). This ORM skeleton's own `db_schema` does not use `chassis/db`, so both are injected together only when storage is chosen. Source in `templates/python-common/optional/chassis/`.
+- `src/chassis/webhook/` — **opt-in** (the webhook prompt); a port-based provider from `templates/python-common/optional/webhook/`.
+
 ## Layer boundaries (strict — do not cross)
 
 | Layer | Location | Rule |
@@ -97,4 +102,4 @@ Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYM
 - **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings. Config: `ruff.toml`.
 - **Pre-commit**: ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
 - **Tests**: `unittest` discovered with `python -m unittest discover -s tests/unit -p "*.py"`.
-- **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `start`.
+- **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `run`.

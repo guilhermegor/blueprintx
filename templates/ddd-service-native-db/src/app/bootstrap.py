@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import warnings
 from time import time
+import warnings
 
 from dotenv import load_dotenv
 from stpstone.utils.calendars.calendar_br import DatesBRAnbima

@@ -6,17 +6,7 @@
 init: venv precommit
 
 venv:
-	@PY_VERSION=$$(cat .python-version 2>/dev/null || echo "3.11.12"); \
-	pyenv install $$PY_VERSION -s; \
-	pyenv local $$PY_VERSION; \
-	python -m pip install --upgrade pip; \
-	python -m pip install -r requirements.txt; \
-	poetry config virtualenvs.in-project true --local; \
-	poetry install; \
-	echo "Virtual environment created in ./.venv"; \
-	echo "Poetry project installed"; \
-	poetry run playwright install; \
-	echo "Playwright installed"
+	@bash bin/venv.sh
 
 update_venv:
 	@poetry update
@@ -25,6 +15,11 @@ update_venv:
 precommit:
 	@poetry run pre-commit install
 	@poetry run pre-commit install --hook-type commit-msg
+
+version_bump_minor:
+	@poetry version minor
+	@git add pyproject.toml
+	@echo "Version bumped to $$(poetry version -s)"
 
 # -------------------
 # TESTING
@@ -71,12 +66,26 @@ check_consistency:
 	@poetry run python bin/check_consistency.py
 
 # -------------------
+# DATABASE
+# -------------------
+.PHONY: db_setup_schema db_backup db_restore
+
+db_setup_schema:
+	@bash bin/db_setup_schema.sh setup
+
+db_backup:
+	@bash bin/db_setup_schema.sh backup
+
+db_restore:
+	@bash bin/db_setup_schema.sh restore
+
+# -------------------
 # RUN
 # -------------------
-.PHONY: start
+.PHONY: run
 
-start:
-	@bash bin/start.sh
+run:
+	@bash bin/run.sh
 
 # -------------------
 # DOCS
@@ -98,9 +107,10 @@ help:
 	@echo ""
 	@echo "Virtual Environment"
 	@echo "  init                 Bootstrap venv + install pre-commit hooks"
-	@echo "  venv                 Create Poetry venv and install Playwright"
+	@echo "  venv                 Create Poetry venv and install dependencies"
 	@echo "  update_venv          Update all Poetry dependencies"
 	@echo "  precommit            Install pre-commit hooks (push + commit-msg)"
+	@echo "  version_bump_minor   Bump minor version in pyproject.toml"
 	@echo ""
 	@echo "Testing"
 	@echo "  unit_tests           Run unit tests with pytest"
@@ -115,11 +125,16 @@ help:
 	@echo "  lint                 Run ruff, codespell, pydocstyle, check_consistency"
 	@echo "  check_consistency    Check docstring type/raises consistency"
 	@echo ""
+	@echo "Database"
+	@echo "  db_setup_schema      Start Docker services, ensure schema, apply migrations"
+	@echo "  db_backup            Dump the database to BACKUP_STORE_PATH"
+	@echo "  db_restore DUMP=<p>  Restore database from a dump file at path <p>"
+	@echo ""
 	@echo "Docs"
 	@echo "  docs_server          Serve MkDocs site locally at http://0.0.0.0:8000"
 	@echo ""
 	@echo "Run"
-	@echo "  start                Run src/main.py (auto-installs Poetry if missing)"
+	@echo "  run                  Run src/main.py (auto-installs Poetry if missing)"
 	@echo ""
 	@echo "Git Diff (offline sync — only present when scaffolded without GitHub)"
 	@echo "  git_diff_export              Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/"

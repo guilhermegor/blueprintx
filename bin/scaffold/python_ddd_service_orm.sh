@@ -11,6 +11,16 @@ PROJECT_DESCRIPTION="${3:-}"
 PROJECT_VERSION="${4:-0.0.1}"
 LICENSE_CHOICE="${LICENSE_CHOICE:-MIT}"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Feature flags set by interactive prompts
+INCLUDE_DOCKER_COMPOSE=false
+DB_COMPOSE_BACKEND="postgresql"
+INCLUDE_STORAGE=false
+INCLUDE_DATA_DIR=false
+DATA_DIR_BASE="logs"
+DATA_DIR_DATED=false
+INCLUDE_WEBHOOK=false
+WEBHOOK_PLATFORM="teams"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/python-common"
 # Language-agnostic assets shared by every skeleton (CODEOWNERS, PR template)
 SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
@@ -89,7 +99,6 @@ create_directory_structure() {
     mkdir -p "$project_path"/data
     mkdir -p "$project_path"/assets
     mkdir -p "$project_path"/docs
-    mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
 
     # Ensure empty dirs are tracked by git
@@ -125,8 +134,10 @@ copy_templates() {
     
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
-    PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}" 
-    PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
+    PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
+    PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" GITHUB_USERNAME="$GITHUB_USERNAME" \
+        envsubst '${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME}' \
+        < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/.env.example" "$project_path/.env"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/.env.example" "$project_path/.env.example"
@@ -163,11 +174,9 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
-    cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
+    cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$project_path/.coveragerc"
 
     print_status "success" "Common templates applied"
 }
@@ -319,14 +328,227 @@ prompt_git_remote_setup() {
     apply_branch_protection "$project_path"
 }
 
+prompt_docker_compose() {
+    local answer db_ans
+    read -r -p "Include Docker Compose for database infrastructure? [y/N]: " answer || true
+    case "$answer" in
+        y|Y)
+            INCLUDE_DOCKER_COMPOSE=true
+            read -r -p "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): " db_ans || true
+            case "${db_ans:-postgresql}" in
+                mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
+                *) DB_COMPOSE_BACKEND="postgresql" ;;
+            esac
+            print_status "config" "Docker Compose: $DB_COMPOSE_BACKEND"
+            ;;
+        *)
+            INCLUDE_DOCKER_COMPOSE=false
+            ;;
+    esac
+}
+
+prompt_storage() {
+    local answer
+    read -r -p "Include schema-less file storage (JSON/CSV/joblib)? [y/N]: " answer || true
+    case "$answer" in
+        y|Y) INCLUDE_STORAGE=true; print_status "config" "Schema-less storage: enabled" ;;
+        *) INCLUDE_STORAGE=false ;;
+    esac
+}
+
+prompt_data_dir() {
+    local answer base_ans dated_ans
+    read -r -p "Customise the output directory (logs/artifacts root)? [y/N]: " answer || true
+    case "$answer" in
+        y|Y)
+            INCLUDE_DATA_DIR=true
+            read -r -p "Output base directory [logs]: " base_ans || true
+            DATA_DIR_BASE="${base_ans:-logs}"
+            read -r -p "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: " dated_ans || true
+            case "$dated_ans" in
+                y|Y) DATA_DIR_DATED=true ;;
+                *) DATA_DIR_DATED=false ;;
+            esac
+            print_status "config" "Output dir: $DATA_DIR_BASE (date-organised: $DATA_DIR_DATED)"
+            ;;
+        *)
+            INCLUDE_DATA_DIR=false
+            ;;
+    esac
+}
+
+prompt_webhook() {
+    local answer platform_ans
+    read -r -p "Include outbound webhook notifications? [y/N]: " answer || true
+    case "$answer" in
+        y|Y)
+            INCLUDE_WEBHOOK=true
+            read -r -p "Which platform? [teams/slack/custom] (default: teams): " platform_ans || true
+            case "${platform_ans:-teams}" in
+                slack|custom) WEBHOOK_PLATFORM="$platform_ans" ;;
+                *) WEBHOOK_PLATFORM="teams" ;;
+            esac
+            print_status "config" "Webhook platform: $WEBHOOK_PLATFORM"
+            ;;
+        *)
+            INCLUDE_WEBHOOK=false
+            ;;
+    esac
+}
+
+copy_poetry_toml() {
+    local project_path="$1"
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/poetry.toml" "$project_path/poetry.toml"
+    print_status "success" "poetry.toml copied"
+}
+
+copy_global_config() {
+    local project_path="$1"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/startup.py" "$project_path/src/config/startup.py"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/inputs.yaml" "$project_path/src/config/inputs.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/outputs.yaml" "$project_path/src/config/outputs.yaml"
+    print_status "success" "Global config (startup/inputs/outputs) applied"
+}
+
+# Schema-less storage opt-in. The ORM db_schema does not use chassis/db, so both
+# chassis/db (the DatabaseHandler ABC db_wschema extends) and chassis/db_wschema
+# are injected together here.
+conditional_copy_storage() {
+    local project_path="$1"
+    if [[ "$INCLUDE_STORAGE" != "true" ]]; then return; fi
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db" "$project_path/src/chassis/db"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db_wschema" "$project_path/src/chassis/db_wschema"
+    cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env"
+    cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env.example"
+    print_status "success" "Schema-less storage (chassis/db + db_wschema) added"
+}
+
+# GitHub-only assets are copied only when a GitHub remote is established (see main()).
+copy_github_assets() {
+    local project_path="$1"
+    mkdir -p "$project_path/.github/workflows"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
+    cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    print_status "success" "GitHub assets copied (.github)"
+}
+
+copy_alembic_templates() {
+    local project_path="$1"
+    print_status "info" "Copying Alembic templates..."
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/alembic.ini" "$project_path/alembic.ini"
+    mkdir -p "$project_path/alembic/versions"
+    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/alembic/." "$project_path/alembic"
+    print_status "success" "Alembic templates copied"
+}
+
+conditional_copy_docker_compose() {
+    local project_path="$1"
+    if [[ "$INCLUDE_DOCKER_COMPOSE" != "true" ]]; then return; fi
+    local src="$COMMON_TEMPLATE_ROOT/docker-compose.${DB_COMPOSE_BACKEND}.yml"
+    cp "$src" "$project_path/docker-compose.yml"
+    print_status "success" "docker-compose.yml (${DB_COMPOSE_BACKEND}) copied"
+}
+
+patch_pyproject_db_driver() {
+    local project_path="$1"
+    if [[ "$INCLUDE_DOCKER_COMPOSE" != "true" ]]; then
+        # Remove the comment block about conditional driver from pyproject.toml
+        sed -i '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
+        return
+    fi
+    # Remove comment block and inject the chosen driver
+    sed -i '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
+    case "$DB_COMPOSE_BACKEND" in
+        postgresql)
+            sed -i '/^alembic/a psycopg = {version = ">=3.2.4", extras = ["binary"]}' "$project_path/pyproject.toml"
+            ;;
+        mysql)
+            sed -i '/^alembic/a pymysql = ">=1.1.0"' "$project_path/pyproject.toml"
+            ;;
+        mariadb)
+            sed -i '/^alembic/a mariadb = ">=1.1.0"' "$project_path/pyproject.toml"
+            ;;
+    esac
+    print_status "success" "DB driver ($DB_COMPOSE_BACKEND) added to pyproject.toml"
+}
+
+# Output directory is data-driven from inputs.yaml (no startup.py patching).
+conditional_patch_inputs_yaml() {
+    local project_path="$1"
+    if [[ "$INCLUDE_DATA_DIR" != "true" ]]; then return; fi
+    local f="$project_path/src/config/inputs.yaml"
+    sed -i "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
+    sed -i "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
+    print_status "success" "Output directory configured in inputs.yaml"
+}
+
+# Webhook wiring depends only on the WebhookNotifier port (chassis/webhook),
+# so swapping platform never edits this block.
+conditional_patch_startup() {
+    local project_path="$1"
+    local startup_path="$project_path/src/config/startup.py"
+    if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
+    cat >> "$startup_path" <<'PYBLOCK'
+
+# Webhook notifications (opt-in) — depends only on the WebhookNotifier port.
+from chassis.webhook.application.webhook_factory import build_webhook  # noqa: E402
+
+
+YAML_WEBHOOKS: dict = reading_yaml(str(_CONFIG_DIR / "webhooks.yaml"))
+WEBHOOK_ENV_GATE: str = os.getenv("WEBHOOK_ENV_GATE", "production")
+CLS_WEBHOOK = build_webhook(os.getenv("WEBHOOK_PLATFORM", "teams"), os.getenv("WEBHOOK_URL", ""))
+MSG_WEBHOOK: str = YAML_WEBHOOKS["message"].format(
+	app_name=APP_NAME,
+	environment=ENVIRONMENT,
+	hostname=HOSTNAME,
+	user=USER,
+	log_path=str(PATH_LOG),
+)
+PYBLOCK
+    print_status "success" "Webhook wiring appended to startup.py"
+}
+
+# Conditional webhook send in main.py, gated by the deployment environment.
+conditional_patch_main_py() {
+    local project_path="$1"
+    local main_path="$project_path/src/main.py"
+    if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
+    cat >> "$main_path" <<'PYBLOCK'
+
+# ─── NOTIFY ───────────────────────────────────────────────────────────────────
+from src.config.startup import (  # noqa: E402
+	CLS_WEBHOOK,
+	ENVIRONMENT,
+	MSG_WEBHOOK,
+	WEBHOOK_ENV_GATE,
+)
+
+
+if ENVIRONMENT == WEBHOOK_ENV_GATE:
+	CLS_WEBHOOK.send(MSG_WEBHOOK)
+PYBLOCK
+    print_status "success" "Webhook send appended to main.py"
+}
+
+conditional_copy_webhooks_yaml() {
+    local project_path="$1"
+    if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
+    cp "$COMMON_TEMPLATE_ROOT/optional/webhooks.yaml" "$project_path/src/config/webhooks.yaml"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/webhook" "$project_path/src/chassis/webhook"
+    printf '\n# Webhook\nWEBHOOK_PLATFORM=%s\nWEBHOOK_URL=\nWEBHOOK_ENV_GATE=production\n' \
+        "$WEBHOOK_PLATFORM" >> "$project_path/.env"
+    printf '\n# Webhook\nWEBHOOK_PLATFORM=%s\nWEBHOOK_URL=\nWEBHOOK_ENV_GATE=production\n' \
+        "$WEBHOOK_PLATFORM" >> "$project_path/.env.example"
+    print_status "success" "Webhook provider (chassis/webhook) + webhooks.yaml added"
+}
+
 apply_offline_mode() {
     local project_path="$1"
 
     print_status "info" "No GitHub remote connected — switching to offline mode"
-    # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
-    # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
-    rm -rf "$project_path/.github"
-    print_status "info" "Removed .github (GitHub-only assets)"
+    # GitHub-only assets are never created offline (see copy_github_assets in main);
+    # ship the offline git-diff workflow instead.
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
@@ -355,17 +577,32 @@ main() {
     validate_inputs
     resolve_github_username
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
+    prompt_docker_compose
+    prompt_storage
+    prompt_data_dir
+    prompt_webhook
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
+    copy_global_config "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    copy_poetry_toml "$PROJECT_PATH"
+    copy_alembic_templates "$PROJECT_PATH"
+    conditional_copy_docker_compose "$PROJECT_PATH"
+    conditional_copy_storage "$PROJECT_PATH"
+    patch_pyproject_db_driver "$PROJECT_PATH"
+    conditional_patch_inputs_yaml "$PROJECT_PATH"
+    conditional_copy_webhooks_yaml "$PROJECT_PATH"
+    conditional_patch_startup "$PROJECT_PATH"
+    conditional_patch_main_py "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
-    # When the project is not connected to a GitHub remote (no upstream tracking
-    # branch after setup), switch to offline mode: drop GitHub-only assets and
-    # ship the git-diff sync workflow instead.
-    if ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    # GitHub-only assets exist iff a GitHub remote was established. With an upstream
+    # tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
+    if git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        copy_github_assets "$PROJECT_PATH"
+    else
         apply_offline_mode "$PROJECT_PATH"
     fi
 
