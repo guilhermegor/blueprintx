@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "BlueprintX"
-version = "0.7.0"
+version = "0.7.1"
 description = "Docs and tooling for the BlueprintX scaffolder"
 authors = []
 readme = "README.md"
