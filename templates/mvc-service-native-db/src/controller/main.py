@@ -2,35 +2,34 @@
 
 Script-style on purpose: read top to bottom to follow the flow. The controller
 wires config → model → view, bracketing each phase with start/finish log lines
-so a run is easy to trace. Run it with ``make start`` or
+so a run is easy to trace. Run it with ``make run`` or
 ``python src/controller/main.py``.
 """
 
 import os
 import sys
-import warnings
 from time import time
+import warnings
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from stpstone.utils.loggs.create_logs import CreateLog  # noqa: E402
+from stpstone.utils.parsers.json import JsonFiles  # noqa: E402
+
 from config.startup import (  # noqa: E402
 	APP_NAME,
-	CLS_MS_TEAMS,
 	ENVIRONMENT,
 	HOSTNAME,
 	LOGGER,
-	MSG_MS_TEAMS,
 	PATH_JSON,
 	PATH_LOG,
-	PATH_REPORT,
 	USER,
 	YAML_INPUTS,
-	YAML_WEBHOOKS,
+	output_path,
 )
 from model.conexao_db import build_connection  # noqa: E402
 from model.example_entity import ExampleEntity  # noqa: E402
-from stpstone.utils.loggs.create_logs import CreateLog  # noqa: E402
-from stpstone.utils.parsers.json import JsonFiles  # noqa: E402
 from view.report_renderer import RenderToExcel  # noqa: E402
 
 
@@ -45,6 +44,9 @@ cls_create_log = CreateLog()
 # accumulates the artifacts produced by the run (paths, counts) for a final summary
 dict_xpt: dict = {}
 
+# report destination for this run (built from outputs.yaml's xlsx_name template)
+path_report = output_path("xlsx_name")
+
 # --- variable definition: record run context so every log file is self-describing ---
 cls_create_log.log_message(LOGGER, "Starting variable-definition process", "info")
 cls_create_log.log_message(LOGGER, f"App: {APP_NAME}", "info")
@@ -54,7 +56,7 @@ cls_create_log.log_message(LOGGER, f"Environment: {ENVIRONMENT}", "info")
 cls_create_log.log_message(LOGGER, f"Inputs config in memory: {YAML_INPUTS}", "info")
 cls_create_log.log_message(LOGGER, f"Log path: {PATH_LOG}", "info")
 cls_create_log.log_message(LOGGER, f"JSON export path: {PATH_JSON}", "info")
-cls_create_log.log_message(LOGGER, f"Report export path: {PATH_REPORT}", "info")
+cls_create_log.log_message(LOGGER, f"Report export path: {path_report}", "info")
 cls_create_log.log_message(LOGGER, "Finishing variable-definition process", "info")
 
 # --- model: read source data into a DataFrame ---
@@ -70,16 +72,13 @@ cls_create_log.log_message(LOGGER, f"Finishing data-read process ({len(df_report
 
 # --- view: render outputs (report + run summary) ---
 cls_create_log.log_message(LOGGER, "Starting report-export process", "info")
-RenderToExcel(PATH_REPORT).render(df_report)
-dict_xpt["report_path"] = str(PATH_REPORT)
-cls_create_log.log_message(LOGGER, f"Finishing report-export process ({PATH_REPORT})", "info")
+RenderToExcel(path_report).render(df_report)
+dict_xpt["report_path"] = str(path_report)
+cls_create_log.log_message(LOGGER, f"Finishing report-export process ({path_report})", "info")
 
 cls_create_log.log_message(LOGGER, "Starting summary-export process", "info")
 bool_json_dump = JsonFiles().dump_message(dict_xpt, str(PATH_JSON))
 cls_create_log.log_message(LOGGER, f"Summary export ok={bool_json_dump}: {PATH_JSON}", "info")
-
-if ENVIRONMENT == "production":
-	CLS_MS_TEAMS.send_message(str_msg=MSG_MS_TEAMS, str_title=YAML_WEBHOOKS["ms_teams"]["title"])
 
 # report total run duration in HH:MM:SS
 float_elapsed_time = time() - float_start_time

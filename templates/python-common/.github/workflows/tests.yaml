@@ -42,7 +42,7 @@ jobs:
         with:
           virtualenvs-in-project: true
           virtualenvs-create: true
-          version: 2.1.2
+          version: 2.2.1
 
       - name: Load Cached Virtual Environment
         id: cached-venv

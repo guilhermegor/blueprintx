@@ -4,9 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this directory is
 
-`templates/python-common/` is the **single source of truth for shared tooling** across all BlueprintX Python skeletons. Every file here is copied verbatim (or rendered via `envsubst`) into scaffolded projects by each `scripts/scaffold/python_*.sh` script.
+`templates/python-common/` is the **single source of truth for shared tooling** across all BlueprintX Python skeletons. Every file here is copied verbatim (or rendered via `envsubst`) into scaffolded projects by each `bin/scaffold/python_*.sh` script.
 
-**Changes here propagate to all three skeletons on the next `make init` run.**
+**Changes here propagate to all Python skeletons on the next scaffold run.**
+
+Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two subtrees are the **deliberate exceptions** — they hold *application code* that is identical across skeletons, so it lives here rather than being duplicated:
+
+- **`src/config/`** — the global runtime config (`startup.py`, `inputs.yaml`, `outputs.yaml`). **Always** copied into every service project's `src/config/`. This is why the four service skeletons no longer carry their own `startup.py`/`inputs.yaml`/`outputs.yaml`.
+- **`optional/`** — opt-in app code injected only when the matching scaffold prompt is answered *yes*. Shipped into the generated project's normal layout (e.g. `src/chassis/`), so the output looks standard — the `optional/` marker exists only here, to keep the tooling-vs-app-code boundary visible.
 
 ## Files and their roles
 
@@ -15,25 +20,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `ruff.toml` | Ruff lint + format config (line-length 99, tab indent, double quotes, NumPy docstrings, full rule set) |
 | `.pre-commit-config.yaml` | Hooks: ruff, pydocstyle (DAR), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge |
 | `pytest.ini` | Pytest configuration shared by all generated projects |
-| `Makefile` | Targets: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `start` |
+| `Makefile` | Targets: `init`, `venv`, `update_venv`, `precommit`, `version_bump_minor`, testing, linting, database, `run`, docs |
+| `tasks.sh` | Non-make equivalent of the project Makefile targets (must stay in sync) |
 | `requirements.txt` | Pins the Poetry version only — not application dependencies |
 | `.python-version` | pyenv Python version pin |
 | `.gitignore` | Python + Poetry + common IDE patterns |
 | `.codespellrc` | codespell configuration |
 | `.pydocstyle` | pydocstyle config (NumPy convention, DAR checks) |
+| `.coveragerc` | Coverage.py configuration (omits chassis, example_feature, app, config) |
+| `poetry.toml` | Poetry local config — forces `virtualenvs.in-project = true` |
 | `README.md` | Template README with `${VARIABLE}` placeholders for `envsubst` |
-| `tasks.sh` | Non-make equivalent of the project Makefile targets |
-| `.github/workflows/tests.yaml` | CI workflow for unit + integration tests |
-| _(CODEOWNERS, PR template)_ | Moved to language-agnostic `templates/common/.github/` — shared by every skeleton |
-| `bin/` | `check_unix_filenames.sh`, `fix_playwright.sh`, `start.sh`, `test_urls_docstrings.sh` |
-| `prompts/` | AI prompt templates: `unit_test.md`, `refactoring.md`, `readme.md` |
+| `.github/workflows/tests.yaml` | CI workflow — copied into the project **only** when a GitHub remote is set up (see `copy_github_assets` in the scaffolds) |
+| _(CODEOWNERS, PR template)_ | Language-agnostic; live in `templates/common/.github/`; also GitHub-remote-only |
+| `docker-compose.{postgresql,mariadb,mysql}.yml` | DB infra templates; one is copied to `docker-compose.yml` on the docker-compose prompt |
+| `src/config/startup.py` | Global runtime config — logger + `output_path()` helper + `PATH_LOG/JSON/TXT`. Always copied into every service project. |
+| `src/config/inputs.yaml` | Global inputs — single output root (`daily_infos_base_path`, default `logs`) + `daily_infos_dated` toggle |
+| `src/config/outputs.yaml` | Global filename templates (`log/json/txt/csv/xlsx_name`) using **named** placeholders |
+| `optional/chassis/db/` | `DatabaseHandler` ABC bundle — injected with the schema-less storage opt-in (and always for the native DDD skeleton, whose `db_schema` requires it) |
+| `optional/chassis/db_wschema/` | Schema-less storage (JSON/CSV/joblib) — injected on the storage opt-in (DDD only) |
+| `optional/storage.env.fragment` | `.env` block appended on the storage opt-in |
+| `optional/webhook/` | Port-based webhook provider (`WebhookNotifier` port + teams/slack adapters + `build_webhook` factory) — injected on the webhook opt-in; lands in `chassis/webhook` (DDD) or `utils/webhook` (MVC) |
+| `optional/webhooks.yaml` | Webhook message config (named placeholders) — copied on the webhook opt-in |
+| `bin/CLAUDE.md` | Shell-script conventions for every `*.sh` in `bin/` |
+| `bin/lib/common.sh` | Canonical sourced lib: `print_status`, `_read_env_var`, color vars |
+| `bin/venv.sh` | pyenv + Poetry venv setup (replaces inline Makefile logic) |
+| `bin/db_setup_schema.sh` | Idempotent DB setup: start services, ensure schema, apply migrations; also handles backup/restore |
+| `bin/run.sh` | Run `src/main.py` via Poetry (auto-installs if absent) |
+| `bin/check_unix_filenames.sh` | Pre-commit hook: reject filenames with special characters |
+| `bin/fix_playwright.sh` | Reinstall Playwright browsers |
+| `bin/test_urls_docstrings.sh` | Pre-commit hook: validate URLs in docstrings (1-week cache) |
 | `assets/logo_lorem_ipsum.png` | Placeholder logo copied into new projects |
 | `CONTRIBUTING.md` | Contribution guide template |
-| `LICENSE` | MIT licence template |
 
 ## Editing rules
 
-- **`ruff.toml`**: The active rule sets are `UP E F ANN B SIM I AIR ERA S PD D`. Only `D206` is ignored (tab-indent + docstring conflict). Do not remove rule sets without a documented reason.
+- **`ruff.toml`**: The active rule sets are `UP E F ANN B SIM I AIR ERA S PD D`. Only `D206` is ignored (tab-indent + docstring conflict). Excluded paths include `alembic`, `src/chassis`, and `src/capabilities/example_feature`. Do not remove rule sets without a documented reason.
 - **`.pre-commit-config.yaml`**: Hook versions must stay pinned (`rev:`).
 - **`README.md`**: Uses `${VARIABLE}` placeholders — do not replace them with literal values; they are resolved by `envsubst` during scaffolding.
-- All shell scripts must remain POSIX-compatible (bash ≥ 4).
+- **`Makefile` ↔ `tasks.sh`**: Must stay in sync. Every target in the Makefile must have a matching function + case branch + help entry in `tasks.sh`. See `bin/CLAUDE.md` for shell conventions.
+- **`src/config/*`**: Edit here, never in the skeleton dirs. `startup.py` is generic (plain `datetime.now()`, no domain calendar); the output directory is **data-driven** from `inputs.yaml` (`daily_infos_base_path` + `daily_infos_dated`) — do not hard-code paths or re-add a `folder` key. Filename templates use **named** placeholders, not positional `{}` + comments.
+- **`optional/webhook/`**: `SlackNotifier.send` is an intentional contribution stub (raises `NotImplementedError`). The `WebhookNotifier` port is the contract `startup.py` depends on — keep adapters structurally conformant so swapping platforms never touches `startup.py`. Internal imports use the canonical `chassis.webhook` prefix; the MVC scaffolds rewrite it to `utils.webhook` on copy.
+- All shell scripts must source `bin/lib/common.sh` and use `print_status` for status output — never bare `echo`/`printf` for status messages.

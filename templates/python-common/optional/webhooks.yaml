@@ -1,0 +1,10 @@
+# Webhook notification config. The target URL is read from WEBHOOK_URL in .env;
+# the platform (teams/slack) from WEBHOOK_PLATFORM. Named fields below are
+# substituted in src/config/startup.py: app_name, environment, hostname, user, log_path.
+title: "ROUTINE_CONCLUSION"
+message: >
+  Routine: {app_name}
+  Environment: {environment}
+  Host: {hostname}
+  Operator: {user}
+  Logs: {log_path}

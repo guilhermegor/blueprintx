@@ -26,7 +26,7 @@ def _compose_url(str_backend: str) -> str:
 	str_port = os.getenv("DB_PORT", dict_default_ports[str_backend])
 	str_name = os.getenv("DB_NAME", "app")
 	dict_schemes: dict[str, str] = {
-		"postgresql": "postgresql+psycopg2",
+		"postgresql": "postgresql+psycopg",
 		"mariadb": "mysql+pymysql",
 		"mysql": "mysql+pymysql",
 		"mssql": "mssql+pyodbc",

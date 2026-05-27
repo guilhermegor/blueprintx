@@ -8,7 +8,6 @@ from typing import Callable
 from capabilities.example_feature.application import create_note, list_notes
 from capabilities.example_feature.domain.dto import NoteCreateDTO, NoteResponseDTO
 from capabilities.example_feature.infrastructure.repositories import InMemoryNoteRepository
-from chassis.db_schema.application import build_database_handler
 
 
 @dataclass(frozen=True)
@@ -37,10 +36,12 @@ def build() -> AppContainer:
 
 	Notes
 	-----
-	Replace ``InMemoryNoteRepository`` with a ``DatabaseSession``-backed
-	implementation once a persistent store is configured.
+	The example wires the in-memory repository so the service runs with no
+	database. For persistence, build a session with
+	``chassis.db_schema.application.build_database_session`` and swap
+	``InMemoryNoteRepository`` for a ``DatabaseSession``-backed repository
+	(``SQLAlchemyRecordRepository``).
 	"""
-	cls_db_handler = build_database_handler()
 	cls_note_repo = InMemoryNoteRepository()
 	return AppContainer(
 		create_note=lambda cls_dto: create_note(cls_dto, cls_note_repo),

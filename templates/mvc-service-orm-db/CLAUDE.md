@@ -20,7 +20,7 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 
 ## Key conventions
 
-**`src/controller/main.py` is script-style.** Read top to bottom. It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `CLS_MS_TEAMS`, `MSG_MS_TEAMS`, `YAML_*`), inlines its own timer, calls the model, hands the DataFrame to the view, and gates the MS Teams notification behind `ENVIRONMENT == "production"`. Do **not** wrap it in a `run()` function — that is the deliberate MVC convention here.
+**`src/controller/main.py` is script-style.** Read top to bottom. It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), inlines its own timer, calls the model, hands the DataFrame to the view, and writes a JSON run summary. Do **not** wrap it in a `run()` function — that is the deliberate MVC convention here. If the webhook opt-in was chosen at scaffold time, a `# --- notify ---` block is appended that sends `MSG_WEBHOOK` when `ENVIRONMENT == WEBHOOK_ENV_GATE`.
 
 **`model/conexao_db.build_engine()`** reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`; `build_session_factory()` returns a bound `sessionmaker`. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. `SQL_ECHO=true` logs SQL.
 
@@ -28,7 +28,7 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 
 **`view/report_renderer.RenderToExcel`** is the reference view: take a DataFrame, write `.xlsx` via openpyxl, return the path. Add JSON/CSV/HTML renderers alongside it.
 
-**`config/startup.py`** is imported once and builds module-level singletons (logger, MS Teams webhook, log/json paths) from `outputs.yaml` / `webhooks.yaml` / `inputs.yaml` and `.env`. Import it early.
+**`config/startup.py`** is the **global config copied from `templates/python-common/src/config/`** — do not edit it in this skeleton. It builds the logger and output paths from `outputs.yaml` + `inputs.yaml` and `.env`, and exposes `output_path("<name_key>")` to build any output file path (e.g. the `.xlsx` report). The output directory is data-driven from `inputs.yaml` (`daily_infos_base_path`, default `logs`; optional `daily_infos_dated` date-subfolders). Webhook notifications are **opt-in**: when chosen at scaffold time, a `utils/webhook/` provider plus `CLS_WEBHOOK`/`MSG_WEBHOOK`/`WEBHOOK_ENV_GATE` are wired in (teams/slack via the `WebhookNotifier` port). There is no hardcoded MS Teams webhook and no Brazilian-calendar dependency.
 
 ## Session lifecycle rule
 
@@ -74,4 +74,4 @@ Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYM
 - **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings. Config: `ruff.toml`.
 - **Pre-commit**: ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, tests, coverage badge.
 - **Tests**: `pytest` — `pytest tests/unit/`.
-- **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `start`.
+- **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `run`.
