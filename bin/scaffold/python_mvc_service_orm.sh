@@ -370,7 +370,7 @@ conditional_patch_startup() {
     cat >> "$startup_path" <<'PYBLOCK'
 
 # Webhook notifications (opt-in) — depends only on the WebhookNotifier port.
-from utils.webhook.application.webhook_factory import build_webhook  # noqa: E402
+from utils.webhook.factory import build_webhook  # noqa: E402
 
 
 YAML_WEBHOOKS: dict = reading_yaml(str(_CONFIG_DIR / "webhooks.yaml"))
