@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 
@@ -45,7 +46,7 @@ def _compose_dsn(str_backend: str) -> str:
 		str_service = os.getenv("DB_SERVICE", "XEPDB1")
 		return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/?service_name={str_service}"
 	if str_backend == "mssql":
-		str_driver = "ODBC+Driver+17+for+SQL+Server"
+		str_driver = quote_plus(os.getenv("DB_ODBC_DRIVER", "ODBC Driver 17 for SQL Server"))
 		return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}?driver={str_driver}"
 	return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
 
