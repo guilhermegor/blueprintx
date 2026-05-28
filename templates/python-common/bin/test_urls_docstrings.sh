@@ -12,7 +12,8 @@ CACHE_TTL=$((60 * 60 * 24 * 7))  # 1 week in seconds
 
 get_cache() {
 	local url="$1"
-	local str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
+	local str_cache_file
+	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
 
 	if [[ -f "$str_cache_file" ]]; then
 		local int_timestamp
@@ -31,7 +32,8 @@ get_cache() {
 set_cache() {
 	local url="$1"
 	local str_status="$2"
-	local str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
+	local str_cache_file
+	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
 	echo "$str_status" > "$str_cache_file"
 }
 

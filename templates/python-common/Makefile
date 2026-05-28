@@ -22,6 +22,14 @@ version_bump_minor:
 	@echo "Version bumped to $$(poetry version -s)"
 
 # -------------------
+# CORPORATE CA
+# -------------------
+.PHONY: corporate_ca
+
+corporate_ca:
+	@bash bin/corporate_ca.sh
+
+# -------------------
 # TESTING
 # -------------------
 .PHONY: unit_tests integration_tests test_cov test_slowest test_feat test_urls_docstrings fix_playwright
@@ -111,6 +119,9 @@ help:
 	@echo "  update_venv          Update all Poetry dependencies"
 	@echo "  precommit            Install pre-commit hooks (push + commit-msg)"
 	@echo "  version_bump_minor   Bump minor version in pyproject.toml"
+	@echo ""
+	@echo "Corporate CA"
+	@echo "  corporate_ca         Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)"
 	@echo ""
 	@echo "Testing"
 	@echo "  unit_tests           Run unit tests with pytest"

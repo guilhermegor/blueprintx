@@ -43,9 +43,11 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 | `optional/webhooks.yaml` | Webhook message config (named placeholders) — copied on the webhook opt-in |
 | `bin/CLAUDE.md` | Shell-script conventions for every `*.sh` in `bin/` |
 | `bin/lib/common.sh` | Canonical sourced lib: `print_status`, `_read_env_var`, color vars |
-| `bin/venv.sh` | pyenv + Poetry venv setup (replaces inline Makefile logic) |
+| `bin/lib/bootstrap.sh` | Sourced lib: cross-platform resolvers (`bootstrap_init`, `detect_os`, `resolve_python`, `ensure_poetry`), pyenv-preferred/system-Python `ensure_python_version`, and `wire_corporate_ca`. Shared by `venv.sh`/`run.sh`/`corporate_ca.sh` |
+| `bin/venv.sh` | Poetry venv setup — pyenv-preferred with a system-Python fallback (for hosts without pyenv) + optional corporate-CA wiring; delegates the heavy lifting to `lib/bootstrap.sh` |
+| `bin/corporate_ca.sh` | Manual generator for `bin/corporate_ca.pem` — extracts a TLS-inspecting proxy's CA for pypi.org. The pem is git-ignored; its presence opts a project into corporate-SSL mode on the next `make venv` |
 | `bin/db_setup_schema.sh` | Idempotent DB setup: start services, ensure schema, apply migrations; also handles backup/restore |
-| `bin/run.sh` | Run `src/main.py` via Poetry (auto-installs if absent) |
+| `bin/run.sh` | Run `src/main.py` via Poetry (auto-installs if absent); sources `lib/bootstrap.sh` to resolve the interpreter and wire the corporate CA |
 | `bin/check_unix_filenames.sh` | Pre-commit hook: reject filenames with special characters |
 | `bin/fix_playwright.sh` | Reinstall Playwright browsers |
 | `bin/test_urls_docstrings.sh` | Pre-commit hook: validate URLs in docstrings (1-week cache) |
@@ -61,3 +63,5 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 - **`src/config/*`**: Edit here, never in the skeleton dirs. `startup.py` is generic (plain `datetime.now()`, no domain calendar); the output directory is **data-driven** from `inputs.yaml` (`daily_infos_base_path` + `daily_infos_dated`) — do not hard-code paths or re-add a `folder` key. Filename templates use **named** placeholders, not positional `{}` + comments.
 - **`optional/webhook/`**: `SlackNotifier.send` is an intentional contribution stub (raises `NotImplementedError`). The `WebhookNotifier` port is the contract `startup.py` depends on — keep adapters structurally conformant so swapping platforms never touches `startup.py`. Internal imports use the canonical `chassis.webhook` prefix; the MVC scaffolds rewrite it to `utils.webhook` on copy.
 - All shell scripts must source `bin/lib/common.sh` and use `print_status` for status output — never bare `echo`/`printf` for status messages.
+- **`bin/lib/bootstrap.sh`**: a sourced lib — define-only, no work on source. Callers run `bootstrap_init` before the other helpers. `ensure_python_version` must keep the pyenv-preferred / system-Python fallback (some corporate hosts forbid installing pyenv). `wire_corporate_ca` must stay a no-op when `bin/corporate_ca.pem` is absent, so non-corporate setups keep full TLS verification.
+- **`bin/corporate_ca.sh`**: the only place TLS verification is intentionally disabled (to capture a proxy CA). Keep it manual (`make corporate_ca`) — never auto-run it from `venv.sh`. The generated `bin/corporate_ca.pem` is git-ignored and must never be committed.
