@@ -1,48 +1,41 @@
 #!/usr/bin/env bash
-# Set up the Python virtual environment via pyenv + Poetry.
+# Set up the Python virtual environment: pyenv-preferred with a system-Python
+# fallback (for hosts where pyenv cannot be installed), optional corporate-CA
+# wiring, then a Poetry install. Cross-platform logic lives in lib/bootstrap.sh.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
-
-setup_python() {
-	local str_py_version
-	str_py_version=$(cat "$SCRIPT_DIR/../.python-version" 2>/dev/null || echo "3.12.2")
-	print_status "config" "Python version: $str_py_version"
-	pyenv install "$str_py_version" -s
-	pyenv local "$str_py_version"
-	print_status "success" "Python $str_py_version active"
-}
+# shellcheck source=bin/lib/bootstrap.sh
+source "$SCRIPT_DIR/lib/bootstrap.sh"
 
 install_deps() {
 	print_status "info" "Upgrading pip..."
-	python -m pip install --upgrade pip
-
-	if [[ -f "$SCRIPT_DIR/../requirements.txt" ]]; then
-		print_status "info" "Installing bootstrap requirements..."
-		python -m pip install -r "$SCRIPT_DIR/../requirements.txt"
-	fi
+	"$PYTHON" -m pip install --upgrade pip
 
 	print_status "info" "Configuring Poetry virtualenv (in-project)..."
-	poetry config virtualenvs.in-project true --local
+	run_poetry config virtualenvs.in-project true --local
 
 	print_status "info" "Installing project dependencies..."
-	poetry install --with dev,docs
+	run_poetry install --with dev,docs
 	print_status "success" "Dependencies installed"
 }
 
 install_playwright() {
-	if poetry run python -c "import playwright" 2>/dev/null; then
+	if run_poetry run python -c "import playwright" 2>/dev/null; then
 		print_status "info" "Installing Playwright browsers..."
-		poetry run playwright install chromium --with-deps
+		run_poetry run playwright install chromium --with-deps
 		print_status "success" "Playwright installed"
 	fi
 }
 
 main() {
 	print_status "section" "Virtual Environment Setup"
-	setup_python
+	bootstrap_init
+	ensure_python_version
+	wire_corporate_ca
+	ensure_poetry
 	install_deps
 	install_playwright
 	print_status "success" "Virtual environment ready in ./.venv"

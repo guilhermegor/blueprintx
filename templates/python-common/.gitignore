@@ -31,6 +31,9 @@ htmlcov/
 # Git-diff offline-sync exports (present only when scaffolded without GitHub)
 /git_diffs/
 
+# Corporate CA (generated locally by `make corporate_ca` — never committed)
+bin/corporate_ca.pem
+
 # Environment files — ignore real env files, keep .env.example tracked
 .env
 .env.local

@@ -33,18 +33,14 @@ from model.example_entity import ExampleEntity  # noqa: E402
 from view.report_renderer import RenderToExcel  # noqa: E402
 
 
-# start the run timer
 float_start_time = time()
 
-# silence pandas/openpyxl forward-incompatibility noise that clutters run logs
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 cls_create_log = CreateLog()
 
-# accumulates the artifacts produced by the run (paths, counts) for a final summary
 dict_xpt: dict = {}
 
-# report destination for this run (built from outputs.yaml's xlsx_name template)
 path_report = output_path("xlsx_name")
 
 # --- variable definition: record run context so every log file is self-describing ---
@@ -80,7 +76,6 @@ cls_create_log.log_message(LOGGER, "Starting summary-export process", "info")
 bool_json_dump = JsonFiles().dump_message(dict_xpt, str(PATH_JSON))
 cls_create_log.log_message(LOGGER, f"Summary export ok={bool_json_dump}: {PATH_JSON}", "info")
 
-# report total run duration in HH:MM:SS
 float_elapsed_time = time() - float_start_time
 float_hours, float_remainder = divmod(float_elapsed_time, 3600)
 float_minutes, float_seconds = divmod(float_remainder, 60)
