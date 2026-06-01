@@ -124,6 +124,7 @@ copy_templates() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.env.example" "$project_path/.env"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.env.example" "$project_path/.env.example"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.coveragerc" "$project_path/.coveragerc"
 
     print_status "success" "Templates copied and configured"
 }
