@@ -174,6 +174,7 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
+    cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
     cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$project_path/.coveragerc"
@@ -396,12 +397,6 @@ prompt_webhook() {
     esac
 }
 
-copy_poetry_toml() {
-    local project_path="$1"
-    cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/poetry.toml" "$project_path/poetry.toml"
-    print_status "success" "poetry.toml copied"
-}
-
 copy_global_config() {
     local project_path="$1"
     cp "$COMMON_TEMPLATE_ROOT/src/config/startup.py" "$project_path/src/config/startup.py"
@@ -560,7 +555,6 @@ main() {
     copy_required_chassis_db "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
-    copy_poetry_toml "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_copy_storage "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"
