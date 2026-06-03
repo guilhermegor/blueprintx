@@ -14,14 +14,16 @@ project/
     controller/
       main.py            # script-style entry-point: config → model → view
     model/
-      conexao_db.py      # build_connection() — native DB-API connection factory
       example_entity.py  # service-style class: SQL in, pandas DataFrame out
     view/
       report_renderer.py # RenderToExcel — DataFrame → .xlsx
     utils/
-      __init__.py        # project-specific helpers; shared utilities come from stpstone
+      __init__.py        # project-specific helpers
+      br_identifiers.py  # CNPJ/CPF mask · unmask · validate
+      dtypes.py          # apply_dtypes() — explicit column typing on load
     config/
-      startup.py         # logger, MS Teams webhook, runtime constants (module-level singletons)
+      connection_db.py   # build_connection() — native DB-API connection factory
+      startup.py         # logger, runtime constants (module-level singletons)
       inputs.yaml · outputs.yaml · webhooks.yaml · emails.yaml
       signatures/ · queries/
   tests/{unit,integration,performance}/
@@ -46,7 +48,7 @@ project/
 
 ## Data access
 
-`model/conexao_db.build_connection()` reads `DB_BACKEND` from `.env` and returns a raw DB-API 2.0 connection. Supported backends: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. Drivers are imported lazily — install only the one you use. SQLite is the zero-config default.
+`config/connection_db.build_connection()` reads `DB_BACKEND` from `.env` and returns a raw DB-API 2.0 connection. Supported backends: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. Drivers are imported lazily — install only the one you use. SQLite is the zero-config default. SQL Server adds `DB_MSSQL_AUTH` (`sql` or `aad` for Azure AD Interactive).
 
 `model/example_entity.ExampleEntity` shows the pattern: take the connection, run SQL via a cursor, and shape the rows into a DataFrame with `pd.DataFrame.from_records`.
 

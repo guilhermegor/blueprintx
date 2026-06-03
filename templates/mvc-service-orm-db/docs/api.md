@@ -11,7 +11,7 @@ Usage examples for the engine/session factories, the model/view layers, and exte
 `build_engine()` reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`. `build_session_factory()` returns a bound `sessionmaker`.
 
 ```python
-from model.conexao_db import build_engine, build_session_factory
+from config.connection_db import build_engine, build_session_factory
 
 # .env: DB_BACKEND=sqlite  DB_PATH=./data/app.db
 cls_engine = build_engine()
@@ -25,7 +25,7 @@ Supported values for `DB_BACKEND`: `sqlite`, `postgresql`, `mariadb`, `mysql`, `
 ## Model — ORM in, DataFrame out
 
 ```python
-from model.conexao_db import build_engine
+from config.connection_db import build_engine
 from model.example_entity import ExampleEntity
 
 cls_engine = build_engine()

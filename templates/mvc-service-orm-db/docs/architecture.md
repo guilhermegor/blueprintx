@@ -14,14 +14,16 @@ project/
     controller/
       main.py            # script-style entry-point: config → model → view
     model/
-      conexao_db.py      # build_engine() / build_session_factory() — SQLAlchemy factories
       example_entity.py  # DeclarativeBase + ORM model + service class (Session → DataFrame)
     view/
       report_renderer.py # RenderToExcel — DataFrame → .xlsx
     utils/
-      __init__.py        # project-specific helpers; shared utilities come from stpstone
+      __init__.py        # project-specific helpers
+      br_identifiers.py  # CNPJ/CPF mask · unmask · validate
+      dtypes.py          # apply_dtypes() — explicit column typing on load
     config/
-      startup.py         # logger, MS Teams webhook, runtime constants (module-level singletons)
+      connection_db.py   # build_engine() / build_session_factory() — SQLAlchemy factories
+      startup.py         # logger, runtime constants (module-level singletons)
       inputs.yaml · outputs.yaml · webhooks.yaml · emails.yaml
       signatures/ · queries/
   tests/{unit,integration,performance}/
@@ -46,7 +48,7 @@ project/
 
 ## Data access
 
-`model/conexao_db.build_engine()` reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`; `build_session_factory()` returns a bound `sessionmaker`. Supported backends: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. SQLite is the zero-config default. Set `SQL_ECHO=true` to log SQL.
+`config/connection_db.build_engine()` reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`; `build_session_factory()` returns a bound `sessionmaker`. Supported backends: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. SQLite is the zero-config default. Set `SQL_ECHO=true` to log SQL. SQL Server adds `DB_MSSQL_AUTH` (`sql` or `aad` for Azure AD Interactive).
 
 `model/example_entity` shows the pattern: a `DeclarativeBase` subclass, an ORM-mapped `ExampleRecord`, and an `ExampleEntity` service that opens sessions for writes and uses `pd.read_sql` for reads.
 

@@ -17,6 +17,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from stpstone.utils.loggs.create_logs import CreateLog  # noqa: E402
 from stpstone.utils.parsers.json import JsonFiles  # noqa: E402
 
+from config.connection_db import build_connection  # noqa: E402
 from config.startup import (  # noqa: E402
 	APP_NAME,
 	ENVIRONMENT,
@@ -28,7 +29,6 @@ from config.startup import (  # noqa: E402
 	YAML_INPUTS,
 	output_path,
 )
-from model.conexao_db import build_connection  # noqa: E402
 from model.example_entity import ExampleEntity  # noqa: E402
 from view.report_renderer import RenderToExcel  # noqa: E402
 
@@ -56,13 +56,16 @@ cls_create_log.log_message(LOGGER, f"Report export path: {path_report}", "info")
 cls_create_log.log_message(LOGGER, "Finishing variable-definition process", "info")
 
 # --- model: read source data into a DataFrame ---
+# Session lifecycle: open the connection, use it, and guarantee close() via finally.
 cls_create_log.log_message(LOGGER, "Starting data-read process", "info")
 cls_connection = build_connection()
-cls_example = ExampleEntity(cls_connection)
-cls_example.ensure_table()
-cls_example.insert("Hello from MVC native-db service!")
-df_report = cls_example.fetch_all()
-cls_connection.close()
+try:
+	cls_example = ExampleEntity(cls_connection)
+	cls_example.ensure_table()
+	cls_example.insert("Hello from MVC native-db service!")
+	df_report = cls_example.fetch_all()
+finally:
+	cls_connection.close()
 dict_xpt["rows_read"] = len(df_report)
 cls_create_log.log_message(LOGGER, f"Finishing data-read process ({len(df_report)} rows)", "info")
 

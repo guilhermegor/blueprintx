@@ -11,6 +11,13 @@ from typing import Any
 
 import pandas as pd
 
+from utils.dtypes import apply_dtypes
+
+
+# Declare the column types on load — never trust pandas' inference (a zero-padded
+# code becomes an int, a mixed column becomes object). Adjust per entity.
+_DICT_DTYPES: dict[str, str] = {"id": "int64", "title": "str"}
+
 
 class ExampleEntity:
 	"""Read/write access to a single example table.
@@ -18,7 +25,7 @@ class ExampleEntity:
 	Parameters
 	----------
 	cls_connection : Any
-		An open DB-API 2.0 connection (see :func:`model.conexao_db.build_connection`).
+		An open DB-API 2.0 connection (see :func:`config.connection_db.build_connection`).
 	str_table : str, optional
 		Table name to operate on, by default ``"example"``.
 	"""
@@ -71,4 +78,5 @@ class ExampleEntity:
 		list_cols = [col[0] for col in cls_cursor.description]
 		list_rows = cls_cursor.fetchall()
 		cls_cursor.close()
-		return pd.DataFrame.from_records(list_rows, columns=list_cols)
+		df_records = pd.DataFrame.from_records(list_rows, columns=list_cols)
+		return apply_dtypes(df_records, dict_dtypes=_DICT_DTYPES)
