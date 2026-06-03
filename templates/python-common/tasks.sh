@@ -122,6 +122,18 @@ run() {
 }
 
 # -------------------
+# GIT
+# -------------------
+
+new_branch() {
+	bash "$SCRIPT_DIR/bin/new_branch.sh" "${1:-}"
+}
+
+git_merge_to_main() {
+	bash "$SCRIPT_DIR/bin/git_merge_to_main.sh" "${1:-}"
+}
+
+# -------------------
 # GIT DIFF (offline sync — defined only when scaffolded without GitHub)
 # -------------------
 
@@ -183,6 +195,10 @@ Docs
 Run
   run                  Run src/main.py (auto-installs Poetry if missing)
 
+Git
+  NAME=<x> new_branch  Create a branch (feat/…, fix/…) off the default branch (main/master)
+  git_merge_to_main    Merge the current clean branch into main/master and delete it
+
 Git Diff (offline sync — only present when scaffolded without GitHub)
   git_diff_export             Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/
   git_diff_check <path>       Check whether a .diff applies cleanly
@@ -216,6 +232,8 @@ case "${1:-help}" in
 	db_restore)          db_restore ;;
 	docs_server)         docs_server ;;
 	run)                 run ;;
+	new_branch)          new_branch "${2:-}" ;;
+	git_merge_to_main)   git_merge_to_main "${2:-}" ;;
 	git_diff_export)     git_diff_export ;;
 	git_diff_check)      git_diff_check "${2:-}" ;;
 	git_diff_apply)      git_diff_apply "${2:-}" ;;
