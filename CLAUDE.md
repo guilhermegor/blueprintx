@@ -118,6 +118,8 @@ The `templates/python-common/` directory is the **single source of truth** for s
 - **Pre-commit hooks** (`.pre-commit-config.yaml`): ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
 - **Tests** use `unittest` (not pytest) and are discovered with `python -m unittest discover`.
 - **One class per file**. Ports (ABCs) in `domain/ports.py`, ORM/DB implementations in `infrastructure/`, orchestration in `application/use_cases.py`. Never mix layers in one file.
+- **Explicit column typing on load** — every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`templates/python-common/src/utils/dtypes.py`), never relying on pandas' inference. `apply_dtypes` also accepts optional `list_date_cols` / `list_datetime_cols`. This applies across every layout (capabilities/model/view).
+- **Brazilian identifiers** — CNPJ/CPF formatting goes through `templates/python-common/src/utils/br_identifiers.py` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format.
 - `pyproject.toml` in templates uses `${VARIABLE}` placeholders — these are resolved via `envsubst` at scaffold time; do not replace them with literal values.
 - **Type-prefix naming** — every variable name starts with a type prefix to make the type visible without inspecting annotations. Never use bare names or underscore prefixes.
 

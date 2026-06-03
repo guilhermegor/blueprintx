@@ -87,6 +87,10 @@ Subclass `DatabaseHandler` in `src/chassis/db_schema/infrastructure/<name>_handl
 Create a new subfolder under `src/chassis/` (e.g. `queues/`, `cache/`) following the same DDD layout:
 `domain/`, `application/`, `infrastructure/`. Each provider is self-contained and exposes a clean interface consumed by capabilities.
 
+## Explicit column typing & Brazilian identifiers
+
+Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference (it turns a zero-padded code into an int and a mixed column into `object`). `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format. Both modules ship from `templates/python-common/src/utils/`.
+
 ## Naming conventions
 
 Every variable name starts with a type prefix. No bare names, no underscore prefixes for instances.

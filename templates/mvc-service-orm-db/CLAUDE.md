@@ -12,19 +12,19 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 
 | Layer | Location | Rule |
 |-------|----------|------|
-| Model | `src/model/` | Data access. ORM models + service classes. May open sessions. Returns pandas DataFrames (or ORM objects). `conexao_db.py` is the engine/session factory. |
+| Model | `src/model/` | Data access. ORM models + service classes. May open sessions. Returns pandas DataFrames (or ORM objects). |
 | View | `src/view/` | Output rendering only (Excel, JSON, HTML, console). No business logic, no DB imports. |
 | Controller | `src/controller/` | Orchestration. Imports model + view + config. `main.py` is the script-style entry-point — top to bottom, no `run()` wrapper. |
-| Utils | `src/utils/` | Project-specific helpers. Calendars/parsers/dates come from the `stpstone` dependency, not vendored here. |
-| Config | `src/config/` | `startup.py` builds runtime singletons once at import; YAML config files; secrets in `.env`. |
+| Utils | `src/utils/` | Helpers. `br_identifiers.py` (CNPJ/CPF mask·unmask·validate) and `dtypes.py` (`apply_dtypes`) are shipped from python-common; calendars/parsers/dates come from the `stpstone` dependency. |
+| Config | `src/config/` | `startup.py` builds runtime singletons once at import; `connection_db.py` is the engine/session factory; YAML config files; secrets in `.env`. |
 
 ## Key conventions
 
-**`src/controller/main.py` is script-style.** Read top to bottom. It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), inlines its own timer, calls the model, hands the DataFrame to the view, and writes a JSON run summary. Do **not** wrap it in a `run()` function — that is the deliberate MVC convention here. If the webhook opt-in was chosen at scaffold time, a `# --- notify ---` block is appended that sends `MSG_WEBHOOK` when `ENVIRONMENT == WEBHOOK_ENV_GATE`.
+**`src/controller/main.py` is script-style.** Read top to bottom. It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), inlines its own timer, calls the model, hands the DataFrame to the view, and writes a JSON run summary. Do **not** wrap it in a `run()` function — that is the deliberate MVC convention here. The engine is bracketed in a `try/finally` so `dispose()` always runs (the session boundary). If the webhook opt-in was chosen at scaffold time, a `# --- notify ---` block is appended that sends `MSG_WEBHOOK` when `ENVIRONMENT == WEBHOOK_ENV_GATE`.
 
-**`model/conexao_db.build_engine()`** reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`; `build_session_factory()` returns a bound `sessionmaker`. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. `SQL_ECHO=true` logs SQL.
+**`config/connection_db.build_engine()`** reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`; `build_session_factory()` returns a bound `sessionmaker`. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. `SQL_ECHO=true` logs SQL. SQL Server honours `DB_MSSQL_AUTH` (`sql` for UID/PWD, `aad` for Azure AD Interactive).
 
-**`model/example_entity`** is the reference model: a `DeclarativeBase`, an ORM-mapped `ExampleRecord`, and an `ExampleEntity` service that opens sessions for writes and uses `pd.read_sql` for reads. Copy it per entity.
+**`model/example_entity`** is the reference model: a `DeclarativeBase`, an ORM-mapped `ExampleRecord`, and an `ExampleEntity` service that opens sessions for writes and uses `pd.read_sql` for reads, then **types every column on load** with `apply_dtypes(df, dict_dtypes=_DICT_DTYPES)` (`utils.dtypes`). Copy it per entity and adjust `_DICT_DTYPES`.
 
 **`view/report_renderer.RenderToExcel`** is the reference view: take a DataFrame, write `.xlsx` via openpyxl, return the path. Add JSON/CSV/HTML renderers alongside it.
 
@@ -43,7 +43,11 @@ The service class owns the `sessionmaker`. Open a session per write and close it
 
 ## Adding a new DB backend
 
-Add the SQLAlchemy scheme to `dict_schemes` in `model/conexao_db.py` and register the backend key in `dict_builders` inside `build_database_url()`.
+Add the SQLAlchemy scheme to `dict_schemes` in `config/connection_db.py` and register the backend key in `dict_builders` inside `build_database_url()`.
+
+## Explicit column typing & Brazilian identifiers
+
+Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference. `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format.
 
 ## Naming conventions
 

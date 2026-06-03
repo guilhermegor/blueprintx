@@ -29,6 +29,7 @@ tests/
 - **Pre-commit**: ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge.
 - **Tests**: `unittest` — `python -m unittest discover -s tests/unit -p "*.py"`.
 - **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `start`.
+- **Explicit column typing & Brazilian identifiers** — if the library touches pandas, type every DataFrame on load via `apply_dtypes` (`utils.dtypes`, never pandas' inference) and use `utils.br_identifiers` for CNPJ/CPF (alphanumeric-aware for the 2026 CNPJ). Both ship from `templates/python-common/src/utils/`.
 
 ## Extending this template
 

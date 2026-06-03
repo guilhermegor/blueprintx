@@ -72,6 +72,10 @@ Create a new subfolder under `src/chassis/` (e.g. `queues/`, `cache/`) following
 
 Always **commit outside** the repository: use-cases call `session.commit()` after the repo method returns, or the caller controls the transaction. Repositories call `session.flush()` to assign IDs without committing. Never call `session.commit()` inside a repository method.
 
+## Explicit column typing & Brazilian identifiers
+
+Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference (it turns a zero-padded code into an int and a mixed column into `object`). `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format. Both modules ship from `templates/python-common/src/utils/`.
+
 ## Naming conventions
 
 Every variable name starts with a type prefix. No bare names, no underscore prefixes for instances.
