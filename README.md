@@ -132,7 +132,7 @@ make preview      # equivalent to blueprintx preview
 make dev
 make dev-clean
 make dry-run
-make docs_server  # serve the docs site locally at http://0.0.0.0:8000
+make mkdocs_server  # serve the docs site locally at http://0.0.0.0:8000
 ```
 
 **Requirements:** `bash` ≥ 4. For Python skeletons, use `pyenv`/`poetry` in the generated project. For TypeScript skeletons, use Node.js ≥ 20 and run `npm install` after scaffolding. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.

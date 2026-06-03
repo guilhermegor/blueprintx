@@ -50,17 +50,25 @@ BlueprintX/
 │   ├── help.sh                     # usage tips
 │   ├── init_venv.sh                # venv bootstrap for this repo
 │   └── scaffold/
-│       ├── python_ddd_service.sh      # native-DB scaffold logic
-│       ├── python_ddd_service_orm.sh  # SQLAlchemy ORM scaffold logic
+│       ├── python_ddd_service.sh      # DDD native-DB scaffold logic
+│       ├── python_ddd_service_orm.sh  # DDD SQLAlchemy ORM scaffold logic
+│       ├── python_mvc_service.sh      # MVC native-DB scaffold logic
+│       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold logic
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold logic
-│       └── ts_react_app.sh            # React SPA (Webpack) scaffold logic
+│       ├── ts_react_app.sh            # React SPA (Webpack) scaffold logic
+│       └── ts_react_capability.sh     # helper: add a capability to an existing React SPA
 ├── templates/
-│   ├── common/                     # language-agnostic assets copied into EVERY skeleton (CODEOWNERS, PR template)
+│   ├── common/                     # language-agnostic assets copied into EVERY skeleton
+│   │                               #   (CODEOWNERS, PR template, bin/ git-diff scripts + lib/common.sh, make/git_diff.mk)
 │   ├── python-common/              # shared assets copied into ALL Python skeletons
 │   ├── ts-common/                  # shared assets copied into ALL TypeScript skeletons
 │   ├── ddd-service-native-db/      # DDD skeleton with native DB drivers
 │   │   └── skeleton.meta           # discovery descriptor (language, display_name, scaffold)
 │   ├── ddd-service-orm-db/         # DDD skeleton with SQLAlchemy ORM
+│   │   └── skeleton.meta
+│   ├── mvc-service-native-db/      # layered MVC skeleton with native DB drivers
+│   │   └── skeleton.meta
+│   ├── mvc-service-orm-db/         # layered MVC skeleton with SQLAlchemy ORM
 │   │   └── skeleton.meta
 │   ├── lib-minimal/                # minimal library skeleton
 │   │   └── skeleton.meta
@@ -85,21 +93,22 @@ scaffold=<relative path from repo root, e.g. bin/scaffold/ts_react_app.sh>
 - `prompt_language` de-duplicates `language=` values across all discovered metas.
 - `prompt_skeleton` shows only skeletons whose `language=` matches the user's choice.
 - `create_project` reads `scaffold=` from the matched meta and delegates to that script.
-- Directories without `skeleton.meta` (`python-common`, `ts-common`, `licenses`) are ignored.
+- Directories without `skeleton.meta` (`common`, `python-common`, `ts-common`, `licenses`) are ignored.
 
 To add a new skeleton: create its directory under `templates/`, add a `skeleton.meta`, write a scaffold script under `bin/scaffold/`, and the menu updates automatically — no changes to `blueprintx.sh` required.
 
 ## How scaffolding works
 
-### Python skeletons (`python_ddd_service.sh`, `python_ddd_service_orm.sh`, `python_lib_minimal.sh`)
+### Python skeletons (`python_ddd_service.sh`, `python_ddd_service_orm.sh`, `python_mvc_service.sh`, `python_mvc_service_orm.sh`, `python_lib_minimal.sh`)
 
 1. `validate_inputs` — checks required args.
 2. `resolve_github_username` — env var → `gh` CLI → interactive prompt.
-3. `create_directory_structure` — `mkdir -p` for the target layout.
-4. `create_python_files` — copies `templates/ddd-service-*/src/` into the project.
+3. `create_directory_structure` — `mkdir -p` for the target layout (hexagonal `chassis/`+`capabilities/` for DDD; flat `controller/model/view` for MVC).
+4. `create_python_files` — copies the skeleton's `src/` into the project.
 5. `copy_templates` — copies project-specific files (`.env`, README, etc.).
 6. `copy_common_templates` — `envsubst` renders `pyproject.toml`, then copies everything from `templates/python-common/` (ruff.toml, pre-commit config, Makefile, CI workflow, etc.).
 7. `prompt_git_remote_setup` — optionally initialises git, creates GitHub repo via `gh`, and applies branch protection.
+8. `apply_offline_mode` — when the user **declines** a GitHub remote, GitHub-only assets are skipped and the offline git-diff workflow (`bin/git_diff_*.sh` + `make/git_diff.mk`) is copied from `templates/common/` instead.
 
 ### TypeScript skeletons (`ts_react_app.sh`)
 
@@ -109,14 +118,17 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 4. `copy_skeleton_files` — copies `templates/react-spa-webpack/` verbatim.
 5. `copy_common_templates` — `envsubst` renders `ts-common/package.json`; copies `.gitignore`, `.vscode/settings.json`, `CONTRIBUTING.md`, license file.
 6. `prompt_git_remote_setup` — optionally initialises git, creates GitHub repo via `gh`, and applies branch protection.
+7. `apply_offline_mode` — same offline git-diff fallback as the Python skeletons when no GitHub remote is connected.
 
-The `templates/python-common/` directory is the **single source of truth** for shared Python tooling. The `templates/ts-common/` directory is the **single source of truth** for shared TypeScript tooling. Changes to either propagate to all skeletons of that language on the next scaffold run.
+`bin/scaffold/ts_react_capability.sh` is a standalone helper (not a skeleton): run it against an existing React SPA to scaffold a new `src/capabilities/<name>/` with its `domain/application/infrastructure/ui` layers wired in.
+
+The `templates/python-common/` directory is the **single source of truth** for shared Python tooling. The `templates/ts-common/` directory is the **single source of truth** for shared TypeScript tooling, and `templates/common/` for language-agnostic assets (CODEOWNERS, PR template, offline git-diff workflow). Changes to any of them propagate to all relevant skeletons on the next scaffold run.
 
 ## Template Python conventions (must be respected in all template files)
 
 - **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, tab indent, double quotes, NumPy docstrings.
 - **Pre-commit hooks** (`.pre-commit-config.yaml`): ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
-- **Tests** use `unittest` (not pytest) and are discovered with `python -m unittest discover`.
+- **Tests**: DDD and lib-minimal skeletons use `unittest`, discovered with `python -m unittest discover`. MVC skeletons use `pytest` (with `conftest.py` fixtures). Match the skeleton you are editing.
 - **One class per file**. Ports (ABCs) in `domain/ports.py`, ORM/DB implementations in `infrastructure/`, orchestration in `application/use_cases.py`. Never mix layers in one file.
 - **Explicit column typing on load** — every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`templates/python-common/src/utils/dtypes.py`), never relying on pandas' inference. `apply_dtypes` also accepts optional `list_date_cols` / `list_datetime_cols`. This applies across every layout (capabilities/model/view).
 - **Brazilian identifiers** — CNPJ/CPF formatting goes through `templates/python-common/src/utils/br_identifiers.py` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format.
