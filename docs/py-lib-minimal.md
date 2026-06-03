@@ -99,7 +99,7 @@ class TestMain(unittest.TestCase):
 2. Mirror the source structure under `tests/unit/` — one test module per source module.
 3. Run tests: `python -m unittest discover -s tests/unit -p "*.py" -v`
 4. Add integration tests in `tests/integration/` for any I/O-dependent code.
-5. Keep `docs/` in sync with the public API; host locally with `make docs_server`.
+5. Keep `docs/` in sync with the public API; host locally with `make mkdocs_server`.
 
 ---
 

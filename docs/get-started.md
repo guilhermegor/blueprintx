@@ -30,7 +30,7 @@ make dry-run     # print structure; no files written
 ## ✨ Highlights
 
 - **Interactive CLI** (`make new`) with auto-discovered language and skeleton menus
-- **Python skeletons**: DDD service (hexagonal/ports-and-adapters, native DB or SQLAlchemy ORM) and lib-minimal
+- **Python skeletons**: DDD service (hexagonal/ports-and-adapters, native DB or SQLAlchemy ORM), MVC service (layered, script/pipeline style, native DB or SQLAlchemy ORM), and lib-minimal
 - **TypeScript skeletons**: React SPA with Webpack 5, Babel, ESLint, and Prettier
 - **Common Python baseline**: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders
 - **Common TypeScript baseline**: `package.json` with pinned deps, `.gitignore`, VS Code settings, `CONTRIBUTING.md`
