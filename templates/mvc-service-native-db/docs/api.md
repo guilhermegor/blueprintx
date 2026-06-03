@@ -11,7 +11,7 @@ Usage examples for the connection factory, the model/view layers, and extension 
 `build_connection()` reads `DB_BACKEND` from `.env` and returns a raw DB-API 2.0 connection.
 
 ```python
-from model.conexao_db import build_connection
+from config.connection_db import build_connection
 
 # .env: DB_BACKEND=sqlite  DB_PATH=./data/app.db
 cls_connection = build_connection()
@@ -24,7 +24,7 @@ Supported values for `DB_BACKEND`: `sqlite`, `postgresql`, `mariadb`, `mysql`, `
 ## Model — SQL in, DataFrame out
 
 ```python
-from model.conexao_db import build_connection
+from config.connection_db import build_connection
 from model.example_entity import ExampleEntity
 
 cls_connection = build_connection()

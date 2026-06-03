@@ -11,6 +11,13 @@ import pandas as pd
 from sqlalchemy import Engine, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
+from utils.dtypes import apply_dtypes
+
+
+# Declare the column types on load — never trust pandas' inference (a zero-padded
+# code becomes an int, a mixed column becomes object). Adjust per entity.
+_DICT_DTYPES: dict[str, str] = {"id": "int64", "title": "str"}
+
 
 class Base(DeclarativeBase):
 	"""Declarative base for the example model."""
@@ -32,7 +39,7 @@ class ExampleEntity:
 	----------
 	cls_engine : sqlalchemy.Engine
 		Engine bound to the target database (see
-		:func:`model.conexao_db.build_engine`).
+		:func:`config.connection_db.build_engine`).
 	"""
 
 	def __init__(self, cls_engine: Engine) -> None:
@@ -67,4 +74,5 @@ class ExampleEntity:
 			One row per record.
 		"""
 		with self.cls_engine.connect() as cls_conn:
-			return pd.read_sql(select(ExampleRecord), cls_conn)
+			df_records = pd.read_sql(select(ExampleRecord), cls_conn)
+		return apply_dtypes(df_records, dict_dtypes=_DICT_DTYPES)

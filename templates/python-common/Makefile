@@ -96,6 +96,17 @@ run:
 	@bash bin/run.sh
 
 # -------------------
+# GIT
+# -------------------
+.PHONY: new_branch git_merge_to_main
+
+new_branch:
+	@bash bin/new_branch.sh "$(NAME)"
+
+git_merge_to_main:
+	@bash bin/git_merge_to_main.sh
+
+# -------------------
 # DOCS
 # -------------------
 .PHONY: docs_server
@@ -146,6 +157,10 @@ help:
 	@echo ""
 	@echo "Run"
 	@echo "  run                  Run src/main.py (auto-installs Poetry if missing)"
+	@echo ""
+	@echo "Git"
+	@echo "  new_branch NAME=<x>  Create a branch (feat/…, fix/…) off the default branch (main/master)"
+	@echo "  git_merge_to_main    Merge the current clean branch into main/master and delete it"
 	@echo ""
 	@echo "Git Diff (offline sync — only present when scaffolded without GitHub)"
 	@echo "  git_diff_export              Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/"

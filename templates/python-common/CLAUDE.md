@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two subtrees are the **deliberate exceptions** — they hold *application code* that is identical across skeletons, so it lives here rather than being duplicated:
 
 - **`src/config/`** — the global runtime config (`startup.py`, `inputs.yaml`, `outputs.yaml`). **Always** copied into every service project's `src/config/`. This is why the four service skeletons no longer carry their own `startup.py`/`inputs.yaml`/`outputs.yaml`.
+- **`src/utils/`** — project-agnostic helpers (`br_identifiers.py`, `dtypes.py`) plus their unit tests. **Always** copied into every service project's `src/utils/` and `tests/unit/`, so the CNPJ/CPF and dtype helpers exist in every Python skeleton from one source.
 - **`optional/`** — opt-in app code injected only when the matching scaffold prompt is answered *yes*. Shipped into the generated project's normal layout (e.g. `src/chassis/`), so the output looks standard — the `optional/` marker exists only here, to keep the tooling-vs-app-code boundary visible.
 
 ## Files and their roles
@@ -36,18 +37,23 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 | `src/config/startup.py` | Global runtime config — logger + `output_path()` helper + `PATH_LOG/JSON/TXT`. Always copied into every service project. |
 | `src/config/inputs.yaml` | Global inputs — single output root (`daily_infos_base_path`, default `logs`) + `daily_infos_dated` toggle |
 | `src/config/outputs.yaml` | Global filename templates (`log/json/txt/csv/xlsx_name`) using **named** placeholders |
+| `src/utils/br_identifiers.py` | CNPJ/CPF `mask_*` / `unmask_*` / `is_valid_*` — alphanumeric-aware (2026 CNPJ), pure functions. Copied into every service project's `src/utils/` |
+| `src/utils/dtypes.py` | `apply_dtypes(df, dict_dtypes, list_date_cols, list_datetime_cols)` — enforces explicit column typing on load. Copied into every service project's `src/utils/` |
 | `optional/chassis/db/` | `DatabaseHandler` ABC bundle — injected with the schema-less storage opt-in (and always for the native DDD skeleton, whose `db_schema` requires it) |
 | `optional/chassis/db_wschema/` | Schema-less storage (JSON/CSV/joblib) — injected on the storage opt-in (DDD only) |
 | `optional/storage.env.fragment` | `.env` block appended on the storage opt-in |
 | `optional/webhook/` | Port-based webhook provider (`WebhookNotifier` port + teams/slack adapters + `build_webhook` factory) — injected on the webhook opt-in; lands in `chassis/webhook` (DDD) or `utils/webhook` (MVC) |
 | `optional/webhooks.yaml` | Webhook message config (named placeholders) — copied on the webhook opt-in |
 | `bin/CLAUDE.md` | Shell-script conventions for every `*.sh` in `bin/` |
-| `bin/lib/common.sh` | Canonical sourced lib: `print_status`, `_read_env_var`, color vars |
-| `bin/lib/bootstrap.sh` | Sourced lib: cross-platform resolvers (`bootstrap_init`, `detect_os`, `resolve_python`, `ensure_poetry`), pyenv-preferred/system-Python `ensure_python_version`, and `wire_corporate_ca`. Shared by `venv.sh`/`run.sh`/`corporate_ca.sh` |
-| `bin/venv.sh` | Poetry venv setup — pyenv-preferred with a system-Python fallback (for hosts without pyenv) + optional corporate-CA wiring; delegates the heavy lifting to `lib/bootstrap.sh` |
+| `bin/lib/common.sh` | Canonical sourced lib: `print_status`, `_read_env_var`, `resolve_default_branch` (main/master detection), color vars |
+| `bin/lib/bootstrap.sh` | Sourced lib: cross-platform resolvers (`bootstrap_init`, `detect_os`, `resolve_python`, `ensure_poetry`), pyenv-preferred/system-Python `ensure_python_version`, `to_native_path` (cygpath path resolution), and `wire_corporate_ca`. Shared by `venv.sh`/`run.sh`/`corporate_ca.sh` |
+| `bin/lib/pip_fallback.sh` | Sourced lib: Poetry→pip fallback for restricted hosts — parses `pyproject.toml` (Poetry + PEP 621) into pip requirements and installs groups straight into `.venv`. Sourced by `venv.sh`/`run.sh` |
+| `bin/venv.sh` | Poetry venv setup — pyenv-preferred with system-Python fallback; configures in-project Poetry venv, upgrades pip in-env, installs `dev,docs`; **falls back to stdlib venv + `pip_fallback`** when Poetry is unavailable. Playwright-aware. Pyenv honoured on both branches |
+| `bin/new_branch.sh` | Create a feature branch off the default branch (main/master) with CONTRIBUTING-prefix validation; `make new_branch NAME=<x>` |
+| `bin/git_merge_to_main.sh` | Merge the current clean branch into the default branch (main/master) and delete it; `make git_merge_to_main` |
 | `bin/corporate_ca.sh` | Manual generator for `bin/corporate_ca.pem` — extracts a TLS-inspecting proxy's CA for pypi.org. The pem is git-ignored; its presence opts a project into corporate-SSL mode on the next `make venv` |
 | `bin/db_setup_schema.sh` | Idempotent DB setup: start services, ensure schema, apply migrations; also handles backup/restore |
-| `bin/run.sh` | Run `src/main.py` via Poetry (auto-installs if absent); sources `lib/bootstrap.sh` to resolve the interpreter and wire the corporate CA |
+| `bin/run.sh` | Run the project entrypoint (auto-resolves `src/main.py` → `src/controller/main.py` → `src/<pkg>/main.py`); skips reinstall when `.venv` is newer than `pyproject.toml`/`poetry.lock`; Poetry→pip→system fallback chain; sources `lib/bootstrap.sh` + `lib/pip_fallback.sh` and wires the corporate CA |
 | `bin/check_unix_filenames.sh` | Pre-commit hook: reject filenames with special characters |
 | `bin/fix_playwright.sh` | Reinstall Playwright browsers |
 | `bin/test_urls_docstrings.sh` | Pre-commit hook: validate URLs in docstrings (1-week cache) |

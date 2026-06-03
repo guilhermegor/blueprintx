@@ -31,11 +31,14 @@ YAML_INPUTS: dict = reading_yaml(str(_CONFIG_DIR / "inputs.yaml"))
 
 _dt_now = datetime.now()
 _str_date = _dt_now.strftime("%Y%m%d")
+_str_date_folder = _dt_now.strftime("%Y-%m-%d")
 _str_time = _dt_now.strftime("%H%M%S")
 
 # Single output root (inputs.yaml); optionally partitioned into <root>/<YYYY-MM-DD>/.
+# The partition uses the human-readable _str_date_folder; filenames keep the compact
+# _str_date (see output_path).
 _root = Path(YAML_INPUTS.get("daily_infos_base_path", "logs")).expanduser()
-_out_dir = _root / _str_date if YAML_INPUTS.get("daily_infos_dated", False) else _root
+_out_dir = _root / _str_date_folder if YAML_INPUTS.get("daily_infos_dated", False) else _root
 _out_dir.mkdir(parents=True, exist_ok=True)
 
 

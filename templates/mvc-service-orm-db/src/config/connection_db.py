@@ -54,6 +54,12 @@ def _compose_url(str_backend: str) -> str:
 		return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/?service_name={str_service}"
 	if str_backend == "mssql":
 		str_driver = quote_plus(os.getenv("DB_ODBC_DRIVER", "ODBC Driver 17 for SQL Server"))
+		str_auth = os.getenv("DB_MSSQL_AUTH", "sql").lower()
+		if str_auth in {"aad", "ad", "azure", "activedirectoryinteractive"}:
+			return (
+				f"{str_scheme}://{str_host}:{str_port}/{str_name}"
+				f"?driver={str_driver}&authentication=ActiveDirectoryInteractive"
+			)
 		return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}?driver={str_driver}"
 	return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
 

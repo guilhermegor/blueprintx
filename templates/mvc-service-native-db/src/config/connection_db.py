@@ -88,20 +88,34 @@ def _connect_mysql() -> Any:
 
 
 def _connect_mssql() -> Any:
-	"""Open a SQL Server connection via ``pyodbc``."""
+	"""Open a SQL Server connection via ``pyodbc`` (SQL auth or Azure AD).
+
+	``DB_MSSQL_AUTH`` selects the auth mode: the default ``sql`` uses
+	``UID``/``PWD``; ``aad`` (Azure AD Interactive) prompts the browser flow and
+	sends ``UID`` only when set.
+	"""
 	import pyodbc
 
 	str_dsn = os.getenv("DB_DSN")
 	if str_dsn:
 		return pyodbc.connect(str_dsn)
 	str_driver = os.getenv("DB_ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
+	str_auth = os.getenv("DB_MSSQL_AUTH", "sql").lower()
 	str_conn = (
 		f"DRIVER={{{str_driver}}};"
 		f"SERVER={os.getenv('DB_HOST', 'localhost')},{os.getenv('DB_PORT', '1433')};"
 		f"DATABASE={os.getenv('DB_NAME', 'app')};"
-		f"UID={os.getenv('DB_USER', 'user')};"
-		f"PWD={os.getenv('DB_PASSWORD', 'password')}"
 	)
+	if str_auth in {"aad", "ad", "azure", "activedirectoryinteractive"}:
+		str_conn += "Authentication=ActiveDirectoryInteractive;"
+		str_user = os.getenv("DB_USER")
+		if str_user:
+			str_conn += f"UID={str_user};"
+	else:
+		str_conn += (
+			f"UID={os.getenv('DB_USER', 'user')};"
+			f"PWD={os.getenv('DB_PASSWORD', 'password')}"
+		)
 	return pyodbc.connect(str_conn)
 
 

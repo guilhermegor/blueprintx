@@ -30,6 +30,42 @@ detect_os() {
     esac
 }
 
+# ── resolve_abs_path ──────────────────────────────────────────────────────────
+# Resolve a path to an absolute POSIX path.
+resolve_abs_path() {
+    local str_path="$1"
+    local str_dir
+    local str_base
+
+    str_dir="$(cd "$(dirname "$str_path")" && pwd)"
+    str_base="$(basename "$str_path")"
+
+    printf '%s/%s\n' "$str_dir" "$str_base"
+}
+
+# ── to_native_path ────────────────────────────────────────────────────────────
+# Convert a POSIX path to the native OS path when needed. On Git Bash / MINGW
+# this turns /a/foo/bar into A:/foo/bar (via cygpath); elsewhere it is a no-op.
+# Shell-only — no Python subprocess — and strips stray CR/LF.
+to_native_path() {
+    local str_path="$1"
+    local str_abs
+    local str_native
+
+    str_abs="$(resolve_abs_path "$str_path")"
+
+    if [[ "${OS_TYPE:-$(detect_os)}" == "windows" ]] && command -v cygpath >/dev/null 2>&1; then
+        str_native="$(cygpath -am "$str_abs")"
+    else
+        str_native="$str_abs"
+    fi
+
+    str_native="${str_native//$'\r'/}"
+    str_native="${str_native//$'\n'/}"
+
+    printf '%s\n' "$str_native"
+}
+
 # ── resolve_python ────────────────────────────────────────────────────────────
 # Echo the first working interpreter (python3 → python → py). Fail if none.
 resolve_python() {
@@ -76,7 +112,7 @@ ensure_poetry() {
     if [[ -f "$PROJECT_ROOT/requirements.txt" ]]; then
         "$PYTHON" -m pip install -r "$PROJECT_ROOT/requirements.txt"
     else
-        "$PYTHON" -m pip install "poetry>=2.2.1"
+        "$PYTHON" -m pip install "poetry>=2.4"
     fi
 
     if resolve_poetry; then
@@ -145,6 +181,8 @@ append_ca_to_certifi() {
 
     local str_bundle str_marker
     str_bundle="$("$PYTHON" -c 'import certifi; print(certifi.where())')"
+    str_bundle="${str_bundle//$'\r'/}"
+    str_bundle="${str_bundle//$'\n'/}"
     str_marker="$(sed -n '2p' "$str_cert")"
 
     if [[ -z "$str_marker" || ! -f "$str_bundle" ]]; then
@@ -170,19 +208,15 @@ wire_corporate_ca() {
 
     print_status "config" "Corporate CA found: $CORPORATE_CA_PEM"
 
-    # Resolve the absolute (Windows-safe) path inside Python — no cygpath, and the
-    # path is passed via env var rather than as a shell arg.
+    # Resolve the absolute (Windows-safe) path in the shell via to_native_path —
+    # one less Python subprocess, and cygpath handles Git Bash drive mapping.
     local str_cert_abs
-    str_cert_abs="$(BOOTSTRAP_CERT_OUT="$CORPORATE_CA_PEM" "$PYTHON" - <<'PYEOF'
-import os
-
-print(os.path.normpath(os.path.abspath(os.environ["BOOTSTRAP_CERT_OUT"])))
-PYEOF
-)"
+    str_cert_abs="$(to_native_path "$CORPORATE_CA_PEM")"
 
     export REQUESTS_CA_BUNDLE="$str_cert_abs"
     export SSL_CERT_FILE="$str_cert_abs"
     export CURL_CA_BUNDLE="$str_cert_abs"
+    export PIP_CERT="$str_cert_abs"
     export PIP_TRUSTED_HOST="pypi.org files.pythonhosted.org pypi.python.org"
     print_status "config" "SSL bundle: $str_cert_abs"
 

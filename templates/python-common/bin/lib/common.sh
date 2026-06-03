@@ -44,3 +44,37 @@ print_status() {
 _read_env_var() {
     grep -m1 "^${1}=" .env 2>/dev/null | cut -d'=' -f2- | tr -d "'\""
 }
+
+# ── resolve_default_branch [override] ─────────────────────────────────────────
+# Echo the repo's default branch (handles main *or* master). Resolution order:
+#   1) the [override] argument, else the DEFAULT_BRANCH env var
+#   2) origin/HEAD (the remote's default), basename only
+#   3) whichever of main / master exists locally
+#   4) "main" as a last resort
+# Plain-data output (stdout) — the caller captures it; not a status message.
+# Shared by new_branch.sh and git_merge_to_main.sh.
+resolve_default_branch() {
+    local str_override="${1:-${DEFAULT_BRANCH:-}}"
+    local str_ref
+    local str_candidate
+
+    if [[ -n "$str_override" ]]; then
+        printf '%s\n' "$str_override"
+        return 0
+    fi
+
+    str_ref="$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null || true)"
+    if [[ -n "$str_ref" ]]; then
+        printf '%s\n' "${str_ref##*/}"
+        return 0
+    fi
+
+    for str_candidate in main master; do
+        if git show-ref --verify --quiet "refs/heads/$str_candidate"; then
+            printf '%s\n' "$str_candidate"
+            return 0
+        fi
+    done
+
+    printf '%s\n' "main"
+}
