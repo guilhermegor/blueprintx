@@ -102,7 +102,7 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 "tests/**/*.py" = [
     "S101",  # use of assert
 ]
-# Native DB-API 2.0 connections have no shared stdlib type, so `Any` is the honest
-# return/param annotation for the raw-driver model layer (MVC native skeleton only).
-"src/model/conexao_db.py" = ["ANN401"]
+# Native DB-API 2.0 / SQLAlchemy connections have no shared stdlib type, so `Any` is the
+# honest return/param annotation for the raw-driver connection factory (MVC skeletons).
+"src/config/connection_db.py" = ["ANN401"]
 "src/model/example_entity.py" = ["ANN401"]
