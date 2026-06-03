@@ -246,20 +246,42 @@ EOF
     esac
 }
 
+# Always initialise a local git repo with a first commit, independent of any
+# remote setup, so every scaffold is a git repo even in non-interactive (--dev)
+# runs. Skips gracefully when git is unavailable or the repo already exists.
+initialize_git_repo() {
+    local project_path="$1"
+
+    if ! command -v git >/dev/null 2>&1; then
+        print_status "warning" "git not found — skipping repo initialization"
+        return
+    fi
+
+    if git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        print_status "info" "Git repo already initialized; skipping"
+        return
+    fi
+
+    (
+        cd "$project_path" || exit 1
+        git init -q -b main || true
+        git add . || true
+        git commit -q -m "feat: first commit" >/dev/null 2>&1 || true
+    )
+    print_status "success" "Initialized git repo (branch main) with first commit"
+}
+
 prompt_git_remote_setup() {
     local project_path="$1"
 
-    print_status "info" "Optional: initialize git and add remote"
-    read -r -p "Initialize git repo and add remote origin? [y/N]: " answer || true
+    print_status "info" "Optional: add a remote origin / create a GitHub repo (the local repo is already initialized)"
+    read -r -p "Add remote origin and (optionally) create the GitHub repo now? [y/N]: " answer || true
 
     case "$answer" in
         y|Y)
             push_done=0
             (
                 cd "$project_path"
-                git init -q -b main || true
-                git add . || true
-                git commit -m "feat: first commit" >/dev/null 2>&1 || true
                 if git remote get-url origin >/dev/null 2>&1; then
                     print_status "warn" "Remote 'origin' already exists; skipped add"
                 else
@@ -306,7 +328,7 @@ prompt_git_remote_setup() {
             print_status "success" "Git repo initialized."
             ;;
         *)
-            print_status "info" "Skipped git initialization"
+            print_status "info" "Skipped remote setup"
             ;;
     esac
 
@@ -354,6 +376,7 @@ main() {
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
+    initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
     # When the project is not connected to a GitHub remote (no upstream tracking

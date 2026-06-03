@@ -336,6 +336,18 @@ copy_global_config() {
     print_status "success" "Global config (startup/inputs/outputs) applied"
 }
 
+# Shared, project-agnostic utils (CNPJ/CPF + dtypes) + their unit tests, from the
+# single source in python-common — so every skeleton ships the same helpers.
+copy_shared_utils() {
+    local project_path="$1"
+    mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
+    cp "$COMMON_TEMPLATE_ROOT/src/utils/br_identifiers.py" "$project_path/src/utils/br_identifiers.py"
+    cp "$COMMON_TEMPLATE_ROOT/src/utils/dtypes.py" "$project_path/src/utils/dtypes.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_br_identifiers.py" "$project_path/tests/unit/test_br_identifiers.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dtypes.py" "$project_path/tests/unit/test_dtypes.py"
+    print_status "success" "Shared utils (br_identifiers/dtypes) + tests applied"
+}
+
 # Output directory is data-driven from inputs.yaml (no startup.py patching).
 conditional_patch_inputs_yaml() {
     local project_path="$1"
@@ -415,20 +427,42 @@ copy_github_assets() {
     print_status "success" "GitHub assets copied (.github)"
 }
 
+# Always initialise a local git repo with a first commit, independent of any
+# remote setup, so every scaffold is a git repo even in non-interactive (--dev)
+# runs. Skips gracefully when git is unavailable or the repo already exists.
+initialize_git_repo() {
+    local project_path="$1"
+
+    if ! command -v git >/dev/null 2>&1; then
+        print_status "warning" "git not found — skipping repo initialization"
+        return
+    fi
+
+    if git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        print_status "info" "Git repo already initialized; skipping"
+        return
+    fi
+
+    (
+        cd "$project_path" || exit 1
+        git init -q -b main || true
+        git add . || true
+        git commit -q -m "feat: first commit" >/dev/null 2>&1 || true
+    )
+    print_status "success" "Initialized git repo (branch main) with first commit"
+}
+
 prompt_git_remote_setup() {
     local project_path="$1"
 
-    print_status "info" "Optional: initialize git and add remote"
-    read -r -p "Initialize git repo and add remote origin? [y/N]: " answer || true
+    print_status "info" "Optional: add a remote origin / create a GitHub repo (the local repo is already initialized)"
+    read -r -p "Add remote origin and (optionally) create the GitHub repo now? [y/N]: " answer || true
 
     case "$answer" in
         y|Y)
             push_done=0
             (
                 cd "$project_path"
-                git init -q -b main || true
-                git add . || true
-                git commit -m "feat: first commit" >/dev/null 2>&1 || true
                 if git remote get-url origin >/dev/null 2>&1; then
                     print_status "warn" "Remote 'origin' already exists; skipped add"
                 else
@@ -476,7 +510,7 @@ prompt_git_remote_setup() {
             print_status "success" "Git repo initialized."
             ;;
         *)
-            print_status "info" "Skipped git initialization"
+            print_status "info" "Skipped remote setup"
             ;;
     esac
 
@@ -523,6 +557,7 @@ main() {
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
     copy_global_config "$PROJECT_PATH"
+    copy_shared_utils "$PROJECT_PATH"
     copy_tests "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
@@ -532,6 +567,7 @@ main() {
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
+    initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
     # GitHub-only assets exist iff a GitHub remote was established. With an upstream
