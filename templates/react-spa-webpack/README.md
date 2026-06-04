@@ -1,7 +1,7 @@
 # ${PROJECT_NAME}
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)
+![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-5.x-3178C6?logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=white)
 ![Webpack](https://img.shields.io/badge/webpack-5-8DD6F9?logo=webpack&logoColor=white)
@@ -42,7 +42,7 @@ ${PROJECT_DESCRIPTION}
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node ≥ 20
+- Node ≥ 22 — the exact version is pinned in `.nvmrc` (`nvm use` / `fnm use`)
 - npm (bundled with Node) — pnpm / yarn also work
 - A modern browser for development (Chrome, Firefox, Safari)
 
@@ -78,6 +78,7 @@ npm run lint        # eslint --fix
 ${PROJECT_NAME}/
 ├── .github/
 │   ├── workflows/             # CI: build, lint, test, type-check (+ deploy-spa for Pages)
+│   ├── CLAUDE.md              # guidance for adding recurrent / scheduled automation
 │   ├── CODEOWNERS
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── .husky/                    # pre-commit / pre-push hooks
@@ -101,7 +102,9 @@ ${PROJECT_NAME}/
 ├── tests/
 │   └── e2e/                   # Playwright specs
 ├── .babelrc
+├── .editorconfig
 ├── .gitignore
+├── .nvmrc                     # pinned Node version (single source of truth)
 ├── .prettierrc.js
 ├── .stylelintrc.json
 ├── eslint.config.js
@@ -134,6 +137,24 @@ gh api -X POST repos/${GITHUB_USERNAME}/${PROJECT_NAME}/pages \
 
 See `CLAUDE.md → Deployment` for the full rationale (token scopes, router
 basename, custom domains).
+
+## 🐳 Docker (optional)
+
+If you scaffolded with the Docker option, the project root has a `Dockerfile`,
+`nginx.conf`, and `.dockerignore`. The build is **multi-stage** (Node build →
+nginx serve), so the final image carries only the static `dist/` on nginx
+(~30 MB — no Node, no `node_modules`, no source).
+
+```bash
+# Build — the BuildKit secret passes .env at build time without baking it into a layer
+docker build --secret id=env,src=.env -t ${PROJECT_NAME} .
+
+# Run — nginx serves the SPA on port 80
+docker run --rm -p 8080:80 ${PROJECT_NAME}   # → http://localhost:8080
+```
+
+To pin the build to the Node version in `.nvmrc`, add
+`--build-arg NODE_VERSION="$(cat .nvmrc)"`. See `CLAUDE.md → Docker` for details.
 
 ## 👨‍💻 Authors
 - ${GITHUB_USERNAME} — [GitHub](https://github.com/${GITHUB_USERNAME})

@@ -4,6 +4,11 @@
   "description": "${PROJECT_DESCRIPTION}",
   "main": "index.js",
   "type": "module",
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  },
+  "packageManager": "npm@10.9.0",
   "scripts": {
     "start": "cross-env NODE_ENV=development webpack serve --mode development",
     "build": "cross-env NODE_ENV=production webpack --mode production",
@@ -22,6 +27,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.460.0",
     "react": "^19.2.5",

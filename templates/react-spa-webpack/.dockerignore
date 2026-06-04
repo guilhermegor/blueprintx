@@ -1,0 +1,16 @@
+# Keep the build context small and the image clean. The build stage runs
+# `npm ci` and `npm run build` from source, so none of the below is needed.
+node_modules
+dist
+.git
+.github
+.husky
+coverage
+playwright-report
+test-results
+.playwright-mcp
+*.log
+.env
+.env.local
+.vscode
+.idea
