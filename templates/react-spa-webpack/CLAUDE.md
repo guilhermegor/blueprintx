@@ -18,6 +18,12 @@ npm run type-check # tsc --noEmit — type errors only, no emit
 npm run lint       # ESLint (run `npm run lint:fix` to apply auto-fixes)
 ```
 
+The Node version is pinned in **`.nvmrc`** (single source of truth). Run
+`nvm use` (or `fnm use`) to match it locally; CI reads it via
+`actions/setup-node`'s `node-version-file`, and the optional Dockerfile reads
+it through `--build-arg NODE_VERSION="$(cat .nvmrc)"`. `package.json`'s
+`engines` field enforces the same floor on `npm install`.
+
 ## Deployment — GitHub Pages
 
 The scaffold ships `.github/workflows/deploy-spa.yml`, which on every push
@@ -113,6 +119,36 @@ If you set a custom domain, add a `CNAME` file at the repo root of the
 `gh-pages` branch (or via the Pages settings UI), and the workflow's
 `rsync --delete` will preserve it because the action commits to the
 existing branch each run rather than rebuilding it from scratch.
+
+## Docker
+
+> Present only if you accepted the Docker prompt at scaffold time (`Dockerfile`,
+> `nginx.conf`, `.dockerignore` in the project root). A GitHub Pages-only project
+> won't have these — that's expected.
+
+The `Dockerfile` is a **multi-stage build**: stage one compiles the SPA with
+Node, stage two copies only the built `dist/` into an `nginx` image. The final
+image contains no Node, no `node_modules`, and no source — just nginx serving
+static files (~30 MB), which is why it's small and has a minimal attack surface.
+
+```bash
+# Build (BuildKit secret passes .env at build time without baking it into a layer)
+docker build --secret id=env,src=.env -t ${PROJECT_NAME} .
+
+# Pin the Node version to .nvmrc instead of the Dockerfile default
+docker build --build-arg NODE_VERSION="$(cat .nvmrc)" \
+  --secret id=env,src=.env -t ${PROJECT_NAME} .
+
+# Run — nginx serves the SPA on port 80
+docker run --rm -p 8080:80 ${PROJECT_NAME}   # → http://localhost:8080
+```
+
+Build-time env vars (e.g. an API key) reach the bundle via the BuildKit secret
+mounted at `/run/secrets/env`; webpack's `readEnvFile()` + `DefinePlugin` inline
+them. Because it's a *secret mount* (not `ARG`/`ENV`), the value never lands in
+an image layer or the image metadata. `nginx.conf` provides the SPA route
+fallback (`try_files … /index.html`) and long-lived immutable caching for the
+fingerprinted `[contenthash]` assets.
 
 ## Architecture
 
@@ -316,20 +352,45 @@ magic numbers.
 
 ## Custom fonts
 
-The scaffold uses a system font stack. To add a custom font without a Google
-CDN request:
+The scaffold ships **[Inter](https://fontsource.org/fonts/inter)** as the default
+sans-serif, self-hosted via `@fontsource/inter` (no Google CDN request). The wiring
+lives in three places:
+
+- `package.json` — the `@fontsource/inter` dependency.
+- `src/index.tsx` — `import '@fontsource/inter/{400,500,600,700}.css'` at the top,
+  before the foundation styles, so the `@font-face` rules register first. The four
+  weights back the `--font-{normal,medium,semibold,bold}` tokens.
+- `shared/styles/foundations/typography.css` — `--font-sans` lists `'Inter'` first,
+  with the system stack as fallback.
+
+### Swap to a different family
+
+Install the new family, replace the imports, and update the token:
 
 ```bash
-npm install @fontsource/inter
+npm install @fontsource/roboto
 ```
 
 ```ts
-// index.tsx
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/700.css';
+// src/index.tsx — replace the @fontsource/inter imports
+import '@fontsource/roboto/400.css';
+import '@fontsource/roboto/500.css';
+import '@fontsource/roboto/700.css';
 ```
 
-Then update `--font-sans` in `shared/styles/foundations/typography.css`.
+```css
+/* shared/styles/foundations/typography.css */
+--font-sans: 'Roboto', system-ui, -apple-system, sans-serif;
+```
+
+Import only the weights you actually reference via `--font-normal` / `--font-medium`
+/ `--font-bold` — each weight is a separate network asset.
+
+### Drop back to the system stack
+
+Remove the `@fontsource/*` imports from `index.tsx`, uninstall the dependency, and
+set `--font-sans` back to `system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+sans-serif`. Zero font payload, but typography varies per OS.
 
 ## Module Federation
 

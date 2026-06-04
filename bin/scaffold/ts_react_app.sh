@@ -82,6 +82,17 @@ prompt_module_federation() {
     esac
 }
 
+prompt_docker() {
+    echo ""
+    read -r -p "Add a Docker setup (multi-stage build → nginx)? [y/N]: " docker_answer || true
+    case "$docker_answer" in
+        y|Y) USE_DOCKER=1
+             print_status "config" "Docker: enabled (Dockerfile + nginx.conf + .dockerignore)" ;;
+        *)   USE_DOCKER=0
+             print_status "config" "Docker: disabled" ;;
+    esac
+}
+
 create_directory_structure() {
     local project_path="$1"
 
@@ -118,6 +129,22 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env.example"
 
     print_status "success" "Skeleton files copied"
+}
+
+# Optional Docker setup (multi-stage build → nginx). Copied only when the user
+# opts in via prompt_docker; static-hosting users (GitHub Pages) skip it.
+apply_docker_files() {
+    local project_path="$1"
+
+    if [ "${USE_DOCKER:-0}" -ne 1 ]; then
+        return
+    fi
+
+    print_status "info" "Adding Docker setup (multi-stage build → nginx)..."
+    cp "$SKELETON_TEMPLATE_ROOT/Dockerfile" "$project_path/Dockerfile"
+    cp "$SKELETON_TEMPLATE_ROOT/nginx.conf" "$project_path/nginx.conf"
+    cp "$SKELETON_TEMPLATE_ROOT/.dockerignore" "$project_path/.dockerignore"
+    print_status "success" "Docker files added — build with: docker build --secret id=env,src=.env -t ${PROJECT_NAME} ."
 }
 
 apply_file_variants() {
@@ -226,6 +253,7 @@ copy_common_templates() {
         > "$project_path/README.md"
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
+    cp "$COMMON_TEMPLATE_ROOT/.nvmrc" "$project_path/.nvmrc"
     cp "$COMMON_TEMPLATE_ROOT/.stylelintrc.json" "$project_path/.stylelintrc.json"
     cp "$COMMON_TEMPLATE_ROOT/jest.config.cjs" "$project_path/jest.config.cjs"
     cp "$COMMON_TEMPLATE_ROOT/jest.setup.ts" "$project_path/jest.setup.ts"
@@ -236,6 +264,8 @@ copy_common_templates() {
     chmod +x "$project_path/.husky/pre-commit" "$project_path/.husky/pre-push" 2>/dev/null || true
     cp -r "$COMMON_TEMPLATE_ROOT/.vscode/." "$project_path/.vscode"
     cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
+    cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
+    cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     # Overlay react-spa-webpack-specific .github contents (e.g. deploy-spa.yml)
@@ -521,8 +551,10 @@ main() {
     resolve_github_username
     prompt_state_management
     prompt_module_federation
+    prompt_docker
     create_directory_structure "$PROJECT_PATH"
     copy_skeleton_files "$PROJECT_PATH"
+    apply_docker_files "$PROJECT_PATH"
     apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
