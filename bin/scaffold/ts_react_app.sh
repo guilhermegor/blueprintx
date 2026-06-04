@@ -112,6 +112,11 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/webpack.config.js" "$project_path/webpack.config.js"
     cp "$SKELETON_TEMPLATE_ROOT/lint-staged.config.js" "$project_path/lint-staged.config.js"
 
+    # Ship both a working .env (git-ignored) and the committed .env.example
+    # template, so the project runs out of the box yet documents its vars.
+    cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env"
+    cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env.example"
+
     print_status "success" "Skeleton files copied"
 }
 

@@ -28,6 +28,18 @@ make init_venv     # run bin/init_venv.sh to bootstrap poetry venv
 make update_venv   # poetry update
 ```
 
+### Releasing / version bump
+**Always bump the version through the make recipe — never hand-edit `pyproject.toml`.**
+```bash
+make bump_version  # runs bin/bump_version.sh: interactive major/minor/patch/custom menu
+```
+The version lives in **two** files that must stay in sync — `pyproject.toml` (`version = `)
+and `bin/blueprintx.sh` (`BLUEPRINTX_VERSION=`). `bin/bump_version.sh` rewrites and verifies
+both atomically (and self-heals pre-existing drift); editing `pyproject.toml` alone leaves the
+CLI reporting a stale `--version`. Drive it non-interactively with `echo <1-4> | make bump_version`
+(`3` = patch). The packaging manifests (`choco/`, `snap/`, `Formula/`) track a separate, lagging
+scheme and are **not** part of the patch cadence.
+
 ### Generated project commands (inside a scaffolded project)
 Once a project is created the template Makefile provides:
 ```bash
@@ -115,7 +127,7 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 1. `validate_inputs` — checks required args.
 2. `resolve_github_username` — env var → `gh` CLI → interactive prompt.
 3. `create_directory_structure` — `mkdir -p` for the target layout.
-4. `copy_skeleton_files` — copies `templates/react-spa-webpack/` verbatim.
+4. `copy_skeleton_files` — copies `templates/react-spa-webpack/` verbatim, and seeds both `.env` (working copy, git-ignored) and `.env.example` (committed template) from the skeleton's `.env.example`.
 5. `copy_common_templates` — `envsubst` renders `ts-common/package.json`; copies `.gitignore`, `.vscode/settings.json`, `CONTRIBUTING.md`, license file.
 6. `prompt_git_remote_setup` — optionally initialises git, creates GitHub repo via `gh`, and applies branch protection.
 7. `apply_offline_mode` — same offline git-diff fallback as the Python skeletons when no GitHub remote is connected.
