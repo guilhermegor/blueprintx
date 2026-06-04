@@ -329,20 +329,59 @@ prompt_pages_setup() {
         return
     fi
 
+    local manual_cmd="gh api -X POST repos/$repo/pages -f 'source[branch]=gh-pages' -f 'source[path]=/'"
+
     print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
     read -r -p "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: " pages_ans || true
     case "$pages_ans" in
-        y|Y)
-            if gh api --method POST "/repos/$repo/pages" \
-                -f 'source[branch]=gh-pages' -f 'source[path]=/' >/dev/null 2>&1; then
-                print_status "success" "GitHub Pages enabled — live at https://$owner.github.io/${PROJECT_NAME}/ after the first deploy."
-            else
-                print_status "warning" "Could not enable Pages yet — the 'gh-pages' branch must exist first (the deploy workflow creates it on the first push to main)."
-                print_status "info" "After the first deploy, run: gh api -X POST repos/$repo/pages -f 'source[branch]=gh-pages' -f 'source[path]=/'"
-            fi
-            ;;
-        *) print_status "info" "Skipped GitHub Pages setup" ;;
+        y|Y) ;;
+        *) print_status "info" "Skipped GitHub Pages setup"; return ;;
     esac
+
+    # Pages can only be pointed at the gh-pages branch once that branch
+    # exists — and it is created by the deploy-spa workflow on the FIRST push
+    # to main, which takes ~1-3 min. Enabling before then fails with a 404 and
+    # leaves the user staring at a "Site not found" page. So: if the branch
+    # isn't there yet, offer to wait for the first deploy, then enable.
+    if ! gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1; then
+        print_status "info" "The 'gh-pages' branch doesn't exist yet — the first deploy creates it (~1-3 min)."
+        read -r -p "Wait for the first deploy and enable Pages automatically? [Y/n]: " wait_ans || true
+        case "$wait_ans" in
+            n|N)
+                print_status "info" "After the first deploy finishes, enable Pages with:"
+                print_status "info" "  $manual_cmd"
+                return
+                ;;
+        esac
+
+        local attempts=0
+        local max_attempts=12  # ~3 min at 15s intervals
+        while [ "$attempts" -lt "$max_attempts" ]; do
+            sleep 15
+            if gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1; then
+                break
+            fi
+            attempts=$((attempts + 1))
+            print_status "info" "Still waiting for the first deploy... (${attempts}/${max_attempts})"
+        done
+    fi
+
+    if ! gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1; then
+        print_status "warning" "The 'gh-pages' branch still isn't there — the first deploy may still be running or it failed."
+        print_status "info" "Check the run, then enable Pages with:"
+        print_status "info" "  $manual_cmd"
+        return
+    fi
+
+    if gh api --method POST "/repos/$repo/pages" \
+        -f 'source[branch]=gh-pages' -f 'source[path]=/' >/dev/null 2>&1; then
+        print_status "success" "GitHub Pages enabled — live at https://$owner.github.io/${PROJECT_NAME}/ in ~1 min."
+    elif gh api "/repos/$repo/pages" >/dev/null 2>&1; then
+        print_status "success" "GitHub Pages already enabled — https://$owner.github.io/${PROJECT_NAME}/"
+    else
+        print_status "warning" "Could not enable Pages automatically."
+        print_status "info" "  $manual_cmd"
+    fi
 }
 
 # Always initialise a local git repo with a first commit, independent of any

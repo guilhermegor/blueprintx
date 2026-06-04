@@ -1,8 +1,9 @@
-import { ExamplePage, NoteProvider } from '@/capabilities/example';
+import { NoteProvider } from '@/capabilities/example';
+import { MainRouter } from '@/routes/MainRouter';
 
 const App = () => (
   <NoteProvider>
-    <ExamplePage />
+    <MainRouter />
   </NoteProvider>
 );
 
