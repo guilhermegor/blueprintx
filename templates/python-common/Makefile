@@ -24,10 +24,10 @@ version_bump_minor:
 # -------------------
 # CORPORATE CA
 # -------------------
-.PHONY: corporate_ca
+.PHONY: get_corporate_ca
 
-corporate_ca:
-	@bash bin/corporate_ca.sh
+get_corporate_ca:
+	@bash bin/get_corporate_ca.sh
 
 # -------------------
 # TESTING
@@ -132,7 +132,7 @@ help:
 	@echo "  version_bump_minor   Bump minor version in pyproject.toml"
 	@echo ""
 	@echo "Corporate CA"
-	@echo "  corporate_ca         Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)"
+	@echo "  get_corporate_ca     Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)"
 	@echo ""
 	@echo "Testing"
 	@echo "  unit_tests           Run unit tests with pytest"

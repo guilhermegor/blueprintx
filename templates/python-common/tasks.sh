@@ -38,8 +38,8 @@ version_bump_minor() {
 # CORPORATE CA
 # -------------------
 
-corporate_ca() {
-	bash "$SCRIPT_DIR/bin/corporate_ca.sh"
+get_corporate_ca() {
+	bash "$SCRIPT_DIR/bin/get_corporate_ca.sh"
 }
 
 # -------------------
@@ -169,7 +169,7 @@ Virtual Environment
   version_bump_minor   Bump minor version in pyproject.toml
 
 Corporate CA
-  corporate_ca         Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)
+  get_corporate_ca     Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)
 
 Testing
   unit_tests           Run unit tests with pytest
@@ -217,7 +217,7 @@ case "${1:-help}" in
 	update_venv)         update_venv ;;
 	precommit)           precommit ;;
 	version_bump_minor)  version_bump_minor ;;
-	corporate_ca)        corporate_ca ;;
+	get_corporate_ca)    get_corporate_ca ;;
 	unit_tests)          unit_tests ;;
 	integration_tests)   integration_tests ;;
 	test_cov)            test_cov ;;

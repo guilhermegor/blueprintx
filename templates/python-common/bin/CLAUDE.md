@@ -31,7 +31,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 `lib/bootstrap.sh` is a sourced lib (like `lib/common.sh`) holding the
 cross-platform setup logic shared by `venv.sh`, `run.sh`, and
-`corporate_ca.sh`. It runs no work on source — the caller invokes
+`get_corporate_ca.sh`. It runs no work on source — the caller invokes
 `bootstrap_init` first, then the helpers it needs:
 
 | Function | Purpose |
@@ -53,7 +53,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/bootstrap.sh"
 ```
 
-`corporate_ca.sh` is the **manual** generator for `bin/corporate_ca.pem` — it
+`get_corporate_ca.sh` is the **manual** generator for `bin/corporate_ca.pem` — it
 disables TLS verification *on purpose* to capture a TLS-inspecting proxy's CA,
 so run it only on such a network. The pem is git-ignored; its mere presence
 opts a project into corporate-SSL mode on the next `make venv` / `make run`.
