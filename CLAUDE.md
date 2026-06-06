@@ -46,6 +46,7 @@ Once a project is created the template Makefile provides:
 make init_venv     # bootstrap poetry venv
 make vscode_init   # install VS Code extensions + keybindings
 make export_deps   # export poetry deps to requirements.txt via pre-commit hook
+make export_context # flatten the repo into repo_context.txt for pasting into a web-UI LLM
 poetry run python -m unittest discover -s tests/unit -p "*.py" -v
 poetry run python -m unittest discover -s tests/integration -p "*.py" -v
 ```
@@ -71,7 +72,7 @@ BlueprintX/
 │       └── ts_react_capability.sh     # helper: add a capability to an existing React SPA
 ├── templates/
 │   ├── common/                     # language-agnostic assets copied into EVERY skeleton
-│   │                               #   (CODEOWNERS, PR template, bin/ git-diff scripts + lib/common.sh, make/git_diff.mk)
+│   │                               #   (CODEOWNERS, PR template, bin/ git-diff scripts + export_repo_content.sh + lib/common.sh, make/git_diff.mk)
 │   ├── python-common/              # shared assets copied into ALL Python skeletons
 │   ├── ts-common/                  # shared assets copied into ALL TypeScript skeletons
 │   ├── ddd-service-native-db/      # DDD skeleton with native DB drivers

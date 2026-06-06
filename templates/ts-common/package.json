@@ -21,7 +21,8 @@
     "test:watch": "jest --watch",
     "test:e2e:frontend": "playwright test",
     "test:e2e:frontend:update": "playwright test --update-snapshots",
-    "test:e2e:frontend:ui": "playwright test --ui"
+    "test:e2e:frontend:ui": "playwright test --ui",
+    "context:export": "bash bin/export_repo_content.sh"
   },
   "keywords": [],
   "author": "",

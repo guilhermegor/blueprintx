@@ -153,6 +153,14 @@ docs_server() {
 }
 
 # -------------------
+# CONTEXT
+# -------------------
+
+export_context() {
+	bash "$SCRIPT_DIR/bin/export_repo_content.sh" "${1:-}"
+}
+
+# -------------------
 # HELP
 # -------------------
 
@@ -195,6 +203,9 @@ Docs
 Run
   run                  Run src/main.py (auto-installs Poetry if missing)
 
+Context
+  export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM
+
 Git
   NAME=<x> new_branch  Create a branch (feat/…, fix/…) off the default branch (main/master)
   git_merge_to_main    Merge the current clean branch into main/master and delete it
@@ -232,6 +243,7 @@ case "${1:-help}" in
 	db_restore)          db_restore ;;
 	docs_server)         docs_server ;;
 	run)                 run ;;
+	export_context)      export_context "${2:-}" ;;
 	new_branch)          new_branch "${2:-}" ;;
 	git_merge_to_main)   git_merge_to_main "${2:-}" ;;
 	git_diff_export)     git_diff_export ;;

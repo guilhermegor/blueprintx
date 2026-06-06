@@ -21,8 +21,9 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 | `ruff.toml` | Ruff lint + format config (line-length 99, tab indent, double quotes, NumPy docstrings, full rule set) |
 | `.pre-commit-config.yaml` | Hooks: ruff, pydocstyle (DAR), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge |
 | `pytest.ini` | Pytest configuration shared by all generated projects |
-| `Makefile` | Targets: `init`, `venv`, `update_venv`, `precommit`, `version_bump_minor`, testing, linting, database, `run`, docs |
+| `Makefile` | Targets: `init`, `venv`, `update_venv`, `precommit`, `version_bump_minor`, testing, linting, database, `run`, `export_context`, docs |
 | `tasks.sh` | Non-make equivalent of the project Makefile targets (must stay in sync) |
+| `export_context` (target) | Runs `bin/export_repo_content.sh` — script is sourced from `templates/common/bin/` (language-agnostic), copied into the project `bin/` by each scaffold |
 | `requirements.txt` | Pins the Poetry version only — not application dependencies |
 | `.python-version` | pyenv Python version pin |
 | `.gitignore` | Python + Poetry + common IDE patterns |

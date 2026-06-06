@@ -165,6 +165,8 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
+    cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh"
 
     print_status "success" "Common templates applied"
 }
