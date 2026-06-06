@@ -96,6 +96,14 @@ run:
 	@bash bin/run.sh
 
 # -------------------
+# CONTEXT
+# -------------------
+.PHONY: export_context
+
+export_context:
+	@bash bin/export_repo_content.sh
+
+# -------------------
 # GIT
 # -------------------
 .PHONY: new_branch git_merge_to_main
@@ -157,6 +165,9 @@ help:
 	@echo ""
 	@echo "Run"
 	@echo "  run                  Run src/main.py (auto-installs Poetry if missing)"
+	@echo ""
+	@echo "Context"
+	@echo "  export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM"
 	@echo ""
 	@echo "Git"
 	@echo "  new_branch NAME=<x>  Create a branch (feat/…, fix/…) off the default branch (main/master)"

@@ -276,6 +276,13 @@ copy_common_templates() {
     fi
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
 
+    # Ship the repo→LLM context exporter (and its print_status helper) unconditionally,
+    # so `npm run context:export` works whether or not a GitHub remote is connected.
+    mkdir -p "$project_path/bin/lib"
+    cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh"
+
     print_status "success" "Common templates applied"
 }
 

@@ -182,6 +182,8 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
+    cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh"
     cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$project_path/.coveragerc"
 
     print_status "success" "Common templates applied"
