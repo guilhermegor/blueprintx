@@ -82,9 +82,9 @@ resolve_github_username() {
 
 create_directory_structure() {
     local project_path="$1"
-    
+
     print_status "info" "Creating directory structure..."
-    
+
     mkdir -p "$project_path"/src/chassis/db_schema/domain
     mkdir -p "$project_path"/src/chassis/db_schema/infrastructure
     mkdir -p "$project_path"/src/chassis/db_schema/application
@@ -107,15 +107,15 @@ create_directory_structure() {
     touch "$project_path"/tests/unit/.keep
     touch "$project_path"/container/.keep
     touch "$project_path"/data/.keep
-    
+
     print_status "success" "Directory structure created"
 }
 
 create_python_files() {
     local project_path="$1"
-    
+
     print_status "info" "Creating Python files..."
-    
+
     touch "$project_path"/src/__init__.py
     touch "$project_path"/src/chassis/__init__.py
     touch "$project_path"/src/chassis/db_schema/__init__.py
@@ -123,15 +123,15 @@ create_python_files() {
     touch "$project_path"/src/utils/__init__.py
     touch "$project_path"/src/config/__init__.py
     cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/src/." "$project_path/src"
-    
+
     print_status "success" "Python files created"
 }
 
 copy_templates() {
     local project_path="$1"
-    
+
     print_status "info" "Copying templates..."
-    
+
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
@@ -576,10 +576,10 @@ apply_offline_mode() {
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
-    
+
     print_section "Python ddd-service-native-db scaffold"
     print_status "config" "Target: $PROJECT_PATH"
-    
+
     validate_inputs
     resolve_github_username
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"

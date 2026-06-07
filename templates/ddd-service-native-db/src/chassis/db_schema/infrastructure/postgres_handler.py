@@ -146,7 +146,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
 
     def backup(self, target_path: str | Path) -> Path:
         """Create a PostgreSQL backup using pg_dump in custom format.
-        
+
         Parameters
         ----------
         target_path : str or Path

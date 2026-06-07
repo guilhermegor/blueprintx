@@ -339,25 +339,25 @@ class BalanceAlertService:
     def execute(self, account_id: str, threshold: float) -> bool:
         """
         Check if account balance is below threshold and send alert.
-        
+
         Respects cooldown period to avoid spamming.
-        
+
         Returns:
             True if alert was sent, False otherwise.
         """
         account = self.accounts.get(account_id)
         if account is None:
             return False
-        
+
         if account.balance >= threshold:
             return False
-        
+
         # Check cooldown
         since = datetime.utcnow() - timedelta(hours=self.cooldown_hours)
         recent_alerts = self.alert_logs.get_recent_for_account(account_id, since)
         if recent_alerts:
             return False  # Already alerted recently
-        
+
         # Send notification
         success = self.notifier.send_balance_alert(
             to_email=account.owner_email,
@@ -365,7 +365,7 @@ class BalanceAlertService:
             current_balance=account.balance,
             threshold=threshold,
         )
-        
+
         if success:
             # Log the alert
             alert_log = AlertLog(
@@ -376,7 +376,7 @@ class BalanceAlertService:
                 sent_at=datetime.utcnow(),
             )
             self.alert_logs.save(alert_log)
-        
+
         return success
 
 
@@ -398,17 +398,17 @@ class BulkBalanceAlertService:
     def execute(self, threshold: float) -> int:
         """
         Check all accounts below threshold and send alerts.
-        
+
         Returns:
             Number of alerts sent.
         """
         low_balance_accounts = self.accounts.get_below_threshold(threshold)
         alerts_sent = 0
-        
+
         for account in low_balance_accounts:
             if self.single_alert.execute(account.id, threshold):
                 alerts_sent += 1
-        
+
         return alerts_sent
 ```
 
@@ -434,13 +434,13 @@ def run_demo() -> None:
     # Setup database
     db = build_database_session()
     db.create_tables()
-    
+
     with db.session() as session:
         # Wire dependencies
         accounts = SQLAlchemyAccountRepository(session)
         alert_logs = SQLAlchemyAlertLogRepository(session)
         notifier = EmailNotificationAdapter()
-        
+
         # Create services
         single_alert = BalanceAlertService(accounts, alert_logs, notifier)
         bulk_alert = BulkBalanceAlertService(accounts, alert_logs, notifier)
@@ -583,16 +583,16 @@ class TestBalanceAlertService:
         db_session.commit()
 
         service = BalanceAlertService(accounts, alert_logs, mock_notifier, cooldown_hours=24)
-        
+
         # First alert should succeed
         result1 = service.execute(account.id, threshold=50.0)
         db_session.commit()
         assert result1 is True
-        
+
         # Second alert should be blocked by cooldown
         result2 = service.execute(account.id, threshold=50.0)
         assert result2 is False
-        
+
         # Notifier called only once
         assert mock_notifier.send_balance_alert.call_count == 1
 

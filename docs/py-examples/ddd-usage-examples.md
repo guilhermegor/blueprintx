@@ -102,10 +102,10 @@ from capabilities.example_feature.domain.ports import NoteRepository
 def test_create_note():
     mock_repo = Mock(spec=NoteRepository)
     mock_repo.add.return_value = Mock(id="123", title="Test", created_at="2026-01-01")
-    
+
     use_case = CreateNote(mock_repo)
     result = use_case.execute("Test")
-    
+
     mock_repo.add.assert_called_once()
     assert result.id == "123"
 ```

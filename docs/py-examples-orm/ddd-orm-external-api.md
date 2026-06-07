@@ -251,15 +251,15 @@ class FetchAndStoreHistoricalPrices:
     def execute(self, symbol: str, start: date, end: date) -> list[OHLCV]:
         """Fetch prices and store them, skipping existing records."""
         candles = self._stock_api.get_historical_data(symbol, start, end)
-        
+
         new_candles = [
             c for c in candles
             if not self._repository.exists(symbol, c.date)
         ]
-        
+
         if new_candles:
             self._repository.save_many(new_candles)
-        
+
         return new_candles
 
 
@@ -287,19 +287,19 @@ from .application.use_cases import FetchAndStoreHistoricalPrices, GetStoredPrice
 
 def run_demo():
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "demo")
-    
+
     # Setup database
     db = build_database_session()
     db.create_tables()
-    
+
     with db.session() as session:
         # Wire dependencies
         api_adapter = AlphaVantageAdapter(api_key)
         repository = SQLAlchemyOHLCVRepository(session)
-        
+
         fetch_and_store = FetchAndStoreHistoricalPrices(api_adapter, repository)
         get_prices = GetStoredPrices(repository)
-        
+
         # Fetch from API and store
         new_candles = fetch_and_store.execute(
             symbol="AAPL",
@@ -308,7 +308,7 @@ def run_demo():
         )
         session.commit()
         print(f"Stored {len(new_candles)} new candles")
-        
+
         # Retrieve from database
         stored = get_prices.execute("AAPL", date(2026, 1, 1), date(2026, 1, 31))
         for candle in stored:
@@ -347,16 +347,16 @@ def test_fetch_and_store_new_candles(db_session):
     mock_api.get_historical_data.return_value = [
         OHLCV(None, "AAPL", date(2026, 1, 15), 150.0, 155.0, 149.0, 154.0, 1000000)
     ]
-    
+
     repo = SQLAlchemyOHLCVRepository(db_session)
     use_case = FetchAndStoreHistoricalPrices(mock_api, repo)
-    
+
     result = use_case.execute("AAPL", date(2026, 1, 1), date(2026, 1, 31))
     db_session.commit()
-    
+
     assert len(result) == 1
     assert result[0].symbol == "AAPL"
-    
+
     # Verify it's in the database
     stored = repo.get_by_symbol("AAPL", date(2026, 1, 1), date(2026, 1, 31))
     assert len(stored) == 1
@@ -364,21 +364,21 @@ def test_fetch_and_store_new_candles(db_session):
 
 def test_skips_existing_candles(db_session):
     repo = SQLAlchemyOHLCVRepository(db_session)
-    
+
     # Pre-populate database
     existing = OHLCV(None, "AAPL", date(2026, 1, 15), 150.0, 155.0, 149.0, 154.0, 1000000)
     repo.save(existing)
     db_session.commit()
-    
+
     # Mock API returns same date
     mock_api = Mock()
     mock_api.get_historical_data.return_value = [
         OHLCV(None, "AAPL", date(2026, 1, 15), 151.0, 156.0, 150.0, 155.0, 2000000)
     ]
-    
+
     use_case = FetchAndStoreHistoricalPrices(mock_api, repo)
     result = use_case.execute("AAPL", date(2026, 1, 1), date(2026, 1, 31))
-    
+
     assert len(result) == 0  # Skipped because it exists
 ```
 

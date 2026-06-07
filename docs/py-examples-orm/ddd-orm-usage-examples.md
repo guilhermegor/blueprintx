@@ -21,11 +21,11 @@ db.create_tables()
 # Use the repository
 with db.session() as session:
     repo = SQLAlchemyRecordRepository(session)
-    
+
     # Create a record
     record_id = repo.add({"title": "First note", "content": "Hello world"})
     session.commit()
-    
+
     # List all records
     print(repo.list_all())
 ```
@@ -249,11 +249,11 @@ def db_session():
 
 def test_create_and_retrieve_note(db_session):
     repo = SQLAlchemyNoteRepository(db_session)
-    
+
     note = Note(id="123", title="Test Note", content="Hello")
     repo.add(note)
     db_session.commit()
-    
+
     retrieved = repo.get("123")
     assert retrieved is not None
     assert retrieved.title == "Test Note"
@@ -261,11 +261,11 @@ def test_create_and_retrieve_note(db_session):
 
 def test_list_all_notes(db_session):
     repo = SQLAlchemyNoteRepository(db_session)
-    
+
     repo.add(Note(id="1", title="First", content=""))
     repo.add(Note(id="2", title="Second", content=""))
     db_session.commit()
-    
+
     notes = repo.list_all()
     assert len(notes) == 2
 ```

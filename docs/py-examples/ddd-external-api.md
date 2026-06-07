@@ -130,16 +130,16 @@ from .application.use_cases import GetHistoricalPrices
 
 def run_demo():
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "demo")
-    
+
     adapter = AlphaVantageAdapter(api_key)
     get_prices = GetHistoricalPrices(adapter)
-    
+
     prices = get_prices.execute(
         symbol="AAPL",
         start=date(2026, 1, 1),
         end=date(2026, 1, 31),
     )
-    
+
     for candle in prices:
         print(f"{candle.date}: O={candle.open:.2f} H={candle.high:.2f} L={candle.low:.2f} C={candle.close:.2f}")
 
@@ -200,10 +200,10 @@ def test_get_historical_prices():
     mock_adapter.get_historical_data.return_value = [
         OHLCV("AAPL", date(2026, 1, 15), 150.0, 155.0, 149.0, 154.0, 1000000)
     ]
-    
+
     use_case = GetHistoricalPrices(mock_adapter)
     result = use_case.execute("AAPL", date(2026, 1, 1), date(2026, 1, 31))
-    
+
     assert len(result) == 1
     assert result[0].symbol == "AAPL"
     mock_adapter.get_historical_data.assert_called_once_with(
