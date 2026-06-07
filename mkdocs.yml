@@ -2,10 +2,12 @@ site_name: BlueprintX
 site_description: Documentation for BlueprintX scaffolds (Python and TypeScript)
 site_url: https://github.com/guilhermegor/BlueprintX
 repo_url: https://github.com/guilhermegor/BlueprintX
-# Internal, non-published docs (maintenance backlogs, backport notes) live under
-# docs/internal/ and are excluded from the built site so they never reach users.
+# Non-published docs are excluded from the built site so they never reach users:
+#   backlog/     — work-to-do backlogs (e.g. template backport notes)
+#   superpowers/ — internal specs and plans
 exclude_docs: |
-  internal/
+  backlog/
+  superpowers/
 nav:
   - Home: index.md
   - Get Started: get-started.md
