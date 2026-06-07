@@ -8,6 +8,7 @@ Usage: ./tasks.sh <target>
 
 Targets (no make required):
   new           Run interactive BlueprintX scaffolder
+  install       Deploy bin/ + templates/ to /usr/share/blueprintx (needs sudo)
   preview       Show available skeletons and examples
   dev           Scaffold into a temporary directory
   dev-clean     Scaffold into a temp directory and delete it on exit

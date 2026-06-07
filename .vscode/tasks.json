@@ -9,8 +9,18 @@
       "detail": "Run the interactive BlueprintX scaffolder (make, tasks.sh fallback)",
       "type": "shell",
       "command": "make new || ./tasks.sh new",
-      "group": { "kind": "build", "isDefault": true },
+      "group": "build",
       "icon": { "id": "rocket", "color": "terminal.ansiGreen" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "install",
+      "detail": "Deploy bin/ + templates/ to /usr/share/blueprintx — needs sudo (make, tasks.sh fallback)",
+      "type": "shell",
+      "command": "make install || ./tasks.sh install",
+      "group": { "kind": "build", "isDefault": true },
+      "icon": { "id": "package", "color": "terminal.ansiGreen" },
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
     },
@@ -72,6 +82,8 @@
       "group": "none",
       "icon": { "id": "book", "color": "terminal.ansiBlue" },
       "presentation": { "reveal": "always", "panel": "dedicated" },
+      "isBackground": true,
+      "runOptions": { "instanceLimit": 1 },
       "problemMatcher": []
     },
     {

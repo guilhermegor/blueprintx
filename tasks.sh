@@ -7,6 +7,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() { bash "$SCRIPT_DIR/bin/help.sh"; }
 
 cmd_new() { bash "$SCRIPT_DIR/bin/blueprintx.sh"; }
+
+cmd_install() {
+	sudo rsync -a --delete "$SCRIPT_DIR/bin/" /usr/share/blueprintx/bin/
+	sudo rsync -a --delete "$SCRIPT_DIR/templates/" /usr/share/blueprintx/templates/
+	echo "Installed to /usr/share/blueprintx"
+}
+
 cmd_preview() { bash "$SCRIPT_DIR/bin/preview.sh"; }
 cmd_dev() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dev; }
 cmd_dev_clean() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dev --clean; }
@@ -44,6 +51,7 @@ main() {
 
 	case "$target" in
 		new) cmd_new ;;
+		install) cmd_install ;;
 		preview) cmd_preview ;;
 		dev) cmd_dev ;;
 		dev-clean|dev_clean) cmd_dev_clean ;;
