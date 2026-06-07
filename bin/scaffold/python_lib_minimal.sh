@@ -72,9 +72,9 @@ resolve_github_username() {
 
 create_directory_structure() {
     local project_path="$1"
-    
+
     print_status "info" "Creating directory structure..."
-    
+
     mkdir -p "$project_path"/src/"$PROJECT_NAME"
     mkdir -p "$project_path"/tests/integration
     mkdir -p "$project_path"/tests/performance
@@ -85,18 +85,18 @@ create_directory_structure() {
     mkdir -p "$project_path"/assets
     mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
-    
+
     print_status "success" "Directory structure created"
 }
 
 create_python_files() {
     local project_path="$1"
-    
+
     print_status "info" "Creating Python files..."
-    
+
     touch "$project_path"/src/"$PROJECT_NAME"/__init__.py
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/main.py" "$project_path/src/$PROJECT_NAME/main.py"
-    
+
     # Create test file with project name substitution
     mkdir -p "$project_path/tests/unit"
     sed "s/\${PROJECT_NAME}/$PROJECT_NAME/g" << 'EOF' > "$project_path/tests/unit/test_main.py"
@@ -107,15 +107,15 @@ def test_main(capsys):
     captured = capsys.readouterr()
     assert "Hello from lib-minimal!" in captured.out
 EOF
-    
+
     print_status "success" "Python files created"
 }
 
 copy_templates() {
     local project_path="$1"
-    
+
     print_status "info" "Copying templates..."
-    
+
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
@@ -368,10 +368,10 @@ apply_offline_mode() {
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
-    
+
     print_section "Python lib-minimal scaffold"
     print_status "config" "Target: $PROJECT_PATH"
-    
+
     validate_inputs
     resolve_github_username
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"

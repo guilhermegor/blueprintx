@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 show_languages() {
     print_section "available languages"
-    
+
     print_status "info" "1) python"
     print_status "config" "Status: supported"
     print_status "config" "Skeletons:"
@@ -33,7 +33,7 @@ show_languages() {
 show_hex_service() {
     echo
     print_section "ddd-service-native-db skeleton"
-    
+
     print_status "info" "Description:"
     print_status "config" "Backend/service-oriented structure with chassis/capabilities separation,"
     print_status "config" "suitable for APIs and services using clean/hexagonal-ish design."
@@ -81,7 +81,7 @@ EOF
 show_orm_service() {
     echo
     print_section "ddd-service-orm-db skeleton"
-    
+
     print_status "info" "Description:"
     print_status "config" "Same DDD/hexagonal structure as native-db, but uses SQLAlchemy ORM"
     print_status "config" "for database operations. Supports PostgreSQL, MySQL, SQLite, Oracle, MSSQL."
@@ -188,7 +188,7 @@ EOF
 show_lib_minimal() {
     echo
     print_section "lib-minimal skeleton"
-    
+
     print_status "info" "Description:"
     print_status "config" "Minimal library-style project, good for small libs, tools, or"
     print_status "config" "starting points for simple CLIs or packages."

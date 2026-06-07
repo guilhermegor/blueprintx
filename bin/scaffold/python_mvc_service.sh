@@ -79,9 +79,9 @@ resolve_github_username() {
 
 create_directory_structure() {
     local project_path="$1"
-    
+
     print_status "info" "Creating directory structure..."
-    
+
     mkdir -p "$project_path"/src/controller
     mkdir -p "$project_path"/src/model
     mkdir -p "$project_path"/src/view
@@ -135,9 +135,9 @@ copy_tests() {
 
 copy_templates() {
     local project_path="$1"
-    
+
     print_status "info" "Copying templates..."
-    
+
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"

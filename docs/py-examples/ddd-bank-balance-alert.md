@@ -89,14 +89,14 @@ class BalanceAlertService:
     def execute(self, account_id: str, threshold: float) -> bool:
         """
         Check if account balance is below threshold and send alert.
-        
+
         Returns:
             True if alert was sent, False otherwise.
         """
         account = self.accounts.get(account_id)
         if account is None:
             return False
-        
+
         if account.balance < threshold:
             self.notifier.send_balance_alert(
                 to_email=account.owner_email,
@@ -104,7 +104,7 @@ class BalanceAlertService:
                 threshold=threshold,
             )
             return True
-        
+
         return False
 ```
 
