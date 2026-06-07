@@ -1039,6 +1039,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-published-docs-never-at-the-docs-root" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-published docs — never at the docs/ root
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#mkdocs-nav-coupling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1246,25 +1257,47 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 <td><code>py-examples-orm/</code></td>
 <td>Example walkthroughs for the <strong>ORM</strong> DDD skeleton</td>
 </tr>
+<tr>
+<td><code>backlog/</code></td>
+<td><strong>Non-published</strong> work-to-do backlogs (e.g. template backport notes). Excluded from the built site — see below.</td>
+</tr>
+<tr>
+<td><code>superpowers/</code></td>
+<td><strong>Non-published</strong> internal specs and plans. Excluded from the built site — see below.</td>
+</tr>
 </tbody>
 </table>
 <p>Future skeletons follow the same pattern: <code>&lt;lang&gt;-examples-&lt;skeleton-name&gt;/</code>.</p>
+<h3 id="non-published-docs-never-at-the-docs-root">Non-published docs — never at the <code>docs/</code> root<a class="headerlink" href="#non-published-docs-never-at-the-docs-root" title="Permanent link">&para;</a></h3>
+<p>MkDocs <strong>builds every <code>.md</code> under <code>docs/</code> into the site</strong>, even files absent from
+<code>nav:</code> (they are merely unlisted, still reachable by URL). So a backlog, spec, or
+internal note dropped at the <code>docs/</code> root <em>will</em> ship to users and misguide them.
+Such files live under a dedicated folder that is excluded from the build via
+<code>exclude_docs</code> in <code>mkdocs.yml</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">exclude_docs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="no">backlog/        # work-to-do backlogs (template backport notes, follow-ups)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="no">superpowers/    # internal specs and plans</span>
+</span></code></pre></div>
+<p>Non-published docs are <strong>NOT</strong> added to the file index (Section 1), <strong>NOT</strong>
+registered in <code>mkdocs.yml</code> <code>nav:</code>, and <strong>NOT</strong> subject to the Type A/B/C content
+templates — they are working documents, not published pages. Any new
+non-published folder must be added to <code>exclude_docs</code> in the same commit.</p>
 <h3 id="mkdocs-nav-coupling">MkDocs nav coupling<a class="headerlink" href="#mkdocs-nav-coupling" title="Permanent link">&para;</a></h3>
 <p>Every new file <strong>must</strong> be registered in <code>mkdocs.yml</code> under <code>nav:</code> in the same commit it is created. Never leave a file unregistered — MkDocs will silently omit it from navigation.</p>
 <p>Current nav shape for reference:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">nav</span><span class="p">:</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Home</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">index.md</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Get Started</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">get-started.md</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Python</span><span class="p">:</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">DDD Service (Native DB)</span><span class="p">:</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Overview</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-ddd-service-native-db.md</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Example - &lt;title&gt;</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-examples/&lt;filename&gt;.md</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">DDD Service (ORM DB)</span><span class="p">:</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Overview</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-ddd-service-orm-db.md</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Example - &lt;title&gt;</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-examples-orm/&lt;filename&gt;.md</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Lib Minimal</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-lib-minimal.md</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">TypeScript</span><span class="p">:</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">React SPA (Webpack)</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ts-react-spa-webpack.md</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">nav</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Home</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">index.md</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Get Started</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">get-started.md</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Python</span><span class="p">:</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">DDD Service (Native DB)</span><span class="p">:</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Overview</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-ddd-service-native-db.md</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Example - &lt;title&gt;</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-examples/&lt;filename&gt;.md</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">DDD Service (ORM DB)</span><span class="p">:</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Overview</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-ddd-service-orm-db.md</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Example - &lt;title&gt;</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-examples-orm/&lt;filename&gt;.md</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Lib Minimal</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-lib-minimal.md</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">TypeScript</span><span class="p">:</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">React SPA (Webpack)</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ts-react-spa-webpack.md</span>
 </span></code></pre></div>
 <p>When adding a new Python skeleton, add a new group under <code>Python:</code> and name the file <code>py-&lt;skeleton&gt;.md</code>. When adding a new TypeScript skeleton, add a new entry under <code>TypeScript:</code> and name the file <code>ts-&lt;skeleton&gt;.md</code>. When adding a new example, append it under the relevant skeleton group. TypeScript example walkthroughs follow the same <code>ts-examples-&lt;skeleton-name&gt;/</code> subdirectory pattern as Python examples.</p>
 <hr />
@@ -1335,6 +1368,10 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 <tr>
 <td>New file added</td>
 <td>1. Add a row to the <strong>file index</strong> (Section 1). 2. Register the file in <code>mkdocs.yml</code> nav. Both changes go in the same commit.</td>
+</tr>
+<tr>
+<td>Non-published doc added</td>
+<td>Place it under a non-published folder (<code>docs/backlog/</code>, <code>docs/superpowers/</code>), never the <code>docs/</code> root. Ensure that folder is in <code>exclude_docs</code>. Do NOT add it to the file index or <code>mkdocs.yml</code> nav.</td>
 </tr>
 <tr>
 <td>File removed</td>
