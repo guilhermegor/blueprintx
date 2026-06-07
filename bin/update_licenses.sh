@@ -3,7 +3,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lib/logging.sh"
+source "$SCRIPT_DIR/lib/common.sh"
 
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LICENSES_DIR="$BLUEPRINTX_ROOT/templates/licenses"

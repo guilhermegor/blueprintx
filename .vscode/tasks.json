@@ -1,0 +1,88 @@
+{
+  // Shell tasks for the BlueprintX repo. Each prefers `make <target>` and falls
+  // back to `./tasks.sh <target>` so they work even without GNU Make installed.
+  // Only targets the root Makefile/tasks.sh actually expose are listed here.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "new",
+      "detail": "Run the interactive BlueprintX scaffolder (make, tasks.sh fallback)",
+      "type": "shell",
+      "command": "make new || ./tasks.sh new",
+      "group": { "kind": "build", "isDefault": true },
+      "icon": { "id": "rocket", "color": "terminal.ansiGreen" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "preview",
+      "detail": "Show available skeletons and examples (make, tasks.sh fallback)",
+      "type": "shell",
+      "command": "make preview || ./tasks.sh preview",
+      "group": "build",
+      "icon": { "id": "eye", "color": "terminal.ansiBlue" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "dry-run",
+      "detail": "Show structure only, no files created (make, tasks.sh fallback)",
+      "type": "shell",
+      "command": "make dry-run || ./tasks.sh dry-run",
+      "group": "build",
+      "icon": { "id": "list-tree", "color": "terminal.ansiBlue" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "init",
+      "detail": "Bootstrap venv + install pre-commit hooks (make, tasks.sh fallback)",
+      "type": "shell",
+      "command": "make init || ./tasks.sh init",
+      "group": "build",
+      "icon": { "id": "tools", "color": "terminal.ansiBlue" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "precommit",
+      "detail": "Install pre-commit + commit-msg hooks (make, tasks.sh fallback)",
+      "type": "shell",
+      "command": "make precommit || ./tasks.sh precommit",
+      "group": "build",
+      "icon": { "id": "git-commit", "color": "terminal.ansiBlue" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "lint",
+      "detail": "Run all pre-commit hooks across the repo — mirrors CI (make, tasks.sh fallback)",
+      "type": "shell",
+      "command": "make lint || ./tasks.sh lint",
+      "group": { "kind": "test", "isDefault": true },
+      "icon": { "id": "checklist", "color": "terminal.ansiYellow" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "mkdocs_server",
+      "detail": "Serve the MkDocs site locally at http://0.0.0.0:8000 (make, tasks.sh fallback)",
+      "type": "shell",
+      "command": "make mkdocs_server || ./tasks.sh mkdocs_server",
+      "group": "none",
+      "icon": { "id": "book", "color": "terminal.ansiBlue" },
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "help",
+      "detail": "List all available make / tasks.sh commands",
+      "type": "shell",
+      "command": "make help || ./tasks.sh help",
+      "group": "none",
+      "icon": { "id": "question", "color": "terminal.ansiWhite" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    }
+  ]
+}

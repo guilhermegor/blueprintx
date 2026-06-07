@@ -19,6 +19,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!bin/lib/
 lib64/
 parts/
 sdist/
@@ -181,3 +182,6 @@ pyrightconfig.json
 !templates/**/lib/
 !templates/**/lib/**
 !templates/**/poetry.toml
+
+# Claude Code runtime artifacts
+.claude/

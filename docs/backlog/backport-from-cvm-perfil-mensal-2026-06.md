@@ -41,6 +41,43 @@ project inheriting them. Organized by the tier that should own the change.
   (title ≤ 72). Note this in the commit-convention docs / the commit-code skill so
   the `→ filename` bullets are written short. Title-case, imperative, no period.
 
+- [ ] **Ship a versioned `.gitlint`; the 72/80 limits are otherwise invisible.**
+  gitlint's title ≤ 72 (T1) and body-line ≤ 80 (B1) caps are *defaults with no
+  config file*, so contributors only discover them when a commit is rejected
+  **after** the slow hook chain (tests + coverage) already ran. Ship a `.gitlint`
+  alongside the `.pre-commit-config.yaml` that invokes it, stating the limits
+  explicitly (`[title-max-length] line-length=72` +
+  `[body-max-line-length] line-length=80`). Companion to the body-line item above;
+  see the `.vscode` item below for the editor side.
+
+- [ ] **`.vscode/settings.json`: associate `.gitlint` with the INI language.**
+  Add `"files.associations": {".gitlint": "ini"}`. Without it the editor treats
+  the extension-less dotfile as Python, so Pylance false-flags every INI section
+  key (`"title" is not defined`, `"length" is not defined`, …) — noise the
+  scaffold should never ship. This is the same `.vscode/settings.json` the MVC
+  tier already touches for the interpreter path (see that item below); fold both
+  keys into one shipped settings file. General rule: any non-`.py` dotfile the
+  scaffold ships must declare its language so Pylance does not analyse it.
+
+- [ ] **Replace `no-commit-to-branch` with a friendly `protect_main` hook.**
+  The stock `no-commit-to-branch` aborts with a terse message and no next step.
+  Ship a local hook (`bin/protect_main.sh`, `always_run: true`,
+  `pass_filenames: false`) placed FIRST in `.pre-commit-config.yaml` so it fails
+  fast before the slow test/coverage hooks. It blocks `main`/`master` and points
+  at the project's own workflow (`make new_branch NAME=feat/…`). Document the
+  guard + the allowed branch prefixes in `CONTRIBUTING.md` (kept in sync with
+  `new_branch.sh`). Flow guard rail, not a control — bypassable with
+  `--no-verify`, and there is no server-side equivalent on remote-less projects.
+
+- [ ] **`.pre-commit-config.yaml`: only tool-owned `args` can move to a config
+  file.** When tidying the config, remember the asymmetry: hooks wrapping a tool
+  with its own config file (`ruff`→`ruff.toml`, `codespell`→`.codespellrc`,
+  `gitlint`→`.gitlint`, `pydocstyle`→pyproject) can drop redundant `args:` and let
+  the file own the settings. The `pre-commit/pre-commit-hooks` hooks
+  (`check-yaml`, `trailing-whitespace`, `no-commit-to-branch`,
+  `detect-aws-credentials`, …) read **CLI flags only** — they have no config file,
+  so their `args:` must stay inline. Don't try to extract those.
+
 ---
 
 ## templates/python-common — Python tooling shipped to every Python tier
@@ -103,6 +140,44 @@ project inheriting them. Organized by the tier that should own the change.
 - [ ] **poetry.lock policy for service/app tiers: track it.** Reproducible installs
   across dev (Linux) and prod (Windows). Regenerate with `poetry lock` after dep
   edits. (Library tiers may legitimately gitignore it.)
+
+- [ ] **Webhook seam: detect the platform from the URL; drop `WEBHOOK_PLATFORM`.**
+  The opt-in webhook provider took both `WEBHOOK_PLATFORM` and `WEBHOOK_URL`, but
+  the platform is redundant — it is inferable from the URL. Ship
+  `detect_platform(url)` in the factory (substring match: `teams.microsoft` /
+  `office.com` → teams, `slack` → slack; raise on unknown) and have
+  `build_webhook(url)` take only the URL. Three coupled fixes proven in
+  `cvm_perfil_mensal`:
+  1. **`NullNotifier` for the opt-out path.** An empty `WEBHOOK_URL` previously
+     crashed at import (the Teams adapter rejects an empty URL in its ctor).
+     Return a no-op `NullNotifier` for a blank URL so `startup.py` imports without
+     a live URL and "leave empty to opt out" is actually true.
+  2. **Gate on the normalized production env; drop `WEBHOOK_ENV_GATE`.** That gate
+     was a second env var duplicating `ENV`. Replace it with an allow-list: fire
+     only when `normalize_text(ENV)` is in `{prod, production, …}` (lower-cased,
+     accent-stripped). An allow-list stays silent for `dev`/`DEV`/`homolog`,
+     unlike the fragile `!= "development"` deny-list (a mistyped `ENV` would have
+     fired on a dev box). The config layer owns the bool; the orchestrator just
+     executes it.
+  3. **`.env.example`: drop both removed vars,** keep only `WEBHOOK_URL` with a
+     comment on auto-detection + the production-only gate.
+
+- [ ] **`check-urls` hook: never put fetchable example URLs in docstrings.**
+  `bin/test_urls_docstrings.sh` fetches every `https://…` URL it finds in a
+  docstring and fails on any 3xx/4xx (it does NOT follow redirects). Doctest-style
+  `Examples` with fake paths (`https://hooks.slack.com/services/T000/…` → 404) or
+  truncated real URLs (`…/l/channel/19%3A…` → 302) block the commit. The hook
+  SKIPS host-only URLs (regex `https?://[^/]+$`), so write examples as bare hosts
+  (`https://hooks.slack.com`), and refresh any stale docs URL to its current 200
+  home. Note this in the python-common docstring conventions.
+
+- [ ] **`.codespellrc`: make extending `ignore-words-list` part of the locale
+  story.** When a project writes docs/comments in a non-English locale (e.g.
+  Portuguese), the English `codespell` flags ordinary words (`nomes`, `caracteres`,
+  `prefere`, `atual`, …) and blocks the commit. The scaffold cannot pre-populate
+  the locale's vocabulary, but it should (a) document that `ignore-words-list` is
+  the extension point and (b) keep the existing curated list rather than skipping
+  whole files (which would hide real typos in code identifiers within those docs).
 
 ---
 

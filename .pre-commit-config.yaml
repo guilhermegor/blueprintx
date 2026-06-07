@@ -1,0 +1,91 @@
+# Root pre-commit for the BlueprintX repo itself — a local mirror of the
+# Scaffold Checks CI (.github/workflows/scaffold-checks.yml) so the same
+# failures surface before commit/push.
+#
+# This is NOT the scaffolded-project pre-commit. That one lives at
+# templates/python-common/.pre-commit-config.yaml and ships into generated
+# projects; it is intentionally separate and untouched by this file.
+#
+# The repo-local hooks delegate to bin/ci/*.sh — the very scripts the CI jobs
+# call — so local and CI run identical logic with zero drift.
+
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+repos:
+  # Layer 1 — generic hygiene (no custom logic).
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args:
+          - --markdown-linebreak-ext=md
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args:
+          - --unsafe  # workflow files use custom tags (e.g. !reference)
+      - id: check-json
+        # .vscode/*.json is JSONC (allows comments); skip the strict parser.
+        exclude: ^\.vscode/
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args:
+          - --maxkb=500
+      - id: no-commit-to-branch  # protects main, matches CONTRIBUTING.md
+
+  # Layer 2 — Conventional Commits enforcement (commit-msg stage).
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.8.3
+    hooks:
+      - id: commitizen
+        stages:
+          - commit-msg
+
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+        stages:
+          - commit-msg
+
+  # Layer 3 — the shared bin/ci scripts the CI jobs also call. language: system
+  # + pass_filenames: false: each script runs its own full scan, matching CI.
+  - repo: local
+    hooks:
+      - id: codespell
+        name: codespell (docs/ + templates/)
+        entry: bash bin/ci/check_spelling.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: shellcheck
+        name: shellcheck (bin/**/*.sh)
+        entry: bash bin/ci/check_shell.sh
+        language: system
+        pass_filenames: false
+        files: ^bin/.*\.sh$
+
+      - id: validate-meta
+        name: validate skeleton.meta integrity
+        entry: bash bin/ci/validate_meta.sh
+        language: system
+        pass_filenames: false
+        files: skeleton\.meta$
+
+      - id: version-sync
+        name: version sync (pyproject vs CLI)
+        entry: bash bin/ci/check_version_sync.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: mkdocs-strict
+        name: mkdocs build --strict
+        entry: bash bin/ci/check_docs_build.sh
+        language: system
+        pass_filenames: false
+        always_run: true

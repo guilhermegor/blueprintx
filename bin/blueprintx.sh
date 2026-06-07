@@ -13,7 +13,7 @@ SUBCOMMAND=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEMPLATES_ROOT="$BLUEPRINTX_ROOT/templates"
-source "$SCRIPT_DIR/lib/logging.sh"
+source "$SCRIPT_DIR/lib/common.sh"
 
 # =========================================================================
 # ARG PARSING

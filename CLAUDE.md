@@ -24,9 +24,19 @@ make mkdocs_server  # installs docs deps then serves at http://0.0.0.0:8000
 
 ### Dev environment (root project)
 ```bash
-make init_venv     # run bin/init_venv.sh to bootstrap poetry venv
+make init          # bootstrap venv + install pre-commit hooks (venv + precommit)
+make venv          # run bin/venv.sh to bootstrap poetry venv
+make precommit     # install pre-commit + commit-msg hooks
+make lint          # run all pre-commit hooks across the repo (mirrors CI)
 make update_venv   # poetry update
 ```
+
+The root repo has its **own** pre-commit (`/.pre-commit-config.yaml`) that mirrors
+`.github/workflows/scaffold-checks.yml`: the shared checks live in `bin/ci/*.sh`
+(`check_spelling.sh`, `check_shell.sh`, `check_docs_build.sh`, `validate_meta.sh`,
+`check_version_sync.sh`) and **both** the workflow and the hook call them — one home
+per check, zero drift. This is distinct from the scaffolded-project pre-commit shipped
+in `templates/python-common/`.
 
 ### Releasing / version bump
 **Always bump the version through the make recipe — never hand-edit `pyproject.toml`.**
@@ -61,7 +71,7 @@ BlueprintX/
 │   ├── blueprintx.sh               # interactive menu + mode parsing (--dev, --dry-run, --clean)
 │   ├── preview.sh                  # skeleton structure previews
 │   ├── help.sh                     # usage tips
-│   ├── init_venv.sh                # venv bootstrap for this repo
+│   ├── venv.sh                     # venv bootstrap for this repo
 │   └── scaffold/
 │       ├── python_ddd_service.sh      # DDD native-DB scaffold logic
 │       ├── python_ddd_service_orm.sh  # DDD SQLAlchemy ORM scaffold logic

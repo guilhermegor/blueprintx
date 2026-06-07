@@ -14,7 +14,19 @@ cmd_dry_run() { bash "$SCRIPT_DIR/bin/blueprintx.sh" --dry-run; }
 
 cmd_update_licenses() { bash "$SCRIPT_DIR/bin/update_licenses.sh"; }
 
-cmd_init_venv() { bash "$SCRIPT_DIR/bin/init_venv.sh"; }
+cmd_venv() { bash "$SCRIPT_DIR/bin/venv.sh"; }
+
+cmd_precommit() {
+	poetry run pre-commit install
+	poetry run pre-commit install --hook-type commit-msg
+}
+
+cmd_init() {
+	cmd_venv
+	cmd_precommit
+}
+
+cmd_lint() { poetry run pre-commit run --all-files; }
 
 cmd_update_venv() {
 	poetry update
@@ -36,9 +48,12 @@ main() {
 		dev) cmd_dev ;;
 		dev-clean|dev_clean) cmd_dev_clean ;;
 		dry-run|dry_run) cmd_dry_run ;;
-		update_licenses|update_licenses) cmd_update_licenses ;;
-		init_venv|init_venv) cmd_init_venv ;;
-		update_venv|update_venv) cmd_update_venv ;;
+		update_licenses) cmd_update_licenses ;;
+		init) cmd_init ;;
+		venv) cmd_venv ;;
+		precommit) cmd_precommit ;;
+		lint) cmd_lint ;;
+		update_venv) cmd_update_venv ;;
 		mkdocs_server|mkdocs_serve) cmd_mkdocs_serve ;;
 		help|-h|--help) usage ;;
 		*) echo "Unknown target: $target" >&2; usage >&2; exit 1 ;;
