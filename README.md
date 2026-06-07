@@ -330,7 +330,7 @@ BlueprintX/
 │   ├── blueprintx.sh        # interactive menu + auto-discovery
 │   ├── preview.sh           # skeleton previews
 │   ├── help.sh              # usage tips and targets
-│   ├── init_venv.sh         # convenience venv bootstrap
+│   ├── venv.sh              # convenience venv bootstrap
 │   └── scaffold/            # per-skeleton scaffolders
 │       ├── python_ddd_service.sh      # DDD native DB scaffold
 │       ├── python_ddd_service_orm.sh  # DDD SQLAlchemy ORM scaffold

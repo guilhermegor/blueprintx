@@ -1,0 +1,4 @@
+[codespell]
+skip = *.png,*.svg,*.ico,*.jpg,*.json,*.lock,*.po,*.pyc
+quiet-level = 3
+ignore-words-list = nd,fpr,strat,enty,filetest,nome,nomes,caracteres,prefere,atual,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX

@@ -1,0 +1,11 @@
+# gitlint configuration for the BlueprintX repo.
+#
+# Commitizen enforces the Conventional-Commits *format* at commit-msg; gitlint
+# here owns the length limits. Making them explicit documents the contract for
+# contributors and tooling instead of relying on gitlint's implicit defaults.
+
+[title-max-length]
+line-length=72
+
+[body-max-line-length]
+line-length=80

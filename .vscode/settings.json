@@ -1,0 +1,24 @@
+{
+  // BlueprintX repo-root editor settings. The root is a Make + bash scaffolding
+  // tool, not a Python application — so there is no src/ path and no pytest
+  // suite. It does keep a poetry-managed .venv (mkdocs, pre-commit, codespell),
+  // so we point the interpreter at it for IDE auto-discovery and linting.
+
+  // Linux/macOS default poetry in-project venv. Absent on a fresh clone until
+  // `make venv`; the extension falls back to auto-discovery if the path is missing.
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "python-envs.defaultEnvManager": "ms-python.python:poetry",
+  "python-envs.defaultPackageManager": "ms-python.python:poetry",
+
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  // These dotfiles are INI-format config, not Python — tell the editor so
+  // Pylance stops analysing them (false "X is not defined" on section keys).
+  "files.associations": {
+    ".gitlint": "ini",
+    ".codespellrc": "ini",
+    ".pydocstyle": "ini"
+  }
+}

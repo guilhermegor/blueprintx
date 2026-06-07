@@ -25,7 +25,7 @@ jobs:
         run: sudo apt-get install -y --no-install-recommends shellcheck
 
       - name: Lint all shell scripts (severity ≥ warning)
-        run: find bin -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
+        run: bash bin/ci/check_shell.sh
 
   validate-meta:
     name: Validate skeleton.meta integrity
@@ -66,7 +66,7 @@ jobs:
         run: pip install "mkdocs-material>=9.5.0"
 
       - name: Build documentation (--strict catches broken refs)
-        run: mkdocs build --strict
+        run: bash bin/ci/check_docs_build.sh
 
   dry-run-smoke:
     name: Dry-run smoke — ${{ matrix.skeleton }}
@@ -135,8 +135,4 @@ jobs:
         run: pip install codespell
 
       - name: Run codespell (skips binaries and lockfiles)
-        run: |
-          codespell docs/ templates/ \
-            --skip="*.png,*.svg,*.ico,*.jpg,*.json,*.lock,*.po,*.pyc" \
-            --quiet-level=3 \
-            --ignore-words-list="nd,fpr,strat,enty,filetest,nome,nomes,caracteres,prefere,atual,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX"
+        run: bash bin/ci/check_spelling.sh
