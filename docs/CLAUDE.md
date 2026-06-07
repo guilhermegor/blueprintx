@@ -40,8 +40,26 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 |-----------|----------|
 | `py-examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
 | `py-examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
+| `internal/` | **Non-published** maintenance docs (backport backlogs, internal notes). Excluded from the built site — see below. |
 
 Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
+
+### Internal (non-published) docs — never at the `docs/` root
+
+MkDocs **builds every `.md` under `docs/` into the site**, even files absent from
+`nav:` (they are merely unlisted, still reachable by URL). So a maintenance
+backlog or internal note dropped at the `docs/` root *will* ship to users and
+misguide them. Such files MUST live under **`docs/internal/`**, which is excluded
+from the build via `exclude_docs` in `mkdocs.yml`:
+
+```yaml
+exclude_docs: |
+  internal/
+```
+
+Internal docs are **NOT** added to the file index (Section 1), **NOT** registered
+in `mkdocs.yml` `nav:`, and **NOT** subject to the Type A/B/C content templates —
+they are working documents, not published pages.
 
 ### MkDocs nav coupling
 
@@ -124,6 +142,7 @@ Apply these rules every time a change is made to the `docs/` directory:
 | Event | Required actions |
 |-------|-----------------|
 | New file added | 1. Add a row to the **file index** (Section 1). 2. Register the file in `mkdocs.yml` nav. Both changes go in the same commit. |
+| Internal/non-published doc added | Place it under `docs/internal/` (never the `docs/` root). Do NOT add it to the file index or `mkdocs.yml` nav; it is already excluded from the build via `exclude_docs`. |
 | File removed | 1. Remove its row from the **file index**. 2. Remove its entry from `mkdocs.yml` nav. Fix any cross-links in other docs that pointed to it. |
 | File renamed | Update the file index path, the `mkdocs.yml` nav entry, and all internal cross-links. |
 | New skeleton added | 1. Create its overview file following Type A structure. 2. Create its `examples-<skeleton>/` subdirectory and at least one example following Type B. 3. Add both to the nav under a new group. 4. Update Sections 1, 2, and 3 of this CLAUDE.md. |
