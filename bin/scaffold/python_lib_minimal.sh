@@ -403,7 +403,20 @@ apply_offline_mode() {
     # Swap the stock no-commit-to-branch hook for the friendly local protect-branch
     # guard that points at `make new_branch` (offline has no server-side protection).
     swap_protect_branch_hook "$project_path"
+    commit_offline_artifacts "$project_path"
     print_status "success" "Offline workflow enabled (new_branch | git_merge_to_main | git_diff_* | protect-branch)"
+}
+
+# The scaffold's first commit runs before the online/offline branch, so the
+# offline artifacts (local git workflow, swapped pre-commit hook, removed
+# .github) would otherwise be left uncommitted. Commit them so a freshly
+# scaffolded offline project starts with a clean working tree. --no-verify
+# bypasses the just-installed protect-branch hook (HEAD is the default branch).
+commit_offline_artifacts() {
+    local project_path="$1"
+    git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    git -C "$project_path" add -A
+    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
 }
 
 # Replace the stock pre-commit `no-commit-to-branch` hook with a local hook that

@@ -55,12 +55,10 @@ echo "::group::poetry install (runtime + dev)"
 poetry install --with dev --no-interaction --no-ansi
 echo "::endgroup::"
 
-# Commit the full tree as the baseline, AFTER poetry install (so the generated
-# poetry.lock is captured too). The scaffold makes its first commit before
-# switching to offline mode, so the offline artifacts (local git workflow,
-# swapped pre-commit hook, removed .github) are otherwise left uncommitted. With
-# everything committed, the post-lint check below reflects only what `make lint`
-# changes.
+# Commit anything left in the tree as the baseline, AFTER poetry install (the
+# scaffold already commits its own output, including offline artifacts; this
+# mainly captures the generated poetry.lock). With a clean baseline, the
+# post-lint check below reflects only what `make lint` itself changes.
 git add -A
 git commit -q --no-verify -m "ci: scaffold baseline" || true
 
