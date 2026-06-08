@@ -11,9 +11,14 @@ indent_style = space
 indent_size = 2
 
 # Python: ruff is configured with tab indentation (see ruff.toml), so the
-# editor must agree to avoid a format-on-save vs. lint tug-of-war.
+# editor must agree to avoid a format-on-save vs. lint tug-of-war. indent_size
+# AND tab_width must be set explicitly — without them [*.py] inherits the
+# [*] indent_size = 2 above, so a tab renders as 2 columns (the recurring
+# "why are my Python tabs 2 spaces?" trap).
 [*.py]
 indent_style = tab
+indent_size = 4
+tab_width = 4
 
 # Makefiles require real tabs for recipe lines.
 [Makefile]

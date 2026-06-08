@@ -106,16 +106,19 @@ jobs:
           fi
 
       - name: Run Integration Tests
-        run: poetry run pytest tests/integration/ -v
+        # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a
+        # fresh project with an empty integration suite does not fail CI; real
+        # failures (exit 1) still fail the step.
+        run: poetry run pytest tests/integration/ -v || [ $? -eq 5 ]
 
       - name: Run Unit Tests
-        run: poetry run pytest tests/unit/
+        run: poetry run pytest tests/unit/ || [ $? -eq 5 ]
 
       - name: Run Coverage Report
         if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
         run: |
           poetry run pytest --cov=src --cov-report=xml --no-header -q tests/unit/
-          poetry run coverage-badge -o coverage.svg -f
+          poetry run genbadge coverage -i coverage.xml -o coverage.svg
 
       - name: Upload Badge
         if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}

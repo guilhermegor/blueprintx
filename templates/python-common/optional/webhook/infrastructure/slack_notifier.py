@@ -72,7 +72,8 @@ class SlackNotifier:
 			raise ValueError("Message cannot be empty")
 
 		bytes_payload = json.dumps({"text": f"*{str_title}*\n{str_message}"}).encode("utf-8")
-		# URL scheme is constrained to https:// by _validate_url, so S310 is a false positive.
+		# The constructor validates that the URL uses an https scheme, so the S310
+		# audit warning about arbitrary schemes does not apply here.
 		cls_request = request.Request(  # noqa: S310
 			self._str_url,
 			data=bytes_payload,

@@ -43,7 +43,8 @@ integration_tests:
 test_cov:
 	@poetry run pytest tests/unit/ --cov=src
 	@poetry run coverage report -m
-	@poetry run coverage-badge -o coverage.svg -f
+	@poetry run coverage xml -o coverage.xml
+	@poetry run genbadge coverage -i coverage.xml -o coverage.svg
 
 test_slowest:
 	@echo "Running tests to identify the 20 slowest tests..."
@@ -61,31 +62,31 @@ fix_playwright:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint check_consistency
+.PHONY: lint check_docstrings
 
 lint:
 	@poetry run ruff check --fix .
 	@poetry run ruff format .
 	@poetry run codespell .
 	@poetry run pydocstyle .
-	@poetry run python bin/check_consistency.py
+	@poetry run python bin/check_docstrings.py
 
-check_consistency:
-	@poetry run python bin/check_consistency.py
+check_docstrings:
+	@poetry run python bin/check_docstrings.py
 
 # -------------------
 # DATABASE
 # -------------------
-.PHONY: db_setup_schema db_backup db_restore
+.PHONY: db_up db_backup db_restore
 
-db_setup_schema:
-	@bash bin/db_setup_schema.sh setup
+db_up:
+	@bash bin/db.sh up
 
 db_backup:
-	@bash bin/db_setup_schema.sh backup
+	@bash bin/db.sh backup
 
 db_restore:
-	@bash bin/db_setup_schema.sh restore
+	@bash bin/db.sh restore
 
 # -------------------
 # RUN
@@ -104,15 +105,12 @@ export_context:
 	@bash bin/export_repo_content.sh
 
 # -------------------
-# GIT
+# SHIP
 # -------------------
-.PHONY: new_branch git_merge_to_main
+.PHONY: ship
 
-new_branch:
-	@bash bin/new_branch.sh "$(NAME)"
-
-git_merge_to_main:
-	@bash bin/git_merge_to_main.sh
+ship:
+	@bash bin/ship.sh
 
 # -------------------
 # DOCS
@@ -152,11 +150,11 @@ help:
 	@echo "  fix_playwright       Reinstall Playwright browsers"
 	@echo ""
 	@echo "Linting"
-	@echo "  lint                 Run ruff, codespell, pydocstyle, check_consistency"
-	@echo "  check_consistency    Check docstring type/raises consistency"
+	@echo "  lint                 Run ruff, codespell, pydocstyle, check_docstrings"
+	@echo "  check_docstrings     Check docstring type/raises consistency"
 	@echo ""
 	@echo "Database"
-	@echo "  db_setup_schema      Start Docker services, ensure schema, apply migrations"
+	@echo "  db_up                Start Docker services, ensure schema, apply migrations"
 	@echo "  db_backup            Dump the database to BACKUP_STORE_PATH"
 	@echo "  db_restore DUMP=<p>  Restore database from a dump file at path <p>"
 	@echo ""
@@ -166,19 +164,18 @@ help:
 	@echo "Run"
 	@echo "  run                  Run src/main.py (auto-installs Poetry if missing)"
 	@echo ""
-	@echo "Context"
+	@echo "Context / Ship"
 	@echo "  export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM"
+	@echo "  ship                 Package the committed main tree into dist/<name>_<ts>.zip"
 	@echo ""
-	@echo "Git"
+	@echo "Offline (only present when scaffolded without GitHub)"
 	@echo "  new_branch NAME=<x>  Create a branch (feat/…, fix/…) off the default branch (main/master)"
 	@echo "  git_merge_to_main    Merge the current clean branch into main/master and delete it"
-	@echo ""
-	@echo "Git Diff (offline sync — only present when scaffolded without GitHub)"
 	@echo "  git_diff_export              Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/"
 	@echo "  git_diff_check FILE=<path>   Check whether a .diff applies cleanly"
 	@echo "  git_diff_apply FILE=<path>   Apply a .diff to the working tree (no commit)"
 	@echo ""
 
-# Offline git-diff sync targets — present only when scaffolded without GitHub.
-# The leading '-' makes this silently skipped when the fragment is absent.
--include make/git_diff.mk
+# Offline-only targets (new_branch, git_merge_to_main, git_diff_*) — present only
+# when scaffolded without GitHub. The leading '-' silently skips this when absent.
+-include make/offline.mk

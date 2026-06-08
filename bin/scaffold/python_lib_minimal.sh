@@ -94,21 +94,41 @@ create_python_files() {
 
     print_status "info" "Creating Python files..."
 
-    touch "$project_path"/src/"$PROJECT_NAME"/__init__.py
+    printf '"""%s package."""\n' "$PROJECT_NAME" > "$project_path/src/$PROJECT_NAME/__init__.py"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/main.py" "$project_path/src/$PROJECT_NAME/main.py"
 
-    # Create test file with project name substitution
+    # Create test file with project name substitution. Tab-indented and fully
+    # annotated/docstringed so a freshly scaffolded project passes `make lint`.
     mkdir -p "$project_path/tests/unit"
     sed "s/\${PROJECT_NAME}/$PROJECT_NAME/g" << 'EOF' > "$project_path/tests/unit/test_main.py"
+"""Unit tests for the library entry point."""
+
+import pytest
+
 from ${PROJECT_NAME}.main import main
 
-def test_main(capsys):
-    main()
-    captured = capsys.readouterr()
-    assert "Hello from lib-minimal!" in captured.out
+
+def test_main(capsys: pytest.CaptureFixture[str]) -> None:
+	"""The entry point prints the placeholder greeting to stdout."""
+	main()
+	captured = capsys.readouterr()
+	assert "Hello from lib-minimal!" in captured.out
 EOF
 
     print_status "success" "Python files created"
+}
+
+# Runtime type-checking engine (stdlib-only) — single source in
+# python-common/optional/typing. lib-minimal vendors it as utils/typing (the same
+# layout the MVC tiers use) and rewrites the canonical chassis.typing prefix.
+copy_typing_chassis() {
+    local project_path="$1"
+    mkdir -p "$project_path/src/utils/typing"
+    cp "$COMMON_TEMPLATE_ROOT/src/utils/__init__.py" "$project_path/src/utils/__init__.py"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$project_path/src/utils/typing"
+    grep -rl "chassis.typing" "$project_path/src/utils/typing" \
+        | xargs -r sed -i "s|chassis\.typing|utils.typing|g"
+    print_status "success" "Runtime type-checking engine (utils/typing) applied"
 }
 
 copy_templates() {
@@ -164,9 +184,17 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
+    cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
-    chmod +x "$project_path/bin/export_repo_content.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh"
+    mkdir -p "$project_path/dist"
+    cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
+    # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).
+    mkdir -p "$project_path/.vscode"
+    cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
 
     print_status "success" "Common templates applied"
 }
@@ -186,6 +214,12 @@ copy_mkdocs_templates() {
         "$project_path/docs/usage.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/api.md" \
         "$project_path/docs/api.md"
+    # Non-published docs/ authoring guide + the excluded backlog folder.
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
+        "$project_path/docs/CLAUDE.md"
+    mkdir -p "$project_path/docs/backlog"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/backlog/.keep" \
+        "$project_path/docs/backlog/.keep"
 
     print_status "success" "MkDocs templates copied"
 }
@@ -352,14 +386,79 @@ apply_offline_mode() {
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_apply.sh" "$project_path/bin/git_diff_apply.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_check.sh" "$project_path/bin/git_diff_check.sh"
+    # Local git workflow + branch guard — substitute for GitHub's branch/PR flow.
+    cp "$SHARED_TEMPLATE_ROOT/bin/new_branch.sh" "$project_path/bin/new_branch.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/git_merge_to_main.sh" "$project_path/bin/git_merge_to_main.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/protect_branch.sh" "$project_path/bin/protect_branch.sh"
     chmod +x "$project_path/bin/git_diff_export.sh" \
         "$project_path/bin/git_diff_apply.sh" \
-        "$project_path/bin/git_diff_check.sh"
+        "$project_path/bin/git_diff_check.sh" \
+        "$project_path/bin/new_branch.sh" \
+        "$project_path/bin/git_merge_to_main.sh" \
+        "$project_path/bin/protect_branch.sh"
     mkdir -p "$project_path/make"
-    cp "$SHARED_TEMPLATE_ROOT/make/git_diff.mk" "$project_path/make/git_diff.mk"
+    cp "$SHARED_TEMPLATE_ROOT/make/offline.mk" "$project_path/make/offline.mk"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
-    print_status "success" "git-diff workflow enabled (make git_diff_export | git_diff_check | git_diff_apply)"
+    # Swap the stock no-commit-to-branch hook for the friendly local protect-branch
+    # guard that points at `make new_branch` (offline has no server-side protection).
+    swap_protect_branch_hook "$project_path"
+    commit_offline_artifacts "$project_path"
+    print_status "success" "Offline workflow enabled (new_branch | git_merge_to_main | git_diff_* | protect-branch)"
+}
+
+# The scaffold's first commit runs before the online/offline branch, so the
+# offline artifacts (local git workflow, swapped pre-commit hook, removed
+# .github) would otherwise be left uncommitted. Commit them so a freshly
+# scaffolded offline project starts with a clean working tree. --no-verify
+# bypasses the just-installed protect-branch hook (HEAD is the default branch).
+commit_offline_artifacts() {
+    local project_path="$1"
+    git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    git -C "$project_path" add -A
+    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+}
+
+# Replace the stock pre-commit `no-commit-to-branch` hook with a local hook that
+# runs bin/protect_branch.sh first (fail-fast, friendly message). Offline only.
+swap_protect_branch_hook() {
+    local project_path="$1"
+    local pc="$project_path/.pre-commit-config.yaml"
+    [ -f "$pc" ] || return 0
+    python3 - "$pc" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    text = fh.read()
+
+# Drop the stock no-commit-to-branch hook (its id line + the following --branch args).
+text = re.sub(
+    r"\n      - id: no-commit-to-branch\n(?:        args:\n          - --branch=\S+\n)?",
+    "\n",
+    text,
+)
+
+# Insert a local protect-branch hook as the FIRST entry of the `repos:` list so it
+# fails fast before the slow test/coverage hooks.
+local_hook = (
+    "repos:\n"
+    "  - repo: local\n"
+    "    hooks:\n"
+    "      - id: protect-branch\n"
+    "        name: block direct commits to main/master\n"
+    "        entry: bash bin/protect_branch.sh\n"
+    "        language: system\n"
+    "        always_run: true\n"
+    "        pass_filenames: false\n"
+)
+text = text.replace("repos:\n", local_hook, 1)
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY
+    print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
 # ============================================================================
@@ -377,6 +476,7 @@ main() {
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
+    copy_typing_chassis "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"

@@ -109,7 +109,7 @@ def _cnpj_check_digit(str_base: str, tuple_weights: tuple[int, ...]) -> int:
 	"""
 	int_sum = sum(
 		(ord(str_char) - _ASCII_ZERO) * int_weight
-		for str_char, int_weight in zip(str_base, tuple_weights)
+		for str_char, int_weight in zip(str_base, tuple_weights, strict=True)
 	)
 	int_rest = int_sum % 11
 	return 0 if int_rest < 2 else 11 - int_rest
@@ -203,8 +203,7 @@ def _cpf_check_digit(str_base: str, int_start_weight: int) -> int:
 		The check digit (0 when the remainder is below 2, else ``11 - remainder``).
 	"""
 	int_sum = sum(
-		int(str_char) * (int_start_weight - int_idx)
-		for int_idx, str_char in enumerate(str_base)
+		int(str_char) * (int_start_weight - int_idx) for int_idx, str_char in enumerate(str_base)
 	)
 	int_rest = int_sum % 11
 	return 0 if int_rest < 2 else 11 - int_rest

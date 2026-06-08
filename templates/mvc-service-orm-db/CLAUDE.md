@@ -18,6 +18,38 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 | Utils | `src/utils/` | Helpers. `br_identifiers.py` (CNPJ/CPF mask·unmask·validate) and `dtypes.py` (`apply_dtypes`) are shipped from python-common; calendars/parsers/dates come from the `stpstone` dependency. |
 | Config | `src/config/` | `startup.py` builds runtime singletons once at import; `connection_db.py` is the engine/session factory; YAML config files; secrets in `.env`. |
 
+## Library coupling (seams for peripheral dependencies)
+
+Model / View / Controller may use the skeleton's **core data libraries directly** —
+`pandas` (the model/view vocabulary) and SQLAlchemy via `config.connection_db`.
+**Every other third-party dependency** (network, vendor SDKs, OS-specific APIs,
+exotic file formats) must be reached through a **seam in `utils/`** (a
+gateway/adapter, or a `WebhookNotifier`-style port), so the layer depends on our
+function, not the vendor API. This confines breakage from a vendor change to a
+single adapter. Example seams shipped here: `utils/webhook/` (teams/slack behind a
+port), `utils/paths.py` (OS-independent path resolution).
+
+The **standard library** (`re`, `pathlib`, `datetime`, `json`, …) is unrestricted
+in every layer — it carries no coupling risk. Route it through `utils/` only when
+the project needs specific behaviour (e.g. `utils/paths.py`), and the reason is the
+behaviour, not the import.
+
+## Runtime type-checking (`utils/typing`)
+
+Reach for `from utils.typing import TypeChecker, type_checker` to validate a call's
+arguments against their annotations at runtime — `metaclass=TypeChecker` on a class
+(or `ProtocolTypeCheckerMeta` for a `Protocol` port), `@type_checker` on a
+module-level function. This complements, not replaces, the static gate (ruff `ANN`
++ mypy). The engine caches resolved hints, preserves
+`@staticmethod`/`@classmethod`/`property` descriptors, and handles PEP 604 `X | Y`
+unions. `utils/typing/` is the one place `Any` is the honest signature (it inspects
+values of any type) and is ANN401-exempt. The package ships from
+`templates/python-common/optional/typing/` (DDD receives it as `chassis/typing`).
+The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`,
+`text`, `paths`, `signatures`, `dates`) are intentionally decoupled from it so they
+stay portable across tiers — apply the checker in your own model/view/controller
+code.
+
 ## Key conventions
 
 **`src/controller/main.py` is script-style.** Read top to bottom. It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), inlines its own timer, calls the model, hands the DataFrame to the view, and writes a JSON run summary. Do **not** wrap it in a `run()` function — that is the deliberate MVC convention here. The engine is bracketed in a `try/finally` so `dispose()` always runs (the session boundary). If the webhook opt-in was chosen at scaffold time, a `# --- notify ---` block is appended that sends `MSG_WEBHOOK` when `ENVIRONMENT == WEBHOOK_ENV_GATE`.

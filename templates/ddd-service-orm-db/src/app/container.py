@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from capabilities.example_feature.application import create_note, list_notes
 from capabilities.example_feature.domain.dto import NoteCreateDTO, NoteResponseDTO

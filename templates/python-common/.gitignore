@@ -15,17 +15,26 @@ env/
 .uv/
 
 # Distribution / packaging
+# dist/ holds build artifacts and `make ship` zips — ignore its contents but keep
+# the tracked dist/.keep so the directory ships with the scaffold.
 build/
-dist/
+dist/*
+!dist/.keep
 *.egg-info/
 
 # IDE / editor
-.vscode/
+# Ship the curated VS Code settings + tasks; ignore everything else under .vscode/.
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
 .idea/
 *.swp
 
 # Test / coverage
+# coverage.svg is tracked (the README badge references it); coverage.xml is the
+# transient genbadge input and is regenerated on every run.
 .coverage
+coverage.xml
 htmlcov/
 
 # Git-diff offline-sync exports (present only when scaffolded without GitHub)

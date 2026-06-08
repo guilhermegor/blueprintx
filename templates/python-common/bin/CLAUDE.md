@@ -15,9 +15,9 @@ Shell-script conventions for every `*.sh` in this directory.
 set -euo pipefail
 ```
 
-Use `set -e` (without `-u`/`-o pipefail`) only when the script sources
-environment files that may contain unset variables (e.g. `db_setup_schema.sh`
-which loads `.env` before the guard runs).
+Use `set -e` (without `-u`/`-o pipefail`) only when the script reads
+environment values that may be unset (e.g. `db.sh`, which loads `.env` values
+via `_read_env_var` before applying defaults).
 
 ## Boilerplate (every script)
 
@@ -100,6 +100,17 @@ corrupts passwords containing those characters.
 str_db_password
 str_db_password=$(_read_env_var DB_PASSWORD)
 ```
+
+## Docstring URL convention (the `check-urls` hook)
+
+`bin/test_urls_docstrings.sh` (pre-commit `check-urls`) fetches every
+`https://…` URL it finds in a docstring and fails on any 3xx/4xx — it does
+**not** follow redirects. So never put a *fetchable* example URL in a
+docstring: doctest-style fakes (`https://hooks.slack.com/services/T000/…` →
+404) and truncated real links (`…/l/channel/19%3A…` → 302) will block the
+commit. The hook **skips host-only URLs** (regex `https?://[^/]+$`), so write
+examples as bare hosts (`https://hooks.slack.com`) and refresh any stale doc
+URL to its current 200 home.
 
 ## SC2155 — split `local x` from `x=$(…)`
 

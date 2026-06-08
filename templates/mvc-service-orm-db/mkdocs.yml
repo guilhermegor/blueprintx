@@ -29,3 +29,9 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.superfences
+
+# Non-published docs: MkDocs builds every .md under docs/, so working
+# documents must be excluded here or they ship to readers.
+exclude_docs: |
+  backlog/        # work-to-do backlogs / follow-up notes
+  CLAUDE.md       # docs/ authoring guidance, not a published page

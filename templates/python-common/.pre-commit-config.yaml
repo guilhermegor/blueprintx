@@ -8,6 +8,9 @@ repos:
         args:
           - --allow-missing-credentials
       - id: check-merge-conflict
+      # Online default. Offline scaffolds (no GitHub remote) swap this for the
+      # local `protect-branch` hook via apply_offline_mode, which points the user
+      # at `make new_branch`. Online projects also get gh server-side protection.
       - id: no-commit-to-branch
         args:
           - --branch=main
@@ -27,7 +30,7 @@ repos:
       - id: check-added-large-files
         args:
           - --maxkb=500
-        exclude: (?i)^data/large/.*
+        exclude: (?i)^(data/large/.*|poetry\.lock)$
       - id: check-illegal-windows-names
       - id: check-case-conflict
       - id: name-tests-test
@@ -93,17 +96,20 @@ repos:
         types:
           - file
 
-      - id: check-consistency
+      - id: check-docstrings
         name: docstring type/raises consistency check
-        entry: poetry run python bin/check_consistency.py
+        entry: poetry run python bin/check_docstrings.py
         language: system
         types:
           - python
         pass_filenames: false
 
+      # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a
+      # fresh project with an empty suite does not block every commit; real
+      # failures (exit 1) still block.
       - id: unit-tests
         name: checking unit tests
-        entry: poetry run pytest tests/unit/
+        entry: bash -c "poetry run pytest tests/unit/ || [ $? -eq 5 ]"
         language: system
         types:
           - file
@@ -111,7 +117,7 @@ repos:
 
       - id: integration-tests
         name: checking integration tests
-        entry: poetry run pytest tests/integration/
+        entry: bash -c "poetry run pytest tests/integration/ || [ $? -eq 5 ]"
         language: system
         types:
           - file
@@ -126,9 +132,12 @@ repos:
         pass_filenames: false
         verbose: true
 
+      # genbadge (not the abandoned coverage-badge, which imports the removed
+      # pkg_resources and breaks on setuptools >= 81). Generates coverage.xml then
+      # the SVG. coverage.svg is tracked (README badge); coverage.xml is ignored.
       - id: coverage-badge
         name: coverage badge
-        entry: bash -c "poetry run pytest tests/unit/ --cov=src --cov-report=term-missing && poetry run coverage-badge -o coverage.svg -f"
+        entry: bash -c "poetry run pytest tests/unit/ --cov=src && poetry run coverage xml -o coverage.xml && poetry run genbadge coverage -i coverage.xml -o coverage.svg"
         language: system
         types:
           - python

@@ -9,10 +9,13 @@ from getpass import getuser
 import os
 from pathlib import Path
 from socket import gethostname
+import tempfile
 
 from dotenv import load_dotenv
 from stpstone.utils.loggs.create_logs import CreateLog
 from stpstone.utils.parsers.yaml import reading_yaml
+
+from utils.paths import is_windows_path
 
 
 load_dotenv(override=True)
@@ -34,12 +37,42 @@ _str_date = _dt_now.strftime("%Y%m%d")
 _str_date_folder = _dt_now.strftime("%Y-%m-%d")
 _str_time = _dt_now.strftime("%H%M%S")
 
+
 # Single output root (inputs.yaml); optionally partitioned into <root>/<YYYY-MM-DD>/.
 # The partition uses the human-readable _str_date_folder; filenames keep the compact
 # _str_date (see output_path).
-_root = Path(YAML_INPUTS.get("daily_infos_base_path", "logs")).expanduser()
-_out_dir = _root / _str_date_folder if YAML_INPUTS.get("daily_infos_dated", False) else _root
-_out_dir.mkdir(parents=True, exist_ok=True)
+def _resolve_out_dir() -> Path:
+	r"""Resolve the run's output directory with a temp-dir fallback.
+
+	Two safety nets keep import-time singletons from exploding off the production
+	host: (1) a configured Windows network path (``A:\\...``) on a POSIX box
+	(dev/CI) is unreachable, so write under the temp dir instead; (2) any
+	``mkdir`` failure (permissions, missing mount) also falls back to the temp dir.
+
+	Returns
+	-------
+	Path
+		An existing directory the process can write to.
+	"""
+	str_base = str(YAML_INPUTS.get("daily_infos_base_path", "logs"))
+	bool_dated = bool(YAML_INPUTS.get("daily_infos_dated", False))
+	path_temp_root = Path(tempfile.gettempdir()) / (APP_NAME or "app")
+
+	if is_windows_path(str_base) and os.name != "nt":
+		path_root = path_temp_root
+	else:
+		path_root = Path(str_base).expanduser()
+
+	path_dir = path_root / _str_date_folder if bool_dated else path_root
+	try:
+		path_dir.mkdir(parents=True, exist_ok=True)
+	except OSError:
+		path_dir = path_temp_root / _str_date_folder if bool_dated else path_temp_root
+		path_dir.mkdir(parents=True, exist_ok=True)
+	return path_dir
+
+
+_out_dir = _resolve_out_dir()
 
 
 def output_path(str_name_key: str) -> Path:
