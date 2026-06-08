@@ -470,6 +470,22 @@ copy_github_assets() {
     print_status "success" "GitHub assets copied (.github)"
 }
 
+# copy_github_assets adds .github AFTER the first commit/push, so commit and push
+# those assets here — giving the online project a clean working tree and a remote
+# that carries them. Done BEFORE branch protection so this direct push to the
+# default branch is not blocked by the rules we then apply.
+commit_and_push_github_assets() {
+    local project_path="$1"
+    git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    if [ -n "$(git -C "$project_path" status --porcelain)" ]; then
+        git -C "$project_path" add -A
+        git -C "$project_path" commit -q --no-verify -m "chore: add GitHub project assets" || true
+        git -C "$project_path" push >/dev/null 2>&1 \
+            || print_status "warning" "Could not push GitHub assets; run 'git push' manually."
+    fi
+    apply_branch_protection "$project_path"
+}
+
 # Always initialise a local git repo with a first commit, independent of any
 # remote setup, so every scaffold is a git repo even in non-interactive (--dev)
 # runs. Skips gracefully when git is unavailable or the repo already exists.
@@ -556,8 +572,9 @@ prompt_git_remote_setup() {
             print_status "info" "Skipped remote setup"
             ;;
     esac
-
-    apply_branch_protection "$project_path"
+    # Branch protection is applied later, in commit_and_push_github_assets, only
+    # for the online path and only after the .github assets have been pushed —
+    # so the asset push is never blocked by the rules we are about to set.
 }
 
 apply_offline_mode() {
@@ -683,6 +700,7 @@ main() {
     # tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
     if git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         copy_github_assets "$PROJECT_PATH"
+        commit_and_push_github_assets "$PROJECT_PATH"
     else
         apply_offline_mode "$PROJECT_PATH"
     fi
