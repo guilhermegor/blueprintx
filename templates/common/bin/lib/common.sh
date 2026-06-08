@@ -10,6 +10,12 @@
 #   - Optional: scripts may set LOG_FILE before sourcing; print_status will tee
 #     timestamped output there. If LOG_FILE is unset, console output only.
 #   - Refuses direct execution.
+#
+# NOTE: This file is the single source of truth and is kept BYTE-IDENTICAL in
+# templates/common/bin/lib/ and templates/python-common/bin/lib/. CI enforces
+# parity (bin/ci/check_version_sync.sh). Offline scaffolds copy the common/
+# version over the python-common one, so both must carry resolve_default_branch
+# and _read_env_var — do not let them drift.
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     echo "lib/common.sh is meant to be sourced, not executed." >&2
@@ -82,4 +88,74 @@ print_status() {
     if [ -n "${LOG_FILE:-}" ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$status] $message" >> "$LOG_FILE"
     fi
+}
+
+# ============================================================================
+# resolve_default_branch — find the repo's default branch
+# ============================================================================
+#
+# Usage:
+#   target="$(resolve_default_branch [explicit_name])"
+#
+# Resolution order: explicit argument, then $DEFAULT_BRANCH, then the remote's
+# origin/HEAD, then a local "main", else "master". Used by new_branch.sh and
+# git_merge_to_main.sh so both agree on the integration branch.
+
+resolve_default_branch() {
+    local explicit="${1:-}"
+    if [ -n "$explicit" ]; then
+        echo "$explicit"
+        return 0
+    fi
+    if [ -n "${DEFAULT_BRANCH:-}" ]; then
+        echo "$DEFAULT_BRANCH"
+        return 0
+    fi
+
+    local head_ref
+    head_ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+    if [ -n "$head_ref" ]; then
+        echo "${head_ref#origin/}"
+        return 0
+    fi
+
+    if git show-ref --verify --quiet refs/heads/main; then
+        echo "main"
+        return 0
+    fi
+    echo "master"
+}
+
+# ============================================================================
+# _read_env_var — read a single variable straight from .env
+# ============================================================================
+#
+# Usage:
+#   value="$(_read_env_var DB_PASSWORD)"
+#
+# Reads NAME=value from .env (override the file with ENV_FILE). Returns the raw
+# right-hand side — it does NOT strip inline '#' so passwords containing '#' or
+# '$' survive intact (the whole point of bypassing Make's variable/comment
+# expansion). A single pair of surrounding quotes is removed; the last matching
+# assignment wins; a missing file or key yields an empty string.
+
+_read_env_var() {
+    local var_name="$1"
+    local env_file="${ENV_FILE:-.env}"
+    [ -f "$env_file" ] || return 0
+
+    local line
+    line="$(grep -E "^[[:space:]]*${var_name}=" "$env_file" | tail -n 1)"
+    [ -n "$line" ] || return 0
+
+    local value="${line#*=}"
+    value="${value%$'\r'}"
+    if [[ "$value" == \"*\" ]]; then
+        value="${value#\"}"
+        value="${value%\"}"
+    elif [[ "$value" == \'*\' ]]; then
+        value="${value#\'}"
+        value="${value%\'}"
+    fi
+    printf '%s' "$value"
 }

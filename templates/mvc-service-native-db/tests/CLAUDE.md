@@ -19,13 +19,33 @@ Run them with `make unit_tests` (`poetry run pytest tests/unit/`) or `pytest tes
 
 ## Imports
 
-`pytest.ini` sets `pythonpath = .` (project root), so import the code under test through the
-`src` package:
+`pytest.ini` sets `pythonpath = . src` — **both** the project root and `src/` are on the
+path. For most tests, import the code under test through the `src` package:
 
 ```python
 from src.view.report_renderer import RenderToExcel
 from src.model.example_entity import ExampleEntity
 ```
+
+### The dual-import-root trap (TypeChecker-guarded classes)
+
+Because both roots are on the path, a module is importable **two** ways — `src.utils.x`
+(via the root) and `utils.x` (via `src/`) — and Python treats them as **distinct module
+and class objects**. This bites when a `TypeChecker`-guarded class is constructed in a test
+and handed *another* src-class instance: if the two are imported via different roots,
+`isinstance` fails with the baffling `X must be of type Foo, got Foo` (same name, different
+object).
+
+Rule: when a test wires together two src classes and at least one is `TypeChecker`-guarded,
+import **both** via the **bare runtime root** — the way the app actually runs:
+
+```python
+from utils.paths import resolve_path            # NOT src.utils.paths
+from view.report_renderer import RenderToExcel  # NOT src.view.report_renderer
+```
+
+The plain `from src.X import …` convention is fine for classes whose constructor takes only
+stdlib types / paths (no cross-src instances to `isinstance`-check).
 
 Order imports as `ruff.toml` enforces (`force-sort-within-sections = true`) — within each
 group, `import X` and `from X import Y` are sorted together by module name, stdlib then

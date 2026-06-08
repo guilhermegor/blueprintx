@@ -181,10 +181,18 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
+    cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
-    chmod +x "$project_path/bin/export_repo_content.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh"
+    mkdir -p "$project_path/dist"
+    cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$project_path/.coveragerc"
+    # VS Code: shared settings (python-common) + per-tier tasks (commands differ).
+    mkdir -p "$project_path/.vscode"
+    cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
+    cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
 
     print_status "success" "Common templates applied"
 }
@@ -204,6 +212,12 @@ copy_mkdocs_templates() {
         "$project_path/docs/architecture.md"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/api.md" \
         "$project_path/docs/api.md"
+    # Non-published docs/ authoring guide + the excluded backlog folder.
+    cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/CLAUDE.md" \
+        "$project_path/docs/CLAUDE.md"
+    mkdir -p "$project_path/docs/backlog"
+    cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/backlog/.keep" \
+        "$project_path/docs/backlog/.keep"
 
     print_status "success" "MkDocs templates copied"
 }
@@ -341,16 +355,31 @@ copy_global_config() {
     print_status "success" "Global config (startup/inputs/outputs) applied"
 }
 
-# Shared, project-agnostic utils (CNPJ/CPF + dtypes) + their unit tests, from the
-# single source in python-common — so every skeleton ships the same helpers.
+# Shared, project-agnostic utils + their unit tests, from the single source in
+# python-common — so every skeleton ships the same helpers.
 copy_shared_utils() {
     local project_path="$1"
+    local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
-    cp "$COMMON_TEMPLATE_ROOT/src/utils/br_identifiers.py" "$project_path/src/utils/br_identifiers.py"
-    cp "$COMMON_TEMPLATE_ROOT/src/utils/dtypes.py" "$project_path/src/utils/dtypes.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_br_identifiers.py" "$project_path/tests/unit/test_br_identifiers.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dtypes.py" "$project_path/tests/unit/test_dtypes.py"
-    print_status "success" "Shared utils (br_identifiers/dtypes) + tests applied"
+    for util in br_identifiers dtypes decimals loggers text paths signatures dates; do
+        cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
+        if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" ]; then
+            cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
+        fi
+    done
+    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/loggers/text/paths/signatures/dates) + tests applied"
+}
+
+# Runtime type-checking engine — single source in python-common/optional/typing.
+# DDD receives it as chassis/typing (prefix already chassis.typing); MVC vendors
+# it as utils/typing and rewrites the import prefix (mirrors the webhook seam).
+copy_typing_chassis() {
+    local project_path="$1"
+    mkdir -p "$project_path/src/utils/typing"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$project_path/src/utils/typing"
+    grep -rl "chassis.typing" "$project_path/src/utils/typing" \
+        | xargs -r sed -i "s|chassis\.typing|utils.typing|g"
+    print_status "success" "Runtime type-checking engine (utils/typing) applied"
 }
 
 # Output directory is data-driven from inputs.yaml (no startup.py patching).
@@ -365,6 +394,8 @@ conditional_patch_inputs_yaml() {
 
 # Webhook provider lands under src/utils/ for MVC; rewrite the package's internal
 # absolute imports from the canonical chassis.webhook prefix to utils.webhook.
+# The platform is auto-detected from WEBHOOK_URL, and the production gate is
+# derived from ENV — so neither WEBHOOK_PLATFORM nor WEBHOOK_ENV_GATE is emitted.
 conditional_copy_webhooks_yaml() {
     local project_path="$1"
     if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
@@ -372,10 +403,10 @@ conditional_copy_webhooks_yaml() {
     cp -r "$COMMON_TEMPLATE_ROOT/optional/webhook" "$project_path/src/utils/webhook"
     grep -rl "chassis.webhook" "$project_path/src/utils/webhook" \
         | xargs -r sed -i "s|chassis\.webhook|utils.webhook|g"
-    printf '\n# Webhook\nWEBHOOK_PLATFORM=%s\nWEBHOOK_URL=\nWEBHOOK_ENV_GATE=production\n' \
-        "$WEBHOOK_PLATFORM" >> "$project_path/.env"
-    printf '\n# Webhook\nWEBHOOK_PLATFORM=%s\nWEBHOOK_URL=\nWEBHOOK_ENV_GATE=production\n' \
-        "$WEBHOOK_PLATFORM" >> "$project_path/.env.example"
+    local webhook_env
+    webhook_env=$'\n# Webhook — platform auto-detected from the URL; fires only when ENV is a\n# production value (prod/production/...). Leave WEBHOOK_URL empty to opt out.\nWEBHOOK_URL=\n'
+    printf '%s' "$webhook_env" >> "$project_path/.env"
+    printf '%s' "$webhook_env" >> "$project_path/.env.example"
     print_status "success" "Webhook provider (utils/webhook) + webhooks.yaml added"
 }
 
@@ -386,13 +417,19 @@ conditional_patch_startup() {
     if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
     cat >> "$startup_path" <<'PYBLOCK'
 
-# Webhook notifications (opt-in) — depends only on the WebhookNotifier port.
+# Webhook notifications (opt-in) — depends only on the WebhookNotifier port. The
+# platform is auto-detected from the URL; a blank URL yields a no-op NullNotifier.
+from utils.text import normalize_text  # noqa: E402
 from utils.webhook.factory import build_webhook  # noqa: E402
 
 
+# Production allow-list: fire only when ENV normalises to a production value.
+# Accent/case-insensitive, so "Prod"/"PRODUÇÃO"/"production" all match — and a
+# mistyped ENV on a dev box stays silent (unlike a "!= development" deny-list).
+_SET_ENV_PRODUCTION = frozenset({"prod", "production", "producao"})
 YAML_WEBHOOKS: dict = reading_yaml(str(_CONFIG_DIR / "webhooks.yaml"))
-WEBHOOK_ENV_GATE: str = os.getenv("WEBHOOK_ENV_GATE", "production")
-CLS_WEBHOOK = build_webhook(os.getenv("WEBHOOK_PLATFORM", "teams"), os.getenv("WEBHOOK_URL", ""))
+BOOL_WEBHOOK_ENABLED: bool = normalize_text(ENVIRONMENT) in _SET_ENV_PRODUCTION
+CLS_WEBHOOK = build_webhook(os.getenv("WEBHOOK_URL", ""))
 MSG_WEBHOOK: str = YAML_WEBHOOKS["message"].format(
 	app_name=APP_NAME,
 	environment=ENVIRONMENT,
@@ -412,11 +449,11 @@ conditional_patch_main_py() {
     if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
     cat >> "$main_path" <<'PYBLOCK'
 
-# --- notify: send the run summary when running in the gated environment ---
-from config.startup import CLS_WEBHOOK, MSG_WEBHOOK, WEBHOOK_ENV_GATE  # noqa: E402
+# --- notify: send the run summary when running in a production environment ---
+from config.startup import BOOL_WEBHOOK_ENABLED, CLS_WEBHOOK, MSG_WEBHOOK  # noqa: E402
 
 
-if ENVIRONMENT == WEBHOOK_ENV_GATE:
+if BOOL_WEBHOOK_ENABLED:
 	CLS_WEBHOOK.send(MSG_WEBHOOK)
 PYBLOCK
     print_status "success" "Webhook send appended to controller/main.py"
@@ -528,20 +565,72 @@ apply_offline_mode() {
 
     print_status "info" "No GitHub remote connected — switching to offline mode"
     # GitHub-only assets are never created offline (see copy_github_assets in main);
-    # ship the offline git-diff workflow instead.
+    # ship the offline git-diff workflow + the local git-flow helpers instead.
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_apply.sh" "$project_path/bin/git_diff_apply.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_check.sh" "$project_path/bin/git_diff_check.sh"
+    # Local git workflow + branch guard — substitute for GitHub's branch/PR flow.
+    cp "$SHARED_TEMPLATE_ROOT/bin/new_branch.sh" "$project_path/bin/new_branch.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/git_merge_to_main.sh" "$project_path/bin/git_merge_to_main.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/protect_branch.sh" "$project_path/bin/protect_branch.sh"
     chmod +x "$project_path/bin/git_diff_export.sh" \
         "$project_path/bin/git_diff_apply.sh" \
-        "$project_path/bin/git_diff_check.sh"
+        "$project_path/bin/git_diff_check.sh" \
+        "$project_path/bin/new_branch.sh" \
+        "$project_path/bin/git_merge_to_main.sh" \
+        "$project_path/bin/protect_branch.sh"
     mkdir -p "$project_path/make"
-    cp "$SHARED_TEMPLATE_ROOT/make/git_diff.mk" "$project_path/make/git_diff.mk"
+    cp "$SHARED_TEMPLATE_ROOT/make/offline.mk" "$project_path/make/offline.mk"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
-    print_status "success" "git-diff workflow enabled (make git_diff_export | git_diff_check | git_diff_apply)"
+    # Swap the stock no-commit-to-branch hook for the friendly local protect-branch
+    # guard that points at `make new_branch` (offline has no server-side protection).
+    swap_protect_branch_hook "$project_path"
+    print_status "success" "Offline workflow enabled (new_branch | git_merge_to_main | git_diff_* | protect-branch)"
+}
+
+# Replace the stock pre-commit `no-commit-to-branch` hook with a local hook that
+# runs bin/protect_branch.sh first (fail-fast, friendly message). Offline only.
+swap_protect_branch_hook() {
+    local project_path="$1"
+    local pc="$project_path/.pre-commit-config.yaml"
+    [ -f "$pc" ] || return 0
+    python3 - "$pc" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    text = fh.read()
+
+# Drop the stock no-commit-to-branch hook (its id line + the following --branch args).
+text = re.sub(
+    r"\n      - id: no-commit-to-branch\n(?:        args:\n          - --branch=\S+\n)?",
+    "\n",
+    text,
+)
+
+# Insert a local protect-branch hook as the FIRST entry of the `repos:` list so it
+# fails fast before the slow test/coverage hooks.
+local_hook = (
+    "repos:\n"
+    "  - repo: local\n"
+    "    hooks:\n"
+    "      - id: protect-branch\n"
+    "        name: block direct commits to main/master\n"
+    "        entry: bash bin/protect_branch.sh\n"
+    "        language: system\n"
+    "        always_run: true\n"
+    "        pass_filenames: false\n"
+)
+text = text.replace("repos:\n", local_hook, 1)
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY
+    print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
 # ============================================================================
@@ -564,6 +653,7 @@ main() {
     create_python_files "$PROJECT_PATH"
     copy_global_config "$PROJECT_PATH"
     copy_shared_utils "$PROJECT_PATH"
+    copy_typing_chassis "$PROJECT_PATH"
     copy_tests "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"

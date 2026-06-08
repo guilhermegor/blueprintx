@@ -31,8 +31,18 @@ pre-commit = ">=4.1.0"
 pretty-errors = ">=1.2.25"
 commitizen = ">=4.4.1"
 poetry-plugin-export = ">=1.8"
-pytest = ">=7.4.0"
+# Pinned to the ruff-pre-commit hook minor (.pre-commit-config.yaml) so `make
+# lint` and the hook never disagree on formatting/lints.
+ruff = ">=0.11.13,<0.12"
+codespell = ">=2.4.1"
+pydocstyle = ">=6.3.0"
+pytest = ">=8.0.0"
 pytest-mock = ">=3.12.0"
+pytest-cov = ">=6.0.0"
+coverage = ">=7.6.0"
+# genbadge replaces the abandoned coverage-badge (it imported the removed
+# pkg_resources and breaks on setuptools >= 81).
+genbadge = {extras = ["coverage"], version = ">=1.1.0"}
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = ">=1.6.0"

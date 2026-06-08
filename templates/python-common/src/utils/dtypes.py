@@ -68,9 +68,7 @@ def apply_dtypes(
 			set_overlap.add(str_col)
 		set_seen.add(str_col)
 	if set_overlap:
-		raise ValueError(
-			f"Columns assigned more than one target type: {sorted(set_overlap)}"
-		)
+		raise ValueError(f"Columns assigned more than one target type: {sorted(set_overlap)}")
 
 	df_typed = df_input.copy()
 

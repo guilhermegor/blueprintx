@@ -26,8 +26,9 @@ repos:
         args:
           - --unsafe  # workflow files use custom tags (e.g. !reference)
       - id: check-json
-        # .vscode/*.json is JSONC (allows comments); skip the strict parser.
-        exclude: ^\.vscode/
+        # JSONC files (comments allowed) must skip the strict JSON parser:
+        # any .vscode/ dir (incl. templates/**/.vscode/) and TypeScript tsconfig*.
+        exclude: (^|/)\.vscode/|(^|/)tsconfig[^/]*\.json$
       - id: check-toml
       - id: check-merge-conflict
       - id: detect-private-key

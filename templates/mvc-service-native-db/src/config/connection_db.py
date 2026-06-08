@@ -8,9 +8,10 @@ only needs the driver for the backend it actually uses.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -113,8 +114,7 @@ def _connect_mssql() -> Any:
 			str_conn += f"UID={str_user};"
 	else:
 		str_conn += (
-			f"UID={os.getenv('DB_USER', 'user')};"
-			f"PWD={os.getenv('DB_PASSWORD', 'password')}"
+			f"UID={os.getenv('DB_USER', 'user')};PWD={os.getenv('DB_PASSWORD', 'password')}"
 		)
 	return pyodbc.connect(str_conn)
 

@@ -57,7 +57,8 @@ integration_tests() {
 test_cov() {
 	poetry run pytest tests/unit/ --cov=src
 	poetry run coverage report -m
-	poetry run coverage-badge -o coverage.svg -f
+	poetry run coverage xml -o coverage.xml
+	poetry run genbadge coverage -i coverage.xml -o coverage.svg
 }
 
 test_slowest() {
@@ -90,27 +91,27 @@ lint() {
 	poetry run ruff format .
 	poetry run codespell .
 	poetry run pydocstyle .
-	poetry run python bin/check_consistency.py
+	poetry run python bin/check_docstrings.py
 }
 
-check_consistency() {
-	poetry run python bin/check_consistency.py
+check_docstrings() {
+	poetry run python bin/check_docstrings.py
 }
 
 # -------------------
 # DATABASE
 # -------------------
 
-db_setup_schema() {
-	bash "$SCRIPT_DIR/bin/db_setup_schema.sh" setup
+db_up() {
+	bash "$SCRIPT_DIR/bin/db.sh" up
 }
 
 db_backup() {
-	bash "$SCRIPT_DIR/bin/db_setup_schema.sh" backup
+	bash "$SCRIPT_DIR/bin/db.sh" backup
 }
 
 db_restore() {
-	bash "$SCRIPT_DIR/bin/db_setup_schema.sh" restore
+	bash "$SCRIPT_DIR/bin/db.sh" restore
 }
 
 # -------------------
@@ -122,20 +123,27 @@ run() {
 }
 
 # -------------------
-# GIT
+# SHIP
 # -------------------
 
-new_branch() {
-	bash "$SCRIPT_DIR/bin/new_branch.sh" "${1:-}"
-}
-
-git_merge_to_main() {
-	bash "$SCRIPT_DIR/bin/git_merge_to_main.sh" "${1:-}"
+ship() {
+	bash "$SCRIPT_DIR/bin/ship.sh"
 }
 
 # -------------------
-# GIT DIFF (offline sync — defined only when scaffolded without GitHub)
+# OFFLINE (defined only when scaffolded without GitHub)
 # -------------------
+# new_branch, git_merge_to_main and the git_diff_* helpers substitute for the
+# GitHub branch/PR flow; they ship only in offline mode (their scripts live in
+# bin/ only then). Define each function only when its script is present.
+
+if [ -f "$SCRIPT_DIR/bin/new_branch.sh" ]; then
+	new_branch() { bash "$SCRIPT_DIR/bin/new_branch.sh" "${1:-}"; }
+fi
+
+if [ -f "$SCRIPT_DIR/bin/git_merge_to_main.sh" ]; then
+	git_merge_to_main() { bash "$SCRIPT_DIR/bin/git_merge_to_main.sh" "${1:-}"; }
+fi
 
 if [ -f "$SCRIPT_DIR/bin/git_diff_export.sh" ]; then
 	git_diff_export() { bash "$SCRIPT_DIR/bin/git_diff_export.sh"; }
@@ -189,11 +197,11 @@ Testing
   fix_playwright       Reinstall Playwright browsers
 
 Linting
-  lint                 Run ruff, codespell, pydocstyle, check_consistency
-  check_consistency    Check docstring type/raises consistency
+  lint                 Run ruff, codespell, pydocstyle, check_docstrings
+  check_docstrings     Check docstring type/raises consistency
 
 Database
-  db_setup_schema      Start Docker services, ensure schema, apply migrations
+  db_up                Start Docker services, ensure schema, apply migrations
   db_backup            Dump the database to BACKUP_STORE_PATH
   db_restore           Restore database from DUMP=<path>
 
@@ -203,14 +211,13 @@ Docs
 Run
   run                  Run src/main.py (auto-installs Poetry if missing)
 
-Context
+Context / Ship
   export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM
+  ship                 Package the committed main tree into dist/<name>_<ts>.zip
 
-Git
+Offline (only present when scaffolded without GitHub)
   NAME=<x> new_branch  Create a branch (feat/…, fix/…) off the default branch (main/master)
   git_merge_to_main    Merge the current clean branch into main/master and delete it
-
-Git Diff (offline sync — only present when scaffolded without GitHub)
   git_diff_export             Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/
   git_diff_check <path>       Check whether a .diff applies cleanly
   git_diff_apply <path>       Apply a .diff to the working tree (no commit)
@@ -237,13 +244,14 @@ case "${1:-help}" in
 	test_urls_docstrings) test_urls_docstrings ;;
 	fix_playwright)      fix_playwright ;;
 	lint)                lint ;;
-	check_consistency)   check_consistency ;;
-	db_setup_schema)     db_setup_schema ;;
+	check_docstrings)    check_docstrings ;;
+	db_up)               db_up ;;
 	db_backup)           db_backup ;;
 	db_restore)          db_restore ;;
 	docs_server)         docs_server ;;
 	run)                 run ;;
 	export_context)      export_context "${2:-}" ;;
+	ship)                ship ;;
 	new_branch)          new_branch "${2:-}" ;;
 	git_merge_to_main)   git_merge_to_main "${2:-}" ;;
 	git_diff_export)     git_diff_export ;;

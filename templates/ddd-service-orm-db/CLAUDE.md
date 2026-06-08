@@ -12,6 +12,7 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 - `src/config/{startup.py,inputs.yaml,outputs.yaml}` — the **global config** copied from `templates/python-common/src/config/`. Edit it there, not here.
 - `src/chassis/db_wschema/` (plus its `chassis/db/` dependency) — **opt-in** schema-less storage (the "schema-less file storage?" prompt). This ORM skeleton's own `db_schema` does not use `chassis/db`, so both are injected together only when storage is chosen. Source in `templates/python-common/optional/chassis/`.
 - `src/chassis/webhook/` — **opt-in** (the webhook prompt); a port-based provider from `templates/python-common/optional/webhook/`.
+- `src/chassis/typing/` — **always injected**: the runtime type-checking engine (`TypeChecker`, `ProtocolTypeCheckerMeta`, `@type_checker`); source in `templates/python-common/optional/typing/`. Preserves `@staticmethod`/`@classmethod`/`property` descriptors and handles PEP 604 `X | Y` unions. (The MVC tiers receive the same engine as `utils/typing`.)
 
 ## Layer boundaries (strict — do not cross)
 
@@ -74,7 +75,7 @@ Always **commit outside** the repository: use-cases call `session.commit()` afte
 
 ## Explicit column typing & Brazilian identifiers
 
-Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference (it turns a zero-padded code into an int and a mixed column into `object`). `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format. Both modules ship from `templates/python-common/src/utils/`.
+Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference (it turns a zero-padded code into an int and a mixed column into `object`). `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format. These plus `utils.decimals` (`to_decimal`, ROUND_DOWN default), `utils.loggers` (`log_message`), `utils.text` (`normalize_text`), `utils.paths` (`is_windows_path`/`resolve_path`/`ensure_dir`), `utils.signatures`, and `utils.dates` (ANBIMA business-day helpers) all ship from `templates/python-common/src/utils/`. Calendars/parsers also come from the `stpstone` dependency.
 
 ## Naming conventions
 

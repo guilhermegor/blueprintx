@@ -47,8 +47,12 @@ def test_mask_cnpj_bare_value_returns_punctuated() -> None:
 
 
 def test_mask_cnpj_invalid_length_passes_through_unmasked() -> None:
-	"""A value that cannot reach 14 chars passes through unmasked."""
-	assert mask_cnpj("123") == "00000000000123"
+	"""An alphanumeric value that cannot reach 14 chars passes through unmasked.
+
+	A short *numeric* value is left-zero-padded to 14 by ``unmask_cnpj`` and then
+	masked, so the pass-through branch only triggers for non-14 alphanumeric input.
+	"""
+	assert mask_cnpj("12ABC") == "12ABC"
 
 
 # --- CNPJ: validate -------------------------------------------------------------

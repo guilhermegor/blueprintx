@@ -7,8 +7,8 @@ plus a bound ``sessionmaker``. The model layer uses these to run ORM queries or
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
-from typing import Callable
 from urllib.parse import quote_plus
 
 from dotenv import load_dotenv

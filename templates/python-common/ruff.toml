@@ -1,6 +1,7 @@
 line-length = 99
 indent-width = 4
-target-version = "py39"
+# Floor of the project's requires-python (>=3.10). Bump in lockstep with pyproject.
+target-version = "py310"
 exclude = [
     # version control systems
     ".bzr",
@@ -46,6 +47,9 @@ exclude = [
     "alembic",
     "src/chassis",
     "src/capabilities/example_feature",
+
+    # check tooling: ruff-format would tabify space-indented helpers and trip E101
+    "bin",
 
     # other
     ".pants.d",
@@ -106,3 +110,7 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 # honest return/param annotation for the raw-driver connection factory (MVC skeletons).
 "src/config/connection_db.py" = ["ANN401"]
 "src/model/example_entity.py" = ["ANN401"]
+# The runtime type-checking engine validates arbitrary annotations, so `Any` is
+# intrinsic to its signatures. DDD ships it under src/chassis (already excluded
+# above); MVC ships it here. Ignore ANN401 rather than excluding it from all lint.
+"src/utils/typing/**/*.py" = ["ANN401"]
