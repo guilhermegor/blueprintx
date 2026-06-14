@@ -12,12 +12,28 @@ class _RecordingLog:
 		self.tuple_last_call: tuple[object, str, str] | None = None
 
 	def log_message(self, logger: object, str_message: str, str_level: str) -> None:
-		"""Record the arguments instead of emitting a log line."""
+		"""Record the arguments instead of emitting a log line.
+
+		Parameters
+		----------
+		logger : object
+			Run logger, or ``None``.
+		str_message : str
+			Log message text.
+		str_level : str
+			Log level name.
+		"""
 		self.tuple_last_call = (logger, str_message, str_level)
 
 
 def test_log_message_delegates_to_shared_logger(monkeypatch: pytest.MonkeyPatch) -> None:
-	"""``log_message`` forwards its arguments to the shared CreateLog instance."""
+	"""``log_message`` forwards its arguments to the shared CreateLog instance.
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		Pytest monkeypatch fixture.
+	"""
 	cls_recorder = _RecordingLog()
 	monkeypatch.setattr(loggers, "_CLS_LOG", cls_recorder)
 	loggers.log_message(None, "hello", "warning")
@@ -25,7 +41,13 @@ def test_log_message_delegates_to_shared_logger(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_log_message_defaults_to_info_level(monkeypatch: pytest.MonkeyPatch) -> None:
-	"""The default level is ``info`` when none is given."""
+	"""The default level is ``info`` when none is given.
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		Pytest monkeypatch fixture.
+	"""
 	cls_recorder = _RecordingLog()
 	monkeypatch.setattr(loggers, "_CLS_LOG", cls_recorder)
 	loggers.log_message(None, "hello")

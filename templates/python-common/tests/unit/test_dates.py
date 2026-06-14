@@ -15,23 +15,59 @@ class _FakeCalendar:
 	"""Stand-in for ``DatesBRAnbima`` that echoes the method and arguments."""
 
 	def is_working_day(self, date_: date) -> tuple[str, date]:
-		"""Echo the call."""
+		"""Echo the call.
+
+		Parameters
+		----------
+		date_ : date
+			The date argument.
+		"""
 		return ("is_working_day", date_)
 
 	def is_holiday(self, date_: date) -> tuple[str, date]:
-		"""Echo the call."""
+		"""Echo the call.
+
+		Parameters
+		----------
+		date_ : date
+			The date argument.
+		"""
 		return ("is_holiday", date_)
 
 	def add_working_days(self, date_: date, int_days: int) -> tuple[str, date, int]:
-		"""Echo the call."""
+		"""Echo the call.
+
+		Parameters
+		----------
+		date_ : date
+			The date argument.
+		int_days : int
+			Number of working days to add.
+		"""
 		return ("add_working_days", date_, int_days)
 
 	def delta_working_days(self, date_start: date, date_end: date) -> tuple[str, date, date]:
-		"""Echo the call."""
+		"""Echo the call.
+
+		Parameters
+		----------
+		date_start : date
+			Interval start date.
+		date_end : date
+			Interval end date.
+		"""
 		return ("delta_working_days", date_start, date_end)
 
 	def nearest_working_day(self, date_: date, bool_next: bool) -> tuple[str, date, bool]:
-		"""Echo the call."""
+		"""Echo the call.
+
+		Parameters
+		----------
+		date_ : date
+			The date argument.
+		bool_next : bool
+			Whether to seek the next working day.
+		"""
 		return ("nearest_working_day", date_, bool_next)
 
 	def holidays(self) -> list[tuple[str, date]]:
@@ -41,7 +77,13 @@ class _FakeCalendar:
 
 @pytest.fixture(autouse=True)
 def _patch_calendar(monkeypatch: pytest.MonkeyPatch) -> None:
-	"""Swap the module singleton for the recording stand-in."""
+	"""Swap the module singleton for the recording stand-in.
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		Pytest monkeypatch fixture.
+	"""
 	monkeypatch.setattr(dates, "_CLS_CALENDAR", _FakeCalendar())
 
 

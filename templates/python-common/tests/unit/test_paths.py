@@ -33,7 +33,13 @@ def test_resolve_path_windows_on_posix_parses_parts() -> None:
 
 
 def test_ensure_dir_creates_directory(tmp_path: Path) -> None:
-	"""``ensure_dir`` creates the directory (and parents) and returns it."""
+	"""``ensure_dir`` creates the directory (and parents) and returns it.
+
+	Parameters
+	----------
+	tmp_path : Path
+		Pytest temporary directory.
+	"""
 	path_target = tmp_path / "nested" / "out"
 	path_returned = ensure_dir(path_target)
 	assert path_returned == path_target

@@ -1,10 +1,12 @@
 """Check NumPy docstrings against signatures (params, returns, raises).
 
-Verifies, for every function in the ``src`` and ``tests`` packages, that the
-docstring's documented parameter types and return type match the annotations,
-and that the ``Raises`` section agrees with the exceptions actually raised. Type
-mismatches are hard errors (exit 1); missing docstrings, undocumented fixture
-params and raises drift are soft warnings.
+Verifies, for every checkable function in the ``src`` and ``tests`` packages, that it has
+a docstring, that every annotated parameter is documented with a matching type, that the
+documented return type matches the annotation, and that every exception raised **directly**
+in the body is documented in ``Raises``. **All** of these are hard errors (exit 1) so the
+pre-commit hook and ``make lint`` reject the drift — there is no soft-warning tier. The one
+deliberate non-check is documenting a *propagated* exception (raised by a callee, ``sys.exit``,
+or a library), which is legitimate API documentation the AST cannot trace.
 """
 
 import ast
@@ -310,7 +312,8 @@ def _check_return_type(node: ast.AST, docstring: str, filepath: str) -> tuple:
     Returns
     -------
     tuple
-        ``(errors, warnings)`` counts.
+        ``(errors, _)`` counts; the second element is retained for the caller's
+        unpacking signature and is always ``0``.
     """
     doc_lines = [ln.rstrip() for ln in docstring.split("\n")]
     if not any(line.strip().lower() == "returns" for line in doc_lines):
@@ -319,10 +322,10 @@ def _check_return_type(node: ast.AST, docstring: str, filepath: str) -> tuple:
     doc_type = _extract_documented_return(doc_lines)
     if doc_type is None:
         print(
-            f"⚠️  Return type documented but no type found in"
+            f"❌ Return type documented but no type found in"
             f" {node.name}() at line {node.lineno} ({filepath})"
         )
-        return 0, 1
+        return 1, 0
     if not compare_types(returns, doc_type):
         print(f"❌ Return type mismatch in {node.name}() at line {node.lineno} ({filepath}):")
         print(f"   Type hint: {returns}")
@@ -384,10 +387,10 @@ def _check_parameters(node: ast.AST, docstring: str, filepath: str) -> tuple:
     Returns
     -------
     tuple
-        ``(errors, warnings)`` counts.
+        ``(errors, _)`` counts; the second element is retained for the caller's
+        unpacking signature and is always ``0``.
     """
     errors = 0
-    warnings = 0
     param_lines = docstring.split("\n")
     for arg in node.args.args:
         if arg.arg == "self" or not arg.annotation:
@@ -396,10 +399,10 @@ def _check_parameters(node: ast.AST, docstring: str, filepath: str) -> tuple:
         doc_type = _documented_param_type(arg.arg, param_lines)
         if doc_type is None:
             print(
-                f"⚠️  Missing docstring for parameter {arg.arg}"
+                f"❌ Missing docstring for parameter {arg.arg}"
                 f" in {node.name}() at line {node.lineno} ({filepath})"
             )
-            warnings += 1
+            errors += 1
             continue
         if not compare_types(hint, doc_type):
             print(
@@ -409,18 +412,19 @@ def _check_parameters(node: ast.AST, docstring: str, filepath: str) -> tuple:
             print(f"   Type hint: {hint}")
             print(f"   Docstring: {doc_type}")
             errors += 1
-    return errors, warnings
+    return errors, 0
 
 
 def _check_raises(node: ast.AST, docstring: str, filepath: str) -> int:
-    """Compare the documented Raises section against exceptions actually raised.
+    """Flag any exception raised **directly** in the body but missing from ``Raises``.
 
-    Convention enforced: a ``Raises`` section documents **only** exceptions the
-    function raises directly (a literal ``raise`` in its own body) — never
-    exceptions merely propagated from a callee or a library. Both directions are
-    therefore strict: documenting a propagated exception ("documented but not
-    raised") and leaving a direct raise undocumented ("raised but not documented")
-    are both flagged. This keeps the check deterministic.
+    Only the "raised but not documented" direction is checked, and it is a hard error:
+    a literal ``raise X`` in the function's own body whose ``X`` is absent from the
+    ``Raises`` section is a real, caller-affecting documentation gap. The reverse
+    direction is deliberately **not** flagged — documenting an exception that the
+    function *propagates* from a callee, raises via ``sys.exit``, or that a library
+    raises internally (e.g. ``urllib`` ``HTTPError``) is legitimate API documentation
+    the AST cannot trace, so flagging it produced only false positives.
 
     Parameters
     ----------
@@ -434,24 +438,18 @@ def _check_raises(node: ast.AST, docstring: str, filepath: str) -> int:
     Returns
     -------
     int
-        Number of warnings (raises drift is never a hard error).
+        Number of hard errors (undocumented direct raises).
     """
     doc_exceptions = {normalize_exception_name(e) for e in parse_raises_section(docstring)}
     actual_exceptions = {normalize_exception_name(e) for e in get_actual_raises(node)}
-    warnings = 0
-    for exc in doc_exceptions - actual_exceptions:
-        print(
-            f"⚠️  Documented but not raised exception {exc}"
-            f" in {node.name}() at line {node.lineno} ({filepath})"
-        )
-        warnings += 1
+    errors = 0
     for exc in actual_exceptions - doc_exceptions:
         print(
-            f"⚠️  Raised but not documented exception {exc}"
+            f"❌ Raised but not documented exception {exc}"
             f" in {node.name}() at line {node.lineno} ({filepath})"
         )
-        warnings += 1
-    return warnings
+        errors += 1
+    return errors
 
 
 def check_file(filepath: str) -> int:
@@ -465,12 +463,13 @@ def check_file(filepath: str) -> int:
     Returns
     -------
     int
-        Number of hard (type-mismatch) errors found. Soft style warnings
-        (missing docstrings, undocumented fixture params, exception-doc drift) are
-        printed but do not count toward the failing total.
+        Number of hard errors found. **All** consistency failures are hard errors
+        (non-zero exit): a missing docstring, an undocumented annotated parameter, a
+        documented/annotation type mismatch, and a directly-raised-but-undocumented
+        exception. The only non-flagged case is documenting a *propagated* exception
+        (see :func:`_check_raises`), which is legitimate and undetectable via AST.
     """
     errors = 0
-    warnings = 0
     with open(filepath, encoding="utf-8") as fh:
         tree = ast.parse(fh.read(), filename=filepath)
     for node in ast.walk(tree):
@@ -478,19 +477,15 @@ def check_file(filepath: str) -> int:
             continue
         docstring = ast.get_docstring(node)
         if not docstring:
-            print(f"⚠️  Missing docstring in {node.name}() at line {node.lineno} ({filepath})")
-            warnings += 1
+            print(f"❌ Missing docstring in {node.name}() at line {node.lineno} ({filepath})")
+            errors += 1
             continue
         if node.returns is not None:
-            ret_errors, ret_warnings = _check_return_type(node, docstring, filepath)
+            ret_errors, _ = _check_return_type(node, docstring, filepath)
             errors += ret_errors
-            warnings += ret_warnings
-        param_errors, param_warnings = _check_parameters(node, docstring, filepath)
+        param_errors, _ = _check_parameters(node, docstring, filepath)
         errors += param_errors
-        warnings += param_warnings
-        warnings += _check_raises(node, docstring, filepath)
-    if warnings:
-        print(f"   ({warnings} warning(s) in {filepath} — not counted as errors)")
+        errors += _check_raises(node, docstring, filepath)
     return errors
 
 

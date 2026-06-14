@@ -9,6 +9,13 @@ from src.utils.dtypes import apply_dtypes
 
 
 def _make_frame() -> pd.DataFrame:
+	"""Build a sample frame for the dtype test.
+
+	Returns
+	-------
+	pd.DataFrame
+		The result.
+	"""
 	return pd.DataFrame(
 		{
 			"code": [1, 2],
