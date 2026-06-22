@@ -55,7 +55,7 @@ def test_parse_br_number_series_handles_br_and_plain() -> None:
 	series_out = parse_br_number_series(series_in)
 	assert series_out.iloc[0] == pytest.approx(2084960.76)
 	assert series_out.iloc[1] == pytest.approx(1234.56)
-	# A plain float-repr cell must NOT be inflated tenfold (5.0 -> 50).
+	# A plain float-repr cell keeps its value and is never inflated tenfold.
 	assert series_out.iloc[2] == pytest.approx(5.0)
 	assert series_out.iloc[3] == pytest.approx(-3.5)
 	assert pd.isna(series_out.iloc[4])
