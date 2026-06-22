@@ -123,3 +123,47 @@ def _normalise_br_number(str_value: str) -> str:
 	if "," in str_stripped:
 		return str_stripped.replace(".", "").replace(",", ".")
 	return str_stripped
+
+
+def parse_br_number_series(series_value: "pd.Series") -> "pd.Series":  # noqa: F821
+	"""Vectorised parse of a Brazilian-formatted numeric column to ``float``.
+
+	Handles thousands ``.``, decimal ``,`` and parenthesised negatives ``(x)`` ->
+	``-x``; non-numeric cells become ``NaN``. The vectorised sibling of
+	:func:`_normalise_br_number` — and it MUST mirror that scalar rule:
+
+	The ``.`` is treated as a **thousands separator only when the cell also carries a
+	``,`` decimal separator** (true BR formatting). A cell with no comma is left
+	intact, so a value already read as a ``float`` (``5.0``) or a plain decimal
+	string (``"1234.56"``) keeps its decimal point instead of being inflated tenfold
+	(``5.0`` -> ``50``). pandas reads count columns as ``float64`` when NaNs are
+	present, so an unconditional ``.str.replace(".", "")`` would silently corrupt
+	them — the two helpers parsing one format must never diverge.
+
+	``pandas`` is imported lazily so this module stays importable in environments
+	that ship the Decimal helpers without pandas.
+
+	Parameters
+	----------
+	series_value : pandas.Series
+		The raw string (or mixed) column.
+
+	Returns
+	-------
+	pandas.Series
+		The parsed ``float`` column (``NaN`` where unparsable).
+	"""
+	import pandas as pd
+
+	series_str = series_value.astype(str)
+	series_has_comma = series_str.str.contains(",", regex=False)
+	# A cell that carries a comma is BR-formatted: drop the dot thousands separator
+	# and convert the comma decimal separator to a dot.
+	series_br = series_str.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+	# A cell with no comma keeps its dot as the decimal point — a plain decimal or float repr.
+	series_clean = (
+		series_str.where(~series_has_comma, series_br)
+		.str.replace("(", "-", regex=False)
+		.str.replace(")", "", regex=False)
+	)
+	return pd.to_numeric(series_clean, errors="coerce")
