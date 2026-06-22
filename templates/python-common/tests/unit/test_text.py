@@ -1,6 +1,6 @@
 """Unit tests for the text normalisation helper."""
 
-from src.utils.text import normalize_text
+from src.utils.text import normalize_text, safe_str
 
 
 def test_normalize_text_strips_accents_and_casefolds() -> None:
@@ -22,3 +22,20 @@ def test_normalize_text_enables_allow_list_membership() -> None:
 def test_normalize_text_empty_string_returns_empty() -> None:
 	"""An empty string normalises to an empty string."""
 	assert normalize_text("") == ""
+
+
+def test_safe_str_nan_returns_default() -> None:
+	"""A float NaN never becomes the literal string 'nan'."""
+	assert safe_str(float("nan")) == ""
+	assert safe_str(float("nan"), default="-") == "-"
+
+
+def test_safe_str_none_returns_default() -> None:
+	"""``None`` returns the default, not the string 'None'."""
+	assert safe_str(None) == ""
+
+
+def test_safe_str_normal_values_stringify_and_strip() -> None:
+	"""Real values are stringified and trimmed."""
+	assert safe_str("  hi  ") == "hi"
+	assert safe_str(42) == "42"

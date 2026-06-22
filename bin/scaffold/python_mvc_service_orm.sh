@@ -369,13 +369,14 @@ copy_shared_utils() {
     local project_path="$1"
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
-    for util in br_identifiers dtypes decimals loggers text paths signatures dates; do
+    for util in br_identifiers dtypes decimals loggers text paths signatures dates \
+        tabular_reader retry http_downloader yaml_reader zip_extractor frames; do
         cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
         if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" ]; then
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
-    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/loggers/text/paths/signatures/dates) + tests applied"
+    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/loggers/text/paths/signatures/dates/tabular_reader/retry/http_downloader/yaml_reader/zip_extractor/frames) + tests applied"
 }
 
 # Runtime type-checking engine — single source in python-common/optional/typing.

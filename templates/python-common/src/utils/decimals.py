@@ -15,6 +15,11 @@ Pass ``rounding`` explicitly when the domain demands a different mode — e.g.
 from __future__ import annotations
 
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+	import pandas as pd
 
 
 # Truncation is the safe generic default; override per call when the domain
@@ -125,7 +130,7 @@ def _normalise_br_number(str_value: str) -> str:
 	return str_stripped
 
 
-def parse_br_number_series(series_value: "pd.Series") -> "pd.Series":  # noqa: F821
+def parse_br_number_series(series_value: pd.Series) -> pd.Series:
 	"""Vectorised parse of a Brazilian-formatted numeric column to ``float``.
 
 	Handles thousands ``.``, decimal ``,`` and parenthesised negatives ``(x)`` ->
@@ -157,10 +162,10 @@ def parse_br_number_series(series_value: "pd.Series") -> "pd.Series":  # noqa: F
 
 	series_str = series_value.astype(str)
 	series_has_comma = series_str.str.contains(",", regex=False)
-	# A cell that carries a comma is BR-formatted: drop the dot thousands separator
-	# and convert the comma decimal separator to a dot.
+	# When a comma is present the cell is Brazilian-formatted, so the thousands dot is
+	# removed and the decimal comma becomes a dot.
 	series_br = series_str.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
-	# A cell with no comma keeps its dot as the decimal point — a plain decimal or float repr.
+	# When no comma is present the existing dot already marks the decimal place and is kept.
 	series_clean = (
 		series_str.where(~series_has_comma, series_br)
 		.str.replace("(", "-", regex=False)

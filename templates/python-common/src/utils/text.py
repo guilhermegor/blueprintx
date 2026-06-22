@@ -34,3 +34,31 @@ def normalize_text(str_value: str) -> str:
 	str_decomposed = unicodedata.normalize("NFKD", str(str_value))
 	str_ascii = "".join(ch for ch in str_decomposed if not unicodedata.combining(ch))
 	return _RE_WHITESPACE.sub(" ", str_ascii).strip().casefold()
+
+
+def safe_str(value: object, default: str = "") -> str:
+	"""Stringify ``value`` without ever producing the literal ``"nan"``.
+
+	``str(float("nan"))`` is ``"nan"`` and ``str(None)`` is ``"None"`` — both are
+	invalid-data sentinels that, once written to a cell/export, masquerade as real text
+	and ship silently. This returns ``default`` for ``None`` and for any float NaN (so a
+	missing numeric never becomes the four-letter string ``"nan"``); everything else is
+	stringified normally and stripped.
+
+	Parameters
+	----------
+	value : object
+		The value to stringify.
+	default : str, optional
+		Returned for ``None`` or a NaN float, by default ``""``.
+
+	Returns
+	-------
+	str
+		``str(value).strip()``, or ``default`` when ``value`` is ``None``/NaN.
+	"""
+	if value is None:
+		return default
+	if isinstance(value, float) and value != value:  # NaN is the only value != itself
+		return default
+	return str(value).strip()
