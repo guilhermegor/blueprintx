@@ -128,7 +128,10 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 # Native DB-API 2.0 / SQLAlchemy connections have no shared stdlib type, so `Any` is the
 # honest return/param annotation for the raw-driver connection factory (MVC skeletons).
 "src/config/connection_db.py" = ["ANN401"]
-"src/model/example_entity.py" = ["ANN401"]
+# The ORM reference entity deliberately demonstrates the SQLAlchemy read idiom
+# (`pd.read_sql(select(...), conn)`), so it is exempt from the bare-reader ban; real
+# entities route reads through utils.tabular_reader.read_query.
+"src/model/example_entity.py" = ["ANN401", "TID251"]
 # The runtime type-checking engine validates arbitrary annotations, so `Any` is
 # intrinsic to its signatures. DDD ships it under src/chassis (already excluded
 # above); MVC ships it here. Ignore ANN401 rather than excluding it from all lint.
