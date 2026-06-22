@@ -75,6 +75,22 @@ code.
 
 Add a `_connect_<name>()` helper in `config/connection_db.py` and register it in the `dict_builders` map inside `build_connection()`.
 
+## Data-handling guardrails (advisory)
+
+When a pipeline merges, overrides, or validates tabular data, three recurring traps are
+worth guarding against (apply when relevant — these are advisories, not scaffolded code):
+
+- **Override layers must re-apply the canonical normaliser.** A substitution/override path
+  that bypasses the same unit/code/sign/default normalisation the primary path uses will
+  silently emit inconsistent values. Centralise the invariant in ONE normaliser and call it
+  from every path (primary and override alike).
+- **Validation rejects sentinel garbage, not just wrong types.** Guard against `"nan"`,
+  blank, and out-of-range/wrong-unit values before output — a type check alone passes a
+  stringified NaN straight through (see `utils.text.safe_str`).
+- **Per-source keyed merge: restrict each partition to the keys it owns before concat.**
+  When merging partitions keyed by an id, scope each partition to its own keys first so the
+  merge key stays unique and a row from one source never overwrites another's.
+
 ## Naming conventions
 
 Every variable name starts with a type prefix. No bare names, no underscore prefixes for instances.

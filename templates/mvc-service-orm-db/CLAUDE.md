@@ -81,6 +81,22 @@ Add the SQLAlchemy scheme to `dict_schemes` in `config/connection_db.py` and reg
 
 Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference. `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format.
 
+## Data-handling guardrails (advisory)
+
+When a pipeline merges, overrides, or validates tabular data, three recurring traps are
+worth guarding against (apply when relevant — these are advisories, not scaffolded code):
+
+- **Override layers must re-apply the canonical normaliser.** A substitution/override path
+  that bypasses the same unit/code/sign/default normalisation the primary path uses will
+  silently emit inconsistent values. Centralise the invariant in ONE normaliser and call it
+  from every path (primary and override alike).
+- **Validation rejects sentinel garbage, not just wrong types.** Guard against `"nan"`,
+  blank, and out-of-range/wrong-unit values before output — a type check alone passes a
+  stringified NaN straight through (see `utils.text.safe_str`).
+- **Per-source keyed merge: restrict each partition to the keys it owns before concat.**
+  When merging partitions keyed by an id, scope each partition to its own keys first so the
+  merge key stays unique and a row from one source never overwrites another's.
+
 ## Naming conventions
 
 Every variable name starts with a type prefix. No bare names, no underscore prefixes for instances.

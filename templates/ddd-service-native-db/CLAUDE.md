@@ -92,6 +92,22 @@ Create a new subfolder under `src/chassis/` (e.g. `queues/`, `cache/`) following
 
 Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference (it turns a zero-padded code into an int and a mixed column into `object`). `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format. These plus `utils.decimals` (`to_decimal`, ROUND_DOWN default), `utils.loggers` (`log_message`), `utils.text` (`normalize_text`), `utils.paths` (`is_windows_path`/`resolve_path`/`ensure_dir`), `utils.signatures`, and `utils.dates` (ANBIMA business-day helpers) all ship from `templates/python-common/src/utils/`. Calendars/parsers also come from the `stpstone` dependency.
 
+## Data-handling guardrails (advisory)
+
+When a capability merges, overrides, or validates tabular data, three recurring traps are
+worth guarding against (apply when relevant — these are advisories, not scaffolded code):
+
+- **Override layers must re-apply the canonical normaliser.** A substitution/override path
+  that bypasses the same unit/code/sign/default normalisation the primary path uses will
+  silently emit inconsistent values. Centralise the invariant in ONE normaliser (a domain
+  value object is a natural home) and call it from every path.
+- **Validation rejects sentinel garbage, not just wrong types.** Guard against `"nan"`,
+  blank, and out-of-range/wrong-unit values before output — a type check alone passes a
+  stringified NaN straight through (see `utils.text.safe_str`).
+- **Per-source keyed merge: restrict each partition to the keys it owns before concat.**
+  When merging partitions keyed by an id, scope each partition to its own keys first so the
+  merge key stays unique and a row from one source never overwrites another's.
+
 ## Naming conventions
 
 Every variable name starts with a type prefix. No bare names, no underscore prefixes for instances.

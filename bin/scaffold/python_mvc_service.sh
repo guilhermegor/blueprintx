@@ -360,7 +360,8 @@ copy_global_config() {
     cp "$COMMON_TEMPLATE_ROOT/src/config/startup.py" "$project_path/src/config/startup.py"
     cp "$COMMON_TEMPLATE_ROOT/src/config/inputs.yaml" "$project_path/src/config/inputs.yaml"
     cp "$COMMON_TEMPLATE_ROOT/src/config/outputs.yaml" "$project_path/src/config/outputs.yaml"
-    print_status "success" "Global config (startup/inputs/outputs) applied"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/CLAUDE.md" "$project_path/src/config/CLAUDE.md"
+    print_status "success" "Global config (startup/inputs/outputs/CLAUDE.md) applied"
 }
 
 # Shared, project-agnostic utils + their unit tests, from the single source in
