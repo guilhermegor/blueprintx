@@ -20,7 +20,11 @@
 	"files.associations": {
 		".gitlint": "ini",
 		".codespellrc": "ini",
-		".pydocstyle": "ini"
+		".pydocstyle": "ini",
+		".sqlfluff": "ini",
+		"mypy.ini": "ini",
+		".shellcheckrc": "properties",
+		".yamllint": "yaml"
 	},
 	"python-envs.defaultEnvManager": "ms-python.python:poetry",
 	"python-envs.defaultPackageManager": "ms-python.python:poetry"

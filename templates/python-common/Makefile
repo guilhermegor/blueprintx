@@ -15,6 +15,7 @@ update_venv:
 precommit:
 	@poetry run pre-commit install
 	@poetry run pre-commit install --hook-type commit-msg
+	@poetry run pre-commit install --hook-type pre-push
 
 version_bump_minor:
 	@poetry version minor
@@ -32,7 +33,7 @@ get_corporate_ca:
 # -------------------
 # TESTING
 # -------------------
-.PHONY: unit_tests integration_tests test_cov test_slowest test_feat test_urls_docstrings fix_playwright
+.PHONY: unit_tests integration_tests test_cov test_cov_report test_cov_serve test_slowest test_feat test_urls_docstrings fix_playwright
 
 unit_tests:
 	@poetry run pytest tests/unit/
@@ -45,6 +46,15 @@ test_cov:
 	@poetry run coverage report -m
 	@poetry run coverage xml -o coverage.xml
 	@poetry run genbadge coverage -i coverage.xml -o coverage.svg
+
+# Whole-tree HTML coverage for drill-down (never narrow --cov=<module>, which
+# reports "no data" on the full suite). Open htmlcov/index.html or `make test_cov_serve`.
+test_cov_report:
+	@poetry run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-report=html
+	@echo "HTML coverage report at htmlcov/index.html"
+
+test_cov_serve:
+	@cd htmlcov && python3 -m http.server $${PORT:-8000}
 
 test_slowest:
 	@echo "Running tests to identify the 20 slowest tests..."
@@ -67,9 +77,13 @@ fix_playwright:
 lint:
 	@poetry run ruff check --fix .
 	@poetry run ruff format .
+	@poetry run mypy
 	@poetry run codespell .
 	@poetry run pydocstyle .
 	@poetry run python bin/check_docstrings.py
+	@bash bin/lint_shell.sh
+	@bash bin/lint_sql.sh
+	@bash bin/lint_yaml.sh
 
 check_docstrings:
 	@poetry run python bin/check_docstrings.py

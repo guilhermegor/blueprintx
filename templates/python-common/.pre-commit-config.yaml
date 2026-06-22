@@ -71,6 +71,10 @@ repos:
         name: ruff check
         args:
           - --config=ruff.toml
+      - id: ruff-format
+        name: ruff format
+        args:
+          - --config=ruff.toml
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
@@ -104,6 +108,40 @@ repos:
           - python
         pass_filenames: false
 
+      - id: mypy
+        name: mypy (static type check)
+        entry: poetry run mypy
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      # Non-Python lint gates share a single wrapper with `make lint` (one home,
+      # zero drift). Each wrapper skips gracefully when its tool is absent.
+      - id: lint-shell
+        name: shellcheck + shfmt (shell lint)
+        entry: bash bin/lint_shell.sh --check
+        language: system
+        types:
+          - shell
+        pass_filenames: false
+
+      - id: lint-yaml
+        name: yamllint (yaml style)
+        entry: bash bin/lint_yaml.sh
+        language: system
+        types:
+          - yaml
+        pass_filenames: false
+
+      - id: lint-sql
+        name: sqlfluff (sql lint)
+        entry: bash bin/lint_sql.sh
+        language: system
+        types:
+          - sql
+        pass_filenames: false
+
       # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a
       # fresh project with an empty suite does not block every commit; real
       # failures (exit 1) still block.
@@ -123,6 +161,8 @@ repos:
           - file
         pass_filenames: false
 
+      # Coverage is the slow full-suite gate — run it on pre-push, not per-commit,
+      # so day-to-day commits stay fast (static gates above still run per-commit).
       - id: coverage-check
         name: test coverage check
         entry: bash -c "poetry run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-fail-under=80"
@@ -131,6 +171,8 @@ repos:
           - python
         pass_filenames: false
         verbose: true
+        stages:
+          - pre-push
 
       # genbadge (not the abandoned coverage-badge, which imports the removed
       # pkg_resources and breaks on setuptools >= 81). Generates coverage.xml then
