@@ -107,7 +107,9 @@ jobs:
 
       - name: Run Static Type Check (mypy)
         if: runner.os == 'Linux'
-        run: poetry run mypy
+        # Run from src/ so it is the single package base (avoids the dual-root
+        # "found twice" error on the deeper DDD tree).
+        run: cd src && poetry run mypy --config-file ../mypy.ini .
 
       - name: Run Non-Python Lint Gates (shell, sql, yaml)
         if: runner.os == 'Linux'

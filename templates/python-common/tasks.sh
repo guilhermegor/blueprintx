@@ -99,7 +99,7 @@ fix_playwright() {
 lint() {
 	poetry run ruff check --fix .
 	poetry run ruff format .
-	poetry run mypy
+	(cd src && poetry run mypy --config-file ../mypy.ini .)
 	poetry run codespell .
 	poetry run pydocstyle .
 	poetry run python bin/check_docstrings.py

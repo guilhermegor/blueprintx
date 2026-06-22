@@ -110,7 +110,9 @@ repos:
 
       - id: mypy
         name: mypy (static type check)
-        entry: poetry run mypy
+        # Run from src/ so it is the single package base (bare config.x/utils.x imports
+        # resolve as at runtime); avoids the dual-root "found twice" error on DDD.
+        entry: bash -c 'cd src && poetry run mypy --config-file ../mypy.ini .'
         language: system
         types:
           - python
