@@ -27,7 +27,7 @@ EXCLUDES=(
 	".pytest_cache" ".ruff_cache" ".mypy_cache"
 	"*.egg-info" "build" "dist"
 	".coverage" "htmlcov"
-	"git_diffs" "repo_context.txt"
+	"repo_context.txt"
 	"corporate_ca.pem"
 	".env" ".env.local" ".env.dev" ".env.development"
 	".env.test" ".env.staging" ".env.prod" ".env.production"
@@ -77,6 +77,19 @@ stage_copy() {
 	prune_excludes "$str_stage_dir"
 }
 
+copy_git_diffs() {
+	# Bundle the working-tree git_diffs/ payload into the staged copy. It is
+	# git-ignored (so `git archive` omits it), but in offline mode git_diffs/ IS
+	# the branch-exchange payload — it must travel with the shipped zip so a
+	# teammate can apply the diffs. No-op when the folder is absent or empty.
+	local str_stage_dir="$1"
+	if [[ -d "$PROJECT_ROOT/git_diffs" ]] && compgen -G "$PROJECT_ROOT/git_diffs/*" >/dev/null 2>&1; then
+		print_status "info" "Bundling working-tree git_diffs/ (offline share payload)..."
+		mkdir -p "$str_stage_dir/git_diffs"
+		cp -a "$PROJECT_ROOT/git_diffs/." "$str_stage_dir/git_diffs/"
+	fi
+}
+
 create_zip() {
 	# Zip the staged copy (at str_stage_root/str_repo_kebab) into str_archive.
 	local str_stage_root="$1"
@@ -118,6 +131,7 @@ main() {
 
 	stage_copy "$str_stage_dir"
 	[[ -d "$str_stage_dir" ]] || { print_status "error" "Staging failed"; exit 1; }
+	copy_git_diffs "$str_stage_dir"
 	create_zip "$str_stage_root" "$str_archive"
 
 	print_status "success" "Shipped '$str_ship_ref': $str_archive"

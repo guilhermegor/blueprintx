@@ -135,6 +135,7 @@ copy_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
+    cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" GITHUB_USERNAME="$GITHUB_USERNAME" \
         envsubst '${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME}' \
@@ -181,7 +182,8 @@ copy_common_templates() {
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
-    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh" "$project_path/bin/commit.sh"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$project_path/.coveragerc"
