@@ -15,7 +15,10 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from utils.typing import type_checker
 
+
+@type_checker
 def _compose_dsn(str_backend: str) -> str:
 	"""Build a connection DSN from generic environment variables.
 
@@ -47,6 +50,7 @@ def _compose_dsn(str_backend: str) -> str:
 	return f"{str_host}:{str_port}/{str_name}|{str_user}|{str_password}"
 
 
+@type_checker
 def _connect_sqlite() -> Any:
 	"""Open a stdlib ``sqlite3`` connection, creating the parent directory."""
 	import sqlite3
@@ -56,6 +60,7 @@ def _connect_sqlite() -> Any:
 	return sqlite3.connect(str(path_db))
 
 
+@type_checker
 def _connect_postgresql() -> Any:
 	"""Open a PostgreSQL connection via ``psycopg``."""
 	import psycopg
@@ -72,6 +77,7 @@ def _connect_postgresql() -> Any:
 	)
 
 
+@type_checker
 def _connect_mysql() -> Any:
 	"""Open a MySQL/MariaDB connection via ``mysql.connector``."""
 	import mysql.connector
@@ -88,6 +94,7 @@ def _connect_mysql() -> Any:
 	)
 
 
+@type_checker
 def _connect_mssql() -> Any:
 	"""Open a SQL Server connection via ``pyodbc`` (SQL auth or Azure AD).
 
@@ -119,6 +126,7 @@ def _connect_mssql() -> Any:
 	return pyodbc.connect(str_conn)
 
 
+@type_checker
 def _connect_oracle() -> Any:
 	"""Open an Oracle connection via ``oracledb``."""
 	import oracledb
@@ -131,6 +139,7 @@ def _connect_oracle() -> Any:
 	)
 
 
+@type_checker
 def build_connection() -> Any:
 	"""Build a native DB-API connection from environment configuration.
 

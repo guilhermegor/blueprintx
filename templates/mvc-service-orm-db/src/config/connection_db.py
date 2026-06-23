@@ -15,7 +15,10 @@ from dotenv import load_dotenv
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from utils.typing import type_checker
 
+
+@type_checker
 def _compose_url(str_backend: str) -> str:
 	"""Build a SQLAlchemy URL from generic environment variables.
 
@@ -64,6 +67,7 @@ def _compose_url(str_backend: str) -> str:
 	return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
 
 
+@type_checker
 def build_database_url() -> str:
 	"""Build a SQLAlchemy database URL from environment configuration.
 
@@ -101,6 +105,7 @@ def build_database_url() -> str:
 	return dict_builders[str_backend]()
 
 
+@type_checker
 def build_engine() -> Engine:
 	"""Build a SQLAlchemy engine from environment configuration.
 
@@ -114,6 +119,7 @@ def build_engine() -> Engine:
 	return create_engine(build_database_url(), echo=bool_echo)
 
 
+@type_checker
 def build_session_factory(cls_engine: Engine | None = None) -> Callable[[], Session]:
 	"""Build a ``sessionmaker`` bound to the configured engine.
 

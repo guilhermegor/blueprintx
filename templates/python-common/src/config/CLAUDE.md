@@ -31,23 +31,30 @@ side-effectful logic. A singleton that does I/O at import, or business rules hid
 YAML loader, couples the whole app to this layer and makes it untestable. Keep it
 declarative; push behaviour outward.
 
-## Runtime type-checking does NOT decorate the config layer
+## Runtime type-checking in the config layer
 
-The runtime `type_checker` / `TypeChecker` engine is applied to your **model / view /
-controller** business code — **not** to config-layer modules (`startup.py`, `env_config.py`,
-`connection_db.py`). This is deliberate, for two reasons:
+Config-layer functions carry the runtime `@type_checker` like the rest of the codebase
+(`connection_db`'s factories, `env_config.resolve_config_path`, `startup.output_path`) — the
+"enforce inputs/outputs everywhere" rule has no by-layer exemption. The only nuance is the
+**import path**, because the engine is injected at a layout-dependent location:
 
-- **Portability (shared files).** `startup.py` and `env_config.py` are copied into **both**
-  layouts — MVC (`utils.typing`) and DDD (`chassis.typing`). A hard `from utils.typing import
-  type_checker` would raise `ModuleNotFoundError` under DDD, so these stay decoupled from the
-  engine exactly like the shared `utils/` helpers.
-- **Nature of the layer.** `connection_db.py` is MVC-only (it *could* import `utils.typing`),
-  but it is a thin lazy-import connection factory returning an opaque DB-API/SQLAlchemy object
-  (already `ANN401`-exempt) — declarative glue, not the business code the runtime checker
-  targets. Keeping the whole config layer undecorated is the consistent choice.
+- **MVC-only files** (`connection_db.py`) import it directly: `from utils.typing import
+  type_checker`.
+- **Shared files** (`startup.py`, `env_config.py` — copied into *both* MVC `utils.typing` and
+  DDD `chassis.typing`) import it through a portable shim so the same code works in either
+  layout:
 
-So a config module without `@type_checker` is correct, not an oversight — do not add the
-import to the shared files (it breaks the DDD layout).
+  ```python
+  try:
+      from utils.typing import type_checker
+  except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+      from chassis.typing import type_checker
+  ```
+
+The shared `utils/` helpers (decimals, dtypes, …) remain the deliberate exception — they stay
+decoupled from the engine so they're trivially portable — but config-layer code is decorated.
+Do **not** hard-import `utils.typing` in a shared config file (it breaks the DDD layout); use
+the shim above.
 
 ## The contracts/ sub-package
 

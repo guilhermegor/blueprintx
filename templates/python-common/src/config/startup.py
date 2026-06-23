@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from socket import gethostname
 import tempfile
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from stpstone.utils.loggs.create_logs import CreateLog
@@ -17,6 +18,18 @@ from stpstone.utils.parsers.yaml import reading_yaml
 
 from config.env_config import resolve_config_path
 from utils.paths import is_windows_path
+
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
 load_dotenv(override=True)
@@ -79,6 +92,7 @@ def _resolve_out_dir() -> Path:
 _out_dir = _resolve_out_dir()
 
 
+@type_checker
 def output_path(str_name_key: str) -> Path:
 	"""Build an output file path from an ``outputs.yaml`` filename template.
 

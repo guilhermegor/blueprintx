@@ -18,7 +18,19 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
+
+
+# The runtime type-checking engine is always injected, but at a layout-dependent path:
+# utils.typing (MVC) or chassis.typing (DDD). mypy reads the single TYPE_CHECKING import
+# (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
 # Accepted ENV values -> config-file suffix (English + pt-BR + short forms). Anything else
@@ -34,6 +46,7 @@ ENV_TO_SUFFIX: dict[str, str] = {
 }
 
 
+@type_checker
 def resolve_config_path(str_env: str, str_kind: str, path_dir: Path) -> Path:
 	"""Resolve the config file for ``str_kind``, preferring the plain file when present.
 
@@ -73,6 +86,7 @@ def resolve_config_path(str_env: str, str_kind: str, path_dir: Path) -> Path:
 	return path_cfg
 
 
+@type_checker
 def _abort(str_reason: str) -> NoReturn:
 	"""Print a startup error to stderr and abort the process (``SystemExit`` code 2).
 
