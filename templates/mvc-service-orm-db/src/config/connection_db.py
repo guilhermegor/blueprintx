@@ -19,6 +19,35 @@ from utils.typing import type_checker
 
 
 @type_checker
+def _normalize_odbc_bool(str_value: str) -> str:
+	"""Map a ``.env`` boolean to the ``yes``/``no`` an ODBC keyword expects.
+
+	ODBC keywords like ``Encrypt`` / ``TrustServerCertificate`` accept ``yes``/``no`` —
+	**not** ``true``/``false`` — so a ``.env`` value of ``true`` would otherwise be passed
+	verbatim and rejected. Common boolean spellings (``true``/``false``, ``1``/``0``,
+	``yes``/``no``, ``y``/``n``, ``on``/``off``, any case) are normalised; any other token is
+	returned stripped-but-verbatim so driver-specific values (``strict``/``mandatory``/
+	``optional``) still pass through.
+
+	Parameters
+	----------
+	str_value : str
+		The raw value read from the environment.
+
+	Returns
+	-------
+	str
+		``"yes"`` / ``"no"`` for a recognised boolean, else the stripped original.
+	"""
+	str_norm = str_value.strip().casefold()
+	if str_norm in {"true", "1", "yes", "y", "on", "t"}:
+		return "yes"
+	if str_norm in {"false", "0", "no", "n", "off", "f"}:
+		return "no"
+	return str_value.strip()
+
+
+@type_checker
 def _compose_url(str_backend: str) -> str:
 	"""Build a SQLAlchemy URL from generic environment variables.
 
@@ -59,11 +88,24 @@ def _compose_url(str_backend: str) -> str:
 		str_driver = quote_plus(os.getenv("DB_ODBC_DRIVER", "ODBC Driver 17 for SQL Server"))
 		str_auth = os.getenv("DB_MSSQL_AUTH", "sql").lower()
 		if str_auth in {"aad", "ad", "azure", "activedirectoryinteractive"}:
-			return (
+			str_url = (
 				f"{str_scheme}://{str_host}:{str_port}/{str_name}"
 				f"?driver={str_driver}&authentication=ActiveDirectoryInteractive"
 			)
-		return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}?driver={str_driver}"
+		else:
+			str_url = (
+				f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
+				f"?driver={str_driver}"
+			)
+		# ODBC Driver 18 encrypts by default; append the normalised TLS settings when these
+		# env vars are set so a server with a self-signed certificate stays reachable.
+		str_encrypt = os.getenv("DB_ENCRYPT")
+		if str_encrypt:
+			str_url += f"&Encrypt={_normalize_odbc_bool(str_encrypt)}"
+		str_trust = os.getenv("DB_TRUST_SERVER_CERTIFICATE")
+		if str_trust:
+			str_url += f"&TrustServerCertificate={_normalize_odbc_bool(str_trust)}"
+		return str_url
 	return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
 
 
