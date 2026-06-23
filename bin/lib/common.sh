@@ -152,3 +152,54 @@ resolve_default_branch() {
     fi
     echo "master"
 }
+
+# ============================================================================
+# Env-wise config prompt + apply (shared by every Python service scaffold)
+# ============================================================================
+#
+# A project's config can ship as a single inputs.yaml/outputs.yaml (default) or
+# as env-suffixed pairs (inputs_dev.yaml/inputs_prd.yaml, …) that `ENV` selects
+# via src/config/env_config.resolve_config_path. These two helpers offer that as
+# a scaffold-time choice, shared here so every Python service tier (mvc-*, ddd-*,
+# and any future one) inherits identical behaviour from one place.
+#
+# Usage in a scaffold:
+#   prompt_env_wise_config                 # sets INCLUDE_ENV_WISE (true|false)
+#   ...
+#   copy_global_config "$PROJECT_PATH"     # ships the plain inputs/outputs.yaml
+#   apply_env_wise_config "$PROJECT_PATH"  # splits them into dev/prd if chosen
+
+prompt_env_wise_config() {
+    local answer
+    read -r -p "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: " answer || true
+    case "${answer:-}" in
+        y | Y | yes | YES)
+            INCLUDE_ENV_WISE=true
+            print_status "config" "Env-wise config: inputs_dev/prd.yaml + outputs_dev/prd.yaml (ENV selects)"
+            ;;
+        *)
+            INCLUDE_ENV_WISE=false
+            print_status "config" "Config: single inputs.yaml + outputs.yaml (default)"
+            ;;
+    esac
+}
+
+apply_env_wise_config() {
+    # When env-wise was chosen, split each plain config file into _dev/_prd copies
+    # and remove the plain file — so env_config.resolve_config_path switches to
+    # env-wise mode (an unknown ENV then fails loud). No-op otherwise. Idempotent
+    # and safe under `set -u` (INCLUDE_ENV_WISE may be unset → treated as false).
+    local project_path="$1"
+    [[ "${INCLUDE_ENV_WISE:-false}" == "true" ]] || return 0
+
+    local config_dir="$project_path/src/config"
+    local kind
+    for kind in inputs outputs; do
+        if [[ -f "$config_dir/$kind.yaml" ]]; then
+            cp "$config_dir/$kind.yaml" "$config_dir/${kind}_dev.yaml"
+            cp "$config_dir/$kind.yaml" "$config_dir/${kind}_prd.yaml"
+            rm -f "$config_dir/$kind.yaml"
+        fi
+    done
+    print_status "success" "Env-wise config generated (dev/prd); plain inputs/outputs.yaml removed"
+}

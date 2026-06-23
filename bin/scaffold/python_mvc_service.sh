@@ -703,6 +703,7 @@ main() {
     prompt_docker_compose
     prompt_data_dir
     prompt_webhook
+    prompt_env_wise_config
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
     copy_global_config "$PROJECT_PATH"
@@ -713,6 +714,7 @@ main() {
     copy_common_templates "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"
+    apply_env_wise_config "$PROJECT_PATH"
     conditional_copy_webhooks_yaml "$PROJECT_PATH"
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"

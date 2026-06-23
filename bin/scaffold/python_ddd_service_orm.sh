@@ -754,6 +754,7 @@ main() {
     prompt_storage
     prompt_data_dir
     prompt_webhook
+    prompt_env_wise_config
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
     copy_global_config "$PROJECT_PATH"
@@ -766,6 +767,7 @@ main() {
     conditional_copy_storage "$PROJECT_PATH"
     patch_pyproject_db_driver "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"
+    apply_env_wise_config "$PROJECT_PATH"
     conditional_copy_webhooks_yaml "$PROJECT_PATH"
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
