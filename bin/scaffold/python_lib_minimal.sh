@@ -229,6 +229,13 @@ copy_mkdocs_templates() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/backlog/.keep" \
         "$project_path/docs/backlog/.keep"
 
+    # Docs version label: hook (reads pyproject version) + theme override + header JS.
+    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
+        "$project_path/docs/javascripts/header-version.js"
+
     print_status "success" "MkDocs templates copied"
 }
 
