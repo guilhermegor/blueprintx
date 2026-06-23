@@ -101,6 +101,11 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "pandas.read_sql_query".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
 "pandas.read_sql_table".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
 "pandas.ExcelFile".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+# FileContract is CONSTRUCTED only in config/contracts/ (per-file-exempt below); everywhere
+# else imports the instance. Both import paths of the class are banned; a file importing the
+# class purely for a type annotation carries a line-scoped `# noqa: TID251`.
+"utils.tabular_reader.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
+"config.contracts.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
 
 [lint.isort]
 force-single-line = false
@@ -125,6 +130,8 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 ]
 # The seam itself is the one place allowed to call the bare pandas readers.
 "src/utils/tabular_reader.py" = ["TID251"]
+# config/contracts/ is the one place allowed to construct FileContract.
+"src/config/contracts/*.py" = ["TID251"]
 # Native DB-API 2.0 / SQLAlchemy connections have no shared stdlib type, so `Any` is the
 # honest return/param annotation for the raw-driver connection factory (MVC skeletons).
 "src/config/connection_db.py" = ["ANN401"]
