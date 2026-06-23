@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from stpstone.utils.loggs.create_logs import CreateLog
 from stpstone.utils.parsers.yaml import reading_yaml
 
+from config.env_config import resolve_config_path
 from utils.paths import is_windows_path
 
 
@@ -29,8 +30,11 @@ HOSTNAME: str = gethostname()
 ENVIRONMENT: str = os.getenv("ENV", "development").lower()
 APP_NAME: str = os.getenv("APP_NAME", "app")
 
-YAML_OUTPUTS: dict = reading_yaml(str(_CONFIG_DIR / "outputs.yaml"))
-YAML_INPUTS: dict = reading_yaml(str(_CONFIG_DIR / "inputs.yaml"))
+# Prefer a single plain inputs.yaml/outputs.yaml (default); a project opts into env-wise
+# config by deleting the plain file and shipping inputs_dev.yaml/inputs_prd.yaml (etc.),
+# after which ENV selects the file and an unknown ENV fails loud (see env_config).
+YAML_OUTPUTS: dict = reading_yaml(str(resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR)))
+YAML_INPUTS: dict = reading_yaml(str(resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR)))
 
 _dt_now = datetime.now()
 _str_date = _dt_now.strftime("%Y%m%d")

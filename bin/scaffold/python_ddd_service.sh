@@ -223,6 +223,13 @@ copy_mkdocs_templates() {
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/docs/backlog/.keep" \
         "$project_path/docs/backlog/.keep"
 
+    # Docs version label: hook (reads pyproject version) + theme override + header JS.
+    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
+        "$project_path/docs/javascripts/header-version.js"
+
     print_status "success" "MkDocs templates copied"
 }
 
@@ -450,8 +457,15 @@ copy_global_config() {
     cp "$COMMON_TEMPLATE_ROOT/src/config/startup.py" "$project_path/src/config/startup.py"
     cp "$COMMON_TEMPLATE_ROOT/src/config/inputs.yaml" "$project_path/src/config/inputs.yaml"
     cp "$COMMON_TEMPLATE_ROOT/src/config/outputs.yaml" "$project_path/src/config/outputs.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/env_config.py" "$project_path/src/config/env_config.py"
     cp "$COMMON_TEMPLATE_ROOT/src/config/CLAUDE.md" "$project_path/src/config/CLAUDE.md"
-    print_status "success" "Global config (startup/inputs/outputs/CLAUDE.md) applied"
+    mkdir -p "$project_path/src/config/contracts"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/__init__.py" "$project_path/src/config/contracts/__init__.py"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/example_source.py" "$project_path/src/config/contracts/example_source.py"
+    if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" ]; then
+        cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" "$project_path/tests/unit/test_env_config.py"
+    fi
+    print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
 # Shared, project-agnostic utils + their unit tests, from the single source in
