@@ -1,21 +1,17 @@
-"""Controller entry-point — orchestrates the MVC pipeline (native DB).
+"""Controller entry-point — builds the pipeline orchestrator and runs it (native DB).
 
-Script-style on purpose: read top to bottom to follow the flow. The controller
-wires config → model → view, bracketing each phase with start/finish log lines
-so a run is easy to trace. Run it with ``make run`` or
-``python src/controller/main.py``.
+Script-style and intentionally thin: it wires the ``config.startup`` singletons + config
+into :class:`controller._pipeline.PipelineOrchestrator` and calls ``run``. It defines no
+functions — business logic lives in the model and all phase sequencing in the orchestrator.
+Run it with ``make run`` or ``python src/controller/main.py``.
 """
 
 import os
 import sys
-from time import time
 import warnings
 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from stpstone.utils.loggs.create_logs import CreateLog  # noqa: E402
-from stpstone.utils.parsers.json import JsonFiles  # noqa: E402
 
 from config.connection_db import build_connection  # noqa: E402
 from config.startup import (  # noqa: E402
@@ -29,61 +25,30 @@ from config.startup import (  # noqa: E402
 	YAML_INPUTS,
 	output_path,
 )
-from model.example_entity import ExampleEntity  # noqa: E402
-from view.report_renderer import RenderToExcel  # noqa: E402
+from controller._pipeline import PipelineOrchestrator  # noqa: E402
+from utils.outlook_gateway import OutlookGateway  # noqa: E402
+from utils.paths import resolve_path  # noqa: E402
 
-
-float_start_time = time()
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-cls_create_log = CreateLog()
-
-dict_xpt: dict = {}
-
-path_report = output_path("xlsx_name")
-
-# --- variable definition: record run context so every log file is self-describing ---
-cls_create_log.log_message(LOGGER, "Starting variable-definition process", "info")
-cls_create_log.log_message(LOGGER, f"App: {APP_NAME}", "info")
-cls_create_log.log_message(LOGGER, f"Operator: {USER}", "info")
-cls_create_log.log_message(LOGGER, f"Hostname: {HOSTNAME}", "info")
-cls_create_log.log_message(LOGGER, f"Environment: {ENVIRONMENT}", "info")
-cls_create_log.log_message(LOGGER, f"Inputs config in memory: {YAML_INPUTS}", "info")
-cls_create_log.log_message(LOGGER, f"Log path: {PATH_LOG}", "info")
-cls_create_log.log_message(LOGGER, f"JSON export path: {PATH_JSON}", "info")
-cls_create_log.log_message(LOGGER, f"Report export path: {path_report}", "info")
-cls_create_log.log_message(LOGGER, "Finishing variable-definition process", "info")
-
-# --- model: read source data into a DataFrame ---
-# Session lifecycle: open the connection, use it, and guarantee close() via finally.
-cls_create_log.log_message(LOGGER, "Starting data-read process", "info")
-cls_connection = build_connection()
-try:
-	cls_example = ExampleEntity(cls_connection)
-	cls_example.ensure_table()
-	cls_example.insert("Hello from MVC native-db service!")
-	df_report = cls_example.fetch_all()
-finally:
-	cls_connection.close()
-dict_xpt["rows_read"] = len(df_report)
-cls_create_log.log_message(LOGGER, f"Finishing data-read process ({len(df_report)} rows)", "info")
-
-# --- view: render outputs (report + run summary) ---
-cls_create_log.log_message(LOGGER, "Starting report-export process", "info")
-RenderToExcel(path_report).render(df_report)
-dict_xpt["report_path"] = str(path_report)
-cls_create_log.log_message(LOGGER, f"Finishing report-export process ({path_report})", "info")
-
-cls_create_log.log_message(LOGGER, "Starting summary-export process", "info")
-bool_json_dump = JsonFiles().dump_message(dict_xpt, str(PATH_JSON))
-cls_create_log.log_message(LOGGER, f"Summary export ok={bool_json_dump}: {PATH_JSON}", "info")
-
-float_elapsed_time = time() - float_start_time
-float_hours, float_remainder = divmod(float_elapsed_time, 3600)
-float_minutes, float_seconds = divmod(float_remainder, 60)
-cls_create_log.log_message(
-	LOGGER,
-	f"Run finished (HH:MM:SS): {int(float_hours)}:{int(float_minutes)}:{float_seconds:.2f}",
-	"info",
-)
+PipelineOrchestrator(
+	logger=LOGGER,
+	fn_build_connection=build_connection,
+	fn_output_path=output_path,
+	path_json=PATH_JSON,
+	dict_context={
+		"App": APP_NAME,
+		"Operator": USER,
+		"Hostname": HOSTNAME,
+		"Environment": ENVIRONMENT,
+		"Inputs config in memory": YAML_INPUTS,
+		"Log path": PATH_LOG,
+		"JSON export path": PATH_JSON,
+	},
+	cls_email_gateway=OutlookGateway(
+		os.getenv("SENDER_EMAIL", ""),
+		path_signatures_dir=resolve_path("src/config/signatures"),
+		logger=LOGGER,
+	),
+).run()

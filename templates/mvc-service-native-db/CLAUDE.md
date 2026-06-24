@@ -14,7 +14,7 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 |-------|----------|------|
 | Model | `src/model/` | Data access. One service class per file. May touch the DB. Returns pandas DataFrames (or plain dicts/dataclasses). |
 | View | `src/view/` | Output rendering only (Excel, JSON, HTML, console). No business logic, no DB imports. |
-| Controller | `src/controller/` | Orchestration. Imports model + view + config. `main.py` is the script-style entry-point — top to bottom, no `run()` wrapper. |
+| Controller | `src/controller/` | Orchestration. `main.py` is a thin script-style entry-point that builds `_pipeline.PipelineOrchestrator` and calls `.run()`; the phase sequencing lives in `_pipeline.py`. |
 | Utils | `src/utils/` | Helpers. `br_identifiers.py` (CNPJ/CPF mask·unmask·validate) and `dtypes.py` (`apply_dtypes`) are shipped from python-common; calendars/parsers/dates come from the `stpstone` dependency. |
 | Config | `src/config/` | `startup.py` builds runtime singletons once at import; `connection_db.py` is the DB connection factory; YAML config files; secrets in `.env`. |
 
@@ -52,7 +52,7 @@ code.
 
 ## Key conventions
 
-**`src/controller/main.py` is script-style.** Read top to bottom. It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), inlines its own timer, calls the model, hands the DataFrame to the view, and writes a JSON run summary. Do **not** wrap it in a `run()` function — that is the deliberate MVC convention here. The DB connection is bracketed in a `try/finally` so `close()` always runs (the session boundary). If the webhook opt-in was chosen at scaffold time, a `# --- notify ---` block is appended that sends `MSG_WEBHOOK` when `ENVIRONMENT == WEBHOOK_ENV_GATE`.
+**`src/controller/main.py` is a thin, script-style entry-point — it defines no functions.** It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), builds `controller._pipeline.PipelineOrchestrator` with those collaborators injected (the connection factory, `output_path`, the run-context dict, and an `OutlookGateway` e-mail seam), and calls `.run()`. The **phase sequencing lives in `controller/_pipeline.py`** (`PipelineOrchestrator`): `run()` calls `_log_context` → `_open_connection` → `_read` (model) → `_render` (view) → `_write_summary`, each phase bracketed by log lines, the DB connection always closed in a `try/finally`. Business logic stays in the model; the orchestrator only wires and sequences. If the webhook opt-in was chosen at scaffold time, a `# --- notify ---` block is appended to `main.py` that sends `MSG_WEBHOOK` in a production environment after the run.
 
 **`config/connection_db.build_connection()`** reads `DB_BACKEND` from `.env` and returns a raw DB-API 2.0 connection. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. Drivers are imported lazily — only the configured backend's driver must be installed. SQL Server honours `DB_MSSQL_AUTH` (`sql` for UID/PWD, `aad` for Azure AD Interactive).
 
