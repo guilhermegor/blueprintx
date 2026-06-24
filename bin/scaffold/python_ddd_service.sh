@@ -21,6 +21,8 @@ DATA_DIR_BASE="logs"
 DATA_DIR_DATED=false
 INCLUDE_WEBHOOK=false
 WEBHOOK_PLATFORM="teams"
+INCLUDE_EMAIL=false
+EMAIL_BACKEND="outlook"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/python-common"
 # Language-agnostic assets shared by every skeleton (CODEOWNERS, PR template)
 SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
@@ -625,6 +627,40 @@ conditional_copy_webhooks_yaml() {
     print_status "success" "Webhook provider (chassis/webhook) + webhooks.yaml added"
 }
 
+prompt_email() {
+    local answer backend_ans
+    read -r -p "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: " answer || true
+    case "$answer" in
+        y | Y)
+            INCLUDE_EMAIL=true
+            read -r -p "Which backend? [outlook/smtp] (default: outlook): " backend_ans || true
+            case "${backend_ans:-outlook}" in
+                smtp) EMAIL_BACKEND="smtp" ;;
+                *) EMAIL_BACKEND="outlook" ;;
+            esac
+            print_status "config" "E-mail backend: $EMAIL_BACKEND"
+            ;;
+        *)
+            INCLUDE_EMAIL=false
+            ;;
+    esac
+}
+
+# E-mail handler seam (opt-in): copy optional/email into src/chassis/email (canonical
+# chassis.email prefix — no rewrite, like the webhook seam) and add the EMAIL_BACKEND/SMTP_*
+# keys. DDD has no shared orchestrator, so a capability wires `build_email_handler(...)`
+# where it needs to notify (the Outlook backend injects utils.outlook_gateway by default).
+conditional_copy_email() {
+    local project_path="$1"
+    if [[ "$INCLUDE_EMAIL" != "true" ]]; then return; fi
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/email" "$project_path/src/chassis/email"
+    local email_env
+    email_env=$'\n# E-mail handler (opt-in). EMAIL_BACKEND: outlook (Windows desktop) or smtp.\n# SENDER_EMAIL is the From address; SMTP_* are used only when EMAIL_BACKEND=smtp.\nSENDER_EMAIL=\nEMAIL_BACKEND='"$EMAIL_BACKEND"$'\nSMTP_HOST=\nSMTP_PORT=587\nSMTP_USER=\nSMTP_PASSWORD=\nSMTP_USE_TLS=true\n'
+    printf '%s' "$email_env" >> "$project_path/.env"
+    printf '%s' "$email_env" >> "$project_path/.env.example"
+    print_status "success" "E-mail handler (chassis/email, backend=$EMAIL_BACKEND) added"
+}
+
 apply_offline_mode() {
     local project_path="$1"
 
@@ -728,6 +764,7 @@ main() {
     prompt_storage
     prompt_data_dir
     prompt_webhook
+    prompt_email
     prompt_env_wise_config
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
@@ -742,6 +779,7 @@ main() {
     conditional_patch_inputs_yaml "$PROJECT_PATH"
     apply_env_wise_config "$PROJECT_PATH"
     conditional_copy_webhooks_yaml "$PROJECT_PATH"
+    conditional_copy_email "$PROJECT_PATH"
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"

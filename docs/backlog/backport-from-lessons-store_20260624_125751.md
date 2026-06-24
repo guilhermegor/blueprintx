@@ -76,12 +76,35 @@ ground `~/dev/perfil_mensal_cvm`. **Branch:** `feat/backport-lessons-store` → 
   — so it was reverted (`6a9570f`) to the resolvable `>=3.1.1`. Re-apply once 3.2.0 is
   published. Owner: user (stpstone maintainer).
 
+## In progress
+
+- [ ] **Email seam (`optional/email/`) mirroring the webhook seam.** A port + adapters +
+  factory, opt-in like webhook. Port is **`EmailHandler`** (not `EmailSender`) — the concrete
+  handler does more than send (download attachments, body/table extraction), so it is named as
+  a handler that can grow. The **shared** Protocol holds only what every backend does (send),
+  since SMTP is send-only; the Outlook handler exposes the extra read methods beyond the port.
+  - [x] `EmailHandler` Protocol with `send_email` (shared across backends).
+  - [x] `OutlookEmailHandler` (injects `utils.outlook_gateway.OutlookGateway`; delegates
+    `send_email` AND `download_attachment` — the read capability SMTP lacks).
+  - [x] `SmtpEmailHandler` (stdlib `smtplib`, send-only) + `NullEmailHandler` opt-out.
+  - [x] `factory.build_email_handler(...)` selecting the backend via `EMAIL_BACKEND` (default outlook; blank/none → Null).
+  - [x] mvc/ddd orchestrator depends on the `EmailHandler` port (was concrete `OutlookGateway`); default `main.py` wires none (opt-in adds it).
+  - [x] opt-in scaffold prompt + conditional copy across the 4 service tiers (MVC → utils/email
+    with chassis.email→utils.email rewrite + main.py sentinel swap injecting the handler into
+    the orchestrator; DDD → chassis/email, no rewrite, no orchestrator).
+  - [x] `.env`/`.env.example` keys (SENDER_EMAIL + EMAIL_BACKEND + SMTP_*).
+  - [x] `EmailHandler` Protocol marked `@runtime_checkable` so the runtime TypeChecker accepts
+    a concrete handler through the port (the proving ground avoided this by typing the param
+    concretely; a port-typed param needs runtime_checkable).
+  - [x] verified in all 4 service scaffolds: ruff + mypy clean; MVC (both backends) runs
+    end-to-end; DDD factory imports resolve under chassis.email.
+  - [ ] unit tests for the seam (factory selection, Null/SMTP/Outlook behaviour) — TODO.
+
 ## Decisions to revisit (not blocking)
 
-- [ ] **`OutlookGateway` is injected into the default `main.py`** for the MVC tiers (mirrors
-  the proving ground). It is log-only off Windows and the reference orchestrator never
-  sends, so no scaffolded project emails unexpectedly — but if the seam should ship only
-  behind an e-mail opt-in (like the webhook), gate it. Pending user preference.
+- [~] **`OutlookGateway` injected into the default `main.py`** — being resolved by the email
+  seam above: the orchestrator will depend on the `EmailSender` port (Outlook injected by
+  default), and the seam ships opt-in like the webhook.
 
 ---
 

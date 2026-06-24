@@ -24,6 +24,8 @@ DATA_DIR_BASE="logs"
 DATA_DIR_DATED=false
 INCLUDE_WEBHOOK=false
 WEBHOOK_PLATFORM="teams"
+INCLUDE_EMAIL=false
+EMAIL_BACKEND="outlook"
 
 # ============================================================================
 # FUNCTIONS
@@ -360,6 +362,64 @@ prompt_webhook() {
             INCLUDE_WEBHOOK=false
             ;;
     esac
+}
+
+prompt_email() {
+    local answer backend_ans
+    read -r -p "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: " answer || true
+    case "$answer" in
+        y | Y)
+            INCLUDE_EMAIL=true
+            read -r -p "Which backend? [outlook/smtp] (default: outlook): " backend_ans || true
+            case "${backend_ans:-outlook}" in
+                smtp) EMAIL_BACKEND="smtp" ;;
+                *) EMAIL_BACKEND="outlook" ;;
+            esac
+            print_status "config" "E-mail backend: $EMAIL_BACKEND"
+            ;;
+        *)
+            INCLUDE_EMAIL=false
+            ;;
+    esac
+}
+
+# E-mail handler seam (opt-in, mirrors the webhook seam): copy optional/email into
+# src/utils/email (rewrite the canonical chassis.email prefix to utils.email), wire the
+# chosen backend into the controller by replacing the CLS_EMAIL_HANDLER sentinel, and add
+# the EMAIL_BACKEND/SMTP_* keys to .env/.env.example.
+conditional_copy_email() {
+    local project_path="$1"
+    if [[ "$INCLUDE_EMAIL" != "true" ]]; then return; fi
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/email" "$project_path/src/utils/email"
+    grep -rl "chassis.email" "$project_path/src/utils/email" \
+        | xargs -r sed -i "s|chassis\.email|utils.email|g"
+    local main_path="$project_path/src/controller/main.py"
+    # Inject the two first-party imports into the controller import block (keeps isort happy:
+    # controller < utils.email < utils.paths), and replace the CLS_EMAIL_HANDLER sentinel with
+    # the build call.
+    awk -v backend="$EMAIL_BACKEND" '
+        /^from controller\._pipeline import PipelineOrchestrator/ {
+            print
+            print "from utils.email.factory import build_email_handler  # noqa: E402"
+            print "from utils.paths import resolve_path  # noqa: E402"
+            next
+        }
+        /^CLS_EMAIL_HANDLER = None$/ {
+            print "CLS_EMAIL_HANDLER = build_email_handler("
+            print "\tstr_backend=\"" backend "\","
+            print "\tstr_sender=os.getenv(\"SENDER_EMAIL\", \"\"),"
+            print "\tpath_signatures_dir=resolve_path(\"src/config/signatures\"),"
+            print "\tlogger=LOGGER,"
+            print ")"
+            next
+        }
+        { print }
+    ' "$main_path" > "$main_path.tmp" && mv "$main_path.tmp" "$main_path"
+    local email_env
+    email_env=$'\n# E-mail handler (opt-in). EMAIL_BACKEND: outlook (Windows desktop) or smtp.\n# SENDER_EMAIL is the From address; SMTP_* are used only when EMAIL_BACKEND=smtp.\nSENDER_EMAIL=\nEMAIL_BACKEND='"$EMAIL_BACKEND"$'\nSMTP_HOST=\nSMTP_PORT=587\nSMTP_USER=\nSMTP_PASSWORD=\nSMTP_USE_TLS=true\n'
+    printf '%s' "$email_env" >> "$project_path/.env"
+    printf '%s' "$email_env" >> "$project_path/.env.example"
+    print_status "success" "E-mail handler (utils/email, backend=$EMAIL_BACKEND) added"
 }
 
 copy_global_config() {
@@ -704,6 +764,7 @@ main() {
     prompt_docker_compose
     prompt_data_dir
     prompt_webhook
+    prompt_email
     prompt_env_wise_config
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
@@ -719,6 +780,7 @@ main() {
     conditional_copy_webhooks_yaml "$PROJECT_PATH"
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
+    conditional_copy_email "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"

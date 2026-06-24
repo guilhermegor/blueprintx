@@ -14,16 +14,39 @@ from collections.abc import Callable
 from logging import Logger
 from pathlib import Path
 from time import time
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import pandas as pd
 from stpstone.utils.parsers.json import JsonFiles
 
 from model.example_entity import ExampleEntity
 from utils.loggers import log_message
-from utils.outlook_gateway import OutlookGateway
 from utils.typing import TypeChecker
 from view.report_renderer import RenderToExcel
+
+
+@runtime_checkable
+class EmailHandler(Protocol):
+	"""Structural port for the optional e-mail handler (see ``optional/email``).
+
+	The orchestrator depends only on the shared ``send_email`` method; the concrete backend
+	(Outlook by default, or SMTP) is injected by ``main.py`` when the e-mail opt-in is chosen.
+	Kept local so the always-shipped controller never imports the opt-in seam. A concrete
+	handler may carry more methods (the Outlook one also downloads attachments) — not in this
+	shared port, which holds only what every backend can do.
+	"""
+
+	def send_email(
+		self,
+		str_subject: str,
+		list_to: list[str],
+		list_cc: list[str],
+		str_body: str,
+		list_attachments: list[str],
+		bool_auto_send: bool = True,
+	) -> bool:
+		"""Send one e-mail; return whether it was dispatched."""
+		...
 
 
 class PipelineOrchestrator(metaclass=TypeChecker):
@@ -42,9 +65,10 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 	dict_context : dict
 		Run-context values (app/operator/host/environment/paths) logged so every log file
 		is self-describing.
-	cls_email_gateway : OutlookGateway | None
-		Optional e-mail seam (log-only off Windows). Injected like the proving ground so a
-		real notify phase can use it; the reference run does not send.
+	cls_email_handler : EmailHandler | None
+		Optional e-mail handler (the ``EmailHandler`` port). Injected by ``main.py`` only when
+		the e-mail opt-in is chosen — Outlook backend by default, SMTP if configured. The
+		reference run does not send; a project adds its own notify phase.
 	"""
 
 	def __init__(
@@ -54,14 +78,14 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		fn_output_path: Callable[[str], Path],
 		path_json: Path,
 		dict_context: dict[str, Any],
-		cls_email_gateway: OutlookGateway | None = None,
+		cls_email_handler: EmailHandler | None = None,
 	) -> None:
 		self.logger = logger
 		self.fn_build_connection = fn_build_connection
 		self.fn_output_path = fn_output_path
 		self.path_json = path_json
 		self.dict_context = dict_context
-		self.cls_email_gateway = cls_email_gateway
+		self.cls_email_handler = cls_email_handler
 
 	def run(self) -> dict[str, Any]:
 		"""Execute every phase in order, returning the run summary.
@@ -95,7 +119,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 			log_message(self.logger, f"{str_key}: {value}")
 		log_message(
 			self.logger,
-			f"Email gateway: {'configured' if self.cls_email_gateway is not None else 'none'}",
+			f"Email handler: {'configured' if self.cls_email_handler is not None else 'none'}",
 		)
 		log_message(self.logger, "Finishing variable-definition process")
 

@@ -26,11 +26,14 @@ from config.startup import (  # noqa: E402
 	output_path,
 )
 from controller._pipeline import PipelineOrchestrator  # noqa: E402
-from utils.outlook_gateway import OutlookGateway  # noqa: E402
-from utils.paths import resolve_path  # noqa: E402
 
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
+
+# E-mail handler (opt-in seam): the assignment below is replaced at scaffold time when the
+# e-mail opt-in is chosen, to build an EmailHandler (Outlook backend by default). By default
+# no handler is wired and the orchestrator runs without sending.
+CLS_EMAIL_HANDLER = None
 
 PipelineOrchestrator(
 	logger=LOGGER,
@@ -46,9 +49,5 @@ PipelineOrchestrator(
 		"Log path": PATH_LOG,
 		"JSON export path": PATH_JSON,
 	},
-	cls_email_gateway=OutlookGateway(
-		os.getenv("SENDER_EMAIL", ""),
-		path_signatures_dir=resolve_path("src/config/signatures"),
-		logger=LOGGER,
-	),
+	cls_email_handler=CLS_EMAIL_HANDLER,
 ).run()
