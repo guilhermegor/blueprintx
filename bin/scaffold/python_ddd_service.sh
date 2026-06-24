@@ -475,7 +475,8 @@ copy_shared_utils() {
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
     for util in br_identifiers dtypes decimals loggers text paths signatures dates \
-        tabular_reader retry http_downloader yaml_reader zip_extractor frames; do
+        tabular_reader retry http_downloader yaml_reader zip_extractor frames \
+        outlook_gateway; do
         cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
         if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" ]; then
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
