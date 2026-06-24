@@ -391,7 +391,13 @@ conditional_copy_email() {
     local project_path="$1"
     if [[ "$INCLUDE_EMAIL" != "true" ]]; then return; fi
     cp -r "$COMMON_TEMPLATE_ROOT/optional/email" "$project_path/src/utils/email"
+    # The seam ships its unit test co-located; relocate it to the project's tests/unit and drop
+    # the now-empty package tests dir so the test is discovered and the package stays clean.
+    mv "$project_path/src/utils/email/tests/unit/test_email_handlers.py" \
+        "$project_path/tests/unit/test_email_handlers.py"
+    rm -rf "$project_path/src/utils/email/tests"
     grep -rl "chassis.email" "$project_path/src/utils/email" \
+        "$project_path/tests/unit/test_email_handlers.py" \
         | xargs -r sed -i "s|chassis\.email|utils.email|g"
     local main_path="$project_path/src/controller/main.py"
     # Inject the two first-party imports into the controller import block (keeps isort happy:

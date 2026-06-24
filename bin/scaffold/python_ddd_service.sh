@@ -654,6 +654,11 @@ conditional_copy_email() {
     local project_path="$1"
     if [[ "$INCLUDE_EMAIL" != "true" ]]; then return; fi
     cp -r "$COMMON_TEMPLATE_ROOT/optional/email" "$project_path/src/chassis/email"
+    # The seam ships its unit test co-located; relocate it to the project's tests/unit (the
+    # canonical chassis.email imports already match the DDD layout, so no rewrite is needed).
+    mv "$project_path/src/chassis/email/tests/unit/test_email_handlers.py" \
+        "$project_path/tests/unit/test_email_handlers.py"
+    rm -rf "$project_path/src/chassis/email/tests"
     local email_env
     email_env=$'\n# E-mail handler (opt-in). EMAIL_BACKEND: outlook (Windows desktop) or smtp.\n# SENDER_EMAIL is the From address; SMTP_* are used only when EMAIL_BACKEND=smtp.\nSENDER_EMAIL=\nEMAIL_BACKEND='"$EMAIL_BACKEND"$'\nSMTP_HOST=\nSMTP_PORT=587\nSMTP_USER=\nSMTP_PASSWORD=\nSMTP_USE_TLS=true\n'
     printf '%s' "$email_env" >> "$project_path/.env"

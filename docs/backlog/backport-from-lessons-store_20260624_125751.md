@@ -98,7 +98,11 @@ ground `~/dev/perfil_mensal_cvm`. **Branch:** `feat/backport-lessons-store` → 
     concretely; a port-typed param needs runtime_checkable).
   - [x] verified in all 4 service scaffolds: ruff + mypy clean; MVC (both backends) runs
     end-to-end; DDD factory imports resolve under chassis.email.
-  - [ ] unit tests for the seam (factory selection, Null/SMTP/Outlook behaviour) — TODO.
+  - [x] unit tests for the seam (factory selection, unknown-backend raise, Null/SMTP
+    validation, Outlook send+download delegation) — co-located in `optional/email/tests/unit/`,
+    relocated by the scaffold into the project `tests/unit/` (MVC rewrites chassis.email→
+    utils.email; DDD keeps it). Imports use the bare runtime root to dodge the dual-import-root
+    isinstance trap. 8 tests pass under pytest in all 4 service tiers.
 
 ## Decisions to revisit (not blocking)
 
