@@ -202,3 +202,15 @@ From `CONTRIBUTING.md`:
 - Branch names: `feat/<name>`, `fix/<desc>`, `docs/<desc>`, `refactor/<desc>`, `chore/<desc>`, `hotfix/<desc>`, `release/<version>`
 - Commits: Conventional Commits — `feat(scope): message`, `fix(scope): message`, etc.
 - Direct commits to `main` are blocked by pre-commit (`no-commit-to-branch`).
+
+## Backlog discipline (persist progress to `docs/backlog/`)
+
+Any multi-step effort here (a backport wave, a multi-PR feature) MUST be tracked in a
+**`docs/backlog/<topic>_YYYYMMDD_HHMMSS.md`** file, created the moment the plan is approved
+and updated after every slice (tick done items, add new to-dos, remove superseded ones).
+This is **not optional and not replaced by a session task tool** (TaskCreate/TodoWrite are
+session-local; the backlog is the in-repo, team-reviewable, cross-session record). At the
+start of work, **re-read any existing `docs/backlog/` file** and keep it current. The
+filename timestamp is set at creation and never renamed. `docs/backlog/` is git-ignored from
+the published site (`exclude_docs` in each skeleton's `mkdocs.yml`) but tracked in the repo.
+Delete a backlog file once every box is `[x]`. (Lesson: persist-todo-in-docs-backlog.)
