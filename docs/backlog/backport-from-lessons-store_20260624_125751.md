@@ -55,6 +55,12 @@ ground `~/dev/perfil_mensal_cvm`. **Branch:** `feat/backport-lessons-store` → 
 
 - [x] `DB_ENCRYPT` / `DB_TRUST_SERVER_CERTIFICATE` support (ODBC Driver 18 defaults to encryption) with a `_normalize_odbc_bool` mapping `.env` booleans to `yes`/`no`, in both MVC factories (pyodbc string joined by `;`, SQLAlchemy URL params by `&`); documented in `.env.example`.
 
+## templates/*/pyproject.toml — dependency floor
+
+- [x] Bump the `stpstone` floor to `>=3.2.0` across the four service tiers. (Earlier attempt
+  `28d3e77` was reverted as `6a9570f` because 3.2.0 was unpublished; it is now on PyPI, so the
+  floor is applied for good and poetry version-solving resolves it.)
+
 ## templates/mvc-service-* — controller + docs
 
 - [x] `controller/_pipeline.py` `PipelineOrchestrator` (`run` → `_log_context`/`_open_connection`(orm `_open_engine`)/`_read`/`_render`/`_write_summary`, `log_message`-driven, `try/finally` close/dispose) + thin no-functions `main.py` building it via DI; both MVC `CLAUDE.md` updated. Webhook opt-in still appends cleanly.
@@ -67,14 +73,6 @@ ground `~/dev/perfil_mensal_cvm`. **Branch:** `feat/backport-lessons-store` → 
 - [x] mkdocs version label: `mkdocs_hooks.py` + `overrides/main.html` + `docs/javascripts/header-version.js` (single source in `templates/common/docs_version/`), wired into all 5 `mkdocs.yml`.
 
 ---
-
-## Still to do
-
-- [ ] **Bump `stpstone` floor to `>=3.2.0`** across the four service tiers' `pyproject.toml`.
-  **Blocked:** stpstone 3.2.0 is not on PyPI yet (latest published is 3.1.2). Applying it
-  (commit `28d3e77`) reddened every service-tier scaffold job — poetry version-solving fails
-  — so it was reverted (`6a9570f`) to the resolvable `>=3.1.1`. Re-apply once 3.2.0 is
-  published. Owner: user (stpstone maintainer).
 
 ## In progress
 
