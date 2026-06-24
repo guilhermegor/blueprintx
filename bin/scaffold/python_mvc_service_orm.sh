@@ -532,22 +532,31 @@ PYBLOCK
     print_status "success" "Webhook wiring appended to startup.py"
 }
 
-# Conditional webhook send in the controller, gated by the deployment environment.
-# ENVIRONMENT is already imported at the top of controller/main.py, so it is not re-imported.
+# Webhook notify is the orchestrator's final phase, not a post-run tail: inject the
+# production-gated notifier (CLS_WEBHOOK when ENV passes the gate, else None) plus its
+# message into the PipelineOrchestrator construction. The send fires inside run() via the
+# WebhookNotifier port — main.py stays a thin wiring script.
 conditional_patch_main_py() {
     local project_path="$1"
     local main_path="$project_path/src/controller/main.py"
     if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
-    cat >> "$main_path" <<'PYBLOCK'
-
-# --- notify: send the run summary when running in a production environment ---
-from config.startup import BOOL_WEBHOOK_ENABLED, CLS_WEBHOOK, MSG_WEBHOOK  # noqa: E402
-
-
-if BOOL_WEBHOOK_ENABLED:
-	CLS_WEBHOOK.send(MSG_WEBHOOK)
-PYBLOCK
-    print_status "success" "Webhook send appended to controller/main.py"
+    awk '
+        /^PipelineOrchestrator\($/ {
+            print "from config.startup import BOOL_WEBHOOK_ENABLED, CLS_WEBHOOK, MSG_WEBHOOK  # noqa: E402"
+            print ""
+            print ""
+            print
+            next
+        }
+        /^\)\.run\(\)$/ {
+            print "\tcls_webhook=CLS_WEBHOOK if BOOL_WEBHOOK_ENABLED else None,"
+            print "\tstr_webhook_message=MSG_WEBHOOK,"
+            print
+            next
+        }
+        { print }
+    ' "$main_path" > "$main_path.tmp" && mv "$main_path.tmp" "$main_path"
+    print_status "success" "Webhook notifier wired into PipelineOrchestrator.run() (controller/main.py)"
 }
 
 # GitHub-only assets are copied only when a GitHub remote is established (see main()).

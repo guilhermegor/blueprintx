@@ -2,10 +2,10 @@
 
 The controller's ``main.py`` only builds this orchestrator and calls :meth:`run`. The
 sequencing — log the run context, build the engine, read via the model, render the report
-via the view, write the JSON summary — lives here, each phase bracketed by log lines.
-Business logic lives in the model (:class:`model.example_entity.ExampleEntity`); this module
-wires and sequences it. The engine is built for the read and always disposed in a
-``finally``.
+via the view, write the JSON summary, then notify via the optional webhook — lives here,
+each phase bracketed by log lines. Business logic lives in the model
+(:class:`model.example_entity.ExampleEntity`); this module wires and sequences it. The
+engine is built for the read and always disposed in a ``finally``.
 """
 
 from __future__ import annotations
@@ -50,6 +50,21 @@ class EmailHandler(Protocol):
 		...
 
 
+@runtime_checkable
+class WebhookNotifier(Protocol):
+	"""Structural port for the optional outbound webhook notifier (see ``optional/webhook``).
+
+	The orchestrator depends only on ``send``; the concrete platform (Teams/Slack, or a
+	no-op ``NullNotifier`` for a blank URL) is injected by ``main.py`` when the webhook
+	opt-in is chosen. Kept local so the always-shipped controller never imports the opt-in
+	seam (mirrors :class:`EmailHandler`).
+	"""
+
+	def send(self, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
+		"""Send one notification."""
+		...
+
+
 class PipelineOrchestrator(metaclass=TypeChecker):
 	"""Sequence the MVC phases end to end.
 
@@ -70,6 +85,14 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		Optional e-mail handler (the ``EmailHandler`` port). Injected by ``main.py`` only when
 		the e-mail opt-in is chosen — Outlook backend by default, SMTP if configured. The
 		reference run does not send; a project adds its own notify phase.
+	cls_webhook : WebhookNotifier | None
+		Optional outbound webhook notifier (the ``WebhookNotifier`` port). Injected by
+		``main.py`` only when the webhook opt-in is chosen *and* the environment passes the
+		production gate. When wired, :meth:`run` sends ``str_webhook_message`` as its final
+		phase; when ``None`` the notify phase is a no-op.
+	str_webhook_message : str
+		The run-summary message sent through ``cls_webhook`` (rendered from ``webhooks.yaml``
+		in ``startup``). Ignored when ``cls_webhook`` is ``None``.
 	"""
 
 	def __init__(
@@ -80,6 +103,8 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		path_json: Path,
 		dict_context: dict[str, Any],
 		cls_email_handler: EmailHandler | None = None,
+		cls_webhook: WebhookNotifier | None = None,
+		str_webhook_message: str = "",
 	) -> None:
 		self.logger = logger
 		self.fn_build_engine = fn_build_engine
@@ -87,6 +112,8 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		self.path_json = path_json
 		self.dict_context = dict_context
 		self.cls_email_handler = cls_email_handler
+		self.cls_webhook = cls_webhook
+		self.str_webhook_message = str_webhook_message
 
 	def run(self) -> dict[str, Any]:
 		"""Execute every phase in order, returning the run summary.
@@ -111,6 +138,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		}
 		self._write_summary(dict_summary)
 		self._log_elapsed(time() - float_start)
+		self._notify()
 		return dict_summary
 
 	def _log_context(self) -> None:
@@ -121,6 +149,10 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		log_message(
 			self.logger,
 			f"Email handler: {'configured' if self.cls_email_handler is not None else 'none'}",
+		)
+		log_message(
+			self.logger,
+			f"Webhook notifier: {'configured' if self.cls_webhook is not None else 'none'}",
 		)
 		log_message(self.logger, "Finishing variable-definition process")
 
@@ -186,6 +218,18 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		log_message(self.logger, "Starting summary-export process")
 		bool_ok = JsonFiles().dump_message(dict_summary, str(self.path_json))
 		log_message(self.logger, f"Summary export ok={bool_ok}: {self.path_json}")
+
+	def _notify(self) -> None:
+		"""Send the run-summary notification when a webhook is wired (final phase).
+
+		No-op when no notifier was injected (``cls_webhook is None``) — i.e. the webhook
+		opt-in was declined or the environment failed the production gate in ``main.py``.
+		"""
+		if self.cls_webhook is None:
+			return
+		log_message(self.logger, "Sending webhook notification")
+		self.cls_webhook.send(self.str_webhook_message)
+		log_message(self.logger, "Webhook notification sent")
 
 	def _log_elapsed(self, float_elapsed: float) -> None:
 		"""Log the elapsed wall time as HH:MM:SS.

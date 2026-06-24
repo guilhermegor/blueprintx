@@ -619,11 +619,22 @@ PYBLOCK
     print_status "success" "Webhook wiring appended to startup.py"
 }
 
-# Conditional webhook send in main.py, gated by the deployment environment.
+# Webhook notify is the final lifecycle step, expressed as bootstrap.notify() rather than a
+# loose post-teardown tail: add `notify` to the bootstrap import (only when chosen, so there
+# is no unused import otherwise) and call it last with the production-gated notifier
+# (CLS_WEBHOOK when ENV passes the gate, else None). main.py stays a thin
+# bootstrap → wire → run → teardown → notify script.
 conditional_patch_main_py() {
     local project_path="$1"
     local main_path="$project_path/src/main.py"
     if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
+    awk '
+        /^from app\.bootstrap import / {
+            print "from app.bootstrap import cls_create_log, init, notify, teardown"
+            next
+        }
+        { print }
+    ' "$main_path" > "$main_path.tmp" && mv "$main_path.tmp" "$main_path"
     cat >> "$main_path" <<'PYBLOCK'
 
 # ─── NOTIFY ───────────────────────────────────────────────────────────────────
@@ -634,10 +645,9 @@ from src.config.startup import (  # noqa: E402
 )
 
 
-if BOOL_WEBHOOK_ENABLED:
-	CLS_WEBHOOK.send(MSG_WEBHOOK)
+notify(CLS_WEBHOOK if BOOL_WEBHOOK_ENABLED else None, MSG_WEBHOOK)
 PYBLOCK
-    print_status "success" "Webhook send appended to main.py"
+    print_status "success" "Webhook notify wired as the final lifecycle step (main.py)"
 }
 
 # The platform is auto-detected from WEBHOOK_URL, and the production gate is
