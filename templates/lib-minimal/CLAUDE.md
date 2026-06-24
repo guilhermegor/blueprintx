@@ -27,7 +27,7 @@ tests/
 - **One public class per file.** Module-level functions are preferred over utility classes when there is no shared state.
 - **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings (`ruff.toml`).
 - **Pre-commit**: ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge.
-- **Tests**: `unittest` — `python -m unittest discover -s tests/unit -p "*.py"`.
+- **Tests**: `pytest` — `make unit_tests` (`poetry run pytest tests/unit/`). Write pytest-style functions with fixtures, not `unittest.TestCase`.
 - **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `start`.
 - **Explicit column typing & Brazilian identifiers** — if the library touches pandas, type every DataFrame on load via `apply_dtypes` (`utils.dtypes`, never pandas' inference) and use `utils.br_identifiers` for CNPJ/CPF (alphanumeric-aware for the 2026 CNPJ). Both ship from `templates/python-common/src/utils/`.
 

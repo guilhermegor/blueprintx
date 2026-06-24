@@ -122,5 +122,5 @@ Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYM
 
 - **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings. Config: `ruff.toml`.
 - **Pre-commit**: ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
-- **Tests**: `unittest` discovered with `python -m unittest discover -s tests/unit -p "*.py"`.
+- **Tests**: `pytest` — `make unit_tests` (`poetry run pytest tests/unit/`). Write pytest-style functions with fixtures, not `unittest.TestCase`.
 - **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `run`.

@@ -57,8 +57,8 @@ make init_venv     # bootstrap poetry venv
 make vscode_init   # install VS Code extensions + keybindings
 make export_deps   # export poetry deps to requirements.txt via pre-commit hook
 make export_context # flatten the repo into repo_context.txt for pasting into a web-UI LLM
-poetry run python -m unittest discover -s tests/unit -p "*.py" -v
-poetry run python -m unittest discover -s tests/integration -p "*.py" -v
+poetry run pytest tests/unit/
+poetry run pytest tests/integration/
 ```
 
 ## Repo architecture
@@ -151,7 +151,7 @@ The `templates/python-common/` directory is the **single source of truth** for s
 
 - **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, tab indent, double quotes, NumPy docstrings.
 - **Pre-commit hooks** (`.pre-commit-config.yaml`): ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
-- **Tests**: DDD and lib-minimal skeletons use `unittest`, discovered with `python -m unittest discover`. MVC skeletons use `pytest` (with `conftest.py` fixtures). Match the skeleton you are editing.
+- **Tests**: every skeleton runs `pytest` (`make unit_tests` → `poetry run pytest tests/unit/`; `pytest.ini` is shipped from `templates/python-common/` to all tiers). Tests are pytest-style — plain functions with fixtures (`conftest.py`, `capsys`, `monkeypatch`, `pytest_mock`) — not `unittest.TestCase`. Write new tests as pytest functions regardless of tier.
 - **One class per file**. Ports (ABCs) in `domain/ports.py`, ORM/DB implementations in `infrastructure/`, orchestration in `application/use_cases.py`. Never mix layers in one file.
 - **Explicit column typing on load** — every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`templates/python-common/src/utils/dtypes.py`), never relying on pandas' inference. `apply_dtypes` also accepts optional `list_date_cols` / `list_datetime_cols`. This applies across every layout (capabilities/model/view).
 - **Brazilian identifiers** — CNPJ/CPF formatting goes through `templates/python-common/src/utils/br_identifiers.py` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format.
