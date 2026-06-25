@@ -14,8 +14,21 @@ return a calendar day return a :class:`datetime.date`.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from stpstone.utils.calendars.calendar_br import DatesBRAnbima
+
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
 # One shared calendar for the whole process (mirrors loggers._CLS_LOG). Cheap to
@@ -23,6 +36,7 @@ from stpstone.utils.calendars.calendar_br import DatesBRAnbima
 _CLS_CALENDAR = DatesBRAnbima()
 
 
+@type_checker
 def is_working_day(dt_date: date | datetime) -> bool:
 	"""Return whether ``dt_date`` is a Brazilian (ANBIMA) business day.
 
@@ -39,6 +53,7 @@ def is_working_day(dt_date: date | datetime) -> bool:
 	return _CLS_CALENDAR.is_working_day(dt_date)
 
 
+@type_checker
 def is_holiday(dt_date: date | datetime) -> bool:
 	"""Return whether ``dt_date`` is an ANBIMA national holiday.
 
@@ -55,6 +70,7 @@ def is_holiday(dt_date: date | datetime) -> bool:
 	return _CLS_CALENDAR.is_holiday(dt_date)
 
 
+@type_checker
 def add_working_days(dt_date: date | datetime, int_days: int) -> date:
 	"""Return the business day ``int_days`` ANBIMA working days from ``dt_date``.
 
@@ -73,6 +89,7 @@ def add_working_days(dt_date: date | datetime, int_days: int) -> date:
 	return _CLS_CALENDAR.add_working_days(dt_date, int_days)
 
 
+@type_checker
 def delta_working_days(dt_start: date | datetime, dt_end: date | datetime) -> int:
 	"""Return the count of ANBIMA working days between two dates.
 
@@ -91,6 +108,7 @@ def delta_working_days(dt_start: date | datetime, dt_end: date | datetime) -> in
 	return _CLS_CALENDAR.delta_working_days(dt_start, dt_end)
 
 
+@type_checker
 def nearest_working_day(dt_date: date | datetime, bool_next: bool = True) -> date:
 	"""Return the nearest ANBIMA working day to ``dt_date``.
 
@@ -111,6 +129,7 @@ def nearest_working_day(dt_date: date | datetime, bool_next: bool = True) -> dat
 	return _CLS_CALENDAR.nearest_working_day(dt_date, bool_next)
 
 
+@type_checker
 def holidays() -> list[tuple[str, date]]:
 	"""Return the ANBIMA national holidays as ``(name, date)`` tuples.
 

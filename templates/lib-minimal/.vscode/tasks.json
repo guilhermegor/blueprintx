@@ -52,6 +52,26 @@
 			"problemMatcher": []
 		},
 		{
+			"label": "test_cov_report",
+			"detail": "Coverage with an HTML report + per-module terminal table (make, tasks.sh fallback)",
+			"type": "shell",
+			"command": "make test_cov_report || ./tasks.sh test_cov_report",
+			"group": "test",
+			"icon": { "id": "graph", "color": "terminal.ansiMagenta" },
+			"presentation": { "reveal": "always", "panel": "shared" },
+			"problemMatcher": []
+		},
+		{
+			"label": "test_cov_serve",
+			"detail": "Serve the htmlcov/ coverage report at http://localhost:8000 (make, tasks.sh fallback)",
+			"type": "shell",
+			"command": "make test_cov_serve || ./tasks.sh test_cov_serve",
+			"group": "test",
+			"icon": { "id": "globe", "color": "terminal.ansiMagenta" },
+			"presentation": { "reveal": "always", "panel": "dedicated" },
+			"problemMatcher": []
+		},
+		{
 			"label": "ship",
 			"detail": "Package the committed main tree into dist/<name>_<ts>.zip (make, tasks.sh fallback)",
 			"type": "shell",

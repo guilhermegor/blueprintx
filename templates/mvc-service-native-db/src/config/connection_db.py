@@ -15,7 +15,10 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from utils.typing import type_checker
 
+
+@type_checker
 def _compose_dsn(str_backend: str) -> str:
 	"""Build a connection DSN from generic environment variables.
 
@@ -47,6 +50,7 @@ def _compose_dsn(str_backend: str) -> str:
 	return f"{str_host}:{str_port}/{str_name}|{str_user}|{str_password}"
 
 
+@type_checker
 def _connect_sqlite() -> Any:
 	"""Open a stdlib ``sqlite3`` connection, creating the parent directory."""
 	import sqlite3
@@ -56,6 +60,7 @@ def _connect_sqlite() -> Any:
 	return sqlite3.connect(str(path_db))
 
 
+@type_checker
 def _connect_postgresql() -> Any:
 	"""Open a PostgreSQL connection via ``psycopg``."""
 	import psycopg
@@ -72,6 +77,7 @@ def _connect_postgresql() -> Any:
 	)
 
 
+@type_checker
 def _connect_mysql() -> Any:
 	"""Open a MySQL/MariaDB connection via ``mysql.connector``."""
 	import mysql.connector
@@ -88,12 +94,44 @@ def _connect_mysql() -> Any:
 	)
 
 
+@type_checker
+def _normalize_odbc_bool(str_value: str) -> str:
+	"""Map a ``.env`` boolean to the ``yes``/``no`` an ODBC keyword expects.
+
+	ODBC keywords like ``Encrypt`` / ``TrustServerCertificate`` accept ``yes``/``no`` —
+	**not** ``true``/``false`` — so a ``.env`` value of ``true`` would otherwise be passed
+	verbatim and rejected. Common boolean spellings (``true``/``false``, ``1``/``0``,
+	``yes``/``no``, ``y``/``n``, ``on``/``off``, any case) are normalised; any other token is
+	returned stripped-but-verbatim so driver-specific values (``strict``/``mandatory``/
+	``optional``) still pass through.
+
+	Parameters
+	----------
+	str_value : str
+		The raw value read from the environment.
+
+	Returns
+	-------
+	str
+		``"yes"`` / ``"no"`` for a recognised boolean, else the stripped original.
+	"""
+	str_norm = str_value.strip().casefold()
+	if str_norm in {"true", "1", "yes", "y", "on", "t"}:
+		return "yes"
+	if str_norm in {"false", "0", "no", "n", "off", "f"}:
+		return "no"
+	return str_value.strip()
+
+
+@type_checker
 def _connect_mssql() -> Any:
 	"""Open a SQL Server connection via ``pyodbc`` (SQL auth or Azure AD).
 
-	``DB_MSSQL_AUTH`` selects the auth mode: the default ``sql`` uses
-	``UID``/``PWD``; ``aad`` (Azure AD Interactive) prompts the browser flow and
-	sends ``UID`` only when set.
+	``DB_MSSQL_AUTH`` selects the auth mode: the default ``sql`` uses ``UID``/``PWD``;
+	``aad`` (Azure AD Interactive) prompts the browser flow and sends ``UID`` only when set.
+	``DB_ENCRYPT`` / ``DB_TRUST_SERVER_CERTIFICATE`` are appended when set (normalised to
+	``yes``/``no``) — needed for ODBC Driver 18 (which defaults ``Encrypt=yes``) against a
+	server with a self-signed certificate.
 	"""
 	import pyodbc
 
@@ -102,23 +140,29 @@ def _connect_mssql() -> Any:
 		return pyodbc.connect(str_dsn)
 	str_driver = os.getenv("DB_ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
 	str_auth = os.getenv("DB_MSSQL_AUTH", "sql").lower()
-	str_conn = (
-		f"DRIVER={{{str_driver}}};"
-		f"SERVER={os.getenv('DB_HOST', 'localhost')},{os.getenv('DB_PORT', '1433')};"
-		f"DATABASE={os.getenv('DB_NAME', 'app')};"
-	)
+	list_parts = [
+		f"DRIVER={{{str_driver}}}",
+		f"SERVER={os.getenv('DB_HOST', 'localhost')},{os.getenv('DB_PORT', '1433')}",
+		f"DATABASE={os.getenv('DB_NAME', 'app')}",
+	]
 	if str_auth in {"aad", "ad", "azure", "activedirectoryinteractive"}:
-		str_conn += "Authentication=ActiveDirectoryInteractive;"
+		list_parts.append("Authentication=ActiveDirectoryInteractive")
 		str_user = os.getenv("DB_USER")
 		if str_user:
-			str_conn += f"UID={str_user};"
+			list_parts.append(f"UID={str_user}")
 	else:
-		str_conn += (
-			f"UID={os.getenv('DB_USER', 'user')};PWD={os.getenv('DB_PASSWORD', 'password')}"
-		)
-	return pyodbc.connect(str_conn)
+		list_parts.append(f"UID={os.getenv('DB_USER', 'user')}")
+		list_parts.append(f"PWD={os.getenv('DB_PASSWORD', 'password')}")
+	str_encrypt = os.getenv("DB_ENCRYPT")
+	if str_encrypt:
+		list_parts.append(f"Encrypt={_normalize_odbc_bool(str_encrypt)}")
+	str_trust = os.getenv("DB_TRUST_SERVER_CERTIFICATE")
+	if str_trust:
+		list_parts.append(f"TrustServerCertificate={_normalize_odbc_bool(str_trust)}")
+	return pyodbc.connect(";".join(list_parts) + ";")
 
 
+@type_checker
 def _connect_oracle() -> Any:
 	"""Open an Oracle connection via ``oracledb``."""
 	import oracledb
@@ -131,6 +175,7 @@ def _connect_oracle() -> Any:
 	)
 
 
+@type_checker
 def build_connection() -> Any:
 	"""Build a native DB-API connection from environment configuration.
 

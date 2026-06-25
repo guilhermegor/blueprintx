@@ -14,7 +14,7 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 |-------|----------|------|
 | Model | `src/model/` | Data access. ORM models + service classes. May open sessions. Returns pandas DataFrames (or ORM objects). |
 | View | `src/view/` | Output rendering only (Excel, JSON, HTML, console). No business logic, no DB imports. |
-| Controller | `src/controller/` | Orchestration. Imports model + view + config. `main.py` is the script-style entry-point — top to bottom, no `run()` wrapper. |
+| Controller | `src/controller/` | Orchestration. `main.py` is a thin script-style entry-point that builds `_pipeline.PipelineOrchestrator` and calls `.run()`; the phase sequencing lives in `_pipeline.py`. |
 | Utils | `src/utils/` | Helpers. `br_identifiers.py` (CNPJ/CPF mask·unmask·validate) and `dtypes.py` (`apply_dtypes`) are shipped from python-common; calendars/parsers/dates come from the `stpstone` dependency. |
 | Config | `src/config/` | `startup.py` builds runtime singletons once at import; `connection_db.py` is the engine/session factory; YAML config files; secrets in `.env`. |
 
@@ -46,13 +46,18 @@ unions. `utils/typing/` is the one place `Any` is the honest signature (it inspe
 values of any type) and is ANN401-exempt. The package ships from
 `templates/python-common/optional/typing/` (DDD receives it as `chassis/typing`).
 The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`,
-`text`, `paths`, `signatures`, `dates`) are intentionally decoupled from it so they
-stay portable across tiers — apply the checker in your own model/view/controller
-code.
+`text`, `paths`, `signatures`, `dates`, …) carry the runtime checker too — every
+function is `@type_checker` and every class uses `metaclass=TypeChecker` (Protocol
+ports use `metaclass=ProtocolTypeCheckerMeta`). There is **no by-layer exemption**.
+Because those files ship to both tiers, they import the engine through a
+layout-agnostic shim — `try: from utils.typing import … except ModuleNotFoundError:
+from chassis.typing import …` — so the same source resolves in MVC (`utils.typing`)
+and DDD (`chassis.typing`). The only exclusions are the `utils/typing/` engine itself
+and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 ## Key conventions
 
-**`src/controller/main.py` is script-style.** Read top to bottom. It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), inlines its own timer, calls the model, hands the DataFrame to the view, and writes a JSON run summary. Do **not** wrap it in a `run()` function — that is the deliberate MVC convention here. The engine is bracketed in a `try/finally` so `dispose()` always runs (the session boundary). If the webhook opt-in was chosen at scaffold time, a `# --- notify ---` block is appended that sends `MSG_WEBHOOK` when `ENVIRONMENT == WEBHOOK_ENV_GATE`.
+**`src/controller/main.py` is a thin, script-style entry-point — it defines no functions.** It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), builds `controller._pipeline.PipelineOrchestrator` with those collaborators injected (the engine factory, `output_path`, the run-context dict, and an `OutlookGateway` e-mail seam), and calls `.run()`. The **phase sequencing lives in `controller/_pipeline.py`** (`PipelineOrchestrator`): `run()` calls `_log_context` → `_open_engine` → `_read` (model) → `_render` (view) → `_write_summary` → `_notify`, each phase bracketed by log lines, the engine always disposed in a `try/finally`. Business logic stays in the model; the orchestrator only wires and sequences. If the webhook opt-in was chosen at scaffold time, `main.py` injects a production-gated `WebhookNotifier` (`CLS_WEBHOOK` when `ENV` passes the gate, else `None`) plus `MSG_WEBHOOK` into the orchestrator; `run()`'s final `_notify` phase sends it — a no-op when no notifier is wired. The send is part of `run()`, not a tail appended to `main.py`.
 
 **`config/connection_db.build_engine()`** reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`; `build_session_factory()` returns a bound `sessionmaker`. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. `SQL_ECHO=true` logs SQL. SQL Server honours `DB_MSSQL_AUTH` (`sql` for UID/PWD, `aad` for Azure AD Interactive).
 
@@ -80,6 +85,22 @@ Add the SQLAlchemy scheme to `dict_schemes` in `config/connection_db.py` and reg
 ## Explicit column typing & Brazilian identifiers
 
 Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference. `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format.
+
+## Data-handling guardrails (advisory)
+
+When a pipeline merges, overrides, or validates tabular data, three recurring traps are
+worth guarding against (apply when relevant — these are advisories, not scaffolded code):
+
+- **Override layers must re-apply the canonical normaliser.** A substitution/override path
+  that bypasses the same unit/code/sign/default normalisation the primary path uses will
+  silently emit inconsistent values. Centralise the invariant in ONE normaliser and call it
+  from every path (primary and override alike).
+- **Validation rejects sentinel garbage, not just wrong types.** Guard against `"nan"`,
+  blank, and out-of-range/wrong-unit values before output — a type check alone passes a
+  stringified NaN straight through (see `utils.text.safe_str`).
+- **Per-source keyed merge: restrict each partition to the keys it owns before concat.**
+  When merging partitions keyed by an id, scope each partition to its own keys first so the
+  merge key stays unique and a row from one source never overwrites another's.
 
 ## Naming conventions
 

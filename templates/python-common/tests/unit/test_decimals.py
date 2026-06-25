@@ -4,7 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
-from src.utils.decimals import to_decimal
+from src.utils.decimals import _normalise_br_number, parse_br_number_series, to_decimal
 
 
 def test_to_decimal_truncates_by_default() -> None:
@@ -46,3 +46,25 @@ def test_to_decimal_negative_places_raises() -> None:
 	"""A negative ``int_places`` fails fast with ``ValueError``."""
 	with pytest.raises(ValueError, match="non-negative"):
 		to_decimal("1.0", -1)
+
+
+def test_parse_br_number_series_handles_br_and_plain() -> None:
+	"""BR-formatted cells normalise; plain decimals/floats keep their point."""
+	pd = pytest.importorskip("pandas")
+	series_in = pd.Series(["2.084.960,76", "1234.56", "5.0", "(3,5)", "x"])
+	series_out = parse_br_number_series(series_in)
+	assert series_out.iloc[0] == pytest.approx(2084960.76)
+	assert series_out.iloc[1] == pytest.approx(1234.56)
+	# A plain float-repr cell keeps its value and is never inflated tenfold.
+	assert series_out.iloc[2] == pytest.approx(5.0)
+	assert series_out.iloc[3] == pytest.approx(-3.5)
+	assert pd.isna(series_out.iloc[4])
+
+
+def test_parse_br_number_series_mirrors_scalar() -> None:
+	"""The vectorised parser agrees with the scalar normaliser on BR input."""
+	pd = pytest.importorskip("pandas")
+	for str_raw in ("2.084.960,76", "1234.56", "10,5"):
+		float_scalar = float(_normalise_br_number(str_raw))
+		float_series = parse_br_number_series(pd.Series([str_raw])).iloc[0]
+		assert float_series == pytest.approx(float_scalar)

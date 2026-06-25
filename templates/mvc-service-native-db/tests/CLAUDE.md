@@ -100,6 +100,27 @@ Use comment-banner sections in this order (omit a section if empty):
   (`mocker.patch`, `mocker.patch.object`); use `tmp_path` for real-but-disposable files.
 - **Deterministic.** No real network, no real clock dependence, no unseeded randomness.
 
+## Expensive shared setup: render once, share via a scoped fixture
+
+When several tests assert on **different facets of one expensive-to-build artifact** (a
+rendered workbook, a built report, a large parsed frame), build it **once** with a
+module- or session-scoped fixture instead of rebuilding it per test:
+
+```python
+@pytest.fixture(scope="module")
+def path_rendered(tmp_path_factory: pytest.TempPathFactory) -> Path:
+	"""Render the report once for the whole module (expensive build shared)."""
+	path_out = tmp_path_factory.mktemp("render") / "report.xlsx"
+	RenderToExcel().write(df_sample(), path_out)
+	return path_out
+```
+
+The smell this fixes is "redundant expensive setup masquerading as independent coverage" —
+N tests each re-running the same costly build. **Share only when the tests inspect one
+artifact**; if a test needs a *different* input/state, give it its own (function-scoped)
+fixture. Never share a **mutable** object across tests at module scope (one test's mutation
+leaks into the next) — share the immutable result (a path, a frozen frame copy).
+
 ## Examples in this folder
 
 - `unit/test_report_renderer.py` — the canonical sample: real-file tests via `tmp_path`,

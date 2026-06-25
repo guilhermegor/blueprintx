@@ -15,15 +15,34 @@ Pass ``rounding`` explicitly when the domain demands a different mode — e.g.
 from __future__ import annotations
 
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from typing import TYPE_CHECKING
+
+import pandas as pd
+
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
 # Truncation is the safe generic default; override per call when the domain
 # explicitly requires commercial / regulatory rounding.
 _DEFAULT_ROUNDING = ROUND_DOWN
 
-NumericLike = str | int | float | Decimal | None
+# ``bool`` is listed explicitly: it is a subclass of ``int`` but the runtime type-checker
+# treats it as a distinct type, and ``_parse`` deliberately accepts it (mapping True/False to
+# ``default`` rather than 1/0). Omitting it would make the checker reject a tolerated input.
+NumericLike = str | int | float | bool | Decimal | None
 
 
+@type_checker
 def to_decimal(
 	value: NumericLike,
 	int_places: int,
@@ -64,6 +83,7 @@ def to_decimal(
 	return cls_raw.quantize(cls_quantum, rounding=rounding)
 
 
+@type_checker
 def _parse(value: NumericLike, default: Decimal) -> Decimal:
 	"""Parse ``value`` into an unquantised Decimal, falling back to ``default``.
 
@@ -101,6 +121,7 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
 		return default
 
 
+@type_checker
 def _normalise_br_number(str_value: str) -> str:
 	"""Normalise a Brazilian-formatted numeric string to a Decimal-parseable form.
 
@@ -123,3 +144,48 @@ def _normalise_br_number(str_value: str) -> str:
 	if "," in str_stripped:
 		return str_stripped.replace(".", "").replace(",", ".")
 	return str_stripped
+
+
+@type_checker
+def parse_br_number_series(series_value: pd.Series) -> pd.Series:
+	"""Vectorised parse of a Brazilian-formatted numeric column to ``float``.
+
+	Handles thousands ``.``, decimal ``,`` and parenthesised negatives ``(x)`` ->
+	``-x``; non-numeric cells become ``NaN``. The vectorised sibling of
+	:func:`_normalise_br_number` — and it MUST mirror that scalar rule:
+
+	The ``.`` is treated as a **thousands separator only when the cell also carries a
+	``,`` decimal separator** (true BR formatting). A cell with no comma is left
+	intact, so a value already read as a ``float`` (``5.0``) or a plain decimal
+	string (``"1234.56"``) keeps its decimal point instead of being inflated tenfold
+	(``5.0`` -> ``50``). pandas reads count columns as ``float64`` when NaNs are
+	present, so an unconditional ``.str.replace(".", "")`` would silently corrupt
+	them — the two helpers parsing one format must never diverge.
+
+	``pandas`` is imported lazily so this module stays importable in environments
+	that ship the Decimal helpers without pandas.
+
+	Parameters
+	----------
+	series_value : pandas.Series
+		The raw string (or mixed) column.
+
+	Returns
+	-------
+	pandas.Series
+		The parsed ``float`` column (``NaN`` where unparsable).
+	"""
+	import pandas as pd
+
+	series_str = series_value.astype(str)
+	series_has_comma = series_str.str.contains(",", regex=False)
+	# When a comma is present the cell is Brazilian-formatted, so the thousands dot is
+	# removed and the decimal comma becomes a dot.
+	series_br = series_str.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+	# When no comma is present the existing dot already marks the decimal place and is kept.
+	series_clean = (
+		series_str.where(~series_has_comma, series_br)
+		.str.replace("(", "-", regex=False)
+		.str.replace(")", "", regex=False)
+	)
+	return pd.to_numeric(series_clean, errors="coerce")

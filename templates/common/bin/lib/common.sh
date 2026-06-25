@@ -159,3 +159,21 @@ _read_env_var() {
     fi
     printf '%s' "$value"
 }
+
+# ============================================================================
+# ensure_dir — create a directory if missing (UNC/CRLF-safe)
+# ============================================================================
+#
+# Usage:
+#   ensure_dir "/path/to/dir"
+#
+# Idempotent: returns early when the directory already exists, then mkdir -p.
+# On Windows mapped/UNC drives a bare `mkdir -p` over an existing path can fail
+# with "Permission denied"; the existence check sidesteps that. Use this instead
+# of bare `mkdir -p` in offline-git recipes and anywhere an output dir is created.
+
+ensure_dir() {
+    local dir_path="$1"
+    [ -d "$dir_path" ] && return 0
+    mkdir -p "$dir_path"
+}

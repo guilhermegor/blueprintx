@@ -139,6 +139,7 @@ copy_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
+    cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
@@ -173,6 +174,12 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
+    cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$project_path/mypy.ini"
+    cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$project_path/.sqlfluff"
+    cp "$COMMON_TEMPLATE_ROOT/.sqlfluffignore" "$project_path/.sqlfluffignore"
+    cp "$COMMON_TEMPLATE_ROOT/.hadolint.yaml" "$project_path/.hadolint.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.yamllint" "$project_path/.yamllint"
+    cp "$COMMON_TEMPLATE_ROOT/.shellcheckrc" "$project_path/.shellcheckrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
     cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
@@ -188,7 +195,8 @@ copy_common_templates() {
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
-    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh" "$project_path/bin/commit.sh"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).
@@ -220,6 +228,13 @@ copy_mkdocs_templates() {
     mkdir -p "$project_path/docs/backlog"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/backlog/.keep" \
         "$project_path/docs/backlog/.keep"
+
+    # Docs version label: hook (reads pyproject version) + theme override + header JS.
+    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
+        "$project_path/docs/javascripts/header-version.js"
 
     print_status "success" "MkDocs templates copied"
 }

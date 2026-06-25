@@ -7,6 +7,8 @@ nav:
   - API Reference: api.md
 theme:
   name: material
+  # overrides/main.html exposes the code version (from mkdocs_hooks.py) as a meta tag.
+  custom_dir: overrides
   palette:
     - scheme: default
       primary: indigo
@@ -30,8 +32,18 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.superfences
 
+# Build hook: reads the version from pyproject.toml into config.extra.code_version,
+# which overrides/main.html surfaces and javascripts/header-version.js renders.
+hooks:
+  - mkdocs_hooks.py
+extra_javascript:
+  - javascripts/header-version.js
+
 # Non-published docs: MkDocs builds every .md under docs/, so working
 # documents must be excluded here or they ship to readers.
 exclude_docs: |
-  backlog/        # work-to-do backlogs / follow-up notes
-  CLAUDE.md       # docs/ authoring guidance, not a published page
+  backlog/                # work-to-do backlogs / follow-up notes
+  superpowers/            # design specs / working notes, not published
+  CLAUDE.md               # docs/ authoring guidance, not a published page
+  checkpoints.md          # offline merge-checkpoint log, internal
+  blueprintx-lessons.md   # git-ignored scaffolding-lessons record, never published

@@ -12,6 +12,7 @@ from sqlalchemy import Engine, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from utils.dtypes import apply_dtypes
+from utils.typing import TypeChecker
 
 
 # Declare the column types on load — never trust pandas' inference (a zero-padded
@@ -19,6 +20,9 @@ from utils.dtypes import apply_dtypes
 _DICT_DTYPES: dict[str, str] = {"id": "int64", "title": "str"}
 
 
+# NB: SQLAlchemy declarative classes (Base, ExampleRecord) carry their own metaclass, so
+# ``metaclass=TypeChecker`` would raise a metaclass conflict — only the plain service class
+# below takes the runtime checker.
 class Base(DeclarativeBase):
 	"""Declarative base for the example model."""
 
@@ -32,7 +36,7 @@ class ExampleRecord(Base):
 	title: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
-class ExampleEntity:
+class ExampleEntity(metaclass=TypeChecker):
 	"""Read/write access to the example table via SQLAlchemy ORM.
 
 	Parameters

@@ -61,8 +61,8 @@ poetry shell
 
 ### Running Tests
 ```bash
-poetry run python -m unittest discover -s tests/unit -p "*.py" -v
-poetry run python -m unittest discover -s tests/integration -p "*.py" -v
+poetry run pytest tests/unit/ -v
+poetry run pytest tests/integration/ -v
 ```
 
 ## 📂 Project Structure (template)

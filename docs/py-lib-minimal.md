@@ -86,8 +86,7 @@ class TestMain(unittest.TestCase):
 |------|------|------------|
 | **Ruff** | Linter + formatter | `ruff.toml` — line-length 99, tab indent, double quotes, NumPy docstrings |
 | **pre-commit** | Git hooks | `.pre-commit-config.yaml` — ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge |
-| **unittest** | Test runner | Discovered with `python -m unittest discover -s tests/unit -p "*.py"` |
-| **pytest** | Alternative runner | `pytest.ini` included for compatibility; `poetry run pytest` also works |
+| **pytest** | Test runner | `pytest.ini` — `make unit_tests` runs `poetry run pytest tests/unit/`; tests are pytest-style functions with fixtures |
 | **GitHub Actions** | CI | `.github/workflows/tests.yaml` — runs linting and tests on every push |
 | **Makefile + `bin/`** | Dev automation | `make init_venv`, `make update_venv`, `make start`, linting and test recipes |
 
@@ -97,7 +96,7 @@ class TestMain(unittest.TestCase):
 
 1. Add library functions and classes under `src/<project_name>/`.
 2. Mirror the source structure under `tests/unit/` — one test module per source module.
-3. Run tests: `python -m unittest discover -s tests/unit -p "*.py" -v`
+3. Run tests: `make unit_tests` (or `poetry run pytest tests/unit/ -v`)
 4. Add integration tests in `tests/integration/` for any I/O-dependent code.
 5. Keep `docs/` in sync with the public API; host locally with `make mkdocs_server`.
 

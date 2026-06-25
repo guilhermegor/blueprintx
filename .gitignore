@@ -79,6 +79,9 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# Internal scaffolding-lessons mirror (canonical store lives in ~/.claude/memory/lessons/)
+docs/blueprintx-lessons.md
+
 # PyBuilder
 .pybuilder/
 target/

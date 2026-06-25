@@ -24,6 +24,8 @@ DATA_DIR_BASE="logs"
 DATA_DIR_DATED=false
 INCLUDE_WEBHOOK=false
 WEBHOOK_PLATFORM="teams"
+INCLUDE_EMAIL=false
+EMAIL_BACKEND="outlook"
 
 # ============================================================================
 # FUNCTIONS
@@ -141,6 +143,7 @@ copy_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
+    cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
@@ -174,6 +177,12 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
+    cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$project_path/mypy.ini"
+    cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$project_path/.sqlfluff"
+    cp "$COMMON_TEMPLATE_ROOT/.sqlfluffignore" "$project_path/.sqlfluffignore"
+    cp "$COMMON_TEMPLATE_ROOT/.hadolint.yaml" "$project_path/.hadolint.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.yamllint" "$project_path/.yamllint"
+    cp "$COMMON_TEMPLATE_ROOT/.shellcheckrc" "$project_path/.shellcheckrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
     cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
@@ -185,7 +194,8 @@ copy_common_templates() {
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
-    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh"
+    cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh" "$project_path/bin/commit.sh"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$project_path/.coveragerc"
@@ -218,6 +228,13 @@ copy_mkdocs_templates() {
     mkdir -p "$project_path/docs/backlog"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/backlog/.keep" \
         "$project_path/docs/backlog/.keep"
+
+    # Docs version label: hook (reads pyproject version) + theme override + header JS.
+    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
+        "$project_path/docs/javascripts/header-version.js"
 
     print_status "success" "MkDocs templates copied"
 }
@@ -347,12 +364,84 @@ prompt_webhook() {
     esac
 }
 
+prompt_email() {
+    local answer backend_ans
+    read -r -p "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: " answer || true
+    case "$answer" in
+        y | Y)
+            INCLUDE_EMAIL=true
+            read -r -p "Which backend? [outlook/smtp] (default: outlook): " backend_ans || true
+            case "${backend_ans:-outlook}" in
+                smtp) EMAIL_BACKEND="smtp" ;;
+                *) EMAIL_BACKEND="outlook" ;;
+            esac
+            print_status "config" "E-mail backend: $EMAIL_BACKEND"
+            ;;
+        *)
+            INCLUDE_EMAIL=false
+            ;;
+    esac
+}
+
+# E-mail handler seam (opt-in, mirrors the webhook seam): copy optional/email into
+# src/utils/email (rewrite the canonical chassis.email prefix to utils.email), wire the
+# chosen backend into the controller by replacing the CLS_EMAIL_HANDLER sentinel, and add
+# the EMAIL_BACKEND/SMTP_* keys to .env/.env.example.
+conditional_copy_email() {
+    local project_path="$1"
+    if [[ "$INCLUDE_EMAIL" != "true" ]]; then return; fi
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/email" "$project_path/src/utils/email"
+    # The seam ships its unit test co-located; relocate it to the project's tests/unit and drop
+    # the now-empty package tests dir so the test is discovered and the package stays clean.
+    mv "$project_path/src/utils/email/tests/unit/test_email_handlers.py" \
+        "$project_path/tests/unit/test_email_handlers.py"
+    rm -rf "$project_path/src/utils/email/tests"
+    grep -rl "chassis.email" "$project_path/src/utils/email" \
+        "$project_path/tests/unit/test_email_handlers.py" \
+        | xargs -r sed -i "s|chassis\.email|utils.email|g"
+    local main_path="$project_path/src/controller/main.py"
+    # Inject the two first-party imports into the controller import block (keeps isort happy:
+    # controller < utils.email < utils.paths), and replace the CLS_EMAIL_HANDLER sentinel with
+    # the build call.
+    awk -v backend="$EMAIL_BACKEND" '
+        /^from controller\._pipeline import PipelineOrchestrator/ {
+            print
+            print "from utils.email.factory import build_email_handler  # noqa: E402"
+            print "from utils.paths import resolve_path  # noqa: E402"
+            next
+        }
+        /^CLS_EMAIL_HANDLER = None$/ {
+            print "CLS_EMAIL_HANDLER = build_email_handler("
+            print "\tstr_backend=\"" backend "\","
+            print "\tstr_sender=os.getenv(\"SENDER_EMAIL\", \"\"),"
+            print "\tpath_signatures_dir=resolve_path(\"src/config/signatures\"),"
+            print "\tlogger=LOGGER,"
+            print ")"
+            next
+        }
+        { print }
+    ' "$main_path" > "$main_path.tmp" && mv "$main_path.tmp" "$main_path"
+    local email_env
+    email_env=$'\n# E-mail handler (opt-in). EMAIL_BACKEND: outlook (Windows desktop) or smtp.\n# SENDER_EMAIL is the From address; SMTP_* are used only when EMAIL_BACKEND=smtp.\nSENDER_EMAIL=\nEMAIL_BACKEND='"$EMAIL_BACKEND"$'\nSMTP_HOST=\nSMTP_PORT=587\nSMTP_USER=\nSMTP_PASSWORD=\nSMTP_USE_TLS=true\n# Dispatch defaults (fallback for every emails.yaml block; override per block with\n# EMAIL_SEND__<BLOCK> / EMAIL_AUTO_SEND__<BLOCK>, block key upper-cased). Send on, auto-send off.\nEMAIL_SEND__DEFAULTS=true\nEMAIL_AUTO_SEND__DEFAULTS=false\n'
+    printf '%s' "$email_env" >> "$project_path/.env"
+    printf '%s' "$email_env" >> "$project_path/.env.example"
+    print_status "success" "E-mail handler (utils/email, backend=$EMAIL_BACKEND) added"
+}
+
 copy_global_config() {
     local project_path="$1"
     cp "$COMMON_TEMPLATE_ROOT/src/config/startup.py" "$project_path/src/config/startup.py"
     cp "$COMMON_TEMPLATE_ROOT/src/config/inputs.yaml" "$project_path/src/config/inputs.yaml"
     cp "$COMMON_TEMPLATE_ROOT/src/config/outputs.yaml" "$project_path/src/config/outputs.yaml"
-    print_status "success" "Global config (startup/inputs/outputs) applied"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/env_config.py" "$project_path/src/config/env_config.py"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/CLAUDE.md" "$project_path/src/config/CLAUDE.md"
+    mkdir -p "$project_path/src/config/contracts"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/__init__.py" "$project_path/src/config/contracts/__init__.py"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/example_source.py" "$project_path/src/config/contracts/example_source.py"
+    if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" ]; then
+        cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" "$project_path/tests/unit/test_env_config.py"
+    fi
+    print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
 # Shared, project-agnostic utils + their unit tests, from the single source in
@@ -361,13 +450,15 @@ copy_shared_utils() {
     local project_path="$1"
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
-    for util in br_identifiers dtypes decimals loggers text paths signatures dates; do
+    for util in br_identifiers dtypes decimals loggers text paths signatures dates \
+        tabular_reader retry http_downloader yaml_reader zip_extractor frames \
+        outlook_gateway; do
         cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
         if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" ]; then
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
-    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/loggers/text/paths/signatures/dates) + tests applied"
+    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/loggers/text/paths/signatures/dates/tabular_reader/retry/http_downloader/yaml_reader/zip_extractor/frames) + tests applied"
 }
 
 # Runtime type-checking engine — single source in python-common/optional/typing.
@@ -441,22 +532,31 @@ PYBLOCK
     print_status "success" "Webhook wiring appended to startup.py"
 }
 
-# Conditional webhook send in the controller, gated by the deployment environment.
-# ENVIRONMENT is already imported at the top of controller/main.py, so it is not re-imported.
+# Webhook notify is the orchestrator's final phase, not a post-run tail: inject the
+# production-gated notifier (CLS_WEBHOOK when ENV passes the gate, else None) plus its
+# message into the PipelineOrchestrator construction. The send fires inside run() via the
+# WebhookNotifier port — main.py stays a thin wiring script.
 conditional_patch_main_py() {
     local project_path="$1"
     local main_path="$project_path/src/controller/main.py"
     if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
-    cat >> "$main_path" <<'PYBLOCK'
-
-# --- notify: send the run summary when running in a production environment ---
-from config.startup import BOOL_WEBHOOK_ENABLED, CLS_WEBHOOK, MSG_WEBHOOK  # noqa: E402
-
-
-if BOOL_WEBHOOK_ENABLED:
-	CLS_WEBHOOK.send(MSG_WEBHOOK)
-PYBLOCK
-    print_status "success" "Webhook send appended to controller/main.py"
+    awk '
+        /^PipelineOrchestrator\($/ {
+            print "from config.startup import BOOL_WEBHOOK_ENABLED, CLS_WEBHOOK, MSG_WEBHOOK  # noqa: E402"
+            print ""
+            print ""
+            print
+            next
+        }
+        /^\)\.run\(\)$/ {
+            print "\tcls_webhook=CLS_WEBHOOK if BOOL_WEBHOOK_ENABLED else None,"
+            print "\tstr_webhook_message=MSG_WEBHOOK,"
+            print
+            next
+        }
+        { print }
+    ' "$main_path" > "$main_path.tmp" && mv "$main_path.tmp" "$main_path"
+    print_status "success" "Webhook notifier wired into PipelineOrchestrator.run() (controller/main.py)"
 }
 
 # GitHub-only assets are copied only when a GitHub remote is established (see main()).
@@ -679,6 +779,8 @@ main() {
     prompt_docker_compose
     prompt_data_dir
     prompt_webhook
+    prompt_email
+    prompt_env_wise_config
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
     copy_global_config "$PROJECT_PATH"
@@ -689,9 +791,11 @@ main() {
     copy_common_templates "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"
+    apply_env_wise_config "$PROJECT_PATH"
     conditional_copy_webhooks_yaml "$PROJECT_PATH"
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
+    conditional_copy_email "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"

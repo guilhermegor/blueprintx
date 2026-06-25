@@ -21,6 +21,7 @@ update_venv() {
 precommit() {
 	poetry run pre-commit install
 	poetry run pre-commit install --hook-type commit-msg
+	poetry run pre-commit install --hook-type pre-push
 }
 
 init() {
@@ -61,6 +62,15 @@ test_cov() {
 	poetry run genbadge coverage -i coverage.xml -o coverage.svg
 }
 
+test_cov_report() {
+	poetry run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-report=html
+	echo "HTML coverage report at htmlcov/index.html"
+}
+
+test_cov_serve() {
+	(cd htmlcov && python3 -m http.server "${PORT:-8000}")
+}
+
 test_slowest() {
 	echo "Running tests to identify the 20 slowest tests..."
 	poetry run pytest tests/unit/ --durations=20 --tb=short
@@ -89,9 +99,13 @@ fix_playwright() {
 lint() {
 	poetry run ruff check --fix .
 	poetry run ruff format .
+	(cd src && poetry run mypy --config-file ../mypy.ini .)
 	poetry run codespell .
 	poetry run pydocstyle .
 	poetry run python bin/check_docstrings.py
+	bash "$SCRIPT_DIR/bin/lint_shell.sh"
+	bash "$SCRIPT_DIR/bin/lint_sql.sh"
+	bash "$SCRIPT_DIR/bin/lint_yaml.sh"
 }
 
 check_docstrings() {
@@ -181,7 +195,7 @@ Virtual Environment
   init                 Bootstrap venv + install pre-commit hooks
   venv                 Create Poetry venv and install dependencies
   update_venv          Update all Poetry dependencies
-  precommit            Install pre-commit hooks (push + commit-msg)
+  precommit            Install pre-commit hooks (pre-push + commit-msg)
   version_bump_minor   Bump minor version in pyproject.toml
 
 Corporate CA
@@ -191,13 +205,15 @@ Testing
   unit_tests           Run unit tests with pytest
   integration_tests    Run integration tests with pytest
   test_cov             Run unit tests with coverage report and badge
+  test_cov_report      Coverage with term-missing + HTML report (htmlcov/)
+  PORT=<n> test_cov_serve  Serve htmlcov/ at http://localhost:<n> (default 8000)
   test_slowest         Report the 20 slowest unit tests
   FEAT=<kw> test_feat  Run unit tests matching keyword <kw>
   test_urls_docstrings Check all URLs inside docstrings
   fix_playwright       Reinstall Playwright browsers
 
 Linting
-  lint                 Run ruff, codespell, pydocstyle, check_docstrings
+  lint                 Run ruff, mypy, codespell, pydocstyle, check_docstrings, shell/sql/yaml
   check_docstrings     Check docstring type/raises consistency
 
 Database
@@ -239,6 +255,8 @@ case "${1:-help}" in
 	unit_tests)          unit_tests ;;
 	integration_tests)   integration_tests ;;
 	test_cov)            test_cov ;;
+	test_cov_report)     test_cov_report ;;
+	test_cov_serve)      test_cov_serve ;;
 	test_slowest)        test_slowest ;;
 	test_feat)           test_feat ;;
 	test_urls_docstrings) test_urls_docstrings ;;

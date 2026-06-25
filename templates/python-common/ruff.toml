@@ -78,6 +78,7 @@ select = [
     "S",   # flake8-bandit - checks for security issues
     "PD",  # pandas-vet - checks for common pandas issues
     "D",   # pydocstring - this enables all docstring checks
+    "TID", # flake8-tidy-imports - enables the banned-api gate below
 ]
 ignore = [
     "D206",  # docstring should be indented with spaces, not tabs
@@ -85,6 +86,26 @@ ignore = [
 fixable = ["I"]
 # allow dummy variables to start with an underscore and be followed by alphanumeric
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Bare pandas readers are banned so every file/SQL read funnels through
+# utils/tabular_reader (which enforces a FileContract + apply_dtypes). ruff resolves
+# `pd.read_csv` to `pandas.read_csv` and flags it. The seam itself and tests
+# (round-trip read-backs) are exempted via per-file-ignores below.
+[lint.flake8-tidy-imports.banned-api]
+"pandas.read_excel".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_csv".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_json".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_table".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_parquet".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_sql".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.read_sql_query".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.read_sql_table".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.ExcelFile".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+# FileContract is CONSTRUCTED only in config/contracts/ (per-file-exempt below); everywhere
+# else imports the instance. Both import paths of the class are banned; a file importing the
+# class purely for a type annotation carries a line-scoped `# noqa: TID251`.
+"utils.tabular_reader.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
+"config.contracts.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
 
 [lint.isort]
 force-single-line = false
@@ -105,11 +126,19 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 [lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",  # use of assert
+    "TID251",  # tests legitimately read back outputs with pd.read_* to assert on them
 ]
+# The seam itself is the one place allowed to call the bare pandas readers.
+"src/utils/tabular_reader.py" = ["TID251"]
+# config/contracts/ is the one place allowed to construct FileContract.
+"src/config/contracts/*.py" = ["TID251"]
 # Native DB-API 2.0 / SQLAlchemy connections have no shared stdlib type, so `Any` is the
 # honest return/param annotation for the raw-driver connection factory (MVC skeletons).
 "src/config/connection_db.py" = ["ANN401"]
-"src/model/example_entity.py" = ["ANN401"]
+# The ORM reference entity deliberately demonstrates the SQLAlchemy read idiom
+# (`pd.read_sql(select(...), conn)`), so it is exempt from the bare-reader ban; real
+# entities route reads through utils.tabular_reader.read_query.
+"src/model/example_entity.py" = ["ANN401", "TID251"]
 # The runtime type-checking engine validates arbitrary annotations, so `Any` is
 # intrinsic to its signatures. DDD ships it under src/chassis (already excluded
 # above); MVC ships it here. Ignore ANN401 rather than excluding it from all lint.

@@ -10,10 +10,24 @@ columns, which need ``to_datetime`` rather than ``astype``.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
+
+
+@type_checker
 def apply_dtypes(
 	df_input: pd.DataFrame,
 	dict_dtypes: dict[str, str] | None = None,

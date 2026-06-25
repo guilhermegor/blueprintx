@@ -8,6 +8,7 @@ repo_url: https://github.com/guilhermegor/BlueprintX
 exclude_docs: |
   backlog/
   superpowers/
+  blueprintx-lessons.md
 nav:
   - Home: index.md
   - Get Started: get-started.md
