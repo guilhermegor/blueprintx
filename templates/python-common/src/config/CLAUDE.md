@@ -51,10 +51,10 @@ Config-layer functions carry the runtime `@type_checker` like the rest of the co
       from chassis.typing import type_checker
   ```
 
-The shared `utils/` helpers (decimals, dtypes, …) remain the deliberate exception — they stay
-decoupled from the engine so they're trivially portable — but config-layer code is decorated.
-Do **not** hard-import `utils.typing` in a shared config file (it breaks the DDD layout); use
-the shim above.
+The shared `utils/` helpers (decimals, dtypes, …) are decorated too, through the **same shim**
+(they ship to both layouts, like the shared config files). Do **not** hard-import `utils.typing`
+in any shared file (it breaks the DDD layout); use the `try/except` shim above. Only files that
+exist in a single tier (e.g. `connection_db.py`, MVC-only) may hard-import `utils.typing`.
 
 ## The contracts/ sub-package
 

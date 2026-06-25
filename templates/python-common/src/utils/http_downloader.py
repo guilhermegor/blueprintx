@@ -11,9 +11,6 @@ mock at this boundary.
 point the server at an internal host. Before fetching, the host is resolved and rejected
 if it maps to a private / loopback / link-local / reserved address, and HTTP redirects are
 NOT followed (a redirect could hop to an internal target that bypasses the up-front check).
-
-This helper is deliberately decoupled from ``utils.typing`` so it stays portable across the
-``chassis.typing`` (DDD) and ``utils.typing`` (MVC) layouts.
 """
 
 from __future__ import annotations
@@ -22,11 +19,23 @@ from http.client import HTTPMessage
 import ipaddress
 from pathlib import Path
 import socket
-from typing import IO
+from typing import IO, TYPE_CHECKING
 from urllib import error, request
 from urllib.parse import urlsplit
 
 from utils.retry import retry_with_backoff
+
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import TypeChecker, type_checker
+else:
+	try:
+		from utils.typing import TypeChecker, type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import TypeChecker, type_checker
 
 
 _TIMEOUT_SECONDS: int = 30
@@ -40,7 +49,7 @@ _DOWNLOAD_MAX_ATTEMPTS: int = 3
 _DOWNLOAD_BASE_WAIT_S: float = 2.0
 
 
-class _NoRedirectHandler(request.HTTPRedirectHandler):
+class _NoRedirectHandler(request.HTTPRedirectHandler, metaclass=TypeChecker):
 	"""Redirect handler that refuses to follow any redirect (SSRF guard).
 
 	``urllib`` follows 3xx automatically through the default opener and fetches the
@@ -92,6 +101,7 @@ _OPENER: request.OpenerDirector = request.build_opener(_NoRedirectHandler)
 	float_base_wait_s=_DOWNLOAD_BASE_WAIT_S,
 	tuple_exceptions=(OSError,),
 )
+@type_checker
 def download_file(str_url: str, path_dest: Path, int_timeout_s: int = _TIMEOUT_SECONDS) -> Path:
 	"""Download ``str_url`` to ``path_dest`` and return the written path.
 
@@ -144,6 +154,7 @@ def download_file(str_url: str, path_dest: Path, int_timeout_s: int = _TIMEOUT_S
 	return path_dest
 
 
+@type_checker
 def _assert_public_host(str_url: str) -> None:
 	"""Reject a URL whose host resolves to a non-public address (SSRF guard).
 

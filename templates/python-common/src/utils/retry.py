@@ -9,11 +9,9 @@ host → ``ValueError``) are NOT retried — only the configured transient excep
 are, so a permanent error still fails fast. Each retry is logged at ``warning``.
 
 This is a generic decorator (it wraps any callable without inspecting its values), so
-its inner closures are typed with :class:`typing.ParamSpec` rather than ``Any``.
-
-This helper is deliberately decoupled from ``utils.typing`` so it stays portable across
-the ``chassis.typing`` (DDD) and ``utils.typing`` (MVC) layouts — apply the runtime
-checker in your own code, not here.
+its inner closures are typed with :class:`typing.ParamSpec` rather than ``Any`` — and the
+runtime ``@type_checker`` is applied to the public factory only, never to the generic inner
+``wrapper`` (whose ``*args``/``**kwargs`` are intentionally opaque).
 """
 
 from __future__ import annotations
@@ -22,9 +20,21 @@ from collections.abc import Callable
 import functools
 import logging
 import time
-from typing import ParamSpec, TypeVar
+from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 from utils.loggers import log_message
+
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
 _P = ParamSpec("_P")
@@ -36,6 +46,7 @@ _DEFAULT_FACTOR: float = 2.0
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
+@type_checker
 def retry_with_backoff(
 	int_max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
 	float_base_wait_s: float = _DEFAULT_BASE_WAIT_S,

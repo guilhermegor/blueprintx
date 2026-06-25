@@ -5,9 +5,6 @@ is confined here (the library-coupling rule). stpstone's ``DealingOutlook`` requ
 (it imports ``win32com`` and raises elsewhere), so it is imported **lazily** inside the send
 call and the whole module stays importable on Linux/CI. Off Windows the gateway logs what it
 *would* send and returns ``False``/``None`` instead of failing — the run continues.
-
-Deliberately decoupled from ``utils.typing`` so it stays portable across the ``utils.typing``
-(MVC) and ``chassis.typing`` (DDD) layouts, like the other shared ``utils`` helpers.
 """
 
 from __future__ import annotations
@@ -16,13 +13,25 @@ from logging import Logger
 import os
 from pathlib import Path
 import platform
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from utils.loggers import log_message
 from utils.signatures import resolve_signature
 
 
-class OutlookGateway:
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import TypeChecker, type_checker
+else:
+	try:
+		from utils.typing import TypeChecker, type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import TypeChecker, type_checker
+
+
+class OutlookGateway(metaclass=TypeChecker):
 	"""Send e-mails through the local Outlook desktop app (Windows), else log-only.
 
 	Parameters
@@ -188,6 +197,7 @@ class OutlookGateway:
 		return None
 
 
+@type_checker
 def to_html_body(str_body: str) -> str:
 	r"""Convert a plain-text e-mail body to HTML so its line breaks survive.
 
@@ -222,6 +232,7 @@ _TRUE_TOKENS: frozenset[str] = frozenset({"1", "true", "yes", "on", "y", "t"})
 _FALSE_TOKENS: frozenset[str] = frozenset({"0", "false", "no", "off", "n", "f"})
 
 
+@type_checker
 def _parse_env_bool(str_raw: str | None, bool_default: bool) -> bool:
 	"""Parse an environment flag to ``bool``, returning ``bool_default`` when absent/unknown.
 
@@ -247,6 +258,7 @@ def _parse_env_bool(str_raw: str | None, bool_default: bool) -> bool:
 	return bool_default
 
 
+@type_checker
 def _dispatch_flag(str_prefix: str, str_block_key: str, bool_default: bool) -> bool:
 	"""Resolve one dispatch flag from the per-block then the default environment variable.
 
@@ -271,6 +283,7 @@ def _dispatch_flag(str_prefix: str, str_block_key: str, bool_default: bool) -> b
 	return _parse_env_bool(str_default_var, bool_default)
 
 
+@type_checker
 def resolve_dispatch(str_block_key: str) -> tuple[bool, bool]:
 	"""Resolve an e-mail block's ``(send, auto_send)`` flags from the environment.
 
@@ -294,6 +307,7 @@ def resolve_dispatch(str_block_key: str) -> tuple[bool, bool]:
 	return bool_send, bool_auto_send
 
 
+@type_checker
 def running_on_windows() -> bool:
 	"""Return whether the current OS is Windows (where Outlook is available).
 
@@ -305,6 +319,7 @@ def running_on_windows() -> bool:
 	return platform.system() == "Windows"
 
 
+@type_checker
 def _build_dealing_outlook() -> Any:  # noqa: ANN401 — opaque vendor client (Windows only)
 	"""Lazily build stpstone's Outlook client (imported only on Windows).
 

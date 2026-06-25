@@ -11,6 +11,7 @@ from stpstone.utils.calendars.calendar_br import DatesBRAnbima
 from stpstone.utils.loggs.create_logs import CreateLog
 from stpstone.utils.loggs.init_setup import initiate_logging
 
+from chassis.typing import ProtocolTypeCheckerMeta, type_checker
 from src.config.startup import DIR_PARENT, LOGGER
 
 
@@ -18,6 +19,7 @@ cls_create_log = CreateLog()
 cls_dates = DatesBRAnbima()
 
 
+@type_checker
 def init() -> float:
 	"""Load environment, configure logging, suppress warnings.
 
@@ -32,6 +34,7 @@ def init() -> float:
 	return time()
 
 
+@type_checker
 def teardown(start_time: float) -> None:
 	"""Log elapsed time and routine end datetime.
 
@@ -56,7 +59,7 @@ def teardown(start_time: float) -> None:
 
 
 @runtime_checkable
-class WebhookNotifier(Protocol):
+class WebhookNotifier(Protocol, metaclass=ProtocolTypeCheckerMeta):
 	"""Structural port for the optional outbound webhook notifier (see ``optional/webhook``).
 
 	``notify`` depends only on ``send``; the concrete platform (Teams/Slack, or a no-op
@@ -69,6 +72,7 @@ class WebhookNotifier(Protocol):
 		...
 
 
+@type_checker
 def notify(cls_webhook: WebhookNotifier | None, str_message: str) -> None:
 	"""Send the run-summary notification — the final lifecycle step.
 

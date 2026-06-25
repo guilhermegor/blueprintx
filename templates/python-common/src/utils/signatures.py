@@ -9,8 +9,22 @@ logic lives here once.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
+
+
+@type_checker
 def resolve_signature(path_signatures_dir: Path, str_sender_email: str) -> str:
 	"""Return the sender's signature HTML, falling back to the default.
 
@@ -33,6 +47,7 @@ def resolve_signature(path_signatures_dir: Path, str_sender_email: str) -> str:
 	return ""
 
 
+@type_checker
 def to_html(str_body: str) -> str:
 	"""Convert a plain-text body to minimal HTML (newlines to ``<br>``).
 

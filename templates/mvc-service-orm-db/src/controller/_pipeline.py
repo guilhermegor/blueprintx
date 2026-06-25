@@ -22,12 +22,12 @@ from stpstone.utils.parsers.json import JsonFiles
 
 from model.example_entity import ExampleEntity
 from utils.loggers import log_message
-from utils.typing import TypeChecker
+from utils.typing import ProtocolTypeCheckerMeta, TypeChecker
 from view.report_renderer import RenderToExcel
 
 
 @runtime_checkable
-class EmailHandler(Protocol):
+class EmailHandler(Protocol, metaclass=ProtocolTypeCheckerMeta):
 	"""Structural port for the optional e-mail handler (see ``optional/email``).
 
 	The orchestrator depends only on the shared ``send_email`` method; the concrete backend
@@ -51,7 +51,7 @@ class EmailHandler(Protocol):
 
 
 @runtime_checkable
-class WebhookNotifier(Protocol):
+class WebhookNotifier(Protocol, metaclass=ProtocolTypeCheckerMeta):
 	"""Structural port for the optional outbound webhook notifier (see ``optional/webhook``).
 
 	The orchestrator depends only on ``send``; the concrete platform (Teams/Slack, or a

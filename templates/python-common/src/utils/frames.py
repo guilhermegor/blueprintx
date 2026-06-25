@@ -1,20 +1,28 @@
 """DataFrame/Series relabelling helpers.
 
-Small, total transformations over pandas objects. ``pandas`` is imported lazily so the
-module stays importable in environments that ship the helpers without pandas. Deliberately
-decoupled from ``utils.typing`` so it stays portable across the ``chassis.typing`` (DDD) and
-``utils.typing`` (MVC) layouts.
+Small, total transformations over pandas objects.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pandas as pd
 
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
 if TYPE_CHECKING:
-	import pandas as pd
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
+@type_checker
 def map_with_default(series_value: pd.Series, dict_mapping: dict, default: object) -> pd.Series:
 	"""Relabel a Series via a mapping, sending every unmapped value to ``default``.
 

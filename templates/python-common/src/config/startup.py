@@ -58,6 +58,7 @@ _str_time = _dt_now.strftime("%H%M%S")
 # Single output root (inputs.yaml); optionally partitioned into <root>/<YYYY-MM-DD>/.
 # The partition uses the human-readable _str_date_folder; filenames keep the compact
 # _str_date (see output_path).
+@type_checker
 def _resolve_out_dir() -> Path:
 	r"""Resolve the run's output directory with a temp-dir fallback.
 

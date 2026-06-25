@@ -18,8 +18,7 @@ configurable delimiter; ``.json`` → a JSON array of records; otherwise Excel).
 Bare ``pd.read_*`` is banned project-wide (ruff ``TID251``); this seam (and tests) is the one
 exempt place, so every read funnels through a contract + dtype check. Projects keep their
 concrete contract instances next to their models (or in ``config/contracts/``); the machinery
-here stays domain-agnostic. Deliberately decoupled from ``utils.typing`` so it stays portable
-across the ``chassis.typing`` (DDD) and ``utils.typing`` (MVC) layouts.
+here stays domain-agnostic.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -35,8 +34,20 @@ from utils.br_identifiers import is_valid_cnpj, unmask_cnpj
 from utils.dtypes import apply_dtypes
 
 
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import TypeChecker, type_checker
+else:
+	try:
+		from utils.typing import TypeChecker, type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import TypeChecker, type_checker
+
+
 @dataclass(frozen=True)
-class FileContract:
+class FileContract(metaclass=TypeChecker):
 	"""The required shape of one input file.
 
 	Parameters
@@ -57,7 +68,7 @@ class FileContract:
 	tuple_cnpj_cols: tuple[str, ...]
 
 
-class ContractError(Exception):
+class ContractError(Exception, metaclass=TypeChecker):
 	"""Raised when a strictly-read file/query violates its data contract.
 
 	Parameters
@@ -71,6 +82,7 @@ class ContractError(Exception):
 		super().__init__("; ".join(list_problems))
 
 
+@type_checker
 def read_table(
 	path_file: Path,
 	str_sheet: str,
@@ -127,6 +139,7 @@ def read_table(
 	return _finalize(df_raw, dict_dtypes, list_date_cols, cls_contract)
 
 
+@type_checker
 def read_query(
 	cls_connection: Any,  # noqa: ANN401 — opaque DB-API connection; any driver's object is valid
 	str_sql: str,
@@ -172,6 +185,7 @@ def read_query(
 	return _finalize(df_raw, dict_dtypes, list_date_cols, cls_contract)
 
 
+@type_checker
 def find_file_problems(
 	cls_contract: FileContract, path_file: Path, str_sheet: str, str_csv_sep: str = ";"
 ) -> list[str]:
@@ -202,6 +216,7 @@ def find_file_problems(
 	return find_contract_problems(df_raw, cls_contract)
 
 
+@type_checker
 def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -> list[str]:
 	"""Return the contract problems of an already-read frame (never raises).
 
@@ -235,6 +250,7 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 	return list_problems
 
 
+@type_checker
 def resolve_sheet_name(path_file: Path, tuple_known_names: tuple[str, ...]) -> str:
 	"""Resolve which worksheet to read from a workbook whose sheet name varies by source.
 
@@ -280,6 +296,7 @@ def resolve_sheet_name(path_file: Path, tuple_known_names: tuple[str, ...]) -> s
 	)
 
 
+@type_checker
 def _finalize(
 	df_raw: pd.DataFrame,
 	dict_dtypes: dict[str, str],
@@ -315,6 +332,7 @@ def _finalize(
 	return apply_dtypes(df_raw, dict_dtypes=dict_dtypes, list_date_cols=list_date_cols)
 
 
+@type_checker
 def _read_raw(
 	path_file: Path,
 	str_sheet: str,

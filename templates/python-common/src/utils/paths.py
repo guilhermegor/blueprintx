@@ -17,6 +17,19 @@ from datetime import date
 import os
 from pathlib import Path, PureWindowsPath
 import shutil
+from typing import TYPE_CHECKING
+
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
 # pt-BR month names (index 1..12), accent-folded to match folder names on disk
@@ -53,6 +66,7 @@ _MONTHS_PT_ABBR: tuple[str, ...] = (
 )
 
 
+@type_checker
 def is_windows_path(str_path: str) -> bool:
 	r"""Return whether ``str_path`` looks like a Windows drive or UNC path.
 
@@ -72,6 +86,7 @@ def is_windows_path(str_path: str) -> bool:
 	return str_stripped.startswith("\\\\")
 
 
+@type_checker
 def resolve_path(str_path: str) -> Path:
 	"""Resolve a configured path string to a :class:`pathlib.Path`.
 
@@ -98,6 +113,7 @@ def resolve_path(str_path: str) -> Path:
 	return Path(str_stripped).expanduser()
 
 
+@type_checker
 def ensure_dir(path_dir: Path) -> Path:
 	"""Create ``path_dir`` (and parents) if absent and return it.
 
@@ -115,6 +131,7 @@ def ensure_dir(path_dir: Path) -> Path:
 	return path_dir
 
 
+@type_checker
 def copy_into(path_src: Path, path_dir: Path, str_stamp: str | None = None) -> Path:
 	"""Copy ``path_src`` into ``path_dir`` (created if absent), returning the destination.
 
@@ -151,6 +168,7 @@ def copy_into(path_src: Path, path_dir: Path, str_stamp: str | None = None) -> P
 	return path_dest
 
 
+@type_checker
 def date_tokens(dt_ref: date) -> dict[str, str]:
 	r"""Build the date-token substitution map for a reference date.
 
@@ -193,6 +211,7 @@ def date_tokens(dt_ref: date) -> dict[str, str]:
 	}
 
 
+@type_checker
 def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | None:
 	"""Resolve an input spec to an existing absolute file path for the reference date.
 
@@ -227,6 +246,7 @@ def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | Non
 	return _to_absolute(path_resolved) if path_resolved.exists() else None
 
 
+@type_checker
 def resolve_input_glob(spec: dict[str, str] | None, dt_ref: date) -> list[Path]:
 	"""Resolve a ``{dir, filename_pattern}`` spec to **all** matching files for the date.
 
@@ -260,6 +280,7 @@ def resolve_input_glob(spec: dict[str, str] | None, dt_ref: date) -> list[Path]:
 	)
 
 
+@type_checker
 def _to_absolute(path_resolved: Path) -> Path:
 	"""Return a resolved input path made absolute so external tools can open it.
 
@@ -280,6 +301,7 @@ def _to_absolute(path_resolved: Path) -> Path:
 	return path_resolved if path_resolved.is_absolute() else path_resolved.resolve()
 
 
+@type_checker
 def _latest_match(path_dir: Path, str_pattern: str) -> Path | None:
 	"""Return the newest file in ``path_dir`` matching ``str_pattern`` (case-insensitive).
 

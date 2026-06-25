@@ -46,9 +46,14 @@ unions. `utils/typing/` is the one place `Any` is the honest signature (it inspe
 values of any type) and is ANN401-exempt. The package ships from
 `templates/python-common/optional/typing/` (DDD receives it as `chassis/typing`).
 The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`,
-`text`, `paths`, `signatures`, `dates`) are intentionally decoupled from it so they
-stay portable across tiers — apply the checker in your own model/view/controller
-code.
+`text`, `paths`, `signatures`, `dates`, …) carry the runtime checker too — every
+function is `@type_checker` and every class uses `metaclass=TypeChecker` (Protocol
+ports use `metaclass=ProtocolTypeCheckerMeta`). There is **no by-layer exemption**.
+Because those files ship to both tiers, they import the engine through a
+layout-agnostic shim — `try: from utils.typing import … except ModuleNotFoundError:
+from chassis.typing import …` — so the same source resolves in MVC (`utils.typing`)
+and DDD (`chassis.typing`). The only exclusions are the `utils/typing/` engine itself
+and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 ## Key conventions
 

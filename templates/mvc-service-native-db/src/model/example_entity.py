@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 
 from utils.dtypes import apply_dtypes
+from utils.typing import TypeChecker
 
 
 # Declare the column types on load — never trust pandas' inference (a zero-padded
@@ -19,7 +20,7 @@ from utils.dtypes import apply_dtypes
 _DICT_DTYPES: dict[str, str] = {"id": "int64", "title": "str"}
 
 
-class ExampleEntity:
+class ExampleEntity(metaclass=TypeChecker):
 	"""Read/write access to a single example table.
 
 	Parameters

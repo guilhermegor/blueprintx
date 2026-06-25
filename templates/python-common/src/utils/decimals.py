@@ -17,18 +17,32 @@ from __future__ import annotations
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
+import pandas as pd
 
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
 if TYPE_CHECKING:
-	import pandas as pd
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
 # Truncation is the safe generic default; override per call when the domain
 # explicitly requires commercial / regulatory rounding.
 _DEFAULT_ROUNDING = ROUND_DOWN
 
-NumericLike = str | int | float | Decimal | None
+# ``bool`` is listed explicitly: it is a subclass of ``int`` but the runtime type-checker
+# treats it as a distinct type, and ``_parse`` deliberately accepts it (mapping True/False to
+# ``default`` rather than 1/0). Omitting it would make the checker reject a tolerated input.
+NumericLike = str | int | float | bool | Decimal | None
 
 
+@type_checker
 def to_decimal(
 	value: NumericLike,
 	int_places: int,
@@ -69,6 +83,7 @@ def to_decimal(
 	return cls_raw.quantize(cls_quantum, rounding=rounding)
 
 
+@type_checker
 def _parse(value: NumericLike, default: Decimal) -> Decimal:
 	"""Parse ``value`` into an unquantised Decimal, falling back to ``default``.
 
@@ -106,6 +121,7 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
 		return default
 
 
+@type_checker
 def _normalise_br_number(str_value: str) -> str:
 	"""Normalise a Brazilian-formatted numeric string to a Decimal-parseable form.
 
@@ -130,6 +146,7 @@ def _normalise_br_number(str_value: str) -> str:
 	return str_stripped
 
 
+@type_checker
 def parse_br_number_series(series_value: pd.Series) -> pd.Series:
 	"""Vectorised parse of a Brazilian-formatted numeric column to ``float``.
 

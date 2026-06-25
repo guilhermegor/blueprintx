@@ -12,12 +12,26 @@ allow-list membership test (e.g. ``normalize_text(ENV) in {"prod", "production"}
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 import unicodedata
+
+
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
 
 
 _RE_WHITESPACE = re.compile(r"\s+")
 
 
+@type_checker
 def normalize_text(str_value: str) -> str:
 	"""Return a canonical, accent-free, lower-cased form of ``str_value``.
 
@@ -36,6 +50,7 @@ def normalize_text(str_value: str) -> str:
 	return _RE_WHITESPACE.sub(" ", str_ascii).strip().casefold()
 
 
+@type_checker
 def safe_str(value: object, default: str = "") -> str:
 	"""Stringify ``value`` without ever producing the literal ``"nan"``.
 

@@ -3,17 +3,29 @@
 A reusable place for "unzip this file (maybe password-protected), but only when needed".
 ``zipfile`` is stdlib, so no coupling seam is strictly required — this module exists for the
 *behaviour*: opt-in extraction, idempotent (skip when the target is already present), and a
-caller-supplied password (from ``.env``), never hard-coded. Deliberately decoupled from
-``utils.typing`` so it stays portable across the ``chassis.typing`` (DDD) and ``utils.typing``
-(MVC) layouts.
+caller-supplied password (from ``.env``), never hard-coded.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 import zipfile
 
 
+# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
+# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
+# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+if TYPE_CHECKING:
+	from utils.typing import type_checker
+else:
+	try:
+		from utils.typing import type_checker
+	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+		from chassis.typing import type_checker
+
+
+@type_checker
 def unzip_if_needed(
 	path_zip: Path,
 	path_target: Path,
@@ -52,6 +64,7 @@ def unzip_if_needed(
 	return True
 
 
+@type_checker
 def extract_members(path_zip: Path, path_dest_dir: Path, list_members: list[str]) -> list[Path]:
 	"""Extract only the named members of ``path_zip`` into ``path_dest_dir``.
 
@@ -90,6 +103,7 @@ def extract_members(path_zip: Path, path_dest_dir: Path, list_members: list[str]
 	return list_out
 
 
+@type_checker
 def extract_all(
 	path_zip: Path, path_dest_dir: Path, str_password: str | None = None
 ) -> list[Path]:
