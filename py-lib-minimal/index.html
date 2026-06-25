@@ -1331,14 +1331,9 @@
 <td><code>.pre-commit-config.yaml</code> — ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge</td>
 </tr>
 <tr>
-<td><strong>unittest</strong></td>
-<td>Test runner</td>
-<td>Discovered with <code>python -m unittest discover -s tests/unit -p "*.py"</code></td>
-</tr>
-<tr>
 <td><strong>pytest</strong></td>
-<td>Alternative runner</td>
-<td><code>pytest.ini</code> included for compatibility; <code>poetry run pytest</code> also works</td>
+<td>Test runner</td>
+<td><code>pytest.ini</code> — <code>make unit_tests</code> runs <code>poetry run pytest tests/unit/</code>; tests are pytest-style functions with fixtures</td>
 </tr>
 <tr>
 <td><strong>GitHub Actions</strong></td>
@@ -1357,7 +1352,7 @@
 <ol>
 <li>Add library functions and classes under <code>src/&lt;project_name&gt;/</code>.</li>
 <li>Mirror the source structure under <code>tests/unit/</code> — one test module per source module.</li>
-<li>Run tests: <code>python -m unittest discover -s tests/unit -p "*.py" -v</code></li>
+<li>Run tests: <code>make unit_tests</code> (or <code>poetry run pytest tests/unit/ -v</code>)</li>
 <li>Add integration tests in <code>tests/integration/</code> for any I/O-dependent code.</li>
 <li>Keep <code>docs/</code> in sync with the public API; host locally with <code>make mkdocs_server</code>.</li>
 </ol>
