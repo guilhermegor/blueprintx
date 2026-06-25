@@ -191,3 +191,7 @@ pyrightconfig.json
 
 # Claude Code runtime artifacts
 .claude/
+
+# BlueprintX internal lessons mirror — kept git-ignored, never ships
+# (see the scaffolding-lessons convention in CLAUDE.md / global memory)
+docs/blueprintx-lessons.md
