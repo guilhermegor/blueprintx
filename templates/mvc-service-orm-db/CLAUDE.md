@@ -88,7 +88,7 @@ Every DataFrame or SQL-to-memory load must declare its column types via a dtype 
 
 ## Data-handling guardrails (advisory)
 
-When a pipeline merges, overrides, or validates tabular data, three recurring traps are
+When a pipeline merges, overrides, or validates tabular data, four recurring traps are
 worth guarding against (apply when relevant — these are advisories, not scaffolded code):
 
 - **Override layers must re-apply the canonical normaliser.** A substitution/override path
@@ -101,6 +101,12 @@ worth guarding against (apply when relevant — these are advisories, not scaffo
 - **Per-source keyed merge: restrict each partition to the keys it owns before concat.**
   When merging partitions keyed by an id, scope each partition to its own keys first so the
   merge key stays unique and a row from one source never overwrites another's.
+- **A time-scoped override input carries a required reference-month and is filtered to the
+  run's competency.** A "backdoor" file that forces records into a *specific* run must declare
+  a reference-month column (make it contract-required, so a file lacking it is reproved at the
+  controller boundary — notify, skip the override, don't abort the run) and be filtered to the
+  current month in the model (accept `06/2026` / `2026-06` / `202606` / a datetime cell; log the
+  dropped count). Otherwise last period's rows silently re-apply to the wrong target.
 
 ## Naming conventions
 
