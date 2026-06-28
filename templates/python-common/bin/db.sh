@@ -9,6 +9,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=bin/lib/bootstrap.sh
+source "$SCRIPT_DIR/lib/bootstrap.sh"
 
 load_env() {
 	if [[ ! -f .env ]]; then
@@ -85,7 +87,10 @@ apply_migrations() {
 
 	print_status "info" "Applying Alembic migrations..."
 	export PYTHONPATH=".:src"
-	poetry run alembic upgrade head
+	# Resolve Poetry robustly (bare `poetry` may be absent; see bin/poetry_exec.sh).
+	bootstrap_init
+	ensure_poetry
+	run_poetry run alembic upgrade head
 	print_status "success" "Migrations applied"
 }
 

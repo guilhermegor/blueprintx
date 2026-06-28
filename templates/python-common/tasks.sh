@@ -5,34 +5,54 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Every Poetry call routes through bin/poetry_exec.sh, which resolves Poetry
+# (poetry -> python -m poetry) on THIS machine — so no task depends on a bare
+# `poetry` being on PATH. Resolution chatter goes to stderr, so $(poetry_exec …)
+# command substitution stays clean. Kept in lockstep with the Makefile's POETRY var.
+poetry_exec() {
+	bash "$SCRIPT_DIR/bin/poetry_exec.sh" "$@"
+}
+
 # -------------------
 # VIRTUAL ENVIRONMENT
 # -------------------
+
+ensure_env() {
+	bash "$SCRIPT_DIR/bin/ensure_env.sh"
+}
 
 venv() {
 	bash "$SCRIPT_DIR/bin/venv.sh"
 }
 
 update_venv() {
-	poetry update
+	poetry_exec update
 	echo "Poetry project updated"
 }
 
 precommit() {
-	poetry run pre-commit install
-	poetry run pre-commit install --hook-type commit-msg
-	poetry run pre-commit install --hook-type pre-push
+	# Hook install lives in bin/precommit.sh so it skips gracefully on a non-git
+	# deploy tree instead of aborting init.
+	bash "$SCRIPT_DIR/bin/precommit.sh"
 }
 
 init() {
+	# Seed .env first; a failed seed is non-blocking so init still runs venv +
+	# precommit — mirrors the Makefile's '-@' on ensure_env.
+	ensure_env || true
 	venv
 	precommit
 }
 
-version_bump_minor() {
-	poetry version minor
+bump_version() {
+	# LEVEL is any Poetry bump rule (patch|minor|major|premajor|preminor|prepatch|
+	# prerelease) or an explicit version (e.g. 1.4.0); Poetry validates it and fails
+	# loud on a bad value. Accepts LEVEL=<x> (parity with the Makefile) or a positional
+	# argument; defaults to patch.
+	local str_level="${LEVEL:-${1:-patch}}"
+	poetry_exec version "$str_level"
 	git add pyproject.toml
-	echo "Version bumped to $(poetry version -s)"
+	echo "Version bumped to $(poetry_exec version -s)"
 }
 
 # -------------------
@@ -48,22 +68,22 @@ get_corporate_ca() {
 # -------------------
 
 unit_tests() {
-	poetry run pytest tests/unit/
+	poetry_exec run pytest tests/unit/
 }
 
 integration_tests() {
-	poetry run pytest tests/integration/
+	poetry_exec run pytest tests/integration/
 }
 
 test_cov() {
-	poetry run pytest tests/unit/ --cov=src
-	poetry run coverage report -m
-	poetry run coverage xml -o coverage.xml
-	poetry run genbadge coverage -i coverage.xml -o coverage.svg
+	poetry_exec run pytest tests/unit/ --cov=src
+	poetry_exec run coverage report -m
+	poetry_exec run coverage xml -o coverage.xml
+	poetry_exec run genbadge coverage -i coverage.xml -o coverage.svg
 }
 
 test_cov_report() {
-	poetry run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-report=html
+	poetry_exec run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-report=html
 	echo "HTML coverage report at htmlcov/index.html"
 }
 
@@ -73,7 +93,7 @@ test_cov_serve() {
 
 test_slowest() {
 	echo "Running tests to identify the 20 slowest tests..."
-	poetry run pytest tests/unit/ --durations=20 --tb=short
+	poetry_exec run pytest tests/unit/ --durations=20 --tb=short
 }
 
 test_feat() {
@@ -81,7 +101,7 @@ test_feat() {
 		echo "Usage: FEAT=<keyword> ./tasks.sh test_feat"
 		exit 1
 	fi
-	poetry run pytest tests/unit/ -k "$FEAT"
+	poetry_exec run pytest tests/unit/ -k "$FEAT"
 }
 
 test_urls_docstrings() {
@@ -97,19 +117,19 @@ fix_playwright() {
 # -------------------
 
 lint() {
-	poetry run ruff check --fix .
-	poetry run ruff format .
-	(cd src && poetry run mypy --config-file ../mypy.ini .)
-	poetry run codespell .
-	poetry run pydocstyle .
-	poetry run python bin/check_docstrings.py
+	poetry_exec run ruff check --fix .
+	poetry_exec run ruff format .
+	(cd src && poetry_exec run mypy --config-file ../mypy.ini .)
+	poetry_exec run codespell .
+	poetry_exec run pydocstyle .
+	poetry_exec run python bin/check_docstrings.py
 	bash "$SCRIPT_DIR/bin/lint_shell.sh"
 	bash "$SCRIPT_DIR/bin/lint_sql.sh"
 	bash "$SCRIPT_DIR/bin/lint_yaml.sh"
 }
 
 check_docstrings() {
-	poetry run python bin/check_docstrings.py
+	poetry_exec run python bin/check_docstrings.py
 }
 
 # -------------------
@@ -170,8 +190,8 @@ fi
 # -------------------
 
 docs_server() {
-	poetry install --with docs
-	poetry run mkdocs serve -a 0.0.0.0:8000 --livereload
+	poetry_exec install --with docs
+	poetry_exec run mkdocs serve -a 0.0.0.0:8000 --livereload
 }
 
 # -------------------
@@ -192,11 +212,12 @@ show_help() {
 Usage: ./tasks.sh <command>
 
 Virtual Environment
-  init                 Bootstrap venv + install pre-commit hooks
+  init                 Seed .env, bootstrap venv, install pre-commit hooks
+  ensure_env           Seed .env from .env.example if .env is missing
   venv                 Create Poetry venv and install dependencies
   update_venv          Update all Poetry dependencies
-  precommit            Install pre-commit hooks (pre-push + commit-msg)
-  version_bump_minor   Bump minor version in pyproject.toml
+  precommit            Install pre-commit hooks (commit-msg + pre-push; skips off a git tree)
+  bump_version         Bump version: LEVEL=<patch|minor|major|pre*|X.Y.Z> (default patch); also accepts a positional arg
 
 Corporate CA
   get_corporate_ca     Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)
@@ -247,10 +268,11 @@ EOF
 
 case "${1:-help}" in
 	init)                init ;;
+	ensure_env)          ensure_env ;;
 	venv)                venv ;;
 	update_venv)         update_venv ;;
 	precommit)           precommit ;;
-	version_bump_minor)  version_bump_minor ;;
+	bump_version)        bump_version "${2:-}" ;;
 	get_corporate_ca)    get_corporate_ca ;;
 	unit_tests)          unit_tests ;;
 	integration_tests)   integration_tests ;;
