@@ -132,6 +132,13 @@ check_docstrings() {
 	poetry_exec run python bin/check_docstrings.py
 }
 
+install_shell_linters() {
+	# Optional system-binary install of shellcheck + shfmt. The primary route is pip
+	# (shellcheck-py/shfmt-py dev-deps); this helps boxes whose venv drive blocks the
+	# vendored binary.
+	bash "$SCRIPT_DIR/bin/install_shell_linters.sh"
+}
+
 # -------------------
 # DATABASE
 # -------------------
@@ -236,6 +243,7 @@ Testing
 Linting
   lint                 Run ruff, mypy, codespell, pydocstyle, check_docstrings, shell/sql/yaml
   check_docstrings     Check docstring type/raises consistency
+  install_shell_linters  Install shellcheck + shfmt as system binaries (optional; pip is primary)
 
 Database
   db_up                Start Docker services, ensure schema, apply migrations
@@ -267,40 +275,41 @@ EOF
 # -------------------
 
 case "${1:-help}" in
-	init)                init ;;
-	ensure_env)          ensure_env ;;
-	venv)                venv ;;
-	update_venv)         update_venv ;;
-	precommit)           precommit ;;
-	bump_version)        bump_version "${2:-}" ;;
-	get_corporate_ca)    get_corporate_ca ;;
-	unit_tests)          unit_tests ;;
-	integration_tests)   integration_tests ;;
-	test_cov)            test_cov ;;
-	test_cov_report)     test_cov_report ;;
-	test_cov_serve)      test_cov_serve ;;
-	test_slowest)        test_slowest ;;
-	test_feat)           test_feat ;;
-	test_urls_docstrings) test_urls_docstrings ;;
-	fix_playwright)      fix_playwright ;;
-	lint)                lint ;;
-	check_docstrings)    check_docstrings ;;
-	db_up)               db_up ;;
-	db_backup)           db_backup ;;
-	db_restore)          db_restore ;;
-	docs_server)         docs_server ;;
-	run)                 run ;;
-	export_context)      export_context "${2:-}" ;;
-	ship)                ship ;;
-	new_branch)          new_branch "${2:-}" ;;
-	git_merge_to_main)   git_merge_to_main "${2:-}" ;;
-	git_diff_export)     git_diff_export ;;
-	git_diff_check)      git_diff_check "${2:-}" ;;
-	git_diff_apply)      git_diff_apply "${2:-}" ;;
-	help|--help|-h)      show_help ;;
-	*)
-		echo "Unknown command: $1"
-		show_help
-		exit 1
-		;;
+init) init ;;
+ensure_env) ensure_env ;;
+venv) venv ;;
+update_venv) update_venv ;;
+precommit) precommit ;;
+bump_version) bump_version "${2:-}" ;;
+get_corporate_ca) get_corporate_ca ;;
+unit_tests) unit_tests ;;
+integration_tests) integration_tests ;;
+test_cov) test_cov ;;
+test_cov_report) test_cov_report ;;
+test_cov_serve) test_cov_serve ;;
+test_slowest) test_slowest ;;
+test_feat) test_feat ;;
+test_urls_docstrings) test_urls_docstrings ;;
+fix_playwright) fix_playwright ;;
+lint) lint ;;
+check_docstrings) check_docstrings ;;
+install_shell_linters) install_shell_linters ;;
+db_up) db_up ;;
+db_backup) db_backup ;;
+db_restore) db_restore ;;
+docs_server) docs_server ;;
+run) run ;;
+export_context) export_context "${2:-}" ;;
+ship) ship ;;
+new_branch) new_branch "${2:-}" ;;
+git_merge_to_main) git_merge_to_main "${2:-}" ;;
+git_diff_export) git_diff_export ;;
+git_diff_check) git_diff_check "${2:-}" ;;
+git_diff_apply) git_diff_apply "${2:-}" ;;
+help | --help | -h) show_help ;;
+*)
+	echo "Unknown command: $1"
+	show_help
+	exit 1
+	;;
 esac

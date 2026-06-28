@@ -88,7 +88,13 @@ fix_playwright:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint check_docstrings
+.PHONY: lint check_docstrings install_shell_linters
+
+# Optional: install shellcheck + shfmt as SYSTEM binaries (choco/scoop/brew/apt).
+# The primary route is pip (shellcheck-py/shfmt-py dev-deps via `poetry install`);
+# this is only for boxes whose venv drive blocks executing the vendored binary.
+install_shell_linters:
+	@bash bin/install_shell_linters.sh
 
 lint:
 	@$(POETRY) run ruff check --fix .
@@ -183,6 +189,7 @@ help:
 	@echo "Linting"
 	@echo "  lint                 Run ruff, codespell, pydocstyle, check_docstrings"
 	@echo "  check_docstrings     Check docstring type/raises consistency"
+	@echo "  install_shell_linters  Install shellcheck + shfmt as system binaries (optional; pip is primary)"
 	@echo ""
 	@echo "Database"
 	@echo "  db_up                Start Docker services, ensure schema, apply migrations"

@@ -69,7 +69,17 @@ must route through the resolver.** How each surface routes:
 |---------|---------------------|
 | `Makefile` / `tasks.sh` / `.pre-commit-config.yaml` | `bash bin/poetry_exec.sh <args>` — the wrapper resolves+`exec`s Poetry, routing resolution status to **stderr** so `$(… version -s)` stays clean |
 | sourcing `bin/*.sh` that needs Poetry (`db.sh`, `fix_playwright.sh`, `precommit.sh`) | source `lib/bootstrap.sh`, `bootstrap_init` + `ensure_poetry`, then `run_poetry run …` |
-| optional-linter `bin/*.sh` (`lint_sql.sh`, `lint_yaml.sh`) | **resolve, don't install**: `resolve_python` → `resolve_poetry \|\| skip (exit 0)` → `run_poetry run …`. Never guard on `command -v poetry` (it misses a `python -m poetry`-only box and skips silently) |
+| optional-linter `bin/*.sh` (`lint_sql.sh`, `lint_yaml.sh`, `lint_shell.sh`) | **resolve, don't install**: `resolve_python` → `resolve_poetry \|\| skip (exit 0)` → `run_poetry run …`. Never guard on `command -v poetry` (it misses a `python -m poetry`-only box and skips silently) |
+
+**Pip-vendored lint CLIs (`shellcheck`, `shfmt`) resolve via `poetry run`, not bare
+PATH.** `shellcheck-py`/`shfmt-py` are dev-deps that vendor their binaries into the
+venv (incl. `win_amd64` wheels), so `lint_shell.sh` tries `poetry run <tool>` first
+(found wherever the venv lives, incl. a Windows UNC/mapped `A:` drive), then a system
+binary, then skips — probing with `--version` so a real lint failure is never mistaken
+for "absent". A bare-PATH `command -v` would silently skip both linters when `make lint`
+runs outside the venv. `bin/install_shell_linters.sh` (`make install_shell_linters`) is
+an **optional** system-binary installer (choco/scoop/brew/apt) for boxes whose venv drive
+blocks executing the vendored binary; the pip route is primary.
 
 `bin/ensure_env.sh` seeds `.env` from `.env.example` for `init` (no-op if `.env`
 exists; aborts only itself on a missing template). `bin/precommit.sh` installs the

@@ -21,7 +21,7 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 | `ruff.toml` | Ruff lint + format config (line-length 99, tab indent, double quotes, NumPy docstrings, full rule set) |
 | `.pre-commit-config.yaml` | Hooks: ruff, pydocstyle (DAR), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge |
 | `pytest.ini` | Pytest configuration shared by all generated projects |
-| `Makefile` | Targets: `init` (`ensure_env` → `venv` → `precommit`), `ensure_env`, `venv`, `update_venv`, `precommit`, `bump_version` (`LEVEL=`-parameterized), testing (`test_cov` uses `genbadge`), linting (`lint`, `check_docstrings`), database (`db_up`, `db_backup`, `db_restore`), `run`, `export_context`, `ship`, docs. Every Poetry call routes through `POETRY := bash bin/poetry_exec.sh` — never a bare `poetry`. Offline-only targets (`new_branch`, `git_merge_to_main`, `git_diff_*`) come from `-include make/offline.mk` |
+| `Makefile` | Targets: `init` (`ensure_env` → `venv` → `precommit`), `ensure_env`, `venv`, `update_venv`, `precommit`, `bump_version` (`LEVEL=`-parameterized), testing (`test_cov` uses `genbadge`), linting (`lint`, `check_docstrings`, `install_shell_linters`), database (`db_up`, `db_backup`, `db_restore`), `run`, `export_context`, `ship`, docs. Every Poetry call routes through `POETRY := bash bin/poetry_exec.sh` — never a bare `poetry`. Offline-only targets (`new_branch`, `git_merge_to_main`, `git_diff_*`) come from `-include make/offline.mk` |
 | `tasks.sh` | Non-make equivalent of the project Makefile targets (must stay in sync) |
 | `.gitlint` | gitlint length limits (title ≤ 72, body line ≤ 80) — made explicit so they are not discovered only on a late hook rejection |
 | `.vscode/settings.json` | Shipped VS Code settings: POSIX interpreter default (Windows path commented), `src` analysis path, pytest, tab-4 Python, INI `files.associations` for `.gitlint`/`.codespellrc`/`.pydocstyle`, poetry env manager |
@@ -70,6 +70,8 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 | `bin/ship.sh` | `make ship` — packages the committed default-branch tree into `dist/<repo-kebab>_YYYYMMDD_HHMMSS.zip` (sourced from `templates/common/bin/`) |
 | `bin/run.sh` | Run the project entrypoint (auto-resolves `src/main.py` → `src/controller/main.py` → `src/<pkg>/main.py`); skips reinstall when `.venv` is newer than `pyproject.toml`/`poetry.lock`; Poetry→pip→system fallback chain; sources `lib/bootstrap.sh` + `lib/pip_fallback.sh` and wires the corporate CA |
 | `bin/check_unix_filenames.sh` | Pre-commit hook: reject filenames with special characters |
+| `bin/lint_shell.sh` | `make lint` + `lint-shell` hook — shellcheck + shfmt over `bin/**/*.sh` + `tasks.sh`. Resolves each vendored CLI via `poetry run` (shellcheck-py/shfmt-py), then a system binary, then skips |
+| `bin/install_shell_linters.sh` | `make install_shell_linters` — **optional** system-binary install of shellcheck + shfmt (choco/scoop/brew/apt). The pip dev-deps are primary; this is for boxes whose venv drive blocks the vendored binary |
 | `bin/fix_playwright.sh` | Reinstall Playwright browsers — OS-aware `--with-deps` (Linux only); resolves Poetry via the bootstrap lib (`run_poetry`) |
 | `bin/test_urls_docstrings.sh` | Pre-commit hook: validate URLs in docstrings (1-week cache) |
 | `assets/logo_lorem_ipsum.png` | Placeholder logo copied into new projects |

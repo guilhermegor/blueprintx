@@ -56,7 +56,7 @@ has_uncommitted_changes() {
 		if [[ "$line" != \?\?* ]]; then
 			return 0
 		fi
-	done <<< "$str_status"
+	done <<<"$str_status"
 
 	return 1
 }
@@ -69,7 +69,7 @@ has_untracked_files() {
 		if [[ "$line" == \?\?* ]]; then
 			return 0
 		fi
-	done <<< "$str_status"
+	done <<<"$str_status"
 
 	return 1
 }

@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 CACHE_DIR=".url_check_cache"
-CACHE_TTL=$((60 * 60 * 24 * 7))  # 1 week in seconds
+CACHE_TTL=$((60 * 60 * 24 * 7)) # 1 week in seconds
 
 get_cache() {
 	local url="$1"
@@ -21,7 +21,7 @@ get_cache() {
 		local int_now
 		int_now=$(date +%s)
 
-		if (( int_now - int_timestamp < CACHE_TTL )); then
+		if ((int_now - int_timestamp < CACHE_TTL)); then
 			cat "$str_cache_file"
 			return 0
 		fi
@@ -34,7 +34,7 @@ set_cache() {
 	local str_status="$2"
 	local str_cache_file
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
-	echo "$str_status" > "$str_cache_file"
+	echo "$str_status" >"$str_cache_file"
 }
 
 clean_cache() {
@@ -170,7 +170,7 @@ process_python_files() {
 					line="${line#*$url}"
 				done
 			fi
-		done < "$file"
+		done <"$file"
 	done < <(find "$str_root_dir" -type f -name "*.py" -print0)
 
 	if [[ $has_errors -eq 0 ]]; then

@@ -118,7 +118,7 @@ backup() {
 
 	docker compose exec -T \
 		-e PGPASSWORD="$str_db_password" \
-		postgresql pg_dump -U "$str_db_user" -Fc "$str_db_name" > "$str_dump_file"
+		postgresql pg_dump -U "$str_db_user" -Fc "$str_db_name" >"$str_dump_file"
 
 	print_status "success" "Backup written to $str_dump_file"
 }
@@ -146,7 +146,7 @@ restore() {
 	docker compose exec -T \
 		-e PGPASSWORD="$str_db_password" \
 		postgresql pg_restore -U "$str_db_user" -d "$str_db_name" \
-		--clean --if-exists --no-owner -Fc < "$str_dump_file"
+		--clean --if-exists --no-owner -Fc <"$str_dump_file"
 
 	print_status "success" "Restore complete"
 }
@@ -158,21 +158,21 @@ main() {
 	load_env
 
 	case "$str_cmd" in
-		up)
-			start_services
-			ensure_schema
-			apply_migrations
-			;;
-		backup)
-			backup
-			;;
-		restore)
-			restore
-			;;
-		*)
-			print_status "error" "Unknown sub-command: $str_cmd (use: up | backup | restore)"
-			exit 1
-			;;
+	up)
+		start_services
+		ensure_schema
+		apply_migrations
+		;;
+	backup)
+		backup
+		;;
+	restore)
+		restore
+		;;
+	*)
+		print_status "error" "Unknown sub-command: $str_cmd (use: up | backup | restore)"
+		exit 1
+		;;
 	esac
 }
 

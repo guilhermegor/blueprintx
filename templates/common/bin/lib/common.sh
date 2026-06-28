@@ -18,13 +18,13 @@
 # and _read_env_var — do not let them drift.
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    echo "lib/common.sh is meant to be sourced, not executed." >&2
-    exit 1
+	echo "lib/common.sh is meant to be sourced, not executed." >&2
+	exit 1
 fi
 
 # Re-sourcing guard
 if [ -n "${_BX_COMMON_LOADED:-}" ]; then
-    return 0
+	return 0
 fi
 _BX_COMMON_LOADED=1
 
@@ -53,41 +53,41 @@ NC='\033[0m'
 # If $LOG_FILE is set, every call appends a timestamped line to it.
 
 print_status() {
-    local status="$1"
-    local message="$2"
+	local status="$1"
+	local message="$2"
 
-    case "$status" in
-        success)
-            echo -e "${GREEN}[✓]${NC} ${message}"
-            ;;
-        error)
-            echo -e "${RED}[✗]${NC} ${message}" >&2
-            ;;
-        warning)
-            echo -e "${YELLOW}[!]${NC} ${message}"
-            ;;
-        info)
-            echo -e "${BLUE}[i]${NC} ${message}"
-            ;;
-        config)
-            echo -e "${CYAN}[→]${NC} ${message}"
-            ;;
-        debug)
-            echo -e "${MAGENTA}[»]${NC} ${message}"
-            ;;
-        section)
-            echo -e "\n${MAGENTA}========================================${NC}"
-            echo -e "${MAGENTA} $message${NC}"
-            echo -e "${MAGENTA}========================================${NC}\n"
-            ;;
-        *)
-            echo -e "[ ] ${message}"
-            ;;
-    esac
+	case "$status" in
+	success)
+		echo -e "${GREEN}[✓]${NC} ${message}"
+		;;
+	error)
+		echo -e "${RED}[✗]${NC} ${message}" >&2
+		;;
+	warning)
+		echo -e "${YELLOW}[!]${NC} ${message}"
+		;;
+	info)
+		echo -e "${BLUE}[i]${NC} ${message}"
+		;;
+	config)
+		echo -e "${CYAN}[→]${NC} ${message}"
+		;;
+	debug)
+		echo -e "${MAGENTA}[»]${NC} ${message}"
+		;;
+	section)
+		echo -e "\n${MAGENTA}========================================${NC}"
+		echo -e "${MAGENTA} $message${NC}"
+		echo -e "${MAGENTA}========================================${NC}\n"
+		;;
+	*)
+		echo -e "[ ] ${message}"
+		;;
+	esac
 
-    if [ -n "${LOG_FILE:-}" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$status] $message" >> "$LOG_FILE"
-    fi
+	if [ -n "${LOG_FILE:-}" ]; then
+		echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$status] $message" >>"$LOG_FILE"
+	fi
 }
 
 # ============================================================================
@@ -102,28 +102,28 @@ print_status() {
 # git_merge_to_main.sh so both agree on the integration branch.
 
 resolve_default_branch() {
-    local explicit="${1:-}"
-    if [ -n "$explicit" ]; then
-        echo "$explicit"
-        return 0
-    fi
-    if [ -n "${DEFAULT_BRANCH:-}" ]; then
-        echo "$DEFAULT_BRANCH"
-        return 0
-    fi
+	local explicit="${1:-}"
+	if [ -n "$explicit" ]; then
+		echo "$explicit"
+		return 0
+	fi
+	if [ -n "${DEFAULT_BRANCH:-}" ]; then
+		echo "$DEFAULT_BRANCH"
+		return 0
+	fi
 
-    local head_ref
-    head_ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-    if [ -n "$head_ref" ]; then
-        echo "${head_ref#origin/}"
-        return 0
-    fi
+	local head_ref
+	head_ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+	if [ -n "$head_ref" ]; then
+		echo "${head_ref#origin/}"
+		return 0
+	fi
 
-    if git show-ref --verify --quiet refs/heads/main; then
-        echo "main"
-        return 0
-    fi
-    echo "master"
+	if git show-ref --verify --quiet refs/heads/main; then
+		echo "main"
+		return 0
+	fi
+	echo "master"
 }
 
 # ============================================================================
@@ -140,24 +140,24 @@ resolve_default_branch() {
 # assignment wins; a missing file or key yields an empty string.
 
 _read_env_var() {
-    local var_name="$1"
-    local env_file="${ENV_FILE:-.env}"
-    [ -f "$env_file" ] || return 0
+	local var_name="$1"
+	local env_file="${ENV_FILE:-.env}"
+	[ -f "$env_file" ] || return 0
 
-    local line
-    line="$(grep -E "^[[:space:]]*${var_name}=" "$env_file" | tail -n 1)"
-    [ -n "$line" ] || return 0
+	local line
+	line="$(grep -E "^[[:space:]]*${var_name}=" "$env_file" | tail -n 1)"
+	[ -n "$line" ] || return 0
 
-    local value="${line#*=}"
-    value="${value%$'\r'}"
-    if [[ "$value" == \"*\" ]]; then
-        value="${value#\"}"
-        value="${value%\"}"
-    elif [[ "$value" == \'*\' ]]; then
-        value="${value#\'}"
-        value="${value%\'}"
-    fi
-    printf '%s' "$value"
+	local value="${line#*=}"
+	value="${value%$'\r'}"
+	if [[ "$value" == \"*\" ]]; then
+		value="${value#\"}"
+		value="${value%\"}"
+	elif [[ "$value" == \'*\' ]]; then
+		value="${value#\'}"
+		value="${value%\'}"
+	fi
+	printf '%s' "$value"
 }
 
 # ============================================================================
@@ -173,7 +173,7 @@ _read_env_var() {
 # of bare `mkdir -p` in offline-git recipes and anywhere an output dir is created.
 
 ensure_dir() {
-    local dir_path="$1"
-    [ -d "$dir_path" ] && return 0
-    mkdir -p "$dir_path"
+	local dir_path="$1"
+	[ -d "$dir_path" ] && return 0
+	mkdir -p "$dir_path"
 }
