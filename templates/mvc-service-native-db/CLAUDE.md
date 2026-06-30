@@ -82,7 +82,7 @@ Add a `_connect_<name>()` helper in `config/connection_db.py` and register it in
 
 ## Data-handling guardrails (advisory)
 
-When a pipeline merges, overrides, or validates tabular data, four recurring traps are
+When a pipeline merges, overrides, or validates tabular data, five recurring traps are
 worth guarding against (apply when relevant — these are advisories, not scaffolded code):
 
 - **Override layers must re-apply the canonical normaliser.** A substitution/override path
@@ -101,6 +101,15 @@ worth guarding against (apply when relevant — these are advisories, not scaffo
   controller boundary — notify, skip the override, don't abort the run) and be filtered to the
   current month in the model (accept `06/2026` / `2026-06` / `202606` / a datetime cell; log the
   dropped count). Otherwise last period's rows silently re-apply to the wrong target.
+- **Canonicalise a join key through the SAME helper on BOTH sides, at the read boundary.**
+  When matching frames on a human/regulatory id (CNPJ/CPF/code), normalise the key with one
+  canonical helper (e.g. `utils.br_identifiers.unmask_cnpj`) as each frame enters memory —
+  never compare a `.map(unmask_*)` series against a bare `.astype(str)` one. A lossy store
+  (Excel coercing a 14-digit string to a number, a sqlite TEXT round-trip) drops a leading
+  zero, so one side keys on 13 digits and the other on 14 → the join misses *exactly* the
+  leading-zero rows, silently (no error, just no match — an approved override dropped).
+  Canonicalise on read (healing the persisted store too) and build a normalised key for both
+  operands of every merge/overlay.
 
 ## Naming conventions
 

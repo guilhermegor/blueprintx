@@ -42,6 +42,34 @@ def test_to_decimal_rejects_bool() -> None:
 	assert to_decimal(True, 2) == Decimal("0.00")
 
 
+@pytest.mark.parametrize(
+	"value",
+	[
+		float("nan"),
+		float("inf"),
+		float("-inf"),
+		Decimal("NaN"),
+		Decimal("Infinity"),
+		Decimal("-Infinity"),
+		"nan",
+		"inf",
+		"NaN",
+	],
+)
+def test_to_decimal_non_finite_returns_default(value: float | Decimal | str) -> None:
+	"""Non-finite input (NaN/±Inf from float, Decimal, or string) falls back to default.
+
+	Parameters
+	----------
+	value : float or Decimal or str
+		A non-finite value the coercion contract must map to ``default`` rather than
+		leak (a leaked ``Decimal('NaN')`` raises ``InvalidOperation`` downstream).
+	"""
+	cls_result = to_decimal(value, 2, default=Decimal("-1"))
+	assert cls_result == Decimal("-1.00")
+	assert cls_result.is_finite()
+
+
 def test_to_decimal_negative_places_raises() -> None:
 	"""A negative ``int_places`` fails fast with ``ValueError``."""
 	with pytest.raises(ValueError, match="non-negative"):
