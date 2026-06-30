@@ -26,6 +26,7 @@ INCLUDE_WEBHOOK=false
 WEBHOOK_PLATFORM="teams"
 INCLUDE_EMAIL=false
 EMAIL_BACKEND="outlook"
+INCLUDE_MULTI_PIPELINE=false
 
 # ============================================================================
 # FUNCTIONS
@@ -390,6 +391,29 @@ prompt_email() {
     esac
 }
 
+# Multi-intent pipeline (opt-in, default No per YAGNI). Yes generates the dispatch trio
+# (pipeline_<intent> + pipeline_dispatch + pipeline_common) + a dispatching main + the
+# PIPELINE_INTENT env key, replacing the single _pipeline.py. Env override MULTI_PIPELINE_OPTIN=true
+# forces Yes non-interactively (used by the multi-mode CI job).
+prompt_pipeline_intent() {
+    local answer
+    if [[ "${MULTI_PIPELINE_OPTIN:-}" == "true" ]]; then
+        INCLUDE_MULTI_PIPELINE=true
+        print_status "config" "Pipeline mode: multi-intent (PIPELINE_INTENT dispatch) [env override]"
+        return
+    fi
+    read -r -p "Does this process have multiple run intents (e.g. send/reconcile/notify)? [y/N]: " answer || true
+    case "$answer" in
+        y | Y)
+            INCLUDE_MULTI_PIPELINE=true
+            print_status "config" "Pipeline mode: multi-intent (PIPELINE_INTENT dispatch)"
+            ;;
+        *)
+            INCLUDE_MULTI_PIPELINE=false
+            ;;
+    esac
+}
+
 # E-mail handler seam (opt-in, mirrors the webhook seam): copy optional/email into
 # src/utils/email (rewrite the canonical chassis.email prefix to utils.email), wire the
 # chosen backend into the controller by replacing the CLS_EMAIL_HANDLER sentinel, and add
@@ -433,6 +457,30 @@ conditional_copy_email() {
     printf '%s' "$email_env" >> "$project_path/.env"
     printf '%s' "$email_env" >> "$project_path/.env.example"
     print_status "success" "E-mail handler (utils/email, backend=$EMAIL_BACKEND) added"
+}
+
+# Multi-intent pipeline (opt-in). Runs LAST among the controller patches so it overwrites
+# main.py with the clean dispatching entry-point; any e-mail/webhook auto-wiring of the single
+# main.py is intentionally discarded (their .env keys + packages remain — wire them into the
+# intent pipelines manually per controller/CLAUDE.md). Copies the dispatch trio, drops the
+# single _pipeline.py, seeds PIPELINE_INTENT, and flips the controller/CLAUDE.md mode marker.
+conditional_apply_multi_pipeline() {
+    local project_path="$1"
+    if [[ "$INCLUDE_MULTI_PIPELINE" != "true" ]]; then return; fi
+    local mp_root="$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/optional/multi_pipeline"
+    local controller_dir="$project_path/src/controller"
+    cp "$mp_root/pipeline_common.py" "$controller_dir/pipeline_common.py"
+    cp "$mp_root/pipeline_send.py" "$controller_dir/pipeline_send.py"
+    cp "$mp_root/pipeline_reconcile.py" "$controller_dir/pipeline_reconcile.py"
+    cp "$mp_root/pipeline_dispatch.py" "$controller_dir/pipeline_dispatch.py"
+    cp "$mp_root/main.py" "$controller_dir/main.py"
+    rm -f "$controller_dir/_pipeline.py"
+    sed -i 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
+    local intent_env
+    intent_env=$'\n# Pipeline intent (multi-intent mode): which purpose to run.\n# Accepts send | reconcile (case/accent/spacing-insensitive); fails loud on a typo.\nPIPELINE_INTENT=send\n'
+    printf '%s' "$intent_env" >> "$project_path/.env"
+    printf '%s' "$intent_env" >> "$project_path/.env.example"
+    print_status "success" "Multi-intent pipeline dispatch wired (send/reconcile; PIPELINE_INTENT)"
 }
 
 copy_global_config() {
@@ -787,6 +835,7 @@ main() {
     prompt_data_dir
     prompt_webhook
     prompt_email
+    prompt_pipeline_intent
     prompt_env_wise_config
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
@@ -803,6 +852,7 @@ main() {
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
     conditional_copy_email "$PROJECT_PATH"
+    conditional_apply_multi_pipeline "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"

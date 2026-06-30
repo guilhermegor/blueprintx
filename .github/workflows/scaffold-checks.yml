@@ -134,6 +134,45 @@ jobs:
           SKELETON: ${{ matrix.skeleton }}
         run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
 
+  scaffold-lint-test-multi:
+    name: Scaffold + lint + test (multi-intent) — ${{ matrix.skeleton }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The multi-intent pipeline opt-in is MVC-only. MULTI_PIPELINE_OPTIN=true forces the
+        # scaffold's pipeline-intent prompt to "yes" non-interactively (inherited by the scaffold
+        # subprocess), so the generated dispatch trio is linted + tested like any other scaffold.
+        skeleton:
+          - mvc-service-native-db
+          - mvc-service-orm-db
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-poetry-${{ hashFiles('templates/*/pyproject.toml') }}
+          restore-keys: pip-poetry-
+
+      - name: Install scaffold tooling (envsubst)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext-base
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Real multi-intent scaffold, then make lint + make unit_tests
+        env:
+          GITHUB_USERNAME: ci-bot
+          SKELETON: ${{ matrix.skeleton }}
+          MULTI_PIPELINE_OPTIN: "true"
+        run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
+
   typecheck-ts:
     name: TypeScript typecheck — react-spa-webpack template
     runs-on: ubuntu-latest
