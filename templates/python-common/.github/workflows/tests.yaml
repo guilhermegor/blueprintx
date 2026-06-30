@@ -66,11 +66,16 @@ jobs:
           print(content)
           ' > pyproject.toml
 
-          # Regenerate lock file, if needed
+          # Fail loud on a stale lock instead of silently regenerating it. A poetry.lock
+          # that no longer matches pyproject.toml means dependencies changed without
+          # re-locking; regenerating here (rm + poetry lock) would re-resolve and upgrade
+          # every dependency to the latest in-range version — a non-reproducible build that
+          # can silently pull a breaking release. Require an intentional `poetry lock` +
+          # commit instead. (A version bump does NOT invalidate the lock — only a dependency
+          # change does — so `make bump_version` never trips this.)
           if ! poetry check --lock; then
-            echo "Lock file is outdated, regenerating..."
-            rm -f poetry.lock
-            poetry lock --no-cache
+            echo "::error::poetry.lock is out of sync with pyproject.toml — run 'poetry lock' locally and commit the result." >&2
+            exit 1
           fi
 
           echo "No groups to exclude, installing all dependencies"
