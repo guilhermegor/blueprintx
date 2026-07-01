@@ -76,7 +76,7 @@ ground `~/dev/perfil_mensal_cvm`. **Branch:** `feat/backport-lessons-store` → 
 
 ## In progress
 
-- [ ] **Email seam (`optional/email/`) mirroring the webhook seam.** A port + adapters +
+- [x] **Email seam (`optional/email/`) mirroring the webhook seam.** A port + adapters +
   factory, opt-in like webhook. Port is **`EmailHandler`** (not `EmailSender`) — the concrete
   handler does more than send (download attachments, body/table extraction), so it is named as
   a handler that can grow. The **shared** Protocol holds only what every backend does (send),
@@ -104,7 +104,7 @@ ground `~/dev/perfil_mensal_cvm`. **Branch:** `feat/backport-lessons-store` → 
 
 ## Decisions to revisit (not blocking)
 
-- [~] **`OutlookGateway` injected into the default `main.py`** — being resolved by the email
+- [x] **`OutlookGateway` injected into the default `main.py`** — resolved by the email
   seam above: the orchestrator will depend on the `EmailSender` port (Outlook injected by
   default), and the seam ships opt-in like the webhook.
 
