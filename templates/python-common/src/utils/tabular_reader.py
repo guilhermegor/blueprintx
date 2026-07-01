@@ -24,6 +24,7 @@ here stays domain-agnostic.
 from __future__ import annotations
 
 from collections.abc import Sequence
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -93,6 +94,7 @@ def read_table(
 	list_columns: Sequence[str] | None = None,
 	str_encoding: str = "utf-8-sig",
 	int_header_row: int = 0,
+	int_csv_quoting: int = csv.QUOTE_MINIMAL,
 ) -> pd.DataFrame:
 	"""Read a file (Excel/CSV/JSON) into a typed, contract-validated DataFrame.
 
@@ -122,6 +124,12 @@ def read_table(
 		first cell). Pass ``"ISO-8859-1"`` for Latin-1 exports. Ignored otherwise.
 	int_header_row : int, optional
 		Excel only: zero-based header-row index (default ``0``). Ignored otherwise.
+	int_csv_quoting : int, optional
+		CSV only: the :mod:`csv` quoting constant passed to the reader (default
+		``csv.QUOTE_MINIMAL``, pandas' own default). Pass ``csv.QUOTE_NONE`` for external
+		``;``-delimited regulatory dumps (e.g. CVM open data), where an upstream submitter's
+		stray ``"`` is literal text, not a field wrapper — the default engine would swallow the
+		delimiter and shift subsequent columns, corrupting the parse. Ignored otherwise.
 
 	Returns
 	-------
@@ -134,7 +142,14 @@ def read_table(
 		When the file violates ``cls_contract``.
 	"""
 	df_raw = _read_raw(
-		path_file, str_sheet, None, str_csv_sep, list_columns, str_encoding, int_header_row
+		path_file,
+		str_sheet,
+		None,
+		str_csv_sep,
+		list_columns,
+		str_encoding,
+		int_header_row,
+		int_csv_quoting,
 	)
 	return _finalize(df_raw, dict_dtypes, list_date_cols, cls_contract)
 
@@ -341,6 +356,7 @@ def _read_raw(
 	list_columns: Sequence[str] | None = None,
 	str_encoding: str = "utf-8-sig",
 	int_header_row: int = 0,
+	int_csv_quoting: int = csv.QUOTE_MINIMAL,
 ) -> pd.DataFrame:
 	"""Read a file into a raw DataFrame, dispatching by extension (CSV, JSON, or Excel).
 
@@ -362,6 +378,9 @@ def _read_raw(
 		cell); pass ``"ISO-8859-1"`` for Latin-1 exports.
 	int_header_row : int, optional
 		Excel header-row index (default ``0``). Ignored for CSV/JSON.
+	int_csv_quoting : int, optional
+		CSV :mod:`csv` quoting constant (default ``csv.QUOTE_MINIMAL``). ``csv.QUOTE_NONE``
+		treats a stray ``"`` as literal text — correct for ``;``-delimited regulatory dumps.
 
 	Returns
 	-------
@@ -385,8 +404,15 @@ def _read_raw(
 				header=None,
 				names=list(list_columns),
 				encoding=str_encoding,
+				quoting=int_csv_quoting,
 			)
-		return pd.read_csv(path_file, dtype=str_dtype, sep=str_csv_sep, encoding=str_encoding)
+		return pd.read_csv(
+			path_file,
+			dtype=str_dtype,
+			sep=str_csv_sep,
+			encoding=str_encoding,
+			quoting=int_csv_quoting,
+		)
 	if str_suffix == ".json":
 		df_json = pd.read_json(path_file)
 		return df_json.astype(str_dtype) if str_dtype is not None else df_json
