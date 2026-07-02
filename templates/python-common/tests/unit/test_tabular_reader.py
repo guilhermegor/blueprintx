@@ -100,9 +100,7 @@ def test_read_table_quote_none_reads_malformed_regulatory_dump(tmp_path: Path) -
 	path_csv = _write_malformed_quote_csv(tmp_path)
 	cls_contract = FileContract("data", "data", (), ())
 	dict_dtypes = {"code": "str", "amount": "str", "note": "str"}
-	df_none = read_table(
-		path_csv, "", dict_dtypes, cls_contract, int_csv_quoting=csv.QUOTE_NONE
-	)
+	df_none = read_table(path_csv, "", dict_dtypes, cls_contract, int_csv_quoting=csv.QUOTE_NONE)
 	assert len(df_none) == 3  # all rows survive; the stray quote is literal text
 	assert df_none["note"].iloc[1] == '"parecer aprovado'
 	assert df_none["amount"].tolist() == ["10", "20", "30"]
