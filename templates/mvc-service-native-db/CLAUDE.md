@@ -57,7 +57,7 @@ and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 ## Key conventions
 
-**`src/controller/main.py` is a thin, script-style entry-point — it defines no functions.** It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), builds `controller._pipeline.PipelineOrchestrator` with those collaborators injected (the connection factory, `output_path`, the run-context dict, and an `OutlookGateway` e-mail seam), and calls `.run()`. The **phase sequencing lives in `controller/_pipeline.py`** (`PipelineOrchestrator`): `run()` calls `_log_context` → `_open_connection` → `_read` (model) → `_render` (view) → `_write_summary` → `_notify`, each phase bracketed by log lines, the DB connection always closed in a `try/finally`. Business logic stays in the model; the orchestrator only wires and sequences. If the webhook opt-in was chosen at scaffold time, `main.py` injects a production-gated `WebhookNotifier` (`CLS_WEBHOOK` when `ENV` passes the gate, else `None`) plus `MSG_WEBHOOK` into the orchestrator; `run()`'s final `_notify` phase sends it — a no-op when no notifier is wired. The send is part of `run()`, not a tail appended to `main.py`.
+**`src/controller/main.py` is a thin, script-style entry-point — it defines no functions.** It imports the `config.startup` singletons (`LOGGER`, `ENVIRONMENT`, `APP_NAME`, paths, `output_path`, `YAML_INPUTS`), builds `controller._pipeline.PipelineOrchestrator` with those collaborators injected (the connection factory, `output_path`, the run-context dict, and an `OutlookGateway` e-mail seam), and calls `.run()`. The **phase sequencing lives in `controller/_pipeline.py`** (`PipelineOrchestrator`): `run()` calls `_log_context` → `_open_connection` → `_read` (model) → `_render` (view) → `_write_summary` → `_notify`, each phase bracketed by log lines, the DB connection always closed in a `try/finally`. Business logic stays in the model; the orchestrator only wires and sequences. If the webhook opt-in was chosen at scaffold time, `main.py` injects a production-gated `WebhookNotifier` (`CLS_WEBHOOK` when `ENV` passes the gate, else `None`) plus `MSG_WEBHOOK` into the orchestrator; `run()`'s final `_notify` phase sends it — a no-op when no notifier is wired. The send is part of `run()`, not a tail appended to `main.py`. **Multi-intent (opt-in):** if you chose multiple run intents at scaffold time, `main.py` instead dispatches on `PIPELINE_INTENT` via `controller/pipeline_dispatch.build_pipeline`, with one `controller/pipeline_<intent>.py` per purpose (e.g. `send`/`reconcile`) and the shared phases in `controller/pipeline_common.py` — see `src/controller/CLAUDE.md`, which documents both modes and carries the `<!-- pipeline-mode: -->` marker for this project.
 
 **`config/connection_db.build_connection()`** reads `DB_BACKEND` from `.env` and returns a raw DB-API 2.0 connection. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. Drivers are imported lazily — only the configured backend's driver must be installed. SQL Server honours `DB_MSSQL_AUTH` (`sql` for UID/PWD, `aad` for Azure AD Interactive).
 
@@ -82,7 +82,7 @@ Add a `_connect_<name>()` helper in `config/connection_db.py` and register it in
 
 ## Data-handling guardrails (advisory)
 
-When a pipeline merges, overrides, or validates tabular data, three recurring traps are
+When a pipeline merges, overrides, or validates tabular data, five recurring traps are
 worth guarding against (apply when relevant — these are advisories, not scaffolded code):
 
 - **Override layers must re-apply the canonical normaliser.** A substitution/override path
@@ -95,6 +95,21 @@ worth guarding against (apply when relevant — these are advisories, not scaffo
 - **Per-source keyed merge: restrict each partition to the keys it owns before concat.**
   When merging partitions keyed by an id, scope each partition to its own keys first so the
   merge key stays unique and a row from one source never overwrites another's.
+- **A time-scoped override input carries a required reference-month and is filtered to the
+  run's competency.** A "backdoor" file that forces records into a *specific* run must declare
+  a reference-month column (make it contract-required, so a file lacking it is reproved at the
+  controller boundary — notify, skip the override, don't abort the run) and be filtered to the
+  current month in the model (accept `06/2026` / `2026-06` / `202606` / a datetime cell; log the
+  dropped count). Otherwise last period's rows silently re-apply to the wrong target.
+- **Canonicalise a join key through the SAME helper on BOTH sides, at the read boundary.**
+  When matching frames on a human/regulatory id (CNPJ/CPF/code), normalise the key with one
+  canonical helper (e.g. `utils.br_identifiers.unmask_cnpj`) as each frame enters memory —
+  never compare a `.map(unmask_*)` series against a bare `.astype(str)` one. A lossy store
+  (Excel coercing a 14-digit string to a number, a sqlite TEXT round-trip) drops a leading
+  zero, so one side keys on 13 digits and the other on 14 → the join misses *exactly* the
+  leading-zero rows, silently (no error, just no match — an approved override dropped).
+  Canonicalise on read (healing the persisted store too) and build a normalised key for both
+  operands of every merge/overlay.
 
 ## Naming conventions
 

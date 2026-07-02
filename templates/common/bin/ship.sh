@@ -96,7 +96,7 @@ create_zip() {
 	local str_archive="$2"
 	mkdir -p "$(dirname "$str_archive")"
 	print_status "info" "Zipping to $str_archive ..."
-	( cd "$str_stage_root" && zip -q -r "$str_archive" "$str_repo_kebab" )
+	(cd "$str_stage_root" && zip -q -r "$str_archive" "$str_repo_kebab")
 }
 
 main() {
@@ -130,7 +130,10 @@ main() {
 	str_archive="$str_ship_dir/${str_archive_base}.zip"
 
 	stage_copy "$str_stage_dir"
-	[[ -d "$str_stage_dir" ]] || { print_status "error" "Staging failed"; exit 1; }
+	[[ -d "$str_stage_dir" ]] || {
+		print_status "error" "Staging failed"
+		exit 1
+	}
 	copy_git_diffs "$str_stage_dir"
 	create_zip "$str_stage_root" "$str_archive"
 

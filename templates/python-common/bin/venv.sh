@@ -88,17 +88,36 @@ install_playwright_in_local_venv() {
 	str_venv_python="$(pip_fallback_project_venv_python)"
 
 	if [[ -x "$str_venv_python" ]] && "$str_venv_python" -c "import playwright" >/dev/null 2>&1; then
-		print_status "info" "Installing Playwright browsers in local .venv..."
-		"$str_venv_python" -m playwright install chromium --with-deps
-		print_status "success" "Playwright installed"
+		try_install_playwright_browsers "$str_venv_python"
 	fi
 }
 
 install_playwright() {
 	if run_poetry run python -c "import playwright" 2>/dev/null; then
-		print_status "info" "Installing Playwright browsers..."
-		run_poetry run playwright install chromium --with-deps
-		print_status "success" "Playwright installed"
+		try_install_playwright_browsers run_poetry run python
+	fi
+}
+
+try_install_playwright_browsers() {
+	# Best-effort Playwright browser install. The Poetry/.venv environment is already
+	# usable without browsers, so a failure here must NEVER abort `init` — it warns and
+	# points at `make fix_playwright`. This guards against `playwright install` failing on
+	# hosts without a compatible browser toolchain (notably `Error: spawn UNKNOWN` under
+	# Git Bash/MINGW on Windows). `--with-deps` installs Linux OS packages via apt and is
+	# only valid on Debian/Ubuntu, so it is added on Linux only.
+	#
+	# $@ is the Python launcher to run the install with, e.g. `run_poetry run python`
+	# (a shell function is fine as the first word) or an absolute `.venv` python path.
+	local -a cmd_python=("$@")
+	local -a args_install=(chromium)
+	[[ "${OS_TYPE:-$(detect_os)}" == "linux" ]] && args_install+=(--with-deps)
+
+	print_status "info" "Installing Playwright browsers (best-effort)..."
+	if "${cmd_python[@]}" -m playwright install "${args_install[@]}"; then
+		print_status "success" "Playwright browsers installed"
+	else
+		print_status "warning" \
+			"Could not install Playwright browsers — init continues; run 'make fix_playwright' later if you need them"
 	fi
 }
 

@@ -136,3 +136,18 @@ leaks into the next) — share the immutable result (a path, a frozen frame copy
 - **Controller** (`src/controller/main.py`): it is a script-style module with import-time side
   effects (it runs the pipeline on import). Prefer testing the model and view directly rather than
   importing the controller; if you must, mock `model`/`view` at the boundary first.
+
+## Testing shell scripts
+
+A bash script in `bin/` has no conventional unit test, so map the tests-with-every-change rule:
+
+- **Unit gate** = `shellcheck --severity=warning --exclude=SC1091` + `bash -n` (already run by
+  `bin/lint_shell.sh` and the `lint-shell` pre-commit hook). When a shell change ships without a
+  Python unit test, say so explicitly — it is a documented choice, not an omission.
+- **Integration** = invoke the script via `subprocess` and assert observable behaviour (exit
+  code, a created file/dir, a status line). Resolve bash with `shutil.which("bash") or "bash"`,
+  build a constant trusted argv, scope-ignore bandit `S603` with a one-line reason, and self-skip
+  when a dependency is unavailable offline.
+
+`tests/integration/test_bin_scripts.py` is the shipped reference example (covers the shared
+`bin/poetry_exec.sh` and `bin/precommit.sh` seams). See also `bin/CLAUDE.md`.

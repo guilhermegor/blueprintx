@@ -36,9 +36,9 @@ resolve_entrypoint_module() {
 		[[ -n "$str_file" ]] || continue
 
 		case "$str_file" in
-			"$project_root/src/main.py"|"$project_root/src/controller/main.py")
-				continue
-				;;
+		"$project_root/src/main.py" | "$project_root/src/controller/main.py")
+			continue
+			;;
 		esac
 
 		str_module="${str_file#"$project_root/"}"

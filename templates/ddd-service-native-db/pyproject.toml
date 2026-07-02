@@ -46,11 +46,12 @@ coverage = ">=7.6.0"
 # pkg_resources and breaks on setuptools >= 81).
 genbadge = {extras = ["coverage"], version = ">=1.1.0"}
 # Static type-checker + non-Python lint gates (mirrored in .pre-commit-config and
-# `make lint`). shellcheck is a system binary; lint_shell.sh skips when it is absent.
+# `make lint`). shellcheck + shfmt are pip dev-deps (shellcheck-py/shfmt-py); lint_shell.sh resolves them via poetry run, falls back to a system binary, then skips.
 mypy = ">=1.8.0"
 sqlfluff = ">=3.0.0"
 yamllint = ">=1.35.0"
 shfmt-py = ">=3.7.0"
+shellcheck-py = ">=0.10.0"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = ">=1.6.0"

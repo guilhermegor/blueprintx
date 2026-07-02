@@ -193,6 +193,13 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
+    # Reference integration test for the shared bin/ shell seams (poetry_exec.sh,
+    # precommit.sh). Ships from python-common — the per-tier `cp -r tests/.` does not
+    # reach python-common/tests/. See bin/CLAUDE.md "Testing shell scripts".
+    mkdir -p "$project_path/tests/integration"
+    cp "$COMMON_TEMPLATE_ROOT/tests/integration/test_bin_scripts.py" \
+        "$project_path/tests/integration/test_bin_scripts.py"
+    rm -f "$project_path/tests/integration/.keep"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"

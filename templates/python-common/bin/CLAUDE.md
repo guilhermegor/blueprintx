@@ -58,6 +58,47 @@ disables TLS verification *on purpose* to capture a TLS-inspecting proxy's CA,
 so run it only on such a network. The pem is git-ignored; its mere presence
 opts a project into corporate-SSL mode on the next `make venv` / `make run`.
 
+## Resolve Poetry — never call a bare `poetry`
+
+A `pip install --user` Poetry (the venv fallback on Windows/Git Bash) is reachable
+only as `python -m poetry` — the user-scripts dir is not on `PATH` — so a bare
+`poetry …` dies "command not found" even after `venv` succeeds. **Every Poetry call
+must route through the resolver.** How each surface routes:
+
+| Surface | How it calls Poetry |
+|---------|---------------------|
+| `Makefile` / `tasks.sh` / `.pre-commit-config.yaml` | `bash bin/poetry_exec.sh <args>` — the wrapper resolves+`exec`s Poetry, routing resolution status to **stderr** so `$(… version -s)` stays clean |
+| sourcing `bin/*.sh` that needs Poetry (`db.sh`, `fix_playwright.sh`, `precommit.sh`) | source `lib/bootstrap.sh`, `bootstrap_init` + `ensure_poetry`, then `run_poetry run …` |
+| optional-linter `bin/*.sh` (`lint_sql.sh`, `lint_yaml.sh`, `lint_shell.sh`) | **resolve, don't install**: `resolve_python` → `resolve_poetry \|\| skip (exit 0)` → `run_poetry run …`. Never guard on `command -v poetry` (it misses a `python -m poetry`-only box and skips silently) |
+
+**Pip-vendored lint CLIs (`shellcheck`, `shfmt`) resolve via `poetry run`, not bare
+PATH.** `shellcheck-py`/`shfmt-py` are dev-deps that vendor their binaries into the
+venv (incl. `win_amd64` wheels), so `lint_shell.sh` tries `poetry run <tool>` first
+(found wherever the venv lives, incl. a Windows UNC/mapped `A:` drive), then a system
+binary, then skips — probing with `--version` so a real lint failure is never mistaken
+for "absent". A bare-PATH `command -v` would silently skip both linters when `make lint`
+runs outside the venv. `bin/install_shell_linters.sh` (`make install_shell_linters`) is
+an **optional** system-binary installer (choco/scoop/brew/apt) for boxes whose venv drive
+blocks executing the vendored binary; the pip route is primary.
+
+`bin/ensure_env.sh` seeds `.env` from `.env.example` for `init` (no-op if `.env`
+exists; aborts only itself on a missing template). `bin/precommit.sh` installs the
+pre-commit hooks and **skips gracefully** when run off a git work tree (a shipped zip
+with no `.git`) so `init` still completes.
+
+## Testing shell scripts
+
+A bash script has no conventional unit test, so map the tests-with-every-change rule:
+
+- **Unit gate** = `shellcheck --severity=warning --exclude=SC1091` + `bash -n` (run by
+  `bin/lint_shell.sh` / the `lint-shell` pre-commit hook). State this explicitly when a
+  shell change ships without a Python unit test — it is a documented choice, not an omission.
+- **Integration** = invoke the script via `subprocess` and assert observable behaviour
+  (exit code, a created file/dir, a status line). Resolve bash with `shutil.which("bash")
+  or "bash"`, build a constant trusted argv, scope-ignore bandit `S603` with a reason, and
+  self-skip when a dependency is unavailable offline. See
+  `tests/integration/test_bin_scripts.py` for the reference example.
+
 ## Structure
 
 All logic goes in named functions. A `main()` function wires them together

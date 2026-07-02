@@ -1,26 +1,42 @@
+# Every Poetry call routes through bin/poetry_exec.sh, which resolves Poetry
+# (poetry -> python -m poetry) on THIS machine — so no recipe depends on a bare
+# `poetry` being on PATH (which breaks after a `pip install --user` Poetry on
+# Windows/Git Bash). Never call a bare `poetry` in a recipe.
+POETRY := bash bin/poetry_exec.sh
+
 # -------------------
 # VIRTUAL ENVIRONMENT
 # -------------------
-.PHONY: init venv update_venv precommit
+.PHONY: init ensure_env venv update_venv precommit bump_version
 
-init: venv precommit
+init: ensure_env venv precommit
+
+# Seed .env from .env.example for a fresh checkout. The leading '-' makes a failed
+# seed (e.g. no .env.example) non-blocking for init — venv + precommit still run.
+ensure_env:
+	-@bash bin/ensure_env.sh
 
 venv:
 	@bash bin/venv.sh
 
 update_venv:
-	@poetry update
+	@$(POETRY) update
 	@echo "Poetry project updated"
 
+# Pre-commit hook install lives in bin/precommit.sh so it can skip gracefully on a
+# non-git deploy tree (a shipped zip with no .git) instead of aborting init.
 precommit:
-	@poetry run pre-commit install
-	@poetry run pre-commit install --hook-type commit-msg
-	@poetry run pre-commit install --hook-type pre-push
+	@bash bin/precommit.sh
 
-version_bump_minor:
-	@poetry version minor
+# Bump the project version. LEVEL is any Poetry bump rule
+# (patch|minor|major|premajor|preminor|prepatch|prerelease) or an explicit version
+# (e.g. 1.4.0); Poetry validates it and fails loud on a bad value. Defaults to patch.
+# Usage: make bump_version LEVEL=minor
+LEVEL ?= patch
+bump_version:
+	@$(POETRY) version $(LEVEL)
 	@git add pyproject.toml
-	@echo "Version bumped to $$(poetry version -s)"
+	@echo "Version bumped to $$($(POETRY) version -s)"
 
 # -------------------
 # CORPORATE CA
@@ -36,21 +52,21 @@ get_corporate_ca:
 .PHONY: unit_tests integration_tests test_cov test_cov_report test_cov_serve test_slowest test_feat test_urls_docstrings fix_playwright
 
 unit_tests:
-	@poetry run pytest tests/unit/
+	@$(POETRY) run pytest tests/unit/
 
 integration_tests:
-	@poetry run pytest tests/integration/
+	@$(POETRY) run pytest tests/integration/
 
 test_cov:
-	@poetry run pytest tests/unit/ --cov=src
-	@poetry run coverage report -m
-	@poetry run coverage xml -o coverage.xml
-	@poetry run genbadge coverage -i coverage.xml -o coverage.svg
+	@$(POETRY) run pytest tests/unit/ --cov=src
+	@$(POETRY) run coverage report -m
+	@$(POETRY) run coverage xml -o coverage.xml
+	@$(POETRY) run genbadge coverage -i coverage.xml -o coverage.svg
 
 # Whole-tree HTML coverage for drill-down (never narrow --cov=<module>, which
 # reports "no data" on the full suite). Open htmlcov/index.html or `make test_cov_serve`.
 test_cov_report:
-	@poetry run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-report=html
+	@$(POETRY) run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-report=html
 	@echo "HTML coverage report at htmlcov/index.html"
 
 test_cov_serve:
@@ -58,10 +74,10 @@ test_cov_serve:
 
 test_slowest:
 	@echo "Running tests to identify the 20 slowest tests..."
-	@poetry run pytest tests/unit/ --durations=20 --tb=short
+	@$(POETRY) run pytest tests/unit/ --durations=20 --tb=short
 
 test_feat:
-	@poetry run pytest tests/unit/ -k "$(FEAT)"
+	@$(POETRY) run pytest tests/unit/ -k "$(FEAT)"
 
 test_urls_docstrings:
 	@bash bin/test_urls_docstrings.sh
@@ -72,21 +88,27 @@ fix_playwright:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint check_docstrings
+.PHONY: lint check_docstrings install_shell_linters
+
+# Optional: install shellcheck + shfmt as SYSTEM binaries (choco/scoop/brew/apt).
+# The primary route is pip (shellcheck-py/shfmt-py dev-deps via `poetry install`);
+# this is only for boxes whose venv drive blocks executing the vendored binary.
+install_shell_linters:
+	@bash bin/install_shell_linters.sh
 
 lint:
-	@poetry run ruff check --fix .
-	@poetry run ruff format .
-	@cd src && poetry run mypy --config-file ../mypy.ini .
-	@poetry run codespell .
-	@poetry run pydocstyle .
-	@poetry run python bin/check_docstrings.py
+	@$(POETRY) run ruff check --fix .
+	@$(POETRY) run ruff format .
+	@cd src && bash ../bin/poetry_exec.sh run mypy --config-file ../mypy.ini .
+	@$(POETRY) run codespell .
+	@$(POETRY) run pydocstyle .
+	@$(POETRY) run python bin/check_docstrings.py
 	@bash bin/lint_shell.sh
 	@bash bin/lint_sql.sh
 	@bash bin/lint_yaml.sh
 
 check_docstrings:
-	@poetry run python bin/check_docstrings.py
+	@$(POETRY) run python bin/check_docstrings.py
 
 # -------------------
 # DATABASE
@@ -132,8 +154,8 @@ ship:
 .PHONY: docs_server
 
 docs_server:
-	@poetry install --with docs
-	@poetry run mkdocs serve -a 0.0.0.0:8000 --livereload
+	@$(POETRY) install --with docs
+	@$(POETRY) run mkdocs serve -a 0.0.0.0:8000 --livereload
 
 # -------------------
 # HELP
@@ -145,11 +167,12 @@ help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Virtual Environment"
-	@echo "  init                 Bootstrap venv + install pre-commit hooks"
+	@echo "  init                 Seed .env, bootstrap venv, install pre-commit hooks"
+	@echo "  ensure_env           Seed .env from .env.example if .env is missing"
 	@echo "  venv                 Create Poetry venv and install dependencies"
 	@echo "  update_venv          Update all Poetry dependencies"
-	@echo "  precommit            Install pre-commit hooks (push + commit-msg)"
-	@echo "  version_bump_minor   Bump minor version in pyproject.toml"
+	@echo "  precommit            Install pre-commit hooks (commit-msg + pre-push; skips off a git tree)"
+	@echo "  bump_version LEVEL=<x>  Bump version (patch|minor|major|pre*|X.Y.Z; default patch)"
 	@echo ""
 	@echo "Corporate CA"
 	@echo "  get_corporate_ca     Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)"
@@ -166,6 +189,7 @@ help:
 	@echo "Linting"
 	@echo "  lint                 Run ruff, codespell, pydocstyle, check_docstrings"
 	@echo "  check_docstrings     Check docstring type/raises consistency"
+	@echo "  install_shell_linters  Install shellcheck + shfmt as system binaries (optional; pip is primary)"
 	@echo ""
 	@echo "Database"
 	@echo "  db_up                Start Docker services, ensure schema, apply migrations"

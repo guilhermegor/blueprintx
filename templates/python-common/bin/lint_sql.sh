@@ -15,12 +15,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=bin/lib/bootstrap.sh
+source "$SCRIPT_DIR/lib/bootstrap.sh"
 
 cd "$SCRIPT_DIR/.."
 
 str_queries="src/config/queries"
 
-if ! command -v poetry >/dev/null 2>&1; then
+# Resolve, don't install: an optional linter must not bootstrap Poetry. Resolve via the
+# bootstrap lib (poetry -> python -m poetry) so a `python -m poetry`-only box is not
+# silently skipped (the old `command -v poetry` guard saw only a bare `poetry`).
+PYTHON="$(resolve_python)" || true
+export PYTHON
+if ! resolve_poetry; then
 	print_status warning "skip: poetry/sqlfluff unavailable for SQL lint"
 	exit 0
 fi
@@ -31,5 +38,5 @@ if [[ ! -d "$str_queries" ]] || [[ -z "$(find "$str_queries" -name '*.sql' -type
 fi
 
 print_status info "sqlfluff lint $str_queries"
-poetry run sqlfluff lint "$str_queries"
+run_poetry run sqlfluff lint "$str_queries"
 print_status success "sqlfluff OK"

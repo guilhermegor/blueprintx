@@ -102,7 +102,7 @@ repos:
 
       - id: check-docstrings
         name: docstring type/raises consistency check
-        entry: poetry run python bin/check_docstrings.py
+        entry: bash bin/poetry_exec.sh run python bin/check_docstrings.py
         language: system
         types:
           - python
@@ -112,7 +112,7 @@ repos:
         name: mypy (static type check)
         # Run from src/ so it is the single package base (bare config.x/utils.x imports
         # resolve as at runtime); avoids the dual-root "found twice" error on DDD.
-        entry: bash -c 'cd src && poetry run mypy --config-file ../mypy.ini .'
+        entry: bash -c 'cd src && bash ../bin/poetry_exec.sh run mypy --config-file ../mypy.ini .'
         language: system
         types:
           - python
@@ -149,7 +149,7 @@ repos:
       # failures (exit 1) still block.
       - id: unit-tests
         name: checking unit tests
-        entry: bash -c "poetry run pytest tests/unit/ || [ $? -eq 5 ]"
+        entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ || [ $? -eq 5 ]"
         language: system
         types:
           - file
@@ -157,7 +157,7 @@ repos:
 
       - id: integration-tests
         name: checking integration tests
-        entry: bash -c "poetry run pytest tests/integration/ || [ $? -eq 5 ]"
+        entry: bash -c "bash bin/poetry_exec.sh run pytest tests/integration/ || [ $? -eq 5 ]"
         language: system
         types:
           - file
@@ -167,7 +167,7 @@ repos:
       # so day-to-day commits stay fast (static gates above still run per-commit).
       - id: coverage-check
         name: test coverage check
-        entry: bash -c "poetry run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-fail-under=80"
+        entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-fail-under=80"
         language: system
         types:
           - python
@@ -181,7 +181,7 @@ repos:
       # the SVG. coverage.svg is tracked (README badge); coverage.xml is ignored.
       - id: coverage-badge
         name: coverage badge
-        entry: bash -c "poetry run pytest tests/unit/ --cov=src && poetry run coverage xml -o coverage.xml && poetry run genbadge coverage -i coverage.xml -o coverage.svg"
+        entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ --cov=src && bash bin/poetry_exec.sh run coverage xml -o coverage.xml && bash bin/poetry_exec.sh run genbadge coverage -i coverage.xml -o coverage.svg"
         language: system
         types:
           - python

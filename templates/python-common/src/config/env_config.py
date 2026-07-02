@@ -17,8 +17,10 @@ Deliberately decoupled from ``utils.typing`` so it stays portable across the
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import sys
 from typing import TYPE_CHECKING, NoReturn
+import unicodedata
 
 
 # The runtime type-checking engine is always injected, but at a layout-dependent path:
@@ -33,8 +35,11 @@ else:
 		from chassis.typing import type_checker
 
 
-# Accepted ENV values -> config-file suffix (English + pt-BR + short forms). Anything else
-# in env-wise mode is a typo and fails loud.
+# Accepted ENV values -> config-file suffix (English + pt-BR + short forms). Keys MUST be in
+# normalised form (see _normalise_keyword): lower-case, no diacritics, spaces/hyphens folded
+# to "_". The lookup normalises its input the same way, so every reasonable spelling of a
+# listed value resolves (e.g. "PROD", " prd ", "produção", "Desenvolvimento") without an
+# entry per casing/accent. Anything still unmatched in env-wise mode is a typo and fails loud.
 ENV_TO_SUFFIX: dict[str, str] = {
 	"development": "dev",
 	"desenvolvimento": "dev",
@@ -44,6 +49,8 @@ ENV_TO_SUFFIX: dict[str, str] = {
 	"prod": "prd",
 	"prd": "prd",
 }
+
+_RE_SEPARATORS: re.Pattern[str] = re.compile(r"[\s-]+")
 
 
 @type_checker
@@ -57,7 +64,8 @@ def resolve_config_path(str_env: str, str_kind: str, path_dir: Path) -> Path:
 	Parameters
 	----------
 	str_env : str
-		The environment name (``ENV``), already lower-cased.
+		The environment name (``ENV``). Normalised internally (diacritics/case/spacing), so
+		any reasonable spelling of a known value resolves.
 	str_kind : str
 		Config kind (``"inputs"`` / ``"outputs"``).
 	path_dir : pathlib.Path
@@ -77,13 +85,37 @@ def resolve_config_path(str_env: str, str_kind: str, path_dir: Path) -> Path:
 	path_plain = path_dir / f"{str_kind}.yaml"
 	if path_plain.exists():
 		return path_plain
-	str_suffix = ENV_TO_SUFFIX.get(str_env)
+	str_suffix = ENV_TO_SUFFIX.get(_normalise_keyword(str_env))
 	if str_suffix is None:
 		_abort(f"invalid ENV {str_env!r}; expected one of: {sorted(set(ENV_TO_SUFFIX))}")
 	path_cfg = path_dir / f"{str_kind}_{str_suffix}.yaml"
 	if not path_cfg.exists():
 		_abort(f"missing config file: {path_cfg}")
 	return path_cfg
+
+
+@type_checker
+def _normalise_keyword(str_raw: str) -> str:
+	"""Normalise a config keyword for spelling-tolerant matching.
+
+	Strips diacritics (NFKD + drop combining marks), lower-cases, trims, and folds runs of
+	internal spaces/hyphens to a single ``_`` — so ``"Produção"``, ``"PROD"``, ``" prd "`` and
+	``"mes anterior"`` all reduce to a single canonical token. A literal/ISO value with no
+	letters is returned unchanged save for trimming, so normalisation never collides with one.
+
+	Parameters
+	----------
+	str_raw : str
+		The raw keyword as typed by the operator (e.g. the ``ENV`` value).
+
+	Returns
+	-------
+	str
+		The normalised token to test against a canonical set.
+	"""
+	str_decomposed = unicodedata.normalize("NFKD", str_raw)
+	str_ascii = "".join(ch for ch in str_decomposed if not unicodedata.combining(ch))
+	return _RE_SEPARATORS.sub("_", str_ascii.strip().lower())
 
 
 @type_checker

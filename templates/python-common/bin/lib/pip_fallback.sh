@@ -289,7 +289,7 @@ pip_fallback_write_requirements_file() {
 	local str_req_file="$2"
 
 	pip_fallback_ensure_toml_reader
-	pip_fallback_emit_pip_requirements_from_pyproject "$str_groups_csv" > "$str_req_file"
+	pip_fallback_emit_pip_requirements_from_pyproject "$str_groups_csv" >"$str_req_file"
 }
 
 pip_fallback_install_requirements_file_into_venv() {

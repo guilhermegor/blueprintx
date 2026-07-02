@@ -56,7 +56,8 @@ def to_decimal(
 	value : NumericLike
 		Raw value. Strings may carry Brazilian formatting (``.`` thousands
 		separator and ``,`` decimal separator); both are normalised. ``None``,
-		empty strings and unparsable values fall back to ``default``.
+		empty strings, unparsable values and **non-finite** results (``NaN``/``±Inf``,
+		including the strings ``"nan"``/``"inf"``) fall back to ``default``.
 	int_places : int
 		Number of decimal places to quantise to (non-negative).
 	default : Decimal, optional
@@ -92,7 +93,7 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
 	value : NumericLike
 		Raw value to parse.
 	default : Decimal
-		Fallback for missing or unparsable input.
+		Fallback for missing, unparsable, or non-finite (``NaN``/``±Inf``) input.
 
 	Returns
 	-------
@@ -102,23 +103,52 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
 	if value is None:
 		return default
 	if isinstance(value, Decimal):
-		return value
+		# A passed-in non-finite Decimal — NaN or Infinity — maps to default.
+		return _finite_or(value, default)
 	if isinstance(value, bool):
 		# bool is a subclass of int; reject it so True/False never become 1/0.
 		return default
 	if isinstance(value, int):
+		# An int converts to an always-finite value — no guard needed.
 		return Decimal(value)
 	if isinstance(value, float):
 		# Go through ``repr`` so the shortest round-tripping decimal is used
-		# instead of the full binary expansion.
-		return Decimal(repr(value))
+		# instead of the full binary expansion. float NaN/Inf -> default.
+		return _finite_or(Decimal(repr(value)), default)
 	str_clean = _normalise_br_number(str(value))
 	if str_clean == "":
 		return default
 	try:
-		return Decimal(str_clean)
+		# The strings nan and inf are valid Decimal literals that parse successfully, so
+		# the finite check — not the except below — is what maps them to default.
+		return _finite_or(Decimal(str_clean), default)
 	except InvalidOperation:
 		return default
+
+
+@type_checker
+def _finite_or(cls_value: Decimal, default: Decimal) -> Decimal:
+	"""Return ``cls_value`` when it is finite, else ``default``.
+
+	Centralises the "non-finite is unusable" rule: a ``NaN`` or ``±Inf`` (from a float,
+	a passed-in ``Decimal('NaN')``, or the string ``"nan"``/``"inf"`` which parses
+	successfully) is semantically "missing", which is exactly what ``default`` is for.
+	A leaked non-finite Decimal otherwise detonates downstream (``Decimal('NaN') > x``
+	raises :class:`decimal.InvalidOperation`).
+
+	Parameters
+	----------
+	cls_value : Decimal
+		The candidate parsed value.
+	default : Decimal
+		Fallback returned when ``cls_value`` is not finite.
+
+	Returns
+	-------
+	Decimal
+		``cls_value`` if finite, otherwise ``default``.
+	"""
+	return cls_value if cls_value.is_finite() else default
 
 
 @type_checker
