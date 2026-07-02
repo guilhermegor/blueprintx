@@ -175,8 +175,8 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
 	if "dubious ownership" not in str_output and not path_global_cfg.exists():
 		pytest.skip("git build does not honour GIT_TEST_ASSUME_DIFFERENT_OWNER -- guard only")
 
-	# The tree resolved rather than reading as "no repo": git's own suggested path was written
-	# to the throwaway global config, under a section header ruff would flag as prose.
+	# The throwaway global config now holds git's own suggested path, which proves the tree
+	# resolved and init could keep going instead of the probe misreading it as absent.
 	str_cfg = path_global_cfg.read_text(encoding="utf-8") if path_global_cfg.exists() else ""
 	assert "safe" in str_cfg
 	assert str(path_repo) in str_cfg or "%(prefix)" in str_cfg
