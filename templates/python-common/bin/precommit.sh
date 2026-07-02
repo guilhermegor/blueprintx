@@ -17,6 +17,13 @@
 # box surfaces a lost .git instead of silently fabricating an empty repo). Never
 # auto-init silently.
 #
+# Shared / network checkout: when the tree lives on a network share (Windows UNC mapped
+# to a drive) the first person to check it out OWNS it, so any other domain user running
+# `make init` trips git's "dubious ownership" guard — which blocks EVERY repo op and makes
+# `pre-commit install` die the same way. ensure_safe_directory self-heals that by
+# registering a per-user safe.directory BEFORE the work-tree probe (which would otherwise
+# also fail under the guard and wrongly conclude "no repo").
+#
 # Poetry is resolved via bin/lib/bootstrap.sh (poetry -> python -m poetry), never a
 # bare `poetry` — see bin/poetry_exec.sh.
 
@@ -27,6 +34,34 @@ source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=bin/lib/bootstrap.sh
 source "$SCRIPT_DIR/lib/bootstrap.sh"
 
+ensure_safe_directory() {
+	# Self-heal git's "dubious ownership" guard for a shared / foreign-owned work tree, so a
+	# network-share checkout (Windows UNC) still installs hooks. Runs BEFORE the work-tree
+	# probe because that probe also fails under the guard and would wrongly conclude "no repo"
+	# (→ a bogus git init over an existing tree). Idempotent: once registered the probe
+	# succeeds, so nothing is re-added. Requires git (the caller checks that first).
+	local str_probe
+	str_probe="$(git rev-parse --is-inside-work-tree 2>&1)" && return 0
+	case "$str_probe" in
+		*"dubious ownership"*) ;;
+		*) return 0 ;;  # a different failure (e.g. genuinely no repo) — leave it to the probe
+	esac
+	# git prints the exact fix to run, e.g.
+	#   git config --global --add safe.directory /srv/share/proj             (plain path)
+	#   git config --global --add safe.directory '%(prefix)///host/share'    (UNC, quoted)
+	# so lift its own suggested path rather than reconstructing it, and strip the UNC quote.
+	local str_path
+	str_path="$(printf '%s\n' "$str_probe" | sed -n 's/.*--add safe.directory //p' | head -n1)"
+	str_path="${str_path#\'}"
+	str_path="${str_path%\'}"
+	if [ -z "$str_path" ]; then
+		print_status "warning" "git flagged dubious ownership but no path could be parsed — skipping safe.directory"
+		return 0
+	fi
+	print_status "config" "Registering git safe.directory for a shared work tree: $str_path"
+	git config --global --add safe.directory "$str_path"
+}
+
 ensure_git_repo() {
 	# Confirm the current tree is a git work tree with git available. Returns 1
 	# (caller skips) when git is absent or there is no work tree — never aborts init.
@@ -34,6 +69,9 @@ ensure_git_repo() {
 		print_status "warning" "git not found — skipping pre-commit hooks (a runtime box never commits)"
 		return 1
 	fi
+
+	# Clear a dubious-ownership block first, else the work-tree probe below mis-reads it.
+	ensure_safe_directory
 
 	if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		print_status "warning" "No git repository here — skipping pre-commit hooks (run inside a checkout to install them)"
