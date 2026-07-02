@@ -43,8 +43,8 @@ ensure_safe_directory() {
 	local str_probe
 	str_probe="$(git rev-parse --is-inside-work-tree 2>&1)" && return 0
 	case "$str_probe" in
-		*"dubious ownership"*) ;;
-		*) return 0 ;;  # a different failure (e.g. genuinely no repo) — leave it to the probe
+	*"dubious ownership"*) ;;
+	*) return 0 ;; # a different failure (e.g. genuinely no repo) — leave it to the probe
 	esac
 	# git prints the exact fix to run, e.g.
 	#   git config --global --add safe.directory /srv/share/proj             (plain path)

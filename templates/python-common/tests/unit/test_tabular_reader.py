@@ -4,6 +4,7 @@ import csv
 from pathlib import Path
 
 import pytest
+
 from src.utils.tabular_reader import ContractError, FileContract, find_file_problems, read_table
 
 
