@@ -31,8 +31,20 @@ pyprojects until a later wave dehydrates the calendar too.
       `utils.loggers` → `utils.logs`; `loggers.py` row → `logs.py`.
 
 ## Remaining
-- [ ] Capture the generalizable lesson (global store + `docs/blueprintx-lessons.md`).
-- [ ] (Future wave, NOT this branch) #1 calendar `DatesBRAnbima` — still imported in both
-      `bootstrap.py` and `utils/dates.py`. Removing it (a slim BR-calendar replacement) is the
-      last step to drop `stpstone` entirely and delete the dep line from the 4 pyprojects.
-- [ ] Optional: `run act` on the scaffold-checks workflow before pushing (per act-first rule).
+- [x] Capture the generalizable lesson (global store + `docs/blueprintx-lessons.md`).
+- [x] `run act` on the scaffold-checks workflow before pushing (per act-first rule) — green
+      end-to-end (make lint clean tree, mypy + docstrings, 111 unit tests); caught 3 scaffold
+      drifts fixed in commit `60eb6c6`. Shipped as PR #37 (v0.12.1).
+- [ ] (Future wave, NOT this branch) #1 calendar `DatesBRAnbima` — the LAST stpstone symbol.
+      Three import sites, all the same calendar: `utils/dates.py` (ships to all 4 tiers) plus
+      both `ddd-*/src/app/bootstrap.py`.
+      **Plan: replace with a `wwdates` package (to be created).** `wwdates` will own the BR
+      ANBIMA business-day / holiday logic; `utils/dates.py` will wrap it exactly as it wraps
+      `DatesBRAnbima` today (same public surface — `is_working_day`, `add_working_days`,
+      `delta_working_days`, …), so no downstream call sites change.
+      - The two `bootstrap.py` uses are only `DatesBRAnbima().curr_datetime()` == stdlib
+        `datetime.now(tz=ZoneInfo("UTC"))` — no calendar needed there; swap to stdlib and drop
+        the import (frees DDD bootstraps from the calendar entirely).
+      - Once `utils/dates.py` points at `wwdates`, delete `stpstone = ">=3.2.0"` from all 4
+        service pyprojects and add `wwdates` — this is the one-line dep swap that finishes the
+        dehydration.
