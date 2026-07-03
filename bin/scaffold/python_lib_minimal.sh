@@ -19,6 +19,7 @@ DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 PROJECT_DISPLAY_NAME=""
 INCLUDE_DOCKER_COMPOSE=false
 DB_COMPOSE_BACKEND="postgresql"
+INCLUDE_LOGS=false
 
 # ============================================================================
 # FUNCTIONS
@@ -150,6 +151,11 @@ copy_internal_utils() {
         __init__.py dtypes.py br_identifiers.py http_downloader.py
         retry.py tabular_reader.py text.py zip_extractor.py
     )
+    # logs.py is opt-in (prompt_logs): the convention is to inject a logger, not import one
+    # (see the shipped utils/CLAUDE.md), so a lib only carries it when explicitly requested.
+    if [[ "$INCLUDE_LOGS" == "true" ]]; then
+        modules+=(logs.py)
+    fi
     local module
 
     printf '"""Private internals of the %s package (not a public API)."""\n' "$PROJECT_NAME" \
@@ -159,6 +165,9 @@ copy_internal_utils() {
     done
     # Runtime type-checking engine — single source in python-common/optional/typing.
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$internal_dir/utils/typing"
+    # Convention guide for the utils layer (logging → dependency injection). Kept out of the
+    # wheel by the `exclude` in pyproject.toml.
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
 
     rewrite_internal_imports "$internal_dir"
     print_status "success" "Private internal utils (_internal/utils) applied"
@@ -550,6 +559,21 @@ PY
     print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
+# Optional in-repo logging helper (utils/logs.py). Kept opt-in because the convention is to
+# INJECT a logger, not hard-import one (see the shipped _internal/utils/CLAUDE.md and
+# retry.py's LogEmitter). logs.py provides:
+#   - CreateLog                                       — logger factory (console + optional file)
+#   - log_message(logger, str_message, str_level)     — level-routed emit (None → timestamped print)
+#   - initiate_logging(logger, path_log)              — attach handlers / a log file
+prompt_logs() {
+    local answer
+    read -r -p "Include the in-repo logging helper (utils/logs.py)? [y/N]: " answer || true
+    case "$answer" in
+        y|Y) INCLUDE_LOGS=true; print_status "config" "logs.py: included" ;;
+        *)   INCLUDE_LOGS=false ;;
+    esac
+}
+
 # Optional Docker Compose DB infrastructure (mirrors the DDD/MVC prompt). A library rarely
 # needs it, but the seam is offered for libs whose integration tests spin up a real DB.
 prompt_docker_compose() {
@@ -590,6 +614,7 @@ main() {
 
     validate_inputs
     resolve_github_username
+    prompt_logs
     prompt_docker_compose
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"

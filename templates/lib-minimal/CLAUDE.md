@@ -54,6 +54,9 @@ of your public `__all__`. The internal imports are package-qualified
   `_internal.utils.br_identifiers` for CNPJ/CPF (alphanumeric-aware for the 2026 CNPJ).
 - **No `.env`** — a distributable library has no runtime env to seed (unlike the service
   tiers), so none is shipped.
+- **Logging via dependency injection** — never hard-import a logging backend in a helper;
+  inject a logger (stdlib default), as `_internal/utils/retry.py`'s `LogEmitter` shows. The
+  in-repo `logs.py` helper is **opt-in** at scaffold time; see `_internal/utils/CLAUDE.md`.
 
 ## Releasing to PyPI
 

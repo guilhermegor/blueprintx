@@ -47,6 +47,10 @@ exclude = [
     "alembic",
     "src/chassis",
     "src/capabilities/example_feature",
+    # lib-minimal vendors the runtime type-checking engine at a nested private path; its
+    # imports are mechanically rewritten to <pkg>._internal.* (can exceed line-length) and it
+    # is intrinsic metaprogramming — fully excluded, like src/chassis (mypy excludes it too).
+    "src/*/_internal/utils/typing",
 
     # check tooling: ruff-format would tabify space-indented helpers and trip E101
     "bin",
@@ -144,7 +148,7 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 # above); MVC ships it here. Ignore ANN401 rather than excluding it from all lint.
 "src/utils/typing/**/*.py" = ["ANN401"]
 # lib-minimal nests the same seams inside a private package (src/<pkg>/_internal/…);
-# mirror the exemptions above for that path (`*` matches the single package segment).
+# mirror the exemptions above for that path (`*` matches the single package segment). The
+# typing engine there is fully excluded (see [exclude]), so it needs no per-file rule.
 "src/*/_internal/utils/tabular_reader.py" = ["TID251"]
 "src/*/_internal/config/contracts/*.py" = ["TID251"]
-"src/*/_internal/utils/typing/**/*.py" = ["ANN401"]
