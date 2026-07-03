@@ -1,10 +1,10 @@
-"""Outlook e-mail gateway — the seam over stpstone's Windows-only Outlook client.
+"""Outlook e-mail gateway — the single in-repo seam for Microsoft Outlook.
 
-Reach e-mail only through this gateway, never the vendor SDK directly, so a vendor change
-is confined here (the library-coupling rule). stpstone's ``DealingOutlook`` requires Windows
-(it imports ``win32com`` and raises elsewhere), so it is imported **lazily** inside the send
-call and the whole module stays importable on Linux/CI. Off Windows the gateway logs what it
-*would* send and returns ``False``/``None`` instead of failing — the run continues.
+Reach e-mail only through this gateway (the library-coupling rule). The Outlook COM operations
+live here as private ``_com_*`` functions that **lazy-import** ``win32com`` inside the call, so
+the module stays importable on Linux/CI even though ``win32com`` is Windows-only. Off Windows the
+gateway logs what it *would* do and returns ``False``/``None`` instead of failing — the run
+continues.
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ from logging import Logger
 import os
 from pathlib import Path
 import platform
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from utils.loggers import log_message
+from utils.logs import log_message
 from utils.signatures import resolve_signature
 
 
@@ -100,14 +100,14 @@ class OutlookGateway(metaclass=TypeChecker):
 			if self.path_signatures_dir is not None
 			else ""
 		)
-		_build_dealing_outlook().send_email(
-			mail_subject=str_subject,
-			mail_to="; ".join(list_to),
-			mail_cc="; ".join(list_cc),
-			mail_body=to_html_body(str_body),
-			mail_attachments=list_attachments,
-			send_behalf_of=self.str_sender,
-			auto_send_email=bool_auto_send,
+		_com_send_email(
+			str_subject=str_subject,
+			str_to="; ".join(list_to),
+			str_cc="; ".join(list_cc),
+			str_body=to_html_body(str_body),
+			list_attachments=list_attachments,
+			str_send_behalf_of=self.str_sender,
+			bool_auto_send=bool_auto_send,
 			str_html_signature=str_signature,
 		)
 		log_message(self.logger, f"[email] sent. subject='{str_subject}' to={list_to}")
@@ -162,15 +162,13 @@ class OutlookGateway(metaclass=TypeChecker):
 			)
 			return None
 		try:
-			dict_status = _build_dealing_outlook().download_attch(
-				email_account=str_email_account,
-				outlook_folder=str_folder,
-				subj_sub_string=str_subject_substring,
-				attch_save_path=str(path_dest_dir),
-				bool_save_file_w_original_name=True,
-				list_fileformat=list_formats,
-				outlook_subfolder=str_subfolder,
-				save_only_first_event=True,
+			dict_status = _com_download_attch(
+				str_email_account=str_email_account,
+				str_folder=str_folder,
+				str_subject_substring=str_subject_substring,
+				str_dest_dir=str(path_dest_dir),
+				list_file_formats=list_formats,
+				str_subfolder=str_subfolder,
 			)
 		except Exception as cls_err:  # noqa: BLE001 — e-mail download is optional; caller falls back.
 			log_message(
@@ -196,13 +194,67 @@ class OutlookGateway(metaclass=TypeChecker):
 		)
 		return None
 
+	def get_body_content(
+		self,
+		str_email_account: str,
+		str_folder: str,
+		str_subject_substring: str,
+		str_subfolder: str | None = None,
+	) -> list[dict[str, object]]:
+		"""Return the body and metadata of e-mails whose subject contains a substring.
+
+		**Non-fatal**: off Windows, or on any read failure, logs and returns an empty list so
+		the caller can proceed.
+
+		Parameters
+		----------
+		str_email_account : str
+			The Outlook account/store name (top-level folder in the MAPI namespace).
+		str_folder : str
+			The mail folder to search under the account.
+		str_subject_substring : str
+			Substring the message subject must contain.
+		str_subfolder : str | None
+			Optional subfolder under ``str_folder``.
+
+		Returns
+		-------
+		list[dict[str, object]]
+			One dict per matching message (``subject`` / ``last_edition`` / ``creation_time`` /
+			``body``); empty off Windows or on any failure (all logged).
+		"""
+		if not running_on_windows():
+			log_message(
+				self.logger,
+				f"[email] Outlook unavailable (non-Windows); body read skipped. "
+				f"account='{str_email_account}' folder='{str_folder}' "
+				f"subject~='{str_subject_substring}'",
+				"warning",
+			)
+			return []
+		try:
+			return _com_get_body_content(
+				str_email_account=str_email_account,
+				str_folder=str_folder,
+				str_subject_substring=str_subject_substring,
+				str_subfolder=str_subfolder,
+			)
+		except Exception as cls_err:  # noqa: BLE001 — body read is optional; caller handles empties.
+			log_message(
+				self.logger,
+				f"[email] body read failed (account='{str_email_account}' folder='{str_folder}' "
+				f"subject~='{str_subject_substring}'): {cls_err}",
+				"warning",
+			)
+			return []
+
 
 @type_checker
 def to_html_body(str_body: str) -> str:
 	r"""Convert a plain-text e-mail body to HTML so its line breaks survive.
 
-	stpstone's ``DealingOutlook`` assigns the body to ``mail.HTMLBody``, where bare newlines
-	collapse and the message renders on a single line. Each newline is turned into a ``<br>``
+	The Outlook client assigns the body to ``mail.HTMLBody``, where bare newlines collapse and
+	the message renders on a single line. Each newline is turned into a ``<br>``
 	so paragraph breaks are preserved. A body that already looks like HTML (contains a ``<br``
 	or ``<p>`` tag) is left untouched.
 
@@ -320,14 +372,176 @@ def running_on_windows() -> bool:
 
 
 @type_checker
-def _build_dealing_outlook() -> Any:  # noqa: ANN401 — opaque vendor client (Windows only)
-	"""Lazily build stpstone's Outlook client (imported only on Windows).
+def _com_send_email(
+	str_subject: str,
+	str_to: str,
+	str_cc: str,
+	str_body: str,
+	list_attachments: list[str],
+	str_send_behalf_of: str,
+	bool_auto_send: bool,
+	str_html_signature: str,
+) -> None:
+	"""Compose and send one e-mail through the local Outlook app (COM, Windows only).
+
+	Parameters
+	----------
+	str_subject : str
+		Subject line.
+	str_to : str
+		Semicolon-joined primary recipients.
+	str_cc : str
+		Semicolon-joined CC recipients.
+	str_body : str
+		HTML body.
+	list_attachments : list of str
+		File paths to attach (each skipped when missing on disk).
+	str_send_behalf_of : str
+		Account to send on behalf of.
+	bool_auto_send : bool
+		Send without opening the compose window.
+	str_html_signature : str
+		HTML signature appended to the body (may be empty).
+
+	Raises
+	------
+	RuntimeError
+		If the auto-send fails.
+	"""
+	import win32com.client as win32
+
+	cls_outlook = win32.Dispatch("outlook.application")
+	cls_mail = cls_outlook.CreateItem(0)
+	if str_to:
+		cls_mail.To = str_to
+	if str_cc:
+		cls_mail.CC = str_cc
+	cls_mail.Subject = str_subject
+	if str_send_behalf_of:
+		cls_account = None
+		for cls_candidate in cls_outlook.Session.Accounts:
+			if str(cls_candidate) == str_send_behalf_of:
+				cls_account = cls_candidate
+				break
+		if cls_account is not None:
+			cls_mail._oleobj_.Invoke(*(64209, 0, 8, 0, cls_account))
+		cls_mail.SentOnBehalfOfName = str_send_behalf_of
+	cls_mail.HTMLBody = str_body + str_html_signature
+	for str_attachment in list_attachments:
+		if os.path.exists(str_attachment):
+			cls_mail.Attachments.Add(Source=str_attachment)
+	if not bool_auto_send:
+		cls_mail.Display()
+		return
+	try:
+		cls_mail.Send()
+	except Exception as cls_err:
+		raise RuntimeError(f"Failed to send email: {cls_err}") from cls_err
+
+
+@type_checker
+def _com_download_attch(
+	str_email_account: str,
+	str_folder: str,
+	str_subject_substring: str,
+	str_dest_dir: str,
+	list_file_formats: list[str],
+	str_subfolder: str | None = None,
+) -> dict[str, bool]:
+	"""Save the first matching e-mail's attachment (original name) via Outlook COM (Windows only).
+
+	Parameters
+	----------
+	str_email_account : str
+		Outlook account name (top-level MAPI folder).
+	str_folder : str
+		Mail folder to search under the account.
+	str_subject_substring : str
+		Substring the message subject must contain.
+	str_dest_dir : str
+		Destination directory for the attachments.
+	list_file_formats : list of str
+		Allowed extensions without the dot.
+	str_subfolder : str | None
+		Optional subfolder under ``str_folder`` (default: ``None``).
 
 	Returns
 	-------
-	Any
-		A ``stpstone.utils.microsoft_apps.outlook.DealingOutlook`` instance.
+	dict[str, bool]
+		Mapping of the saved path to whether the file now exists; returns after the first save.
 	"""
-	from stpstone.utils.microsoft_apps.outlook import DealingOutlook
+	import win32com.client as win32
 
-	return DealingOutlook()
+	cls_app = win32.Dispatch("Outlook.Application")
+	cls_namespace = cls_app.GetNamespace("MAPI")
+	if str_subfolder:
+		cls_folder = (
+			cls_namespace.Folders[str_email_account].Folders[str_folder].Folders[str_subfolder]
+		)
+	else:
+		cls_folder = cls_namespace.Folders[str_email_account].Folders[str_folder]
+	dict_status: dict[str, bool] = {}
+	int_count = cls_folder.Items.Count
+	for int_i in range(int_count):
+		cls_message = cls_folder.Items[int_i]
+		if str_subject_substring not in cls_message.Subject:
+			continue
+		for cls_attach in cls_message.Attachments:
+			if cls_attach.FileName.split(".")[-1] in list_file_formats:
+				str_full_path = os.path.join(str_dest_dir, cls_attach.FileName)
+				cls_attach.SaveAsFile(str_full_path)
+				dict_status[str_full_path] = os.path.exists(str_full_path)
+				return dict_status
+	return dict_status
+
+
+@type_checker
+def _com_get_body_content(
+	str_email_account: str,
+	str_folder: str,
+	str_subject_substring: str,
+	str_subfolder: str | None = None,
+) -> list[dict[str, object]]:
+	"""Read body + metadata of matching e-mails via Outlook COM (Windows only).
+
+	Parameters
+	----------
+	str_email_account : str
+		Outlook account name (top-level MAPI folder).
+	str_folder : str
+		Mail folder to search under the account.
+	str_subject_substring : str
+		Substring the message subject must contain.
+	str_subfolder : str | None
+		Optional subfolder under ``str_folder`` (default: ``None``).
+
+	Returns
+	-------
+	list[dict[str, object]]
+		One dict per matching message with ``subject`` / ``last_edition`` / ``creation_time`` /
+		``body`` keys.
+	"""
+	import win32com.client as win32
+
+	cls_app = win32.Dispatch("Outlook.Application")
+	cls_namespace = cls_app.GetNamespace("MAPI")
+	if str_subfolder:
+		cls_folder = (
+			cls_namespace.Folders[str_email_account].Folders[str_folder].Folders[str_subfolder]
+		)
+	else:
+		cls_folder = cls_namespace.Folders[str_email_account].Folders[str_folder]
+	list_content: list[dict[str, object]] = []
+	int_count = cls_folder.Items.Count
+	for int_i in range(int_count):
+		cls_message = cls_folder.Items[int_i]
+		if str_subject_substring in cls_message.Subject:
+			list_content.append(
+				{
+					"subject": cls_message.Subject,
+					"last_edition": cls_message.LastModificationTime,
+					"creation_time": cls_message.CreationTime,
+					"body": cls_message.body,
+				}
+			)
+	return list_content

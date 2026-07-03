@@ -25,6 +25,12 @@ sqlalchemy = ">=2.0"
 pandas = ">=2.0"
 openpyxl = ">=3.1"
 stpstone = ">=3.2.0"
+# Microsoft Teams incoming-webhook transport, used by the webhook opt-in (teams adapter).
+pymsteams = ">=0.2.5"
+# YAML config parsing (inputs/outputs/webhooks .yaml) in src/config.
+pyyaml = ">=6.0"
+# Outlook desktop COM automation (utils/outlook_gateway); Windows-only at install time.
+pywin32 = {version = ">=306", markers = "sys_platform == 'win32'"}
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = ">=4.1.0"

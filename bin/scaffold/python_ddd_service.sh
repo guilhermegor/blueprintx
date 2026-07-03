@@ -483,15 +483,15 @@ copy_shared_utils() {
     local project_path="$1"
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
-    for util in br_identifiers dtypes decimals loggers text paths signatures dates \
-        tabular_reader retry http_downloader yaml_reader zip_extractor frames \
+    for util in br_identifiers dtypes decimals logs text paths signatures dates \
+        tabular_reader retry http_downloader zip_extractor frames \
         outlook_gateway; do
         cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
         if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" ]; then
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
-    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/loggers/text/paths/signatures/dates/tabular_reader/retry/http_downloader/yaml_reader/zip_extractor/frames) + tests applied"
+    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/logs/text/paths/signatures/dates/tabular_reader/retry/http_downloader/zip_extractor/frames) + tests applied"
 }
 
 # Runtime type-checking engine — single source in python-common/optional/typing.
@@ -585,7 +585,7 @@ from utils.text import normalize_text  # noqa: E402
 # Accent/case-insensitive, so "Prod"/"PRODUÇÃO"/"production" all match — and a
 # mistyped ENV on a dev box stays silent (unlike a "!= development" deny-list).
 _SET_ENV_PRODUCTION = frozenset({"prod", "production", "producao"})
-YAML_WEBHOOKS: dict = reading_yaml(str(_CONFIG_DIR / "webhooks.yaml"))
+YAML_WEBHOOKS: dict = yaml.safe_load((_CONFIG_DIR / "webhooks.yaml").read_text(encoding="utf-8"))
 BOOL_WEBHOOK_ENABLED: bool = normalize_text(ENVIRONMENT) in _SET_ENV_PRODUCTION
 CLS_WEBHOOK = build_webhook(os.getenv("WEBHOOK_URL", ""))
 MSG_WEBHOOK: str = YAML_WEBHOOKS["message"].format(

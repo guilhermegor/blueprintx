@@ -13,10 +13,10 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
-from stpstone.utils.loggs.create_logs import CreateLog
-from stpstone.utils.parsers.yaml import reading_yaml
+import yaml
 
 from config.env_config import resolve_config_path
+from utils.logs import CreateLog
 from utils.paths import is_windows_path
 
 
@@ -46,8 +46,12 @@ APP_NAME: str = os.getenv("APP_NAME", "app")
 # Prefer a single plain inputs.yaml/outputs.yaml (default); a project opts into env-wise
 # config by deleting the plain file and shipping inputs_dev.yaml/inputs_prd.yaml (etc.),
 # after which ENV selects the file and an unknown ENV fails loud (see env_config).
-YAML_OUTPUTS: dict = reading_yaml(str(resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR)))
-YAML_INPUTS: dict = reading_yaml(str(resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR)))
+YAML_OUTPUTS: dict = yaml.safe_load(
+	resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR).read_text(encoding="utf-8")
+)
+YAML_INPUTS: dict = yaml.safe_load(
+	resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
+)
 
 _dt_now = datetime.now()
 _str_date = _dt_now.strftime("%Y%m%d")

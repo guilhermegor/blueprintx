@@ -26,7 +26,7 @@ from sqlalchemy import Engine
 
 from controller import pipeline_common
 from controller.pipeline_common import EmailHandler, WebhookNotifier
-from utils.loggers import log_message
+from utils.logs import log_message
 from utils.typing import TypeChecker
 
 

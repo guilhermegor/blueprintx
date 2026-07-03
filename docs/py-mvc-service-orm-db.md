@@ -31,7 +31,7 @@ project/
     view/
       report_renderer.py # RenderToExcel — DataFrame → .xlsx
     utils/
-      __init__.py        # project-specific helpers; shared utilities come from stpstone
+      __init__.py        # project-specific helpers; the BR calendar comes from stpstone
     config/
       startup.py         # logger, MS Teams webhook, runtime constants (singletons)
       inputs.yaml · outputs.yaml · webhooks.yaml · emails.yaml
@@ -52,7 +52,7 @@ project/
 | `src/controller/` | Orchestration | `main.py` — script-style pipeline wiring config, model, and view |
 | `src/model/` | Data access | ORM models + service classes; `conexao_db.py` engine/session factory; returns DataFrames |
 | `src/view/` | Output rendering | Renderers (Excel/JSON/HTML/console) — no DB, no business logic |
-| `src/utils/` | Project helpers | Calendars/parsers/dates come from the `stpstone` dependency |
+| `src/utils/` | Project helpers | The BR calendar comes from the `stpstone` dependency (wrapped by `utils.dates`) |
 | `src/config/` | Runtime config | `startup.py` singletons + YAML config; secrets in `.env` |
 | `tests/{unit,integration,performance}/` | Tests | pytest, mirrors `src/` |
 | `bin/` | Shell helpers | Entry-point scripts called by the `Makefile` |
