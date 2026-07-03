@@ -22,19 +22,17 @@ import logging
 import time
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
-from utils.logs import log_message
-
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
 # DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
 # import (no redefinition); at runtime the try/except picks whichever layout shipped.
 if TYPE_CHECKING:
-	from utils.typing import type_checker
+	from utils.typing import TypeChecker, type_checker
 else:
 	try:
-		from utils.typing import type_checker
+		from utils.typing import TypeChecker, type_checker
 	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+		from chassis.typing import TypeChecker, type_checker
 
 
 _P = ParamSpec("_P")
@@ -46,12 +44,48 @@ _DEFAULT_FACTOR: float = 2.0
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
+class LogEmitter(metaclass=TypeChecker):
+	"""Sink the retry decorator writes each retry warning to (injectable).
+
+	The default implementation forwards to a standard-library :class:`logging.Logger`. A
+	caller that wants richer routing (e.g. the project's ``utils.logs`` formatting) injects
+	its own :class:`LogEmitter` subclass — ``retry.py`` then depends only on the
+	``log_message`` method, never on any concrete logging module, so the seam stays
+	dependency-free for a distributable library.
+	"""
+
+	def __init__(self, cls_logger: logging.Logger | None = None) -> None:
+		"""Build an emitter over ``cls_logger`` (defaults to this module's logger).
+
+		Parameters
+		----------
+		cls_logger : logging.Logger, optional
+			The standard-library logger to write to; defaults to the logger for this module.
+		"""
+		self._cls_logger = cls_logger if cls_logger is not None else _LOGGER
+
+	def log_message(self, str_message: str, str_level: str) -> None:
+		"""Emit ``str_message`` at the named level.
+
+		Parameters
+		----------
+		str_message : str
+			The message to log.
+		str_level : str
+			The level name (e.g. ``"warning"``, ``"info"``); falls back to ``warning`` when
+			the underlying logger has no method of that name.
+		"""
+		fn_emit = getattr(self._cls_logger, str_level.lower(), self._cls_logger.warning)
+		fn_emit(str_message)
+
+
 @type_checker
 def retry_with_backoff(
 	int_max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
 	float_base_wait_s: float = _DEFAULT_BASE_WAIT_S,
 	float_factor: float = _DEFAULT_FACTOR,
 	tuple_exceptions: tuple[type[Exception], ...] = (OSError,),
+	cls_logger: LogEmitter | None = None,
 ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
 	"""Build a decorator that retries a callable with exponential backoff.
 
@@ -72,6 +106,9 @@ def retry_with_backoff(
 		Exponential growth factor of the wait between retries, by default 2.0.
 	tuple_exceptions : tuple of type[Exception], optional
 		The transient exception types that trigger a retry, by default ``(OSError,)``.
+	cls_logger : LogEmitter, optional
+		Sink each retry warning is written to; by default a stdlib-logger-backed
+		:class:`LogEmitter`. Inject a subclass to route warnings elsewhere.
 
 	Returns
 	-------
@@ -85,6 +122,7 @@ def retry_with_backoff(
 	"""
 	if int_max_attempts < 1:
 		raise ValueError("int_max_attempts must be >= 1")
+	cls_emitter: LogEmitter = cls_logger if cls_logger is not None else LogEmitter()
 
 	def decorator(fn: Callable[_P, _R]) -> Callable[_P, _R]:
 		"""Wrap ``fn`` so each call is retried with exponential backoff.
@@ -134,8 +172,7 @@ def retry_with_backoff(
 					if int_attempt >= int_max_attempts:
 						raise
 					float_wait = float_base_wait_s * float_factor ** (int_attempt - 1)
-					log_message(
-						_LOGGER,
+					cls_emitter.log_message(
 						f"{str_fn_name} failed (attempt {int_attempt}/{int_max_attempts}): "
 						f"{cls_err}. Retrying in {float_wait:.1f}s.",
 						"warning",
