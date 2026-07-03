@@ -11,18 +11,18 @@ connection is opened for the read and always closed in a ``finally``.
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
 from logging import Logger
 from pathlib import Path
 from time import time
 from typing import Any, Protocol, runtime_checkable
 
-import pandas as pd
-from stpstone.utils.parsers.json import JsonFiles
-
 from model.example_entity import ExampleEntity
-from utils.loggers import log_message
-from utils.typing import ProtocolTypeCheckerMeta, TypeChecker
+import pandas as pd
 from view.report_renderer import RenderToExcel
+
+from utils.logs import log_message
+from utils.typing import ProtocolTypeCheckerMeta, TypeChecker
 
 
 @runtime_checkable
@@ -215,8 +215,9 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 			The run summary to serialise.
 		"""
 		log_message(self.logger, "Starting summary-export process")
-		bool_ok = JsonFiles().dump_message(dict_summary, str(self.path_json))
-		log_message(self.logger, f"Summary export ok={bool_ok}: {self.path_json}")
+		with self.path_json.open("w") as file_write:
+			json.dump(dict_summary, file_write)
+		log_message(self.logger, f"Summary exported: {self.path_json}")
 
 	def _notify(self) -> None:
 		"""Send the run-summary notification when a webhook is wired (final phase).

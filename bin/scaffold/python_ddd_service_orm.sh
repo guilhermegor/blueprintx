@@ -612,7 +612,7 @@ from utils.text import normalize_text  # noqa: E402
 # Accent/case-insensitive, so "Prod"/"PRODUÇÃO"/"production" all match — and a
 # mistyped ENV on a dev box stays silent (unlike a "!= development" deny-list).
 _SET_ENV_PRODUCTION = frozenset({"prod", "production", "producao"})
-YAML_WEBHOOKS: dict = reading_yaml(str(_CONFIG_DIR / "webhooks.yaml"))
+YAML_WEBHOOKS: dict = yaml.safe_load((_CONFIG_DIR / "webhooks.yaml").read_text(encoding="utf-8"))
 BOOL_WEBHOOK_ENABLED: bool = normalize_text(ENVIRONMENT) in _SET_ENV_PRODUCTION
 CLS_WEBHOOK = build_webhook(os.getenv("WEBHOOK_URL", ""))
 MSG_WEBHOOK: str = YAML_WEBHOOKS["message"].format(

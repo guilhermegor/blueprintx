@@ -11,16 +11,16 @@ and notify.
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
 from logging import Logger
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import pandas as pd
-from stpstone.utils.parsers.json import JsonFiles
-
-from utils.loggers import log_message
-from utils.typing import ProtocolTypeCheckerMeta, type_checker
 from view.report_renderer import RenderToExcel
+
+from utils.logs import log_message
+from utils.typing import ProtocolTypeCheckerMeta, type_checker
 
 
 @runtime_checkable
@@ -150,8 +150,9 @@ def write_summary(logger: Logger | None, path_json: Path, dict_summary: dict[str
 		The run summary to serialise.
 	"""
 	log_message(logger, "Starting summary-export process")
-	bool_ok = JsonFiles().dump_message(dict_summary, str(path_json))
-	log_message(logger, f"Summary export ok={bool_ok}: {path_json}")
+	with path_json.open("w") as file_write:
+		json.dump(dict_summary, file_write)
+	log_message(logger, f"Summary exported: {path_json}")
 
 
 @type_checker

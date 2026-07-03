@@ -15,7 +15,7 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 | Model | `src/model/` | Data access. One service class per file. May touch the DB. Returns pandas DataFrames (or plain dicts/dataclasses). |
 | View | `src/view/` | Output rendering only (Excel, JSON, HTML, console). No business logic, no DB imports. |
 | Controller | `src/controller/` | Orchestration. `main.py` is a thin script-style entry-point that builds `_pipeline.PipelineOrchestrator` and calls `.run()`; the phase sequencing lives in `_pipeline.py`. |
-| Utils | `src/utils/` | Helpers. `br_identifiers.py` (CNPJ/CPF mask·unmask·validate) and `dtypes.py` (`apply_dtypes`) are shipped from python-common; calendars/parsers/dates come from the `stpstone` dependency. |
+| Utils | `src/utils/` | Helpers. `br_identifiers.py` (CNPJ/CPF mask·unmask·validate) and `dtypes.py` (`apply_dtypes`) are shipped from python-common; the BR calendar comes from the `stpstone` dependency (wrapped by `utils.dates`). |
 | Config | `src/config/` | `startup.py` builds runtime singletons once at import; `connection_db.py` is the DB connection factory; YAML config files; secrets in `.env`. |
 
 ## Library coupling (seams for peripheral dependencies)

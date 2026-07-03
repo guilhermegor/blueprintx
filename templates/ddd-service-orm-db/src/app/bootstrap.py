@@ -6,13 +6,12 @@ from time import time
 from typing import Protocol, runtime_checkable
 import warnings
 
+from chassis.typing import ProtocolTypeCheckerMeta, type_checker
 from dotenv import load_dotenv
 from stpstone.utils.calendars.calendar_br import DatesBRAnbima
-from stpstone.utils.loggs.create_logs import CreateLog
-from stpstone.utils.loggs.init_setup import initiate_logging
 
-from chassis.typing import ProtocolTypeCheckerMeta, type_checker
 from src.config.startup import DIR_PARENT, LOGGER
+from utils.logs import CreateLog, initiate_logging
 
 
 cls_create_log = CreateLog()

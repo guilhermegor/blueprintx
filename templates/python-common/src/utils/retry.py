@@ -22,7 +22,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
-from utils.loggers import log_message
+from utils.logs import log_message
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
