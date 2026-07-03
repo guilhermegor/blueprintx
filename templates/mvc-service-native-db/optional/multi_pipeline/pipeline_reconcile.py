@@ -24,7 +24,6 @@ from typing import Any
 
 from controller import pipeline_common
 from controller.pipeline_common import EmailHandler, WebhookNotifier
-
 from utils.logs import log_message
 from utils.typing import TypeChecker
 

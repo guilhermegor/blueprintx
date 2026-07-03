@@ -42,6 +42,10 @@ _SET_SKIP_MODULES = frozenset(
 	{"pydantic", "typing", "inspect", "logging", "utils.typing", "chassis.typing"}
 )
 
+# The severities a message may carry — shared by ``CreateLog.log_message`` and the module-level
+# ``log_message`` seam so the two never drift (mypy checks the forwarded argument against this).
+LogLevel = Literal["info", "warning", "error", "critical"]
+
 
 class CreateLog(metaclass=TypeChecker):
 	"""Create and manage log files with a customizable format and caller context."""
@@ -131,7 +135,7 @@ class CreateLog(metaclass=TypeChecker):
 		self,
 		logger: logging.Logger | None,
 		message: str,
-		log_level: Literal["info", "warning", "error", "critical"],
+		log_level: LogLevel,
 	) -> None:
 		"""Log a message with reconstructed caller context.
 
@@ -141,8 +145,8 @@ class CreateLog(metaclass=TypeChecker):
 			Logger instance, or ``None`` to print to the console.
 		message : str
 			Message to log.
-		log_level : Literal['info', 'warning', 'error', 'critical']
-			Logging level.
+		log_level : LogLevel
+			Logging level — one of ``"info"`` / ``"warning"`` / ``"error"`` / ``"critical"``.
 
 		Raises
 		------
@@ -194,7 +198,9 @@ _CLS_LOG = CreateLog()
 
 
 @type_checker
-def log_message(logger: logging.Logger | None, str_message: str, str_level: str = "info") -> None:
+def log_message(
+	logger: logging.Logger | None, str_message: str, str_level: LogLevel = "info"
+) -> None:
 	"""Log ``str_message`` at ``str_level`` through the shared logger.
 
 	Parameters
@@ -203,7 +209,7 @@ def log_message(logger: logging.Logger | None, str_message: str, str_level: str 
 		Destination logger; when ``None`` the message is printed with a timestamp.
 	str_message : str
 		The message to log.
-	str_level : str, optional
+	str_level : LogLevel, optional
 		One of ``"info"``, ``"warning"``, ``"error"``, ``"critical"``; default ``"info"``.
 	"""
 	_CLS_LOG.log_message(logger, str_message, str_level)

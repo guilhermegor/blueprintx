@@ -22,10 +22,10 @@ from pathlib import Path
 from time import time
 from typing import Any
 
-from controller import pipeline_common
-from controller.pipeline_common import EmailHandler, WebhookNotifier
 from sqlalchemy import Engine
 
+from controller import pipeline_common
+from controller.pipeline_common import EmailHandler, WebhookNotifier
 from utils.logs import log_message
 from utils.typing import TypeChecker
 

@@ -17,13 +17,13 @@ from pathlib import Path
 from time import time
 from typing import Any, Protocol, runtime_checkable
 
-from model.example_entity import ExampleEntity
 import pandas as pd
 from sqlalchemy import Engine
-from view.report_renderer import RenderToExcel
 
+from model.example_entity import ExampleEntity
 from utils.logs import log_message
 from utils.typing import ProtocolTypeCheckerMeta, TypeChecker
+from view.report_renderer import RenderToExcel
 
 
 @runtime_checkable
