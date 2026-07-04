@@ -17,6 +17,9 @@ SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 PROJECT_DISPLAY_NAME=""
+INCLUDE_DOCKER_COMPOSE=false
+DB_COMPOSE_BACKEND="postgresql"
+INCLUDE_LOGS=false
 
 # ============================================================================
 # FUNCTIONS
@@ -75,7 +78,8 @@ create_directory_structure() {
 
     print_status "info" "Creating directory structure..."
 
-    mkdir -p "$project_path"/src/"$PROJECT_NAME"
+    mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/utils/typing
+    mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/config/contracts
     mkdir -p "$project_path"/tests/integration
     mkdir -p "$project_path"/tests/performance
     mkdir -p "$project_path"/tests/unit
@@ -118,17 +122,73 @@ EOF
     print_status "success" "Python files created"
 }
 
-# Runtime type-checking engine (stdlib-only) — single source in
-# python-common/optional/typing. lib-minimal vendors it as utils/typing (the same
-# layout the MVC tiers use) and rewrites the canonical chassis.typing prefix.
-copy_typing_chassis() {
+# Rewrite the bare `utils.`/`config.` import prefixes (and the `chassis.typing` runtime
+# fallback) to the package-qualified private path `<pkg>._internal.*`, on import lines only.
+# The curated helpers are copied verbatim from python-common (DRY single source); this is the
+# one adaptation that makes them resolve when nested inside the distributed package.
+rewrite_internal_imports() {
+    local internal_dir="$1"
+    local pkg_prefix="${PROJECT_NAME}._internal"
+    local file
+    while IFS= read -r file; do
+        sed -i -E \
+            -e "s@^([[:space:]]*)(from|import) utils\.@\1\2 ${pkg_prefix}.utils.@" \
+            -e "s@^([[:space:]]*)(from|import) config\.@\1\2 ${pkg_prefix}.config.@" \
+            -e "s@^([[:space:]]*)(from|import) chassis\.typing@\1\2 ${pkg_prefix}.utils.typing@" \
+            "$file"
+    done < <(grep -rlE "^[[:space:]]*(from|import) (utils|config|chassis)\." "$internal_dir" 2>/dev/null)
+}
+
+# The curated internal helper set for a distributable library — copied from python-common
+# into a PRIVATE `_internal/utils` package (leading underscore keeps it off the consumer's
+# public import surface, yet it ships inside the wheel). `logs.py` is intentionally absent:
+# `retry.py` is decoupled from it via an injectable `LogEmitter`.
+copy_internal_utils() {
     local project_path="$1"
-    mkdir -p "$project_path/src/utils/typing"
-    cp "$COMMON_TEMPLATE_ROOT/src/utils/__init__.py" "$project_path/src/utils/__init__.py"
-    cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$project_path/src/utils/typing"
-    grep -rl "chassis.typing" "$project_path/src/utils/typing" \
-        | xargs -r sed -i "s|chassis\.typing|utils.typing|g"
-    print_status "success" "Runtime type-checking engine (utils/typing) applied"
+    local internal_dir="$project_path/src/$PROJECT_NAME/_internal"
+    local utils_src="$COMMON_TEMPLATE_ROOT/src/utils"
+    local -a modules=(
+        __init__.py dtypes.py br_identifiers.py http_downloader.py
+        retry.py tabular_reader.py text.py zip_extractor.py
+    )
+    # logs.py is opt-in (prompt_logs): the convention is to inject a logger, not import one
+    # (see the shipped utils/CLAUDE.md), so a lib only carries it when explicitly requested.
+    if [[ "$INCLUDE_LOGS" == "true" ]]; then
+        modules+=(logs.py)
+    fi
+    local module
+
+    printf '"""Private internals of the %s package (not a public API)."""\n' "$PROJECT_NAME" \
+        > "$internal_dir/__init__.py"
+    for module in "${modules[@]}"; do
+        cp "$utils_src/$module" "$internal_dir/utils/$module"
+    done
+    # Runtime type-checking engine — single source in python-common/optional/typing.
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$internal_dir/utils/typing"
+    # Convention guide for the utils layer (logging → dependency injection). Kept out of the
+    # wheel by the `exclude` in pyproject.toml.
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
+
+    rewrite_internal_imports "$internal_dir"
+    print_status "success" "Private internal utils (_internal/utils) applied"
+}
+
+# The config-layer data contracts (declarations only), mirroring the MVC tiers — nested in
+# the same private `_internal/config` package so the library author gets the contract seam
+# without exposing it to consumers.
+copy_internal_config() {
+    local project_path="$1"
+    local internal_dir="$project_path/src/$PROJECT_NAME/_internal"
+    local config_src="$COMMON_TEMPLATE_ROOT/src/config"
+
+    printf '"""Private configuration internals (data contracts) of %s."""\n' "$PROJECT_NAME" \
+        > "$internal_dir/config/__init__.py"
+    cp "$config_src/contracts/__init__.py" "$internal_dir/config/contracts/__init__.py"
+    cp "$config_src/contracts/example_source.py" "$internal_dir/config/contracts/example_source.py"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/config_CLAUDE.md" "$internal_dir/config/CLAUDE.md"
+
+    rewrite_internal_imports "$internal_dir"
+    print_status "success" "Private internal config (_internal/config/contracts) applied"
 }
 
 copy_templates() {
@@ -143,8 +203,8 @@ copy_templates() {
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.env.example" "$project_path/.env"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.env.example" "$project_path/.env.example"
+    # No .env / .env.example: a distributable library has no runtime env to seed (unlike the
+    # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.coveragerc" "$project_path/.coveragerc"
 
@@ -164,10 +224,17 @@ copy_common_templates() {
     COPYRIGHT_YEAR="$(date +%Y)"
     AUTHOR_NAME="${GITHUB_USERNAME}"
     PROJECT_LICENSE="${LICENSE_CHOICE}"
+    # Map the license choice to its PyPI Trove classifier (generic OSI fallback otherwise).
+    case "$PROJECT_LICENSE" in
+        MIT) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved :: MIT License" ;;
+        Apache-2.0) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved :: Apache Software License" ;;
+        GPL-3.0) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved :: GNU General Public License v3 (GPLv3)" ;;
+        *) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved" ;;
+    esac
 
     export PROJECT_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
         PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME \
-        COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE
+        COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE PROJECT_LICENSE_CLASSIFIER
     envsubst < "$BLUEPRINTX_ROOT/templates/lib-minimal/pyproject.toml" > "$project_path/pyproject.toml"
 
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
@@ -187,6 +254,15 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # PyPI + Test-PyPI release workflows (GitHub-remote-only, like tests.yaml). Restricted
+    # envsubst substitutes ONLY PACKAGE_NAME/OWNER — GitHub's own `${{ … }}` expressions and
+    # the `$SHELL_VARS` inside run: blocks are left untouched.
+    envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
+        < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release_pypi.yaml" \
+        > "$project_path/.github/workflows/release_pypi.yaml"
+    envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
+        < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release_test_pypi.yaml" \
+        > "$project_path/.github/workflows/release_test_pypi.yaml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
@@ -483,6 +559,49 @@ PY
     print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
+# Optional in-repo logging helper (utils/logs.py). Kept opt-in because the convention is to
+# INJECT a logger, not hard-import one (see the shipped _internal/utils/CLAUDE.md and
+# retry.py's LogEmitter). logs.py provides:
+#   - CreateLog                                       — logger factory (console + optional file)
+#   - log_message(logger, str_message, str_level)     — level-routed emit (None → timestamped print)
+#   - initiate_logging(logger, path_log)              — attach handlers / a log file
+prompt_logs() {
+    local answer
+    read -r -p "Include the in-repo logging helper (utils/logs.py)? [y/N]: " answer || true
+    case "$answer" in
+        y|Y) INCLUDE_LOGS=true; print_status "config" "logs.py: included" ;;
+        *)   INCLUDE_LOGS=false ;;
+    esac
+}
+
+# Optional Docker Compose DB infrastructure (mirrors the DDD/MVC prompt). A library rarely
+# needs it, but the seam is offered for libs whose integration tests spin up a real DB.
+prompt_docker_compose() {
+    local answer db_ans
+    read -r -p "Include Docker Compose for database infrastructure? [y/N]: " answer || true
+    case "$answer" in
+        y|Y)
+            INCLUDE_DOCKER_COMPOSE=true
+            read -r -p "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): " db_ans || true
+            case "${db_ans:-postgresql}" in
+                mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
+                *) DB_COMPOSE_BACKEND="postgresql" ;;
+            esac
+            print_status "config" "Docker Compose: $DB_COMPOSE_BACKEND"
+            ;;
+        *)
+            INCLUDE_DOCKER_COMPOSE=false
+            ;;
+    esac
+}
+
+conditional_copy_docker_compose() {
+    local project_path="$1"
+    if [[ "$INCLUDE_DOCKER_COMPOSE" != "true" ]]; then return; fi
+    cp "$COMMON_TEMPLATE_ROOT/docker-compose.${DB_COMPOSE_BACKEND}.yml" "$project_path/docker-compose.yml"
+    print_status "success" "docker-compose.yml (${DB_COMPOSE_BACKEND}) copied"
+}
+
 # ============================================================================
 # MAIN
 # ============================================================================
@@ -495,12 +614,16 @@ main() {
 
     validate_inputs
     resolve_github_username
+    prompt_logs
+    prompt_docker_compose
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
-    copy_typing_chassis "$PROJECT_PATH"
+    copy_internal_utils "$PROJECT_PATH"
+    copy_internal_config "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_copy_docker_compose "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"

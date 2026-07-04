@@ -2,17 +2,23 @@
 name = "${PROJECT_NAME}"
 version = "${PROJECT_VERSION}"
 description = "${PROJECT_DESCRIPTION}"
-authors = []
+authors = ["${AUTHOR_NAME}"]
 readme = "README.md"
 license = "${PROJECT_LICENSE}"
 homepage = "${HOMEPAGE}"
 repository = "${REPOSITORY}"
-keywords = ["python"]
+keywords = ["${PROJECT_NAME}", "python", "library"]
 packages = [{ include = "${PROJECT_NAME}", from = "src" }]
+# Keep internal dev docs out of the distributed wheel/sdist.
+exclude = ["src/**/CLAUDE.md"]
 package-mode = true
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
+    "${PROJECT_LICENSE_CLASSIFIER}",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
 ]
 
 [tool.poetry.urls]
@@ -21,13 +27,19 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
-python-dotenv = ">=1.0.0"
+# Required by the private _internal helpers (dtypes / tabular_reader / config.contracts).
+pandas = ">=2.1.0"
+openpyxl = ">=3.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = ">=4.1.0"
 pretty-errors = ">=1.2.25"
 commitizen = ">=4.4.1"
 poetry-plugin-export = ">=1.8"
+# Build + publish tooling for the PyPI / Test-PyPI release workflows (twine is the
+# publish fallback when `poetry publish` is unavailable).
+build = ">=1.2.2"
+twine = ">=6.1.0"
 # Pinned to the ruff-pre-commit hook minor (.pre-commit-config.yaml) so `make
 # lint` and the hook never disagree on formatting/lints.
 ruff = ">=0.11.13,<0.12"
