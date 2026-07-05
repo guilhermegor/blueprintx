@@ -172,6 +172,36 @@ ship() {
 }
 
 # -------------------
+# LIBRARY (defined only when scaffolded as a distributable library)
+# -------------------
+# install_dist_locally + changelog ship only for the library tier (make/library.mk present);
+# they mirror the Makefile's -included library targets. Define each only when the marker is there.
+
+if [ -f "$SCRIPT_DIR/make/library.mk" ]; then
+	install_dist_locally() {
+		# `python -m build` (a PEP 517 frontend) so poetry-dynamic-versioning stamps the real
+		# version into the wheel; `poetry build` would ignore the backend. The editable install
+		# resolves __version__ to the 0.0.0 placeholder (expected), so report the built wheel's
+		# actual tag-derived version. The package name is read from pyproject at runtime.
+		rm -rf dist/* build/ ./*.egg-info/
+		poetry_exec run python -m build
+		poetry_exec install
+		local str_pkg
+		str_pkg=$(poetry_exec version | awk '{print $1}' | tr '-' '_')
+		poetry_exec run python -c "import importlib, sys; m = importlib.import_module(sys.argv[1]); assert m.__version__; print('Package import works; __version__ resolves')" "$str_pkg"
+		poetry_exec run python -c "import pathlib; print('Built wheel:', sorted(pathlib.Path('dist').glob('*.whl'))[-1].name)"
+	}
+
+	changelog() {
+		# Preview CHANGELOG.md locally (cz derives sections from git tags). No hand-run bump online:
+		# the version is the git tag, stamped at build by poetry-dynamic-versioning; releases are cut
+		# by CI. The published site's changelog is regenerated in docs.yaml; CI never pushes to main.
+		poetry_exec run cz changelog
+		echo "CHANGELOG.md regenerated"
+	}
+fi
+
+# -------------------
 # OFFLINE (defined only when scaffolded without GitHub)
 # -------------------
 # new_branch, git_merge_to_main and the git_diff_* helpers substitute for the
@@ -260,6 +290,10 @@ Context / Ship
   export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM
   ship                 Package the committed main tree into dist/<name>_<ts>.zip
 
+Library (only present for the library scaffold)
+  install_dist_locally Build the wheel, install it, and smoke-import the package
+  changelog            Regenerate CHANGELOG.md from git tags (cz changelog)
+
 Offline (only present when scaffolded without GitHub)
   NAME=<x> new_branch  Create a branch (feat/…, fix/…) off the default branch (main/master)
   git_merge_to_main    Merge the current clean branch into main/master and delete it
@@ -301,6 +335,8 @@ docs_server) docs_server ;;
 run) run ;;
 export_context) export_context "${2:-}" ;;
 ship) ship ;;
+install_dist_locally) install_dist_locally ;;
+changelog) changelog ;;
 new_branch) new_branch "${2:-}" ;;
 git_merge_to_main) git_merge_to_main "${2:-}" ;;
 git_diff_export) git_diff_export ;;

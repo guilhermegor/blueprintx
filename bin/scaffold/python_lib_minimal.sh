@@ -20,6 +20,13 @@ PROJECT_DISPLAY_NAME=""
 INCLUDE_DOCKER_COMPOSE=false
 DB_COMPOSE_BACKEND="postgresql"
 INCLUDE_LOGS=false
+# Publish/consume wiring (scaffold-publish-target-selection). Python resolution of the
+# ecosystem-neutral questions: official public registry = PyPI, staging/sandbox = Test PyPI,
+# private/non-official source = a PEP 503 index or git source. Defaults keep the prior behaviour
+# (both release workflows shipped) so non-interactive --dev runs are unchanged.
+PUBLISH_PYPI=true
+PUBLISH_TEST_PYPI=true
+CONSUME_PRIVATE=false
 
 # ============================================================================
 # FUNCTIONS
@@ -98,7 +105,23 @@ create_python_files() {
 
     print_status "info" "Creating Python files..."
 
-    printf '"""%s package."""\n' "$PROJECT_NAME" > "$project_path/src/$PROJECT_NAME/__init__.py"
+    # Public package init. Exposes __version__ (resolved from the installed distribution's
+    # metadata), which install_dist_locally's wheel smoke-test asserts. Tab-indented so a fresh
+    # scaffold passes `make lint`.
+    cat > "$project_path/src/$PROJECT_NAME/__init__.py" <<EOF
+"""$PROJECT_NAME package."""
+
+from importlib.metadata import PackageNotFoundError, version
+
+
+try:
+	__version__ = version("$PROJECT_NAME")
+except PackageNotFoundError:  # pragma: no cover - source tree without an installed dist
+	__version__ = "0.0.0"
+
+
+__all__ = ["__version__"]
+EOF
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/main.py" "$project_path/src/$PROJECT_NAME/main.py"
 
     # Create test file with project name substitution. Tab-indented and fully
@@ -154,7 +177,9 @@ copy_internal_utils() {
     # logs.py is opt-in (prompt_logs): the convention is to inject a logger, not import one
     # (see the shipped utils/CLAUDE.md), so a lib only carries it when explicitly requested.
     if [[ "$INCLUDE_LOGS" == "true" ]]; then
-        modules+=(logs.py)
+        # logs_emitter (rich default sink) delegates to logs.py's CreateLog, so it ships only
+        # alongside logs.py (the opt-in logging helper), never on its own.
+        modules+=(logs.py logs_emitter.py)
     fi
     local module
 
@@ -207,6 +232,9 @@ copy_templates() {
     # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.coveragerc" "$project_path/.coveragerc"
+    # Placeholder CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
+    # release; cz changelog regenerates it from tags at release/docs-build time.
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CHANGELOG.md" "$project_path/CHANGELOG.md"
 
     print_status "success" "Templates copied and configured"
 }
@@ -250,6 +278,10 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
     cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
+    # Library-only Makefile targets (install_dist_locally, changelog); the shared Makefile
+    # -includes make/library.mk. tasks.sh defines the matching functions when this file is present.
+    mkdir -p "$project_path/make"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/make/library.mk" "$project_path/make/library.mk"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
@@ -257,12 +289,21 @@ copy_common_templates() {
     # PyPI + Test-PyPI release workflows (GitHub-remote-only, like tests.yaml). Restricted
     # envsubst substitutes ONLY PACKAGE_NAME/OWNER — GitHub's own `${{ … }}` expressions and
     # the `$SHELL_VARS` inside run: blocks are left untouched.
-    envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
-        < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release_pypi.yaml" \
-        > "$project_path/.github/workflows/release_pypi.yaml"
-    envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
-        < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release_test_pypi.yaml" \
-        > "$project_path/.github/workflows/release_test_pypi.yaml"
+    # Emit only the selected release workflows (Q1/Q2 from prompt_publish_targets).
+    if [[ "$PUBLISH_PYPI" == "true" ]]; then
+        envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
+            < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release_pypi.yaml" \
+            > "$project_path/.github/workflows/release_pypi.yaml"
+    fi
+    if [[ "$PUBLISH_TEST_PYPI" == "true" ]]; then
+        envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
+            < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release_test_pypi.yaml" \
+            > "$project_path/.github/workflows/release_test_pypi.yaml"
+    fi
+    # Docs → GitHub Pages deploy (gh-deploy on push to default branch). No placeholders; plain cp.
+    # GitHub-remote-only, like the release workflows — apply_offline_mode drops all of .github/.
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/docs.yaml" \
+        "$project_path/.github/workflows/docs.yaml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
@@ -305,6 +346,10 @@ copy_mkdocs_templates() {
         "$project_path/docs/usage.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/api.md" \
         "$project_path/docs/api.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/contributing.md" \
+        "$project_path/docs/contributing.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/changelog.md" \
+        "$project_path/docs/changelog.md"
     # Non-published docs/ authoring guide + the excluded backlog folder.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
@@ -312,12 +357,15 @@ copy_mkdocs_templates() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/backlog/.keep" \
         "$project_path/docs/backlog/.keep"
 
-    # Docs version label: hook (reads pyproject version) + theme override + header JS.
-    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts"
+    # Docs version label: hook (git describe → pyproject fallback) + theme override + header JS
+    # + the pill CSS (without it the label wraps under the logo). extra_css in mkdocs.yml wires it.
+    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts" "$project_path/docs/stylesheets"
     cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
     cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
     cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
         "$project_path/docs/javascripts/header-version.js"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/version-badge.css" \
+        "$project_path/docs/stylesheets/version-badge.css"
 
     print_status "success" "MkDocs templates copied"
 }
@@ -433,11 +481,15 @@ prompt_git_remote_setup() {
                         vis_flag="--public"
                         [ "$vis_choice" = "2" ] && vis_flag="--private"
                         repo_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
+                        # Set the repo's About-sidebar Website field to the GitHub Pages docs URL
+                        # (the same URL apply_online_docs_url writes into pyproject) — the most
+                        # visible entry point on the repo page; blank looks unfinished.
+                        local docs_url="https://${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}.github.io/${PROJECT_NAME}/"
                         (
                             cd "$project_path"
-                            if gh repo create "$repo_slug" --source . --remote origin --push "$vis_flag"; then
+                            if gh repo create "$repo_slug" --source . --remote origin --push --homepage "$docs_url" "$vis_flag"; then
                                 push_done=1
-                                gh repo edit "$repo_slug" --default-branch main >/dev/null 2>&1 || true
+                                gh repo edit "$repo_slug" --default-branch main --homepage "$docs_url" >/dev/null 2>&1 || true
                                 print_status "success" "Repository created and pushed via gh."
                             else
                                 print_status "warn" "gh repo create failed; check authentication or if the repo already exists."
@@ -559,6 +611,141 @@ PY
     print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
+# Online (GitHub remote) versioning: rewrite pyproject.toml to a "0.0.0" stub +
+# poetry-dynamic-versioning so the published version is derived from the git tag, and remove
+# `make bump_version` (releases are cut by tagging via the CI release workflows). Offline
+# scaffolds keep the static version + bump_version. See the versioning-origin-dependent lesson.
+apply_online_tag_versioning() {
+    local project_path="$1"
+    local pyproject="$project_path/pyproject.toml"
+    [ -f "$pyproject" ] || return 0
+    python3 - "$pyproject" "$PROJECT_VERSION" <<'PY'
+import sys
+
+path, version = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as fh:
+    text = fh.read()
+
+# 1) Stub the version — the real one is derived from the git tag at build time.
+text = text.replace(f'version = "{version}"', 'version = "0.0.0"', 1)
+
+# 2) Insert the dynamic-versioning config just before [build-system].
+dynamic_block = (
+    "[tool.poetry-dynamic-versioning]\n"
+    "# Published version is derived from the latest git tag matching `v$version` (e.g. v0.2.0). On\n"
+    "# an exact tag the build is clean (0.2.0); off-tag builds get a PEP 440 dev version. The CI\n"
+    "# release workflows pass POETRY_DYNAMIC_VERSIONING_BYPASS to build a specific version. Needs\n"
+    "# `python -m build` (a PEP 517 frontend), not `poetry build` (which ignores the backend).\n"
+    "enable = true\n"
+    'vcs = "git"\n'
+    'style = "pep440"\n'
+    "\n"
+    "[build-system]\n"
+)
+text = text.replace("[build-system]\n", dynamic_block, 1)
+
+# 3) Swap to the poetry-dynamic-versioning build backend.
+text = text.replace(
+    'requires = ["poetry-core>=1.7.0"]',
+    'requires = ["poetry-core>=1.7.0", "poetry-dynamic-versioning>=1.4.0,<2.0.0"]',
+)
+text = text.replace(
+    'build-backend = "poetry.core.masonry.api"',
+    'build-backend = "poetry_dynamic_versioning.backend"',
+)
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY
+    strip_bump_version "$project_path"
+    print_status "success" "Online: tag-driven versioning (poetry-dynamic-versioning); make bump_version removed"
+}
+
+# Remove the hand-bump `bump_version` target — meaningless under tag-driven versioning (it would
+# bump the "0.0.0" stub). Strips it from the copied Makefile (.PHONY, recipe, help) + tasks.sh
+# (function, case branch, help). Online-only; offline keeps the recipe.
+strip_bump_version() {
+    local project_path="$1"
+    python3 - "$project_path/Makefile" "$project_path/tasks.sh" <<'PY'
+import re
+import sys
+
+makefile, tasks = sys.argv[1], sys.argv[2]
+
+with open(makefile, encoding="utf-8") as fh:
+    text = fh.read()
+# Drop bump_version from the .PHONY line only (not the help text).
+text = re.sub(r"(\.PHONY:[^\n]*) bump_version", r"\1", text, count=1)
+# Remove the recipe (its comment block + LEVEL default through the recipe body). The comment
+# span uses DOTALL (.*?), but the recipe lines use [^\n] so `.` can't run greedily to EOF.
+text = re.sub(
+    r"\n# Bump the project version\..*?\nbump_version:\n(?:\t[^\n]*\n)+",
+    "\n",
+    text,
+    count=1,
+    flags=re.S,
+)
+# Remove the help line.
+text = re.sub(r'\t@echo "  bump_version[^\n]*\n', "", text, count=1)
+with open(makefile, "w", encoding="utf-8") as fh:
+    fh.write(text)
+
+with open(tasks, encoding="utf-8") as fh:
+    text = fh.read()
+# Remove the bump_version() function.
+text = re.sub(r"\nbump_version\(\) \{\n.*?\n\}\n", "\n", text, count=1, flags=re.S)
+# Remove the case branch.
+text = re.sub(r"\nbump_version\) bump_version [^\n]*\n", "\n", text, count=1)
+# Remove the help line.
+text = re.sub(r"\n  bump_version[^\n]*", "", text, count=1)
+with open(tasks, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY
+}
+
+# Online (GitHub remote) docs website: point pyproject.toml's homepage / documentation /
+# [tool.poetry.urls] Documentation at the GitHub Pages docs URL that docs.yaml deploys to
+# (https://<owner>.github.io/<repo>/). Online-only — an offline scaffold has no public docs site,
+# so its homepage stays generic. Pairs with the repo Website field set by prompt_git_remote_setup.
+apply_online_docs_url() {
+    local project_path="$1"
+    local pyproject="$project_path/pyproject.toml"
+    [ -f "$pyproject" ] || return 0
+    local docs_url="https://${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}.github.io/${PROJECT_NAME}/"
+    python3 - "$pyproject" "$docs_url" <<'PY'
+import re
+import sys
+
+path, docs = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as fh:
+    text = fh.read()
+
+# homepage -> the docs site.
+text = re.sub(r'^homepage = ".*"$', f'homepage = "{docs}"', text, count=1, flags=re.M)
+# Add a documentation field right after homepage (if not already present).
+if "documentation = " not in text:
+    text = re.sub(
+        r'(^homepage = ".*"\n)',
+        rf'\1documentation = "{docs}"\n',
+        text,
+        count=1,
+        flags=re.M,
+    )
+# Add a Documentation entry under [tool.poetry.urls] (after the existing "K" = "V" lines).
+if '"Documentation"' not in text:
+    text = re.sub(
+        r'(\[tool\.poetry\.urls\]\n(?:"[^"]+" = "[^"]*"\n)*)',
+        rf'\1"Documentation" = "{docs}"\n',
+        text,
+        count=1,
+    )
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY
+    print_status "success" "Online: docs website URL wired into pyproject ($docs_url)"
+}
+
 # Optional in-repo logging helper (utils/logs.py). Kept opt-in because the convention is to
 # INJECT a logger, not hard-import one (see the shipped _internal/utils/CLAUDE.md and
 # retry.py's LogEmitter). logs.py provides:
@@ -572,6 +759,50 @@ prompt_logs() {
         y|Y) INCLUDE_LOGS=true; print_status "config" "logs.py: included" ;;
         *)   INCLUDE_LOGS=false ;;
     esac
+}
+
+# Q1/Q2/Q3 publish/consume selection (scaffold-publish-target-selection). The ecosystem-neutral
+# questions, resolved for Python: official public registry = PyPI, staging/sandbox = Test PyPI,
+# private/non-official source = a PEP 503 index or git source. Only the selected release workflows
+# are emitted; Q3 wires a consumer-side source. Empty answers (non-interactive --dev) take the
+# shown defaults, preserving the prior behaviour.
+prompt_publish_targets() {
+    local answer
+    read -r -p "Publish to the official public registry (PyPI)? [Y/n]: " answer || true
+    case "$answer" in n | N) PUBLISH_PYPI=false ;; *) PUBLISH_PYPI=true ;; esac
+    print_status "config" "Publish target PyPI: $PUBLISH_PYPI"
+
+    read -r -p "Add a staging/sandbox registry (Test PyPI) first? [Y/n]: " answer || true
+    case "$answer" in n | N) PUBLISH_TEST_PYPI=false ;; *) PUBLISH_TEST_PYPI=true ;; esac
+    print_status "config" "Staging registry Test PyPI: $PUBLISH_TEST_PYPI"
+
+    read -r -p "Consume this library from a non-official source (private index / git)? [y/N]: " answer || true
+    case "$answer" in y | Y) CONSUME_PRIVATE=true ;; *) CONSUME_PRIVATE=false ;; esac
+    print_status "config" "Private consumer source: $CONSUME_PRIVATE"
+}
+
+# Q3 consumer-side wiring: when the library will be consumed from a non-official source, append a
+# documented (commented) explicit-priority source block to pyproject. priority = "explicit" is the
+# dependency-confusion guard — poetry/pip never falls back to it for other packages.
+apply_private_consumer_source() {
+    local project_path="$1"
+    [[ "$CONSUME_PRIVATE" == "true" ]] || return 0
+    local pyproject="$project_path/pyproject.toml"
+    [ -f "$pyproject" ] || return 0
+    cat >> "$pyproject" <<'EOF'
+
+# --- Private / non-official consumer source (uncomment and fill in) --------------------------
+# Install this package from a source other than PyPI (a private PEP 503 index, or a git source).
+# Use priority = "explicit" so poetry/pip NEVER falls back to it for other packages — the
+# dependency-confusion guard. Authenticate with:
+#   poetry config http-basic.private <user> <token>
+# and, for pip, use --index-url (never --extra-index-url).
+# [[tool.poetry.source]]
+# name = "private"
+# url = "https://your-private-index.example/simple/"
+# priority = "explicit"
+EOF
+    print_status "success" "Q3: private consumer-source template appended to pyproject.toml"
 }
 
 # Optional Docker Compose DB infrastructure (mirrors the DDD/MVC prompt). A library rarely
@@ -616,6 +847,7 @@ main() {
     resolve_github_username
     prompt_logs
     prompt_docker_compose
+    prompt_publish_targets
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
@@ -623,6 +855,7 @@ main() {
     copy_internal_config "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    apply_private_consumer_source "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
@@ -633,6 +866,9 @@ main() {
     # ship the git-diff sync workflow instead.
     if ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         apply_offline_mode "$PROJECT_PATH"
+    else
+        apply_online_tag_versioning "$PROJECT_PATH"
+        apply_online_docs_url "$PROJECT_PATH"
     fi
 
     print_status "success" "Lib-minimal scaffold complete!"

@@ -72,3 +72,30 @@ opens only when a CVE advisory matches a dependency), need **no**
 gh api -X PUT repos/{owner}/{repo}/vulnerability-alerts
 gh api -X PUT repos/{owner}/{repo}/automated-security-fixes
 ```
+
+## Publishing packages — prefer OIDC / trusted publishing over stored tokens
+
+When a release workflow publishes a package to a registry, default to the registry's **OIDC /
+trusted-publishing** flow — **never** a stored long-lived API token committed as a secret. The
+principle is registry-agnostic; only the concrete action differs:
+
+| Ecosystem | OIDC / trusted publishing |
+|-----------|---------------------------|
+| Python (PyPI / Test PyPI) | `pypa/gh-action-pypi-publish@release/v1`, no `password:` |
+| npm | trusted publishing (2025) + `--provenance` |
+| Rust (crates.io), RubyGems | trusted publishing (OIDC) |
+| Go | no token at all — publishing is a signed VCS tag |
+
+Rules:
+
+- Set `permissions: id-token: write` on the publish job and bind it to a **GitHub Environment**
+  (per-index, self-documenting: `release_pypi`, `release_test_pypi`, `release_npm`, …).
+- **Never commit a long-lived token.** Fall back to a short-lived scoped token **only** where the
+  registry/CI lacks OIDC (trade-off: OIDC works only from CI — keep a token if you must publish
+  from a laptop).
+- The trusted publisher's claims (owner, repo, **exact workflow filename**, environment) and its
+  registered project name must match the running workflow, or the upload fails with an opaque
+  `invalid-publisher`. Register a *pending publisher* before the first release.
+
+Why: no long-lived secret to store, leak, or rotate; the upload token is short-lived and bound to
+this repo/workflow/environment. This is each registry's own recommended path.
