@@ -280,9 +280,10 @@ copy_templates() {
     # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.coveragerc" "$project_path/.coveragerc"
-    # Placeholder CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
-    # release; cz changelog regenerates it from tags at release/docs-build time.
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CHANGELOG.md" "$project_path/CHANGELOG.md"
+    # Seed CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
+    # release; cz changelog regenerates it from tags at release/docs-build time. Single-sourced
+    # from python-common (same seed every Python tier ships) — no per-tier duplicate.
+    cp "$COMMON_TEMPLATE_ROOT/CHANGELOG.md" "$project_path/CHANGELOG.md"
 
     print_status "success" "Templates copied and configured"
 }

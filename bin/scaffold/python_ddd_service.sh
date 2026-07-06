@@ -184,6 +184,9 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
+    # Seed CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
+    # release; cz changelog regenerates it from tags at release/docs-build time.
+    cp "$COMMON_TEMPLATE_ROOT/CHANGELOG.md" "$project_path/CHANGELOG.md"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
