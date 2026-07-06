@@ -45,14 +45,21 @@ init() {
 }
 
 bump_version() {
-	# LEVEL is any Poetry bump rule (patch|minor|major|premajor|preminor|prepatch|
-	# prerelease) or an explicit version (e.g. 1.4.0); Poetry validates it and fails
-	# loud on a bad value. Accepts LEVEL=<x> (parity with the Makefile) or a positional
-	# argument; defaults to patch.
-	local str_level="${LEVEL:-${1:-patch}}"
-	poetry_exec version "$str_level"
-	git add pyproject.toml
-	echo "Version bumped to $(poetry_exec version -s)"
+	# cz computes the next semver from Conventional Commits, writes it to pyproject.toml,
+	# regenerates CHANGELOG.md, commits "bump: X.Y.Z", and creates the vX.Y.Z tag.
+	# Run this on a feature branch (before `git_merge_to_main`) — the protect-branch/
+	# no-commit-to-branch hook only blocks commits made while checked out on the default
+	# branch, so the bump commit is never gated there.
+	poetry_exec run cz bump --yes --git-output-to-stderr
+	echo "Version bumped to $(poetry_exec run cz version --project 2>/dev/null || poetry_exec version -s)"
+}
+
+changelog() {
+	# Regenerate CHANGELOG.md from git tags + Conventional Commits (cz derives sections
+	# from tags). Preview locally; the published site regenerates it in the docs workflow.
+	# CI never commits it.
+	poetry_exec run cz changelog
+	echo "CHANGELOG.md regenerated"
 }
 
 # -------------------
@@ -174,8 +181,8 @@ ship() {
 # -------------------
 # LIBRARY (defined only when scaffolded as a distributable library)
 # -------------------
-# install_dist_locally + changelog ship only for the library tier (make/library.mk present);
-# they mirror the Makefile's -included library targets. Define each only when the marker is there.
+# install_dist_locally ships only for the library tier (make/library.mk present); it mirrors
+# the Makefile's -included library target. Defined only when the marker is there.
 
 if [ -f "$SCRIPT_DIR/make/library.mk" ]; then
 	install_dist_locally() {
@@ -190,14 +197,6 @@ if [ -f "$SCRIPT_DIR/make/library.mk" ]; then
 		str_pkg=$(poetry_exec version | awk '{print $1}' | tr '-' '_')
 		poetry_exec run python -c "import importlib, sys; m = importlib.import_module(sys.argv[1]); assert m.__version__; print('Package import works; __version__ resolves')" "$str_pkg"
 		poetry_exec run python -c "import pathlib; print('Built wheel:', sorted(pathlib.Path('dist').glob('*.whl'))[-1].name)"
-	}
-
-	changelog() {
-		# Preview CHANGELOG.md locally (cz derives sections from git tags). No hand-run bump online:
-		# the version is the git tag, stamped at build by poetry-dynamic-versioning; releases are cut
-		# by CI. The published site's changelog is regenerated in docs.yaml; CI never pushes to main.
-		poetry_exec run cz changelog
-		echo "CHANGELOG.md regenerated"
 	}
 fi
 
@@ -254,7 +253,8 @@ Virtual Environment
   venv                 Create Poetry venv and install dependencies
   update_venv          Update all Poetry dependencies
   precommit            Install pre-commit hooks (commit-msg + pre-push; skips off a git tree)
-  bump_version         Bump version: LEVEL=<patch|minor|major|pre*|X.Y.Z> (default patch); also accepts a positional arg
+  bump_version         Bump version from Conventional Commits, tag, and update CHANGELOG.md (cz bump)
+  changelog            Regenerate CHANGELOG.md from git tags (cz changelog)
 
 Corporate CA
   get_corporate_ca     Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)
@@ -292,7 +292,6 @@ Context / Ship
 
 Library (only present for the library scaffold)
   install_dist_locally Build the wheel, install it, and smoke-import the package
-  changelog            Regenerate CHANGELOG.md from git tags (cz changelog)
 
 Offline (only present when scaffolded without GitHub)
   NAME=<x> new_branch  Create a branch (feat/…, fix/…) off the default branch (main/master)
@@ -314,7 +313,7 @@ ensure_env) ensure_env ;;
 venv) venv ;;
 update_venv) update_venv ;;
 precommit) precommit ;;
-bump_version) bump_version "${2:-}" ;;
+bump_version) bump_version ;;
 get_corporate_ca) get_corporate_ca ;;
 unit_tests) unit_tests ;;
 integration_tests) integration_tests ;;
