@@ -23,6 +23,7 @@ release.yml                  ← single entry point (workflow_dispatch, manual b
 
 - Triggered only via `workflow_call` — never manually.
 - Each owns the full update cycle for **one package manager only**: compute checksum, update manifest, commit.
+- **Stamp the version into the artifact.** A packaged install has no `.git`, so `blueprintx --version` can't derive the tag — each packager must bake the released version into `BLUEPRINTX_VERSION` in the installed `bin/blueprintx.sh` (apt/snap sed it in CI before packaging; the Homebrew formula `inreplace`s it on install; the Chocolatey `chocolateyInstall.ps1` replaces it after extract). The in-repo literal is only a `"0.0.0"` stub — never hand-bump it.
 - Declare `permissions: contents: write` explicitly (do not rely on inherited defaults).
 - All `${{ inputs.* }}` expressions must go through `env:` blocks before use in `run:` steps — never inline in shell commands.
 

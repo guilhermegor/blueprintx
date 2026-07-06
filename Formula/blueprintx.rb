@@ -13,6 +13,11 @@ class Blueprintx < Formula
     # All template references ($BLUEPRINTX_ROOT/templates/...) resolve correctly without patching.
     libexec.install "bin", "templates"
 
+    # Stamp the release version into the fallback literal, so `blueprintx --version` is correct
+    # when run from the Cellar (no .git there for `git describe` to derive the tag).
+    inreplace libexec/"bin/blueprintx.sh",
+              /^BLUEPRINTX_VERSION=".*"/, "BLUEPRINTX_VERSION=\"#{version}\""
+
     (libexec/"bin").find do |f|
       f.chmod(0755) if f.file? && f.extname == ".sh"
     end

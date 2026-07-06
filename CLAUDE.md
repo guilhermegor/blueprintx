@@ -39,16 +39,22 @@ per check, zero drift. This is distinct from the scaffolded-project pre-commit s
 in `templates/python-common/`.
 
 ### Releasing / version bump
-**Always bump the version through the make recipe — never hand-edit `pyproject.toml`.**
-```bash
-make bump_version  # runs bin/bump_version.sh: interactive major/minor/patch/custom menu
-```
-The version lives in **two** files that must stay in sync — `pyproject.toml` (`version = `)
-and `bin/blueprintx.sh` (`BLUEPRINTX_VERSION=`). `bin/bump_version.sh` rewrites and verifies
-both atomically (and self-heals pre-existing drift); editing `pyproject.toml` alone leaves the
-CLI reporting a stale `--version`. Drive it non-interactively with `echo <1-4> | make bump_version`
-(`3` = patch). The packaging manifests (`choco/`, `snap/`, `Formula/`) track a separate, lagging
-scheme and are **not** part of the patch cadence.
+**The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
+GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes
+`vX.Y.Z` and the package-manager jobs stamp that version into each artifact. You enter the version
+**once**, in the Action's field — no `make bump_version`, no commit to `main`.
+
+`blueprintx --version` resolves the version at runtime (mirrors how a Python wheel gets its version
+from the tag, one layer down):
+- **From a git checkout** → `git describe --tags` (a clone always reports the latest tag; nothing
+  to bump).
+- **From a packaged install** (Homebrew/Chocolatey/Snap/apt) or **`make install`** → no `.git`, so
+  it reads the `BLUEPRINTX_VERSION` literal that the install path **stamps from the tag** (the
+  `install` recipe seds it; each `release_*.yml` stamps it into its artifact).
+
+In-repo, both `pyproject.toml` (`version = "0.0.0"`, docs-only) and `BLUEPRINTX_VERSION` stay at the
+`"0.0.0"` stub — `bin/ci/check_version_sync.sh` enforces this and rejects an accidental hand-bump.
+Do not edit either by hand.
 
 ### Generated project commands (inside a scaffolded project)
 Once a project is created the template Makefile provides:
