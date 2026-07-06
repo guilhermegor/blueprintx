@@ -12,6 +12,11 @@ exclude_docs: |
 nav:
   - Home: index.md
   - Get Started: get-started.md
+  - Examples: examples.md
+  - CLI Reference: cli-reference.md
+  - FAQ: faq.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
   - Python:
       - DDD Service (Native DB):
           - Overview: py-ddd-service-native-db.md
@@ -54,6 +59,3 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.superfences
-  - pymdownx.snippets:
-      base_path:
-        - .

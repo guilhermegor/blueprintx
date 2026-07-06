@@ -25,17 +25,16 @@ copy steps + `mkdir`s.
 
 ## B) Add the standard nav sections + pages
 
-- [ ] **lib-minimal** — add `Examples` + `FAQ` (pages `examples.md`, `faq.md`; nav; scaffold copy).
-  Final nav: Home · Usage · Examples · API Reference · FAQ · Contributing · Changelog.
-- [ ] **service tiers ×4** — add `Usage`, `Examples`, `FAQ`, `Contributing`, `Changelog` (keep
-  `Architecture`). New pages per tier + commitizen block/changelog wiring where missing + scaffold
-  copy. Final nav: Home · Usage · Examples · Architecture · API Reference · FAQ · Contributing · Changelog.
-- [ ] **root blueprintx** — add `Examples` (top-level linking existing per-skeleton examples),
-  `CLI Reference` (API-equivalent for the tool), `FAQ`, `Contributing`, `Changelog`. Real content
-  (blueprintx's own docs), tool-appropriate.
+- [x] **lib-minimal** — added `Examples` + `FAQ`. Final nav: Home · Usage · Examples · API
+  Reference · FAQ · Contributing · Changelog. Verified `mkdocs --strict`.
+- [x] **service tiers ×4** — added `Usage`, `Examples`, `FAQ`, `Contributing`, `Changelog` (kept
+  `Architecture`); 5 pages single-sourced from `templates/python-common/docs/`; changelog is a
+  hand-maintained Keep-a-Changelog page (no cz/tag dependency for apps). Verified mvc + ddd `--strict`.
+- [x] **root blueprintx** — added `Examples` (hub → per-skeleton walkthroughs), `CLI Reference`
+  (make targets + blueprintx flags), `FAQ`, `Contributing`, `Changelog` (→ GitHub Releases,
+  tag-driven). docs/CLAUDE.md file index + nav-shape updated. Verified `--strict`.
 
 ## Verification
-- [ ] `mkdocs build --strict` on each template tree (scaffold a lib + a service; build root).
-- [ ] No masthead pill in built `site/`; Material GitHub version still renders (online).
-- [ ] Nav shows the full section set per tier; no broken links; docs/CLAUDE.md file index updated (root).
-- [ ] Update `docs/CLAUDE.md` (root) file index + nav-shape reference.
+- [x] `mkdocs build --strict` — lib, mvc, ddd (assembled), and root all pass (every nav page + link resolves).
+- [x] No masthead pill in built `site/`; Material GitHub version still renders (online).
+- [x] Nav shows the full section set per tier; docs/CLAUDE.md file index + nav-shape updated (root).
