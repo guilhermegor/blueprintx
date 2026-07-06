@@ -1320,7 +1320,7 @@ commit-message policy · <a href="../cli-reference/">CLI Reference</a>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>init<span class="w">          </span><span class="c1"># bootstrap the venv + install pre-commit hooks</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>lint<span class="w">          </span><span class="c1"># run all pre-commit hooks across the repo (mirrors CI)</span>
 </span></code></pre></div>
-<p>The root repo's pre-commit mirrors <code>.github/workflows/scaffold-checks.yml</code>: the shared checks
+<p>The root repo's pre-commit mirrors <code>.github/workflows/scaffold_checks.yml</code>: the shared checks
 live in <code>bin/ci/*.sh</code> and both the workflow and the hook call them — one home per check.</p>
 <h2 id="adding-a-new-skeleton">Adding a new skeleton<a class="headerlink" href="#adding-a-new-skeleton" title="Permanent link">&para;</a></h2>
 <ol>
