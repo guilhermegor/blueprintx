@@ -32,7 +32,7 @@ make update_venv   # poetry update
 ```
 
 The root repo has its **own** pre-commit (`/.pre-commit-config.yaml`) that mirrors
-`.github/workflows/scaffold-checks.yml`: the shared checks live in `bin/ci/*.sh`
+`.github/workflows/scaffold_checks.yml`: the shared checks live in `bin/ci/*.sh`
 (`check_spelling.sh`, `check_shell.sh`, `check_docs_build.sh`, `validate_meta.sh`,
 `check_version_sync.sh`) and **both** the workflow and the hook call them — one home
 per check, zero drift. This is distinct from the scaffolded-project pre-commit shipped
