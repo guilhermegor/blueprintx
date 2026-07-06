@@ -216,6 +216,53 @@ copy_internal_config() {
     print_status "success" "Private internal config (_internal/config/contracts) applied"
 }
 
+# Add the PyPI/Snyk library badges (package identity + security) to the copied README, right
+# after the Python Version badge. Library-only — service tiers are not published to PyPI, so these
+# badges would be misleading there. Kept in the same ${...}-placeholder style as the existing
+# README badges, so they render/fill together (PYPI_NAME = the PyPI distribution name;
+# PROJECT_SLUG = the GitHub repo). Idempotent.
+add_library_badges() {
+    local project_path="$1"
+    local readme="$project_path/README.md"
+    [ -f "$readme" ] || return 0
+    python3 - "$readme" <<'PY'
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    lines = fh.readlines()
+
+if any("PyPI Version" in ln for ln in lines):
+    sys.exit(0)  # already added — idempotent
+
+badges = [
+    "![PyPI Version](https://img.shields.io/pypi/v/${PYPI_NAME})\n",
+    "[![Snyk Vulnerabilities](https://snyk.io/test/github/${GITHUB_USERNAME}/${PROJECT_SLUG}/badge.svg)]"
+    "(https://snyk.io/test/github/${GITHUB_USERNAME}/${PROJECT_SLUG})\n",
+    "[![Snyk License](https://snyk.io/advisor/python/${PYPI_NAME}/badge.svg)]"
+    "(https://snyk.io/advisor/python/${PYPI_NAME})\n",
+    "![PyPI Downloads](https://static.pepy.tech/badge/${PYPI_NAME})\n",
+]
+
+out: list[str] = []
+inserted = False
+for ln in lines:
+    out.append(ln)
+    if not inserted and "Python Version" in ln and "img.shields.io" in ln:
+        out.extend(badges)
+        inserted = True
+if not inserted:  # no anchor found: prepend after the first badge line instead
+    for i, ln in enumerate(out):
+        if "img.shields.io" in ln or "repostatus.org" in ln:
+            out[i + 1 : i + 1] = badges
+            break
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.writelines(out)
+PY
+    print_status "success" "Library PyPI/Snyk badges added to README"
+}
+
 copy_templates() {
     local project_path="$1"
 
@@ -227,6 +274,7 @@ copy_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
+    add_library_badges "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     # No .env / .env.example: a distributable library has no runtime env to seed (unlike the
     # service tiers). Removing them keeps the published package free of service-only cruft.
