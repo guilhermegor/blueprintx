@@ -1,7 +1,7 @@
 # Library-only targets — present only when scaffolded as a distributable library
 # (the lib-minimal scaffold copies this into make/ and the Makefile -includes it).
 # Not shipped to the service tiers, which are applications, not published packages.
-.PHONY: install_dist_locally changelog
+.PHONY: install_dist_locally
 
 # Build the wheel/sdist, install it, and smoke-import the package — catches packaging
 # mistakes (missing __init__, unshipped _internal subpackages) that source-tree tests miss.
@@ -17,11 +17,3 @@ install_dist_locally:
 	@pkg=$$($(POETRY) version | awk '{print $$1}' | tr '-' '_'); \
 		$(POETRY) run python -c "import importlib, sys; m = importlib.import_module(sys.argv[1]); assert m.__version__; print('Package import works; __version__ resolves')" "$$pkg"
 	@$(POETRY) run python -c "import pathlib; print('Built wheel:', sorted(pathlib.Path('dist').glob('*.whl'))[-1].name)"
-
-# Regenerate CHANGELOG.md locally to preview it (cz derives sections from the git tags). There is
-# no hand-run version bump online: the version is the git tag, stamped at build by
-# poetry-dynamic-versioning, and releases are cut by the CI release workflows. The published
-# site's changelog is regenerated in docs.yaml; CI never pushes the changelog to protected main.
-changelog:
-	@$(POETRY) run cz changelog
-	@echo "CHANGELOG.md regenerated"

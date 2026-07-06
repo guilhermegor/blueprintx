@@ -5,8 +5,8 @@ name: Docs - GitHub Pages Deployment
 # SELF-ENABLES Pages on the first run using the built-in GITHUB_TOKEN — no manual "enable
 # Pages" step and no PAT, unlike the `mkdocs gh-deploy` / gh-pages-branch model (which
 # publishes files but can't enable serving, causing the classic first-publish 404).
-# (The library tier ships its own docs.yaml with an extra changelog regeneration step;
-# service tiers deploy the site as-is.)
+# Regenerates CHANGELOG.md via `cz changelog` before the build (see the "Regenerate
+# CHANGELOG.md" step below) so the Changelog page is never built from a stale file.
 on:
   push:
     branches:
@@ -30,7 +30,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          # Full history so `git describe` (the mkdocs version-badge hook) sees the tags.
+          # Full history so `cz changelog` sees the tags when regenerating CHANGELOG.md.
           fetch-depth: 0
 
       - name: Set Up Python
@@ -46,6 +46,11 @@ jobs:
 
       - name: Install Docs Dependencies
         run: poetry install --with docs
+
+      # Regenerate CHANGELOG.md from the commit/tag history so the published Changelog page is
+      # current. CI never commits it back to protected main; the site's copy is produced fresh.
+      - name: Regenerate CHANGELOG.md
+        run: poetry run cz changelog
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

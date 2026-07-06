@@ -184,6 +184,61 @@ prompt_env_wise_config() {
     esac
 }
 
+# ============================================================================
+# strip_bump_version — remove the hand-bump Makefile/tasks.sh target
+# ============================================================================
+#
+# Usage:
+#   strip_bump_version "$project_path"
+#
+# Meaningless once versioning is tag-driven (lib: poetry-dynamic-versioning;
+# services: the release.yaml workflow) — it would bump a frozen "0.0.0" stub.
+# Strips it from the copied Makefile (.PHONY, recipe, help) + tasks.sh
+# (function, case branch, help). Call only on the online path; offline
+# scaffolds keep the recipe (cz bump). Shared by every Python scaffold
+# (lib-minimal + the four service tiers) so the regex lives in one place.
+
+strip_bump_version() {
+    local project_path="$1"
+    python3 - "$project_path/Makefile" "$project_path/tasks.sh" <<'PY'
+import re
+import sys
+
+makefile, tasks = sys.argv[1], sys.argv[2]
+
+with open(makefile, encoding="utf-8") as fh:
+    text = fh.read()
+# Drop bump_version from the .PHONY line only (not the help text).
+text = re.sub(r"(\.PHONY:[^\n]*) bump_version", r"\1", text, count=1)
+# Remove the recipe: its preceding comment block + the target line + the tab-indented body.
+# Anchored on the `bump_version:` target (NOT the comment wording, which varies between tiers
+# and edits) — `(?:#[^\n]*\n)+` grabs the contiguous comment run only because `bump_version:\n`
+# pins its end, and `(?:\t[^\n]*\n)+` grabs the recipe body. Structural anchors only, so a
+# reworded recipe comment can never silently defeat the strip.
+text = re.sub(
+    r"\n(?:#[^\n]*\n)+bump_version:\n(?:\t[^\n]*\n)+",
+    "\n",
+    text,
+    count=1,
+)
+# Remove the help line.
+text = re.sub(r'\t@echo "  bump_version[^\n]*\n', "", text, count=1)
+with open(makefile, "w", encoding="utf-8") as fh:
+    fh.write(text)
+
+with open(tasks, encoding="utf-8") as fh:
+    text = fh.read()
+# Remove the bump_version() function.
+text = re.sub(r"\nbump_version\(\) \{\n.*?\n\}\n", "\n", text, count=1, flags=re.S)
+# Remove the case branch.
+text = re.sub(r"\nbump_version\) bump_version [^\n]*\n", "\n", text, count=1)
+# Remove the help line.
+text = re.sub(r"\n  bump_version[^\n]*", "", text, count=1)
+with open(tasks, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY
+}
+
 apply_env_wise_config() {
     # When env-wise was chosen, split each plain config file into _dev/_prd copies
     # and remove the plain file — so env_config.resolve_config_path switches to

@@ -1,5 +1,5 @@
 # Root pre-commit for the BlueprintX repo itself — a local mirror of the
-# Scaffold Checks CI (.github/workflows/scaffold-checks.yml) so the same
+# Scaffold Checks CI (.github/workflows/scaffold_checks.yml) so the same
 # failures surface before commit/push.
 #
 # This is NOT the scaffolded-project pre-commit. That one lives at

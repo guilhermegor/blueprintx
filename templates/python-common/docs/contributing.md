@@ -37,6 +37,24 @@ CI runs the same gates on every pull request; keep them green locally before pus
 
 ## Releasing
 
-This service is deployed, not published to a package index. Bump the version with
-`make bump_version LEVEL=<patch|minor|major>`, land it on the default branch via a PR, and
-deploy per your environment's process. Keep [the changelog](changelog.md) current.
+> **`main` is protected — you never commit or push to it directly.** All changes land via a
+> branch → Pull Request → merge (online), or `make new_branch` → `make git_merge_to_main`
+> (offline). Cutting a release means creating a `vX.Y.Z` git tag; the Changelog page is then
+> generated from that tag by `cz changelog` on the docs build.
+
+This service is deployed, not published to a package index.
+
+**With a GitHub remote (online):**
+1. Land your work on the default branch through a Pull Request (CI is the merge gate).
+2. Run the **Release** action (Actions → Release → *Run workflow*), entering the version
+   (e.g. `1.4.0`). It creates the `v1.4.0` tag and a GitHub Release server-side — no direct
+   push to protected `main`.
+3. The docs deploy regenerates the Changelog from the new tag automatically.
+
+**Without a GitHub remote (offline):**
+1. `make new_branch NAME=feat/my-change` — branch off the default branch.
+2. Do the work and commit (Conventional Commits).
+3. `make bump_version` — runs `cz bump`: computes the next version from your commits, updates
+   `pyproject.toml`, regenerates `CHANGELOG.md`, and creates the `vX.Y.Z` tag.
+4. `make git_merge_to_main` — merges the branch into the protected default branch locally.
+5. Preview the Changelog any time with `make changelog`.

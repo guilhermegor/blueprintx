@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: scaffold-checks-${{ github.ref }}
+  group: scaffold_checks-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

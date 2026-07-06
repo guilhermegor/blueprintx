@@ -18,6 +18,16 @@ classifiers = [
 "Bug Reports" = "${BUG_REPORTS_URL}"
 "Source" = "${SOURCE_URL}"
 
+[tool.commitizen]
+# Conventional-commit driven changelog. Unlike the library tier, a service keeps its
+# version in pyproject.toml (this is the nominal home). Tags come from `cz bump` (offline,
+# via `make bump_version`) or the `release.yaml` workflow (online); `cz changelog` (via
+# `make changelog`, and the docs build) groups commits by those tags.
+name = "cz_conventional_commits"
+version_provider = "poetry"
+tag_format = "v$version"
+update_changelog_on_bump = true
+
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
 python-dotenv = ">=1.0.0"

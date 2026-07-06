@@ -45,6 +45,10 @@ We use the following standardized variable naming conventions:
 
 ## Branching Strategy
 
+**`main` is protected — direct commits and pushes are blocked** (`no-commit-to-branch` locally,
+server-side branch protection on GitHub). All changes land via a branch → Pull Request → merge
+(online), or `make new_branch` → `make git_merge_to_main` (offline).
+
 ### Branch Naming Convention
 
 All branches must follow the pattern: `<purpose>/<branch-task>`

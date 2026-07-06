@@ -14,7 +14,7 @@ make init          # bootstrap the venv + install pre-commit hooks
 make lint          # run all pre-commit hooks across the repo (mirrors CI)
 ```
 
-The root repo's pre-commit mirrors `.github/workflows/scaffold-checks.yml`: the shared checks
+The root repo's pre-commit mirrors `.github/workflows/scaffold_checks.yml`: the shared checks
 live in `bin/ci/*.sh` and both the workflow and the hook call them — one home per check.
 
 ## Adding a new skeleton
