@@ -34,6 +34,10 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.superfences
+  # Enables the `--8<-- "CHANGELOG.md"` include on the Changelog page (single-sources the root file).
+  - pymdownx.snippets:
+      base_path:
+        - .
 
 # Non-published docs: MkDocs builds every .md under docs/, so working
 # documents must be excluded here or they ship to readers.

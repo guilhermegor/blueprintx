@@ -1,24 +1,16 @@
 # **Changelog**
 
-Notable changes to this service, newest first. This page is maintained by hand in the
-[Keep a Changelog](https://keepachangelog.com/) style; group entries under the version they
-shipped in and keep an `Unreleased` section at the top for work in progress.
+Release history for this service. Entries are generated from
+[Conventional Commit](https://www.conventionalcommits.org/) messages via
+[commitizen](https://commitizen-tools.github.io/commitizen/), so the version headings below track
+what actually shipped.
+
+**How it updates:** the sections below are generated from the git tags and commit history by
+`cz changelog`. The page is regenerated **fresh on every docs build**, so it always reflects the
+default branch — CI never commits `CHANGELOG.md` back to the repo. You never edit it by hand.
+Regenerate or preview locally any time with `make changelog` (or `bash tasks.sh changelog`).
 
 ---
 
-## Unreleased
-
-### Added
-- ...
-
-### Changed
-- ...
-
-### Fixed
-- ...
-
----
-
-## 0.0.1 — YYYY-MM-DD
-
-- Initial scaffold.
+<!-- Single-sourced from the repo-root CHANGELOG.md — never edit the entries here by hand. -->
+--8<-- "CHANGELOG.md"
