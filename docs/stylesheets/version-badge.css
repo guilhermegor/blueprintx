@@ -1,0 +1,33 @@
+/* Style the code-version label that header-version.js injects into the masthead title.
+   Without this it renders as a bare string that wraps under the logo; here it becomes a
+   compact pill sitting inline next to the site name, theme-aware in light and dark. */
+.md-header__version {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 0.5rem;
+	padding: 0.05rem 0.4rem;
+	border-radius: 0.6rem;
+	font-size: 0.62rem;
+	font-weight: 700;
+	line-height: 1.4;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+	color: var(--md-primary-bg-color, #fff);
+	background-color: rgba(255, 255, 255, 0.18);
+	border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+/* Keep the title row on one line so the pill never pushes below the logo. */
+.md-header__title {
+	display: flex;
+	align-items: center;
+}
+
+/* Hide the site title repeated at the top of the primary sidebar on desktop — the name
+   already appears in the masthead, so it is redundant there. Kept on the mobile drawer,
+   where it is the drawer's own heading. */
+@media screen and (min-width: 76.25em) {
+	.md-sidebar--primary .md-nav--primary > .md-nav__title {
+		display: none;
+	}
+}

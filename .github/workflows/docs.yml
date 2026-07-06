@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags so the mkdocs version-badge hook's `git describe` resolves the
+          # release version (otherwise a shallow checkout has no tags and it falls back to "?").
+          fetch-depth: 0
       - name: Configure Git Credentials
         run: |
           git config user.name github-actions[bot]
