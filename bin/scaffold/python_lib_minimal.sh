@@ -400,7 +400,7 @@ copy_mkdocs_templates() {
         "$project_path/docs/faq.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/contributing.md" \
         "$project_path/docs/contributing.md"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/changelog.md" \
+    cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
     # Non-published docs/ authoring guide + the excluded backlog folder.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
