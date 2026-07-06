@@ -704,47 +704,7 @@ PY
     print_status "success" "Online: tag-driven versioning (poetry-dynamic-versioning); make bump_version removed"
 }
 
-# Remove the hand-bump `bump_version` target — meaningless under tag-driven versioning (it would
-# bump the "0.0.0" stub). Strips it from the copied Makefile (.PHONY, recipe, help) + tasks.sh
-# (function, case branch, help). Online-only; offline keeps the recipe.
-strip_bump_version() {
-    local project_path="$1"
-    python3 - "$project_path/Makefile" "$project_path/tasks.sh" <<'PY'
-import re
-import sys
-
-makefile, tasks = sys.argv[1], sys.argv[2]
-
-with open(makefile, encoding="utf-8") as fh:
-    text = fh.read()
-# Drop bump_version from the .PHONY line only (not the help text).
-text = re.sub(r"(\.PHONY:[^\n]*) bump_version", r"\1", text, count=1)
-# Remove the recipe (its comment block + LEVEL default through the recipe body). The comment
-# span uses DOTALL (.*?), but the recipe lines use [^\n] so `.` can't run greedily to EOF.
-text = re.sub(
-    r"\n# Bump the project version\..*?\nbump_version:\n(?:\t[^\n]*\n)+",
-    "\n",
-    text,
-    count=1,
-    flags=re.S,
-)
-# Remove the help line.
-text = re.sub(r'\t@echo "  bump_version[^\n]*\n', "", text, count=1)
-with open(makefile, "w", encoding="utf-8") as fh:
-    fh.write(text)
-
-with open(tasks, encoding="utf-8") as fh:
-    text = fh.read()
-# Remove the bump_version() function.
-text = re.sub(r"\nbump_version\(\) \{\n.*?\n\}\n", "\n", text, count=1, flags=re.S)
-# Remove the case branch.
-text = re.sub(r"\nbump_version\) bump_version [^\n]*\n", "\n", text, count=1)
-# Remove the help line.
-text = re.sub(r"\n  bump_version[^\n]*", "", text, count=1)
-with open(tasks, "w", encoding="utf-8") as fh:
-    fh.write(text)
-PY
-}
+# strip_bump_version is shared across every Python scaffold — see bin/lib/common.sh.
 
 # Online (GitHub remote) docs website: point pyproject.toml's homepage / documentation /
 # [tool.poetry.urls] Documentation at the GitHub Pages docs URL that docs.yaml deploys to
@@ -912,6 +872,10 @@ main() {
     else
         apply_online_tag_versioning "$PROJECT_PATH"
         apply_online_docs_url "$PROJECT_PATH"
+        # The generic service release.yaml (tag + GitHub Release, no publish) does not apply to a
+        # library — the lib ships its own release-pypi.yaml / release-test-pypi.yaml.
+        rm -f "$PROJECT_PATH/.github/workflows/release.yaml"
+        print_status "success" "Library: generic service release.yaml removed (uses release-pypi instead)"
     fi
 
     print_status "success" "Lib-minimal scaffold complete!"

@@ -1,0 +1,36 @@
+name: Release
+# Cut a versioned release for this service: create the vX.Y.Z tag and a GitHub Release.
+# Services are deployed, not published to a package index — there is no PyPI step. The tag is
+# what the docs workflow's `cz changelog` groups the changelog by. main is protected; this runs
+# server-side with the built-in GITHUB_TOKEN, so no direct push to main is needed.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. 1.4.0 (no leading v)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          TAG="v${VERSION}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"; exit 1
+          fi
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" --title "$TAG" --generate-notes

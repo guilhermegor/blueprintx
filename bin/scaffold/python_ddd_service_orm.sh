@@ -522,6 +522,8 @@ copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # Tag + GitHub Release (no PyPI — a service is deployed, not published). GitHub-only.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/release.yaml" "$project_path/.github/workflows/release.yaml"
     # Docs → GitHub Pages deploy (build + gh-deploy on push to the default branch). GitHub-only.
     cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yaml" "$project_path/.github/workflows/docs.yaml"
     envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
@@ -843,6 +845,9 @@ main() {
     if git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         copy_github_assets "$PROJECT_PATH"
         commit_and_push_github_assets "$PROJECT_PATH"
+        # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
+        # make bump_version (cz bump).
+        strip_bump_version "$PROJECT_PATH"
     else
         apply_offline_mode "$PROJECT_PATH"
     fi
