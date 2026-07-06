@@ -772,6 +772,9 @@ prompt_logs() {
 # shown defaults, preserving the prior behaviour.
 prompt_publish_targets() {
     local answer
+    # Two orthogonal axes, banner-separated so Q3 doesn't read as a fork of Q1/Q2:
+    # publishing = where THIS library ships to; consuming = where its own deps come from.
+    print_status "section" "Publishing — where this library ships to"
     read -r -p "Publish to the official public registry (PyPI)? [Y/n]: " answer || true
     case "$answer" in n | N) PUBLISH_PYPI=false ;; *) PUBLISH_PYPI=true ;; esac
     print_status "config" "Publish target PyPI: $PUBLISH_PYPI"
@@ -780,6 +783,7 @@ prompt_publish_targets() {
     case "$answer" in n | N) PUBLISH_TEST_PYPI=false ;; *) PUBLISH_TEST_PYPI=true ;; esac
     print_status "config" "Staging registry Test PyPI: $PUBLISH_TEST_PYPI"
 
+    print_status "section" "Consuming — where this library's own dependencies come from"
     read -r -p "Consume this library from a non-official source (private index / git)? [y/N]: " answer || true
     case "$answer" in y | Y) CONSUME_PRIVATE=true ;; *) CONSUME_PRIVATE=false ;; esac
     print_status "config" "Private consumer source: $CONSUME_PRIVATE"
