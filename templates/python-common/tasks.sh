@@ -47,10 +47,11 @@ init() {
 bump_version() {
 	# cz computes the next semver from Conventional Commits, writes it to pyproject.toml,
 	# regenerates CHANGELOG.md, commits "bump: X.Y.Z", and creates the vX.Y.Z tag.
-	# Run this on a feature branch (before `git_merge_to_main`) — the protect-branch/
-	# no-commit-to-branch hook only blocks commits made while checked out on the default
-	# branch, so the bump commit is never gated there.
-	poetry_exec run cz bump --yes --git-output-to-stderr
+	# --no-verify bypasses the commit hooks for this machine-generated commit: its single-line
+	# "bump: …" message can't satisfy gitlint's body-required rule, and the pre-commit
+	# test/format hooks are irrelevant to a pyproject + CHANGELOG bump (same rationale as
+	# bin/git_merge_to_main.sh). Run this on a feature branch (before `git_merge_to_main`).
+	poetry_exec run cz bump --yes --no-verify --git-output-to-stderr
 	echo "Version bumped to $(poetry_exec run cz version --project 2>/dev/null || poetry_exec version -s)"
 }
 

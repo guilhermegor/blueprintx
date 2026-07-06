@@ -30,13 +30,14 @@ precommit:
 
 # Cut a version bump from Conventional Commits: cz computes the next semver, writes it to
 # pyproject.toml, regenerates CHANGELOG.md, commits "bump: X.Y.Z", and creates the vX.Y.Z tag.
-# --git-output-to-stderr keeps stdout clean. Run this on a feature branch (before
-# `make git_merge_to_main`) — the protect-branch/no-commit-to-branch hook only blocks commits
-# made while checked out on the default branch, so the bump commit is never gated there.
-# OFFLINE tier only — the online scaffold strips this target (releases are cut by the
-# release.yaml workflow).
+# --git-output-to-stderr keeps stdout clean. --no-verify bypasses the commit hooks for this
+# machine-generated commit: its single-line "bump: …" message can't satisfy gitlint's
+# body-required rule, and the pre-commit test/format hooks are irrelevant to a pyproject +
+# CHANGELOG bump (same rationale as bin/git_merge_to_main.sh's --no-verify). Run this on a
+# feature branch (before `make git_merge_to_main`). OFFLINE tier only — the online scaffold
+# strips this target (releases are cut by the release.yaml workflow).
 bump_version:
-	@$(POETRY) run cz bump --yes --git-output-to-stderr
+	@$(POETRY) run cz bump --yes --no-verify --git-output-to-stderr
 	@echo "Version bumped to $$($(POETRY) run cz version --project 2>/dev/null || $(POETRY) version -s)"
 
 # Regenerate CHANGELOG.md from git tags + Conventional Commits (cz derives sections from tags).
