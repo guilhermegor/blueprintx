@@ -39,23 +39,16 @@ per check, zero drift. This is distinct from the scaffolded-project pre-commit s
 in `templates/python-common/`.
 
 ### Releasing / version bump
-**The release version is entered once — in the `Release` GitHub Action (`release.yml`,
-`workflow_dispatch` → `version` input). You do not hand-bump before a release.** The `tag` job
-bakes that version into **both** files that must stay in sync — `pyproject.toml` (`version = `)
-and `bin/blueprintx.sh` (`BLUEPRINTX_VERSION=`, read by `--version`) — commits them to `main`,
-then tags `vX.Y.Z`. Because Homebrew/Chocolatey/Snap/apt install from the **tag's archive
-tarball**, baking the literal at the tagged commit is what makes `blueprintx --version` correct
-for every install method; the packaging jobs then fan out from the tag. This is why the version
-can't be purely tag-derived at runtime like a Python wheel — the shipped artifact is a source
-snapshot (a shell script), so the literal must exist in the tagged tree.
-
-`make bump_version` (runs `bin/bump_version.sh`: interactive major/minor/patch/custom menu;
-non-interactive `echo <1-4> | make bump_version`, `3` = patch) still exists as an **optional
-local convenience** — e.g. to refresh the two literals on `main` between releases — and it
-rewrites + verifies both atomically. It is **no longer required before a release** (the Action
-does it). The `check_version_sync.sh` pre-commit/CI gate still asserts the two literals agree.
-The packaging manifests (`choco/`, `snap/`, `Formula/`) track a separate, lagging scheme and are
-**not** part of the patch cadence.
+**Always bump the version through the make recipe — never hand-edit `pyproject.toml`.**
+```bash
+make bump_version  # runs bin/bump_version.sh: interactive major/minor/patch/custom menu
+```
+The version lives in **two** files that must stay in sync — `pyproject.toml` (`version = `)
+and `bin/blueprintx.sh` (`BLUEPRINTX_VERSION=`). `bin/bump_version.sh` rewrites and verifies
+both atomically (and self-heals pre-existing drift); editing `pyproject.toml` alone leaves the
+CLI reporting a stale `--version`. Drive it non-interactively with `echo <1-4> | make bump_version`
+(`3` = patch). The packaging manifests (`choco/`, `snap/`, `Formula/`) track a separate, lagging
+scheme and are **not** part of the patch cadence.
 
 ### Generated project commands (inside a scaffolded project)
 Once a project is created the template Makefile provides:
