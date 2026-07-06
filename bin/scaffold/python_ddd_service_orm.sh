@@ -233,11 +233,13 @@ copy_mkdocs_templates() {
         "$project_path/docs/backlog/.keep"
 
     # Docs version label: hook (reads pyproject version) + theme override + header JS.
-    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts"
+    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts" "$project_path/docs/stylesheets"
     cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
     cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
     cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
         "$project_path/docs/javascripts/header-version.js"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/version-badge.css" \
+        "$project_path/docs/stylesheets/version-badge.css"
 
     print_status "success" "MkDocs templates copied"
 }
@@ -483,7 +485,7 @@ copy_shared_utils() {
     local project_path="$1"
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
-    for util in br_identifiers dtypes decimals logs text paths signatures dates \
+    for util in br_identifiers dtypes decimals logs logs_emitter text paths signatures dates \
         tabular_reader retry http_downloader zip_extractor frames \
         outlook_gateway; do
         cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
@@ -522,6 +524,8 @@ copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # Docs → GitHub Pages deploy (build + gh-deploy on push to the default branch). GitHub-only.
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yaml" "$project_path/.github/workflows/docs.yaml"
     envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"

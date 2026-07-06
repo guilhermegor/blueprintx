@@ -16,6 +16,12 @@ tar -xzf $archive -C $installDir --strip-components=1
 
 Get-ChildItem -Recurse -Filter '*.sh' $installDir | ForEach-Object { $_.IsReadOnly = $false }
 
+# Stamp the release version into the fallback literal, so `blueprintx --version` is correct
+# when run from the install dir (no .git there for `git describe` to derive the tag).
+$bpx = Join-Path $installDir 'bin\blueprintx.sh'
+(Get-Content $bpx -Raw) -replace '(?m)^BLUEPRINTX_VERSION=".*"', "BLUEPRINTX_VERSION=`"$version`"" |
+    Set-Content $bpx -Encoding UTF8
+
 $shim = @"
 @echo off
 bash "%LOCALAPPDATA%\blueprintx\bin\blueprintx.sh" %*

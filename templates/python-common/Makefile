@@ -199,6 +199,10 @@ help:
 	@echo "Docs"
 	@echo "  docs_server          Serve MkDocs site locally at http://0.0.0.0:8000"
 	@echo ""
+	@echo "Library (only present for the library scaffold)"
+	@echo "  install_dist_locally Build the wheel, install it, and smoke-import the package"
+	@echo "  changelog            Regenerate CHANGELOG.md from git tags (cz changelog)"
+	@echo ""
 	@echo "Run"
 	@echo "  run                  Run src/main.py (auto-installs Poetry if missing)"
 	@echo ""
@@ -213,6 +217,10 @@ help:
 	@echo "  git_diff_check FILE=<path>   Check whether a .diff applies cleanly"
 	@echo "  git_diff_apply FILE=<path>   Apply a .diff to the working tree (no commit)"
 	@echo ""
+
+# Library-only targets (install_dist_locally, changelog) — present only when scaffolded as a
+# distributable library (lib-minimal). The leading '-' silently skips this when absent.
+-include make/library.mk
 
 # Offline-only targets (new_branch, git_merge_to_main, git_diff_*) — present only
 # when scaffolded without GitHub. The leading '-' silently skips this when absent.

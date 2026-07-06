@@ -1,6 +1,8 @@
 [tool.poetry]
 name = "BlueprintX"
-version = "0.12.2"
+# Stub only — BlueprintX is not a published package; this file exists to drive the docs site.
+# The real version is the git tag (see bin/blueprintx.sh print_version). Do not hand-bump.
+version = "0.0.0"
 description = "Docs and tooling for the BlueprintX scaffolder"
 authors = []
 readme = "README.md"

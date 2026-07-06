@@ -53,6 +53,11 @@ jobs:
           cp -r /tmp/bpx-src/templates pkg/usr/share/blueprintx/
           find pkg/usr/share/blueprintx/bin -name '*.sh' -exec chmod 755 {} +
 
+          # Stamp the release version into the fallback literal, so `blueprintx --version` is
+          # correct when run from /usr/share/blueprintx (no .git for `git describe`).
+          sed -i "s/^BLUEPRINTX_VERSION=\".*\"/BLUEPRINTX_VERSION=\"${VERSION}\"/" \
+            pkg/usr/share/blueprintx/bin/blueprintx.sh
+
           cat > pkg/usr/bin/blueprintx << 'EOF'
           #!/usr/bin/env bash
           exec /usr/share/blueprintx/bin/blueprintx.sh "$@"

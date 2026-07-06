@@ -129,7 +129,7 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 ## Pull Request Process
 
 1. **Create an Issue First**:
-   - Check existing issues at [GitHub Issues](https://github.com/guilhermegor/stpstone/issues)
+   - Check existing issues on this repository's [GitHub Issues](../../issues) page
    - Open a new issue if none exists for your work
 
 2. **Opening a PR**:

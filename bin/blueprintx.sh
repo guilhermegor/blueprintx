@@ -2,7 +2,11 @@
 
 set -e
 
-BLUEPRINTX_VERSION="0.12.2"
+# Fallback version for installs WITHOUT a .git tree (packaged installs + `make install` stamp the
+# real value here at build/install time). A git checkout ignores this and derives the version from
+# the tag via `git describe` — see print_version. Do not hand-bump: the release tag is the single
+# source of truth.
+BLUEPRINTX_VERSION="0.0.0"
 
 DEV_MODE=0
 DRY_RUN=0
@@ -42,7 +46,15 @@ print_usage() {
 }
 
 print_version() {
-    echo "blueprintx $BLUEPRINTX_VERSION"
+    # Prefer the git tag (the single source of truth) when run from a checkout; fall back to the
+    # stamped BLUEPRINTX_VERSION literal for packaged installs / source archives without a .git.
+    local str_version
+    if str_version=$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null) \
+        && [ -n "$str_version" ]; then
+        echo "blueprintx ${str_version#v}"
+    else
+        echo "blueprintx $BLUEPRINTX_VERSION"
+    fi
 }
 
 while [[ $# -gt 0 ]]; do

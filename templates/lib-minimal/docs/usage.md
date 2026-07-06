@@ -60,8 +60,8 @@ make lint          # ruff check + ruff format + codespell + pydocstyle
 
 Two GitHub Actions workflows handle releases (present when the repo has a GitHub remote):
 
-- **`release_test_pypi.yaml`** — publish to [Test PyPI](https://test.pypi.org) first.
-- **`release_pypi.yaml`** — publish to [PyPI](https://pypi.org) and cut a GitHub release.
+- **`release-test-pypi.yaml`** — publish to [Test PyPI](https://test.pypi.org) first.
+- **`release-pypi.yaml`** — publish to [PyPI](https://pypi.org) and cut a GitHub release.
 
 Trigger either from the **Actions** tab (`workflow_dispatch`) with the version to release.
 Both gate on the new version being greater than the latest already published, build with

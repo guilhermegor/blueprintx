@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+<!--
+  Expose the code version (injected by mkdocs_hooks.on_config from pyproject.toml) as a meta
+  tag. docs/javascripts/header-version.js reads it and inserts the label into the header bar
+  (no extra row, no mike / no gh-pages). Everything else is the stock Material theme.
+-->
+{% block extrahead %}
+  {{ super() }}
+  <meta name="code-version" content="v{{ config.extra.code_version }}">
+{% endblock %}

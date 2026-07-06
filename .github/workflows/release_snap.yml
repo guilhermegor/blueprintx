@@ -42,6 +42,15 @@ jobs:
       - name: Copy snap manifest into build directory
         run: cp -r snap /tmp/bpx-src/snap
 
+      # Stamp the release version into the fallback literal in the extracted source, so the
+      # packaged `blueprintx --version` is correct (the snap has no .git for `git describe`).
+      - name: Stamp version into blueprintx.sh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          sed -i "s/^BLUEPRINTX_VERSION=\".*\"/BLUEPRINTX_VERSION=\"${VERSION}\"/" \
+            /tmp/bpx-src/bin/blueprintx.sh
+
       - name: Install snapcraft
         run: sudo snap install snapcraft --classic
 

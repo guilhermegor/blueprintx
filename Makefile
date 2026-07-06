@@ -3,15 +3,21 @@ WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
 # -------------------
 # BLUEPRINTX SCRIPTS
 # -------------------
-.PHONY: new install preview dev dev-clean dry-run bump_version
+.PHONY: new install preview dev dev-clean dry-run
 
 new:
 	@bash bin/blueprintx.sh
 
+# Install from this clone into /usr/share/blueprintx. That path has no .git, so the installed
+# `blueprintx --version` can't derive the tag at runtime — stamp the clone's current
+# `git describe` version into the installed script (mirroring what the package-manager jobs do),
+# so every install path reports the same tag-derived version with no hand-bump.
 install:
+	$(eval VERSION := $(shell git describe --tags --always 2>/dev/null | sed 's/^v//'))
 	@sudo rsync -a --delete bin/ /usr/share/blueprintx/bin/
 	@sudo rsync -a --delete templates/ /usr/share/blueprintx/templates/
-	@echo "Installed to /usr/share/blueprintx"
+	@sudo sed -i "s/^BLUEPRINTX_VERSION=\".*\"/BLUEPRINTX_VERSION=\"$(VERSION)\"/" /usr/share/blueprintx/bin/blueprintx.sh
+	@echo "Installed blueprintx $(VERSION) to /usr/share/blueprintx"
 
 preview:
 	@bash bin/preview.sh
@@ -24,9 +30,6 @@ dev-clean:
 
 dry-run:
 	@bash bin/blueprintx.sh --dry-run
-
-bump_version:
-	@bash bin/bump_version.sh
 
 # -------------------
 # VIRTUAL ENVIRONMENT
