@@ -230,6 +230,12 @@ copy_mkdocs_templates() {
         "$project_path/docs/architecture.md"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/api.md" \
         "$project_path/docs/api.md"
+    # Standard doc sections shared across all service tiers — single-sourced from
+    # python-common/docs so every tier stays in sync.
+    local doc
+    for doc in usage examples faq contributing changelog; do
+        cp "$COMMON_TEMPLATE_ROOT/docs/${doc}.md" "$project_path/docs/${doc}.md"
+    done
     # Non-published docs/ authoring guide + the excluded backlog folder.
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
@@ -237,14 +243,6 @@ copy_mkdocs_templates() {
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/backlog/.keep" \
         "$project_path/docs/backlog/.keep"
 
-    # Docs version label: hook (reads pyproject version) + theme override + header JS.
-    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts" "$project_path/docs/stylesheets"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
-        "$project_path/docs/javascripts/header-version.js"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/version-badge.css" \
-        "$project_path/docs/stylesheets/version-badge.css"
 
     print_status "success" "MkDocs templates copied"
 }

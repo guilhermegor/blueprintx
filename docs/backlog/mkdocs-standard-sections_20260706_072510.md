@@ -1,0 +1,40 @@
+# Backlog — standard mkdocs doc sections + remove masthead version badge
+
+Branch: `feat/mkdocs-standard-doc-sections`. Two coordinated changes across every mkdocs site
+in the family (5 scaffold tiers + root), batched because they touch the same `mkdocs.yml` files.
+
+**Canonical section set (from wwdates):** Home · Usage · Examples · API Reference · FAQ ·
+Contributing · Changelog. Decisions: root = tool-mapped full set; service tiers = full parity +
+keep Architecture; masthead version pill removed from scaffold tiers **and** root (GitHub-release
+version from Material's `repo_url` integration stays).
+
+## A) Remove the masthead version badge (git-describe pill) — all sites
+
+Files per site: `mkdocs.yml` wiring (`theme.custom_dir: overrides`, `hooks:`,
+`extra_javascript: header-version.js`, `extra_css: version-badge.css`) + delete
+`overrides/main.html`, `docs/javascripts/header-version.js`, `docs/stylesheets/version-badge.css`,
+`mkdocs_hooks.py`. Shared source `templates/common/docs_version/`: drop `mkdocs_hooks.py`,
+`main.html`, `header-version.js`, `version-badge.css` (keep `docs.yaml`). Update every scaffold's
+copy steps + `mkdir`s.
+
+- [x] root blueprintx (revert what PR #40 added) — DONE (commit 14cf47a)
+- [x] lib-minimal (template + scaffold copy) — DONE
+- [x] mvc/ddd ×4 (+ their 4 scaffolds) — DONE
+- [x] remove the 4 shared assets from `templates/common/docs_version/` — DONE
+- [x] verified: all 6 mkdocs.yml valid, scaffolds shellcheck clean, root builds --strict, no code-version meta
+
+## B) Add the standard nav sections + pages
+
+- [x] **lib-minimal** — added `Examples` + `FAQ`. Final nav: Home · Usage · Examples · API
+  Reference · FAQ · Contributing · Changelog. Verified `mkdocs --strict`.
+- [x] **service tiers ×4** — added `Usage`, `Examples`, `FAQ`, `Contributing`, `Changelog` (kept
+  `Architecture`); 5 pages single-sourced from `templates/python-common/docs/`; changelog is a
+  hand-maintained Keep-a-Changelog page (no cz/tag dependency for apps). Verified mvc + ddd `--strict`.
+- [x] **root blueprintx** — added `Examples` (hub → per-skeleton walkthroughs), `CLI Reference`
+  (make targets + blueprintx flags), `FAQ`, `Contributing`, `Changelog` (→ GitHub Releases,
+  tag-driven). docs/CLAUDE.md file index + nav-shape updated. Verified `--strict`.
+
+## Verification
+- [x] `mkdocs build --strict` — lib, mvc, ddd (assembled), and root all pass (every nav page + link resolves).
+- [x] No masthead pill in built `site/`; Material GitHub version still renders (online).
+- [x] Nav shows the full section set per tier; docs/CLAUDE.md file index + nav-shape updated (root).
