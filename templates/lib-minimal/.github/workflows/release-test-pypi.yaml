@@ -178,7 +178,7 @@ jobs:
     needs: setup_and_build
     runs-on: ubuntu-latest
     environment:
-      name: release_test_pypi
+      name: release-test-pypi
     permissions:
       id-token: write
     steps:
@@ -193,7 +193,7 @@ jobs:
       # the trusted publisher registered for this repo/workflow/environment, then issues a
       # one-time upload token for this run only. Requires a trusted publisher configured on
       # test.pypi.org for owner=${GITHUB_USERNAME}, repo=${PROJECT_NAME},
-      # workflow=release_test_pypi.yaml, environment=release_test_pypi. No TEST_PYPI_TOKEN secret is used.
+      # workflow=release-test-pypi.yaml, environment=release-test-pypi. No TEST_PYPI_TOKEN secret is used.
       - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

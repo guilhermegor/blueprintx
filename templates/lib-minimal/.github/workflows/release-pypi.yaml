@@ -179,7 +179,7 @@ jobs:
     needs: setup_and_build
     runs-on: ubuntu-latest
     environment:
-      name: release_pypi
+      name: release-pypi
     permissions:
       id-token: write
     steps:
@@ -193,8 +193,8 @@ jobs:
       # OpenID Connect token (via `id-token: write`, above) that PyPI verifies against the
       # trusted publisher registered for this repo/workflow/environment, then issues a
       # one-time upload token for this run only. Requires a trusted publisher configured on
-      # PyPI for owner=${GITHUB_USERNAME}, repo=${PROJECT_NAME}, workflow=release_pypi.yaml,
-      # environment=release_pypi. No PYPI_TOKEN secret is used.
+      # PyPI for owner=${GITHUB_USERNAME}, repo=${PROJECT_NAME}, workflow=release-pypi.yaml,
+      # environment=release-pypi. No PYPI_TOKEN secret is used.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 

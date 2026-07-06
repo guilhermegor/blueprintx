@@ -75,8 +75,8 @@ of your public `__all__`. The internal imports are package-qualified
 
 Two workflows ship under `.github/workflows/` (present only when a GitHub remote is set up):
 
-- `release_test_pypi.yaml` — publish to **Test PyPI** first (`workflow_dispatch`).
-- `release_pypi.yaml` — publish to **PyPI** and cut a GitHub release.
+- `release-test-pypi.yaml` — publish to **Test PyPI** first (`workflow_dispatch`).
+- `release-pypi.yaml` — publish to **PyPI** and cut a GitHub release.
 
 Both gate on the version being greater than what is already published, build with Poetry,
 and fall back to `twine` if `poetry publish` is unavailable. Configure these repository

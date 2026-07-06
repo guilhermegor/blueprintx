@@ -340,13 +340,13 @@ copy_common_templates() {
     # Emit only the selected release workflows (Q1/Q2 from prompt_publish_targets).
     if [[ "$PUBLISH_PYPI" == "true" ]]; then
         envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
-            < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release_pypi.yaml" \
-            > "$project_path/.github/workflows/release_pypi.yaml"
+            < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release-pypi.yaml" \
+            > "$project_path/.github/workflows/release-pypi.yaml"
     fi
     if [[ "$PUBLISH_TEST_PYPI" == "true" ]]; then
         envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
-            < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release_test_pypi.yaml" \
-            > "$project_path/.github/workflows/release_test_pypi.yaml"
+            < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release-test-pypi.yaml" \
+            > "$project_path/.github/workflows/release-test-pypi.yaml"
     fi
     # Docs → GitHub Pages deploy (gh-deploy on push to default branch). No placeholders; plain cp.
     # GitHub-remote-only, like the release workflows — apply_offline_mode drops all of .github/.
