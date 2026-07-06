@@ -394,6 +394,10 @@ copy_mkdocs_templates() {
         "$project_path/docs/usage.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/api.md" \
         "$project_path/docs/api.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/examples.md" \
+        "$project_path/docs/examples.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/faq.md" \
+        "$project_path/docs/faq.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/contributing.md" \
         "$project_path/docs/contributing.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/changelog.md" \

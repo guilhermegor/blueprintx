@@ -17,10 +17,11 @@ Files per site: `mkdocs.yml` wiring (`theme.custom_dir: overrides`, `hooks:`,
 `main.html`, `header-version.js`, `version-badge.css` (keep `docs.yaml`). Update every scaffold's
 copy steps + `mkdir`s.
 
-- [ ] root blueprintx (revert what PR #40 added)
-- [ ] lib-minimal (template + scaffold copy)
-- [ ] mvc-service-native-db, mvc-service-orm-db, ddd-service-native-db, ddd-service-orm-db (+ their 4 scaffolds)
-- [ ] remove the 4 shared assets from `templates/common/docs_version/`
+- [x] root blueprintx (revert what PR #40 added) — DONE (commit 14cf47a)
+- [x] lib-minimal (template + scaffold copy) — DONE
+- [x] mvc/ddd ×4 (+ their 4 scaffolds) — DONE
+- [x] remove the 4 shared assets from `templates/common/docs_version/` — DONE
+- [x] verified: all 6 mkdocs.yml valid, scaffolds shellcheck clean, root builds --strict, no code-version meta
 
 ## B) Add the standard nav sections + pages
 

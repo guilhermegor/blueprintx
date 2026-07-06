@@ -230,6 +230,12 @@ copy_mkdocs_templates() {
         "$project_path/docs/architecture.md"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/api.md" \
         "$project_path/docs/api.md"
+    # Standard doc sections shared across all service tiers — single-sourced from
+    # python-common/docs so every tier stays in sync.
+    local doc
+    for doc in usage examples faq contributing changelog; do
+        cp "$COMMON_TEMPLATE_ROOT/docs/${doc}.md" "$project_path/docs/${doc}.md"
+    done
     # Non-published docs/ authoring guide + the excluded backlog folder.
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"

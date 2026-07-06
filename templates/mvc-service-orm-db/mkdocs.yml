@@ -3,8 +3,13 @@ site_description: Documentation for ${PROJECT_DISPLAY_NAME}
 repo_url: ${REPOSITORY}
 nav:
   - Home: index.md
+  - Usage: usage.md
+  - Examples: examples.md
   - Architecture: architecture.md
   - API Reference: api.md
+  - FAQ: faq.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
 theme:
   name: material
   palette:
