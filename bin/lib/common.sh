@@ -210,14 +210,16 @@ with open(makefile, encoding="utf-8") as fh:
     text = fh.read()
 # Drop bump_version from the .PHONY line only (not the help text).
 text = re.sub(r"(\.PHONY:[^\n]*) bump_version", r"\1", text, count=1)
-# Remove the recipe (its comment block + LEVEL default through the recipe body). The comment
-# span uses DOTALL (.*?), but the recipe lines use [^\n] so `.` can't run greedily to EOF.
+# Remove the recipe: its preceding comment block + the target line + the tab-indented body.
+# Anchored on the `bump_version:` target (NOT the comment wording, which varies between tiers
+# and edits) — `(?:#[^\n]*\n)+` grabs the contiguous comment run only because `bump_version:\n`
+# pins its end, and `(?:\t[^\n]*\n)+` grabs the recipe body. Structural anchors only, so a
+# reworded recipe comment can never silently defeat the strip.
 text = re.sub(
-    r"\n# Bump the project version\..*?\nbump_version:\n(?:\t[^\n]*\n)+",
+    r"\n(?:#[^\n]*\n)+bump_version:\n(?:\t[^\n]*\n)+",
     "\n",
     text,
     count=1,
-    flags=re.S,
 )
 # Remove the help line.
 text = re.sub(r'\t@echo "  bump_version[^\n]*\n', "", text, count=1)

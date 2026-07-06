@@ -873,9 +873,13 @@ main() {
         apply_online_tag_versioning "$PROJECT_PATH"
         apply_online_docs_url "$PROJECT_PATH"
         # The generic service release.yaml (tag + GitHub Release, no publish) does not apply to a
-        # library — the lib ships its own release-pypi.yaml / release-test-pypi.yaml.
-        rm -f "$PROJECT_PATH/.github/workflows/release.yaml"
-        print_status "success" "Library: generic service release.yaml removed (uses release-pypi instead)"
+        # library — the lib ships its own release-pypi.yaml / release-test-pypi.yaml. The lib copy
+        # step doesn't pull it in today, but strip defensively so a future copy-list change can't
+        # leak it. Only report when a file was actually removed — never claim a no-op removal.
+        if [[ -f "$PROJECT_PATH/.github/workflows/release.yaml" ]]; then
+            rm -f "$PROJECT_PATH/.github/workflows/release.yaml"
+            print_status "success" "Library: generic service release.yaml removed (uses release-pypi instead)"
+        fi
     fi
 
     print_status "success" "Lib-minimal scaffold complete!"
