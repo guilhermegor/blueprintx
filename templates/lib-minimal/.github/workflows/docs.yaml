@@ -28,7 +28,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          # Full history so `git describe` (version badge) and `cz changelog` see the tags.
+          # Full history so `cz changelog` sees the tags when regenerating CHANGELOG.md.
           fetch-depth: 0
 
       - name: Set Up Python
