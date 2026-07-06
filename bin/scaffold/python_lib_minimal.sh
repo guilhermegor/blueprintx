@@ -405,15 +405,6 @@ copy_mkdocs_templates() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/backlog/.keep" \
         "$project_path/docs/backlog/.keep"
 
-    # Docs version label: hook (git describe → pyproject fallback) + theme override + header JS
-    # + the pill CSS (without it the label wraps under the logo). extra_css in mkdocs.yml wires it.
-    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts" "$project_path/docs/stylesheets"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
-        "$project_path/docs/javascripts/header-version.js"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/version-badge.css" \
-        "$project_path/docs/stylesheets/version-badge.css"
 
     print_status "success" "MkDocs templates copied"
 }

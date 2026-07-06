@@ -232,14 +232,6 @@ copy_mkdocs_templates() {
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/docs/backlog/.keep" \
         "$project_path/docs/backlog/.keep"
 
-    # Docs version label: hook (reads pyproject version) + theme override + header JS.
-    mkdir -p "$project_path/overrides" "$project_path/docs/javascripts" "$project_path/docs/stylesheets"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/mkdocs_hooks.py" "$project_path/mkdocs_hooks.py"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/main.html" "$project_path/overrides/main.html"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/header-version.js" \
-        "$project_path/docs/javascripts/header-version.js"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/version-badge.css" \
-        "$project_path/docs/stylesheets/version-badge.css"
 
     print_status "success" "MkDocs templates copied"
 }

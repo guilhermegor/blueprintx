@@ -32,8 +32,6 @@ nav:
       - React SPA (Webpack): ts-react-spa-webpack.md
 theme:
   name: material
-  # overrides/main.html exposes the code version (from mkdocs_hooks.py) as a meta tag.
-  custom_dir: overrides
   palette:
     - scheme: default
       primary: indigo
@@ -56,13 +54,6 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.superfences
-
-# Version badge: mkdocs_hooks.py derives the version from `git describe` (the release tag) into
-# config.extra.code_version, which overrides/main.html surfaces and javascripts/header-version.js
-# renders in the masthead — mirroring the scaffolded tiers (python-common / ddd-* / mvc-* / lib).
-hooks:
-  - mkdocs_hooks.py
-extra_javascript:
-  - javascripts/header-version.js
-extra_css:
-  - stylesheets/version-badge.css
+  - pymdownx.snippets:
+      base_path:
+        - .
