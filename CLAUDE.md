@@ -219,4 +219,7 @@ session-local; the backlog is the in-repo, team-reviewable, cross-session record
 start of work, **re-read any existing `docs/backlog/` file** and keep it current. The
 filename timestamp is set at creation and never renamed. `docs/backlog/` is git-ignored from
 the published site (`exclude_docs` in each skeleton's `mkdocs.yml`) but tracked in the repo.
-Delete a backlog file once every box is `[x]`. (Lesson: persist-todo-in-docs-backlog.)
+**Do NOT delete a backlog file once every box is `[x]`** — keep it as a permanent,
+team-reviewable record of what was done and why. When complete, tick the last box and add a
+short "Completed — kept as a record" note instead of removing the file. (Lesson:
+persist-todo-in-docs-backlog.)
