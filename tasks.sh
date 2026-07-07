@@ -45,6 +45,13 @@ cmd_mkdocs_serve() {
 	poetry run mkdocs serve -a 0.0.0.0:8000 --livereload
 }
 
+# Regenerate the root CHANGELOG.md from the conventional-commit / git-tag history (mirrors
+# `make changelog`). The docs Changelog page single-sources this file; do not hand-edit it.
+cmd_changelog() {
+	poetry run cz changelog
+	echo "Regenerated CHANGELOG.md"
+}
+
 main() {
 	local target="${1:-help}"
 	shift || true
@@ -63,6 +70,7 @@ main() {
 		lint) cmd_lint ;;
 		update_venv) cmd_update_venv ;;
 		mkdocs_server|mkdocs_serve) cmd_mkdocs_serve ;;
+		changelog) cmd_changelog ;;
 		help|-h|--help) usage ;;
 		*) echo "Unknown target: $target" >&2; usage >&2; exit 1 ;;
 	esac

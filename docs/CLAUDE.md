@@ -15,7 +15,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `cli-reference.md` | Utility page | Every BlueprintX command: `make` targets + `blueprintx` CLI flags |
 | `faq.md` | Utility page | Common questions about using and extending BlueprintX |
 | `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, release) |
-| `changelog.md` | Utility page | Release history — points to GitHub Releases (tag-driven) |
+| `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
 | `py-mvc-service-native-db.md` | Skeleton overview | Layered MVC scaffold using native DB drivers (script/pipeline style) |

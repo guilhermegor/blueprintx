@@ -1,11 +1,20 @@
 # **Changelog**
 
-BlueprintX is released by tagging: each release is a `vX.Y.Z` git tag cut from the **Release**
-GitHub Action, and GitHub generates the release notes from the merged pull requests.
+Release history for BlueprintX. Entries are generated from
+[Conventional Commit](https://www.conventionalcommits.org/) messages via
+[commitizen](https://commitizen-tools.github.io/commitizen/), so the version headings below track
+what actually shipped (each `vX.Y.Z` tag is cut from the **Release** GitHub Action).
 
-- **[Releases on GitHub »](https://github.com/guilhermegor/blueprintx/releases)** — the
-  authoritative, per-version changelog with notes and downloadable artifacts.
+**How it updates:** the sections below are generated from the git tags and commit history by
+`cz changelog`. The published page is regenerated **fresh on every docs build** (the docs workflow
+runs `cz changelog` before `mkdocs build`), so it always reflects the default branch — CI never
+commits `CHANGELOG.md` back to the repo. You never edit it by hand. Regenerate or preview locally
+any time with `make changelog` (or `bash tasks.sh changelog`).
 
-The version is the tag, resolved at runtime by `blueprintx --version` (`git describe` from a
-checkout, or a stamped literal for a packaged install) — there is no hand-maintained version
-in the repo. See the [FAQ](faq.md#how-is-blueprintx-itself-versioned).
+For the authoritative per-version notes and downloadable artifacts, see the
+**[Releases on GitHub »](https://github.com/guilhermegor/blueprintx/releases)**.
+
+---
+
+<!-- Single-sourced from the repo-root CHANGELOG.md — never edit the entries here by hand. -->
+--8<-- "CHANGELOG.md"

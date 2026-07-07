@@ -59,3 +59,7 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.superfences
+  # Enables the `--8<-- "CHANGELOG.md"` include on the Changelog page (single-sources the root file).
+  - pymdownx.snippets:
+      base_path:
+        - .

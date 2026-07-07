@@ -19,5 +19,6 @@ Targets (no make required):
   lint          Run all pre-commit hooks across the repo (mirrors CI)
   update_venv   Update Poetry dependencies
   mkdocs_server  Install docs deps (if needed) and serve with live reload
+  changelog     Regenerate root CHANGELOG.md from git tags (cz changelog)
   help          Show this help
 EOF

@@ -36,6 +36,14 @@ mkdocs = ">=1.6.0"
 mkdocs-material = ">=9.5.0"
 pymdown-extensions = ">=10.0"
 
+[tool.commitizen]
+# Conventional-commit driven changelog. Releases are cut by tagging (see .github/workflows),
+# not a hand-run bump; `cz changelog` (via `make changelog`) groups commits by tag into the
+# root CHANGELOG.md, which the docs Changelog page single-sources via a snippets include.
+name = "cz_conventional_commits"
+version_provider = "poetry"
+tag_format = "v$version"
+
 [build-system]
 requires = ["poetry-core>=1.7.0"]
 build-backend = "poetry.core.masonry.api"

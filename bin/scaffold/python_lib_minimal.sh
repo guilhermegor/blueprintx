@@ -531,7 +531,7 @@ prompt_git_remote_setup() {
                         local docs_url="https://${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}.github.io/${PROJECT_NAME}/"
                         (
                             cd "$project_path"
-                            if gh repo create "$repo_slug" --source . --remote origin --push --homepage "$docs_url" "$vis_flag"; then
+                            if gh repo create "$repo_slug" --source . --remote origin --push --homepage "$docs_url" --description "$PROJECT_DESCRIPTION" "$vis_flag"; then
                                 push_done=1
                                 gh repo edit "$repo_slug" --default-branch main --homepage "$docs_url" >/dev/null 2>&1 || true
                                 print_status "success" "Repository created and pushed via gh."
@@ -611,6 +611,21 @@ commit_offline_artifacts() {
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
     git -C "$project_path" add -A
     git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+}
+
+# The first commit (pushed by prompt_git_remote_setup) runs before the online versioning/docs
+# rewrites (apply_online_tag_versioning + apply_online_docs_url), so pyproject.toml + Makefile +
+# tasks.sh are left modified afterwards. Commit + push them so a fresh online scaffold starts with
+# a clean, fully-pushed working tree. Mirrors the service tiers' commit_and_push_github_assets.
+# --no-verify bypasses the test/coverage hooks (HEAD is the default branch).
+commit_online_artifacts() {
+    local project_path="$1"
+    git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    [ -n "$(git -C "$project_path" status --porcelain)" ] || return 0
+    git -C "$project_path" add -A
+    git -C "$project_path" commit -q --no-verify -m "chore: apply tag-driven versioning and docs URL" || true
+    git -C "$project_path" push >/dev/null 2>&1 \
+        || print_status "warning" "Could not push versioning changes; run 'git push' manually."
 }
 
 # Replace the stock pre-commit `no-commit-to-branch` hook with a local hook that
@@ -885,6 +900,9 @@ main() {
             rm -f "$PROJECT_PATH/.github/workflows/release.yaml"
             print_status "success" "Library: generic service release.yaml removed (uses release-pypi instead)"
         fi
+        # Sweep the online versioning/docs rewrites into a commit + push (they run after the first
+        # pushed commit) so the scaffold ends with a clean working tree.
+        commit_online_artifacts "$PROJECT_PATH"
     fi
 
     print_status "success" "Lib-minimal scaffold complete!"
