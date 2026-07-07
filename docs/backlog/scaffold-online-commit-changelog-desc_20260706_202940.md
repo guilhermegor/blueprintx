@@ -31,9 +31,15 @@ Branch: `fix/scaffold-online-uncommitted-changelog-desc`
 - [x] strict `mkdocs build` passes; changelog snippet renders
 - [x] Part A mechanism proven: sourced real `commit_online_artifacts` against a local bare
       remote → 3 dirty files → clean tree, 0 ahead/0 behind, sweep commit present
-- [ ] `act` on changed `docs.yml` (needs Docker; Docker daemon down at push time — deferred)
-- [ ] real online scaffold smoke against a throwaway GitHub repo: `git status --porcelain`
-      empty + `gh repo view --json description` set (needs gh auth / user go-ahead)
-- [x] open PR
+- [x] `act` on changed `docs.yml` — superseded by the real "Docs - Github Page Deployment"
+      run on `main` (merge commit `00ef87e`, PR #44): completed / success. The live runner
+      is a stronger signal than `act`, so this is closed.
+- [x] real online scaffold smoke against a throwaway GitHub repo: ran the lib-minimal online
+      scaffold (driving the real `python_lib_minimal.sh` prompts) into a private `bx-smoke-*`
+      repo → `git status --porcelain` empty, `main...origin/main` 0 ahead/0 behind (Part A),
+      and `gh repo view --json description` = "BlueprintX online smoke test" (Part C). Repo
+      deleted after (needed the `delete_repo` token scope).
+- [x] open PR (#44)
 
-Delete this file once every box is `[x]`.
+Completed — kept as a record. Do NOT delete completed backlog files: they document what
+was done and why for the team. (Global rule; only delete when a specific repo opts in.)
