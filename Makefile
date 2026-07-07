@@ -60,11 +60,18 @@ lint:
 # -------------------
 # DOCS
 # -------------------
-.PHONY: mkdocs_server
+.PHONY: mkdocs_server changelog
 
 mkdocs_server:
 	@poetry install --with docs
 	@poetry run mkdocs serve -a 0.0.0.0:8000 --livereload
+
+# Regenerate the root CHANGELOG.md from the conventional-commit / git-tag history. The docs
+# Changelog page single-sources this file via a snippets include; CI regenerates it fresh on
+# every docs build (never committed back). Run this to preview locally. Do not hand-edit CHANGELOG.md.
+changelog:
+	@poetry run cz changelog
+	@echo "Regenerated CHANGELOG.md"
 
 # -------------------
 # LICENSES

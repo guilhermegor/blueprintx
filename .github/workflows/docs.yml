@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so `cz changelog` sees the tags when regenerating CHANGELOG.md.
+          fetch-depth: 0
       - name: Configure Git Credentials
         run: |
           git config user.name github-actions[bot]
@@ -25,7 +28,11 @@ jobs:
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material
+      - run: pip install mkdocs-material commitizen
+      # Regenerate CHANGELOG.md from the commit/tag history so the published Changelog page is
+      # current (the page single-sources it via a snippets include). Never committed back to main;
+      # the site's copy is produced fresh here. cz derives sections from git tags.
+      - run: cz changelog
       - run: mkdocs build
       - name: Checkout gh-pages
         uses: actions/checkout@v4

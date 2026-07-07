@@ -359,7 +359,7 @@ prompt_git_remote_setup() {
                         repo_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
                         (
                             cd "$project_path"
-                            if gh repo create "$repo_slug" --source . --remote origin --push "$vis_flag"; then
+                            if gh repo create "$repo_slug" --source . --remote origin --push --description "$PROJECT_DESCRIPTION" "$vis_flag"; then
                                 push_done=1
                                 gh repo edit "$repo_slug" --default-branch main >/dev/null 2>&1 || true
                                 print_status "success" "Repository created and pushed via gh."
@@ -847,10 +847,11 @@ main() {
     # tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
     if git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         copy_github_assets "$PROJECT_PATH"
-        commit_and_push_github_assets "$PROJECT_PATH"
         # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
-        # make bump_version (cz bump).
+        # make bump_version (cz bump). Strip BEFORE the assets commit so its Makefile/tasks.sh
+        # edits are swept into the same commit+push (no leftover uncommitted files).
         strip_bump_version "$PROJECT_PATH"
+        commit_and_push_github_assets "$PROJECT_PATH"
     else
         apply_offline_mode "$PROJECT_PATH"
     fi

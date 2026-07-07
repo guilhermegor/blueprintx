@@ -475,7 +475,7 @@ prompt_git_remote_setup() {
                         repo_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
                         (
                             cd "$project_path"
-                            if gh repo create "$repo_slug" --source . --remote origin --push "$vis_flag"; then
+                            if gh repo create "$repo_slug" --source . --remote origin --push --description "$PROJECT_DESCRIPTION" "$vis_flag"; then
                                 push_done=1
                                 gh repo edit "$repo_slug" --default-branch main >/dev/null 2>&1 || true
                                 print_status "success" "Repository created and pushed via gh."

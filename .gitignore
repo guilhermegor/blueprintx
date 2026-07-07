@@ -82,6 +82,10 @@ docs/_build/
 # Internal scaffolding-lessons mirror (canonical store lives in ~/.claude/memory/lessons/)
 docs/blueprintx-lessons.md
 
+# Generated changelog — regenerated fresh by `cz changelog` (make changelog / docs CI);
+# the docs Changelog page single-sources it via a snippets include. Never committed back.
+CHANGELOG.md
+
 # PyBuilder
 .pybuilder/
 target/
