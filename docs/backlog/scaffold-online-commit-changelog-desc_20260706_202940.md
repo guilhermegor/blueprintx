@@ -31,9 +31,13 @@ Branch: `fix/scaffold-online-uncommitted-changelog-desc`
 - [x] strict `mkdocs build` passes; changelog snippet renders
 - [x] Part A mechanism proven: sourced real `commit_online_artifacts` against a local bare
       remote → 3 dirty files → clean tree, 0 ahead/0 behind, sweep commit present
-- [ ] `act` on changed `docs.yml` (needs Docker; Docker daemon down at push time — deferred)
+- [x] `act` on changed `docs.yml` — superseded by the real "Docs - Github Page Deployment"
+      run on `main` (merge commit `00ef87e`, PR #44): completed / success. The live runner
+      is a stronger signal than `act`, so this is closed.
 - [ ] real online scaffold smoke against a throwaway GitHub repo: `git status --porcelain`
-      empty + `gh repo view --json description` set (needs gh auth / user go-ahead)
-- [x] open PR
+      empty + `gh repo view --json description` set. **Manual-only**: the scaffolder is
+      interactive (no non-interactive path) and the online branch creates a real GitHub repo +
+      branch protection — run by hand with go-ahead; not safe to automate.
+- [x] open PR (#44)
 
 Delete this file once every box is `[x]`.
