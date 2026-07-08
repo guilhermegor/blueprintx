@@ -23,8 +23,9 @@ exclude_docs: |
   (timestamped filename, set at creation, never renamed) recording **what was done**
   and **what remains / is open**, updated as the work proceeds. Tracked in git but
   excluded from the site, so knowledge survives across sessions. Distinct from
-  generalizable lessons: the ledger is *this branch's* state — delete it once every
-  item is done.
+  generalizable lessons: the ledger is *this branch's* state. When every item is done,
+  tick the last box and add a "Completed — kept as a record" note — do **not** delete it;
+  a finished ledger is the team-reviewable record of what was done and why.
 - Any new non-published folder must be added to `exclude_docs` in the same commit.
 
 ## Published pages
