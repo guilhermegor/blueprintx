@@ -141,7 +141,13 @@ A pre-existing `find_file_problems()` "documented but not raised FileNotFoundErr
 `tabular_reader.py` is untouched by this branch and left alone.
 
 ### Wrap-up
-- [ ] Mirror the 8 lessons into BlueprintX `docs/blueprintx-lessons.md` ("Backported 2026-07-08"),
+- [x] Mirror the 8 lessons into BlueprintX `docs/blueprintx-lessons.md` ("Backported 2026-07-08"),
       plus the new mypy-pin lesson discovered here
+- [x] Correct the global store: `~/.claude/memory/lessons/python-version-floor-consistency.md`
+      amended in place (it prescribed the bad pin) + flagged in that store's `README.md`
 - [x] Verify in a scaffolded project (not template root): all 5 tiers scaffold + lint + unit tests
-- [ ] Commit, push, open PR (**awaiting explicit user OK**)
+- [x] Commit, push, open PR → **#47** (`feat/backport-filings-cvm-lessons`)
+
+**Completed 2026-07-08 — kept as a record.** All 8 lessons landed. The one substantive course
+correction: the mypy `python_version` floor pin (a Decisions-section default at the top of this
+file) turned out to be the defect, not the fix — see the corrected Lesson-3 finding.
