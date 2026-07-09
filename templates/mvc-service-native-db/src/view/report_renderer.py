@@ -11,8 +11,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from utils.typing import TypeChecker
 
-class RenderToExcel:
+
+class RenderToExcel(metaclass=TypeChecker):
 	"""Write a pandas DataFrame to an ``.xlsx`` file via the openpyxl engine.
 
 	Parameters

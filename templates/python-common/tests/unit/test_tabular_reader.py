@@ -38,6 +38,22 @@ def test_read_table_applies_contract_and_dtypes(tmp_path: Path) -> None:
 	assert df_out["code"].iloc[0] == "ABC"
 
 
+def test_read_table_reads_as_text_preserving_zero_padding_and_decimals(tmp_path: Path) -> None:
+	"""A zero-padded code and a money decimal survive the read intact (text-first, no inference).
+
+	The regression this guards: reading with pandas' inference (``dtype=None``) parses ``007``
+	to the int ``7`` and ``1000.50`` to the float ``1000.5`` *before* typing, and a later
+	``astype`` cannot recover the dropped leading/trailing zeros. Reading as raw text keeps the
+	exact source characters, so the declared dtype coerces from ``"007"`` / ``"1000.50"``.
+	"""
+	path_csv = tmp_path / "padded.csv"
+	path_csv.write_text("code;amount\n007;1000.50\n042;0.10\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	df_out = read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+	assert df_out["code"].tolist() == ["007", "042"]  # leading zeros survive
+	assert df_out["amount"].tolist() == ["1000.50", "0.10"]  # trailing zeros survive
+
+
 def test_read_table_raises_on_missing_required_column(tmp_path: Path) -> None:
 	"""A missing required column raises ContractError before typing."""
 	path_csv = _write_csv(tmp_path)

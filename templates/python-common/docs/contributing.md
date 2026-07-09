@@ -29,6 +29,26 @@ make lint                # ruff + mypy + codespell + pydocstyle + shell/sql/yaml
 
 CI runs the same gates on every pull request; keep them green locally before pushing.
 
+## Publishing the documentation (GitHub Pages)
+
+The `Docs - GitHub Pages Deployment` workflow builds and publishes the site on every push to
+the default branch. It requires **GitHub Pages to be enabled once** with the *GitHub Actions*
+source — and that first-time enablement **cannot** be done by the workflow itself: its
+`GITHUB_TOKEN` is a GitHub App token that cannot create the Pages site from scratch (the first
+run fails at *Configure Pages* with `Resource not accessible by integration`).
+
+Do the one-time enable, with repo-admin rights:
+
+```bash
+make enable_pages          # or: bash tasks.sh enable_pages
+```
+
+This step already runs inside `make init` / `bash tasks.sh init`. It is **idempotent and
+non-blocking**: if Pages is already enabled it does nothing; if `gh` is absent/unauthenticated,
+no remote resolves, or you are not a repo admin (a fork), it just warns and continues — it never
+breaks `init`. Manual alternative: *Settings → Pages → Build and deployment → Source: GitHub
+Actions*.
+
 ## Pull requests
 
 1. Branch off the default branch following the prefix policy (`feat/…`, `fix/…`, …).
