@@ -8,10 +8,11 @@ from dataclasses import dataclass
 from capabilities.example_feature.application import create_note, list_notes
 from capabilities.example_feature.domain.dto import NoteCreateDTO, NoteResponseDTO
 from capabilities.example_feature.infrastructure.repositories import InMemoryNoteRepository
+from chassis.typing import TypeChecker, type_checker
 
 
 @dataclass(frozen=True)
-class AppContainer:
+class AppContainer(metaclass=TypeChecker):
 	"""Holds pre-wired application entry points ready for use by main.
 
 	Attributes
@@ -26,6 +27,7 @@ class AppContainer:
 	list_notes: Callable[[], list[NoteResponseDTO]]
 
 
+@type_checker
 def build() -> AppContainer:
 	"""Instantiate infrastructure and bind it to application factories.
 

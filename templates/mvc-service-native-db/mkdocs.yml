@@ -51,6 +51,9 @@ exclude_docs: |
   superpowers/
   # docs/ authoring guidance, not a published page
   CLAUDE.md
+  # scaffolding-lessons mirrors (also git-ignored) — never publish backport notes
+  blueprintx-lessons.md
+  dotfiles-dev-lessons.md
   # offline merge-checkpoint log, internal
   checkpoints.md
   # git-ignored scaffolding-lessons record, never published

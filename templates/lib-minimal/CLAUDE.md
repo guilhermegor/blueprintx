@@ -20,6 +20,7 @@ src/<project_name>/
                            #   text, zip_extractor, br_identifiers, typing/)
         config/
             contracts/     # FileContract declarations (one per input source)
+        ports/             # private behavioural ABCs (hexagonal ports; ABCTypeCheckerMeta)
 tests/
     unit/  integration/  performance/
 ```

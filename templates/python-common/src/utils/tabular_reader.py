@@ -98,6 +98,10 @@ def read_table(
 ) -> pd.DataFrame:
 	"""Read a file (Excel/CSV/JSON) into a typed, contract-validated DataFrame.
 
+	The file is **read as raw text** (``dtype="str"``) and :func:`utils.dtypes.apply_dtypes`
+	does all coercion — never pandas' inference, which would truncate a money decimal or drop a
+	code's leading zeros irrecoverably before typing.
+
 	The data contract is **mandatory**: the file is always validated first and
 	:class:`ContractError` is raised on any violation, before types are applied. A read that
 	legitimately constrains nothing still declares intent by passing an empty contract
@@ -140,11 +144,18 @@ def read_table(
 	------
 	ContractError
 		When the file violates ``cls_contract``.
+
+	Notes
+	-----
+	The file is always read as text, never with pandas' type inference: a zero-padded code
+	loses its leading zeros and a money decimal its trailing zeros *before* typing, and
+	``apply_dtypes`` cannot recover them afterwards. Reading as text is lossless — the
+	declared dtype then coerces the exact source text.
 	"""
 	df_raw = _read_raw(
 		path_file,
 		str_sheet,
-		None,
+		"str",
 		str_csv_sep,
 		list_columns,
 		str_encoding,

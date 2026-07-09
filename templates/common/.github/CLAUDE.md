@@ -99,3 +99,34 @@ Rules:
 
 Why: no long-lived secret to store, leak, or rotate; the upload token is short-lived and bound to
 this repo/workflow/environment. This is each registry's own recommended path.
+
+## Gate parity — every gate in BOTH pre-commit and CI
+
+CI runs its gates as **explicit steps** in `tests.yaml`, not via `pre-commit run`, so adding a
+hook to `.pre-commit-config.yaml` does **not** cover CI. Every lint/static/test gate must be
+wired into **both** files, in the same change — otherwise a `--no-verify` commit or an
+uninstalled hook slips straight past branch-protection CI (which runs the workflow, not local
+hooks). The gate set that must stay mirrored: `ruff check`, **`ruff format --check`** (distinct
+from `ruff check`), `mypy`, `check-docstrings`, **`check-typing`**, the shell/sql/yaml lints,
+unit + integration tests, and the **coverage floor**.
+
+- **Single-source the coverage floor.** `.coveragerc` `[report] fail_under` is the one value;
+  pre-commit's `coverage-check` and the CI `Run Coverage Gate` both read it — never duplicate a
+  `--cov-fail-under=NN` literal. The CI coverage gate runs on **every** PR (the badge step is
+  main/tags-only, so without it a PR could drop below the floor uncaught).
+- **Version-floor consistency.** `requires-python`, `ruff target-version`, `mypy.ini
+  python_version`, and the CI `python-version` matrix must all agree. Pin mypy's `python_version`
+  to the **floor** (not the newest) so a too-new construct fails locally, not only on the CI
+  floor leg. Derive the matrix from `requires-python` — no leg below the floor.
+
+## Validating CI locally with `act`
+
+`act` runs the workflow in a local Docker container — a fast loop for the legs it can run,
+complementary to (not a replacement for) pushing so the full matrix runs on GitHub's runners.
+
+- It only runs **Linux** — narrow every invocation with `--matrix os:ubuntu-latest`; let
+  GitHub cover the `macos`/`windows` legs.
+- Validate the **risky single leg**, not the whole matrix — e.g. a newest-Python leg where a dep
+  may lack wheels: `act --matrix os:ubuntu-latest --matrix python-version:3.14 -j test`.
+- **Docker Desktop on Linux** puts its socket at `~/.docker/desktop/docker.sock` — export
+  `DOCKER_HOST=unix://$HOME/.docker/desktop/docker.sock` or `act` reports the daemon is down.
