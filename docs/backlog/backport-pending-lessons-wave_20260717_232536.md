@@ -36,9 +36,15 @@ below**. Do these first, in order:
    every `pytest.raises(TypeError)` in the scaffolded projects — `BeartypeConf(violation_type=
    TypeError)` is **mandatory**. numpy leniency is cleanly solved by `hint_overrides=
    BeartypeHintOverrides({int: int | np.integer})` (verified); Mock-skip has **no** conf knob.
-2. **#77** — `feat`: ship `.vscode` static validation (Pylance strict + Ruff-on-save) for fast
-   in-editor feedback (Ready). Runtime checking gives **nothing** in the editor; this owns the
-   dev's fast feedback loop. Extends the already-shipped `.vscode/settings.json`.
+2. **[x] #77 — DONE (branch `feat/77-vscode-static-validation`).** Shipped `.vscode` static
+   validation: `python.analysis.typeCheckingMode: strict` (Pylance) + Ruff format/autofix/
+   organise-imports on save, scoped to `[python]`, in `templates/python-common/.vscode/
+   settings.json`; new `.vscode/extensions.json` (ruff + python + pylance) wired into all 5
+   Python scaffolds. **Also fixed a pre-existing defect:** the shipped `check-json` pre-commit
+   hook only excluded `.vscode/settings.json`, but the per-tier `tasks.json` (and now
+   `extensions.json`) are JSONC too — broadened the exclude to `^\.vscode/.*\.json$`. tier
+   `CLAUDE.md` updated. **TS parity deferred** (issue said optional) — `templates/ts-common/
+   .vscode/` could get ESLint/TS-server-on-save later; not filed as its own issue yet.
 
 (Then #48 mike, then the wave below.)
 

@@ -462,6 +462,7 @@ copy_common_templates() {
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).
     mkdir -p "$project_path/.vscode"
     cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
+    cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.json" "$project_path/.vscode/extensions.json"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
 
     print_status "success" "Common templates applied"

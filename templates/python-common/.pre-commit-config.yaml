@@ -24,7 +24,10 @@ repos:
           - --unsafe
       - id: check-toml
       - id: check-json
-        exclude: \.vscode/settings\.json
+        # Every file under .vscode/ is JSONC (VS Code allows // comments): settings.json,
+        # extensions.json, and the per-tier tasks.json all carry them. check-json parses
+        # strict JSON and would reject the comments, so exclude the whole directory.
+        exclude: ^\.vscode/.*\.json$
       - id: check-symlinks
       - id: debug-statements
       - id: check-added-large-files
