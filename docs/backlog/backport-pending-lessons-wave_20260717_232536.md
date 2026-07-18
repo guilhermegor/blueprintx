@@ -15,8 +15,17 @@ a record" note instead.
 Two issues from the `pyty` design discussion take **priority over the whole backport wave
 below**. Do these first, in order:
 
-1. **#76** — `refactor`: back the runtime type-checking engine with **beartype**, behind the
-   same seam names (Ready). *Investigation verdict:* a `pyty` library is **not** warranted — the
+1. **[x] #76 — DONE (branch `refactor/76-beartype-typing-engine`).** Backed the runtime
+   type-checking engine with **beartype**, behind the same seam names. Decisions applied:
+   `violation_type=TypeError` (mandatory), strict bool via `hint_overrides`
+   (`Annotated[int | np.integer, Is[not bool]]`), Mock leniency **dropped** (use `Mock(spec=...)`),
+   `@runtime_checkable` added to both Protocol ports (beartype fails at decoration on a plain
+   Protocol). beartype declared a main dep in all 5 tiers; engine got its first test suite.
+   Return-type checking is now on (old engine checked args only) — surfaced + fixed a
+   type-dishonest `test_dates.py` stub. **Verified: all 5 tiers scaffold clean, `make lint`
+   unchanged, unit tests pass** (lib-minimal 3, mvc 128, ddd 123). Original verdict retained
+   below for the record:
+   *A `pyty` library is **not** warranted — the
    vendored engine is a shallow, slower subset of beartype (no dict/tuple/set element checks,
    shallow TypedDict, no return-type/nested-generic/TypeVar), and it has **zero external
    consumers** (every importer is a scaffold carrying its own vendored copy). So: keep it
