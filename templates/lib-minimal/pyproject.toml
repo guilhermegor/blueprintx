@@ -40,6 +40,10 @@ update_changelog_on_bump = true
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
+# Runtime type-checking engine behind _internal/utils/typing. A main (not dev) dependency:
+# library code imports it via @type_checker / metaclass=TypeChecker, so it must ship to
+# consumers of the wheel.
+beartype = ">=0.22"
 # Required by the private _internal helpers (dtypes / tabular_reader / config.contracts).
 pandas = ">=2.1.0"
 openpyxl = ">=3.1.0"
