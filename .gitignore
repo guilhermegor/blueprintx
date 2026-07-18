@@ -199,3 +199,5 @@ pyrightconfig.json
 # BlueprintX internal lessons mirror — kept git-ignored, never ships
 # (see the scaffolding-lessons convention in CLAUDE.md / global memory)
 docs/blueprintx-lessons.md
+# Same convention, dotfiles-dev toolchain half (fixes land in ai_clients/claude/)
+docs/dotfiles-dev-lessons.md
