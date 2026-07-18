@@ -13,7 +13,7 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 - `src/chassis/db/` — always injected (the `DatabaseHandler` ABC that `db_schema` requires); the source lives in `templates/python-common/optional/chassis/db/`.
 - `src/chassis/db_wschema/` — **opt-in** (the "schema-less file storage?" prompt). Present only when chosen; source in `templates/python-common/optional/chassis/db_wschema/`. The `STORAGE_BACKEND`/`DATA_DIR`/`JOBLIB_*` `.env` block and the abstractions below appear only then.
 - `src/chassis/webhook/` — **opt-in** (the webhook prompt); a port-based provider from `templates/python-common/optional/webhook/`.
-- `src/chassis/typing/` — **always injected**: the runtime type-checking engine (`TypeChecker`, `ProtocolTypeCheckerMeta`, `@type_checker`); source in `templates/python-common/optional/typing/`. Preserves `@staticmethod`/`@classmethod`/`property` descriptors and handles PEP 604 `X | Y` unions. (The MVC tiers receive the same engine as `utils/typing`.)
+- `src/chassis/typing/` — **always injected**: the runtime type-checking engine (`TypeChecker`, `ProtocolTypeCheckerMeta`, `@type_checker`); source in `templates/python-common/optional/typing/`. **Backed by `beartype`** (`validate.py` is a thin adapter — do not reimplement it): violations raise `TypeError`, `bool` is not accepted as `int`, mocks must be `spec=`-ed, and container checks are sampled O(1). (The MVC tiers receive the same engine as `utils/typing`.)
 
 ## Layer boundaries (strict — do not cross)
 

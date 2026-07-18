@@ -143,6 +143,71 @@ def test_main(capsys: pytest.CaptureFixture[str]) -> None:
 	assert "Hello from lib-minimal!" in captured.out
 EOF
 
+    # Smoke-test the runtime type-checking engine in the wheel layout. lib-minimal is the only
+    # tier that rewrites the engine's own imports to `<pkg>._internal.utils.typing`; a broken
+    # rewrite would fail here and nowhere else, so this guards that path (the full behavioural
+    # matrix is covered by the service tiers' test_typing.py).
+    sed "s/\${PROJECT_NAME}/$PROJECT_NAME/g" << 'EOF' > "$project_path/tests/unit/test_typing.py"
+"""Smoke test: the runtime type-checking engine resolves in the wheel layout."""
+
+import pytest
+
+from ${PROJECT_NAME}._internal.utils.typing import TypeChecker, type_checker
+
+
+class _Sample(metaclass=TypeChecker):
+	"""Exercise the metaclass after the ``_internal`` import rewrite."""
+
+	@staticmethod
+	def doubled(x: int) -> int:
+		"""Return ``x`` doubled.
+
+		Parameters
+		----------
+		x : int
+			A number.
+
+		Returns
+		-------
+		int
+			``x * 2``.
+		"""
+		return x * 2
+
+
+def test_engine_imports_and_enforces_after_rewrite() -> None:
+	"""The rewritten engine imports and rejects a wrong-typed argument."""
+	assert _Sample.doubled(5) == 10
+	with pytest.raises(TypeError):
+		_Sample.doubled("five")
+
+
+def test_decorator_rejects_wrong_type() -> None:
+	"""The decorator validates a standalone function's arguments."""
+
+	@type_checker
+	def add(a: int, b: int) -> int:
+		"""Add two ints.
+
+		Parameters
+		----------
+		a : int
+			First addend.
+		b : int
+			Second addend.
+
+		Returns
+		-------
+		int
+			The sum.
+		"""
+		return a + b
+
+	assert add(1, 2) == 3
+	with pytest.raises(TypeError):
+		add(1, "two")
+EOF
+
     print_status "success" "Python files created"
 }
 

@@ -40,9 +40,12 @@ Reach for `from utils.typing import TypeChecker, type_checker` to validate a cal
 arguments against their annotations at runtime — `metaclass=TypeChecker` on a class
 (or `ProtocolTypeCheckerMeta` for a `Protocol` port), `@type_checker` on a
 module-level function. This complements, not replaces, the static gate (ruff `ANN`
-+ mypy). The engine caches resolved hints, preserves
-`@staticmethod`/`@classmethod`/`property` descriptors, and handles PEP 604 `X | Y`
-unions. `utils/typing/` is the one place `Any` is the honest signature (it inspects
++ mypy). The engine is **backed by `beartype`** (`validate.py` is a thin adapter over
+it, not a hand-rolled checker — do not reimplement it). Two policies via `BeartypeConf`:
+violations raise `TypeError` (beartype's own exception is not a `TypeError` subclass),
+and `bool` is **not** accepted where `int` is annotated. Test note: a bare `Mock` fails a
+typed parameter — use `Mock(spec=...)`; and container checks are **sampled O(1)** (one
+element per call), not exhaustive. `utils/typing/` is the one place `Any` is the honest signature (it inspects
 values of any type) and is ANN401-exempt. The package ships from
 `templates/python-common/optional/typing/` (DDD receives it as `chassis/typing`).
 The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`,
