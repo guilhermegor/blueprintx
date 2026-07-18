@@ -527,11 +527,14 @@ copy_shared_utils() {
 # it as utils/typing and rewrites the import prefix (mirrors the webhook seam).
 copy_typing_chassis() {
     local project_path="$1"
-    mkdir -p "$project_path/src/utils/typing"
+    mkdir -p "$project_path/src/utils/typing" "$project_path/tests/unit"
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$project_path/src/utils/typing"
     grep -rl "chassis.typing" "$project_path/src/utils/typing" \
         | xargs -r sed -i "s|chassis\.typing|utils.typing|g"
-    print_status "success" "Runtime type-checking engine (utils/typing) applied"
+    # The engine's unit test resolves the layout through its own import shim, so the
+    # same file serves the utils (MVC) and chassis (DDD) placements.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_typing.py" "$project_path/tests/unit/test_typing.py"
+    print_status "success" "Runtime type-checking engine (utils/typing) + test applied"
 }
 
 # Output directory is data-driven from inputs.yaml (no startup.py patching).

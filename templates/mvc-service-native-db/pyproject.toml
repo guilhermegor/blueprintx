@@ -30,6 +30,9 @@ update_changelog_on_bump = true
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
+# Runtime type-checking engine behind src/utils/typing. A main (not dev) dependency:
+# production code imports it via @type_checker / metaclass=TypeChecker.
+beartype = ">=0.22"
 python-dotenv = ">=1.0.0"
 pandas = ">=2.0"
 openpyxl = ">=3.1"

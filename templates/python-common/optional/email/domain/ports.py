@@ -1,8 +1,12 @@
 """E-mail handler port."""
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 
+# ``@runtime_checkable`` is required, not cosmetic: the runtime type-checking engine
+# performs an ``isinstance`` against this port, and a plain ``Protocol`` raises
+# ``TypeError`` on that check — at import time, not call time.
+@runtime_checkable
 class EmailHandler(Protocol):
 	"""Structural contract for outbound e-mail, shared across backends.
 

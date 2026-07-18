@@ -505,9 +505,12 @@ copy_shared_utils() {
 # src/chassis/typing (no rewrite; the MVC tiers vendor it under utils/typing).
 copy_typing_chassis() {
     local project_path="$1"
-    mkdir -p "$project_path/src/chassis/typing"
+    mkdir -p "$project_path/src/chassis/typing" "$project_path/tests/unit"
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$project_path/src/chassis/typing"
-    print_status "success" "Runtime type-checking engine (chassis/typing) applied"
+    # The engine's unit test resolves the layout through its own import shim, so the
+    # same file serves the chassis (DDD) and utils (MVC) placements.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_typing.py" "$project_path/tests/unit/test_typing.py"
+    print_status "success" "Runtime type-checking engine (chassis/typing) + test applied"
 }
 
 # chassis/db is the DatabaseHandler ABC that db_schema (and db_wschema) extend.
