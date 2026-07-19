@@ -6,11 +6,26 @@
 	// "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
 	"python.terminal.activateEnvironment": true,
 	"python.analysis.extraPaths": ["src"],
+	// Pylance/pyright type-checks as-you-type at the same strictness the CI mypy leg
+	// enforces — a wrong-typed annotation is flagged in the editor, not only at commit.
+	// The runtime checker (utils/typing) fires only when code runs; this is the fast
+	// static loop. No config is duplicated: ruff.toml and mypy.ini stay authoritative.
+	"python.analysis.typeCheckingMode": "strict",
 	"python.testing.pytestEnabled": true,
 	"python.testing.pytestArgs": ["tests/unit"],
+	// Ruff is the formatter + linter (matches ruff.toml: line-length 99, tab indent,
+	// double quotes). Format + autofix + organise-imports on save, scoped to Python so
+	// no other filetype is reformatted. Requires the charliermarsh.ruff extension
+	// (recommended in .vscode/extensions.json).
 	"[python]": {
 		"editor.insertSpaces": false,
-		"editor.tabSize": 4
+		"editor.tabSize": 4,
+		"editor.defaultFormatter": "charliermarsh.ruff",
+		"editor.formatOnSave": true,
+		"editor.codeActionsOnSave": {
+			"source.fixAll.ruff": "explicit",
+			"source.organizeImports.ruff": "explicit"
+		}
 	},
 	"files.insertFinalNewline": true,
 	"files.trimTrailingWhitespace": true,
