@@ -17,7 +17,12 @@ repos:
       - id: trailing-whitespace
         args:
           - --markdown-linebreak-ext=md
+        # fixtures are verbatim external bytes — never normalise a captured oracle
+        # (stripping trailing spaces / CRLF corrupts the very thing it pins).
+        exclude: ^tests/fixtures/
       - id: end-of-file-fixer
+        # fixtures are verbatim external bytes — never normalise a captured oracle.
+        exclude: ^tests/fixtures/
       - id: check-xml
       - id: check-yaml
         args:

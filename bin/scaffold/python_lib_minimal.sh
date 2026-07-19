@@ -453,6 +453,14 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/tests/integration/test_bin_scripts.py" \
         "$project_path/tests/integration/test_bin_scripts.py"
     rm -f "$project_path/tests/integration/.keep"
+    # Network-block guard + introspective-convention example — ship from
+    # python-common to every tier (the per-tier `cp -r tests/.` does not reach
+    # python-common/tests/). The conftest makes a real network call impossible in
+    # any test; the example demonstrates enforcing a family convention via __all__.
+    mkdir -p "$project_path/tests/unit"
+    cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
+        "$project_path/tests/unit/test_family_convention_example.py"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"

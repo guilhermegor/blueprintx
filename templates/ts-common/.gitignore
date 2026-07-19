@@ -17,6 +17,12 @@ docs/dotfiles-dev-lessons.md
 .env.local
 *.log
 .DS_Store
+
+# Claude Code machine-local settings + its mid-save temp siblings. The
+# `.tmp.<pid>.<hash>` file is written briefly during a save; a `git add -A` that
+# races that window would otherwise sweep it into a commit.
+.claude/settings.local.json
+.claude/settings.local.json.tmp.*
 coverage/
 .nyc_output/
 
