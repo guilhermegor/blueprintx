@@ -27,6 +27,40 @@ else:
 		from chassis.typing import type_checker
 
 
+# pandas < 3 has no real ``str`` dtype: ``astype("str")`` on a missing value yields the
+# LITERAL three-character string ``"nan"`` (object dtype), and ``.isna()`` then reports
+# ``False`` — a blank source field becomes indistinguishable from one the source actually
+# sent, and nothing raises. pandas 3 introduced a true ``str`` dtype that preserves NA.
+# A ``poetry.lock`` routinely ships BOTH majors keyed by Python marker, so the same dtype
+# declaration would produce different DATA on different CI legs (and a dev box on pandas 3
+# sees a fully green suite). The nullable ``"string"`` dtype behaves identically on 2 and 3,
+# and its elements are still ordinary ``str`` — ``isinstance(x, str)`` keeps passing.
+_DTYPE_TEXT = "string"
+
+
+@type_checker
+def _resolve_text_dtypes(dict_dtypes: dict[str, str]) -> dict[str, str]:
+	"""Swap ``"str"`` declarations for the NA-safe nullable ``"string"`` dtype.
+
+	Callers keep writing the obvious ``"str"``; this is the single place that knows the
+	pandas-major caveat.
+
+	Parameters
+	----------
+	dict_dtypes : dict of {str: str}
+		The caller's column→dtype mapping.
+
+	Returns
+	-------
+	dict of {str: str}
+		The same mapping with every ``"str"`` replaced by ``"string"``.
+	"""
+	return {
+		str_col: (_DTYPE_TEXT if str_dtype == "str" else str_dtype)
+		for str_col, str_dtype in dict_dtypes.items()
+	}
+
+
 @type_checker
 def apply_dtypes(
 	df_input: pd.DataFrame,
@@ -47,7 +81,9 @@ def apply_dtypes(
 		The source frame (left unmodified — work happens on a copy).
 	dict_dtypes : dict of {str: str}, optional
 		Column→dtype mapping passed to :meth:`pandas.DataFrame.astype` (e.g. ``"str"``,
-		``"int64"``, ``"float64"``).
+		``"int64"``, ``"float64"``). A ``"str"`` declaration is normalised to the nullable
+		``"string"`` dtype so a missing value stays NA instead of becoming the literal
+		``"nan"`` on pandas 2 — see :data:`_DTYPE_TEXT`.
 	list_date_cols : sequence of str, optional
 		Columns coerced to ``datetime.date`` (date only, no time component).
 	list_datetime_cols : sequence of str, optional
@@ -87,7 +123,7 @@ def apply_dtypes(
 	df_typed = df_input.copy()
 
 	if dict_dtypes:
-		df_typed = df_typed.astype(dict_dtypes)
+		df_typed = df_typed.astype(_resolve_text_dtypes(dict_dtypes))
 
 	for str_col in list_datetime_cols:
 		df_typed[str_col] = pd.to_datetime(df_typed[str_col], errors="raise")

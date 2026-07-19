@@ -134,8 +134,16 @@ below**. Do these first, in order:
 - [ ] #64 — `feat`: ingestion imports sidecar META metadata when available
 - [ ] #65 — `fix`: ground invariants on the real artifact, not just schema
 - [ ] #66 — `fix`: pin contracts to a source-published oracle (fixture + drift job)
-- [ ] #67 — `fix`: `apply_dtypes` maps `"str"`→`"string"` (NA-safe below pandas 3)
-- [ ] #68 — `fix`: `zip_extractor.find_member` — exact name, never prefix
+- [x] #67 — **DONE (branch `fix/ingestion-cluster-67-68`)** — `apply_dtypes` normalises a `"str"`
+      declaration to the nullable `"string"` dtype via a `_resolve_text_dtypes` helper + `_DTYPE_TEXT`
+      constant. **Verified on BOTH pandas majors** (the lesson's own corollary — a green suite on one
+      proves nothing about the other): reproduced the raw bug on pandas 2.3.3
+      (`astype("str")` → `['A', 'nan']`, `isna [False, False]`), then 7 tests pass on 2.3.3 and 135 on
+      3.0.3. **Mutation-tested**: reverting the normalisation makes the new test fail on pandas 2.
+- [x] #68 — **DONE (same branch)** — `zip_extractor.find_member(list_members, str_name)` matches the
+      **exact** file name and raises `ValueError` naming the member + listing what was available.
+      Test writes the archive so a `startswith` scan would hit the WRONG member first
+      (`lamina_fi_carteira_202601.csv` before `lamina_fi_202601.csv`).
 
 ## Lint / hooks / tests / misc
 
