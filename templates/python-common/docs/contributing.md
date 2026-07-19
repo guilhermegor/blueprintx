@@ -31,23 +31,27 @@ CI runs the same gates on every pull request; keep them green locally before pus
 
 ## Publishing the documentation (GitHub Pages)
 
-The `Docs - GitHub Pages Deployment` workflow builds and publishes the site on every push to
-the default branch. It requires **GitHub Pages to be enabled once** with the *GitHub Actions*
-source — and that first-time enablement **cannot** be done by the workflow itself: its
-`GITHUB_TOKEN` is a GitHub App token that cannot create the Pages site from scratch (the first
-run fails at *Configure Pages* with `Resource not accessible by integration`).
+Docs are **versioned via [mike](https://github.com/jimporter/mike)** and served from the
+`gh-pages` branch. The `Docs - Strict Build Check` workflow only *builds* the site with
+`--strict` on every push and PR (catching broken links before a release) — it never deploys.
+Deployment is owned by the **Release** action: after it cuts the `vX.Y.Z` tag it runs
+`mike deploy <X.Y> latest`, so the published site is versioned and only ever reflects versions
+that actually shipped (a prerelease suffix is skipped and never moves `latest`).
 
-Do the one-time enable, with repo-admin rights:
+GitHub Pages must be set to **"Deploy from a branch → gh-pages"**. That first-time enablement
+**cannot** be done by the workflow itself (its `GITHUB_TOKEN` cannot create the Pages site from
+scratch), so do the one-time enable with repo-admin rights:
 
 ```bash
 make enable_pages          # or: bash tasks.sh enable_pages
 ```
 
 This step already runs inside `make init` / `bash tasks.sh init`. It is **idempotent and
-non-blocking**: if Pages is already enabled it does nothing; if `gh` is absent/unauthenticated,
-no remote resolves, or you are not a repo admin (a fork), it just warns and continues — it never
-breaks `init`. Manual alternative: *Settings → Pages → Build and deployment → Source: GitHub
-Actions*.
+non-blocking**: it waits until the first release creates the `gh-pages` branch (mike creates it
+on its first deploy), does nothing if Pages already points there, and just warns and continues
+if `gh` is absent/unauthenticated, no remote resolves, or you are not a repo admin (a fork) — it
+never breaks `init`. Manual alternative: *Settings → Pages → Build and deployment → Source:
+Deploy from a branch → gh-pages*.
 
 ## Pull requests
 
