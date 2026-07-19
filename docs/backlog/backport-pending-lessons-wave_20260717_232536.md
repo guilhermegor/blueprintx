@@ -46,7 +46,19 @@ below**. Do these first, in order:
    `CLAUDE.md` updated. **TS parity deferred** (issue said optional) — `templates/ts-common/
    .vscode/` could get ESLint/TS-server-on-save later; not filed as its own issue yet.
 
-(Then #48 mike, then the wave below.)
+3. **[x] #82 — DONE (branch `feat/82-typing-policy-seam`).** Externalised the beartype typing
+   **policy** from `validate.py` into a documented, editable `optional/typing/policy.py` seam:
+   `VIOLATION_TYPE` (⚠ load-bearing — kept `TypeError`), `STRICT_BOOL`, `WIDEN_INT_TO_NUMPY`, and
+   `PEP484_NUMERIC_TOWER` (opt-in) knobs feed `build_conf()`; `validate.py` stays a thin adapter that
+   imports `CONF`. A new `test_policy_seam_knob_flip_changes_behaviour` proves flipping `STRICT_BOOL`
+   on the seam changes runtime behaviour with the adapter untouched. **Also fixed:** shared-engine
+   docstrings must not hardcode one layout's FQN `:mod:` path — lib's anchored sed only rewrites
+   `from/import` lines, so a `chassis.typing.*` doc ref would ship stale to a lib project; de-FQN'd to
+   bare module names. **Verified:** MVC (`utils.typing`), DDD (`chassis.typing`), lib
+   (`_internal.utils.typing`) all scaffold, `make lint` clean (tree unchanged), unit tests pass
+   (mvc 10, ddd 10, lib 3); knob-flip test green in both service layouts.
+
+(Then #48 mike (#84), #83 mike-services (#85), then the wave below.)
 
 ## How this wave was scoped
 
@@ -74,7 +86,7 @@ below**. Do these first, in order:
       gh-pages branch source, guarded until that branch exists; else Actions). ⚠️ The lesson is
       tagged `python-common` but a service is *deployed, not published*, so the "pinned consumer
       needs old docs" rationale does not apply — **the service-tier decision was #83**.
-- [x] #83 — **DONE (branch `feat/83-service-tier-mike-versioned-docs`)** — user chose **Option B**:
+- [x] #83 — **DONE (PR #85, squash `58798a0`)** — user chose **Option B**:
       extend mike to **all 4 service tiers**, not lib-minimal-only. `mike` dep + `extra.version.
       provider: mike` added to each service `pyproject.toml`/`mkdocs.yml`; the shared
       `templates/common/docs_version/docs.yaml` converted to **strict-build-only** (no deploy); a

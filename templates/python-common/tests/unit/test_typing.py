@@ -7,13 +7,14 @@ layout-agnostic shim the shared helpers use.
 
 from unittest.mock import MagicMock
 
+from beartype.door import die_if_unbearable
 import pytest
 
 
 try:
-	from src.utils.typing import TypeChecker, type_checker
+	from src.utils.typing import TypeChecker, policy as typing_policy, type_checker
 except ModuleNotFoundError:  # pragma: no cover - depends on the scaffolded layout
-	from src.chassis.typing import TypeChecker, type_checker
+	from src.chassis.typing import TypeChecker, policy as typing_policy, type_checker
 
 
 class _Sample(metaclass=TypeChecker):
@@ -165,3 +166,25 @@ def test_bare_mock_is_rejected_but_specced_mock_passes() -> None:
 	with pytest.raises(TypeError):
 		_Sample(MagicMock())
 	assert _Sample(MagicMock(spec=int)).n is not None
+
+
+def test_policy_seam_knob_flip_changes_behaviour(monkeypatch: pytest.MonkeyPatch) -> None:
+	"""Flipping a knob on the ``policy`` seam changes behaviour without touching the adapter.
+
+	The engine's tunable policy lives in ``chassis.typing.policy`` (``utils.typing.policy``
+	on the MVC tiers), not buried in the ``validate`` adapter. Under the default policy a
+	``bool`` is rejected where ``int`` is annotated; setting ``STRICT_BOOL = False`` on the
+	seam and rebuilding the config restores PEP 484's default (``bool`` is an ``int``) — and
+	``validate.py`` is never edited to make that happen.
+	"""
+	# Under the default policy a bool is rejected where an int is annotated.
+	with pytest.raises(TypeError):
+		die_if_unbearable(True, int, conf=typing_policy.CONF)
+
+	# Flip the strict-bool knob off on the seam and rebuild the config.
+	monkeypatch.setattr(typing_policy, "STRICT_BOOL", False)
+	monkeypatch.setattr(typing_policy, "WIDEN_INT_TO_NUMPY", False)
+	cls_conf = typing_policy.build_conf()
+
+	# bool now satisfies int — the knob, not the adapter, drove the change.
+	die_if_unbearable(True, int, conf=cls_conf)
