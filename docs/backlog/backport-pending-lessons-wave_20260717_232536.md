@@ -67,7 +67,23 @@ below**. Do these first, in order:
 
 ## Docs / site
 
-- [ ] #48 — `feat`: scaffold **mike** doc versioning into python-common by default **(started — branch `feat/48-scaffold-mike-doc-versioning`, board: Ready)**
+- [x] #48 — **DONE (PR #84, squash `dd7f730`)** — mike doc versioning shipped **library-first**,
+      not all-tier: `mike` + `extra.version.provider` in lib-minimal, `docs.yaml` → strict build
+      check, `deploy_docs` job in `release-pypi.yaml` (after the PyPI publish, X.Y granularity,
+      prerelease-guarded), and the shared `bin/enable_pages.sh` made **model-aware** (mike →
+      gh-pages branch source, guarded until that branch exists; else Actions). ⚠️ The lesson is
+      tagged `python-common` but a service is *deployed, not published*, so the "pinned consumer
+      needs old docs" rationale does not apply — **the service-tier decision was #83**.
+- [x] #83 — **DONE (branch `feat/83-service-tier-mike-versioned-docs`)** — user chose **Option B**:
+      extend mike to **all 4 service tiers**, not lib-minimal-only. `mike` dep + `extra.version.
+      provider: mike` added to each service `pyproject.toml`/`mkdocs.yml`; the shared
+      `templates/common/docs_version/docs.yaml` converted to **strict-build-only** (no deploy); a
+      `deploy_docs` mike job added to `templates/python-common/.github/workflows/release.yaml`,
+      gated on the **tag job** (services have no PyPI publish), prerelease-skipped in-step, and
+      regenerating `CHANGELOG.md` before deploy. `bin/enable_pages.sh` needed no change (already
+      model-aware from #48). Tier `contributing.md` rewritten Actions→mike. **Verified:** all 4
+      service TOML/YAML parse, offline scaffold emits the mike wiring, `mkdocs build --strict`
+      passes on a generated mvc-native tree (mike is deploy-time-only, absent at build).
 - [ ] #49 — `feat`: scaffold placeholder logo + landing image
 - [ ] #50 — `docs`: ship `docs/api/` as a directory from day one
 - [ ] #51 — `feat`: docs-skeleton gate, language-neutral (English slugs + nav)

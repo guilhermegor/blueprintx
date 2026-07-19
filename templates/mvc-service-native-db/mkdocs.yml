@@ -23,6 +23,12 @@ theme:
       toggle:
         icon: material/white-balance-sunny
         name: Switch to light mode
+# mike drives Material's version dropdown. The release workflow deploys each X.Y with the
+# `latest` alias to the gh-pages branch; this line makes the theme render the selector.
+extra:
+  version:
+    provider: mike
+
 markdown_extensions:
   - admonition
   - toc:
