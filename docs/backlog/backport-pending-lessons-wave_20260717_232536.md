@@ -115,8 +115,18 @@ below**. Do these first, in order:
 
 ## Release / coverage
 
-- [ ] #61 — `fix`: coverage badge offline — never gate release on an external fetch
-- [ ] #62 — `fix`: a rehearsal only rehearses the steps it shares (diff the two workflows)
+**Cluster DONE (branch `feat/release-coverage-cluster-61-62`)** — both shipped in one PR.
+- [x] #61 — `fix`: coverage badge offline. `genbadge coverage --local` in **all four** places
+      (gate parity): `.github/workflows/tests.yaml`, `Makefile` (`test_cov`), `tasks.sh`
+      (`test_cov`), and the `coverage-badge` pre-commit hook. Rationale comment on the CI path.
+      **Verified:** ran the exact shipped command in a scaffolded tree — exit 0, valid SVG,
+      **0 `shields.io` references** (fully offline).
+- [x] #62 — `fix`: a rehearsal only rehearses the steps it shares. Fixed the `files: dist/*`
+      landmine in `lib-minimal/.github/workflows/release-pypi.yaml` → `dist/*.whl` +
+      `dist/*.tar.gz` (the scaffold tracks a **0-byte `dist/.keep`**, and GitHub's API rejects a
+      0-byte asset — aborting `action-gh-release` mid-way leaves a **draft** release, for which
+      GitHub creates **no tag**, poisoning tag-derived versioning). Added a comment marking the
+      GitHub-Release step as **prod-only / never rehearsed** by `release-test-pypi.yaml`.
 
 ## Ingestion / data contracts
 
@@ -129,7 +139,7 @@ below**. Do these first, in order:
 
 ## Lint / hooks / tests / misc
 
-**Cluster DONE (branch `feat/lint-hooks-tests-cluster-69-74`)** — all 6 shipped in one PR.
+**Cluster DONE (PR #87, squash `4d15dfd`)** — all 6 shipped in one PR.
 Verified across all structural tiers (MVC 132 / DDD 127 / lib 6 unit tests pass **with the
 network guard active**, `make lint` clean, trees unchanged; guard fires on a real connection
 via negative control):

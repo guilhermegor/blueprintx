@@ -219,11 +219,19 @@ jobs:
           path: dist/
 
       - name: Create GitHub Release
+        # NOTE: this GitHub-Release step exists ONLY here, not in release-test-pypi.yaml
+        # (Test PyPI rehearses the publish, not the release). So it is never exercised by the
+        # rehearsal — any change here debuts in production. Diff the two workflows when editing.
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.TAG_NAME }}
+          # Name the artifacts to ship — never `dist/*`. The scaffold tracks a 0-byte
+          # dist/.keep, and GitHub's API REJECTS a 0-byte release asset (size >= 1), which
+          # aborts action-gh-release mid-way — leaving a DRAFT release, for which GitHub
+          # creates no tag (poisoning tag-derived versioning). List what you mean to publish.
           files: |
-            dist/*
+            dist/*.whl
+            dist/*.tar.gz
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
