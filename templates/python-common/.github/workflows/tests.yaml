@@ -162,7 +162,11 @@ jobs:
         if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
         run: |
           poetry run pytest --cov=src --cov-report=xml --no-header -q tests/unit/
-          poetry run genbadge coverage -i coverage.xml -o coverage.svg
+          # --local renders the SVG from coverage.xml offline. The default form fetches
+          # the badge from img.shields.io, so a DNS flake on this cosmetic step could fail
+          # (or, on a fail-fast release matrix, silently SKIP) the run. Nothing on a CI/
+          # release path may depend on a non-essential external host.
+          poetry run genbadge coverage --local -i coverage.xml -o coverage.svg
 
       - name: Upload Badge
         if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
