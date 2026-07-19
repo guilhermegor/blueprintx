@@ -142,6 +142,46 @@ def extract_all(
 
 
 @type_checker
+def find_member(list_members: list[Path], str_name: str) -> Path:
+	"""Select one extracted member by its **exact** file name.
+
+	Regulatory archives routinely ship members whose names *prefix one another* — e.g.
+	``lamina_fi_202601.csv`` alongside ``lamina_fi_carteira_202601.csv`` and
+	``lamina_fi_rentab_ano_202601.csv``. A ``startswith("lamina_fi_")`` scan therefore
+	returns whichever member the archive happened to list first, and the caller parses a
+	wholly different layout. The failure is **not loud**: the wrong member may still satisfy
+	a lax contract. Even a longer prefix is correct only by accident of the literal chosen —
+	the next member the publisher adds can re-break it. Matching the exact name removes the
+	class of bug rather than the instance, and the caller almost always knows the reference
+	month, so it can name the member exactly.
+
+	Parameters
+	----------
+	list_members : list of pathlib.Path
+		Extracted paths, as returned by :func:`extract_all` or :func:`extract_members`.
+	str_name : str
+		The member's exact file name, no directory component (e.g. ``"lamina_fi_202601.csv"``).
+
+	Returns
+	-------
+	pathlib.Path
+		The member whose file name equals ``str_name``.
+
+	Raises
+	------
+	ValueError
+		If no member matches, naming the wanted member and listing what was available.
+	"""
+	path_found = next(
+		(path_member for path_member in list_members if path_member.name == str_name), None
+	)
+	if path_found is None:
+		list_available = sorted(path_member.name for path_member in list_members)
+		raise ValueError(f"Archive member not found: {str_name!r}. Available: {list_available}")
+	return path_found
+
+
+@type_checker
 def extract_all_to_memory(path_zip: Path, str_password: str | None = None) -> dict[str, bytes]:
 	"""Read every file member of ``path_zip`` into memory, never touching disk.
 

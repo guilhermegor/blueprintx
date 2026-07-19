@@ -3,12 +3,15 @@
 from pathlib import Path
 import zipfile
 
+import pytest
+
 from src.utils.zip_extractor import (
 	extract_all,
 	extract_all_to_memory,
 	extract_member_to_memory,
 	extract_members,
 	extract_members_to_memory,
+	find_member,
 	unzip_if_needed,
 )
 
@@ -48,6 +51,30 @@ def test_extract_members_selects_only_named(tmp_path: Path) -> None:
 	path_dest = tmp_path / "out"
 	list_out = extract_members(path_zip, path_dest, ["a.txt", "missing.txt"])
 	assert [p.name for p in list_out] == ["a.txt"]
+
+
+def test_find_member_selects_exact_name_never_a_prefix(tmp_path: Path) -> None:
+	"""A member whose name prefixes another is never selected by accident.
+
+	The archive is written so that a ``startswith("lamina_fi_")`` scan would return the
+	WRONG member first — which is exactly the silent bug this helper removes.
+	"""
+	path_zip = tmp_path / "lamina.zip"
+	with zipfile.ZipFile(path_zip, "w") as cls_zip:
+		cls_zip.writestr("lamina_fi_carteira_202601.csv", "carteira")
+		cls_zip.writestr("lamina_fi_202601.csv", "principal")
+	list_out = extract_all(path_zip, tmp_path / "out")
+
+	assert find_member(list_out, "lamina_fi_202601.csv").read_text() == "principal"
+	assert find_member(list_out, "lamina_fi_carteira_202601.csv").read_text() == "carteira"
+
+
+def test_find_member_missing_raises_value_error_naming_the_member(tmp_path: Path) -> None:
+	"""A missing member fails loudly, naming what was wanted."""
+	path_zip = _make_zip(tmp_path)
+	list_out = extract_all(path_zip, tmp_path / "out")
+	with pytest.raises(ValueError, match="not found"):
+		find_member(list_out, "absent.csv")
 
 
 def test_unzip_if_needed_is_idempotent(tmp_path: Path) -> None:
