@@ -6,15 +6,12 @@ walker. beartype validates far more than the previous implementation (nested
 generics, ``dict``/``tuple``/``set`` values, return types, ``TypeVar``), so the
 seam gets deeper checking for less code.
 
-Two project-specific policies are layered on top via :data:`CONF`:
-
-* **Violations raise plain ``TypeError``.** beartype's own
-  ``BeartypeCallHintParamViolation`` is *not* a ``TypeError`` subclass, so
-  ``violation_type=TypeError`` keeps the documented contract intact.
-* **``bool`` is not an ``int``.** PEP 484 makes ``bool`` a subtype of ``int``,
-  which silently lets a stray ``True`` count as ``1``. The ``int`` hint is
-  overridden to exclude ``bool`` (and to admit NumPy integers where NumPy is
-  installed), and the override reaches inside generics such as ``list[int]``.
+This module is the **thin adapter**: it applies the project's
+:class:`~beartype.BeartypeConf` to beartype's primitives. The *policy* that
+``CONF`` encodes — violations raising ``TypeError``, ``bool`` rejected where
+``int`` is annotated, NumPy-int widening, the PEP 484 numeric tower — lives in
+the ``policy`` module alongside this one, a documented, editable seam. Tune the
+policy there; do not bury decisions in this adapter.
 
 .. note::
    **Container checking is sampled, not exhaustive.** beartype's default
@@ -31,34 +28,12 @@ Two project-specific policies are layered on top via :data:`CONF`:
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Any
 
-from beartype import BeartypeConf, BeartypeHintOverrides, beartype
+from beartype import beartype
 from beartype.door import die_if_unbearable
-from beartype.vale import Is
 
-
-# NumPy is absent from the leaner tiers (``lib-minimal``), so the integer hint is
-# widened only where NumPy actually ships. Keeping this conditional is what lets
-# one engine serve every skeleton.
-try:
-	import numpy as _np
-
-	_INT_BASE: Any = int | _np.integer
-except ModuleNotFoundError:  # pragma: no cover - depends on the tier's deps
-	_INT_BASE = int
-
-
-# PEP 484 declares ``bool`` a subtype of ``int``; this project rejects that, so a
-# boolean passed where a number is expected fails loudly instead of becoming 0/1.
-_NOT_BOOL = Is[lambda obj: not isinstance(obj, bool)]
-_INT_HINT = Annotated[_INT_BASE, _NOT_BOOL]
-
-
-CONF = BeartypeConf(
-	violation_type=TypeError,
-	hint_overrides=BeartypeHintOverrides({int: _INT_HINT}),
-)
+from chassis.typing.policy import CONF
 
 
 _type_check = beartype(conf=CONF)

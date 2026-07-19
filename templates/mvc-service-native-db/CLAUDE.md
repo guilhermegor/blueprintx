@@ -43,7 +43,10 @@ module-level function. This complements, not replaces, the static gate (ruff `AN
 + mypy). The engine is **backed by `beartype`** (`validate.py` is a thin adapter over
 it, not a hand-rolled checker — do not reimplement it). Two policies via `BeartypeConf`:
 violations raise `TypeError` (beartype's own exception is not a `TypeError` subclass),
-and `bool` is **not** accepted where `int` is annotated. Test note: a bare `Mock` fails a
+and `bool` is **not** accepted where `int` is annotated. These decisions are **knobs in
+`utils/typing/policy.py`** (the editable policy seam) — flip one there, never in `validate.py`;
+⚠️ `VIOLATION_TYPE` is **load-bearing** (keep it `TypeError`, or downstream `pytest.raises(TypeError)`
+breaks). Test note: a bare `Mock` fails a
 typed parameter — use `Mock(spec=...)`; and container checks are **sampled O(1)** (one
 element per call), not exhaustive. `utils/typing/` is the one place `Any` is the honest signature (it inspects
 values of any type) and is ANN401-exempt. The package ships from
