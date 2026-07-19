@@ -86,6 +86,15 @@ select = [
 ]
 ignore = [
     "D206",  # docstring should be indented with spaces, not tabs
+    # E701 (multiple statements on one line) is deliberately NOT ignored. It is
+    # tempting to add it here to allow `if cond: break`, but that would be dead
+    # config: `ruff format` (Black semantics, not configurable) expands a compound
+    # statement back onto its own line regardless of the lint rule, so the linter
+    # and the formatter would fight and the formatter wins. E701 is the linter
+    # agreeing with the formatter. Reach for the EXPRESSION form (`return not cond`,
+    # a comprehension, `any(...)`, a ternary, dict dispatch) for real concision —
+    # the formatter keeps those on one line. General rule: before suppressing a lint
+    # rule to enable a style, check whether the FORMATTER already forbids it.
 ]
 fixable = ["I"]
 # allow dummy variables to start with an underscore and be followed by alphanumeric

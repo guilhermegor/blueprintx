@@ -8,6 +8,9 @@ quiet-level = 3
 # ignore specific words (global across all files)
 # LOCALE EXTENSION POINT: codespell only knows English, so docs/comments written
 # in another language (e.g. Portuguese: "nomes", "caracteres", "atual"...) get
-# flagged as typos. Extend this list with your locale's vocabulary rather than
-# skipping whole files (which would hide real typos in code identifiers there).
-ignore-words-list = nd,fpr,strat,enty,filetest,nome,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX
+# flagged as typos and BLOCK the commit at the pre-commit boundary. This seed is
+# generous on purpose — a technical PT-BR doc hits these words constantly, and
+# discovering them one failed-commit-at-a-time wastes a full pre-commit run each
+# time. EXTEND this list with your locale's vocabulary; never `skip` a whole file
+# (that hides real typos in the code identifiers there).
+ignore-words-list = nd,fpr,strat,enty,filetest,nome,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX,atual,nomes,datas,data,caracteres,caractere,momento,repete,essencial,construtor,comando,comandos,sequencia,referencia,valores,coluna,colunas,linha,linhas,arquivo,arquivos,cabecalho,conteudo,tamanho,saida,entrada,obrigatorio,opcional,usuario,parametro,parametros,retorno,entao,acao,nao,erros

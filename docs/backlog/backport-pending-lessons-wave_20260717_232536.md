@@ -46,7 +46,7 @@ below**. Do these first, in order:
    `CLAUDE.md` updated. **TS parity deferred** (issue said optional) — `templates/ts-common/
    .vscode/` could get ESLint/TS-server-on-save later; not filed as its own issue yet.
 
-3. **[x] #82 — DONE (branch `feat/82-typing-policy-seam`).** Externalised the beartype typing
+3. **[x] #82 — DONE (PR #86, squash `e7fa62e`).** Externalised the beartype typing
    **policy** from `validate.py` into a documented, editable `optional/typing/policy.py` seam:
    `VIOLATION_TYPE` (⚠ load-bearing — kept `TypeError`), `STRICT_BOOL`, `WIDEN_INT_TO_NUMPY`, and
    `PEP484_NUMERIC_TOWER` (opt-in) knobs feed `build_conf()`; `validate.py` stays a thin adapter that
@@ -129,12 +129,27 @@ below**. Do these first, in order:
 
 ## Lint / hooks / tests / misc
 
-- [ ] #69 — `refactor`: prefer expression form; never suppress a formatter-enforced rule
-- [ ] #70 — `chore`: pre-seed `.codespellrc` with the docs-locale vocabulary
-- [ ] #71 — `chore`: `.gitignore` covers `.claude/settings.local.json` + `.tmp.*`
-- [ ] #72 — `chore`: exclude `tests/fixtures/` from whitespace/EOF pre-commit hooks
-- [ ] #73 — `test`: block network in tests with an autouse conftest guard
-- [ ] #74 — `test`: enforce conventions with an introspective `__all__` test
+**Cluster DONE (branch `feat/lint-hooks-tests-cluster-69-74`)** — all 6 shipped in one PR.
+Verified across all structural tiers (MVC 132 / DDD 127 / lib 6 unit tests pass **with the
+network guard active**, `make lint` clean, trees unchanged; guard fires on a real connection
+via negative control):
+- [x] #69 — `refactor`: prefer expression form; never suppress a formatter-enforced rule.
+      `ruff.toml` block comment on why **E701 stays enabled** (suppressing it is dead config —
+      `ruff format` re-expands the statement) + a code-style note in `python-common/CLAUDE.md`.
+- [x] #70 — `chore`: pre-seed `.codespellrc` `ignore-words-list` with a generous PT-BR seed
+      (~40 words) under the `# LOCALE EXTENSION POINT`; documented "extend, never `skip` a file".
+- [x] #71 — `chore`: `.gitignore` covers `.claude/settings.local.json` + `.tmp.*` — both
+      `python-common` and `ts-common` tiers.
+- [x] #72 — `chore`: `exclude: ^tests/fixtures/` on `trailing-whitespace` + `end-of-file-fixer`
+      in `.pre-commit-config.yaml` (verbatim oracle bytes must never be normalised).
+- [x] #73 — `test`: `tests/conftest.py` autouse **network block** (swaps the connection
+      primitives to raise `NetworkAccessError`; `@pytest.mark.allow_network` opt-out registered in
+      `pytest.ini`). ⚠️ Scope fix found in verification: block only the **connection** primitives,
+      NOT `getaddrinfo` — offline SSRF/address classification legitimately resolves (the shipped
+      `test_download_rejects_loopback_host` proved it). Wired into all 5 scaffolds.
+- [x] #74 — `test`: `tests/unit/test_family_convention_example.py` — a self-contained worked
+      example of the introspective-`__all__` convention test (discover the family, meta-test the
+      discovery, assert per member). Wired into all 5 scaffolds; doc note in `python-common/CLAUDE.md`.
 
 ## Notes
 
