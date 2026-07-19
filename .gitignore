@@ -193,8 +193,13 @@ pyrightconfig.json
 !templates/**/lib/**
 !templates/**/poetry.toml
 
-# Claude Code runtime artifacts
+# Claude Code runtime artifacts (machine-local: settings.local.json and its .tmp.* siblings).
+# release.conf is the exception — it is repo metadata, not a runtime artifact: it declares this
+# repo's SHIPPED paths for the release tooling, so it must be committed or every clone (and CI)
+# silently falls back to the wrong default. The negation must follow the directory ignore.
 .claude/
+!.claude/
+!.claude/release.conf
 
 # BlueprintX internal lessons mirror — kept git-ignored, never ships
 # (see the scaffolding-lessons convention in CLAUDE.md / global memory)
