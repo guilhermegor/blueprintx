@@ -43,25 +43,46 @@ tests never surface:
 make install_dist_locally    # python -m build → install → smoke-import → report the built wheel
 ```
 
-## Publishing the documentation (GitHub Pages)
+## Publishing the documentation (versioned, via mike)
 
-The `Docs - GitHub Pages Deployment` workflow builds and publishes the site on every push to
-the default branch. It requires **GitHub Pages to be enabled once** with the *GitHub Actions*
-source — and that first-time enablement **cannot** be done by the workflow itself: its
-`GITHUB_TOKEN` is a GitHub App token that cannot create the Pages site from scratch (the first
-run fails at *Configure Pages* with `Resource not accessible by integration`).
+The published site is **versioned**: a consumer pinned to an older release reads *that
+release's* docs, not HEAD. [mike](https://github.com/jimporter/mike) maintains the version tree
+on the `gh-pages` branch and MkDocs-Material renders the version dropdown.
 
-Do the one-time enable, with repo-admin rights:
+Two workflows split the work:
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `Docs - Strict Build Check` (`docs.yaml`) | every push + PR | `mkdocs build --strict` only — catches broken links/nav before a release. **Never deploys.** |
+| `Release to PyPI` (`release-pypi.yaml`) | manual release | after the PyPI publish succeeds, deploys the released version with `mike deploy --update-aliases <X.Y> latest` |
+
+Because the deploy runs **after** publishing, the site only ever advertises versions that
+actually shipped. Notes:
+
+- **Granularity is `X.Y`** — `1.4.2` and `1.4.7` share the `1.4` entry; the `latest` alias
+  always tracks the newest release and is the default landing version.
+- **Prereleases never move `latest`** — a version with a suffix (`1.2.3rc1`) builds and
+  publishes, but the docs deploy job is skipped.
+
+### One-time Pages setup
+
+mike serves from the **`gh-pages` branch**, so Pages must be set to *Deploy from a branch →
+gh-pages*. The workflow's `GITHUB_TOKEN` cannot change that (it is a GitHub App token without
+repo-admin rights), so do it with your own `gh` auth:
 
 ```bash
 make enable_pages          # or: bash tasks.sh enable_pages
 ```
 
-This step already runs inside `make init` / `bash tasks.sh init`. It is **idempotent and
-non-blocking**: if Pages is already enabled it does nothing; if `gh` is absent/unauthenticated,
-no remote resolves, or you are not a repo admin (a fork), it just warns and continues — it never
-breaks `init`. Manual alternative: *Settings → Pages → Build and deployment → Source: GitHub
-Actions*.
+This already runs inside `make init` / `bash tasks.sh init`, and is **idempotent and
+non-blocking** — it warns and continues if `gh` is absent/unauthenticated, no remote resolves,
+or you are not a repo admin (a fork), so it never breaks `init`.
+
+**Ordering matters:** the `gh-pages` branch does not exist until the first release deploy
+creates it. Until then `enable_pages` deliberately leaves Pages untouched (so the site is never
+pointed at an empty branch) and tells you to re-run it. So: cut the first release, then run
+`make enable_pages` once. Manual alternative: *Settings → Pages → Build and deployment →
+Source: Deploy from a branch → `gh-pages` / `/`*.
 
 ## Pull requests
 

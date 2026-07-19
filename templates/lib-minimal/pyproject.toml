@@ -80,6 +80,9 @@ shellcheck-py = ">=0.10.0"
 mkdocs = ">=1.6.0"
 mkdocs-material = ">=9.5.0"
 pymdown-extensions = ">=10.0"
+# Versioned docs: the release workflow runs `mike deploy <X.Y> latest` after a PyPI publish,
+# so a consumer pinned to an old release still gets that release's docs. Serves from gh-pages.
+mike = ">=2.1.0"
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]

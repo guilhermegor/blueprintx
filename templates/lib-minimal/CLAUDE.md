@@ -77,7 +77,14 @@ of your public `__all__`. The internal imports are package-qualified
 Two workflows ship under `.github/workflows/` (present only when a GitHub remote is set up):
 
 - `release-test-pypi.yaml` — publish to **Test PyPI** first (`workflow_dispatch`).
-- `release-pypi.yaml` — publish to **PyPI** and cut a GitHub release.
+- `release-pypi.yaml` — publish to **PyPI**, cut a GitHub release, then deploy the **versioned
+  docs** with `mike deploy --update-aliases <X.Y> latest` (skipped for prereleases, so a suffixed
+  version never moves `latest`).
+
+**Docs are versioned via [mike](https://github.com/jimporter/mike)** and served from the
+`gh-pages` branch — `docs.yaml` is a strict *build check only* and never deploys. Pages must be
+set to "Deploy from a branch → gh-pages" via `make enable_pages`, which waits until the first
+release creates that branch. See `docs/contributing.md`.
 
 Both gate on the version being greater than what is already published, build with Poetry,
 and fall back to `twine` if `poetry publish` is unavailable. Configure these repository
