@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from time import time
 from typing import Protocol, runtime_checkable
 import warnings
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from stpstone.utils.calendars.calendar_br import DatesBRAnbima
 
 from chassis.typing import ProtocolTypeCheckerMeta, type_checker
 from src.config.startup import DIR_PARENT, LOGGER
@@ -15,7 +16,6 @@ from utils.logs import CreateLog, initiate_logging
 
 
 cls_create_log = CreateLog()
-cls_dates = DatesBRAnbima()
 
 
 @type_checker
@@ -52,7 +52,7 @@ def teardown(start_time: float) -> None:
 	)
 	cls_create_log.log_message(
 		logger=LOGGER,
-		message=f"Routine ended in {cls_dates.curr_datetime()}",
+		message=f"Routine ended in {datetime.now(tz=ZoneInfo('UTC'))}",
 		log_level="info",
 	)
 

@@ -41,7 +41,7 @@ project/
 | **Model** | `src/model/` | Data access. One service class per file. May touch the DB. Returns pandas DataFrames (or plain dicts/dataclasses). |
 | **View** | `src/view/` | Output rendering only (Excel, JSON, HTML, console). No business logic, no DB. |
 | **Controller** | `src/controller/` | Orchestration. Imports model + view + config. `main.py` is the script-style entry-point. |
-| **Utils** | `src/utils/` | Project-specific cross-cutting helpers. The BR calendar comes from the `stpstone` dependency (wrapped by `utils.dates`). |
+| **Utils** | `src/utils/` | Project-specific cross-cutting helpers. The BR calendar comes from the `wwdates` dependency (wrapped by `utils.dates`). |
 | **Config** | `src/config/` | `startup.py` builds runtime singletons once at import (logger, webhook, paths) from YAML + `.env`. |
 
 ---

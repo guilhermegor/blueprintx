@@ -1,11 +1,10 @@
 """Brazilian business-day helpers backed by the ANBIMA holiday calendar.
 
-Wraps stpstone's :class:`~stpstone.utils.calendars.calendar_br.DatesBRAnbima` so
-the whole project shares one calendar instance and a small, intention-revealing
-function surface instead of each caller building its own. The first call that
-needs holiday data fetches and caches the ANBIMA holiday table (network on first
-use, cached thereafter); pure date arithmetic that does not consult holidays is
-local.
+Wraps wwdates' :class:`~wwdates.br.anbima.DatesBRAnbima` so the whole project
+shares one calendar instance and a small, intention-revealing function surface
+instead of each caller building its own. The first call that needs holiday data
+fetches and caches the ANBIMA holiday table (network on first use, cached
+thereafter); pure date arithmetic that does not consult holidays is local.
 
 Pass dates as :class:`datetime.date` (or :class:`datetime.datetime`); helpers that
 return a calendar day return a :class:`datetime.date`.
@@ -16,7 +15,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from stpstone.utils.calendars.calendar_br import DatesBRAnbima
+from wwdates.br.anbima import DatesBRAnbima
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
@@ -96,7 +95,7 @@ def delta_working_days(dt_start: date | datetime, dt_end: date | datetime) -> in
 	Parameters
 	----------
 	dt_start : datetime.date | datetime.datetime
-		Start date (inclusive per stpstone's convention).
+		Start date (inclusive per wwdates' convention).
 	dt_end : datetime.date | datetime.datetime
 		End date.
 

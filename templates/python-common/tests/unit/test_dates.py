@@ -1,6 +1,6 @@
 """Unit tests for the Brazilian business-day helpers.
 
-The stpstone ANBIMA calendar is replaced with a recording stand-in so the tests
+The wwdates ANBIMA calendar is replaced with a recording stand-in so the tests
 assert delegation without touching the network or the holiday cache. The stand-in
 returns **correctly-typed** values — the wrappers enforce their return annotations
 at runtime (beartype), so a sentinel of the wrong type would be rejected — and
