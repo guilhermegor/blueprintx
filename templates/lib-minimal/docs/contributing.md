@@ -194,3 +194,61 @@ Dependabot alerts and security updates. Ordinary version bumps are separate — 
 `.github/dependabot.yml`, which uses `versioning-strategy: lockfile-only` so it refreshes
 `poetry.lock` (keeping CI honest about what consumers install) without ever rewriting your
 `pyproject` ranges.
+
+## Automated PR flow (the quality gate)
+
+Every PR is classified by `bin/pr_gate.py` (workflow `pr-gate.yaml`), which labels it, posts one
+sticky comment with a per-axis status table, and hands the **safe classes** to GitHub's native
+auto-merge. Two rules are the whole design:
+
+**Classified by PATH, never by diff size.** The dangerous change is *semantic*, not big: a
+one-character edit to a schema/contract constant is the smallest possible diff and the most
+dangerous — and every test still passes, because the tests assert the contract that was written.
+So size never decides eligibility; the changed paths do. (The one place size still matters — an
+`XL` diff is vetoed — is **waived for a lockfile-only diff**, whose line count tracks how many
+dependency hashes moved, not risk.)
+
+| Risk class | Paths | Auto-merge? |
+|------------|-------|-------------|
+| `src` | `src/` | ❌ defines what "passing" means |
+| `tests` | `tests/` | ❌ defines what "passing" means |
+| `other` | anything unmatched | ❌ unknown = unsafe (default-deny) |
+| `ci` | `.github/`, `bin/`, `Makefile`, `tasks.sh`, `.pre-commit-config.yaml` | ✅ |
+| `deps` | `pyproject.toml`, `poetry.lock`, `requirements.txt` | ✅ (the test suite is the gate) |
+| `docs` | `docs/`, `mkdocs.yml`, `README.md`, `CHANGELOG.md`, … | ✅ |
+
+**Consent is opt-OUT.** The safe classes auto-merge with **no label**; add `do-not-merge` to force
+a human merge. Native auto-merge **bypasses nothing** — GitHub holds the merge until every required
+check of the ruleset is green, so the gate only decides *eligibility*, never *whether it passed*.
+
+Edit the risk table (the `RISK_PATHS` constant) in `bin/pr_gate.py` for your project's real layout.
+
+### ⚠️ After changing gate policy, backfill the open PRs
+
+The gate runs on `pull_request` events, so a PR that was **already open** when you change the
+policy (the classification/consent rules in `pr_gate.py`, or `allow_auto_merge` /
+`delete_branch_on_merge`) is **never re-evaluated** — it keeps the labels and auto-merge state it
+got under the old rules until some new event touches it. That is not a bug; the gate simply never
+ran again. So after merging a policy change, run the backfill:
+
+```bash
+gh workflow run pr-gate.yaml -f backfill=true   # re-evaluates every open PR
+# for a Dependabot PR, `gh pr comment <n> --body "@dependabot rebase"` also works
+```
+
+### Bot-merged PRs and the reconciler
+
+A PR merged by **native auto-merge** (a bot action) does **not** close its linked issue and does
+**not** delete its branch, even with `delete_branch_on_merge` on — bot-performed actions are
+deliberately inert to prevent automation recursion. `pr-reconcile.yaml` fixes both: it closes the
+`Closes #N` issues and deletes the head branch of merged PRs. Its **scheduled daily run is the
+actual fix** — scheduled events are exempt from the "no new workflow runs" suppression that also
+swallows the fast `pull_request: [closed]` path for a bot merge. Latency is up to one day; that is
+the accepted cost of not needing a personal access token.
+
+### The work-ledger gate
+
+`bin/check_backlog_ledger.py` (pre-commit + CI) fails a branch that touches `src/` or CI paths but
+adds no `docs/backlog/<kebab>_YYYYMMDD_HHMMSS.md` ledger with a `- [ ]` checklist — making the
+per-branch work-ledger convention structural instead of a thing you remember. Routine
+docs/deps/tests-only branches need none.

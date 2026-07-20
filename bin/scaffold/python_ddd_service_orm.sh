@@ -207,6 +207,10 @@ copy_common_templates() {
     # any test; the example demonstrates enforcing a family convention via __all__.
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
+        "$project_path/tests/unit/test_pr_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
+        "$project_path/tests/unit/test_backlog_ledger.py"
     mkdir -p "$project_path/tests/fixtures"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
         "$project_path/tests/unit/test_contract_oracle_example.py"
@@ -558,6 +562,11 @@ copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # PR quality gate (classify by path, sticky comment, native auto-merge) + the reconciler
+    # that closes linked issues of BOT-merged PRs (a bot merge suppresses both the issue close
+    # and delete_branch_on_merge). GitHub-only, like tests.yaml.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yaml" "$project_path/.github/workflows/pr-gate.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yaml" "$project_path/.github/workflows/pr-reconcile.yaml"
     # Weekly, non-gating contract-drift check (opens/updates an issue on schema drift). GitHub-only.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/contract_drift.yaml" "$project_path/.github/workflows/contract_drift.yaml"
     # Tag + GitHub Release (no PyPI — a service is deployed, not published). GitHub-only.
