@@ -7,9 +7,9 @@ POETRY := bash bin/poetry_exec.sh
 # -------------------
 # VIRTUAL ENVIRONMENT
 # -------------------
-.PHONY: init ensure_env venv update_venv precommit enable_pages bump_version changelog
+.PHONY: init ensure_env venv update_venv precommit enable_pages enable_repo_rules enable_security bump_version changelog
 
-init: ensure_env venv precommit enable_pages
+init: ensure_env venv precommit enable_pages enable_repo_rules enable_security
 
 # Seed .env from .env.example for a fresh checkout. The leading '-' makes a failed
 # seed (e.g. no .env.example) non-blocking for init — venv + precommit still run.
@@ -39,6 +39,18 @@ precommit:
 # contributors and offline scaffolds run it harmlessly.
 enable_pages:
 	@bash bin/enable_pages.sh
+
+# Provision the `pr-quality-gate` branch ruleset + the repo settings the PR gate needs
+# (CodeQL default setup, allow_auto_merge, delete_branch_on_merge, the do-not-merge label).
+# Repo-settings writes need the maintainer's gh auth — CI's GITHUB_TOKEN cannot make them.
+# Idempotent + non-blocking, so it never fails init.
+enable_repo_rules:
+	@bash bin/enable_repo_rules.sh
+
+# Flip the free GitHub security toggles: private vulnerability reporting, Dependabot alerts,
+# and Dependabot security updates. Same admin-gated, idempotent, non-blocking contract.
+enable_security:
+	@bash bin/enable_security.sh
 
 # Cut a version bump from Conventional Commits: cz computes the next semver, writes it to
 # pyproject.toml, regenerates CHANGELOG.md, commits "bump: X.Y.Z", and creates the vX.Y.Z tag.
@@ -193,6 +205,8 @@ help:
 	@echo "  update_venv          Update all Poetry dependencies"
 	@echo "  precommit            Install pre-commit hooks (commit-msg + pre-push; skips off a git tree)"
 	@echo "  enable_pages         Enable GitHub Pages once (gh-pages branch w/ mike, else Actions); needs gh + repo-admin, else skips"
+	@echo "  enable_repo_rules    Apply the pr-quality-gate ruleset + merge settings; needs gh + repo-admin, else skips"
+	@echo "  enable_security      Enable private vuln reporting + Dependabot alerts/security updates; needs gh + repo-admin, else skips"
 	@echo "  bump_version         Bump version from Conventional Commits, tag, and update CHANGELOG.md (cz bump)"
 	@echo "  changelog            Regenerate CHANGELOG.md from git tags (cz changelog)"
 	@echo ""

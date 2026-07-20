@@ -93,3 +93,57 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    `mkdocs.yml` paths and the `<img>` in `docs/index.md`).
 2. Tune size and placement in `docs/stylesheets/extra.css` — the `.hero-logo` rule: `max-width`
    scales it, and the side margins (`margin: … auto` centers; `float` aligns left/right).
+
+## Repository protection & security (one-time, scripted)
+
+`make init` runs three admin-gated helpers. They are **idempotent and non-blocking**: without
+`gh`, without auth, without a GitHub remote, or without repo-admin rights they warn and skip, so
+`init` still completes for contributors and offline scaffolds. Re-run any of them alone later:
+
+| Target | What it provisions |
+|--------|--------------------|
+| `make enable_pages` | GitHub Pages source (gh-pages branch for versioned docs, else Actions) |
+| `make enable_repo_rules` | The `pr-quality-gate` branch ruleset + the merge settings the PR gate needs |
+| `make enable_security` | Private vulnerability reporting, Dependabot alerts, Dependabot security updates |
+
+### The `pr-quality-gate` ruleset
+
+Applied to `~DEFAULT_BRANCH` (that ref survives a branch rename), looked up **by name** so a
+re-run updates in place instead of creating a duplicate:
+
+| Rule | Setting | Why |
+|------|---------|-----|
+| `pull_request` | `required_approving_review_count: 0` | ⚠️ **Must be 0.** GitHub forbids approving your own PR, so any value ≥ 1 locks a solo maintainer out of merging their own work. Zero still forces every change through a PR — that is the real guardrail. |
+| `pull_request` | `required_review_thread_resolution: true` | Makes review comments **binding**: an unresolved thread blocks the merge instead of being decorative. |
+| `code_scanning` | CodeQL, security `high_or_higher`, alerts `errors` | Alerts stay at `errors`: `errors_and_warnings`/`all` start blocking merges on stylistic queries, duplicating ruff/mypy with noise. |
+| `copilot_code_review` | `review_on_push: true` | Its **own rule type** — not a `pull_request` parameter (that returns HTTP 422 and makes the feature look UI-only). |
+| `non_fast_forward`, `deletion` | on | No force-push, no branch deletion on the default branch. |
+| `required_status_checks` | **empty by default** | ⚠️ Deliberate. A required check whose name never reports blocks **every** PR forever. Populate `REQUIRED_CHECKS` in `bin/enable_repo_rules.sh` from a real PR — `gh api repos/:owner/:repo/commits/<sha>/check-runs --jq ".check_runs[].name"` — then re-run. |
+
+**Deliberately not enabled:** *Require code quality results* (subjective AI severity on the merge
+path — ruff, mypy and the `bin/check_*.py` gates already enforce quality deterministically) and
+*Restrict code coverage* (preview; the floor is single-sourced in `.coveragerc` `fail_under`).
+
+### Automatic vs manual — the boundary is repo config vs account plan
+
+**Nothing here needs a click.** Every *repository* setting above is scripted. What is **not**
+scriptable is your *account's* entitlement: the `copilot_code_review` rule only fires if the author
+has access to Copilot code review, and **code review is not part of Copilot Free**. Without a
+qualifying plan the rule sits correctly configured and **inert** — no review appears and nothing
+errors. That silence is the trap, because the ruleset JSON looks perfect either way.
+
+Every other rule (PR required, CI green, CodeQL clean) works regardless of any Copilot plan, so
+the ruleset is worth applying unconditionally. Copilot Pro is free for verified students,
+teachers and popular-OSS maintainers.
+
+> Do **not** diagnose this with `gh api user/copilot_billing` → 404: that endpoint is for
+> org/enterprise seat management and 404s for a personal account even when Copilot Free is active.
+
+### Security
+
+`SECURITY.md` at the repo root is auto-detected by GitHub (no API call) and flips *Security
+policy* to Enabled; `make enable_security` turns on the matching private-reporting intake plus
+Dependabot alerts and security updates. Ordinary version bumps are separate — see
+`.github/dependabot.yml`, which uses `versioning-strategy: lockfile-only` so it refreshes
+`poetry.lock` (keeping CI honest about what consumers install) without ever rewriting your
+`pyproject` ranges.
