@@ -248,3 +248,9 @@ via negative control):
 - PR-automation part 1 #53/#55/#56 (PR #99); part 2 #54/#57–#60 (#100)
 
 Per the keep-completed-backlogs rule, this file is retained as the team-reviewable record of what was done and why. Do NOT delete it.
+
+### Follow-up shipped after the wave
+
+- **#97 (PR #103)** — `codespell` now skips the git-ignored `*-lessons.md` mirrors in both
+  `.codespellrc` files. ⚠️ Uses the **basename** glob: the issue's `docs/*-lessons.md` is
+  invocation-dependent and silently fails under `codespell .` (how `make lint`/CI run it).
