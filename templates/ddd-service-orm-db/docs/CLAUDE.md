@@ -30,6 +30,16 @@ exclude_docs: |
 
 ## Published pages
 
-Everything else under `docs/` (e.g. `index.md`, `architecture.md`, `api.md`) is a
+Everything else under `docs/` (e.g. `index.md`, `architecture.md`, the `api/` reference section) is a
 published page. Register new published pages in `mkdocs.yml` `nav:` in the same
-commit they are created, or MkDocs silently omits them from navigation.
+commit they are created, or MkDocs silently omits them from navigation — the
+`check-docs-sections` gate (pre-commit + CI) enforces this on the canonical **English
+slugs** (`index`/`usage`/`examples`/`api/index`/`faq`/`contributing`/`changelog`), not on
+the localized nav titles.
+
+The API reference is a **directory** (`docs/api/` — `index.md` overview + `reference.md`),
+never a single `api.md`: it grows once per shipped unit, and splitting it later rots every
+published deep link. Group new API pages by the codebase's own top-level split. Brand assets
+live in `docs/assets/` (placeholder `logo.png`, wired as `theme.logo`/`favicon` + the
+landing hero) with tunable size/placement in `docs/stylesheets/extra.css` — swap the file,
+tune the `.hero-logo` rule.

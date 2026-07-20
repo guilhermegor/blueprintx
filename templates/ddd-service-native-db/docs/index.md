@@ -1,5 +1,7 @@
 # **${PROJECT_DISPLAY_NAME}**
 
+<img src="assets/logo.png" alt="Project logo" class="hero-logo">
+
 A Domain-Driven Design service with a hexagonal (ports-and-adapters) layout, using native database drivers for fine-grained control over queries and connections.
 
 ---
@@ -9,7 +11,7 @@ A Domain-Driven Design service with a hexagonal (ports-and-adapters) layout, usi
 | Section | Description |
 |---------|-------------|
 | [Architecture](architecture.md) | DDD layer structure, folder layout, and design decisions |
-| [API Reference](api.md) | Factory usage, use-case wiring, and extension patterns |
+| [API Reference](api/index.md) | Factory usage, use-case wiring, and extension patterns |
 
 ---
 

@@ -1,5 +1,7 @@
 # **${PROJECT_DISPLAY_NAME}**
 
+<img src="assets/logo.png" alt="Project logo" class="hero-logo">
+
 A minimal Python library with packaging, tests, CI, and linting pre-configured.
 
 ---
@@ -9,7 +11,7 @@ A minimal Python library with packaging, tests, CI, and linting pre-configured.
 | Section | Description |
 |---------|-------------|
 | [Usage](usage.md) | Installation, imports, and usage examples |
-| [API Reference](api.md) | Module-level functions and public interface |
+| [API Reference](api/index.md) | Module-level functions and public interface |
 
 ---
 

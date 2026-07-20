@@ -1,5 +1,7 @@
 # **${PROJECT_DISPLAY_NAME}**
 
+<img src="assets/logo.png" alt="Project logo" class="hero-logo">
+
 A layered MVC service (Model–View–Controller) using native database drivers for direct, fine-grained SQL access. The controller orchestrates a pandas-driven pipeline: read via the model, render via the view.
 
 ---
@@ -9,7 +11,7 @@ A layered MVC service (Model–View–Controller) using native database drivers 
 | Section | Description |
 |---------|-------------|
 | [Architecture](architecture.md) | MVC layer structure, folder layout, and design decisions |
-| [API Reference](api.md) | Connection factory, model/view usage, and extension patterns |
+| [API Reference](api/index.md) | Connection factory, model/view usage, and extension patterns |
 
 ---
 

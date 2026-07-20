@@ -3,7 +3,7 @@
 Task-oriented, self-contained snippets for common uses of this library. Each recipe stands
 alone — copy it and adjust.
 
-> **See also:** [Usage](usage.md) for the basics · [API Reference](api.md) for every public
+> **See also:** [Usage](usage.md) for the basics · [API Reference](api/index.md) for every public
 > symbol.
 
 ---

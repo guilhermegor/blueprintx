@@ -2,7 +2,7 @@
 
 Usage examples for the engine/session factories, the model/view layers, and extension patterns.
 
-> **See also:** [Architecture](architecture.md)
+> **See also:** [Architecture](../architecture.md)
 
 ---
 

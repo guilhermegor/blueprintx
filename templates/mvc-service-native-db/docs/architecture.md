@@ -65,4 +65,4 @@ project/
 
 ## Learn more
 
-- [API Reference](api.md) — connection factory, model/view usage, and extension patterns
+- [API Reference](api/index.md) — connection factory, model/view usage, and extension patterns

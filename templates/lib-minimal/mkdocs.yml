@@ -5,12 +5,20 @@ nav:
   - Home: index.md
   - Usage: usage.md
   - Examples: examples.md
-  - API Reference: api.md
+  - API Reference:
+      - Overview: api/index.md
+      - Reference: api/reference.md
   - FAQ: faq.md
   - Contributing: contributing.md
   - Changelog: changelog.md
+extra_css:
+  - stylesheets/extra.css
+
 theme:
   name: material
+  # Placeholder brand icon — swap docs/assets/logo.png for your own (favicon is separate).
+  logo: assets/logo.png
+  favicon: assets/logo.png
   palette:
     - scheme: default
       primary: indigo

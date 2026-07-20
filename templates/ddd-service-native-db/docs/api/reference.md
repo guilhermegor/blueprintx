@@ -2,7 +2,7 @@
 
 Usage examples for the database factories, use-case wiring, and extension patterns.
 
-> **See also:** [Architecture](architecture.md)
+> **See also:** [Architecture](../architecture.md)
 
 ---
 

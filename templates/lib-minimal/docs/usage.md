@@ -2,7 +2,7 @@
 
 Examples for installing and using this library.
 
-> **See also:** [API Reference](api.md)
+> **See also:** [API Reference](api/index.md)
 
 ---
 
