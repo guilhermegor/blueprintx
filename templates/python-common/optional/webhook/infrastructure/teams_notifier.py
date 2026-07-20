@@ -1,7 +1,7 @@
 """Microsoft Teams webhook adapter.
 
 This adapter satisfies the ``WebhookNotifier`` port (see ``domain/ports.py``). The transport
-uses ``pymsteams`` (the same client stpstone wrapped internally), so a notification is an
+uses ``pymsteams`` directly, so a notification is an
 incoming-webhook connector card with a title and text body. A send failure raises rather than
 being swallowed, matching the Slack adapter; the caller decides whether to send at all via the
 ``WEBHOOK_ENV_GATE`` environment check.

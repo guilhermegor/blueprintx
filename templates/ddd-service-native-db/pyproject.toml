@@ -40,7 +40,8 @@ oracledb = ">=2.0"
 psycopg = ">=3.1"
 # 9.x requires system libmysqlclient; pin to 8.x for portable wheels
 mysql-connector-python = ">=8.3,<9.0"
-stpstone = ">=3.2.0"
+# BR ANBIMA business-day calendar (wrapped by utils/dates.py). Single-purpose package.
+wwdates = ">=0.1.0"
 # Microsoft Teams incoming-webhook transport, used by the webhook opt-in (teams adapter).
 pymsteams = ">=0.2.5"
 # YAML config parsing (inputs/outputs/webhooks .yaml) in src/config.
@@ -59,6 +60,9 @@ ruff = ">=0.11.13,<0.12"
 codespell = ">=2.4.1"
 pydocstyle = ">=6.3.0"
 pytest = ">=8.0.0"
+# Declared explicitly (not borrowed transitively): tests/unit/test_outlook_gateway.py
+# imports pytest_mock. It shipped only because the old stpstone dep happened to pull it.
+pytest-mock = ">=3.12.0"
 pytest-cov = ">=6.0.0"
 coverage = ">=7.6.0"
 # genbadge replaces the abandoned coverage-badge (it imported the removed

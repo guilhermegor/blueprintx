@@ -35,16 +35,21 @@ pyprojects until a later wave dehydrates the calendar too.
 - [x] `run act` on the scaffold-checks workflow before pushing (per act-first rule) — green
       end-to-end (make lint clean tree, mypy + docstrings, 111 unit tests); caught 3 scaffold
       drifts fixed in commit `60eb6c6`. Shipped as PR #37 (v0.12.1).
-- [ ] (Future wave, NOT this branch) #1 calendar `DatesBRAnbima` — the LAST stpstone symbol.
-      Three import sites, all the same calendar: `utils/dates.py` (ships to all 4 tiers) plus
-      both `ddd-*/src/app/bootstrap.py`.
-      **Plan: replace with a `wwdates` package (to be created).** `wwdates` will own the BR
-      ANBIMA business-day / holiday logic; `utils/dates.py` will wrap it exactly as it wraps
-      `DatesBRAnbima` today (same public surface — `is_working_day`, `add_working_days`,
-      `delta_working_days`, …), so no downstream call sites change.
-      - The two `bootstrap.py` uses are only `DatesBRAnbima().curr_datetime()` == stdlib
-        `datetime.now(tz=ZoneInfo("UTC"))` — no calendar needed there; swap to stdlib and drop
-        the import (frees DDD bootstraps from the calendar entirely).
-      - Once `utils/dates.py` points at `wwdates`, delete `stpstone = ">=3.2.0"` from all 4
-        service pyprojects and add `wwdates` — this is the one-line dep swap that finishes the
-        dehydration.
+- [x] **DONE 2026-07-20 (issue #94, branch `feat/94-dehydrate-stpstone-wwdates`)** — #1 calendar
+      `DatesBRAnbima`, the LAST stpstone symbol, dehydrated. **stpstone is now fully gone from the
+      templates** (`git grep stpstone -- templates/` → 0 hits). What shipped:
+      - `utils/dates.py` re-pointed at **`wwdates.br.anbima.DatesBRAnbima`** — a genuine 1:1 map
+        (same class name, all 6 wrapped methods, positional calls), so the wrapper body and every
+        downstream call site are unchanged. Verified live in a scaffolded DDD tree.
+      - Both `ddd-*/src/app/bootstrap.py`: `DatesBRAnbima().curr_datetime()` → stdlib
+        `datetime.now(tz=ZoneInfo("UTC"))`; calendar import dropped entirely.
+      - `stpstone = ">=3.2.0"` → `wwdates = ">=0.1.0"` in all 4 service pyprojects; residual
+        doc/comment mentions scrubbed (test_dates, mypy.ini, webhook notifiers, tier CLAUDE.md ×4,
+        architecture.md ×2, logs.py provenance line).
+      - ⚠️ **Latent bug surfaced + fixed:** `test_outlook_gateway.py` (ships to all 4 service tiers)
+        imports `pytest_mock`, but the DDD pyprojects never *declared* `pytest-mock` — it was only
+        present because stpstone transitively pulled it. Removing stpstone exposed it; added
+        `pytest-mock` to both DDD dev groups (the MVC tiers already declared it). This is the
+        `never-build-on-transitive-dependency` lesson, caught by the CI harness.
+      - **Verified:** harness green on both DDD tiers + MVC-native; live wwdates wrapper call
+        correct; `git grep stpstone -- templates/` = 0.
