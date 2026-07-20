@@ -2,7 +2,7 @@
 
 Usage examples for the connection factory, the model/view layers, and extension patterns.
 
-> **See also:** [Architecture](architecture.md)
+> **See also:** [Architecture](../architecture.md)
 
 ---
 

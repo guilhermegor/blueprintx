@@ -248,8 +248,20 @@ copy_mkdocs_templates() {
         > "$project_path/docs/index.md"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/architecture.md" \
         "$project_path/docs/architecture.md"
-    cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/api.md" \
-        "$project_path/docs/api.md"
+    # API reference is a directory (index + one page) from day one, never a single
+    # api.md — splitting it later rots published deep links (see docs/api/index.md).
+    mkdir -p "$project_path/docs/api"
+    cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/api/index.md" \
+        "$project_path/docs/api/index.md"
+    cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/api/reference.md" \
+        "$project_path/docs/api/reference.md"
+    # Placeholder brand image (header logo/favicon + landing hero) + its tunable CSS.
+    # Swap docs/assets/logo.png for a real asset; size/placement live in extra.css.
+    mkdir -p "$project_path/docs/assets" "$project_path/docs/stylesheets"
+    cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
+        "$project_path/docs/assets/logo.png"
+    cp "$COMMON_TEMPLATE_ROOT/docs/stylesheets/extra.css" \
+        "$project_path/docs/stylesheets/extra.css"
     # Standard doc sections shared across all service tiers — single-sourced from
     # python-common/docs so every tier stays in sync.
     local doc

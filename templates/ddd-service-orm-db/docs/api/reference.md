@@ -2,7 +2,7 @@
 
 Usage examples for the SQLAlchemy session factory, use-case wiring, and extension patterns.
 
-> **See also:** [Architecture](architecture.md)
+> **See also:** [Architecture](../architecture.md)
 
 ---
 

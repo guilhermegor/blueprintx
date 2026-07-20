@@ -190,4 +190,4 @@ Keep `chassis/` only for truly shared cross-cutting providers. Feature-specific 
 
 ## Learn more
 
-- [API Reference](api.md) — factory usage, use-case wiring, and extension patterns
+- [API Reference](api/index.md) — factory usage, use-case wiring, and extension patterns

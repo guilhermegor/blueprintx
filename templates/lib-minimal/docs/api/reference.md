@@ -2,7 +2,7 @@
 
 Public interface for this library.
 
-> **See also:** [Usage](usage.md)
+> **See also:** [Usage](../usage.md)
 
 ---
 

@@ -158,4 +158,4 @@ For FastAPI `Depends` injection, use `cls_db_session.get_session()` (a generator
 
 ## Learn more
 
-- [API Reference](api.md) — session factory usage, use-case wiring, and extension patterns
+- [API Reference](api/index.md) — session factory usage, use-case wiring, and extension patterns

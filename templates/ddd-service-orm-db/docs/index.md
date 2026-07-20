@@ -1,5 +1,7 @@
 # **${PROJECT_DISPLAY_NAME}**
 
+<img src="assets/logo.png" alt="Project logo" class="hero-logo">
+
 A Domain-Driven Design service with a hexagonal (ports-and-adapters) layout, using SQLAlchemy ORM for database access.
 
 ---
@@ -9,7 +11,7 @@ A Domain-Driven Design service with a hexagonal (ports-and-adapters) layout, usi
 | Section | Description |
 |---------|-------------|
 | [Architecture](architecture.md) | DDD layer structure, SQLAlchemy session management, and design decisions |
-| [API Reference](api.md) | Session factory usage, use-case wiring, and extension patterns |
+| [API Reference](api/index.md) | Session factory usage, use-case wiring, and extension patterns |
 
 ---
 

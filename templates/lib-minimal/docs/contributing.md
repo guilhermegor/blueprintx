@@ -2,7 +2,7 @@
 
 Everything you need to develop, test, and release this library.
 
-> **See also:** [Usage](usage.md) · [API Reference](api.md) · the repository's root
+> **See also:** [Usage](usage.md) · [API Reference](api/index.md) · the repository's root
 > `CONTRIBUTING.md` holds the authoritative branch/PR and commit-message policy.
 
 ---
@@ -129,3 +129,14 @@ registry (Test PyPI). To publish to a **private / non-official** source instead 
 Packages — wire the consumer-side source in `pyproject.toml` with an explicit-priority guard
 against dependency confusion (`poetry`'s `priority = "explicit"`; `pip --index-url`, never
 `--extra-index-url`).
+
+## Branding the docs site
+
+The scaffold ships a **placeholder** brand image at `docs/assets/logo.png`, wired as the header
+logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing hero on
+`docs/index.md`. To brand your site:
+
+1. Replace `docs/assets/logo.png` with your own asset (keep the filename, or update the two
+   `mkdocs.yml` paths and the `<img>` in `docs/index.md`).
+2. Tune size and placement in `docs/stylesheets/extra.css` — the `.hero-logo` rule: `max-width`
+   scales it, and the side margins (`margin: … auto` centers; `float` aligns left/right).

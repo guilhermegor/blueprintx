@@ -72,4 +72,4 @@ project/
 
 ## Learn more
 
-- [API Reference](api.md) — engine/session factory, model/view usage, and extension patterns
+- [API Reference](api/index.md) — engine/session factory, model/view usage, and extension patterns
