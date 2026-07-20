@@ -31,6 +31,10 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          # Full history: the work-ledger gate resolves merge-base(HEAD, default) and a
+          # shallow clone has no common ancestor to find.
+          fetch-depth: 0
 
       - name: Set Up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -122,6 +126,13 @@ jobs:
         # exists and is registered in mkdocs.yml nav. CI runs its gates as explicit steps, not via
         # pre-commit, so this must be listed here or a hook-skipping contributor bypasses it.
         run: poetry run python bin/check_docs_sections.py
+
+      - name: Run Work-Ledger Enforcement
+        if: runner.os == 'Linux'
+        # Mirrors the `check-backlog-ledger` pre-commit hook: a branch touching src/ or ci paths
+        # must carry a docs/backlog ledger. CI runs its gates as explicit steps, not via
+        # pre-commit, so this must be listed here or a hook-skipping contributor bypasses it.
+        run: poetry run python bin/check_backlog_ledger.py
 
       - name: Run Ruff Linting
         if: runner.os == 'Linux'

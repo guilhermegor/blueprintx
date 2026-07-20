@@ -426,6 +426,11 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # PR quality gate (classify by path, sticky comment, native auto-merge) + the reconciler
+    # that closes linked issues of BOT-merged PRs (a bot merge suppresses both the issue close
+    # and delete_branch_on_merge). GitHub-only, like tests.yaml.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yaml" "$project_path/.github/workflows/pr-gate.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yaml" "$project_path/.github/workflows/pr-reconcile.yaml"
     # PyPI + Test-PyPI release workflows (GitHub-remote-only, like tests.yaml). Restricted
     # envsubst substitutes ONLY PACKAGE_NAME/OWNER — GitHub's own `${{ … }}` expressions and
     # the `$SHELL_VARS` inside run: blocks are left untouched.
@@ -469,6 +474,10 @@ copy_common_templates() {
     # any test; the example demonstrates enforcing a family convention via __all__.
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
+        "$project_path/tests/unit/test_pr_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
+        "$project_path/tests/unit/test_backlog_ledger.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
         "$project_path/tests/unit/test_family_convention_example.py"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"

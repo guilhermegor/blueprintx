@@ -15,6 +15,11 @@
 # majors arrive on their own so they get scrutiny. Each bump lands as an isolated PR, so a bad one
 # reddens that PR and never `main`. Note that a linter bump (ruff/mypy) can occasionally red a PR
 # or ask for a reformat — that is the system working.
+# ⚠️ NO `labels:` HERE ON PURPOSE. bin/pr_gate.py already labels every PR by changed path
+# (risk:*/size:*/gate:*), so a second taxonomy here would be one nothing reads — and worse,
+# Dependabot posts an ERROR COMMENT ON EVERY PR IT OPENS when a declared label does not
+# exist in the repo (a fresh repo has none of them), for months, while the config looks fine.
+# When a scaffold ships both a bot config and a labeling gate, only ONE may own labels.
 version: 2
 
 updates:
@@ -24,8 +29,6 @@ updates:
       interval: "weekly"
     versioning-strategy: "lockfile-only"
     open-pull-requests-limit: 5
-    labels:
-      - "deps"
     commit-message:
       prefix: "chore(deps)"
     groups:
@@ -49,8 +52,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    labels:
-      - "ci"
     commit-message:
       prefix: "chore(ci)"
     groups:
