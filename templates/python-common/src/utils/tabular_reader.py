@@ -27,7 +27,7 @@ from collections.abc import Sequence
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pandas as pd
 
@@ -61,12 +61,41 @@ class FileContract(metaclass=TypeChecker):
 		Columns that must be present.
 	tuple_cnpj_cols : tuple of str
 		Columns that must hold at least one valid CNPJ (coercible-type check).
+
+	Attributes
+	----------
+	PROVENANCE_COLUMNS : tuple of str
+		The fixed provenance columns appended to every ingested frame by
+		:func:`utils.provenance.stamp_provenance`. They describe the full output shape
+		(:attr:`output_columns`) but are **not** in ``tuple_required`` — that validates the
+		*source* artifact, which never carries them, so the stamp is applied *after* the
+		contract check.
 	"""
 
 	str_name: str
 	str_source_key: str
 	tuple_required: tuple[str, ...]
 	tuple_cnpj_cols: tuple[str, ...]
+
+	PROVENANCE_COLUMNS: ClassVar[tuple[str, ...]] = (
+		"url",
+		"updated_at",
+		"source_key",
+		"package_version",
+		"ingestion_run_id",
+		"content_hash",
+	)
+
+	@property
+	def output_columns(self) -> tuple[str, ...]:
+		"""Return the full output shape: source-required columns then provenance columns.
+
+		Returns
+		-------
+		tuple of str
+			``tuple_required + PROVENANCE_COLUMNS`` — what a stamped, ingested frame holds.
+		"""
+		return self.tuple_required + self.PROVENANCE_COLUMNS
 
 
 class ContractError(Exception, metaclass=TypeChecker):

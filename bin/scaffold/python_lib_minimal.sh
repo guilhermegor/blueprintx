@@ -239,7 +239,7 @@ copy_internal_utils() {
     local utils_src="$COMMON_TEMPLATE_ROOT/src/utils"
     local -a modules=(
         __init__.py dtypes.py br_identifiers.py http_downloader.py
-        retry.py tabular_reader.py text.py zip_extractor.py
+        retry.py tabular_reader.py provenance.py text.py zip_extractor.py
     )
     # logs.py is opt-in (prompt_logs): the convention is to inject a logger, not import one
     # (see the shipped utils/CLAUDE.md), so a lib only carries it when explicitly requested.

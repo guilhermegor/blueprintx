@@ -130,7 +130,22 @@ below**. Do these first, in order:
 
 ## Ingestion / data contracts
 
-- [ ] #63 — `feat`: ingestion stamps `url` + `updated_at` provenance
+- [x] #63 — **DONE (branch `feat/ingestion-contracts-cluster-63-66`)** — shipped the provenance
+      seam `utils/provenance.py` (`hash_artifact` I/O half + pure `stamp_provenance` +
+      `resolve_package_version`), the six-column `FileContract.PROVENANCE_COLUMNS` + `output_columns`
+      property, and the `bin/check_provenance.py` gate (wired into **both** `.pre-commit-config.yaml`
+      and `tests.yaml`, gate-parity). The gate keys on the **call form** `read_table(` on purpose:
+      `read_query` (own-DB read) is out of provenance scope, and a contract module that merely *names*
+      `read_table` in prose (`example_source.py`) is a declaration, not a read — so it isn't
+      false-flagged. `provenance.py` added to all 5 scaffold copy-lists; `test_provenance.py` (8 tests)
+      auto-copies to the service tiers. Docs: standing decision in `src/config/CLAUDE.md` + rows in the
+      tier `CLAUDE.md`. **Verified across all 3 layouts:** MVC-native (8 prov tests + both gates + ruff
+      check/format clean), DDD-native (chassis.typing fallback, 14 tests, both gates), lib-minimal
+      (import rewrite sound, gate green). **Negative control:** a reader calling `read_table(` without
+      a stamp fails the gate (exit 1); adding the stamp passes (exit 0). ⚠️ Test-import note: uses the
+      **bare `utils.`** prefix (like `test_logs_emitter`), not `src.utils.` — under pytest's
+      `pythonpath = . src` the `src.` prefix loads a *second* module copy with distinct class
+      identities, which beartype (correctly) rejects on the `FileContract` param.
 - [ ] #64 — `feat`: ingestion imports sidecar META metadata when available
 - [ ] #65 — `fix`: ground invariants on the real artifact, not just schema
 - [ ] #66 — `fix`: pin contracts to a source-published oracle (fixture + drift job)

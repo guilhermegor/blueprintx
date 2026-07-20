@@ -126,6 +126,17 @@ repos:
           - python
         pass_filenames: false
 
+      # Structural gate for the "ingestion stamps provenance" doctrine — a module that
+      # references read_table (a contract-checked read) must also reference stamp_provenance,
+      # so a bronze row can never ship without its traceability columns.
+      - id: check-provenance
+        name: ingestion provenance stamp check
+        entry: bash bin/poetry_exec.sh run python bin/check_provenance.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
       - id: mypy
         name: mypy (static type check)
         # Run from src/ so it is the single package base (bare config.x/utils.x imports
