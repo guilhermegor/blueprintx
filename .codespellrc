@@ -1,4 +1,10 @@
 [codespell]
-skip = *.png,*.svg,*.ico,*.jpg,*.json,*.lock,*.po,*.pyc
+# *-lessons.md are the git-ignored scaffolding-lessons mirrors the capture workflow writes
+# (docs/blueprintx-lessons.md, docs/dotfiles-dev-lessons.md). codespell scans the whole tree, so
+# without this skip, writing a lesson flags the mirror and aborts an unrelated staged commit — a
+# file the workflow writes but git ignores must be skipped here.
+# ⚠️ BASENAME glob on purpose: a `docs/`-anchored pattern fails under `codespell .` (paths come
+# back as `./docs/…`). The basename form matches under every invocation style.
+skip = *.png,*.svg,*.ico,*.jpg,*.json,*.lock,*.po,*.pyc,*-lessons.md
 quiet-level = 3
 ignore-words-list = nd,fpr,strat,enty,filetest,nome,nomes,caracteres,prefere,atual,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX

@@ -1,6 +1,15 @@
 [codespell]
-# skip specific file types and test files with Portuguese data
-skip = *.po,*.csv,*.json,*.xml,*.txt,.git,*.pyc,__pycache__,*.egg-info,.pytest_cache,.ruff_cache,.mypy_cache,node_modules,poetry.lock,htmlcov,coverage.svg,coverage.xml,*.diff
+# skip specific file types and test files with Portuguese data.
+# `*-lessons.md` is a DIFFERENT class of skip from the generated artifacts above
+# (htmlcov/coverage.svg/*.diff): it is a git-ignored mirror the lessons-capture workflow WRITES,
+# not a build output. codespell runs pass_filenames:false over the whole tree, so without this
+# skip, writing a lesson would flag the mirror and abort an unrelated staged commit. This one
+# `skip` is the single source both gates read: `make lint` scans the whole working tree while
+# pre-commit scans only staged files, so they agree only because the skip lives here.
+# ⚠️ Use the BASENAME glob, not `docs/*-lessons.md`: codespell matches the skip against the path
+# as walked, and `make lint` / CI invoke `codespell .`, which yields `./docs/…` — a `docs/`-anchored
+# pattern silently fails to match there (verified). A basename glob is invocation-independent.
+skip = *.po,*.csv,*.json,*.xml,*.txt,.git,*.pyc,__pycache__,*.egg-info,.pytest_cache,.ruff_cache,.mypy_cache,node_modules,poetry.lock,htmlcov,coverage.svg,coverage.xml,*.diff,*-lessons.md
 # count the number of spelling errors
 count =
 # set quiet level to suppress certain messages

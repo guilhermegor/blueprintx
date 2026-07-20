@@ -30,7 +30,7 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 | `requirements.txt` | Pins the Poetry version only — not application dependencies |
 | `.python-version` | pyenv Python version pin |
 | `.gitignore` | Python + Poetry + common IDE patterns |
-| `.codespellrc` | codespell configuration |
+| `.codespellrc` | codespell configuration. The **single source both gates read**: `make lint` scans the whole working tree while pre-commit scans only staged files, so they agree only because `skip`/`ignore-words-list` live here. Two distinct classes of `skip`: generated artifacts (`htmlcov`, `coverage.svg`, `*.diff`) and **`*-lessons.md`** — the git-ignored mirror the lessons-capture workflow *writes*; without it, writing a lesson flags a file outside your diff and aborts an unrelated staged commit. ⚠️ Use the **basename** glob, never `docs/*-lessons.md`: `make lint`/CI run `codespell .`, whose paths come back as `./docs/…`, which a `docs/`-anchored pattern silently fails to match |
 | `.pydocstyle` | pydocstyle config (NumPy convention, DAR checks) |
 | `.coveragerc` | Coverage.py configuration (omits chassis, example_feature, app, config) |
 | `poetry.toml` | Poetry local config — forces `virtualenvs.in-project = true` |
