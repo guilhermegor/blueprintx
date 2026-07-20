@@ -40,7 +40,10 @@ import uuid
 
 import pandas as pd
 
-from utils.tabular_reader import FileContract
+# Imports the CLASS only for a type annotation (stamp_provenance's contract parameter) — it never
+# constructs one, so it carries the documented line-scoped exemption to the TID251 ban that keeps
+# FileContract construction inside config/contracts/ (see src/config/CLAUDE.md).
+from utils.tabular_reader import FileContract  # noqa: TID251
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
