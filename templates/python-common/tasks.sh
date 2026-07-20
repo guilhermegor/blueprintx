@@ -45,6 +45,19 @@ enable_pages() {
 	bash "$SCRIPT_DIR/bin/enable_pages.sh"
 }
 
+enable_repo_rules() {
+	print_status "info" "Applying the pr-quality-gate ruleset + merge settings..."
+	# Lives in bin/enable_repo_rules.sh; idempotent + non-blocking (skips without gh/auth,
+	# without a remote, or without repo-admin), so it never fails init.
+	bash "$SCRIPT_DIR/bin/enable_repo_rules.sh"
+}
+
+enable_security() {
+	print_status "info" "Enabling the GitHub security toggles..."
+	# Lives in bin/enable_security.sh; same admin-gated, idempotent, non-blocking contract.
+	bash "$SCRIPT_DIR/bin/enable_security.sh"
+}
+
 init() {
 	# Seed .env first; a failed seed is non-blocking so init still runs venv +
 	# precommit — mirrors the Makefile's '-@' on ensure_env.
@@ -52,6 +65,8 @@ init() {
 	venv
 	precommit
 	enable_pages
+	enable_repo_rules
+	enable_security
 }
 
 bump_version() {
@@ -265,6 +280,8 @@ Virtual Environment
   update_venv          Update all Poetry dependencies
   precommit            Install pre-commit hooks (commit-msg + pre-push; skips off a git tree)
   enable_pages         Enable GitHub Pages once (gh-pages branch w/ mike, else Actions); needs gh + repo-admin, else skips
+  enable_repo_rules    Apply the pr-quality-gate ruleset + merge settings; needs gh + repo-admin, else skips
+  enable_security      Enable private vuln reporting + Dependabot alerts/security updates; needs gh + repo-admin, else skips
   bump_version         Bump version from Conventional Commits, tag, and update CHANGELOG.md (cz bump)
   changelog            Regenerate CHANGELOG.md from git tags (cz changelog)
 
@@ -326,6 +343,8 @@ venv) venv ;;
 update_venv) update_venv ;;
 precommit) precommit ;;
 enable_pages) enable_pages ;;
+enable_repo_rules) enable_repo_rules ;;
+enable_security) enable_security ;;
 bump_version) bump_version ;;
 get_corporate_ca) get_corporate_ca ;;
 unit_tests) unit_tests ;;

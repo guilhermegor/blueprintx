@@ -565,6 +565,12 @@ copy_github_assets() {
     # Docs → GitHub Pages deploy (build + gh-deploy on push to the default branch). GitHub-only.
     cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yaml" "$project_path/.github/workflows/docs.yaml"
     envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
+    # SECURITY.md (root; GitHub auto-detects it and flips "Security policy" to Enabled) +
+    # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
+    # bin/enable_security.sh). Both are GitHub-platform features, hence GitHub-only.
+    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
+        < "$SHARED_TEMPLATE_ROOT/SECURITY.md" > "$project_path/SECURITY.md"
+    cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     print_status "success" "GitHub assets copied (.github)"
