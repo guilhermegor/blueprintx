@@ -146,7 +146,17 @@ below**. Do these first, in order:
       **bare `utils.`** prefix (like `test_logs_emitter`), not `src.utils.` — under pytest's
       `pythonpath = . src` the `src.` prefix loads a *second* module copy with distinct class
       identities, which beartype (correctly) rejects on the `FileContract` param.
-- [ ] #64 — `feat`: ingestion imports sidecar META metadata when available
+- [x] #64 — **DONE (same branch)** — shipped `utils/sidecar_metadata.py` as a **generic seam** (user
+      chose "generic seam + CVM reference"): `cvm_meta_url(base, key)` reference locator
+      (`<base>/META/meta_<key>.txt`), `fetch_sidecar_text(url, path_raw, fn_download=download_file)`
+      (persists to bronze + returns text, or `None` when absent — tolerant, never raises), and
+      `parse_sidecar_metadata(text)` → `{field: {column: value}}` (header-driven, format-agnostic).
+      Locator + download transport are injectable; CVM is the documented reference, not hard-coded.
+      `sidecar_metadata` added to all 5 copy-lists; `test_sidecar_metadata.py` (5 tests) auto-copies
+      to services. Docs: standing decision in `src/config/CLAUDE.md` + tier `CLAUDE.md` row.
+      ⚠️ Correctness catch fixed in-flight: `Callable` must be a **runtime** import (not
+      TYPE_CHECKING-only) — beartype resolves the `fn_download` hint at call time. **Verified** on
+      fresh MVC + DDD scaffolds: seam + test ship, both gates green, 13 tests pass, ruff clean.
 - [x] #65 — **DONE (same branch)** — doc-only convention appended to the contracts home
       `src/config/CLAUDE.md` ("Ground a contract's invariants in the real artifact"): measure the
       invariant on a downloaded artifact before asserting it; write the measured range into the
