@@ -18,9 +18,10 @@ src/<project_name>/
     _internal/             # PRIVATE — ships in the wheel, but not a public API
         utils/             # vendored helpers (dtypes, tabular_reader, retry, http_downloader,
                            #   text, zip_extractor, br_identifiers, typing/)
-        config/
+        config/            # ALL private structural declarations (one config/CLAUDE.md maps them)
             contracts/     # FileContract declarations (one per input source)
-        ports/             # private behavioural ABCs (hexagonal ports; ABCTypeCheckerMeta)
+            ports/         # private behavioural ABCs (hexagonal ports; ABCTypeCheckerMeta) — opt-in
+            # schemas/     # (opt-in) Pydantic models mirroring an external standard
 tests/
     unit/  integration/  performance/
 ```
@@ -100,3 +101,19 @@ secrets and a GitHub Environment named **`release`**:
 - Mirror the test folder hierarchy to match the package structure.
 - Drop `_internal/config/contracts` (and the pandas deps) if the library never reads
   tabular inputs.
+
+## Project memory — thin root, lazy leaves (never `@`-imports)
+
+This `CLAUDE.md` is a **thin index**: keep it scannable (what the project is, its structure, the
+few commands that matter, the non-negotiable rules) and push domain detail into **leaf**
+`CLAUDE.md` files that load **lazily** — a nested `CLAUDE.md` loads on directory entry; a
+`rules/*.md` with `paths:` frontmatter loads on file touch. This template already ships leaves
+(`src/*/CLAUDE.md`, `docs/CLAUDE.md`, `tests/CLAUDE.md`, `_internal/*/CLAUDE.md`, …).
+
+**Never** wire those leaves through a `@.claude/<topic>.md` table. `@path` is an **eager import** —
+Claude Code inlines every referenced file at session start, so a "Documentation" table of `@`-refs
+loads *all* of them on *every* session: the structure looks lazy and behaves eager. Nested
+`CLAUDE.md` and `paths:`-scoped rules are the only mechanisms that actually defer the load.
+
+Corollary: a prose rule here cannot guard what `settings.json` / hooks auto-approve — put hard
+guardrails in permissions or hooks, and keep `CLAUDE.md` for what config cannot express.

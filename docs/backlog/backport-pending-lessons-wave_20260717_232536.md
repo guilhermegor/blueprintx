@@ -99,8 +99,8 @@ below**. Do these first, in order:
 - [ ] #49 — `feat`: scaffold placeholder logo + landing image
 - [ ] #50 — `docs`: ship `docs/api/` as a directory from day one
 - [ ] #51 — `feat`: docs-skeleton gate, language-neutral (English slugs + nav)
-- [ ] #52 — `docs`: layered project memory — lazy, not eager (`@path` is eager)
-- [ ] #75 — `docs`: internal `CLAUDE.md` maps ports + schemas + layout under `config/`
+- [x] #52 — **DONE (branch `feat/project-memory-cluster-52-75`)** — the lazy pattern was already followed (thin tier roots, nested leaf `CLAUDE.md` under src/docs/tests/_internal, **zero** `@`-imports), so this documents the standing rule so it isn't regressed: a **Project memory** section in all 5 tier root `CLAUDE.md` — thin root + lazy leaves via nested `CLAUDE.md` / `paths:`-scoped rules, **never** a `@.claude/*` table (`@path` is an eager session-start import); plus the config-beats-prose corollary. Verified: DDD 144 tests + lib 6 pass, make lint clean.
+- [x] #75 — **DONE (same branch)** — consolidated lib's `_internal/ports/` **under** `_internal/config/ports/` (config/ = home of all private structural declarations). Scaffold: `mkdir` path, the `ports.` → `config.ports.` import rewrite, `copy_internal_ports` targets `config/ports/`, and it no longer copies a separate `ports/CLAUDE.md`. Folded `ports_CLAUDE.md` into `config_CLAUDE.md` (now a 3-sub-package map — contracts + opt-in ports + opt-in schemas — with the **schema↔document vs FileContract↔flat-table** boundary); deleted `ports_CLAUDE.md`; updated the root `CLAUDE.md` layout tree. Verified on a fresh lib scaffold: ports import `<pkg>._internal.config.ports`, no stale top-level dir, single config/CLAUDE.md, harness green.
 
 ## PR / repo automation
 

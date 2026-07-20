@@ -87,7 +87,9 @@ create_directory_structure() {
 
     mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/utils/typing
     mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/config/contracts
-    mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/ports
+    # ports live UNDER config/ — config/ is the home of all private structural declarations
+    # (contracts + ports + schemas), not a top-level sibling. See _internal/config/CLAUDE.md.
+    mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/config/ports
     mkdir -p "$project_path"/tests/integration
     mkdir -p "$project_path"/tests/performance
     mkdir -p "$project_path"/tests/unit
@@ -223,7 +225,7 @@ rewrite_internal_imports() {
         sed -i -E \
             -e "s@^([[:space:]]*)(from|import) utils\.@\1\2 ${pkg_prefix}.utils.@" \
             -e "s@^([[:space:]]*)(from|import) config\.@\1\2 ${pkg_prefix}.config.@" \
-            -e "s@^([[:space:]]*)(from|import) ports\.@\1\2 ${pkg_prefix}.ports.@" \
+            -e "s@^([[:space:]]*)(from|import) ports\.@\1\2 ${pkg_prefix}.config.ports.@" \
             -e "s@^([[:space:]]*)(from|import) chassis\.typing@\1\2 ${pkg_prefix}.utils.typing@" \
             "$file"
     done < <(grep -rlE "^[[:space:]]*(from|import) (utils|config|ports|chassis)\." "$internal_dir" 2>/dev/null)
@@ -284,20 +286,22 @@ copy_internal_config() {
 }
 
 # Behavioural ports (private ABCs) — the ports of hexagonal ports-and-adapters, one operation
-# per file with `ABCTypeCheckerMeta`. Nested in the same private `_internal/ports` package so
-# the library author gets the port/adapter seam without exposing it to consumers. Source is a
-# generic reference (`ExamplePort`), mirroring `config/contracts/example_source.py`.
+# per file with `ABCTypeCheckerMeta`. Nested under `_internal/config/ports` (config/ is the home
+# of every private structural declaration — contracts + ports + schemas — not a top-level
+# sibling), so the library author gets the port/adapter seam without exposing it to consumers.
+# The whole config/ layer is documented by one _internal/config/CLAUDE.md (copied by
+# copy_internal_config); ports has no separate CLAUDE.md. Source is a generic reference
+# (`ExamplePort`), mirroring `config/contracts/example_source.py`.
 copy_internal_ports() {
     local project_path="$1"
     local internal_dir="$project_path/src/$PROJECT_NAME/_internal"
     local ports_src="$COMMON_TEMPLATE_ROOT/optional/ports"
 
-    cp "$ports_src/__init__.py" "$internal_dir/ports/__init__.py"
-    cp "$ports_src/example_port.py" "$internal_dir/ports/example_port.py"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/ports_CLAUDE.md" "$internal_dir/ports/CLAUDE.md"
+    cp "$ports_src/__init__.py" "$internal_dir/config/ports/__init__.py"
+    cp "$ports_src/example_port.py" "$internal_dir/config/ports/example_port.py"
 
     rewrite_internal_imports "$internal_dir"
-    print_status "success" "Private internal ports (_internal/ports) applied"
+    print_status "success" "Private internal ports (_internal/config/ports) applied"
 }
 
 # Add the PyPI/Snyk library badges (package identity + security) to the copied README, right
