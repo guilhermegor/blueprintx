@@ -143,3 +143,71 @@ the `utils/sidecar_metadata.py` seam:
   locator for another source and pass its result to `fetch_sidecar_text`. The download transport is
   injectable (defaults to the one `http_downloader.download_file` seam), so tests mock at that
   boundary and the network guard stays satisfied.
+
+## Pin every contract to a source-published oracle
+
+A `FileContract` is only *correct* if it is checked against something **the source produced** —
+never against itself. The failure mode is a tautology: a wrong contract passes every test, because
+the contract, the reader's assertion, and a hand-written fixture all encode the *same belief*.
+Adding more unit tests inside that loop adds agreement, not truth. So:
+
+- **Generate the contract's columns from the real bytes; never transcribe them.** The oracle is,
+  in priority order: (1) the source's own spec if it publishes one (a sidecar `META`, an
+  `.xsd`/OpenAPI doc — see the sidecar-metadata section), else (2) the real artifact's **header**,
+  committed verbatim as a tracked fixture under `tests/fixtures/`. Then assert
+  `contract.tuple_required == header_from_fixture` — both steps, not just the first.
+- **Header-only fixtures — never commit real data rows** if the artifact can carry personal data
+  (a CPF/CNPJ column). The header line gives the full anti-tautology benefit with zero PII.
+- **A spec often lacks column *order*** (an alphabetical `META` vs the real file). Use the spec for
+  **names/types**, the real header for **order** — complementary, not interchangeable.
+- **Tooling.** `bin/pin_contract_oracle.py` extracts the header tuple from a downloaded artifact
+  (and optionally writes the `tests/fixtures/<key>__header.csv` fixture) so the pin is *generated*,
+  mechanically, not typed by hand. `tests/unit/test_contract_oracle_example.py` is the copyable
+  worked example of the `contract.tuple_required == oracle` assertion.
+
+### Two layers, and why the drift job must never gate
+
+| layer | when | catches | gates? |
+|---|---|---|---|
+| pinned header/spec fixture | PR-time, **offline** | **you** writing the contract wrong | ✅ yes |
+| scheduled drift job | weekly, **online** | **the source** changing it after you shipped | ❌ **never** |
+
+The fixture proves the contract matched the day it was written; only a job that looks again can
+know the source changed yesterday. But that job **must never fail CI or gate a release**: a network
+test contradicts the socket-blocking `conftest` guard, "the source is down" and "our contract is
+wrong" are indistinguishable as a red check, and an external host on the release path has silently
+skipped a publish before. So drift → **open (or update) an issue**, never fail — and **dedupe**, or
+a weekly job that files a fresh issue every run becomes noise that gets switched off.
+
+### Subset vs full-column contracts — the drift job must know which it has
+
+`tuple_required` means **"the file must contain at least these"**, not "these are exactly the
+columns". So every contract is one of two kinds, and the choice should be **conscious per source**:
+
+- **Subset** (`bool_full_column=False`, the default) — require the *key* columns and let the rest
+  flow through as typed text. Deliberate and legitimate, but it opts out of the full-header
+  pinned-oracle guarantee.
+- **Full-column** (`bool_full_column=True`) — generated from the whole published header; the
+  pinned-oracle kind.
+
+This distinction is load-bearing for the drift job, because the two directions are **not**
+symmetric:
+
+| direction | subset contract | full-column contract |
+|---|---|---|
+| a **required** column vanished from the source | ✅ always drift | ✅ always drift |
+| the source has a column the contract doesn't list | ❌ **noise** (most columns aren't required) | ✅ drift (the source added a field) |
+
+`check_contract_drift.py` gates the second direction on `bool_full_column` for exactly this
+reason. Flagging it unconditionally reports every non-required column as a finding — a real run of
+this pattern elsewhere opened its first issue with ~122 false positives out of 123, and a job that
+cries wolf 122:1 is worse than no job, because nobody reads the 123rd week's issue. A fetch failure
+is likewise **not** drift (the source may be down, or the current period may not be published yet)
+— it is logged as a note, never written into the issue-opening report.
+
+The seam: `config/contract_oracles.yaml` is the registry (`source_key → {url, sep, encoding}`,
+**empty by default**); `bin/check_contract_drift.py` compares each shipped contract's columns
+against the live header and **always exits 0** (self-skips to success when the registry is empty —
+a check that never reports would block nothing, but this one is a *reporter*, not a gate); the
+`contract_drift.yaml` workflow runs it weekly (and on manual dispatch, **never** on PR/push) and
+opens/updates one deduplicated issue when drift is found.

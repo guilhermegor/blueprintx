@@ -1,0 +1,80 @@
+name: Contract Drift
+
+# Weekly, NON-gating check that each shipped FileContract still matches its live source. It runs
+# ONLY on a schedule and manual dispatch — never on pull_request/push — so it can never gate a PR
+# or a release (see src/config/CLAUDE.md → "Pin every contract to a source-published oracle"). On
+# drift it opens or updates ONE deduplicated issue; it never fails the run. Inert until you add a
+# source to src/config/contract_oracles.yaml (the driver self-skips to success).
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    name: Contract drift check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-in-project: true
+          virtualenvs-create: true
+          version: 2.2.1
+
+      - name: Install Dependencies
+        run: poetry install --no-interaction
+
+      - name: Run Contract Drift Check
+        # The driver always exits 0 (it is a reporter, not a gate) and writes
+        # contract_drift_report.md — empty when there is no drift or no source is configured.
+        run: poetry run python bin/check_contract_drift.py
+
+      - name: Open or Update Drift Issue
+        # Non-gating by construction: only acts when the report is non-empty, and never fails the
+        # run. Dedupes on the `contract-drift` label — updates the open issue instead of filing a
+        # fresh one each week. The report is passed as a --body-file (never interpolated into a
+        # shell command), so source-derived header text cannot inject.
+        if: hashFiles('contract_drift_report.md') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -s contract_drift_report.md ]; then
+            echo "No drift reported — nothing to open."
+            exit 0
+          fi
+          gh label create contract-drift --color b60205 \
+            --description "A shipped FileContract no longer matches its live source" --force
+          # Dedupe on the label AND a hidden HTML marker in the body: the label alone can be
+          # removed by hand, and a weekly job that files a fresh issue every run is noise that
+          # gets the job switched off. Prefer an open issue; fall back to the marker search.
+          marker='<!-- contract-drift-tracker -->'
+          printf '%s\n\n' "$marker" | cat - contract_drift_report.md > drift_issue_body.md
+          existing=$(gh issue list --label contract-drift --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$existing" ]; then
+            existing=$(gh issue list --state open --search "$marker in:body" \
+              --json number --jq '.[0].number // empty')
+          fi
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file drift_issue_body.md
+          else
+            gh issue create --title "Contract drift detected" \
+              --label contract-drift --body-file drift_issue_body.md
+          fi

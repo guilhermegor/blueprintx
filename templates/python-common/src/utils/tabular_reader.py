@@ -61,6 +61,17 @@ class FileContract(metaclass=TypeChecker):
 		Columns that must be present.
 	tuple_cnpj_cols : tuple of str
 		Columns that must hold at least one valid CNPJ (coercible-type check).
+	bool_full_column : bool, optional
+		Whether ``tuple_required`` lists the source's **complete** published header (default
+		``False``). ``tuple_required`` means "the file must contain **at least** these", so a
+		contract is either a deliberate **subset** (require the keys, let the rest flow through
+		as typed text) or **full-column** (generated from the whole header, the pinned-oracle
+		kind). The distinction is load-bearing for the drift job: "a required column vanished
+		from the source" is *always* drift, but "the source has a column we don't require" is
+		drift **only** when the contract claims completeness — flagging it on a subset contract
+		reports every non-required column as a finding. Keep the default ``False`` unless the
+		contract was pinned to the full header; the choice should be conscious per source, not
+		accidental.
 
 	Attributes
 	----------
@@ -76,6 +87,7 @@ class FileContract(metaclass=TypeChecker):
 	str_source_key: str
 	tuple_required: tuple[str, ...]
 	tuple_cnpj_cols: tuple[str, ...]
+	bool_full_column: bool = False
 
 	PROVENANCE_COLUMNS: ClassVar[tuple[str, ...]] = (
 		"url",

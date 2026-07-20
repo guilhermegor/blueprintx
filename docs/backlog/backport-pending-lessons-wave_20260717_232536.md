@@ -163,7 +163,23 @@ below**. Do these first, in order:
       docstring where the data refutes it (so the absent check reads as a decision); corollary —
       upstream class names lie, confirm the artifact from its URL. Ships to all service tiers via
       the single `config/CLAUDE.md` source. No code/test (pure guidance).
-- [ ] #66 — `fix`: pin contracts to a source-published oracle (fixture + drift job)
+- [x] #66 — **DONE (same branch)** — **user chose FULL scope** (convention + fixture helper +
+      drift-job workflow, overriding the lazy "defer the workflow" default). Shipped: the "pin every
+      contract to a source-published oracle" standing decision in `src/config/CLAUDE.md` (two-layer
+      table: offline PR-time fixture gates; online weekly drift job **never** gates); `bin/pin_contract_oracle.py`
+      (extracts a real artifact's header → `tuple_required` / header-only PII-safe fixture, generated
+      not transcribed); a copyable worked example `tests/unit/test_contract_oracle_example.py` +
+      `tests/fixtures/example_source__header.csv` asserting `EXAMPLE_SOURCE.tuple_required == oracle`;
+      the registry `src/config/contract_oracles.yaml` (empty by default → driver self-skips);
+      `bin/check_contract_drift.py` (re-fetches each source, diffs the live header, **always exits 0** —
+      reporter not gate); and `.github/workflows/contract_drift.yaml` (weekly + dispatch, **never**
+      PR/push, opens/updates ONE deduplicated `contract-drift` issue via `--body-file`, `continue-on-error`).
+      pin/driver ship via wholesale `bin/` copy; registry + workflow + example test/fixture wired into the
+      **4 service tiers** (not lib — the ingestion tier). **Verified** fresh MVC: all artifacts land online
+      path wired (offline correctly omits the workflow like tests.yaml), driver self-skips (exit 0, empty
+      report) and detects injected drift (added/removed cols, no false positive, graceful unknown key),
+      workflow YAML valid (triggers schedule+dispatch only), example test passes + ruff clean, 135 unit
+      tests pass, both gates green.
 - [x] #67 — **DONE (branch `fix/ingestion-cluster-67-68`)** — `apply_dtypes` normalises a `"str"`
       declaration to the nullable `"string"` dtype via a `_resolve_text_dtypes` helper + `_DTYPE_TEXT`
       constant. **Verified on BOTH pandas majors** (the lesson's own corollary — a green suite on one
