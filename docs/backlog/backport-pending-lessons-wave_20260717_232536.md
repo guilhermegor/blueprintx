@@ -234,3 +234,17 @@ via negative control):
 - Earlier store lessons (origin ≤ 2026-07-08) are treated as already backported per the
   mirror; if any turns out to be a false-done, add it here as a new box.
 - Board: https://github.com/users/guilhermegor/projects/8
+
+---
+
+## ✅ Completed 2026-07-20 — kept as a record
+
+**The entire backport wave (#48–#75) is shipped and merged to `main`.** All 28 lessons backported across these PRs:
+
+- Priority: #76 (PR #78), #77 (#81), #82 (#86), #48 (#84), #83 (#85)
+- Lint/hooks/tests #69–74 (PR #87); Release/coverage #61–62 (#88)
+- Ingestion part 1 #67–68 (PR #91); part 2 / data-contracts #63–66 (#92)
+- Docs/site #49–51 (PR #95), #52/#75 (#96); superseded-note (#98)
+- PR-automation part 1 #53/#55/#56 (PR #99); part 2 #54/#57–#60 (#100)
+
+Per the keep-completed-backlogs rule, this file is retained as the team-reviewable record of what was done and why. Do NOT delete it.
