@@ -153,3 +153,19 @@ Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYM
 - **Pre-commit**: ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, tests, coverage badge.
 - **Tests**: `pytest` — `pytest tests/unit/`.
 - **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `run`.
+
+## Project memory — thin root, lazy leaves (never `@`-imports)
+
+This `CLAUDE.md` is a **thin index**: keep it scannable (what the project is, its structure, the
+few commands that matter, the non-negotiable rules) and push domain detail into **leaf**
+`CLAUDE.md` files that load **lazily** — a nested `CLAUDE.md` loads on directory entry; a
+`rules/*.md` with `paths:` frontmatter loads on file touch. This template already ships leaves
+(`src/*/CLAUDE.md`, `docs/CLAUDE.md`, `tests/CLAUDE.md`, `_internal/*/CLAUDE.md`, …).
+
+**Never** wire those leaves through a `@.claude/<topic>.md` table. `@path` is an **eager import** —
+Claude Code inlines every referenced file at session start, so a "Documentation" table of `@`-refs
+loads *all* of them on *every* session: the structure looks lazy and behaves eager. Nested
+`CLAUDE.md` and `paths:`-scoped rules are the only mechanisms that actually defer the load.
+
+Corollary: a prose rule here cannot guard what `settings.json` / hooks auto-approve — put hard
+guardrails in permissions or hooks, and keep `CLAUDE.md` for what config cannot express.
