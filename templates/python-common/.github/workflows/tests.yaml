@@ -108,6 +108,14 @@ jobs:
         # here or a hook-skipping contributor bypasses the check entirely.
         run: poetry run python bin/check_typing.py
 
+      - name: Run Ingestion Provenance Enforcement
+        if: runner.os == 'Linux'
+        # Mirrors the `check-provenance` pre-commit hook: a module referencing read_table (a
+        # contract-checked read) must also reference stamp_provenance, so a bronze row never
+        # ships without its traceability columns. CI runs its gates as explicit steps, not via
+        # pre-commit, so this must be listed here or a hook-skipping contributor bypasses it.
+        run: poetry run python bin/check_provenance.py
+
       - name: Run Ruff Linting
         if: runner.os == 'Linux'
         run: |

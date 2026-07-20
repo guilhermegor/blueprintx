@@ -207,6 +207,11 @@ copy_common_templates() {
     # any test; the example demonstrates enforcing a family convention via __all__.
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
+    mkdir -p "$project_path/tests/fixtures"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
+        "$project_path/tests/unit/test_contract_oracle_example.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \
+        "$project_path/tests/fixtures/example_source__header.csv"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
         "$project_path/tests/unit/test_family_convention_example.py"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
@@ -481,6 +486,7 @@ copy_global_config() {
     cp "$COMMON_TEMPLATE_ROOT/src/config/startup.py" "$project_path/src/config/startup.py"
     cp "$COMMON_TEMPLATE_ROOT/src/config/inputs.yaml" "$project_path/src/config/inputs.yaml"
     cp "$COMMON_TEMPLATE_ROOT/src/config/outputs.yaml" "$project_path/src/config/outputs.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/contract_oracles.yaml" "$project_path/src/config/contract_oracles.yaml"
     cp "$COMMON_TEMPLATE_ROOT/src/config/env_config.py" "$project_path/src/config/env_config.py"
     cp "$COMMON_TEMPLATE_ROOT/src/config/CLAUDE.md" "$project_path/src/config/CLAUDE.md"
     mkdir -p "$project_path/src/config/contracts"
@@ -499,14 +505,14 @@ copy_shared_utils() {
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
     for util in br_identifiers dtypes decimals logs logs_emitter text paths signatures dates \
-        tabular_reader retry http_downloader zip_extractor frames \
+        tabular_reader provenance sidecar_metadata retry http_downloader zip_extractor frames \
         outlook_gateway; do
         cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
         if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" ]; then
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
-    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/logs/text/paths/signatures/dates/tabular_reader/retry/http_downloader/zip_extractor/frames) + tests applied"
+    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/logs/text/paths/signatures/dates/tabular_reader/provenance/sidecar_metadata/retry/http_downloader/zip_extractor/frames) + tests applied"
 }
 
 # Runtime type-checking engine — single source in python-common/optional/typing.
@@ -545,6 +551,8 @@ copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # Weekly, non-gating contract-drift check (opens/updates an issue on schema drift). GitHub-only.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/contract_drift.yaml" "$project_path/.github/workflows/contract_drift.yaml"
     # Tag + GitHub Release (no PyPI — a service is deployed, not published). GitHub-only.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/release.yaml" "$project_path/.github/workflows/release.yaml"
     # Docs → GitHub Pages deploy (build + gh-deploy on push to the default branch). GitHub-only.

@@ -130,10 +130,56 @@ below**. Do these first, in order:
 
 ## Ingestion / data contracts
 
-- [ ] #63 — `feat`: ingestion stamps `url` + `updated_at` provenance
-- [ ] #64 — `feat`: ingestion imports sidecar META metadata when available
-- [ ] #65 — `fix`: ground invariants on the real artifact, not just schema
-- [ ] #66 — `fix`: pin contracts to a source-published oracle (fixture + drift job)
+- [x] #63 — **DONE (branch `feat/ingestion-contracts-cluster-63-66`)** — shipped the provenance
+      seam `utils/provenance.py` (`hash_artifact` I/O half + pure `stamp_provenance` +
+      `resolve_package_version`), the six-column `FileContract.PROVENANCE_COLUMNS` + `output_columns`
+      property, and the `bin/check_provenance.py` gate (wired into **both** `.pre-commit-config.yaml`
+      and `tests.yaml`, gate-parity). The gate keys on the **call form** `read_table(` on purpose:
+      `read_query` (own-DB read) is out of provenance scope, and a contract module that merely *names*
+      `read_table` in prose (`example_source.py`) is a declaration, not a read — so it isn't
+      false-flagged. `provenance.py` added to all 5 scaffold copy-lists; `test_provenance.py` (8 tests)
+      auto-copies to the service tiers. Docs: standing decision in `src/config/CLAUDE.md` + rows in the
+      tier `CLAUDE.md`. **Verified across all 3 layouts:** MVC-native (8 prov tests + both gates + ruff
+      check/format clean), DDD-native (chassis.typing fallback, 14 tests, both gates), lib-minimal
+      (import rewrite sound, gate green). **Negative control:** a reader calling `read_table(` without
+      a stamp fails the gate (exit 1); adding the stamp passes (exit 0). ⚠️ Test-import note: uses the
+      **bare `utils.`** prefix (like `test_logs_emitter`), not `src.utils.` — under pytest's
+      `pythonpath = . src` the `src.` prefix loads a *second* module copy with distinct class
+      identities, which beartype (correctly) rejects on the `FileContract` param.
+- [x] #64 — **DONE (same branch)** — shipped `utils/sidecar_metadata.py` as a **generic seam** (user
+      chose "generic seam + CVM reference"): `cvm_meta_url(base, key)` reference locator
+      (`<base>/META/meta_<key>.txt`), `fetch_sidecar_text(url, path_raw, fn_download=download_file)`
+      (persists to bronze + returns text, or `None` when absent — tolerant, never raises), and
+      `parse_sidecar_metadata(text)` → `{field: {column: value}}` (header-driven, format-agnostic).
+      Locator + download transport are injectable; CVM is the documented reference, not hard-coded.
+      `sidecar_metadata` added to all 5 copy-lists; `test_sidecar_metadata.py` (5 tests) auto-copies
+      to services. Docs: standing decision in `src/config/CLAUDE.md` + tier `CLAUDE.md` row.
+      ⚠️ Correctness catch fixed in-flight: `Callable` must be a **runtime** import (not
+      TYPE_CHECKING-only) — beartype resolves the `fn_download` hint at call time. **Verified** on
+      fresh MVC + DDD scaffolds: seam + test ship, both gates green, 13 tests pass, ruff clean.
+- [x] #65 — **DONE (same branch)** — doc-only convention appended to the contracts home
+      `src/config/CLAUDE.md` ("Ground a contract's invariants in the real artifact"): measure the
+      invariant on a downloaded artifact before asserting it; write the measured range into the
+      docstring where the data refutes it (so the absent check reads as a decision); corollary —
+      upstream class names lie, confirm the artifact from its URL. Ships to all service tiers via
+      the single `config/CLAUDE.md` source. No code/test (pure guidance).
+- [x] #66 — **DONE (same branch)** — **user chose FULL scope** (convention + fixture helper +
+      drift-job workflow, overriding the lazy "defer the workflow" default). Shipped: the "pin every
+      contract to a source-published oracle" standing decision in `src/config/CLAUDE.md` (two-layer
+      table: offline PR-time fixture gates; online weekly drift job **never** gates); `bin/pin_contract_oracle.py`
+      (extracts a real artifact's header → `tuple_required` / header-only PII-safe fixture, generated
+      not transcribed); a copyable worked example `tests/unit/test_contract_oracle_example.py` +
+      `tests/fixtures/example_source__header.csv` asserting `EXAMPLE_SOURCE.tuple_required == oracle`;
+      the registry `src/config/contract_oracles.yaml` (empty by default → driver self-skips);
+      `bin/check_contract_drift.py` (re-fetches each source, diffs the live header, **always exits 0** —
+      reporter not gate); and `.github/workflows/contract_drift.yaml` (weekly + dispatch, **never**
+      PR/push, opens/updates ONE deduplicated `contract-drift` issue via `--body-file`, `continue-on-error`).
+      pin/driver ship via wholesale `bin/` copy; registry + workflow + example test/fixture wired into the
+      **4 service tiers** (not lib — the ingestion tier). **Verified** fresh MVC: all artifacts land online
+      path wired (offline correctly omits the workflow like tests.yaml), driver self-skips (exit 0, empty
+      report) and detects injected drift (added/removed cols, no false positive, graceful unknown key),
+      workflow YAML valid (triggers schedule+dispatch only), example test passes + ruff clean, 135 unit
+      tests pass, both gates green.
 - [x] #67 — **DONE (branch `fix/ingestion-cluster-67-68`)** — `apply_dtypes` normalises a `"str"`
       declaration to the nullable `"string"` dtype via a `_resolve_text_dtypes` helper + `_DTYPE_TEXT`
       constant. **Verified on BOTH pandas majors** (the lesson's own corollary — a green suite on one
