@@ -98,6 +98,15 @@ added the second wave); all 8 are covered below.
 - [x] Unit test `test_read_table_reads_as_text_preserving_zero_padding_and_decimals`
 
 ### Lesson 8 — `_internal/ports/` macro-section behavioural interfaces (lib-minimal) — user chose "implement in lib-minimal now"
+
+> ⚠️ **SUPERSEDED 2026-07-20 by issue #75 (PR #96) — do not re-apply the paths below as written.**
+> `ports/` no longer lives at the top level of `_internal/`; it was moved **under** `config/`
+> (`_internal/config/ports/`), because `config/` is the home of *every* private structural
+> declaration (contracts + ports + schemas). Consequently: the rewrite rule is now
+> `ports.` → `<pkg>._internal.config.ports.`, `copy_internal_ports` targets `config/ports/`, and
+> **`ports_CLAUDE.md` no longer exists** — its content was folded into `config_CLAUDE.md` (a
+> 3-sub-package map). The checkboxes below stay ticked as the historical record of what shipped
+> in this wave; the current shape is documented in `templates/lib-minimal/config_CLAUDE.md`.
 - [x] Source authored at `templates/python-common/optional/ports/` (`example_port.py` generic
       `ExamplePort(Generic[T], metaclass=ABCTypeCheckerMeta)` + `__init__.py`) — mirrors
       `optional/typing/` (the `_internal` nesting happens at scaffold time via the dest path, not
