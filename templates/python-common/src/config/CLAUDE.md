@@ -96,3 +96,26 @@ bronze layer is self-describing and drift-detectable. This is enforced, not mere
 - **`updated_at` is tz-aware UTC** (lossless, unambiguous). A sink that cannot store tz-aware
   timestamps normalises at the **warehouse load boundary**, never here and never via a per-reader
   flag — because it is one seam, changing that default later is a one-line change.
+
+## Ground a contract's invariants in the real artifact, not just the schema
+
+Before you declare a `FileContract` or add any validation to a reader, **download the real
+artifact and measure the invariant you are about to assert** — not merely the column names.
+"Percentages sum to 100", "this id is never null", "this key is unique", "this amount is
+non-negative" are *hypotheses about the source*; a plausible-sounding one the data violates turns
+a reader into a machine for false rejections.
+
+- **Assert only what the artifact demonstrates.** A wrong column name raises loudly and
+  immediately; a wrong *invariant* silently rejects valid production rows — or, used as an
+  assumption rather than a check, silently corrupts a downstream aggregate. That asymmetry is why
+  invariant grounding matters more than the (already-conventional) column-name grounding.
+- **Where the data refutes the invariant, write the measured range into the docstring** (date,
+  range, row count) so the *absent* check reads as a decision, not an oversight — nobody re-adds
+  it. Worked example: a per-asset-type "share of net worth" column looks like it should sum to
+  100% per group, but leveraged/short positions make real per-group totals run negative→>1000%;
+  the check would reject valid rows. Conversely, a member verified one-row-per-key *is* a grounded
+  basis for `merge(..., validate="many_to_one")`. Measurement is what tells you which you have.
+- **Corollary — upstream class/name labels lie; read the URL.** A ported reader's class name may
+  advertise a different source than the file it actually fetches. Confirm the artifact a reader
+  pulls from its URL, not from what an inherited name claims, or you duplicate a reader or point
+  it at the wrong file.

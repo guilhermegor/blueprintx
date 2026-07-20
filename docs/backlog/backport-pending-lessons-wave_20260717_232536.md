@@ -147,7 +147,12 @@ below**. Do these first, in order:
       `pythonpath = . src` the `src.` prefix loads a *second* module copy with distinct class
       identities, which beartype (correctly) rejects on the `FileContract` param.
 - [ ] #64 — `feat`: ingestion imports sidecar META metadata when available
-- [ ] #65 — `fix`: ground invariants on the real artifact, not just schema
+- [x] #65 — **DONE (same branch)** — doc-only convention appended to the contracts home
+      `src/config/CLAUDE.md` ("Ground a contract's invariants in the real artifact"): measure the
+      invariant on a downloaded artifact before asserting it; write the measured range into the
+      docstring where the data refutes it (so the absent check reads as a decision); corollary —
+      upstream class names lie, confirm the artifact from its URL. Ships to all service tiers via
+      the single `config/CLAUDE.md` source. No code/test (pure guidance).
 - [ ] #66 — `fix`: pin contracts to a source-published oracle (fixture + drift job)
 - [x] #67 — **DONE (branch `fix/ingestion-cluster-67-68`)** — `apply_dtypes` normalises a `"str"`
       declaration to the nullable `"string"` dtype via a `_resolve_text_dtypes` helper + `_DTYPE_TEXT`
