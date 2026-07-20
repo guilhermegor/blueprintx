@@ -130,6 +130,20 @@ below**. Do these first, in order:
 
 ## Ingestion / data contracts
 
+**Cluster COMPLETE — part 1 (#67–#68) via PR #91, part 2 (#63–#66) via PR #92 (squash `76cde27`,
+merged 2026-07-20, CI 38/38 green).** Two process lessons captured from part 2, both worth
+honouring on the remaining clusters:
+1. **Read `~/.claude/memory/lessons/README.md` BEFORE planning template work.** The store already
+   held `drift-check-respects-subset-vs-full-column-contracts` + `drift-job-reuses-read-and-pins-explicit-wiring`
+   (from filings-cvm) describing the very drift job #66 asked for. Skipping it shipped a
+   false-positive defect (flagging unlisted source columns on *subset* contracts — ~122:1 cry-wolf
+   in a real run) that had to be fixed before merge via `FileContract.bool_full_column`.
+2. **Verify with `bash bin/ci/scaffold_lint_test.sh <skeleton>`, not ad-hoc `ruff check <files>`.**
+   `make lint` short-circuits (ruff whole-tree → ruff format → mypy → codespell), so one ruff error
+   means mypy/codespell never run. CI failed 4/6 scaffold jobs on a single `TID251` type-only
+   import; lib-minimal passed and masked it (its scaffold rewrites the import path, so the
+   literal-path ban no longer matches).
+
 - [x] #63 — **DONE (branch `feat/ingestion-contracts-cluster-63-66`)** — shipped the provenance
       seam `utils/provenance.py` (`hash_artifact` I/O half + pure `stamp_provenance` +
       `resolve_package_version`), the six-column `FileContract.PROVENANCE_COLUMNS` + `output_columns`
