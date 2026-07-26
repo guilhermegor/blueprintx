@@ -91,8 +91,8 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
 
 1. Replace `docs/assets/logo.png` with your own asset (keep the filename, or update the two
    `mkdocs.yml` paths and the `<img>` in `docs/index.md`).
-2. Tune size and placement in `docs/stylesheets/extra.css` — the `.hero-logo` rule: `max-width`
-   scales it, and the side margins (`margin: … auto` centers; `float` aligns left/right).
+2. Tune size, position and border inline on the `<img>` — `width="200"` (scale),
+   `align="right"` (position) and `style="border-radius: 15px;"` (rounded) — in `docs/index.md`.
 
 ## Repository protection & security (one-time, scripted)
 

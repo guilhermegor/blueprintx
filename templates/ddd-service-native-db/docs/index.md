@@ -1,6 +1,4 @@
-# **${PROJECT_DISPLAY_NAME}**
-
-<img src="assets/logo.png" alt="Project logo" class="hero-logo">
+# **${PROJECT_DISPLAY_NAME}** <img src="assets/logo.png" align="right" width="200" style="border-radius: 15px;" alt="${PROJECT_DISPLAY_NAME}">
 
 A Domain-Driven Design service with a hexagonal (ports-and-adapters) layout, using native database drivers for fine-grained control over queries and connections.
 

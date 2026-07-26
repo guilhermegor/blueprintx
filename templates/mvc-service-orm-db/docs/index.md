@@ -1,6 +1,4 @@
-# **${PROJECT_DISPLAY_NAME}**
-
-<img src="assets/logo.png" alt="Project logo" class="hero-logo">
+# **${PROJECT_DISPLAY_NAME}** <img src="assets/logo.png" align="right" width="200" style="border-radius: 15px;" alt="${PROJECT_DISPLAY_NAME}">
 
 A layered MVC service (Model–View–Controller) using the SQLAlchemy ORM. The controller orchestrates a pandas-driven pipeline: read via the model, render via the view.
 
