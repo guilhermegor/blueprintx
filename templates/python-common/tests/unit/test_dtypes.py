@@ -1,6 +1,7 @@
 """Unit tests for the explicit DataFrame typing helper."""
 
 from datetime import date
+from decimal import Decimal
 
 import pandas as pd
 import pytest
@@ -79,3 +80,80 @@ def test_apply_dtypes_does_not_mutate_input_frame() -> None:
 	df_input = _make_frame()
 	apply_dtypes(df_input, dict_dtypes={"code": "str"})
 	assert df_input["code"].tolist() == [1, 2]
+
+
+# --------------------------
+# Exact decimals (list_decimal_cols)
+# --------------------------
+def test_decimal_cols_convert_text_exactly() -> None:
+	"""A numeric string becomes a Decimal without passing through a binary float.
+
+	``float("1984223115.42")`` is ``1984223115.4200000762939453125``; the assertion is exact
+	equality precisely because that near-miss is the whole failure mode.
+	"""
+	df_input = pd.DataFrame({"vlm": ["1984223115.42", "0.01"]})
+
+	df_typed = apply_dtypes(df_input, list_decimal_cols=["vlm"])
+
+	assert df_typed["vlm"].iloc[0] == Decimal("1984223115.42")
+	assert df_typed["vlm"].iloc[1] == Decimal("0.01")
+
+
+def test_decimal_cols_preserve_the_source_scale() -> None:
+	"""Trailing zeros survive: the source's own scale is the scale, unrounded and unpadded.
+
+	No precision is *chosen* at ingestion. How many decimals a value carries is information
+	the source published, and quantising here would discard evidence a warehouse may need.
+	"""
+	df_input = pd.DataFrame({"price": ["1.50", "1.5000", "2"]})
+
+	df_typed = apply_dtypes(df_input, list_decimal_cols=["price"])
+
+	assert str(df_typed["price"].iloc[0]) == "1.50"
+	assert str(df_typed["price"].iloc[1]) == "1.5000"
+	assert str(df_typed["price"].iloc[2]) == "2"
+
+
+def test_decimal_cols_sum_exactly() -> None:
+	"""Aggregating stays exact — this is what a warehouse does to these columns."""
+	df_input = pd.DataFrame({"vlm": ["0.10", "0.20", "0.30"]})
+
+	df_typed = apply_dtypes(df_input, list_decimal_cols=["vlm"])
+
+	assert sum(df_typed["vlm"]) == Decimal("0.60")
+	# Pinned for contrast — the same arithmetic in binary floats misses 0.60 entirely.
+	assert 0.10 + 0.20 + 0.30 != 0.60
+
+
+def test_decimal_cols_refuse_a_binary_float() -> None:
+	"""Converting a float would launder a lossy value into a type advertising exactness.
+
+	By the time a ``float`` exists the source's exact value is already gone, so silently
+	wrapping it in ``Decimal`` yields a column that *claims* precision it does not have —
+	worse than the float, because nothing downstream would question it. The fix belongs at
+	the parse boundary, and the error message says so.
+	"""
+	df_input = pd.DataFrame({"vlm": [1984223115.42]})
+
+	with pytest.raises(ValueError, match="parse_float=Decimal"):
+		apply_dtypes(df_input, list_decimal_cols=["vlm"])
+
+
+@pytest.mark.parametrize("value_missing", [None, "", float("nan")])
+def test_decimal_cols_keep_missing_values_missing(value_missing: object) -> None:
+	"""A blank source field becomes NA, never ``Decimal("0")``.
+
+	``float("nan")`` is here deliberately: NaN *is* a float and is pandas' missing marker in
+	any numeric column, so it must be recognised as missing **before** the float rejection —
+	otherwise every blank cell in such a column would raise.
+
+	Parameters
+	----------
+	value_missing : object
+		A representation of an absent source value.
+	"""
+	df_input = pd.DataFrame({"vlm": [value_missing]})
+
+	df_typed = apply_dtypes(df_input, list_decimal_cols=["vlm"])
+
+	assert df_typed["vlm"].iloc[0] is pd.NA
