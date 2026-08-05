@@ -40,15 +40,10 @@ validate_inputs() {
 }
 
 format_display_name() {
-    local raw="$1"
-    local part formatted=""
-    raw=${raw//[-_]/ }
-    for part in $raw; do
-        part=${part,,}
-        part=${part^}
-        formatted+="${formatted:+ }${part}"
-    done
-    echo "$formatted"
+    # Identity: the docs/README title IS the distribution name (lowercase,
+    # hyphenated), mirroring filings-cvm/filings-b3 — not a title-cased variant.
+    # Set PROJECT_DISPLAY_NAME explicitly before scaffolding to override.
+    echo "$1"
 }
 
 resolve_github_username() {
@@ -260,12 +255,10 @@ copy_mkdocs_templates() {
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/api/reference.md" \
         "$project_path/docs/api/reference.md"
     # Placeholder brand image (header logo/favicon + landing hero) + its tunable CSS.
-    # Swap docs/assets/logo.png for a real asset; size/placement live in extra.css.
-    mkdir -p "$project_path/docs/assets" "$project_path/docs/stylesheets"
+    # Swap docs/assets/logo.png for a real asset; size/position/border are inline on the <img>.
+    mkdir -p "$project_path/docs/assets"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
         "$project_path/docs/assets/logo.png"
-    cp "$COMMON_TEMPLATE_ROOT/docs/stylesheets/extra.css" \
-        "$project_path/docs/stylesheets/extra.css"
     # Standard doc sections shared across all service tiers — single-sourced from
     # python-common/docs so every tier stays in sync.
     local doc

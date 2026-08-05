@@ -41,5 +41,5 @@ The API reference is a **directory** (`docs/api/` — `index.md` overview + `ref
 never a single `api.md`: it grows once per shipped unit, and splitting it later rots every
 published deep link. Group new API pages by the codebase's own top-level split. Brand assets
 live in `docs/assets/` (placeholder `logo.png`, wired as `theme.logo`/`favicon` + the
-landing hero) with tunable size/placement in `docs/stylesheets/extra.css` — swap the file,
-tune the `.hero-logo` rule.
+landing image), with size/position/border tuned inline on the `<img>` (`width` / `align` /
+`style="border-radius"`) in `docs/index.md` and `README.md`.

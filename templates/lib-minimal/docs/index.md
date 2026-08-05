@@ -1,6 +1,4 @@
-# **${PROJECT_DISPLAY_NAME}**
-
-<img src="assets/logo.png" alt="Project logo" class="hero-logo">
+# **${PROJECT_DISPLAY_NAME}** <img src="assets/logo.png" align="right" width="200" style="border-radius: 15px;" alt="${PROJECT_DISPLAY_NAME}">
 
 A minimal Python library with packaging, tests, CI, and linting pre-configured.
 
