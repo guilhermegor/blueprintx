@@ -62,9 +62,21 @@ spot checks. Stage 2 found one more real gap (#119) and corrected five false ala
 
 - **#129 reviewer topology = option (a).** CodeRabbit replaces Copilot code review; drop
   `copilot_code_review` from the #53 ruleset. CodeQL stays (SAST, not a reviewer).
+  > ⚠️ **SCOPE SUPERSEDED 2026-08-09 — see `lessons-audit-wave-2_20260809_143000.md`.** This
+  > decision still holds *as far as it goes*, but #129 was **re-scoped and retitled** from
+  > "scaffold `.coderabbit.yaml`" to **the provider-agnostic PR-gate reviewer/scanner
+  > topology**: CodeRabbit (review threads) **plus GitGuardian (secrets check)**, both wired
+  > through the same roster seam per #145. Do not build the CodeRabbit-only version from this
+  > paragraph.
 - **`.coderabbit.yaml` ships to online AND offline.** "Offline" here means *no GitHub
   remote*, not *no internet*; the CodeRabbit **CLI** reviews local git changes with no PR.
   ⚠️ Unverified: the docs never state the CLI reads the file (`/cli/configuration` 404s).
+  > ⚠️ **STILL UNVERIFIED as of 2026-08-09**, and now known to be **load-bearing for the offline
+  > tier only on the CodeRabbit side**. Measured since: BlueprintX itself runs CodeRabbit with
+  > **no `.coderabbit.yaml` at all** (app defaults) — what makes its threads binding is the
+  > ruleset's `required_review_thread_resolution`, not a config file. GitGuardian's `ggshield`
+  > *is* a documented local CLI, so the offline story is stronger there; evaluate on merits,
+  > never by analogy (#155).
 - **#130 corrected the premise.** `docs/architecture.md` already ships in all 4 service
   tiers and is in nav — the defect is that it is absent from `_DEFAULT_REQUIRED_PAGES`
   and **no tier ships the `.docs-skeleton.yaml`** the gate's own comment names as the way
