@@ -1,4 +1,4 @@
-# Lessons-audit wave 2 — issues #143–#153
+# Lessons-audit wave 2 — issues #143–#153, #155
 
 Created 2026-08-09. Second pass over the lessons corpus, scoped to everything written or
 amended **after** the first wave (`lessons-audit-wave_20260805_083429.md`, issues #113–#130).
@@ -7,16 +7,47 @@ amended **after** the first wave (`lessons-audit-wave_20260805_083429.md`, issue
 
 | Source | Size | Method |
 |---|---|---|
-| `~/.claude/memory/lessons/` | 212 files (was 193) | `find -newermt 2026-08-05` → 32 touched files |
+| `~/.claude/memory/lessons/` | 212 files (was 193) | `find ~/.claude/memory/lessons -type f -name '*.md' ! -name README.md -newermt '2026-08-05 08:34:29'` (local `-03`) → **31** touched lessons |
 | Existing issues | 60 (open + closed) | every lesson slug matched against every issue title+body |
 | `templates/` tree | — | substance probe on each candidate before filing |
+
+The cutoff is the **wave-1 record's own mtime** (`08:34:29 -03`), not midnight. That distinction
+is load-bearing: a midnight cutoff returns **32**, one of which —
+`pip-fallback-needs-offline-wheelhouse.md` (06:38:28, i.e. *before* wave 1 finished) — was
+already filed as **#127** in that wave. Stating the loose cutoff would have implied a 32nd
+uncovered lesson that does not exist.
 
 The first wave's two-stage audit (slug diff, then `Scaffold into:` target resolution) was
 re-validated and holds — **no gap was found in the pre-2026-08-05 corpus**. A naive slug scan
 reports 126 "untraced" lessons, but that is an artefact: the pre-wave issues were filed by
 **title**, not slug. Every one spot-checked resolved to a closed or open issue.
 
-The new issues therefore all trace to lessons captured in the **four days** since.
+### Counting rule (so this record can be audited, not just read)
+
+**12 issues** were opened: **#143–#152 (10) trace to lessons** in the 31-lesson cohort above.
+**#153 and #155 do not** — both came from questions asked during the session (secret scanning,
+then GitGuardian specifically), and both sit in their own section below, marked as such. `#154`
+is not an issue; it is the PR that lands this record.
+
+**21 lesson slugs** are covered by those 10 issues — issues and lessons are **not** 1:1 by
+design, because grouping is by shipped surface (decision recorded below):
+
+| Issue | Lessons | | Issue | Lessons |
+|---|---|---|---|---|
+| #143 | 2 | | #148 | 1 |
+| #144 | 2 | | #149 | 2 |
+| #145 | 4 | | #150 | 1 |
+| #146 | 1 | | #151 | 1 |
+| #147 | 3 | | #152 | 4 |
+
+The remaining cohort lessons were already covered by wave 1 or earlier and are enumerated under
+*Already covered*.
+
+⚠️ The first draft of this section said "13", carried over from a loose in-session figure. The
+table above is the **re-measured** sum, not an incremented digit — the exact correction
+`docs-that-enumerate-code-need-a-gate` prescribes, and the reason a count in prose needs a table
+behind it. Both this and the cutoff above were caught by CodeRabbit on PR #154, not by the
+author.
 
 ## Three confirmed shipped defects (probed, not inferred)
 
@@ -46,9 +77,13 @@ The new issues therefore all trace to lessons captured in the **four days** sinc
 - [ ] **#151** `fix(templates)` — a documented graceful degradation needs a path from every failure (`mvc-*`)
 - [ ] **#152** `docs(templates)` — `tests/CLAUDE.md`: negative-control and proof discipline (4 lessons)
 
-### Security scanning (follow-up question, not from a lesson)
+### Security scanning (follow-up questions, not from a lesson)
 - [ ] **#153** `feat(python-common)` — `enable_security.sh`: add `secret_scanning` +
       `secret_scanning_push_protection`
+- [ ] **#155** `feat(templates)` — GitGuardian (`ggshield`) across BlueprintX CI + all scaffolded
+      tiers; token held **once** in BlueprintX's root `.env` and propagated per-repo as a secret
+      after `gh repo create`. ⚠️ Ships a root `.gitignore` `.env` rule **first** — the repo has
+      none today, so a root `.env` holding a live key would be committable
 
 ### Edits to existing issues
 - [x] **#119** commented — add `check_query_layout.py`, the enforcement half
@@ -66,7 +101,7 @@ The new issues therefore all trace to lessons captured in the **four days** sinc
   the harness rule reaches *this* machine while the leaf doc reaches every *generated project*.
   `prove-a-refactored-gate-still-fires` stays partly in #111.
 - **Grouping = one issue per shipped surface**, not one per lesson — 13 lessons → 10 issues.
-- **Starting column = Backlog** for all eleven, matching the #113–#130 wave (these are backports
+- **Starting column = Backlog** for all twelve, matching the #113–#130 wave (these are backports
   with real design work left, not pull-ready tasks).
 - **CodeRabbit + GitGuardian both live in #129**, as two participants in one *provider-agnostic*
   topology — CodeRabbit produces review threads, GitGuardian produces a secrets check. Pairing
