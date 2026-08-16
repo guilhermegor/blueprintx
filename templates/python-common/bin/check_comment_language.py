@@ -1,0 +1,526 @@
+r"""Keep comments and docstrings in English, while published documentation stays Portuguese.
+
+The root ``CLAUDE.md`` draws the boundary at *documentation for a reader* × *code*: ``README.md``
+and every page under ``docs/`` is Portuguese; docstrings, comments, symbol names, commit messages
+and CI output are English. Nothing enforced the code half, and it was breached twice in one
+session — first across seven ``.py`` files, then, after a sweep that grepped only ``.py``, across
+five ``src/config/*.yaml`` files carrying 55 Portuguese comment lines.
+
+Both breaches came from the same mechanism: the author read the comment *next to* the insertion
+point and took it as the convention. That is why a partial sweep is worse than none — it leaves a
+precedent that regenerates the violation. This gate is the part a sweep cannot be: repeatable, and
+blind to which file type the last violation happened to be in.
+
+Three design points:
+
+1. **It looks for Portuguese function words, not for accents.** Accent-hunting flags every
+   legitimate mention of ``Saídas``, ``Ativos Líquidos`` or a custodian's name; function words
+   (``que``, ``não``, ``para``, ``com``, ``dos``, …) appear only when a sentence is actually being
+   written in Portuguese. None of the listed words is also an English word.
+
+2. **Quoted and backticked spans are redacted before matching.** An English comment quoting an
+   e-mail subject or naming the ``saidas_zeradas`` block is correct and must pass. So are dotted
+   tokens (``email_dispatch.yaml``, ``utils.text``, ``bradesco.com.br``) — without that redaction,
+   ``\\bcom\\b`` matches inside every e-mail address in ``email_dispatch.yaml``.
+
+3. **A hit is a candidate, not a verdict.** ``lang:pt-ok`` anywhere on the line skips it, for the
+   case the redaction cannot reach. Mangling an English sentence to satisfy the regex would be
+   worse than the hit it silences.
+
+   ⚠️ The same restraint does **not** extend to ``TUPLE_TERMS_OF_ART``, which is empty on purpose.
+   An escape marker exempts one line a reader can see; a terms-of-art entry exempts a word
+   *everywhere, invisibly*. Whitelist only a term with no English equivalent — where a translation
+   exists, translate. ``de-para`` was the first entry and was removed by translating its 10 sites
+   to "mapping" (user decision, 2026-08-06).
+
+Known ceiling: only **full-line** comments are read for the ``#``/``--`` file types, so a trailing
+comment after a value is not checked. Reading those needs a per-format parser to tell a real
+comment from a ``#`` inside a quoted value, and the measured violations were all full-line.
+Python is exact regardless — it goes through ``tokenize`` and ``ast``.
+
+**Language-agnostic by construction.** ``SET_PT_WORDS`` names the language that must NOT appear
+in code; the language of ``docs/`` is never inspected, so a project whose documentation is
+English, Spanish or Portuguese all use this gate unchanged. To police a different locale, swap
+the word set — the redaction, block-joining and escape machinery are locale-independent.
+
+⚠️ **The calibration IS the deliverable, not a detail.** The first draft of this gate reported
+**19 findings, of which 18 were false**, and a gate that cries wolf gets switched off — at which
+point it protects nothing while still looking installed. Every rule below (function words not
+accents; redaction in a specific order; blocks not lines; length-preserving blanking) exists
+because a specific class of false positive was measured. Do not "simplify" one away without
+re-running ``tests/unit/test_comment_language_gate.py``, which pins each class by name.
+"""
+
+import ast
+import pathlib
+import re
+import sys
+import tokenize
+
+
+# Portuguese function words. Every entry was checked against English: none is also an English
+# word, so one hit is enough signal. Deliberately absent: "ver" and "dar", which collide with the
+# abbreviations "ver"(sion) and a Danish/Dutch reading, and every 1-2 letter word.
+SET_PT_WORDS = frozenset(
+	{
+		"ainda",
+		"antes",
+		"apenas",
+		"aqui",
+		"cada",
+		"com",
+		"das",
+		"depois",
+		"dos",
+		"então",
+		"entre",
+		"essa",
+		"esse",
+		"esta",
+		"está",
+		"estão",
+		"este",
+		"exige",
+		"faz",
+		"fica",
+		"foi",
+		"isso",
+		"isto",
+		"já",
+		"mais",
+		"menos",
+		"mesmo",
+		"muito",
+		"não",
+		"nunca",
+		"onde",
+		"para",
+		"pela",
+		"pelo",
+		"pode",
+		"pois",
+		"porque",
+		"precisa",
+		"quais",
+		"qual",
+		"quando",
+		"que",
+		"quem",
+		"seja",
+		"sem",
+		"ser",
+		"sobre",
+		"são",
+		"tem",
+		"têm",
+		"toda",
+		"todas",
+		"todo",
+		"todos",
+		"também",
+		"uma",
+		"vai",
+	}
+)
+
+STR_ESCAPE = "lang:pt-ok"
+
+# Portuguese terms of art that carry no English equivalent and are used *inside* English prose,
+# exactly as `CNPJ` and `informe diário` are. Redacted whole, before word matching.
+#
+# ⚠️ **Deliberately EMPTY, and that is the stricter setting.** `de-para` lived here first — it is
+# the mapping/lookup table this project named that way, and splitting it on the hyphen made seven
+# English docstrings read as Portuguese. The user chose to translate it to "mapping" instead
+# (2026-08-06, 10 sites), so the exemption came out with it. Whitelisting is the fallback for a
+# term with no English equivalent; where a translation exists, translating is what keeps the gate
+# honest, because every entry here is a word the gate stops seeing anywhere.
+#
+# Nothing else needs an entry today. `CNPJ`, `Ativos Líquidos` and `informe diário` already pass —
+# the first through the ALL-CAPS acronym rule, the other two because they are not function words.
+TUPLE_TERMS_OF_ART: tuple = ()
+
+# File types whose full-line comments are read, by comment marker.
+DICT_MARKERS = {
+	".cfg": "#",
+	".env": "#",
+	".example": "#",
+	".ini": "#",
+	".sh": "#",
+	".sql": "--",
+	".toml": "#",
+	".yaml": "#",
+	".yml": "#",
+}
+
+# Scanned when the gate is invoked with no filenames (a full-repo audit).
+TUPLE_AUDIT_GLOBS = (
+	"src/**/*.py",
+	"src/**/*.yaml",
+	"src/**/*.yml",
+	"src/**/*.sql",
+	"bin/**/*.py",
+	"bin/**/*.sh",
+	"tests/**/*.py",
+	".env.example",
+)
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# Redacted before matching, in this order: backticked spans, quoted spans, URLs, dotted tokens,
+# ALL-CAPS acronyms. The acronym rule is what stops Microsoft `COM` from reading as the
+# Portuguese preposition "com" — five hits across the Outlook gateway alone.
+_TUPLE_REDACTIONS = (
+	re.compile(r"``[^`]+``"),
+	re.compile(r"`[^`]*`"),
+	re.compile(r"\"[^\"]*\""),
+	re.compile(r"'[^']*'"),
+	re.compile(r"https?://\S+"),
+	re.compile(r"\S+\.\S+"),
+	re.compile(r"\b[A-ZÀ-Ý0-9]{2,}\b"),
+)
+
+_RE_WORD = re.compile(r"[0-9A-Za-zÀ-ÿ_]+")
+
+
+def _blank(cls_match: re.Match) -> str:
+	"""Return as many spaces as the match consumed.
+
+	Parameters
+	----------
+	cls_match : re.Match
+		The span being redacted.
+
+	Returns
+	-------
+	str
+		A run of spaces the same length as the match, so line and column offsets survive.
+	"""
+	return " " * len(cls_match.group(0))
+
+
+def redact(str_text: str) -> str:
+	"""Blank out every span whose language is not the comment's own, preserving text geometry.
+
+	Each substitution writes back **as many spaces as it removed**, so the result stays aligned
+	with the input line for line and column for column. That is what lets a finding name the line
+	the offending word is really on, rather than the line the comment block happens to start at.
+
+	Parameters
+	----------
+	str_text : str
+		A comment block, markers already stripped.
+
+	Returns
+	-------
+	str
+		The same text with escaped lines, terms of art, quoted/backticked spans, URLs, dotted
+		tokens and ALL-CAPS acronyms replaced by spaces.
+	"""
+	# The escape works one line at a time and never per block, because a block is joined from
+	# consecutive comment lines — letting one escaped line silence its neighbours would quietly
+	# exempt whole headers.
+	list_lines = [
+		" " * len(str_line) if STR_ESCAPE in str_line else str_line
+		for str_line in str_text.splitlines()
+	]
+	str_clean = "\n".join(list_lines)
+	for str_term in TUPLE_TERMS_OF_ART:
+		str_clean = re.sub(re.escape(str_term), _blank, str_clean, flags=re.IGNORECASE)
+	for re_span in _TUPLE_REDACTIONS:
+		str_clean = re_span.sub(_blank, str_clean)
+	return str_clean
+
+
+def portuguese_words(str_text: str) -> list:
+	"""Return the Portuguese function words a comment carries, once redaction has run.
+
+	Parameters
+	----------
+	str_text : str
+		One comment block's text, markers already stripped.
+
+	Returns
+	-------
+	list of str
+		The matched words in order of appearance, de-duplicated; empty when the text reads as
+		English, quotes its Portuguese, or carries the escape marker.
+	"""
+	list_hits = []
+	for str_word in _RE_WORD.findall(redact(str_text).lower()):
+		if str_word in SET_PT_WORDS and str_word not in list_hits:
+			list_hits.append(str_word)
+	return list_hits
+
+
+def marker_comments(str_source: str, str_marker: str) -> list:
+	"""Return the comment BLOCKS of a marker-delimited file.
+
+	Only lines whose first non-space characters are the marker count, so a marker appearing
+	inside a quoted value is never mistaken for a comment.
+
+	⚠️ **Consecutive comment lines are joined into one block, and that is load-bearing** — a
+	sentence, and above all a *quotation*, routinely spans several comment lines. Redacting line
+	by line sees an opening quote with no closing one, so the quoted span survives redaction and
+	the quotation's own language is charged to the comment around it. Measured: the verbatim
+	user decision quoted across two lines in ``view/recon_email_body.py`` was reported as a
+	violation, which it is not.
+
+	Parameters
+	----------
+	str_source : str
+		The file's text.
+	str_marker : str
+		The comment marker (``#`` or ``--``).
+
+	Returns
+	-------
+	list of tuple
+		One ``(int_line, str_text)`` pair per block, the line being where the block starts.
+	"""
+	list_out = []
+	list_block: list = []
+	int_start = 0
+	for int_line, str_line in enumerate(str_source.splitlines(), 1):
+		str_stripped = str_line.lstrip()
+		if str_stripped.startswith(str_marker):
+			if not list_block:
+				int_start = int_line
+			list_block.append(str_stripped[len(str_marker) :])
+			continue
+		if list_block:
+			list_out.append((int_start, "\n".join(list_block)))
+			list_block = []
+	if list_block:
+		list_out.append((int_start, "\n".join(list_block)))
+	return list_out
+
+
+def python_comments(str_source: str) -> list:
+	"""Return a Python file's comments and docstrings.
+
+	``tokenize`` is what makes this exact — a ``#`` inside a string literal is a string, not a
+	comment, and only the tokenizer knows the difference. Docstrings come from ``ast`` for the
+	same reason: they are the other place English prose lives in a module.
+
+	Parameters
+	----------
+	str_source : str
+		The file's text.
+
+	Returns
+	-------
+	list of tuple
+		One ``(int_line, str_text)`` pair per comment and per docstring, 1-indexed. A file that
+		does not parse yields nothing — a syntax error is ruff's finding to report, not this
+		gate's.
+	"""
+	list_out = []
+	list_block: list = []
+	int_start = 0
+	int_previous = -2
+	try:
+		for cls_token in tokenize.generate_tokens(iter(str_source.splitlines(True)).__next__):
+			if cls_token.type != tokenize.COMMENT:
+				continue
+			int_line = cls_token.start[0]
+			if int_line != int_previous + 1 and list_block:
+				list_out.append((int_start, "\n".join(list_block)))
+				list_block = []
+			if not list_block:
+				int_start = int_line
+			list_block.append(cls_token.string.lstrip("#"))
+			int_previous = int_line
+	except (tokenize.TokenError, IndentationError, SyntaxError):
+		return []
+	if list_block:
+		list_out.append((int_start, "\n".join(list_block)))
+	try:
+		cls_tree = ast.parse(str_source)
+	except SyntaxError:
+		return list_out
+	tuple_holders = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+	for cls_node in ast.walk(cls_tree):
+		if not isinstance(cls_node, tuple_holders):
+			continue
+		str_doc = ast.get_docstring(cls_node, clean=False)
+		if str_doc:
+			list_out.append((cls_node.body[0].lineno, str_doc))
+	return list_out
+
+
+def _line_offset(str_text: str, str_word: str) -> int:
+	"""Return how many lines into a block the first occurrence of a word sits.
+
+	Parameters
+	----------
+	str_text : str
+		The whole comment block.
+	str_word : str
+		The matched word.
+
+	Returns
+	-------
+	int
+		The 0-based line offset, found in the **redacted** block so a quoted occurrence earlier in
+		the block cannot win the race against the real one. 0 when it cannot be located.
+	"""
+	re_word = re.compile(rf"\b{re.escape(str_word)}\b", re.IGNORECASE)
+	for int_offset, str_line in enumerate(redact(str_text).splitlines()):
+		if re_word.search(str_line):
+			return int_offset
+	return 0
+
+
+def _excerpt_around(str_text: str, str_word: str) -> str:
+	"""Return the offending word in its immediate context.
+
+	A block can be forty lines long, so quoting its opening is useless — the reader needs the
+	sentence the word is actually in.
+
+	Parameters
+	----------
+	str_text : str
+		The whole comment block.
+	str_word : str
+		The first matched word.
+
+	Returns
+	-------
+	str
+		Up to ~35 characters either side of the match, whitespace collapsed.
+	"""
+	str_flat = " ".join(str_text.split())
+	int_at = str_flat.lower().find(str_word)
+	if int_at < 0:
+		return str_flat[:80]
+	int_from = max(0, int_at - 35)
+	str_slice = str_flat[int_from : int_at + len(str_word) + 35]
+	return f"…{str_slice}…" if int_from else f"{str_slice}…"
+
+
+def _display_path(path_file: pathlib.Path) -> str:
+	"""Return the shortest readable form of a path for a message.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The file being reported.
+
+	Returns
+	-------
+	str
+		Repo-relative when the file lives inside the repository, absolute otherwise. A file
+		outside the repo is legitimate (a test invoking the gate on a temp file), so this must
+		never raise.
+	"""
+	try:
+		return str(path_file.relative_to(_ROOT))
+	except ValueError:
+		return str(path_file)
+
+
+def file_problems(path_file: pathlib.Path) -> list:
+	"""Return the Portuguese comment lines of one file.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The file to read. An unsupported extension yields nothing.
+
+	Returns
+	-------
+	list of str
+		One ``path:line: words -- text`` message per offending comment.
+	"""
+	bool_python = path_file.suffix == ".py"
+	str_marker = DICT_MARKERS.get(path_file.suffix, "")
+	if not bool_python and not str_marker:
+		return []
+	try:
+		str_source = path_file.read_text(encoding="utf-8")
+	except (OSError, UnicodeDecodeError):
+		return []
+	list_comments = (
+		python_comments(str_source) if bool_python else marker_comments(str_source, str_marker)
+	)
+	list_out = []
+	for int_line, str_text in list_comments:
+		list_hits = portuguese_words(str_text)
+		if list_hits:
+			int_at = int_line + _line_offset(str_text, list_hits[0])
+			list_out.append(
+				f"❌ {_display_path(path_file)}:{int_at}: reads as Portuguese "
+				f"[{', '.join(list_hits)}] -- {_excerpt_around(str_text, list_hits[0])}"
+			)
+	return list_out
+
+
+def audit_paths() -> list:
+	"""Return the files scanned when no filenames are passed.
+
+	Returns
+	-------
+	list of pathlib.Path
+		Every file matching the audit globs, sorted and de-duplicated.
+	"""
+	set_paths: set = set()
+	for str_glob in TUPLE_AUDIT_GLOBS:
+		set_paths.update(path for path in _ROOT.glob(str_glob) if path.is_file())
+	return sorted(set_paths)
+
+
+def main(list_argv: list) -> int:
+	"""Check every named file's comments for Portuguese prose.
+
+	Parameters
+	----------
+	list_argv : list of str
+		Filenames, as pre-commit passes them. Empty means audit the whole repository.
+
+	Returns
+	-------
+	int
+		0 when every comment reads as English, 1 on a violation.
+	"""
+	bool_audit = not list_argv
+	list_paths = (
+		[pathlib.Path(str_name).resolve() for str_name in list_argv]
+		if list_argv
+		else audit_paths()
+	)
+
+	# ⚠️ In audit mode, ZERO discovered files is a failure, not a pass. Scanning nothing
+	# produces no findings, so a gate whose globs stopped matching — a renamed layout, a
+	# scaffold that puts sources elsewhere — reports success forever, and is green precisely
+	# because it checks nothing. Named files (pre-commit's mode) are exempt: pre-commit
+	# legitimately passes an empty list when no matching file is staged.
+	if bool_audit and not list_paths:
+		print(
+			f"❌ no files matched {len(TUPLE_AUDIT_GLOBS)} audit glob(s) under {_ROOT} — "
+			f"this gate would pass vacuously. Fix TUPLE_AUDIT_GLOBS to match the layout."
+		)
+		return 1
+
+	list_problems = []
+	for path_file in list_paths:
+		list_problems.extend(file_problems(path_file))
+	for str_problem in list_problems:
+		print(str_problem)
+
+	if not list_problems:
+		# Report the FILE COUNT on success, not just silence. A gate that prints nothing when
+		# clean is indistinguishable from a gate that did not run — and this whole file exists
+		# because an unenforced convention looked identical to an enforced one.
+		print(f"✅ documentation-language boundary OK ({len(list_paths)} file(s) checked)")
+	if list_problems:
+		print(
+			f"\n{len(list_problems)} comment(s) read as Portuguese. Comments, docstrings and "
+			f"symbol names are English (root CLAUDE.md, 'Documentation language'); README.md and "
+			f"docs/ are Portuguese. If a flagged line is genuinely English and merely quotes "
+			f"Portuguese text, add {STR_ESCAPE} to it rather than rewording the sentence."
+		)
+	return 1 if list_problems else 0
+
+
+if __name__ == "__main__":
+	sys.exit(main(sys.argv[1:]))

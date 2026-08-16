@@ -478,6 +478,8 @@ copy_common_templates() {
         "$project_path/tests/unit/test_backlog_ledger.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
         "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
+        "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
         "$project_path/tests/unit/test_review_threads_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \

@@ -115,17 +115,32 @@ das 5 tiers. Também documenta um buraco honesto: o `lib-minimal` vendoriza os u
       estruturalmente em vez de depender de onde a linha quebra; varredura confirmou 0 em todo
       `docs/backlog/`.
 
-## PR B — idioma (grupo 2)
+## PR B — idioma (grupo 2) — ✅ ENTREGUE
 
-- [ ] **#141** — `bin/check_comment_language.py` (existe em `recon_al_cvm`, ausente dos templates)
-      - [ ] **a calibração É a entrega** — 1º rascunho deu 19 achados, 18 falsos
-      - [ ] casar **palavras funcionais** do idioma, nunca acento
-      - [ ] redigir antes de casar, nesta ordem: spans de crase dupla → crase simples → aspas →
-            URLs → tokens pontuados → siglas em CAIXA ALTA (inclusive acentuadas) → termos de arte
-      - [ ] 🔴 ler comentários como **blocos**, não linhas (citação atravessa linhas)
-      - [ ] redação **preserva comprimento** (N espaços) para o achado nomear a linha certa
-      - [ ] `.py` exato via `tokenize` + `ast.get_docstring`; `#`/`--` só linha-cheia nos demais
-      - [ ] escape hatch por **linha** (`lang:pt-ok`), nunca por bloco
+Branch `feat/docs-language-gate-141`, empilhada sobre a PR A. Verificado nas **5 tiers**.
+
+- [x] **#141** — `bin/check_comment_language.py` **portado** de `recon_al_cvm` (494 linhas, já
+      calibrado em campo) em vez de reescrito. A escada: reusar o que existe e funciona.
+      - [x] a calibração veio junta e foi **provada por mutação**: remover a redação de sigla,
+            a de token pontuado, a preservação de comprimento ou o escopo-por-linha do escape
+            faz **exatamente 1** teste falhar. Nenhuma das 4 regras é decorativa.
+      - [x] 18 testes nomeados por classe de falso positivo em
+            `tests/unit/test_comment_language_gate.py`
+      - [x] controle positivo + negativo: pega português real (2 achados, linha certa) e passa
+            nos 6 falsos positivos medidos (rótulos acentuados, `COM` da Microsoft, `emails.yaml`,
+            `bradesco.com.br`, URL com `/para/que/nao`, citação atravessando 2 linhas)
+      - [x] **os templates já passam**: 129 arquivos varridos nas 6 pastas, 0 achados — o gate
+            entra verde, não com uma dívida a pagar
+      - [x] duas melhorias sobre o original, ambas lições desta sessão: **falha quando a
+            descoberta casa zero arquivos** (senão passa vaziamente para sempre) e **imprime a
+            contagem no sucesso** (gate silencioso é indistinguível de gate ausente — medido:
+            118 arquivos no mvc, 142 no ddd-native, 78 no lib-minimal)
+      - [x] ligado nas 4 superfícies: hook, `make lint`, `tasks.sh lint`, step de CI
+      - [x] adicionado às 5 copy-lists — e o gate `check_test_copy_lists.py` da PR A **provou**
+            (26 → 27 testes compartilhados, todos alcançáveis)
+
+Contagem por tier após a B: mvc-native **256**, mvc-orm **256**, ddd-native **251**,
+ddd-orm **251**, lib-minimal **89** — todas +18, e 30 de integração em cada.
 
 ## PR C — núcleo de ingestão (grupo 3)
 
