@@ -2,7 +2,12 @@ r"""Keep comments and docstrings in English, while published documentation stays
 
 The root ``CLAUDE.md`` draws the boundary at *documentation for a reader* × *code*: ``README.md``
 and every page under ``docs/`` is Portuguese; docstrings, comments, symbol names, commit messages
-and CI output are English. Nothing enforced the code half, and it was breached twice in one
+and CI output are English.
+
+⚠️ **This gate enforces only the first two of those** — comments and docstrings. Symbol names,
+commit messages and CI output share the convention but are checked by nothing here, so do not
+read a green run as covering them. Nothing enforced the code half at all, and it was breached
+twice in one
 session — first across seven ``.py`` files, then, after a sweep that grepped only ``.py``, across
 five ``src/config/*.yaml`` files carrying 55 Portuguese comment lines.
 
@@ -152,24 +157,44 @@ DICT_MARKERS = {
 	".yml": "#",
 }
 
-# Scanned when the gate is invoked with no filenames (a full-repo audit).
-TUPLE_AUDIT_GLOBS = (
-	"src/**/*.py",
-	"src/**/*.yaml",
-	"src/**/*.yml",
-	"src/**/*.sql",
-	"bin/**/*.py",
-	"bin/**/*.sh",
-	"tests/**/*.py",
-	".env.example",
+# Audit mode is DENY-BY-DEFAULT: every file whose extension appears in DICT_MARKERS (plus
+# `.py`) is scanned, and only the directories below are skipped.
+#
+# ⚠️ It used to be an allow-list of globs (`src/**/*.py`, `bin/**/*.sh`, …) and that was wrong in
+# the one way this gate least affords: it left **57** supported files unaudited in this very
+# template — `.pre-commit-config.yaml`, `.github/workflows/*.yaml`, `mypy.ini`, the
+# `docker-compose.*.yml` files, and all of `optional/` (app code that ships into projects).
+# Worse, the pre-commit hook DOES check those when staged, so hook and CI disagreed: a comment
+# could pass CI and fail someone's commit later. A gate written against "a partial sweep leaves
+# a precedent" must not itself be a partial sweep.
+#
+# An allow-list also fails silently on every future addition — a new top-level directory is
+# simply never scanned, and nothing says so.
+TUPLE_SKIP_DIRS = (
+	".git",
+	".venv",
+	".mypy_cache",
+	".pytest_cache",
+	".ruff_cache",
+	"__pycache__",
+	"node_modules",
+	"htmlcov",
+	"dist",
+	"build",
+	"site",
+	# The published documentation is written in the project's locale ON PURPOSE — that is the
+	# other half of the boundary this gate enforces, so it must never be scanned.
+	"docs",
+	# Verbatim external bytes; normalising or judging a captured oracle corrupts its purpose.
+	"fixtures",
 )
 
-_ROOT = pathlib.Path(__file__).resolve().parent.parent
+PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # Redacted before matching, in this order: backticked spans, quoted spans, URLs, dotted tokens,
 # ALL-CAPS acronyms. The acronym rule is what stops Microsoft `COM` from reading as the
 # Portuguese preposition "com" — five hits across the Outlook gateway alone.
-_TUPLE_REDACTIONS = (
+TUPLE_REDACTIONS = (
 	re.compile(r"``[^`]+``"),
 	re.compile(r"`[^`]*`"),
 	re.compile(r"\"[^\"]*\""),
@@ -179,7 +204,7 @@ _TUPLE_REDACTIONS = (
 	re.compile(r"\b[A-ZÀ-Ý0-9]{2,}\b"),
 )
 
-_RE_WORD = re.compile(r"[0-9A-Za-zÀ-ÿ_]+")
+RE_WORD = re.compile(r"[0-9A-Za-zÀ-ÿ_]+")
 
 
 def _blank(cls_match: re.Match) -> str:
@@ -226,7 +251,7 @@ def redact(str_text: str) -> str:
 	str_clean = "\n".join(list_lines)
 	for str_term in TUPLE_TERMS_OF_ART:
 		str_clean = re.sub(re.escape(str_term), _blank, str_clean, flags=re.IGNORECASE)
-	for re_span in _TUPLE_REDACTIONS:
+	for re_span in TUPLE_REDACTIONS:
 		str_clean = re_span.sub(_blank, str_clean)
 	return str_clean
 
@@ -246,7 +271,7 @@ def portuguese_words(str_text: str) -> list:
 		English, quotes its Portuguese, or carries the escape marker.
 	"""
 	list_hits = []
-	for str_word in _RE_WORD.findall(redact(str_text).lower()):
+	for str_word in RE_WORD.findall(redact(str_text).lower()):
 		if str_word in SET_PT_WORDS and str_word not in list_hits:
 			list_hits.append(str_word)
 	return list_hits
@@ -414,7 +439,7 @@ def _display_path(path_file: pathlib.Path) -> str:
 		never raise.
 	"""
 	try:
-		return str(path_file.relative_to(_ROOT))
+		return str(path_file.relative_to(PATH_ROOT))
 	except ValueError:
 		return str(path_file)
 
@@ -461,12 +486,19 @@ def audit_paths() -> list:
 	Returns
 	-------
 	list of pathlib.Path
-		Every file matching the audit globs, sorted and de-duplicated.
+		Every file carrying a supported extension, minus the skipped directories, sorted.
 	"""
-	set_paths: set = set()
-	for str_glob in TUPLE_AUDIT_GLOBS:
-		set_paths.update(path for path in _ROOT.glob(str_glob) if path.is_file())
-	return sorted(set_paths)
+	set_supported = set(DICT_MARKERS) | {".py"}
+	list_paths = []
+	for path_file in PATH_ROOT.rglob("*"):
+		if path_file.suffix not in set_supported or not path_file.is_file():
+			continue
+		if any(str_part in TUPLE_SKIP_DIRS for str_part in path_file.parts):
+			continue
+		list_paths.append(path_file)
+	# `.env.example` carries `#` comments but its suffix is `.example`, already in DICT_MARKERS,
+	# so it is picked up by the walk above with no special case.
+	return sorted(set(list_paths))
 
 
 def main(list_argv: list) -> int:
@@ -492,12 +524,12 @@ def main(list_argv: list) -> int:
 	# ⚠️ In audit mode, ZERO discovered files is a failure, not a pass. Scanning nothing
 	# produces no findings, so a gate whose globs stopped matching — a renamed layout, a
 	# scaffold that puts sources elsewhere — reports success forever, and is green precisely
-	# because it checks nothing. Named files (pre-commit's mode) are exempt: pre-commit
-	# legitimately passes an empty list when no matching file is staged.
+	# because it checks nothing. When filenames are passed in, the hook is driving, and receiving
+	# none of them simply means nothing matching was staged — so there is nothing to check.
 	if bool_audit and not list_paths:
 		print(
-			f"❌ no files matched {len(TUPLE_AUDIT_GLOBS)} audit glob(s) under {_ROOT} — "
-			f"this gate would pass vacuously. Fix TUPLE_AUDIT_GLOBS to match the layout."
+			f"❌ no supported file found under {PATH_ROOT} — this gate would pass vacuously. "
+			f"Check DICT_MARKERS and TUPLE_SKIP_DIRS against the layout."
 		)
 		return 1
 

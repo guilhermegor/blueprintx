@@ -90,8 +90,10 @@ de integração de cada tier viajavam sem nunca rodar. Agora rodam.
 
 **Segundo extra — `bin/ci/check_test_copy_lists.py`.** A copy-list de testes é mantida à mão
 em cada um dos 5 scaffolds, e um teste esquecido lá é escrito, commitado e **nunca roda em
-projeto nenhum**. 🔴 O único tell é a **contagem** de testes, nunca a cor: 234 → 234 depois de
-somar 18 testes é indistinguível de 234 → 252, e ninguém lê o número. Na primeira execução o
+projeto nenhum**. 🔴 O único tell é a **contagem** de testes, nunca a cor. Os números
+234 e 252 são obviamente diferentes — o problema é que **nada compara o resultado com o
+esperado**: uma rodada que soma 18 testes e continua mostrando 234 fica exatamente tão verde
+quanto a que mostra 252, e ninguém confere o número contra a expectativa. Por isso vira gate. Na primeira execução o
 gate achou `test_startup_fragility_order.py` — o guarda do próprio fix da **#160** — ausente
 das 5 tiers. Também documenta um buraco honesto: o `lib-minimal` vendoriza os utils sob
 `_internal/` e por isso **não recebe os testes deles** (precisaria do mesmo

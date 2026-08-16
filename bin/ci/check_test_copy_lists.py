@@ -42,6 +42,13 @@ DICT_EXPECTED_ABSENT = {
         "test_contract_oracle_example.py": "lib-minimal ships no contract oracle registry",
         # startup.py is a service-tier singleton; a library has no import-time bootstrap.
         "test_startup_fragility_order.py": "lib-minimal ships no src/config/startup.py",
+        # NOT missing — DELIVERED BY A THIRD MECHANISM this gate does not model: the scaffold
+        # GENERATES it from a heredoc (python_lib_minimal.sh), because the file needs the
+        # package name substituted in and covers a smaller matrix than the service tiers'.
+        # Verified present and running in a real lib-minimal scaffold. Modelling heredoc
+        # generation would mean a third parser for one case; the stale-exclusion check below
+        # will flag this entry the day it becomes an ordinary `cp`.
+        "test_typing.py": "lib-minimal GENERATES it from a heredoc, not a cp",
         # ⚠️ NOT a clean exclusion — a known gap, recorded honestly rather than hidden.
         # lib-minimal vendors the shared helpers into `<pkg>/_internal/utils/` and rewrites
         # their import prefix, so these tests — written against the service tiers' flat
@@ -69,9 +76,31 @@ DICT_EXPECTED_ABSENT = {
     },
 }
 
-# Utils whose tests travel via the copy_shared_utils loop rather than an explicit cp line.
-_RE_UTILS_LOOP = re.compile(r"for util in (.*?); do", re.S)
-_RE_EXPLICIT_CP = re.compile(r"tests/unit/(test_[a-z0-9_]+\.py)")
+# ⚠️ Both patterns must prove a COPY, not merely a mention.
+#
+# An earlier version matched `tests/unit/(test_x.py)` anywhere in the file, so a filename inside
+# a comment — or inside this gate's own exclusion prose quoted into a script — counted as
+# delivery. Likewise it accepted the first `for util in …; do` anywhere, without checking the
+# loop actually copies the test. Either way the gate could report a scaffold as complete while
+# the file never arrives, which is a FALSE PASS in the one direction that matters: the whole
+# point is catching a test that silently never runs.
+#
+# So: the explicit form must be an active `cp` command whose SOURCE is the shared tests dir, and
+# the loop form must be the real `copy_shared_utils` body containing a `cp` of `test_${util}.py`.
+
+# `cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_x.py" …` — anchored on `cp` and on the source root,
+# and rejecting a leading `#` so a commented-out line never counts.
+_RE_EXPLICIT_CP = re.compile(
+    r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*?COMMON_TEMPLATE_ROOT/tests/unit/(test_[a-z0-9_]+\.py)",
+    re.M,
+)
+
+# The `copy_shared_utils` function body, from its definition to the closing brace.
+_RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
+# Its `for util in … ; do` header, searched INSIDE that body only.
+_RE_UTILS_LOOP = re.compile(r"for\s+util\s+in\s+(.*?);\s*do", re.S)
+# Proof the loop body actually copies the test beside the module.
+_RE_UTILS_TEST_CP = re.compile(r"\bcp\b[^\n]*tests/unit/test_\$\{util\}\.py")
 
 
 def shared_test_names() -> set:
@@ -100,12 +129,16 @@ def reachable_tests(str_source: str) -> set:
     """
     set_reachable = set(_RE_EXPLICIT_CP.findall(str_source))
 
-    cls_loop = _RE_UTILS_LOOP.search(str_source)
-    if cls_loop:
-        # The loop body copies test_<util>.py when it exists, so each util name implies a test.
-        for str_util in cls_loop.group(1).split():
-            if str_util not in {"\\", "do"}:
-                set_reachable.add(f"test_{str_util}.py")
+    # The loop counts only when it is the real copy_shared_utils body AND that body demonstrably
+    # copies test_${util}.py. A loop that merely iterates util names copies no test.
+    cls_fn = _RE_UTILS_FN.search(str_source)
+    if cls_fn:
+        str_body = cls_fn.group(1)
+        cls_loop = _RE_UTILS_LOOP.search(str_body)
+        if cls_loop and _RE_UTILS_TEST_CP.search(str_body):
+            for str_util in cls_loop.group(1).split():
+                if str_util != "\\":
+                    set_reachable.add(f"test_{str_util}.py")
 
     return set_reachable
 

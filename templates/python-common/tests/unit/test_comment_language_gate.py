@@ -224,8 +224,60 @@ def test_audit_mode_fails_when_no_file_matches(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_the_gate_discovers_this_project_s_own_sources() -> None:
-	"""The positive half: the shipped globs must actually match this layout.
+	"""The positive half: discovery must actually match this layout.
 
 	Without this, the test above passes while the real invocation still scans nothing.
 	"""
 	assert len(gate.audit_paths()) > 0
+
+
+def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
+	"""Deny-by-default: a supported file may not sit outside the audit just by living elsewhere.
+
+	The original allow-list of globs (``src/**/*.py``, ``bin/**/*.sh``, …) left **57** supported
+	files unaudited in this template — `.pre-commit-config.yaml`, the workflow files, `mypy.ini`,
+	`docker-compose.*.yml`, and all of `optional/`. Worse, the pre-commit hook *does* check those
+	when staged, so hook and CI disagreed and a comment could pass CI then fail a later commit.
+
+	An allow-list also fails silently on every future addition: a new top-level directory is
+	simply never scanned, and nothing reports it.
+
+	⚠️ Deriving the expectation from ``TUPLE_SKIP_DIRS`` alone would be tautological — adding a
+	directory to the skip list moves both sides of the comparison together and the test keeps
+	passing. (Verified: that version survived a mutation adding ``optional`` to the skips.) So
+	this first names concrete LOCATIONS that must be covered, which a skip-list change genuinely
+	breaks, and only then asserts the general property.
+	"""
+	set_audited = {p.resolve() for p in gate.audit_paths()}
+
+	# One representative, long-lived file per location the allow-list used to miss entirely.
+	list_required = [
+		gate.PATH_ROOT / ".pre-commit-config.yaml",  # repo-root config
+		gate.PATH_ROOT / "mypy.ini",  # root .ini
+		gate.PATH_ROOT / ".github/workflows/tests.yaml",  # workflow
+		gate.PATH_ROOT / "optional/typing/validate.py",  # app code that ships into projects
+	]
+	list_missing = [p for p in list_required if p.is_file() and p.resolve() not in set_audited]
+	assert list_missing == [], f"supported but unaudited: {list_missing}"
+
+	# And the general property, so a NEW location cannot quietly fall outside either.
+	set_supported = set(gate.DICT_MARKERS) | {".py"}
+	list_missed = [
+		path_file
+		for path_file in gate.PATH_ROOT.rglob("*")
+		if path_file.suffix in set_supported
+		and path_file.is_file()
+		and not any(str_part in gate.TUPLE_SKIP_DIRS for str_part in path_file.parts)
+		and path_file.resolve() not in set_audited
+	]
+	assert list_missed == [], f"supported but unaudited: {list_missed[:10]}"
+
+
+def test_published_docs_are_never_audited() -> None:
+	"""``docs/`` is the OTHER half of the boundary — written in the locale on purpose.
+
+	Scanning it would invert the rule the gate exists to enforce, so the exclusion is load-bearing
+	rather than a performance tweak.
+	"""
+	assert "docs" in gate.TUPLE_SKIP_DIRS
+	assert not [p for p in gate.audit_paths() if "docs" in p.parts]
