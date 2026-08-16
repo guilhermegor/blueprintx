@@ -1,3 +1,12 @@
+# `bin/precommit.sh` installs BOTH `commit-msg` and `pre-push`. pre-commit applies a hook to
+# EVERY installed git hook type unless a stage is declared, so without this line every static
+# gate below (tests, mypy, lint-*, check_*) would run twice: once on commit and again on push.
+# The duplication is invisible in the config — the fast hooks correctly carry no `stages:`
+# because they belong on commit, and nothing says that silence also enlists them in the push.
+# Hooks that belong elsewhere still say so explicitly (`commit-msg`, `pre-push`, `manual`).
+default_stages:
+  - pre-commit
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

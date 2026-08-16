@@ -70,6 +70,45 @@ def test_find_file_problems_reports_without_raising(tmp_path: Path) -> None:
 	assert any("absent" in p for p in list_problems)
 
 
+def test_header_only_file_passes_its_cnpj_contract(tmp_path: Path) -> None:
+	"""A source reporting "nothing today" by shipping its header alone is not a broken file.
+
+	Negative control for the ``any()``-over-an-empty-series trap: ``any()`` of an empty series
+	is ``False``, the same answer a column of garbage gives, so the pre-fix code reproved a
+	well-formed header-only file as "holds no valid CNPJ" and killed the run.
+	"""
+	path_csv = tmp_path / "empty.csv"
+	path_csv.write_text("cnpj;amount\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
+	assert find_file_problems(cls_contract, path_csv, "") == []
+
+
+def test_populated_cnpj_column_with_no_valid_value_still_fails(tmp_path: Path) -> None:
+	"""The emptiness guard must not relax the check for a column that HAS values.
+
+	The other half of the control above: skipping an empty column is right, skipping a
+	populated-but-invalid one would delete the check entirely.
+	"""
+	path_csv = tmp_path / "garbage.csv"
+	path_csv.write_text("cnpj;amount\nnot-a-cnpj;10\nalso-not;20\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
+	list_problems = find_file_problems(cls_contract, path_csv, "")
+	assert any("holds no valid CNPJ" in p for p in list_problems)
+
+
+def test_missing_cnpj_value_is_not_stringified_to_nan(tmp_path: Path) -> None:
+	"""A blank cell must not reach the validator as the literal string ``"nan"``.
+
+	``.astype(str)`` is not NA-safe below pandas 3: it renders a missing value as ``"nan"``,
+	which then fails validation for the wrong reason. ``safe_str`` yields ``""``. A valid
+	sibling row keeps the column passing, proving the blank was skipped rather than counted.
+	"""
+	path_csv = tmp_path / "blank.csv"
+	path_csv.write_text("cnpj;amount\n;10\n11.222.333/0001-81;20\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
+	assert find_file_problems(cls_contract, path_csv, "") == []
+
+
 def test_empty_contract_constrains_nothing(tmp_path: Path) -> None:
 	"""An empty contract still declares intent and passes any well-formed file."""
 	path_csv = _write_csv(tmp_path)

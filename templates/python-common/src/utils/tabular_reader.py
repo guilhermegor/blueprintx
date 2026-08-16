@@ -33,6 +33,7 @@ import pandas as pd
 
 from utils.br_identifiers import is_valid_cnpj, unmask_cnpj
 from utils.dtypes import apply_dtypes
+from utils.text import safe_str
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
@@ -313,7 +314,18 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 	for str_col in cls_contract.tuple_cnpj_cols:
 		if str_col not in df_input.columns:
 			continue
-		series_valid = df_input[str_col].astype(str).map(lambda v: is_valid_cnpj(unmask_cnpj(v)))
+		series_col = df_input[str_col]
+		# An EMPTY column is not a broken column. `any()` over an empty series is False —
+		# the exact answer a column of garbage gives — so without this guard a source that
+		# reports "nothing today" by shipping its header alone is reproved as holding no
+		# valid CNPJ, and the run dies on a file that is perfectly well-formed. A column
+		# that HAS values and none valid must still fail, so the guard is emptiness only.
+		if series_col.empty:
+			continue
+		# `safe_str` (never `.astype(str)`, which is not NA-safe below pandas 3 and turns a
+		# missing value into the literal "nan" — a string that then fails validation for the
+		# wrong reason).
+		series_valid = series_col.map(lambda v: is_valid_cnpj(unmask_cnpj(safe_str(v))))
 		if not bool(series_valid.any()):
 			list_problems.append(
 				f"Column '{str_col}' in '{cls_contract.str_name}' holds no valid CNPJ "
