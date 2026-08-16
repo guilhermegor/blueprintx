@@ -96,12 +96,23 @@ def test_a_captured_config_failure_is_reported_and_exits() -> None:
 	Swallowing the error and running on fallback config is strictly worse than the original
 	crash: the job would run against values nobody configured.
 	"""
-	path_startup = Path(__file__).resolve().parents[2] / "src" / "config" / "startup.py"
-	str_source = path_startup.read_text(encoding="utf-8")
-	str_tail = str_source.split("LOGGER = ")[-1]
-	assert "LOGGER.critical" in str_tail, "the captured failure is never written to the log"
-	assert "stderr" in str_tail, "the captured failure never reaches stderr"
-	assert "SystemExit(2)" in str_tail, "the run continues on fallback configuration"
+	cls_tree = _startup_tree()
+
+	# Bind the assertions to the error branch itself. A substring search over everything
+	# after the LOGGER assignment passes just as well when some unrelated branch logs, writes
+	# to stderr and exits — it would prove the file contains those calls, not that THIS
+	# failure reaches them.
+	list_branches = [
+		cls_node
+		for cls_node in cls_tree.body
+		if isinstance(cls_node, ast.If) and "_str_config_error" in ast.dump(cls_node.test)
+	]
+	assert list_branches, "the captured config failure is no longer acted on"
+
+	str_branch = "\n".join(ast.dump(cls_stmt) for cls_stmt in list_branches[0].body)
+	assert "critical" in str_branch, "the captured failure is never written to the log"
+	assert "stderr" in str_branch, "the captured failure never reaches stderr"
+	assert "SystemExit" in str_branch, "the run continues on fallback configuration"
 
 
 def test_the_failable_block_catches_exception_not_baseexception() -> None:

@@ -471,3 +471,46 @@ def test_corporate_ca_wiring_never_disables_verification_for_pypi() -> None:
 		encoding="utf-8"
 	)
 	assert "export PIP_TRUSTED_HOST" not in str_source
+
+
+# --------------------------
+# bin/get_corporate_ca.sh
+# --------------------------
+
+
+def test_get_corporate_ca_refuses_with_guidance_off_windows(tmp_path: Path) -> None:
+	"""On a non-Windows host the script refuses and names the system trust store.
+
+	The rewrite deliberately removed the old behaviour of opening a TLS connection with
+	verification disabled and saving whatever certificate the network presented — that
+	captured the LEAF, not the CA, and trusted whatever a hostile network offered. There is
+	no automatic substitute off Windows, so refusing with the path to the OS bundle is the
+	feature, and this pins it: a future edit that silently "restores" extraction would fail
+	here rather than in production behind a proxy.
+	"""
+	if os.name == "nt":  # pragma: no cover - the guard under test is the POSIX branch
+		pytest.skip("this asserts the non-Windows refusal path")
+
+	cls_result = _run("get_corporate_ca.sh", cwd=tmp_path)
+
+	assert cls_result.returncode != 0, "the script must not report success without a pem"
+	str_output = cls_result.stdout + cls_result.stderr
+	assert "Windows only" in str_output
+	# The refusal carries the remedy, not just the verdict.
+	assert "ca-certificates.crt" in str_output or "ca-bundle.crt" in str_output
+	# Nothing is written on the refusal path.
+	assert not (tmp_path / "bin" / "corporate_ca.pem").exists()
+
+
+def test_get_corporate_ca_never_disables_tls_verification() -> None:
+	"""The script must not reach the network with verification switched off.
+
+	Structural, because the behaviour it excludes cannot be observed from a passing run: the
+	previous version set ``CERT_NONE`` and ``check_hostname = False`` to capture a proxy's
+	substituted certificate. Reading the OS trust store needs neither.
+	"""
+	str_source = _bin_script("get_corporate_ca.sh").read_text(encoding="utf-8")
+	assert "CERT_NONE" not in str_source
+	assert "check_hostname" not in str_source
+	# The supported path reads the store the browser already trusts.
+	assert "enum_certificates" in str_source

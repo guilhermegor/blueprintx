@@ -335,7 +335,9 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 		# Coerce with the NA-safe string helper rather than astype-to-str. Below pandas 3 the
 		# latter renders a missing value as the literal nan, and that string then fails
 		# validation for entirely the wrong reason.
-		series_valid = series_col.map(lambda v: is_valid_cnpj(unmask_cnpj(safe_str(v))))
+		series_valid = series_col.map(
+			lambda obj_cell: is_valid_cnpj(unmask_cnpj(safe_str(obj_cell)))
+		)
 		if not bool(series_valid.any()):
 			list_problems.append(
 				f"Column '{str_col}' in '{cls_contract.str_name}' holds no valid CNPJ "
@@ -379,7 +381,7 @@ def decode_positional_payload(
 		If a row is narrower than the header, or if a surplus position holds a value.
 	"""
 	int_declared = len(list_columns)
-	list_narrow = [int_i for int_i, row in enumerate(list_rows) if len(row) < int_declared]
+	list_narrow = [int_i for int_i, seq_row in enumerate(list_rows) if len(seq_row) < int_declared]
 	if list_narrow:
 		raise ContractError(
 			[
@@ -389,9 +391,10 @@ def decode_positional_payload(
 			]
 		)
 
-	for int_pos in range(int_declared, max((len(row) for row in list_rows), default=int_declared)):
-		list_surplus = [row[int_pos] for row in list_rows if len(row) > int_pos]
-		if any(value not in (None, "") for value in list_surplus):
+	int_widest = max((len(seq_row) for seq_row in list_rows), default=int_declared)
+	for int_pos in range(int_declared, int_widest):
+		list_surplus = [seq_row[int_pos] for seq_row in list_rows if len(seq_row) > int_pos]
+		if any(obj_value not in (None, "") for obj_value in list_surplus):
 			raise ContractError(
 				[
 					f"Positional payload row is wider than its header and surplus position "
@@ -400,7 +403,7 @@ def decode_positional_payload(
 			)
 
 	return pd.DataFrame(
-		[list(row)[:int_declared] for row in list_rows], columns=list(list_columns)
+		[list(seq_row)[:int_declared] for seq_row in list_rows], columns=list(list_columns)
 	)
 
 
@@ -549,6 +552,7 @@ def _read_raw(
 	return df_raw
 
 
+@type_checker
 def _read_raw_dispatch(
 	path_file: Path,
 	str_sheet: str,

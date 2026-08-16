@@ -55,8 +55,8 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
 
 ## Fronteira de vendor (pedido do dono, meio da sessao)
 
-- [x] `utils/frames.from_cursor` + `model/example_entity` da tier **native-db** deixa de chamar a
-      API do pandas; `pd.DataFrame` fica so como anotacao. Scaffold real: 203 passed, lint limpo.
+- [x] `utils/frames.from_cursor` + `model/example_entity` da tier **native-db** deixam de chamar
+      a API do pandas; `pd.DataFrame` fica so como anotacao. Scaffold real: 203 passed, lint limpo.
 - [x] **#171** o gate que torna isso mecanico — `bin/check_layer_imports.py` +
       `.layer-policy.yaml` por tier + 10 testes + wiring pre-commit/CI/scaffolds. Prova nos 4
       formatos: vendor no topo reprova; vendor em funcao sob `try/except ImportError` reprova
@@ -82,7 +82,7 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
 ## Fora do Tier A (não tocam o duskko no dia 1)
 
 ts-lib (#132–#136), gates de docs (#159, #130, #141), PR-gate (#145), GitGuardian (#153/#155/#129),
-e as 7 issues abertas nesta sessão (#158–#164, exceto a própria #158).
+e as 6 issues abertas nesta sessão que seguem sem implementação (#159 a #164).
 
 ## Registro de auditoria desta sessão
 

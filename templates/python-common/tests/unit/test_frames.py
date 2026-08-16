@@ -25,17 +25,20 @@ def test_map_with_default_is_total_no_nan_leak() -> None:
 class _FakeCursor:
 	"""Minimal DB-API cursor stand-in: a description plus rows.
 
+	The ``description`` attribute keeps its bare DB-API name on purpose — the seam looks it
+	up by exactly that spelling, so renaming it would break the double.
+
 	Parameters
 	----------
-	description : list or None
+	list_description : list or None
 		The DB-API ``description`` sequence, or ``None`` for a non-returning statement.
 	list_rows : list
 		Rows returned by ``fetchall``.
 	"""
 
-	def __init__(self, description: list | None, list_rows: list) -> None:
-		self.description = description
-		self._list_rows = list_rows
+	def __init__(self, list_description: list | None, list_rows: list) -> None:
+		self.description = list_description
+		self.list_rows = list_rows
 
 	def fetchall(self) -> list:
 		"""Return the canned rows.
@@ -45,7 +48,7 @@ class _FakeCursor:
 		list
 			The rows this cursor was built with.
 		"""
-		return self._list_rows
+		return self.list_rows
 
 
 def test_from_cursor_types_every_declared_column() -> None:
@@ -84,3 +87,22 @@ def test_from_records_returns_the_declared_columns_when_empty() -> None:
 	df_out = from_records([], {"id": "int64", "title": "str"})
 	assert df_out.empty
 	assert list(df_out.columns) == ["id", "title"]
+
+
+def test_from_cursor_applies_date_columns_on_the_empty_path() -> None:
+	"""An empty result takes the SAME coercion path as a populated one.
+
+	Omitting ``list_date_cols`` on the empty branch gives a date column a different dtype
+	depending on whether rows happened to exist — reintroducing, one argument down, the very
+	data-dependent shape the declared-columns branch exists to prevent.
+	"""
+	# apply_dtypes requires the column sets to be disjoint, so a date column is declared by
+	# list_date_cols alone and never also in dict_dtypes.
+	cls_cursor = _FakeCursor(None, [])
+	df_out = from_cursor(cls_cursor, {"id": "int64"}, list_date_cols=["dt_ref"])
+	assert "dt_ref" in df_out.columns
+
+	cls_populated = _FakeCursor([("id",), ("dt_ref",)], [(1, "2026-01-31")])
+	df_rows = from_cursor(cls_populated, {"id": "int64"}, list_date_cols=["dt_ref"])
+	# The empty and populated results agree on the date column's dtype.
+	assert str(df_out["dt_ref"].dtype) == str(df_rows["dt_ref"].dtype)

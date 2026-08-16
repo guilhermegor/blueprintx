@@ -33,6 +33,40 @@ else:
 
 
 @type_checker
+def _empty_frame(
+	dict_dtypes: dict[str, str], list_date_cols: list[str] | None = None
+) -> pd.DataFrame:
+	"""Build the zero-row frame both construction seams return when there is nothing to read.
+
+	Carries **every declared column** — those named in ``dict_dtypes`` and those named in
+	``list_date_cols`` — and runs the same coercion the populated path runs. Both halves
+	matter and both were wrong at some point: dropping the date columns makes an empty result
+	structurally different from a populated one, and skipping the coercion makes it
+	differently *typed*. Either way a caller that concatenates or renders the result starts
+	behaving differently depending on whether rows happened to exist, which is the entire
+	reason this branch returns a shaped frame rather than a bare one.
+
+	Parameters
+	----------
+	dict_dtypes : dict of {str: str}
+		Column→dtype mapping declared by the caller.
+	list_date_cols : list of str, optional
+		Columns coerced to dates. Disjoint from ``dict_dtypes`` (``apply_dtypes`` requires it).
+
+	Returns
+	-------
+	pandas.DataFrame
+		An empty frame holding every declared column, typed.
+	"""
+	list_columns = list(dict_dtypes) + list(list_date_cols or [])
+	return apply_dtypes(
+		pd.DataFrame(columns=list_columns),
+		dict_dtypes=dict_dtypes,
+		list_date_cols=list_date_cols,
+	)
+
+
+@type_checker
 def from_cursor(
 	cls_cursor: Any,  # noqa: ANN401 — opaque DB-API cursor; any driver's object is valid
 	dict_dtypes: dict[str, str],
@@ -66,7 +100,7 @@ def from_cursor(
 		One row per record, every declared column typed.
 	"""
 	if cls_cursor.description is None:
-		return apply_dtypes(pd.DataFrame(columns=list(dict_dtypes)), dict_dtypes=dict_dtypes)
+		return _empty_frame(dict_dtypes, list_date_cols)
 
 	list_cols = [col[0] for col in cls_cursor.description]
 	df_records = pd.DataFrame.from_records(cls_cursor.fetchall(), columns=list_cols)
@@ -104,7 +138,7 @@ def from_records(
 		One row per record, every declared column typed.
 	"""
 	if not list_records:
-		return apply_dtypes(pd.DataFrame(columns=list(dict_dtypes)), dict_dtypes=dict_dtypes)
+		return _empty_frame(dict_dtypes, list_date_cols)
 
 	df_records = pd.DataFrame(list(list_records))
 	return apply_dtypes(df_records, dict_dtypes=dict_dtypes, list_date_cols=list_date_cols)
