@@ -1,0 +1,67 @@
+# Per-layer import policy, read by bin/check_layer_imports.py (pre-commit + CI).
+#
+# The rule: a third-party dependency is reached through a seam in utils/, never imported by
+# model/, view/ or controller/. The layer then depends on OUR function, not on a vendor API,
+# so a vendor change is confined to one adapter.
+#
+# Deferring an import into a function does NOT buy an exemption — the layer still knows the
+# vendor. The gate judges every scope identically.
+#
+# Every `allow` entry carries a written reason. An allowlist entry without one is a rule that
+# the first person who finds it inconvenient will widen.
+
+# Package roots that are first-party but do NOT exist in THIS layout. The shared utils/
+# helpers ship to both tiers and reach their typing engine through a layout shim
+# (`try: from utils.typing … except ModuleNotFoundError: from chassis.typing …`), so
+# `chassis` is our own code — just the DDD layout's name for it.
+first_party_extra:
+  - chassis
+
+# Vendors usable as a TYPE ANNOTATION in any layer, and as nothing else.
+# This is the pandas compromise, and the distinction is load-bearing: `-> pd.DataFrame` in a
+# signature is the vocabulary the layers agree on and couples nothing, while `pd.read_sql(...)`
+# is a vendor API call that every copied file inherits.
+annotation_only:
+  pandas: >-
+    Annotation only. Build a frame with utils.frames.from_cursor; read one with
+    utils.tabular_reader.read_table / read_query (they enforce a FileContract + dtypes).
+
+layers:
+  model:
+    allow:
+      sqlalchemy: >-
+        ORM tier only, and DECLARATION only: in a declarative-mapping design the entity IS
+        its sqlalchemy declaration (DeclarativeBase / Mapped / mapped_column / column types),
+        so hiding it behind a seam would mean hiding the model from itself. Session and
+        engine construction still belong to config.connection_db, and reads go through the
+        utils/ seams — see blueprintx#172.
+
+  view:
+    allow:
+      openpyxl: >-
+        The Excel writer IS the view's output format, not a peripheral dependency: a seam
+        over it would forward the same calls with no swap in sight. Revisit if a second
+        workbook backend ever appears.
+
+  controller:
+    allow: {}  # orchestration wires our own layers; it should need no vendor at all
+
+  utils:
+    # utils/ IS the seam layer — this is where vendors are supposed to live. Listed
+    # explicitly rather than left unchecked, so a new vendor still gets a conscious decision.
+    allow:
+      pandas: "the seam layer owns the pandas surface (frames, dtypes, tabular_reader)"
+      wwdates: "BR business-day calendar, wrapped by utils.dates"
+      win32com: "Outlook COM automation, wrapped by utils.outlook_gateway (Windows only)"
+      requests: "HTTP transport, wrapped by utils.http_downloader"
+      urllib3: "retry/backoff policy used by the download seam"
+      defusedxml: "hardened XML parsing at the ingestion trust boundary"
+      beartype: "runtime type-checking engine behind utils.typing"
+
+  config:
+    # The composition root: the one layer whose job IS to know concrete implementations.
+    # What it must NOT know is the DOMAIN — a vendor SDK for the business belongs in a seam.
+    allow:
+      dotenv: "loads .env at startup; this is the layer that owns environment resolution"
+      yaml: "parses inputs.yaml / outputs.yaml"
+      sqlalchemy: "builds the Engine and the sessionmaker for every supported backend"

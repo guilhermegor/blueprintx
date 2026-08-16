@@ -20,14 +20,31 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 
 ## Library coupling (seams for peripheral dependencies)
 
-Model / View / Controller may use the skeleton's **core data libraries directly** —
-`pandas` (the model/view vocabulary) and SQLAlchemy via `config.connection_db`.
+`pandas` is the **vocabulary** Model / View / Controller speak, not an API they call.
+`pd.DataFrame` may appear as a parameter or return **annotation** anywhere, but the pandas
+*surface* — constructing a frame, reading one — lives behind a seam in `utils/`
+(`utils.tabular_reader`, `utils.frames`). SQLAlchemy reaches the layers via
+`config.connection_db`; in `model/` it is allowed for the **declaration** of an entity, since
+in a declarative mapping the entity *is* its `DeclarativeBase` / `Mapped` / `mapped_column`.
+
 **Every other third-party dependency** (network, vendor SDKs, OS-specific APIs,
 exotic file formats) must be reached through a **seam in `utils/`** (a
 gateway/adapter, or a `WebhookNotifier`-style port), so the layer depends on our
 function, not the vendor API. This confines breakage from a vendor change to a
 single adapter. Example seams shipped here: `utils/webhook/` (teams/slack behind a
 port), `utils/paths.py` (OS-independent path resolution).
+
+**This is enforced, not advised.** `.layer-policy.yaml` at the project root declares, per
+layer, which third-party modules are allowed and why; `bin/check_layer_imports.py` reads it in
+pre-commit and CI. Two things worth knowing before you try to work around it:
+
+- **Deferring an import into a function changes nothing.** The gate judges every scope alike —
+  the layer still knows the vendor, so hiding the import inside a method is not an exemption
+  (the message says so explicitly). The optional-dependency pattern
+  (`try: import x / except ImportError: degrade`) is legitimate, but it belongs in the `utils/`
+  seam that *owns* the optional dependency and returns the degraded result.
+- **Adding an entry to `allow` requires writing the reason.** An allowlist entry without one is
+  a rule the next person widens. If the reason is hard to write, the seam is the answer.
 
 The **standard library** (`re`, `pathlib`, `datetime`, `json`, …) is unrestricted
 in every layer — it carries no coupling risk. Route it through `utils/` only when

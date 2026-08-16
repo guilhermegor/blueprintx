@@ -206,6 +206,8 @@ copy_common_templates() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
+        "$project_path/tests/unit/test_layer_imports_gate.py"
     mkdir -p "$project_path/tests/fixtures"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
         "$project_path/tests/unit/test_contract_oracle_example.py"

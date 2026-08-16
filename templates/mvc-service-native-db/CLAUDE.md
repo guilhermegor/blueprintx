@@ -34,7 +34,19 @@ vendor grows one copy at a time. An annotation propagates nothing.
 **Every other third-party dependency** (network, vendor SDKs, OS-specific APIs,
 exotic file formats) must be reached through a **seam in `utils/`** (a
 gateway/adapter, or a `WebhookNotifier`-style port), so the layer
-depends on our function, not the vendor API. This confines breakage from a vendor
+depends on our function, not the vendor API.
+
+**This is enforced, not advised.** `.layer-policy.yaml` at the project root declares, per
+layer, which third-party modules are allowed and why; `bin/check_layer_imports.py` reads it in
+pre-commit and CI. Two things worth knowing before you try to work around it:
+
+- **Deferring an import into a function changes nothing.** The gate judges every scope alike —
+  the layer still knows the vendor, so hiding the import inside a method is not an exemption
+  (the message says so explicitly). The optional-dependency pattern
+  (`try: import x / except ImportError: degrade`) is legitimate, but it belongs in the `utils/`
+  seam that *owns* the optional dependency and returns the degraded result.
+- **Adding an entry to `allow` requires writing the reason.** An allowlist entry without one is
+  a rule the next person widens. If the reason is hard to write, the seam is the answer. This confines breakage from a vendor
 change to a single adapter. Example seams shipped here: `utils/webhook/`
 (teams/slack behind a port), `utils/paths.py` (OS-independent path resolution).
 

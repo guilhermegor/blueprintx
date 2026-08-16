@@ -57,7 +57,11 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
 
 - [x] `utils/frames.from_cursor` + `model/example_entity` da tier **native-db** deixa de chamar a
       API do pandas; `pd.DataFrame` fica so como anotacao. Scaffold real: 203 passed, lint limpo.
-- [ ] **#171** o gate que torna isso mecanico (vendor fora de utils negado em qualquer escopo)
+- [x] **#171** o gate que torna isso mecanico — `bin/check_layer_imports.py` +
+      `.layer-policy.yaml` por tier + 10 testes + wiring pre-commit/CI/scaffolds. Prova nos 4
+      formatos: vendor no topo reprova; vendor em funcao sob `try/except ImportError` reprova
+      (mensagem nomeia a evasao); `pd.read_sql` reprova; `pd.DataFrame` so em anotacao passa.
+      Scaffold real: **213 passed**.
 - [ ] tier **ORM**: `model/example_entity.py:81` usa `pd.read_sql`, que o proprio `ruff.toml`
       bane — e o arquivo esta isento via `per-file-ignores`. Issue separada.
 

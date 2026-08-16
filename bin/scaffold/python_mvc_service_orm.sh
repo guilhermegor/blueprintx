@@ -149,6 +149,10 @@ copy_templates() {
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/.env.example" "$project_path/.env"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/.env.example" "$project_path/.env.example"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/CLAUDE.md" "$project_path/CLAUDE.md"
+    # Per-layer import policy read by bin/check_layer_imports.py (pre-commit + CI). It is
+    # per-tier, not shared: model/ may declare sqlalchemy in the ORM tier and nothing in the
+    # native one, so it cannot live in python-common.
+    cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
 
     print_status "success" "Templates copied and configured"
 }
@@ -211,6 +215,8 @@ copy_common_templates() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
+        "$project_path/tests/unit/test_layer_imports_gate.py"
     mkdir -p "$project_path/tests/fixtures"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
         "$project_path/tests/unit/test_contract_oracle_example.py"
