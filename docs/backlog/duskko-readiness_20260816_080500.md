@@ -27,8 +27,11 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
       **pandas 3** o `.astype(str)` não produz `"nan"` (comportamento do pandas 2), ele deixa o
       `float nan` chegar ao validador e o beartype levanta `TypeError`. O defeito é um crash, não
       uma validação errada silenciosa. `safe_str` corrige os dois regimes.
-- [ ] **#165** índice PyPI parcialmente bloqueado (403) aborta o `init` inteiro — **evidência de
-      campo do box do Werner (2026-08-16)**; poda por `DB_BACKEND` + instalação incremental
+- [x] **#165** índice PyPI parcialmente bloqueado (403) aborta o `init` inteiro — **evidência de
+      campo do box do Werner (2026-08-16)**; poda por `DB_BACKEND` + instalação incremental.
+      O teste de poda pegou um bug meu antes do commit: `_read_env_var` resolve `.env` relativo ao
+      **CWD**, então todos os backends liam `sqlite`. Ancorado em `$PROJECT_ROOT/.env` — mesma
+      classe da lição `resolve-config-paths-to-absolute` (#122).
 - [ ] **#147** robustez do reader de ingestão: payload posicional mais largo que o header, nomes de
       campo não confiáveis, envelope de fixture reproduzindo o real
 - [ ] **#115** emoji nos `bin/check_*.py` quebra os gates em Windows cp1252

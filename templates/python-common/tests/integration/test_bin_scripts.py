@@ -182,3 +182,83 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
 	assert str(path_repo) in str_cfg or "%(prefix)" in str_cfg
 	# The self-heal never fabricates a repo and never emits the "no git repo" skip.
 	assert "No git repository here" not in str_output
+
+
+# --------------------------
+# pip_fallback.sh — DB driver pruning
+# --------------------------
+
+
+def _run_prune(tmp_path: Path, str_backend: str) -> list[str]:
+	"""Source ``pip_fallback.sh`` and prune a requirements file for one ``DB_BACKEND``.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Temporary directory standing in for the project root (holds ``.env``).
+	str_backend : str
+		The ``DB_BACKEND`` value to write into ``.env``.
+
+	Returns
+	-------
+	list of str
+		The requirement lines that survived pruning.
+	"""
+	path_lib = Path(__file__).resolve().parents[2] / "bin" / "lib"
+	path_req = tmp_path / "req.txt"
+	(tmp_path / ".env").write_text(f"DB_BACKEND={str_backend}\n", encoding="utf-8")
+	path_req.write_text(
+		"beartype>=0.22\npandas>=2.0\npyodbc>=5.0\noracledb>=2.0\n"
+		"psycopg>=3.1\nmysql-connector-python>=8.3,<9.0\n",
+		encoding="utf-8",
+	)
+	str_bash = shutil.which("bash") or "bash"
+	str_script = (
+		f'export PROJECT_ROOT="{tmp_path}"; '
+		f'source "{path_lib}/common.sh"; source "{path_lib}/bootstrap.sh"; '
+		f'source "{path_lib}/pip_fallback.sh"; '
+		f'pip_fallback_prune_unused_db_drivers "{path_req}"'
+	)
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	subprocess.run([str_bash, "-c", str_script], check=True, capture_output=True)  # noqa: S603
+	return [line for line in path_req.read_text(encoding="utf-8").splitlines() if line]
+
+
+def test_prune_drops_every_db_driver_for_sqlite(tmp_path: Path) -> None:
+	"""A SQLite project asks the index for no DB driver at all.
+
+	This is the regression that motivated the change: the tiers declare all four drivers
+	unconditionally, so a SQLite project fetched ``mysql-connector-python`` — and a corporate
+	index that 403s that one package killed the whole install over a package the project can
+	never import.
+	"""
+	list_kept = _run_prune(tmp_path, "sqlite")
+	assert list_kept == ["beartype>=0.22", "pandas>=2.0"]
+
+
+@pytest.mark.parametrize(
+	("str_backend", "str_driver"),
+	[
+		("postgresql", "psycopg"),
+		("mysql", "mysql-connector-python"),
+		("mariadb", "mysql-connector-python"),
+		("mssql", "pyodbc"),
+		("oracle", "oracledb"),
+	],
+)
+def test_prune_keeps_only_the_configured_backends_driver(
+	tmp_path: Path, str_backend: str, str_driver: str
+) -> None:
+	"""Each backend keeps its own driver and drops the other three.
+
+	The negative half matters as much as the positive one: pruning that dropped the driver the
+	project actually needs would break the install it exists to protect.
+	"""
+	list_kept = _run_prune(tmp_path, str_backend)
+	list_drivers = [
+		line
+		for line in list_kept
+		if line.split(">")[0].split("<")[0] in {"pyodbc", "oracledb", "psycopg", "mysql-connector-python"}
+	]
+	assert len(list_drivers) == 1
+	assert list_drivers[0].startswith(str_driver)

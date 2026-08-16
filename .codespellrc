@@ -7,4 +7,4 @@
 # back as `./docs/…`). The basename form matches under every invocation style.
 skip = *.png,*.svg,*.ico,*.jpg,*.json,*.lock,*.po,*.pyc,*-lessons.md
 quiet-level = 3
-ignore-words-list = nd,fpr,strat,enty,filetest,nome,nomes,caracteres,prefere,atual,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX,itens,controle,controles,validador,validadores,cabecalho,ambiente,ambientes,superficie,indice,indices
+ignore-words-list = nd,fpr,strat,enty,filetest,nome,nomes,caracteres,prefere,atual,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX,itens,controle,controles,validador,validadores,cabecalho,ambiente,ambientes,superficie,indice,indices,meu,seu,sua,seus,suas
