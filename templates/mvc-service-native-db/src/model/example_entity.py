@@ -1,18 +1,25 @@
 """Example service-style model.
 
-Demonstrates the MVC model pattern with native drivers: take a DB-API
-connection, issue raw SQL, and shape the result into a pandas DataFrame. Copy
-this file per domain entity and adapt the table name and columns.
+Demonstrates the MVC model pattern with native drivers: take a DB-API connection, issue raw
+SQL, and hand the cursor to the frame seam. Copy this file per domain entity and adapt the
+table name and columns.
+
+Note what this file does NOT do: it never calls the pandas API. ``pandas`` appears only as
+the return **annotation**, which is the vocabulary the layers agree on — the construction
+lives in ``utils.frames``. Copying this file therefore propagates the boundary rather than a
+direct vendor call, which is the point of a reference example.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pandas as pd
-
-from utils.dtypes import apply_dtypes
+from utils.frames import from_cursor
 from utils.typing import TypeChecker
+
+
+if TYPE_CHECKING:
+	import pandas as pd
 
 
 # Declare the column types on load — never trust pandas' inference (a zero-padded
@@ -69,15 +76,11 @@ class ExampleEntity(metaclass=TypeChecker):
 		Returns
 		-------
 		pd.DataFrame
-			One row per record, columns taken from the cursor description.
+			One row per record, every declared column typed.
 		"""
 		cls_cursor = self.cls_connection.cursor()
-		cls_cursor.execute(f"SELECT * FROM {self.str_table}")  # noqa: S608
-		if cls_cursor.description is None:
+		try:
+			cls_cursor.execute(f"SELECT * FROM {self.str_table}")  # noqa: S608
+			return from_cursor(cls_cursor, _DICT_DTYPES)
+		finally:
 			cls_cursor.close()
-			return pd.DataFrame()
-		list_cols = [col[0] for col in cls_cursor.description]
-		list_rows = cls_cursor.fetchall()
-		cls_cursor.close()
-		df_records = pd.DataFrame.from_records(list_rows, columns=list_cols)
-		return apply_dtypes(df_records, dict_dtypes=_DICT_DTYPES)

@@ -20,11 +20,20 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 
 ## Library coupling (seams for peripheral dependencies)
 
-Model / View / Controller may use the skeleton's **core data libraries directly** —
-`pandas` (the model/view vocabulary) and the configured DB driver via
-`config.connection_db`. **Every other third-party dependency** (network, vendor
-SDKs, OS-specific APIs, exotic file formats) must be reached through a **seam in
-`utils/`** (a gateway/adapter, or a `WebhookNotifier`-style port), so the layer
+`pandas` is the **vocabulary** Model / View / Controller speak, not an API they call.
+Concretely: `pd.DataFrame` may appear as a parameter or return **annotation** anywhere, but
+the pandas *surface* — constructing a frame, reading one, reshaping one — lives behind a
+seam in `utils/`. Reads go through `utils.tabular_reader` (`read_table` / `read_query`, which
+enforce a `FileContract` + dtypes); a frame built from a DB-API cursor goes through
+`utils.frames.from_cursor`. The DB driver itself is reached via `config.connection_db`.
+
+The distinction is what keeps a copied file honest: a reference model that *calls* pandas
+propagates that call into every entity derived from it, and the layer's dependency on the
+vendor grows one copy at a time. An annotation propagates nothing.
+
+**Every other third-party dependency** (network, vendor SDKs, OS-specific APIs,
+exotic file formats) must be reached through a **seam in `utils/`** (a
+gateway/adapter, or a `WebhookNotifier`-style port), so the layer
 depends on our function, not the vendor API. This confines breakage from a vendor
 change to a single adapter. Example seams shipped here: `utils/webhook/`
 (teams/slack behind a port), `utils/paths.py` (OS-independent path resolution).
@@ -67,7 +76,7 @@ and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 **`config/connection_db.build_connection()`** reads `DB_BACKEND` from `.env` and returns a raw DB-API 2.0 connection. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. Drivers are imported lazily — only the configured backend's driver must be installed. SQL Server honours `DB_MSSQL_AUTH` (`sql` for UID/PWD, `aad` for Azure AD Interactive).
 
-**`model/example_entity.ExampleEntity`** is the reference model: take a connection, run SQL via a cursor, shape rows into a DataFrame with `pd.DataFrame.from_records`, then **type every column on load** with `apply_dtypes(df, dict_dtypes=_DICT_DTYPES)` (`utils.dtypes`). Copy it per entity and adjust `_DICT_DTYPES`.
+**`model/example_entity.ExampleEntity`** is the reference model: take a connection, run SQL via a cursor, and hand the cursor to `utils.frames.from_cursor(cls_cursor, _DICT_DTYPES)`, which shapes the rows and **types every column on load**. Copy it per entity and adjust `_DICT_DTYPES`. Note that it never calls the pandas API — `pd.DataFrame` appears only as the return annotation, so copying it propagates the boundary instead of a vendor call.
 
 **`view/report_renderer.RenderToExcel`** is the reference view: take a DataFrame, write `.xlsx` via openpyxl, return the path. Add JSON/CSV/HTML renderers alongside it.
 

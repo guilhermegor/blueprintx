@@ -1,13 +1,22 @@
-"""DataFrame/Series relabelling helpers.
+"""DataFrame construction and relabelling helpers.
 
-Small, total transformations over pandas objects.
+Small, total transformations over pandas objects, plus the **construction seam**: the one
+place a DataFrame is built from a DB-API cursor.
+
+The construction half exists so a `model/` entity never calls the pandas API. It keeps the
+layer's pandas usage to the return ANNOTATION (`-> pd.DataFrame`), which is the vocabulary
+the layers agree on, while the calls that actually depend on pandas' surface live here. That
+also removes the shaping code every copied entity would otherwise carry, along with its
+empty-result edge case.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
+
+from utils.dtypes import apply_dtypes
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
@@ -20,6 +29,47 @@ else:
 		from utils.typing import type_checker
 	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
 		from chassis.typing import type_checker
+
+
+@type_checker
+def from_cursor(
+	cls_cursor: Any,  # noqa: ANN401 — opaque DB-API cursor; any driver's object is valid
+	dict_dtypes: dict[str, str],
+	list_date_cols: list[str] | None = None,
+) -> pd.DataFrame:
+	"""Build a typed DataFrame from an executed DB-API cursor.
+
+	The construction seam for the model layer: it takes the cursor the entity already
+	executed, reads the column names from ``cursor.description``, fetches the rows, and
+	applies the declared dtypes. The caller never touches the pandas API.
+
+	An exhausted or non-returning cursor (``description is None``) yields an **empty frame
+	with the declared columns**, not a shapeless one — a caller that concatenates or renders
+	the result then behaves identically whether or not there were rows, which a bare empty
+	frame does not give you.
+
+	The cursor is **not** closed here: the entity owns it and its lifecycle.
+
+	Parameters
+	----------
+	cls_cursor : Any
+		A DB-API 2.0 cursor on which ``execute`` has already been called.
+	dict_dtypes : dict of {str: str}
+		Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
+	list_date_cols : list of str, optional
+		Columns coerced to dates, forwarded to :func:`utils.dtypes.apply_dtypes`.
+
+	Returns
+	-------
+	pandas.DataFrame
+		One row per record, every declared column typed.
+	"""
+	if cls_cursor.description is None:
+		return apply_dtypes(pd.DataFrame(columns=list(dict_dtypes)), dict_dtypes=dict_dtypes)
+
+	list_cols = [col[0] for col in cls_cursor.description]
+	df_records = pd.DataFrame.from_records(cls_cursor.fetchall(), columns=list_cols)
+	return apply_dtypes(df_records, dict_dtypes=dict_dtypes, list_date_cols=list_date_cols)
 
 
 @type_checker

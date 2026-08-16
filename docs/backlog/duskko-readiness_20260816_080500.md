@@ -53,6 +53,14 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
       — **prioridade caiu**: a #165 resolveu a falha aguda do Nexus (403 por pacote). O
       wheelhouse cobre o indice bloqueado por inteiro, que nao e o que o box do Werner mostra.
 
+## Fronteira de vendor (pedido do dono, meio da sessao)
+
+- [x] `utils/frames.from_cursor` + `model/example_entity` da tier **native-db** deixa de chamar a
+      API do pandas; `pd.DataFrame` fica so como anotacao. Scaffold real: 203 passed, lint limpo.
+- [ ] **#171** o gate que torna isso mecanico (vendor fora de utils negado em qualquer escopo)
+- [ ] tier **ORM**: `model/example_entity.py:81` usa `pd.read_sql`, que o proprio `ruff.toml`
+      bane — e o arquivo esta isento via `per-file-ignores`. Issue separada.
+
 ## Aberto durante a sessao (fora do Tier A, registrado para depois)
 
 - **#167** gate de complexidade ciclomatica no python-common (1 testes / 2 modulos) — com medicao
