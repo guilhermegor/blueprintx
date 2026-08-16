@@ -212,8 +212,9 @@ re_pem = re.compile(
 )
 list_seen: list[str] = []
 set_bodies: set[str] = set()
+int_non_corporate = 0
 
-for str_source in list_sources:
+for int_index, str_source in enumerate(list_sources):
     path_source = pathlib.Path(str_source)
     if not path_source.is_file():
         continue
@@ -223,9 +224,25 @@ for str_source in list_sources:
         if str_body not in set_bodies:
             set_bodies.add(str_body)
             list_seen.append(str_block)
+            # Index 0 is the corporate CA; everything after it is pre-existing trust.
+            if int_index > 0:
+                int_non_corporate += 1
 
 if not list_seen:
     print("No certificates found for the union bundle", file=sys.stderr)
+    sys.exit(1)
+
+# A "union" of exactly one source is a REPLACEMENT wearing the word union. If certifi is
+# unimportable AND the host set no bundle, writing this file would narrow the trust store to
+# the corporate CA alone — the precise defect this function was written to remove, arrived at
+# from the other direction. Fail instead, so wire_corporate_ca leaves TLS untouched.
+if int_non_corporate == 0:
+    print(
+        "Refusing to write a CA bundle containing ONLY the corporate certificate: that "
+        "narrows the trust store instead of widening it. Install certifi (pip install "
+        "certifi) or point PIP_CERT/REQUESTS_CA_BUNDLE at the host's CA bundle, then retry.",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 path_out.parent.mkdir(parents=True, exist_ok=True)

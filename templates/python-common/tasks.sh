@@ -156,6 +156,7 @@ lint() {
 	poetry_exec run codespell .
 	poetry_exec run pydocstyle .
 	poetry_exec run python bin/check_docstrings.py
+	poetry_exec run python bin/check_layer_imports.py
 	bash "$SCRIPT_DIR/bin/lint_shell.sh"
 	bash "$SCRIPT_DIR/bin/lint_sql.sh"
 	bash "$SCRIPT_DIR/bin/lint_yaml.sh"

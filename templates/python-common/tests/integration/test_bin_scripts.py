@@ -244,6 +244,11 @@ def test_prune_drops_every_db_driver_for_sqlite(tmp_path: Path) -> None:
 		("mariadb", "mysql-connector-python"),
 		("mssql", "pyodbc"),
 		("oracle", "oracledb"),
+		# config/connection_db.py lowercases DB_BACKEND before dispatching, so these spellings
+		# are valid app configuration. The pruner must agree, or it drops the one driver the
+		# project is configured to use — the exact failure the pruning exists to prevent.
+		("PostgreSQL", "psycopg"),
+		("ORACLE", "oracledb"),
 	],
 )
 def test_prune_keeps_only_the_configured_backends_driver(
@@ -333,6 +338,9 @@ def test_every_glyph_printing_gate_reconfigures_its_streams(str_script: str) -> 
 # --------------------------
 
 
+_CA_ENV_VARS = ("PIP_CERT", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA_BUNDLE")
+
+
 def _fake_pem(str_marker: str) -> str:
 	"""Build a syntactically valid PEM block whose body identifies it.
 
@@ -395,6 +403,61 @@ def test_corporate_ca_bundle_is_a_union_not_a_replacement(tmp_path: Path) -> Non
 	assert "SE9TVEJVTkRMRQ==" in str_bundle, "the host's existing bundle must survive"
 	# A replacement writes exactly one block; only a union carries the roots as well.
 	assert str_bundle.count("BEGIN CERTIFICATE") > 2
+
+
+def test_bundle_construction_refuses_when_only_the_corporate_ca_is_available(
+	tmp_path: Path,
+) -> None:
+	"""With no certifi and no host bundle, writing the file would narrow the trust store.
+
+	A union of exactly one source is a replacement wearing the word "union" — the same defect
+	this function exists to remove, reached from the other direction. It must fail loudly so
+	the caller leaves TLS settings untouched, rather than write a one-certificate bundle that
+	breaks every connection not through the proxy.
+	"""
+	path_bin = tmp_path / "bin"
+	(path_bin / "lib").mkdir(parents=True)
+	for path_lib in (Path(__file__).resolve().parents[2] / "bin" / "lib").glob("*.sh"):
+		shutil.copy(path_lib, path_bin / "lib" / path_lib.name)
+	path_corporate = path_bin / "corporate_ca.pem"
+	path_corporate.write_text(_fake_pem("Q09SUE9SQVRFQ0E="), encoding="utf-8")
+
+	dict_env = {k: v for k, v in os.environ.items() if k not in _CA_ENV_VARS}
+	# Stand in for a host where certifi was never installed by hiding it from the child.
+	path_sitecustomize = tmp_path / "sitecustomize.py"
+	path_sitecustomize.write_text(
+		# Written against the modern finder protocol. The older two-method form was dropped
+		# in Python 3.12, where a finder shaped that way is skipped without any warning.
+		"import sys\n"
+		"from importlib.abc import MetaPathFinder\n"
+		"class _Block(MetaPathFinder):\n"
+		"    def find_spec(self, fullname, path=None, target=None):\n"
+		"        if fullname == 'certifi':\n"
+		"            raise ModuleNotFoundError(fullname)\n"
+		"        return None\n"
+		"sys.meta_path.insert(0, _Block())\n",
+		encoding="utf-8",
+	)
+	dict_env["PYTHONPATH"] = str(tmp_path)
+
+	str_bash = shutil.which("bash") or "bash"
+	str_script = (
+		f'source "{path_bin}/lib/common.sh"; source "{path_bin}/lib/bootstrap.sh"; '
+		f'BIN_DIR="{path_bin}"; PYTHON="$(command -v python3 || command -v python)"; '
+		f'build_union_ca_bundle "{path_corporate}"'
+	)
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	cls_run = subprocess.run(  # noqa: S603
+		[str_bash, "-c", str_script],
+		env=dict_env,
+		capture_output=True,
+		encoding="utf-8",
+		errors="replace",
+		check=False,
+	)
+	assert cls_run.returncode != 0, "a corporate-only bundle must not be written"
+	assert not (path_bin / "ca_bundle.pem").exists()
+	assert "narrows the trust store" in cls_run.stderr
 
 
 def test_corporate_ca_wiring_never_disables_verification_for_pypi() -> None:

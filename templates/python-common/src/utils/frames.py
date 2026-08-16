@@ -12,6 +12,7 @@ empty-result edge case.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -69,6 +70,43 @@ def from_cursor(
 
 	list_cols = [col[0] for col in cls_cursor.description]
 	df_records = pd.DataFrame.from_records(cls_cursor.fetchall(), columns=list_cols)
+	return apply_dtypes(df_records, dict_dtypes=dict_dtypes, list_date_cols=list_date_cols)
+
+
+@type_checker
+def from_records(
+	list_records: Sequence[Mapping[str, Any]],
+	dict_dtypes: dict[str, str],
+	list_date_cols: list[str] | None = None,
+) -> pd.DataFrame:
+	"""Build a typed DataFrame from already-materialised row mappings.
+
+	The ORM sibling of :func:`from_cursor`: an entity turns its mapped objects into plain
+	dicts (``{"id": row.id, "title": row.title}``) and hands them here, so the model layer
+	never calls the pandas API. Keeping the projection in the entity is deliberate — it is the
+	only place that knows which attributes belong in the frame.
+
+	Like :func:`from_cursor`, an empty input yields an empty frame carrying the **declared
+	columns**, so the result's shape does not depend on whether rows happened to exist.
+
+	Parameters
+	----------
+	list_records : sequence of mapping
+		One mapping per row, keyed by column name.
+	dict_dtypes : dict of {str: str}
+		Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
+	list_date_cols : list of str, optional
+		Columns coerced to dates, forwarded to :func:`utils.dtypes.apply_dtypes`.
+
+	Returns
+	-------
+	pandas.DataFrame
+		One row per record, every declared column typed.
+	"""
+	if not list_records:
+		return apply_dtypes(pd.DataFrame(columns=list(dict_dtypes)), dict_dtypes=dict_dtypes)
+
+	df_records = pd.DataFrame(list(list_records))
 	return apply_dtypes(df_records, dict_dtypes=dict_dtypes, list_date_cols=list_date_cols)
 
 

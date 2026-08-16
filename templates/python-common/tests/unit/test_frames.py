@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.utils.frames import from_cursor, map_with_default
+from src.utils.frames import from_cursor, from_records, map_with_default
 
 
 def test_map_with_default_relabels_known_and_defaults_unknown() -> None:
@@ -66,5 +66,21 @@ def test_from_cursor_returns_the_declared_columns_when_there_are_no_rows() -> No
 	"""
 	cls_cursor = _FakeCursor(None, [])
 	df_out = from_cursor(cls_cursor, {"id": "int64", "title": "str"})
+	assert df_out.empty
+	assert list(df_out.columns) == ["id", "title"]
+
+
+def test_from_records_types_every_declared_column() -> None:
+	"""Row mappings are shaped and coerced to the declared dtypes."""
+	list_records = [{"id": 1, "title": "a"}, {"id": 2, "title": "b"}]
+	df_out = from_records(list_records, {"id": "int64", "title": "str"})
+	assert list(df_out.columns) == ["id", "title"]
+	assert str(df_out["id"].dtype) == "int64"
+	assert df_out["title"].tolist() == ["a", "b"]
+
+
+def test_from_records_returns_the_declared_columns_when_empty() -> None:
+	"""No rows still yields the declared columns, so the shape is not data-dependent."""
+	df_out = from_records([], {"id": "int64", "title": "str"})
 	assert df_out.empty
 	assert list(df_out.columns) == ["id", "title"]

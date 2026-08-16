@@ -1,18 +1,29 @@
 """Example service-style model (SQLAlchemy ORM).
 
-Demonstrates the MVC model pattern with the ORM: a declarative model plus a
-service class that opens sessions, runs queries, and shapes results into a
-pandas DataFrame via ``pd.read_sql``. Copy and adapt per domain entity.
+Demonstrates the MVC model pattern with the ORM: a declarative model plus a service class
+that opens sessions for writes and reads through the session, projecting mapped objects into
+the frame seam. Copy and adapt per domain entity.
+
+Note what this file does NOT do: it never calls the pandas API. ``pandas`` appears only as
+the return **annotation**; the construction lives in ``utils.frames``. That matters here more
+than anywhere else, because this file exists to be copied — the previous version called
+``pd.read_sql``, which the project's own ``ruff.toml`` bans, and the gate had been silenced
+for this path rather than the example fixed (blueprintx#172).
 """
 
 from __future__ import annotations
 
-import pandas as pd
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Engine, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
-from utils.dtypes import apply_dtypes
+from utils.frames import from_records
 from utils.typing import TypeChecker
+
+
+if TYPE_CHECKING:
+	import pandas as pd
 
 
 # Declare the column types on load — never trust pandas' inference (a zero-padded
@@ -72,11 +83,22 @@ class ExampleEntity(metaclass=TypeChecker):
 	def fetch_all(self) -> pd.DataFrame:
 		"""Read every row from the example table into a DataFrame.
 
+		Reads through the ORM session and projects each mapped object into a plain mapping,
+		then hands those to ``utils.frames.from_records``. The projection stays here because
+		this is the only place that knows which attributes belong in the frame; the pandas
+		call stays in the seam.
+
 		Returns
 		-------
 		pd.DataFrame
-			One row per record.
+			One row per record, every declared column typed.
 		"""
-		with self.cls_engine.connect() as cls_conn:
-			df_records = pd.read_sql(select(ExampleRecord), cls_conn)
-		return apply_dtypes(df_records, dict_dtypes=_DICT_DTYPES)
+		cls_session = self._session_factory()
+		try:
+			list_records = [
+				{"id": cls_row.id, "title": cls_row.title}
+				for cls_row in cls_session.scalars(select(ExampleRecord))
+			]
+		finally:
+			cls_session.close()
+		return from_records(list_records, _DICT_DTYPES)

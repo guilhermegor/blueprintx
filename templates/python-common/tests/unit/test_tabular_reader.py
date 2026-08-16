@@ -237,3 +237,18 @@ def test_positional_payload_raises_on_a_row_narrower_than_its_header(tmp_path: P
 	cls_contract = FileContract("data", "data", ("code", "amount"), ())
 	with pytest.raises(ContractError, match="narrower"):
 		read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_column_names_colliding_after_trimming_are_rejected(tmp_path: Path) -> None:
+	"""Two names that differ only by surrounding spaces must not silently become one.
+
+	Stripping is the fix for an unreachable padded column, but it can collide: a source
+	shipping both ``code`` and ``code `` yields two columns named ``code``. The contract's
+	required-column check still passes — the name IS present — while every later lookup
+	returns a DataFrame instead of a Series and ``apply_dtypes`` types an ambiguous schema.
+	"""
+	path_csv = tmp_path / "collide.csv"
+	path_csv.write_text("code;code ;amount\nABC;DEF;10\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("code",), ())
+	with pytest.raises(ContractError, match="collide after trimming"):
+		read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)

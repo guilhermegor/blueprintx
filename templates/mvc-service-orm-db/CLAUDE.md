@@ -84,7 +84,7 @@ and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 **`config/connection_db.build_engine()`** reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`; `build_session_factory()` returns a bound `sessionmaker`. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. `SQL_ECHO=true` logs SQL. SQL Server honours `DB_MSSQL_AUTH` (`sql` for UID/PWD, `aad` for Azure AD Interactive).
 
-**`model/example_entity`** is the reference model: a `DeclarativeBase`, an ORM-mapped `ExampleRecord`, and an `ExampleEntity` service that opens sessions for writes and uses `pd.read_sql` for reads, then **types every column on load** with `apply_dtypes(df, dict_dtypes=_DICT_DTYPES)` (`utils.dtypes`). Copy it per entity and adjust `_DICT_DTYPES`.
+**`model/example_entity`** is the reference model: a `DeclarativeBase`, an ORM-mapped `ExampleRecord`, and an `ExampleEntity` service that opens sessions for writes and **reads through the session** (`session.scalars(select(...))`), projecting each mapped object into a plain mapping and handing those to `utils.frames.from_records`, which **types every column on load**. Copy it per entity and adjust `_DICT_DTYPES`. Note it never calls the pandas API — `pd.DataFrame` is only the return annotation, so copying it propagates the boundary rather than a vendor call.
 
 **`view/report_renderer.RenderToExcel`** is the reference view: take a DataFrame, write `.xlsx` via openpyxl, return the path. Add JSON/CSV/HTML renderers alongside it.
 
@@ -92,7 +92,9 @@ and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 ## Session lifecycle rule
 
-The service class owns the `sessionmaker`. Open a session per write and close it in a `finally`; reads use `pd.read_sql` on an engine connection. Keep `commit()` at the service boundary — never inside a lower-level helper.
+The service class owns the `sessionmaker`. Open a session per write **and per read**, and close it in a `finally`. Keep `commit()` at the service boundary — never inside a lower-level helper.
+
+Reads go through the session (`session.scalars(select(...))`), not `pd.read_sql`: the bare pandas readers are banned project-wide so every read funnels through a seam that enforces types, and the frame is built by `utils.frames.from_records`. Materialise the rows **before** closing the session — a lazily-loaded attribute touched after `close()` raises `DetachedInstanceError`.
 
 ## Adding a new model entity
 

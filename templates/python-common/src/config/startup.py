@@ -83,6 +83,22 @@ try:
 	YAML_INPUTS = yaml.safe_load(
 		resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
 	)
+	# Validate the SHAPE here, inside the guard. An empty YAML file loads as nothing at all,
+	# and a non-mapping root loads as a scalar or as a sequence. Each of those reaches the
+	# output directory resolver further down and raises there — that is, BELOW this block and
+	# before the logger exists, which is exactly the failure the fragility gradient was
+	# introduced to remove. Checking the type here routes a malformed config to the same
+	# reported, exit-2 path as a missing one.
+	for str_label, dict_loaded in (("outputs", YAML_OUTPUTS), ("inputs", YAML_INPUTS)):
+		if not isinstance(dict_loaded, dict):
+			raise TypeError(
+				f"{str_label} config must be a YAML mapping, got {type(dict_loaded).__name__}"
+			)
+	# The three filename templates are read unconditionally below; a non-string here would
+	# fail while being formatted, for the same reason, one line later.
+	for str_key in ("log_name", "json_name", "txt_name"):
+		if not isinstance(YAML_OUTPUTS.get(str_key), str):
+			raise TypeError(f"outputs config must define {str_key!r} as a string")
 # Exception, never BaseException: the config helpers raise SystemExit(2) for an unknown ENV
 # and that must pass straight through rather than being reported as a config read failure.
 except Exception as cls_exc:  # noqa: BLE001

@@ -176,8 +176,16 @@ def find_file_problems(
         return [f"{path_file}: could not parse ({cls_exc})"]
 
     dict_layers = dict_policy.get("layers", {})
-    dict_allow = (dict_layers.get(str_layer) or {}).get("allow") or {}
-    dict_annotation_only = dict_policy.get("annotation_only") or {}
+    dict_layer = dict_layers.get(str_layer) or {}
+    dict_allow = dict_layer.get("allow") or {}
+    # A layer may narrow a vendor to annotations even where a sibling layer legitimately
+    # calls it. Measured: the ORM tier's controller names `Engine` only in signatures, while
+    # its model genuinely CONSTRUCTS with DeclarativeBase/mapped_column — one global verdict
+    # cannot serve both, and the loose one would be the one that survives.
+    dict_annotation_only = {
+        **(dict_policy.get("annotation_only") or {}),
+        **(dict_layer.get("annotation_only") or {}),
+    }
 
     set_annotation_ids = annotation_node_ids(cls_tree)
     list_functions = [
@@ -272,8 +280,8 @@ if __name__ == "__main__":
     # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
     # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
     # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
-    for _cls_stream in (sys.stdout, sys.stderr):
-        if hasattr(_cls_stream, "reconfigure"):
-            _cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
     sys.exit(main())

@@ -529,7 +529,23 @@ def _read_raw(
 		int_header_row,
 		int_csv_quoting,
 	)
-	df_raw.columns = [str(col).strip() for col in df_raw.columns]
+	list_normalised = [str(col).strip() for col in df_raw.columns]
+	# Stripping can COLLIDE. When a source publishes one name twice — once padded with
+	# spaces and once not — trimming leaves two columns under a single label. The
+	# required-column check still passes, since the label IS present, while the identifier
+	# check and the dtype step then work on an ambiguous schema. Fail here, while the cause
+	# is still visible; one line further down the duplicate can no longer be told apart from
+	# a source that genuinely repeats a label.
+	list_duplicates = sorted({c for c in list_normalised if list_normalised.count(c) > 1})
+	if list_duplicates:
+		raise ContractError(
+			[
+				f"Column names collide after trimming whitespace: {', '.join(list_duplicates)}. "
+				f"The source published the same name with and without surrounding spaces; "
+				f"disambiguate it before reading."
+			]
+		)
+	df_raw.columns = list_normalised
 	return df_raw
 
 

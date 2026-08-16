@@ -210,8 +210,8 @@ if __name__ == "__main__":
     # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
     # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
     # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
-    for _cls_stream in (sys.stdout, sys.stderr):
-        if hasattr(_cls_stream, "reconfigure"):
-            _cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
     sys.exit(main())

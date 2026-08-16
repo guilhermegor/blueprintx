@@ -329,7 +329,12 @@ pip_fallback_resolve_db_backend() {
 	str_backend="${str_backend//$'\r'/}"
 	str_backend="${str_backend//[[:space:]]/}"
 
-	printf '%s\n' "${str_backend:-sqlite}"
+	# Lowercase to match config/connection_db.py, which reads the same variable through
+	# `os.getenv("DB_BACKEND", "sqlite").lower()`. Without this, `DB_BACKEND=PostgreSQL` is a
+	# valid configuration for the app and an unrecognised one here — so the pruner would drop
+	# psycopg and hand the project a venv missing the driver it is configured to use, which is
+	# the exact class of failure this pruning exists to prevent.
+	printf '%s\n' "${str_backend:-sqlite}" | tr '[:upper:]' '[:lower:]'
 }
 
 # Drop every DB driver that the configured DB_BACKEND does not use.

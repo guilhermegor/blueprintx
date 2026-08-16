@@ -62,8 +62,17 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
       formatos: vendor no topo reprova; vendor em funcao sob `try/except ImportError` reprova
       (mensagem nomeia a evasao); `pd.read_sql` reprova; `pd.DataFrame` so em anotacao passa.
       Scaffold real: **213 passed**.
-- [ ] tier **ORM**: `model/example_entity.py:81` usa `pd.read_sql`, que o proprio `ruff.toml`
-      bane — e o arquivo esta isento via `per-file-ignores`. Issue separada.
+- [x] **#172** tier **ORM**: `example_entity` lia com `pd.read_sql` (banido pelo proprio
+      `ruff.toml`) e o arquivo estava isento de `TID251` via `per-file-ignores` — a isencao
+      estava no arquivo que o `CLAUDE.md` manda COPIAR, entao isentava o padrao. Agora le pela
+      sessao ORM e monta o frame com `utils.frames.from_records`; isencao removida; as duas
+      afirmacoes do `CLAUDE.md` corrigidas.
+- [x] Revisao do CodeRabbit no PR #170 colhida e resolvida: 4 Major (2 deles reintroduziriam
+      defeitos ja corrigidos nesta sessao) + 2 menores.
+- [x] Cards do kanban corrigidos — o hook so move o card da issue que originou a branch, e eu
+      bundlei 8 numa branch so.
+- [ ] **#173** aplicar o PR gate ao proprio BlueprintX (`required_conversation_resolution`,
+      checks obrigatorios, GitGuardian) — medido: nada bloqueia merge hoje.
 
 ## Aberto durante a sessao (fora do Tier A, registrado para depois)
 
