@@ -262,3 +262,70 @@ def test_prune_keeps_only_the_configured_backends_driver(
 	]
 	assert len(list_drivers) == 1
 	assert list_drivers[0].startswith(str_driver)
+
+
+# --------------------------
+# bin/check_*.py — Windows cp1252 stdout
+# --------------------------
+
+_GLYPH_GATES = (
+	"check_backlog_ledger.py",
+	"check_contract_drift.py",
+	"check_docs_sections.py",
+	"check_docstrings.py",
+	"check_dtypes.py",
+	"check_provenance.py",
+	"check_typing.py",
+	"pr_gate.py",
+)
+
+
+def test_gate_reports_a_finding_under_cp1252_stdout(tmp_path: Path) -> None:
+	"""A gate must survive a cp1252 stdout while PRINTING its non-ASCII status glyph.
+
+	Windows defaults stdout to cp1252, which cannot encode ``❌``, so the script died with
+	UnicodeEncodeError before reporting anything — and because these back an ``always_run``
+	pre-commit hook, that crash blocked every commit from a Windows checkout instead of
+	failing the file under check.
+
+	The violation is deliberate: a gate run over clean sources prints no glyph and would pass
+	this test with the fix removed. ``PYTHONIOENCODING`` turns an OS-specific defect into an
+	ordinary local test.
+	"""
+	path_src = tmp_path / "src"
+	path_src.mkdir()
+	# A banned binary float dtype — the finding that makes check_dtypes print its glyph.
+	(path_src / "loader.py").write_text(
+		'dict_dtypes = {"amount": "float64"}\n', encoding="utf-8"
+	)
+	dict_env = dict(os.environ)
+	dict_env["PYTHONIOENCODING"] = "cp1252"
+	str_python = shutil.which("python3") or shutil.which("python") or "python3"
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	cls_run = subprocess.run(  # noqa: S603
+		[str_python, str(_bin_script("check_dtypes.py"))],
+		cwd=tmp_path,
+		env=dict_env,
+		capture_output=True,
+		encoding="utf-8",
+		errors="replace",
+		check=False,
+	)
+	str_output = (cls_run.stdout or "") + (cls_run.stderr or "")
+	assert "UnicodeEncodeError" not in str_output
+	assert cls_run.returncode == 1, "the gate must still report the violation, not crash"
+
+
+@pytest.mark.parametrize("str_script", _GLYPH_GATES)
+def test_every_glyph_printing_gate_reconfigures_its_streams(str_script: str) -> None:
+	"""Structural sweep: the whole family carries the fix, not just the one that was caught.
+
+	A shared-shape defect is never in one file, and only one of these is cheap to execute
+	end-to-end (the others reach the network or the GitHub API), so the family is held to the
+	convention structurally while the mechanism above is proven for real once.
+	"""
+	str_source = _bin_script(str_script).read_text(encoding="utf-8")
+	str_main = str_source.split('if __name__ == "__main__":')[-1]
+	assert 'reconfigure(encoding="utf-8"' in str_main, (
+		f"{str_script} prints status glyphs but never reconfigures stdout/stderr"
+	)

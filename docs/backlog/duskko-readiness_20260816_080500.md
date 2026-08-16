@@ -34,7 +34,9 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
       classe da lição `resolve-config-paths-to-absolute` (#122).
 - [ ] **#147** robustez do reader de ingestão: payload posicional mais largo que o header, nomes de
       campo não confiáveis, envelope de fixture reproduzindo o real
-- [ ] **#115** emoji nos `bin/check_*.py` quebra os gates em Windows cp1252
+- [x] **#115** emoji nos `bin/check_*.py` quebra os gates em Windows cp1252 — 8 arquivos, 41
+      caracteres nao-cp1252. Corrigido no seam de I/O (reconfigure UTF-8), nao removendo os
+      glifos. Controle negativo: 2 failed sem a correcao, 9 passed com ela.
 - [ ] **#114** `get_corporate_ca.sh` estreita o trust store TLS em vez de uni-lo
 - [ ] **#127** wheelhouse offline para o fallback pip (índice bloqueado sai 0 com venv vazia)
 
