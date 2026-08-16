@@ -325,16 +325,16 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 		if str_col not in df_input.columns:
 			continue
 		series_col = df_input[str_col]
-		# An EMPTY column is not a broken column. `any()` over an empty series is False —
-		# the exact answer a column of garbage gives — so without this guard a source that
-		# reports "nothing today" by shipping its header alone is reproved as holding no
-		# valid CNPJ, and the run dies on a file that is perfectly well-formed. A column
+		# An EMPTY column is not a broken column. Over an empty series the any-reducer
+		# answers False, the exact answer a column of garbage gives, so without this guard
+		# a source reporting "nothing today" by shipping its header alone is reproved as
+		# holding no valid CNPJ and the run dies on a perfectly well-formed file. A column
 		# that HAS values and none valid must still fail, so the guard is emptiness only.
 		if series_col.empty:
 			continue
-		# `safe_str` (never `.astype(str)`, which is not NA-safe below pandas 3 and turns a
-		# missing value into the literal "nan" — a string that then fails validation for the
-		# wrong reason).
+		# Coerce with the NA-safe string helper rather than astype-to-str. Below pandas 3 the
+		# latter renders a missing value as the literal nan, and that string then fails
+		# validation for entirely the wrong reason.
 		series_valid = series_col.map(lambda v: is_valid_cnpj(unmask_cnpj(safe_str(v))))
 		if not bool(series_valid.any()):
 			list_problems.append(
@@ -381,18 +381,23 @@ def decode_positional_payload(
 	int_declared = len(list_columns)
 	list_narrow = [int_i for int_i, row in enumerate(list_rows) if len(row) < int_declared]
 	if list_narrow:
-		raise ContractError([
-			f"Positional payload has {len(list_narrow)} row(s) narrower than the declared "
-			f"{int_declared} columns (first at index {list_narrow[0]}); padding would invent data"
-		])
+		raise ContractError(
+			[
+				f"Positional payload has {len(list_narrow)} row(s) narrower than the declared "
+				f"{int_declared} columns (first at index {list_narrow[0]}); "
+				f"padding would invent data"
+			]
+		)
 
 	for int_pos in range(int_declared, max((len(row) for row in list_rows), default=int_declared)):
 		list_surplus = [row[int_pos] for row in list_rows if len(row) > int_pos]
 		if any(value not in (None, "") for value in list_surplus):
-			raise ContractError([
-				f"Positional payload row is wider than its header and surplus position "
-				f"{int_pos} holds a value — it cannot be named, so it must not be dropped"
-			])
+			raise ContractError(
+				[
+					f"Positional payload row is wider than its header and surplus position "
+					f"{int_pos} holds a value — it cannot be named, so it must not be dropped"
+				]
+			)
 
 	return pd.DataFrame(
 		[list(row)[:int_declared] for row in list_rows], columns=list(list_columns)
@@ -594,12 +599,12 @@ def _read_raw_dispatch(
 			quoting=int_csv_quoting,
 		)
 	if str_suffix == ".json":
-		# NEVER pd.read_json here: it infers types before anything can ask it not to, and the
-		# later astype cannot undo that. It coerces even values the document QUOTES as strings
-		# — measured, `"1000.50"` comes back `1000.5` and `"007"` comes back `7` — so the
-		# "always read as text" guarantee read_table documents was false on this branch alone
-		# while the CSV branch honoured it. parse_float/parse_int as `str` keep the exact
-		# source token, which is what a Decimal column is later built from.
+		# Never use pandas' own JSON reader here. It infers types before anything can ask it
+		# not to, and the later astype cannot undo that. It coerces even values the document
+		# QUOTES as strings — measured, "1000.50" comes back as 1000.5 and "007" as 7 — so
+		# the "always read as text" guarantee read_table documents was false on this branch
+		# alone while the CSV branch honoured it. Parsing floats and ints as str keeps the
+		# exact source token, which is what a Decimal column is later built from.
 		obj_json = json.loads(
 			path_file.read_text(encoding=str_encoding), parse_float=str, parse_int=str
 		)

@@ -233,9 +233,7 @@ def test_positional_payload_raises_when_the_surplus_holds_a_value(tmp_path: Path
 def test_positional_payload_raises_on_a_row_narrower_than_its_header(tmp_path: Path) -> None:
 	"""A short row is a defect too — padding it would invent data."""
 	path_json = tmp_path / "narrow.json"
-	path_json.write_text(
-		'{"columns": ["code", "amount"], "rows": [["ABC"]]}', encoding="utf-8"
-	)
+	path_json.write_text('{"columns": ["code", "amount"], "rows": [["ABC"]]}', encoding="utf-8")
 	cls_contract = FileContract("data", "data", ("code", "amount"), ())
 	with pytest.raises(ContractError, match="narrower"):
 		read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)

@@ -255,10 +255,9 @@ def test_prune_keeps_only_the_configured_backends_driver(
 	project actually needs would break the install it exists to protect.
 	"""
 	list_kept = _run_prune(tmp_path, str_backend)
+	set_known_drivers = {"pyodbc", "oracledb", "psycopg", "mysql-connector-python"}
 	list_drivers = [
-		line
-		for line in list_kept
-		if line.split(">")[0].split("<")[0] in {"pyodbc", "oracledb", "psycopg", "mysql-connector-python"}
+		line for line in list_kept if line.split(">")[0].split("<")[0] in set_known_drivers
 	]
 	assert len(list_drivers) == 1
 	assert list_drivers[0].startswith(str_driver)
@@ -295,9 +294,7 @@ def test_gate_reports_a_finding_under_cp1252_stdout(tmp_path: Path) -> None:
 	path_src = tmp_path / "src"
 	path_src.mkdir()
 	# A banned binary float dtype — the finding that makes check_dtypes print its glyph.
-	(path_src / "loader.py").write_text(
-		'dict_dtypes = {"amount": "float64"}\n', encoding="utf-8"
-	)
+	(path_src / "loader.py").write_text('dict_dtypes = {"amount": "float64"}\n', encoding="utf-8")
 	dict_env = dict(os.environ)
 	dict_env["PYTHONIOENCODING"] = "cp1252"
 	str_python = shutil.which("python3") or shutil.which("python") or "python3"
