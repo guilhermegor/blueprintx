@@ -34,9 +34,29 @@ make update_venv   # poetry update
 The root repo has its **own** pre-commit (`/.pre-commit-config.yaml`) that mirrors
 `.github/workflows/scaffold_checks.yml`: the shared checks live in `bin/ci/*.sh`
 (`check_spelling.sh`, `check_shell.sh`, `check_docs_build.sh`, `validate_meta.sh`,
-`check_version_sync.sh`) and **both** the workflow and the hook call them — one home
-per check, zero drift. This is distinct from the scaffolded-project pre-commit shipped
-in `templates/python-common/`.
+`check_version_sync.sh`, `check_codespell_sync.sh`, `check_actions.sh`) and **both** the
+workflow and the hook call them — one home per check, zero drift. This is distinct from the
+scaffolded-project pre-commit shipped in `templates/python-common/`.
+
+Two of those exist because a defect can only be seen from *this* side of the copy:
+
+- `check_codespell_sync.sh` — the root `.codespellrc` and `templates/python-common/.codespellrc`
+  must carry the same `ignore-words-list`. They drifted in **both** directions (30 words one
+  way, 25 the other) and the stale copy was the **template**, so the cost landed only on
+  generated projects, which re-learned each word one rejected commit at a time. ⚠️ Write every
+  entry **lowercase**: codespell lowercases the found word before lookup, so a lowercase entry
+  covers every casing while a capitalised one matches only itself.
+- `check_actions.sh` — actionlint over this repo's workflows **and** the ones inside
+  `templates/`. Template workflows never execute here, so nothing exercised them: the gate's
+  first run found 8 real defects, including `actions/cache@v3` (a version GitHub no longer
+  runs) in three tiers. Resolves gracefully when actionlint is absent; CI sets
+  `LINT_ACTIONS_REQUIRED=1`, because a skip in CI is a gate reporting its own blindness as OK.
+
+`bin/ci/scaffold_lint_test.sh <tier>` is the real verification for template work — it scaffolds
+a project and runs **that project's** `make lint`, `make unit_tests` and `make integration_tests`.
+Checking at the template root is a false green: the generated project pins different linter
+versions. The integration suite matters specifically because it is the only place a `bin/*.sh`
+seam is actually executed.
 
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`

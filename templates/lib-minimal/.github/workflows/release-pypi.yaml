@@ -109,7 +109,7 @@ jobs:
 
       - name: Load Cached Virtual Environment
         id: cached-venv
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             .venv
@@ -146,7 +146,11 @@ jobs:
           fi
           if [ ${#without_groups[@]} -gt 0 ]; then
             echo "Excluding groups: ${without_groups[*]}"
-            poetry install --no-interaction --no-root --without $(IFS=,; echo "${without_groups[*]}")
+            # Joined into a quoted variable first: an unquoted $(...) word-splits, which is
+            # what SC2046 flags. Harmless for today's group names, and one group name with a
+            # space away from silently passing poetry two arguments instead of one.
+            str_without="$(IFS=,; printf '%s' "${without_groups[*]}")"
+            poetry install --no-interaction --no-root --without "$str_without"
           else
             echo "No groups to exclude, installing all dependencies"
             poetry install --no-interaction --no-root
@@ -222,7 +226,7 @@ jobs:
         # NOTE: this GitHub-Release step exists ONLY here, not in release-test-pypi.yaml
         # (Test PyPI rehearses the publish, not the release). So it is never exercised by the
         # rehearsal — any change here debuts in production. Diff the two workflows when editing.
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
           # Name the artifacts to ship — never `dist/*`. The scaffold tracks a 0-byte

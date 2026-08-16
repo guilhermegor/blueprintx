@@ -5,7 +5,15 @@ A branch whose cumulative diff touches a **non-trivial** path must add a work le
 It was the last rule of the flow enforced by memory in a repo that makes every other convention
 structural, so it is wired into both pre-commit and CI (gate parity), like ``check_typing.py``.
 
-Three design points that are easy to get wrong, all deliberate here:
+Four design points that are easy to get wrong, all deliberate here:
+
+0. **Bot PRs are exempt, keyed on the AUTHOR.** A gate demanding a human-authored artifact
+   permanently blocks every bot PR that trips it — nobody can satisfy it, so the real effect is
+   training people to reach for ``--admin``. The exemption reads the PR author from the event
+   payload (never ``GITHUB_ACTOR``, which is whoever *triggered* the run) and fails closed when
+   the author cannot be resolved. Keyed on the author and never the path: a human branch
+   touching the same files still owes the ledger. See ``pr_author_login`` / ``is_bot_author``.
+
 
 1. **"Non-trivial" is decided BY PATH, reusing the PR gate's classifier — but PER PATH.**
    ``pr_gate.classify_risk(list)`` returns the single *most-dangerous* class and ranks ``tests``
@@ -28,10 +36,73 @@ CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ance
 """
 
 import importlib.util
+import json
+import os
 import pathlib
 import re
 import subprocess
 import sys
+
+
+# A gate demanding a HUMAN-AUTHORED artifact permanently blocks every bot PR that trips it:
+# nobody can satisfy it, so the real effect is training people to reach for `--admin`.
+# Measured: two Dependabot PRs differed only in which file the bump touched; one merged, one
+# sat red for days.
+#
+# Keyed on GitHub's own `[bot]` login suffix — an allow-list of bot names would rot.
+BOT_LOGIN_SUFFIX = "[bot]"
+
+
+def is_bot_author(str_login: str) -> bool:
+    """Return whether a GitHub login belongs to a bot account.
+
+    Parameters
+    ----------
+    str_login : str
+        A GitHub login, e.g. ``dependabot[bot]`` or ``octocat``. An empty or ``None``-ish
+        value is treated as human, so an unresolved author fails CLOSED.
+
+    Returns
+    -------
+    bool
+        ``True`` only for a login carrying GitHub's ``[bot]`` suffix.
+    """
+    return bool(str_login) and str_login.endswith(BOT_LOGIN_SUFFIX)
+
+
+def pr_author_login() -> str:
+    """Return the PR author's login from the GitHub event payload (I/O seam).
+
+    ⚠️ This must be the PR **author**, never ``GITHUB_ACTOR``. The actor is whoever
+    *triggered* the run, so an actor-keyed exemption dies the moment a human touches the
+    bot's PR (update-branch, re-run, fixup) — i.e. the act of unblocking it defeats the fix,
+    and every retry looks like "the fix doesn't work".
+
+    ``GITHUB_ACTOR`` is consulted **only** when there is no PR payload at all (a ``push``
+    run, a local pre-commit), where there is no author to confuse it with.
+
+    Returns
+    -------
+    str
+        The author login, or ``""`` when it cannot be resolved — which the caller treats as
+        human, so the gate fails closed rather than exempting everyone.
+    """
+    str_event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+    if str_event_path and pathlib.Path(str_event_path).is_file():
+        try:
+            dict_event = json.loads(
+                pathlib.Path(str_event_path).read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError):
+            # An unreadable payload must not exempt anything.
+            return ""
+        dict_pr = dict_event.get("pull_request") or {}
+        if dict_pr:
+            # A PR payload exists: the author is authoritative and the actor is irrelevant.
+            return str((dict_pr.get("user") or {}).get("login") or "")
+
+    # No PR payload — nothing can be confused with the author here.
+    return os.environ.get("GITHUB_ACTOR", "")
 
 
 # Risk classes that REQUIRE a ledger. Kept narrow on purpose: docs/deps/tests-only branches are
@@ -183,6 +254,13 @@ def main() -> int:
     int
         0 when satisfied (or not applicable), 1 on a violation.
     """
+    str_author = pr_author_login()
+    if is_bot_author(str_author):
+        # Keyed on the AUTHOR, never the path: a human branch touching the same files still
+        # owes the ledger. Announced so an unexpected exemption is visible in the log.
+        print(f"✅ work-ledger check skipped — PR authored by a bot ({str_author}).")
+        return 0
+
     cls_gate = _load_pr_gate()
     if cls_gate is None:
         print("bin/pr_gate.py absent — skipping the work-ledger check.")

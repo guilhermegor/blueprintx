@@ -57,6 +57,33 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  lint-actions:
+    name: actionlint — workflows (repo + templates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ⚠️ Pinning the version pins what is ASKED FOR, never what ARRIVES — and what arrives
+      # is unpacked and EXECUTED on this runner. Hence the SHA-256 check before extracting.
+      - name: Install actionlint (pinned + checksum-verified)
+        env:
+          ACTIONLINT_VERSION: "1.7.7"
+          ACTIONLINT_SHA256: "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+        run: |
+          curl -fsSL -o /tmp/actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint
+
+      # yamllint says "is this valid YAML?"; actionlint says "will GitHub run this?" — and a
+      # workflow GitHub refuses produces no red check at all, only a PR that looks like it is
+      # waiting. The templates are in scope because their workflows never execute here, so
+      # every defect in them was previously found by whoever scaffolded a project.
+      - name: Lint workflows
+        env:
+          LINT_ACTIONS_REQUIRED: "1"
+        run: bash bin/ci/check_actions.sh
+
   validate-meta:
     name: Validate skeleton.meta integrity
     runs-on: ubuntu-latest
@@ -249,3 +276,9 @@ jobs:
 
       - name: Run codespell (skips binaries and lockfiles)
         run: bash bin/ci/check_spelling.sh
+
+      # The locale vocabulary this repo learns must reach the copy that ships into every
+      # scaffolded project — the two lists drifted in both directions before, and the stale
+      # side was the template, so only generated projects paid for it.
+      - name: Codespell ignore-list sync (root vs template)
+        run: bash bin/ci/check_codespell_sync.sh
