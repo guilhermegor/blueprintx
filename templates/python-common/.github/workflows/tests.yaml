@@ -20,35 +20,6 @@ on:
 
 jobs:
 
-  review-threads:
-    name: Review threads answered
-    runs-on: ubuntu-latest
-    # PRs only: there is no review thread to check on a push.
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - run: pip install --quiet pyyaml
-
-      # A review finding has two halves - change the code, and REPLY on the thread. Only the
-      # first is visible from the editor; the second is what a future session reads to learn
-      # what was decided and why. isResolved cannot be the signal, because a good reviewer bot
-      # closes its own threads on seeing the fix - the flag records ITS satisfaction, not your
-      # reasoning. The reviewer roster is data in .review-bots.yaml, so swapping tools is a
-      # row there and never an edit to the gate. Delete that file to opt out.
-      - name: Every review thread carries an answer
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: python bin/check_review_threads.py
 
   test:
     name: Run Automated Tests (${{ matrix.os }})

@@ -424,6 +424,9 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
+    # after the last push is still checked — a push-only trigger goes stale exactly then.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
     # PR quality gate (classify by path, sticky comment, native auto-merge) + the reconciler
     # that closes linked issues of BOT-merged PRs (a bot merge suppresses both the issue close
     # and delete_branch_on_merge). GitHub-only, like tests.yaml.

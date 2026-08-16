@@ -31,7 +31,22 @@ import sys
 
 _ROOT = pathlib.Path(__file__).resolve().parents[2]
 _SHARED_TESTS = _ROOT / "templates/python-common/tests/unit"
+_SHARED_WORKFLOWS = _ROOT / "templates/python-common/.github/workflows"
 _SCAFFOLD_DIR = _ROOT / "bin/scaffold"
+
+# Workflows are the SECOND hand-maintained copy list with exactly this defect shape, and it is
+# worse there: a CI job that no scaffold copies is not a test that silently does not run, it is
+# a GATE that silently does not exist in any generated project — and nothing anywhere reports a
+# workflow that was never installed. Found by adding `review_threads.yaml` and noticing the cp
+# list would not carry it.
+DICT_WORKFLOWS_EXPECTED_ABSENT = {
+    "python_lib_minimal.sh": {
+        # A library publishes to PyPI through its own release-pypi / release-test-pypi pair.
+        "release.yaml": "lib-minimal ships its own release-pypi workflows",
+        # Contract drift describes an ingested external file; a library tier registers none.
+        "contract_drift.yaml": "lib-minimal ships no contract oracle registry",
+    },
+}
 
 # Tests a given scaffold deliberately does NOT copy, with the reason. An entry here is a claim
 # that the tier cannot use the test, not a shortcut for "I forgot to wire it".
@@ -97,6 +112,14 @@ _RE_EXPLICIT_CP = re.compile(
     re.M,
 )
 
+# Same anchoring for the workflow copy list: an active `cp` whose source is the shared
+# workflows dir, never a mention in a comment.
+_RE_WORKFLOW_CP = re.compile(
+    r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*?COMMON_TEMPLATE_ROOT/\.github/workflows/"
+    r"([a-z0-9_\-]+\.ya?ml)",
+    re.M,
+)
+
 # The `copy_shared_utils` function body, from its definition to the closing brace.
 _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
 # Its `for util in … ; do` header, searched INSIDE that body only — and rejected when
@@ -117,7 +140,18 @@ def shared_test_names() -> set:
     set of str
         Filenames like ``test_dtypes.py`` under ``templates/python-common/tests/unit/``.
     """
-    return {path.name for path in _SHARED_TESTS.glob("test_*.py")}
+    return {path_file.name for path_file in _SHARED_TESTS.glob("test_*.py")}
+
+
+def shared_workflow_names() -> set:
+    """Return every shared workflow filename.
+
+    Returns
+    -------
+    set of str
+        Filenames like ``tests.yaml`` under ``templates/python-common/.github/workflows/``.
+    """
+    return {path_file.name for path_file in _SHARED_WORKFLOWS.glob("*.y*ml")}
 
 
 def reachable_tests(str_source: str) -> set:
@@ -149,8 +183,87 @@ def reachable_tests(str_source: str) -> set:
     return set_reachable
 
 
-def scaffold_problems(path_scaffold: pathlib.Path, set_shared: set) -> list:
-    """Return the shared tests a scaffold neither copies nor deliberately excludes.
+def reachable_workflows(str_source: str) -> set:
+    """Return the shared workflows one scaffold script copies.
+
+    Parameters
+    ----------
+    str_source : str
+        The scaffold script's text.
+
+    Returns
+    -------
+    set of str
+        Workflow filenames delivered by an active ``cp`` from the shared workflows directory.
+    """
+    return set(_RE_WORKFLOW_CP.findall(str_source))
+
+
+def asset_problems(
+    path_scaffold: pathlib.Path,
+    set_shared: set,
+    set_reachable: set,
+    dict_allowed: dict,
+    str_kind: str,
+    str_source_dir: str,
+    str_consequence: str,
+) -> list:
+    """Return the shared assets a scaffold neither copies nor deliberately excludes.
+
+    One function for both copy lists: tests and workflows have identical failure shapes, so a
+    second implementation would be a second place for the stale-exclusion check to rot.
+
+    Parameters
+    ----------
+    path_scaffold : pathlib.Path
+        A ``bin/scaffold/python_*.sh`` script.
+    set_shared : set of str
+        Every shared asset filename that exists on disk.
+    set_reachable : set of str
+        The assets this scaffold can actually deliver.
+    dict_allowed : dict of {str: str}
+        Deliberate exclusions for this scaffold, mapped to their reason.
+    str_kind : str
+        Human label for the asset class, e.g. ``"test"``.
+    str_source_dir : str
+        Repo-relative directory the assets come from, named in the stale-exclusion message.
+    str_consequence : str
+        What going missing actually costs, appended to the "never copies" message.
+
+    Returns
+    -------
+    list of str
+        One message per problem.
+    """
+    str_exclusions = "DICT_EXPECTED_ABSENT" if str_kind == "test" else "DICT_WORKFLOWS_EXPECTED_ABSENT"
+
+    list_problems = []
+    for str_asset in sorted(set_shared - set_reachable):
+        if str_asset in dict_allowed:
+            continue
+        list_problems.append(
+            f"❌ {path_scaffold.name}: never copies {str_asset} — {str_consequence}"
+        )
+
+    # A stale exclusion is its own defect: it silently keeps an asset out long after the reason
+    # expired, and reads as intentional forever.
+    for str_asset, str_reason in sorted(dict_allowed.items()):
+        if str_asset in set_reachable:
+            list_problems.append(
+                f"❌ {path_scaffold.name}: {str_asset} IS copied, but {str_exclusions} still "
+                f"claims it is not ({str_reason}) — remove the stale exclusion"
+            )
+        elif str_asset not in set_shared:
+            list_problems.append(
+                f"❌ {path_scaffold.name}: {str_exclusions} names {str_asset}, which no longer "
+                f"exists in {str_source_dir} — remove it"
+            )
+
+    return list_problems
+
+
+def scaffold_problems(path_scaffold: pathlib.Path, set_shared: set, set_workflows: set) -> list:
+    """Return every copy-list problem for one scaffold, across both asset classes.
 
     Parameters
     ----------
@@ -158,40 +271,33 @@ def scaffold_problems(path_scaffold: pathlib.Path, set_shared: set) -> list:
         A ``bin/scaffold/python_*.sh`` script.
     set_shared : set of str
         Every shared test filename.
+    set_workflows : set of str
+        Every shared workflow filename.
 
     Returns
     -------
     list of str
-        One message per unreachable test.
+        One message per problem, tests first.
     """
     str_source = path_scaffold.read_text(encoding="utf-8")
-    set_reachable = reachable_tests(str_source)
-    dict_allowed = DICT_EXPECTED_ABSENT.get(path_scaffold.name, {})
 
-    list_problems = []
-    for str_test in sorted(set_shared - set_reachable):
-        if str_test in dict_allowed:
-            continue
-        list_problems.append(
-            f"❌ {path_scaffold.name}: never copies {str_test} — it would be written, "
-            f"committed, and never run in any generated project"
-        )
-
-    # A stale exclusion is its own defect: it silently keeps a test out long after the reason
-    # expired, and reads as intentional forever.
-    for str_test, str_reason in sorted(dict_allowed.items()):
-        if str_test in set_reachable:
-            list_problems.append(
-                f"❌ {path_scaffold.name}: {str_test} IS copied, but DICT_EXPECTED_ABSENT still "
-                f"claims it is not ({str_reason}) — remove the stale exclusion"
-            )
-        elif str_test not in set_shared:
-            list_problems.append(
-                f"❌ {path_scaffold.name}: DICT_EXPECTED_ABSENT names {str_test}, which no "
-                f"longer exists in templates/python-common/tests/unit/ — remove it"
-            )
-
-    return list_problems
+    return asset_problems(
+        path_scaffold,
+        set_shared,
+        reachable_tests(str_source),
+        DICT_EXPECTED_ABSENT.get(path_scaffold.name, {}),
+        "test",
+        "templates/python-common/tests/unit/",
+        "it would be written, committed, and never run in any generated project",
+    ) + asset_problems(
+        path_scaffold,
+        set_workflows,
+        reachable_workflows(str_source),
+        DICT_WORKFLOWS_EXPECTED_ABSENT.get(path_scaffold.name, {}),
+        "workflow",
+        "templates/python-common/.github/workflows/",
+        "that CI gate would not exist at all in any generated project",
+    )
 
 
 def main() -> int:
@@ -203,10 +309,14 @@ def main() -> int:
         0 when every shared test is reachable from every scaffold, 1 otherwise.
     """
     set_shared = shared_test_names()
+    set_workflows = shared_workflow_names()
 
     # Scanning nothing yields no findings, which reads exactly like a clean pass.
     if not set_shared:
         print(f"❌ no shared tests found under {_SHARED_TESTS} — this gate would pass vacuously")
+        return 1
+    if not set_workflows:
+        print(f"❌ no workflows found under {_SHARED_WORKFLOWS} — this gate would pass vacuously")
         return 1
 
     list_scaffolds = sorted(_SCAFFOLD_DIR.glob("python_*.sh"))
@@ -216,22 +326,22 @@ def main() -> int:
 
     list_problems = []
     for path_scaffold in list_scaffolds:
-        list_problems.extend(scaffold_problems(path_scaffold, set_shared))
+        list_problems.extend(scaffold_problems(path_scaffold, set_shared, set_workflows))
 
     for str_problem in list_problems:
         print(str_problem)
 
     if list_problems:
         print(
-            f"\n{len(list_problems)} problem(s). A shared test reaches a generated project "
-            f"either through an explicit cp line or through the copy_shared_utils loop. Add the "
-            f"missing cp line, or record a deliberate exclusion in DICT_EXPECTED_ABSENT with a "
-            f"reason."
+            f"\n{len(list_problems)} problem(s). A shared asset reaches a generated project only "
+            f"through an active cp line (tests may also ride the copy_shared_utils loop). Add the "
+            f"missing cp, or record a deliberate exclusion with a reason."
         )
         return 1
 
     print(
-        f"test copy lists OK: {len(set_shared)} shared test(s) reachable from all "
+        f"copy lists OK: {len(set_shared)} shared test(s) + {len(set_workflows)} workflow(s) "
+        f"reachable from all "
         f"{len(list_scaffolds)} Python scaffolds."
     )
     return 0
