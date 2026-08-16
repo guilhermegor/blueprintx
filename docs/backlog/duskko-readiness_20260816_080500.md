@@ -46,7 +46,12 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
       trust store do SO (`ssl.enum_certificates`, sem rede e sem desabilitar verificacao) e
       `wire_corporate_ca` monta `bin/ca_bundle.pem` como UNIAO (certifi + bundle do host + CA
       corporativa). Removidos o append in-place no certifi e o `PIP_TRUSTED_HOST`.
+- [x] **#160** `startup.py` construia o LOGGER depois de resolucao falivel — gradiente de
+      fragilidade explicito, falha capturada e reportada em log + stderr com exit 2, guarda de
+      ordem via `ast`. Controle negativo: 2 failed na forma antiga.
 - [ ] **#127** wheelhouse offline para o fallback pip (índice bloqueado sai 0 com venv vazia)
+      — **prioridade caiu**: a #165 resolveu a falha aguda do Nexus (403 por pacote). O
+      wheelhouse cobre o indice bloqueado por inteiro, que nao e o que o box do Werner mostra.
 
 ## Aberto durante a sessao (fora do Tier A, registrado para depois)
 

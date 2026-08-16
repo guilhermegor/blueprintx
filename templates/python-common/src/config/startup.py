@@ -9,6 +9,7 @@ from getpass import getuser
 import os
 from pathlib import Path
 from socket import gethostname
+import sys
 import tempfile
 from typing import TYPE_CHECKING
 
@@ -43,20 +44,51 @@ HOSTNAME: str = gethostname()
 ENVIRONMENT: str = os.getenv("ENV", "development").lower()
 APP_NAME: str = os.getenv("APP_NAME", "app")
 
-# Prefer a single plain inputs.yaml/outputs.yaml (default); a project opts into env-wise
-# config by deleting the plain file and shipping inputs_dev.yaml/inputs_prd.yaml (etc.),
-# after which ENV selects the file and an unknown ENV fails loud (see env_config).
-YAML_OUTPUTS: dict = yaml.safe_load(
-	resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR).read_text(encoding="utf-8")
-)
-YAML_INPUTS: dict = yaml.safe_load(
-	resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
-)
-
 _dt_now = datetime.now()
 _str_date = _dt_now.strftime("%Y%m%d")
 _str_date_folder = _dt_now.strftime("%Y-%m-%d")
 _str_time = _dt_now.strftime("%H%M%S")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FRAGILITY GRADIENT — everything ABOVE this line must not be able to fail;
+# everything BELOW it may. An import-time singleton module has to build its
+# OBSERVABILITY before the first thing that can break, or a failure has nowhere
+# to be written: the process dies with no log file, no traceback and no run
+# folder, and the operator has nothing at all to read.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Filename templates used only when outputs.yaml could not be read — enough to give the
+# failure a place to be recorded. They are never the normal path.
+_DICT_FALLBACK_OUTPUTS: dict[str, str] = {
+	"log_name": "{app_name}_{environment}_{date}_{time}.log",
+	"json_name": "{app_name}_{environment}_{date}_{time}.json",
+	"txt_name": "{app_name}_{environment}_{date}_{time}.txt",
+}
+
+# Prefer a single plain inputs.yaml/outputs.yaml (default); a project opts into env-wise
+# config by deleting the plain file and shipping inputs_dev.yaml/inputs_prd.yaml (etc.),
+# after which ENV selects the file and an unknown ENV fails loud (see env_config).
+#
+# The read is FAILABLE (missing file, unreadable file, unknown ENV), so its failure is
+# captured rather than raised: the logger below is built either way, and the error is
+# reported through it at the end of this module.
+_str_config_error: str | None = None
+YAML_OUTPUTS: dict = {}
+YAML_INPUTS: dict = {}
+
+try:
+	YAML_OUTPUTS = yaml.safe_load(
+		resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR).read_text(encoding="utf-8")
+	)
+	YAML_INPUTS = yaml.safe_load(
+		resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
+	)
+# Exception, never BaseException: the config helpers raise SystemExit(2) for an unknown ENV
+# and that must pass straight through rather than being reported as a config read failure.
+except Exception as cls_exc:  # noqa: BLE001
+	_str_config_error = f"{type(cls_exc).__name__}: {cls_exc}"
+	YAML_OUTPUTS = dict(_DICT_FALLBACK_OUTPUTS)
+	YAML_INPUTS = {}
 
 
 # Single output root (inputs.yaml); optionally partitioned into <root>/<YYYY-MM-DD>/.
@@ -122,3 +154,14 @@ PATH_TXT: Path = output_path("txt_name")
 
 DIR_PARENT: str = str(_out_dir)
 LOGGER = cls_create_log.basic_conf(complete_path=str(PATH_LOG), basic_level="info")
+
+# The logger now exists, so a failure from the block above finally has somewhere to go.
+# Report it to BOTH the log file and stderr, name the log's path (the operator has to be
+# told where to look), and exit 2 — continuing on fallback config would run the job against
+# values nobody configured.
+if _str_config_error is not None:
+	LOGGER.critical("Configuration could not be read: %s", _str_config_error)
+	LOGGER.critical("Falling back to default output names; the run is aborted.")
+	print(f"FATAL: configuration could not be read: {_str_config_error}", file=sys.stderr)
+	print(f"Details were written to: {PATH_LOG}", file=sys.stderr)
+	raise SystemExit(2)
