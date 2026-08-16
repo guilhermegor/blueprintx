@@ -22,15 +22,44 @@ ROOT_RC="$REPO_ROOT/.codespellrc"
 TEMPLATE_RC="$REPO_ROOT/templates/python-common/.codespellrc"
 
 extract_words() {
-	# Print the ignore-words-list entries, one per line, lowercased and sorted.
+	# Print the ignore-words-list entries, one per line, VERBATIM and sorted.
+	#
+	# ⚠️ Do NOT lowercase here. An earlier version did, on the belief that codespell matches
+	# case-insensitively — it does not, and the difference is the whole point of this gate.
+	# codespell splits the list in two (`process_ignore_words`): entries that are already
+	# lowercase filter its typo dictionary, while a CASED entry goes to a separate set and only
+	# ever matches that exact capitalisation. So `classe` and `Classe` are NOT interchangeable,
+	# and folding case before comparing would report two configs as "in sync" while they behave
+	# differently — the gate would be blind to the very drift it exists to catch.
 	local str_file="$1"
 	grep -E '^ignore-words-list = ' "$str_file" |
 		head -1 |
 		sed -E 's/^ignore-words-list = //' |
 		tr ',' '\n' |
-		tr '[:upper:]' '[:lower:]' |
-		sed '/^[[:space:]]*$/d' |
+		sed 's/^[[:space:]]*//; s/[[:space:]]*$//' |
+		sed '/^$/d' |
 		sort -u
+}
+
+check_lowercase() {
+	# Reject any entry carrying an uppercase letter.
+	#
+	# codespell lowercases the word it FOUND before looking it up, so a lowercase entry covers
+	# every capitalisation (`classe` silences `classe`/`Classe`/`CLASSE`) while a capitalised
+	# entry silences only itself. A cased entry is therefore never more useful than its
+	# lowercase form and is usually a mistake — the configs carried `Classe,classe` pairs that
+	# existed only to work around this.
+	local str_file="$1"
+	local str_cased
+	str_cased="$(extract_words "$str_file" | grep -E '[[:upper:]]' || true)"
+	if [ -n "$str_cased" ]; then
+		echo "Uppercase entries in ${str_file}'s ignore-words-list:" >&2
+		printf '%s\n' "$str_cased" | sed 's/^/    /' >&2
+		echo "Write them lowercase — codespell lowercases the found word before lookup, so a" >&2
+		echo "lowercase entry covers every casing while a capitalised one matches only itself." >&2
+		return 1
+	fi
+	return 0
 }
 
 main() {
@@ -42,6 +71,13 @@ main() {
 		echo "Could not read ignore-words-list from one of the .codespellrc files:" >&2
 		echo "  $ROOT_RC" >&2
 		echo "  $TEMPLATE_RC" >&2
+		exit 1
+	fi
+
+	local int_cased=0
+	check_lowercase "$ROOT_RC" || int_cased=1
+	check_lowercase "$TEMPLATE_RC" || int_cased=1
+	if [ "$int_cased" -ne 0 ]; then
 		exit 1
 	fi
 

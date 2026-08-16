@@ -94,6 +94,13 @@ repos:
         pass_filenames: false
         files: (^|/)\.github/workflows/.*\.(yml|yaml)$
 
+      - id: test-copy-lists
+        name: shared test copy lists (scaffolds vs python-common)
+        entry: python3 bin/ci/check_test_copy_lists.py
+        language: system
+        pass_filenames: false
+        files: ^(bin/scaffold/python_.*\.sh|templates/python-common/tests/unit/.*\.py)$
+
       - id: validate-meta
         name: validate skeleton.meta integrity
         entry: bash bin/ci/validate_meta.sh

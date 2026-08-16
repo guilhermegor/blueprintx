@@ -88,20 +88,23 @@ def pr_author_login() -> str:
         human, so the gate fails closed rather than exempting everyone.
     """
     str_event_path = os.environ.get("GITHUB_EVENT_PATH", "")
-    if str_event_path and pathlib.Path(str_event_path).is_file():
+
+    # Once GITHUB_EVENT_PATH is set we are inside a workflow run, so the payload is the ONLY
+    # authority on who authored the change. Every failure to use it — missing file, unreadable
+    # bytes, malformed JSON, a PR object with no login — returns "" and is treated as human.
+    # Falling back to GITHUB_ACTOR here would reintroduce the exact defect this function exists
+    # to avoid: the actor is whoever triggered the run, so a bot re-running or auto-merging a
+    # human's PR would exempt it. Fail closed: the worst case is a gate that still applies.
+    if str_event_path:
         try:
-            dict_event = json.loads(
-                pathlib.Path(str_event_path).read_text(encoding="utf-8")
-            )
+            dict_event = json.loads(pathlib.Path(str_event_path).read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            # An unreadable payload must not exempt anything.
             return ""
         dict_pr = dict_event.get("pull_request") or {}
-        if dict_pr:
-            # A PR payload exists: the author is authoritative and the actor is irrelevant.
-            return str((dict_pr.get("user") or {}).get("login") or "")
+        return str((dict_pr.get("user") or {}).get("login") or "")
 
-    # No PR payload — nothing can be confused with the author here.
+    # Not inside a workflow run at all (a local pre-commit, a manual invocation). There is no
+    # PR author to confuse the actor with, so the actor is the best available signal.
     return os.environ.get("GITHUB_ACTOR", "")
 
 

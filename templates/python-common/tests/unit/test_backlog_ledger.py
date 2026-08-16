@@ -170,15 +170,49 @@ def test_human_authored_pr_is_not_exempt_even_when_a_bot_is_the_actor(
 	assert ledger.is_bot_author(ledger.pr_author_login()) is False
 
 
-def test_actor_is_consulted_only_without_a_pr_payload(
+def test_a_push_run_has_no_pr_author_and_stays_enforced(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-	"""On a push run there is no author to confuse with the actor, so the actor is used."""
+	"""Inside a workflow run the payload is the ONLY authority — never the actor.
+
+	A push payload carries no ``pull_request`` object, so there is no author, and the gate must
+	stay enforced rather than fall back to a possibly-bot actor.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir holding the event payload.
+	monkeypatch : pytest.MonkeyPatch
+		Used to set the GitHub Actions environment variables.
+	"""
 	str_event = _write_event(tmp_path, {"ref": "refs/heads/main"})
 	monkeypatch.setenv("GITHUB_EVENT_PATH", str_event)
 	monkeypatch.setenv("GITHUB_ACTOR", "dependabot[bot]")
 
-	assert ledger.pr_author_login() == "dependabot[bot]"
+	assert ledger.is_bot_author(ledger.pr_author_login()) is False
+
+
+def test_a_missing_event_file_exempts_nobody(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""GITHUB_EVENT_PATH set but the file absent must fail CLOSED, not fall back to the actor.
+
+	This is the narrow hole an earlier revision left: the missing-file branch skipped the
+	payload entirely and returned ``GITHUB_ACTOR``, so a bot re-running or auto-merging a
+	human's PR would have exempted it — the exact defect keying on the author exists to avoid.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir; the payload path deliberately points at nothing.
+	monkeypatch : pytest.MonkeyPatch
+		Used to set the GitHub Actions environment variables.
+	"""
+	monkeypatch.setenv("GITHUB_EVENT_PATH", str(tmp_path / "does_not_exist.json"))
+	monkeypatch.setenv("GITHUB_ACTOR", "dependabot[bot]")
+
+	assert ledger.pr_author_login() == ""
+	assert ledger.is_bot_author(ledger.pr_author_login()) is False
 
 
 def test_unreadable_payload_exempts_nobody(

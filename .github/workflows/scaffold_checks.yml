@@ -25,6 +25,8 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -50,6 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
@@ -57,11 +61,32 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  test-copy-lists:
+    name: Shared test copy lists — scaffolds vs python-common
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # A shared test that no scaffold copies is written, committed, and never runs in any
+      # generated project — and the only tell is the test COUNT, which nobody reads. Its
+      # first run found test_startup_fragility_order.py, the guard on the very fix #160
+      # shipped, absent from all five tiers.
+      - name: Every shared test is reachable from every scaffold
+        run: python3 bin/ci/check_test_copy_lists.py
+
   lint-actions:
     name: actionlint — workflows (repo + templates)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # ⚠️ Pinning the version pins what is ASKED FOR, never what ARRIVES — and what arrives
       # is unpacked and EXECUTED on this runner. Hence the SHA-256 check before extracting.
@@ -89,6 +114,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Check required fields and scaffold paths
         run: bash bin/ci/validate_meta.sh
@@ -98,6 +125,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Assert pyproject.toml and blueprintx.sh versions match
         run: bash bin/ci/check_version_sync.sh
@@ -107,6 +136,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -140,6 +171,8 @@ jobs:
           - react-spa-webpack
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Run blueprintx new --dry-run for ${{ matrix.skeleton }}
         env:
@@ -164,6 +197,8 @@ jobs:
           - lib-minimal
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -205,6 +240,8 @@ jobs:
           - mvc-service-orm-db
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -235,6 +272,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -266,6 +305,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:

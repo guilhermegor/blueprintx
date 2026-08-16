@@ -88,6 +88,33 @@ Branch `feat/ci-friction-gates-126`. Verificado: **5/5 tiers Python** via
 **integração**, que são o único lugar onde um `bin/*.sh` é de fato **executado**. Os 30 testes
 de integração de cada tier viajavam sem nunca rodar. Agora rodam.
 
+**Segundo extra — `bin/ci/check_test_copy_lists.py`.** A copy-list de testes é mantida à mão
+em cada um dos 5 scaffolds, e um teste esquecido lá é escrito, commitado e **nunca roda em
+projeto nenhum**. 🔴 O único tell é a **contagem** de testes, nunca a cor: 234 → 234 depois de
+somar 18 testes é indistinguível de 234 → 252, e ninguém lê o número. Na primeira execução o
+gate achou `test_startup_fragility_order.py` — o guarda do próprio fix da **#160** — ausente
+das 5 tiers. Também documenta um buraco honesto: o `lib-minimal` vendoriza os utils sob
+`_internal/` e por isso **não recebe os testes deles** (precisaria do mesmo
+`rewrite_internal_imports` nos testes).
+
+### Correções da review do CodeRabbit na PR #180
+
+- [x] **`persist-credentials: false`** em `actions/checkout` — apontado em **1** job; aplicado
+      nos **12** do arquivo, todos read-only. Corrigir só o apontado deixaria exatamente o
+      *precedente* que a #141 existe para combater.
+- [x] **`check_codespell_sync.sh` comparava minusculizado** — bug real e meu. O codespell
+      separa a ignore-list em duas (`process_ignore_words`): entrada já minúscula filtra o
+      dicionário; entrada com maiúscula vai para outro conjunto e só casa aquela capitalização.
+      Logo `classe` e `Classe` **não** são intercambiáveis, e dobrar o caso antes de comparar
+      declararia "in sync" dois configs que se comportam diferente — o gate cego para a deriva
+      que existe para pegar. Agora compara verbatim **e** rejeita entrada com maiúscula.
+- [x] **`pr_author_login` falhava aberto** quando `GITHUB_EVENT_PATH` estava setado mas o
+      arquivo ausente: caía no `GITHUB_ACTOR`. Dentro de um workflow o payload é a única
+      autoridade; qualquer falha em usá-lo agora retorna `""`. Teste nomeado adicionado.
+- [x] **MD018** no ledger — linha começando com `#117`. Reescrito como lista, o que resolve
+      estruturalmente em vez de depender de onde a linha quebra; varredura confirmou 0 em todo
+      `docs/backlog/`.
+
 ## PR B — idioma (grupo 2)
 
 - [ ] **#141** — `bin/check_comment_language.py` (existe em `recon_al_cvm`, ausente dos templates)
@@ -134,9 +161,13 @@ de integração de cada tier viajavam sem nunca rodar. Agora rodam.
 
 ## Fora deste corte
 
-Seções B e C da triagem, mais os itens de A que ficaram de fora dos grupos 1–5 (#116, #144, #148,
-#117, #127, #124, #152, #111, #145, #130, #113, #110, #118, #121, #151, #161, #162). Backfill é
-barato enquanto o duskko ainda não existe — e depois dele passa a ser #109.
+Seções B e C da triagem, mais os itens da seção A que ficaram de fora dos grupos 1–5:
+
+- ingestão e dados: `#116`, `#144`, `#148`, `#117`, `#127`
+- CI e docs do projeto gerado: `#111`, `#145`, `#130`, `#113`, `#110`, `#124`, `#152`
+- entregável e e-mail: `#118`, `#121`, `#151`, `#161`, `#162`
+
+Backfill é barato enquanto o duskko ainda não existe; depois dele passa a ser `#109`.
 
 ## Depois
 
