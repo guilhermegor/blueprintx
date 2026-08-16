@@ -26,6 +26,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import csv
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -492,7 +493,16 @@ def _read_raw(
 			quoting=int_csv_quoting,
 		)
 	if str_suffix == ".json":
-		df_json = pd.read_json(path_file)
+		# NEVER pd.read_json here: it infers types before anything can ask it not to, and the
+		# later astype cannot undo that. It coerces even values the document QUOTES as strings
+		# — measured, `"1000.50"` comes back `1000.5` and `"007"` comes back `7` — so the
+		# "always read as text" guarantee read_table documents was false on this branch alone
+		# while the CSV branch honoured it. parse_float/parse_int as `str` keep the exact
+		# source token, which is what a Decimal column is later built from.
+		obj_json = json.loads(
+			path_file.read_text(encoding=str_encoding), parse_float=str, parse_int=str
+		)
+		df_json = pd.DataFrame(obj_json)
 		return df_json.astype(str_dtype) if str_dtype is not None else df_json
 	# An empty sheet name means "the first worksheet, whatever it is named" — external files
 	# arrive with locale-dependent default sheet names such as Planilha1 or Sheet1, so read the

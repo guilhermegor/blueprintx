@@ -160,3 +160,24 @@ def test_read_table_quote_none_reads_malformed_regulatory_dump(tmp_path: Path) -
 	assert len(df_none) == 3  # all rows survive; the stray quote is literal text
 	assert df_none["note"].iloc[1] == '"parecer aprovado'
 	assert df_none["amount"].tolist() == ["10", "20", "30"]
+
+
+def test_read_table_json_preserves_zero_padding_and_decimal_scale(tmp_path: Path) -> None:
+	"""The JSON branch honours the same "read as text" guarantee the CSV branch does.
+
+	``read_table``'s docstring promises the file is *always* read as text, never with pandas'
+	inference — but the JSON branch used ``pd.read_json``, which infers regardless. Measured:
+	it returns ``1000.5`` for a document that literally contains the STRING ``"1000.50"``, and
+	``7`` for ``"007"``. The scale is unrecoverable afterwards, so a money column ingested from
+	an API silently lost its cents.
+	"""
+	path_json = tmp_path / "money.json"
+	path_json.write_text(
+		'[{"code": "007", "amount": "1000.50"}, {"code": "042", "amount": 0.10}]',
+		encoding="utf-8",
+	)
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	df_out = read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+	assert df_out["code"].tolist() == ["007", "042"]  # leading zeros survive
+	# The second row arrives as a bare JSON number — the exact source token still survives.
+	assert df_out["amount"].tolist() == ["1000.50", "0.10"]
