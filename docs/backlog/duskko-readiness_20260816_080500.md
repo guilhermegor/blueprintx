@@ -42,8 +42,16 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
 - [x] **#115** emoji nos `bin/check_*.py` quebra os gates em Windows cp1252 — 8 arquivos, 41
       caracteres nao-cp1252. Corrigido no seam de I/O (reconfigure UTF-8), nao removendo os
       glifos. Controle negativo: 2 failed sem a correcao, 9 passed com ela.
-- [ ] **#114** `get_corporate_ca.sh` estreita o trust store TLS em vez de uni-lo
+- [x] **#114** `get_corporate_ca.sh` estreita o trust store TLS em vez de uni-lo — agora le a
+      trust store do SO (`ssl.enum_certificates`, sem rede e sem desabilitar verificacao) e
+      `wire_corporate_ca` monta `bin/ca_bundle.pem` como UNIAO (certifi + bundle do host + CA
+      corporativa). Removidos o append in-place no certifi e o `PIP_TRUSTED_HOST`.
 - [ ] **#127** wheelhouse offline para o fallback pip (índice bloqueado sai 0 com venv vazia)
+
+## Aberto durante a sessao (fora do Tier A, registrado para depois)
+
+- **#167** gate de complexidade ciclomatica no python-common (1 testes / 2 modulos) — com medicao
+- **#168** o mesmo gate explorado para os layouts ts-*
 
 ## Fora do Tier A (não tocam o duskko no dia 1)
 

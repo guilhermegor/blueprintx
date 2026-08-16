@@ -329,3 +329,85 @@ def test_every_glyph_printing_gate_reconfigures_its_streams(str_script: str) -> 
 	assert 'reconfigure(encoding="utf-8"' in str_main, (
 		f"{str_script} prints status glyphs but never reconfigures stdout/stderr"
 	)
+
+
+# --------------------------
+# bootstrap.sh — corporate CA must UNION, never replace
+# --------------------------
+
+
+def _fake_pem(str_marker: str) -> str:
+	"""Build a syntactically valid PEM block whose body identifies it.
+
+	Parameters
+	----------
+	str_marker : str
+		A base64-safe token embedded in the certificate body so the test can find it.
+
+	Returns
+	-------
+	str
+		One ``BEGIN/END CERTIFICATE`` block.
+	"""
+	return f"-----BEGIN CERTIFICATE-----\n{str_marker}\n-----END CERTIFICATE-----\n"
+
+
+def test_corporate_ca_bundle_is_a_union_not_a_replacement(tmp_path: Path) -> None:
+	"""The generated bundle must ADD the corporate CA to the existing trust, never replace it.
+
+	Pointing SSL_CERT_FILE/REQUESTS_CA_BUNDLE/PIP_CERT at the corporate CA alone narrows the
+	trust store to one certificate, so every TLS connection not through the proxy breaks —
+	measured, Poetry went from "0 candidates" to "All attempts to connect to pypi.org failed"
+	BECAUSE the helper ran.
+
+	The certificate COUNT is the assertion that distinguishes a union from a replacement: both
+	implementations write a file containing the corporate CA, and only the union keeps the
+	rest.
+	"""
+	path_bin = tmp_path / "bin"
+	(path_bin / "lib").mkdir(parents=True)
+	for path_lib in (Path(__file__).resolve().parents[2] / "bin" / "lib").glob("*.sh"):
+		shutil.copy(path_lib, path_bin / "lib" / path_lib.name)
+
+	path_corporate = path_bin / "corporate_ca.pem"
+	path_corporate.write_text(_fake_pem("Q09SUE9SQVRFQ0E="), encoding="utf-8")
+	path_host = tmp_path / "host_bundle.pem"
+	path_host.write_text(_fake_pem("SE9TVEJVTkRMRQ=="), encoding="utf-8")
+
+	dict_env = dict(os.environ)
+	dict_env["PIP_CERT"] = str(path_host)
+	str_bash = shutil.which("bash") or "bash"
+	str_script = (
+		f'source "{path_bin}/lib/common.sh"; source "{path_bin}/lib/bootstrap.sh"; '
+		f'BIN_DIR="{path_bin}"; PYTHON="$(command -v python3 || command -v python)"; '
+		f'build_union_ca_bundle "{path_corporate}"'
+	)
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	cls_run = subprocess.run(  # noqa: S603
+		[str_bash, "-c", str_script],
+		env=dict_env,
+		capture_output=True,
+		encoding="utf-8",
+		errors="replace",
+		check=False,
+	)
+	assert cls_run.returncode == 0, cls_run.stderr
+
+	str_bundle = (path_bin / "ca_bundle.pem").read_text(encoding="utf-8")
+	assert "Q09SUE9SQVRFQ0E=" in str_bundle, "the corporate CA must be in the bundle"
+	assert "SE9TVEJVTkRMRQ==" in str_bundle, "the host's existing bundle must survive"
+	# A replacement writes exactly one block; only a union carries the roots as well.
+	assert str_bundle.count("BEGIN CERTIFICATE") > 2
+
+
+def test_corporate_ca_wiring_never_disables_verification_for_pypi() -> None:
+	"""PIP_TRUSTED_HOST must not be exported — it defeats the bundle being built.
+
+	Trusting a host outright skips certificate verification for it, so shipping both is worse
+	than shipping neither: the bundle looks like the control while the trusted-host list is
+	what actually decides.
+	"""
+	str_source = (Path(__file__).resolve().parents[2] / "bin" / "lib" / "bootstrap.sh").read_text(
+		encoding="utf-8"
+	)
+	assert "export PIP_TRUSTED_HOST" not in str_source
