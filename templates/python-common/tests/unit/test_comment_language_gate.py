@@ -248,7 +248,7 @@ def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
 	this first names concrete LOCATIONS that must be covered, which a skip-list change genuinely
 	breaks, and only then asserts the general property.
 	"""
-	set_audited = {p.resolve() for p in gate.audit_paths()}
+	set_audited = {path_file.resolve() for path_file in gate.audit_paths()}
 
 	# One representative, long-lived file per location the allow-list used to miss entirely.
 	list_required = [
@@ -257,7 +257,11 @@ def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
 		gate.PATH_ROOT / ".github/workflows/tests.yaml",  # workflow
 		gate.PATH_ROOT / "optional/typing/validate.py",  # app code that ships into projects
 	]
-	list_missing = [p for p in list_required if p.is_file() and p.resolve() not in set_audited]
+	list_missing = [
+		path_file
+		for path_file in list_required
+		if path_file.is_file() and path_file.resolve() not in set_audited
+	]
 	assert list_missing == [], f"supported but unaudited: {list_missing}"
 
 	# And the general property, so a NEW location cannot quietly fall outside either.
@@ -280,4 +284,43 @@ def test_published_docs_are_never_audited() -> None:
 	rather than a performance tweak.
 	"""
 	assert "docs" in gate.TUPLE_SKIP_DIRS
-	assert not [p for p in gate.audit_paths() if "docs" in p.parts]
+	assert not [
+		path_file
+		for path_file in gate.audit_paths()
+		if "docs" in path_file.relative_to(gate.PATH_ROOT).parts
+	]
+
+
+def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""A checkout living under a directory named ``docs`` must still be audited.
+
+	``path_file.parts`` carries every ancestor above the repository, so matching the skip list
+	against it makes the verdict depend on **where someone cloned**: a tree at ``~/docs/proj``
+	or a CI workspace under ``fixtures/`` would match on every file, the audit would find
+	nothing, and the gate would fail with the vacuous-audit error on a perfectly fine tree.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir; the fake repo is created under a ``docs`` ancestor.
+	monkeypatch : pytest.MonkeyPatch
+		Used to point the gate's ``PATH_ROOT`` at that fake repo.
+	"""
+	path_repo = tmp_path / "docs" / "proj"
+	(path_repo / "src").mkdir(parents=True)
+	(path_repo / "src" / "ok.py").write_text("# English comment\n", encoding="utf-8")
+	# The repo's OWN docs/ must still be skipped — the exclusion is real, just repo-relative.
+	(path_repo / "docs").mkdir()
+	(path_repo / "docs" / "guia.py").write_text(
+		"# esta linha nao esta escrita em ingles\n", encoding="utf-8"
+	)
+
+	monkeypatch.setattr(gate, "PATH_ROOT", path_repo)
+	list_paths = gate.audit_paths()
+
+	assert [p.name for p in list_paths] == ["ok.py"], (
+		"the ancestor named 'docs' must not disqualify the tree, "
+		"while the repo's own docs/ stays excluded"
+	)

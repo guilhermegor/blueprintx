@@ -13,9 +13,11 @@ project. That is the failure this gate exists for, and it is invisible from ever
 normally reports: the template's own suite runs it and passes, `make lint` is clean, and the
 scaffolded project is green — green because the file is not there to fail.
 
-🔴 **The only tell is the test COUNT, never the colour.** A scaffold verification that goes from
-234 to 234 after adding 18 tests looks exactly like a scaffold verification that went from 234
-to 252. Nobody reads the number; everybody reads the colour. Hence a gate.
+🔴 **Before this gate the only available signal was the test COUNT**, and nobody compares it
+against an expectation: a run that adds 18 tests and still prints 234 is exactly as green as one
+printing 252. The count is weak even when read, because an unchanged total hides one test
+vanishing while another appears. So this gate does not count — it compares **sets**: each
+scaffold's reachable shared-test set against the set that exists on disk, naming every absentee.
 
 Deliberate exclusions live in ``DICT_EXPECTED_ABSENT`` with a reason each — a tier that
 genuinely should not receive a test (``lib-minimal`` has no service config, so the env-config
@@ -97,10 +99,14 @@ _RE_EXPLICIT_CP = re.compile(
 
 # The `copy_shared_utils` function body, from its definition to the closing brace.
 _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
-# Its `for util in … ; do` header, searched INSIDE that body only.
-_RE_UTILS_LOOP = re.compile(r"for\s+util\s+in\s+(.*?);\s*do", re.S)
-# Proof the loop body actually copies the test beside the module.
-_RE_UTILS_TEST_CP = re.compile(r"\bcp\b[^\n]*tests/unit/test_\$\{util\}\.py")
+# Its `for util in … ; do` header, searched INSIDE that body only — and rejected when
+# commented out, exactly like the explicit form above. Both patterns need the guard: adding
+# `(?!#)` to only one of them leaves the other able to satisfy the gate from a comment.
+_RE_UTILS_LOOP = re.compile(r"^[^\S\n]*(?!#)\S*\s*for\s+util\s+in\s+(.*?);\s*do", re.M | re.S)
+# Proof the loop body actually copies the test beside the module — likewise not from a comment.
+_RE_UTILS_TEST_CP = re.compile(
+    r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*tests/unit/test_\$\{util\}\.py", re.M
+)
 
 
 def shared_test_names() -> set:
