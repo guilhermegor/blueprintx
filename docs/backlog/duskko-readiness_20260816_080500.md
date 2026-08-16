@@ -1,5 +1,14 @@
 # Duskko readiness — Tier A bundle
 
+> **CONCLUÍDO 2026-08-16 — mantido como registro.** Tudo aqui foi entregue no PR #170 (squash
+> `ac069c3`) e publicado na **v0.15.3**. Para *o que ainda falta*, leia
+> **`duskko-blockers_20260816_110000.md`**, não este arquivo.
+>
+> ⚠️ Uma prioridade mudou durante a sessão e vale registrar por escrito, porque a linha abaixo
+> ainda lista **#127** como Tier A: ela foi **rebaixada**. A #127 cobre o índice bloqueado *por
+> inteiro*; a evidência de campo (box do Werner) mostrou o índice bloqueado *parcialmente* — que é
+> a **#165**, já entregue. Não retome a #127 como se fosse urgente.
+
 **Criado:** 2026-08-16 08:05
 **Branch:** `fix/158-duskko-readiness-bundle`
 **Prazo duro:** 14h de 2026-08-16 (início do projeto duskko com o Werner)
