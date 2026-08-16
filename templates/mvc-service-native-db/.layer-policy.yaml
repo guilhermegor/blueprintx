@@ -27,6 +27,11 @@ annotation_only:
     utils.tabular_reader.read_table / read_query (they enforce a FileContract + dtypes).
 
 layers:
+  # Modules sitting directly under src/ (an entrypoint such as main.py). It has no
+  # directory to name its layer, and it is precisely where a bypass would be easiest.
+  __root__:
+    allow: {}
+
   model:
     allow: {}  # data access goes through config.connection_db and the utils/ seams
 

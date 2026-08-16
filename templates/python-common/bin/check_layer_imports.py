@@ -39,6 +39,8 @@ except ModuleNotFoundError:  # pragma: no cover - the gate self-skips without it
 
 _POLICY_FILE = ".layer-policy.yaml"
 _SRC_ROOT = "src"
+# Layer name for modules sitting directly under src/ (an entrypoint such as src/main.py).
+_ROOT_LAYER = "__root__"
 
 
 def load_policy(path_root: pathlib.Path) -> dict | None:
@@ -260,11 +262,12 @@ def main() -> int:
         if "__pycache__" in path_file.parts:
             continue
         tuple_rel = path_file.relative_to(path_src).parts
-        if len(tuple_rel) < 2:
-            continue
-        list_all.extend(
-            find_file_problems(path_file, tuple_rel[0], dict_policy, set_first_party)
-        )
+        # A module sitting directly under src/ has no directory to name its layer, but it is
+        # exactly where an entrypoint lives — skipping it would let src/main.py import any
+        # vendor and bypass the policy entirely. It gets its own layer name so the policy can
+        # speak about it; deny-by-default then applies as everywhere else.
+        str_layer = tuple_rel[0] if len(tuple_rel) > 1 else _ROOT_LAYER
+        list_all.extend(find_file_problems(path_file, str_layer, dict_policy, set_first_party))
 
     for str_problem in list_all:
         print(f"❌ {str_problem}")

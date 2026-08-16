@@ -186,3 +186,26 @@ def test_one_statement_binding_many_names_is_one_violation(tmp_path: Path, str_l
 	"""
 	list_problems = _problems(tmp_path, "from filings_cvm import a, b, c\n", str_layer)
 	assert len(list_problems) == 1
+
+
+def test_a_module_directly_under_src_is_not_skipped(tmp_path: Path) -> None:
+	"""An entrypoint at ``src/main.py`` is checked like any other file.
+
+	It has no directory to name its layer, and an earlier revision skipped exactly those
+	files — so ``src/main.py`` could import any vendor and bypass the policy entirely. The
+	place a bypass is easiest is not the place to stop looking.
+	"""
+	cls_gate = _load_gate()
+	path_src = tmp_path / "src"
+	path_src.mkdir()
+	(path_src / "main.py").write_text("from filings_cvm import fi\n", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(
+		"layers:\n  __root__:\n    allow: {}\n", encoding="utf-8"
+	)
+
+	dict_policy = cls_gate.load_policy(tmp_path)
+	list_problems = cls_gate.find_file_problems(
+		path_src / "main.py", cls_gate._ROOT_LAYER, dict_policy, {"src"}
+	)
+	assert len(list_problems) == 1
+	assert "filings_cvm" in list_problems[0]
