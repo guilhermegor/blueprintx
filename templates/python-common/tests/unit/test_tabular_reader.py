@@ -181,3 +181,61 @@ def test_read_table_json_preserves_zero_padding_and_decimal_scale(tmp_path: Path
 	assert df_out["code"].tolist() == ["007", "042"]  # leading zeros survive
 	# The second row arrives as a bare JSON number — the exact source token still survives.
 	assert df_out["amount"].tolist() == ["1000.50", "0.10"]
+
+
+def test_padded_column_name_is_stripped_at_the_read_boundary(tmp_path: Path) -> None:
+	"""A header cell with a trailing space must not produce an unreachable column.
+
+	The nasty part is that it does not look like a defect: the column PRINTS as ``amount``
+	while only ``df["amount "]`` reaches it, so the contract reports a required column missing
+	and every lookup raises KeyError on a name plainly visible in ``df.columns``. It is
+	per-dataset, never per-format — a sibling table from the same publisher is usually clean.
+	"""
+	path_csv = tmp_path / "padded_header.csv"
+	path_csv.write_text("code ;amount \nABC;10\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	df_out = read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+	assert list(df_out.columns) == ["code", "amount"]
+
+
+def test_positional_payload_drops_a_surplus_position_that_is_empty_everywhere(
+	tmp_path: Path,
+) -> None:
+	"""A row wider than its header is tolerated only when the surplus is empty on every row."""
+	path_json = tmp_path / "wide.json"
+	path_json.write_text(
+		'{"columns": ["code", "amount"], "rows": [["ABC", "10", null], ["DEF", "20", null]]}',
+		encoding="utf-8",
+	)
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	df_out = read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+	assert list(df_out.columns) == ["code", "amount"]
+	assert df_out["amount"].tolist() == ["10", "20"]
+
+
+def test_positional_payload_raises_when_the_surplus_holds_a_value(tmp_path: Path) -> None:
+	"""A surplus position carrying data must raise, never be trimmed away.
+
+	The payload is positional, so a surplus value cannot be named — and blind trimming is
+	exactly how a source column stops arriving with nothing going red: a contract validates
+	column PRESENCE, not payload WIDTH.
+	"""
+	path_json = tmp_path / "wide_valued.json"
+	path_json.write_text(
+		'{"columns": ["code", "amount"], "rows": [["ABC", "10", "surprise"]]}',
+		encoding="utf-8",
+	)
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	with pytest.raises(ContractError, match="surplus position"):
+		read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_positional_payload_raises_on_a_row_narrower_than_its_header(tmp_path: Path) -> None:
+	"""A short row is a defect too — padding it would invent data."""
+	path_json = tmp_path / "narrow.json"
+	path_json.write_text(
+		'{"columns": ["code", "amount"], "rows": [["ABC"]]}', encoding="utf-8"
+	)
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	with pytest.raises(ContractError, match="narrower"):
+		read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)

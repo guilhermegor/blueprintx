@@ -12,8 +12,17 @@ configurable delimiter; ``.json`` → a JSON array of records; otherwise Excel).
   seam never opens connections (that stays a controller/boundary concern).
 - :func:`find_file_problems` — validates a file against a contract and returns problems
   **without raising** (the boundary uses it to abort, skip, or notify).
+- :func:`decode_positional_payload` — decodes an API payload whose rows are positional
+  arrays beside a separate ``columns`` header, handling a row wider than its own header
+  asymmetrically (drop a surplus position only when it is empty everywhere; raise when it
+  holds a value). The ``.json`` reader uses it automatically for a
+  ``{"columns": …, "rows": …}`` document.
 - :class:`FileContract` — declares the columns a file must have and the columns that must
   hold valid CNPJs (a coercible-type check).
+
+Column NAMES are as untrusted as column values: they are stripped at the read boundary,
+because a publisher shipping ``"Symb "`` yields a column that prints as ``Symb`` while only
+``df["Symb "]`` reaches it.
 
 Bare ``pd.read_*`` is banned project-wide (ruff ``TID251``); this seam (and tests) is the one
 exempt place, so every read funnels through a contract + dtype check. Projects keep their
@@ -336,6 +345,61 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 
 
 @type_checker
+def decode_positional_payload(
+	list_columns: Sequence[str], list_rows: Sequence[Sequence[Any]]
+) -> pd.DataFrame:
+	"""Decode an API payload whose rows are positional arrays beside a separate header.
+
+	An endpoint returning ``{"columns": [...], "rows": [[...], ...]}`` can send rows **wider
+	than its own header** — and it is per table, not per format, so a sibling endpoint that
+	matches exactly is no evidence about this one. The width mismatch is handled
+	**asymmetrically**: a surplus position is dropped only when it is empty on *every* row,
+	and raises when it ever holds a value. The payload is positional, so a surplus value
+	cannot be named — and trimming it blindly is exactly how a source column stops arriving
+	with nothing going red, since a contract validates column PRESENCE, not payload WIDTH.
+
+	Never ``zip()`` (it truncates in silence) and never pad: a short row is a defect too, it
+	simply happens to be the direction that blows up on its own.
+
+	Parameters
+	----------
+	list_columns : sequence of str
+		The header the payload declares, in order.
+	list_rows : sequence of sequence
+		The rows as positional arrays.
+
+	Returns
+	-------
+	pd.DataFrame
+		A frame with exactly ``list_columns`` as its columns.
+
+	Raises
+	------
+	ContractError
+		If a row is narrower than the header, or if a surplus position holds a value.
+	"""
+	int_declared = len(list_columns)
+	list_narrow = [int_i for int_i, row in enumerate(list_rows) if len(row) < int_declared]
+	if list_narrow:
+		raise ContractError([
+			f"Positional payload has {len(list_narrow)} row(s) narrower than the declared "
+			f"{int_declared} columns (first at index {list_narrow[0]}); padding would invent data"
+		])
+
+	for int_pos in range(int_declared, max((len(row) for row in list_rows), default=int_declared)):
+		list_surplus = [row[int_pos] for row in list_rows if len(row) > int_pos]
+		if any(value not in (None, "") for value in list_surplus):
+			raise ContractError([
+				f"Positional payload row is wider than its header and surplus position "
+				f"{int_pos} holds a value — it cannot be named, so it must not be dropped"
+			])
+
+	return pd.DataFrame(
+		[list(row)[:int_declared] for row in list_rows], columns=list(list_columns)
+	)
+
+
+@type_checker
 def resolve_sheet_name(path_file: Path, tuple_known_names: tuple[str, ...]) -> str:
 	"""Resolve which worksheet to read from a workbook whose sheet name varies by source.
 
@@ -437,6 +501,43 @@ def _read_raw(
 	int_header_row: int = 0,
 	int_csv_quoting: int = csv.QUOTE_MINIMAL,
 ) -> pd.DataFrame:
+	"""Read a file into a raw DataFrame and normalise its column NAMES.
+
+	Ingestion validates a source's values and tends to trust its column names; both are
+	untrusted, and the name defect is the nastier of the two because it is invisible. A
+	publisher that ships ``"Symb "`` with a trailing space produces a column that PRINTS as
+	``Symb`` while only ``df["Symb "]`` reaches it — so the contract reports a required column
+	*missing* and every lookup raises ``KeyError`` on a name plainly visible in
+	``df.columns``. Stripping at the read boundary is the one place that fixes it for every
+	caller, and it is per-dataset, never per-format: a sibling table from the same endpoint
+	is usually clean, which is exactly why nobody expects it.
+
+	See :func:`_read_raw_dispatch` for the per-format reading itself.
+	"""
+	df_raw = _read_raw_dispatch(
+		path_file,
+		str_sheet,
+		str_dtype,
+		str_csv_sep,
+		list_columns,
+		str_encoding,
+		int_header_row,
+		int_csv_quoting,
+	)
+	df_raw.columns = [str(col).strip() for col in df_raw.columns]
+	return df_raw
+
+
+def _read_raw_dispatch(
+	path_file: Path,
+	str_sheet: str,
+	str_dtype: str | None,
+	str_csv_sep: str,
+	list_columns: Sequence[str] | None = None,
+	str_encoding: str = "utf-8-sig",
+	int_header_row: int = 0,
+	int_csv_quoting: int = csv.QUOTE_MINIMAL,
+) -> pd.DataFrame:
 	"""Read a file into a raw DataFrame, dispatching by extension (CSV, JSON, or Excel).
 
 	Parameters
@@ -502,7 +603,12 @@ def _read_raw(
 		obj_json = json.loads(
 			path_file.read_text(encoding=str_encoding), parse_float=str, parse_int=str
 		)
-		df_json = pd.DataFrame(obj_json)
+		# A payload carrying BOTH a header and positional rows is unambiguous, so decode it
+		# rather than handing pandas a dict it would read as two unrelated columns.
+		if isinstance(obj_json, dict) and {"columns", "rows"} <= set(obj_json):
+			df_json = decode_positional_payload(obj_json["columns"], obj_json["rows"])
+		else:
+			df_json = pd.DataFrame(obj_json)
 		return df_json.astype(str_dtype) if str_dtype is not None else df_json
 	# An empty sheet name means "the first worksheet, whatever it is named" — external files
 	# arrive with locale-dependent default sheet names such as Planilha1 or Sheet1, so read the

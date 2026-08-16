@@ -32,8 +32,13 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
       O teste de poda pegou um bug meu antes do commit: `_read_env_var` resolve `.env` relativo ao
       **CWD**, então todos os backends liam `sqlite`. Ancorado em `$PROJECT_ROOT/.env` — mesma
       classe da lição `resolve-config-paths-to-absolute` (#122).
-- [ ] **#147** robustez do reader de ingestão: payload posicional mais largo que o header, nomes de
-      campo não confiáveis, envelope de fixture reproduzindo o real
+- [x] **#147** robustez do reader de ingestão — **2 de 3 licoes entregues**: nomes de campo
+      normalizados no read boundary (`.strip()`) e `decode_positional_payload` com tratamento
+      assimetrico da largura. A terceira (envelope de fixture) e convencao de teste e pertence ao
+      #152/#124, nao ao seam.
+- [x] **#166** o ramo JSON do `read_table` quebrava a garantia de "ler como texto" —
+      `pd.read_json` coage ate valores publicados entre aspas (`"1000.50"` -> `1000.5`,
+      `"007"` -> `7`). Fronteira de parse, atinge direto API JSON com dinheiro.
 - [x] **#115** emoji nos `bin/check_*.py` quebra os gates em Windows cp1252 — 8 arquivos, 41
       caracteres nao-cp1252. Corrigido no seam de I/O (reconfigure UTF-8), nao removendo os
       glifos. Controle negativo: 2 failed sem a correcao, 9 passed com ela.
