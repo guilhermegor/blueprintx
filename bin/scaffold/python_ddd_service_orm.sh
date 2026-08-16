@@ -171,6 +171,9 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
+    # Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
+    # review tools is a row here rather than an edit to the gate.
+    cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
     cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$project_path/mypy.ini"
     cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$project_path/.sqlfluff"
     cp "$COMMON_TEMPLATE_ROOT/.sqlfluffignore" "$project_path/.sqlfluffignore"
@@ -206,6 +209,10 @@ copy_common_templates() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
+        "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
+        "$project_path/tests/unit/test_review_threads_gate.py"
     mkdir -p "$project_path/tests/fixtures"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
         "$project_path/tests/unit/test_contract_oracle_example.py"

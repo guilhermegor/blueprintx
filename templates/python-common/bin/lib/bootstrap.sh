@@ -165,35 +165,90 @@ ensure_python_version() {
 	fi
 }
 
-# ── append_ca_to_certifi ──────────────────────────────────────────────────────
-# Append the corporate CA to the certifi bundle so httpx/requests trust it too.
-# Idempotent — keyed on the cert's base64 body, not its shared BEGIN header.
-append_ca_to_certifi() {
+# ── build_union_ca_bundle ─────────────────────────────────────────────────────
+# Write bin/ca_bundle.pem as the UNION of: certifi's roots, whatever bundle the host
+# already provisioned, and the corporate CA. Sets CA_BUNDLE_PEM to the result.
+#
+# UNION is the whole point. Pointing SSL_CERT_FILE/REQUESTS_CA_BUNDLE/PIP_CERT at the
+# corporate CA alone NARROWS the trust store to one certificate, so every TLS connection
+# that is not through the proxy's CA breaks — measured, Poetry went from "0 candidates" to
+# "All attempts to connect to pypi.org failed" BECAUSE the helper ran. It also clobbers the
+# bundle a corporate image may already provision.
+#
+# Writing a generated file also replaces the old in-place append to certifi's cacert.pem,
+# which was invisible (it mutated a file inside site-packages) and undone by any reinstall.
+build_union_ca_bundle() {
 	local str_cert="$1"
 
-	if ! "$PYTHON" -c "import certifi" >/dev/null 2>&1; then
-		print_status "config" "Installing certifi..."
-		if ! "$PYTHON" -m pip install --quiet certifi; then
-			print_status "warning" "Could not install certifi — skipping bundle merge"
-			return 0
-		fi
-	fi
+	CA_BUNDLE_PEM="$BIN_DIR/ca_bundle.pem"
+	export CA_BUNDLE_PEM
 
-	local str_bundle str_marker
-	str_bundle="$("$PYTHON" -c 'import certifi; print(certifi.where())')"
-	str_bundle="${str_bundle//$'\r'/}"
-	str_bundle="${str_bundle//$'\n'/}"
-	str_marker="$(sed -n '2p' "$str_cert")"
+	BX_CA_CORPORATE="$str_cert" BX_CA_OUT="$CA_BUNDLE_PEM" "$PYTHON" - <<'PYEOF'
+import os
+import pathlib
+import re
+import sys
 
-	if [[ -z "$str_marker" || ! -f "$str_bundle" ]]; then
-		return 0
-	fi
-	if grep -qF "$str_marker" "$str_bundle" 2>/dev/null; then
-		print_status "info" "Corporate CA already in certifi bundle"
-		return 0
-	fi
-	cat "$str_cert" >>"$str_bundle"
-	print_status "config" "Corporate CA appended to certifi bundle"
+path_out = pathlib.Path(os.environ["BX_CA_OUT"])
+list_sources = [os.environ["BX_CA_CORPORATE"]]
+
+# Whatever the host already trusts, in the order tools consult it. A corporate image often
+# provisions one of these; replacing it is how a working box stops working.
+for str_var in ("PIP_CERT", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA_BUNDLE"):
+    str_existing = os.environ.get(str_var, "")
+    # Skip a bundle we generated ourselves on a previous run, or the union would grow forever.
+    if str_existing and pathlib.Path(str_existing) != path_out:
+        list_sources.append(str_existing)
+
+try:
+    import certifi
+
+    list_sources.append(certifi.where())
+except ModuleNotFoundError:
+    print("certifi not importable — union built without it", file=sys.stderr)
+
+re_pem = re.compile(
+    r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.DOTALL
+)
+list_seen: list[str] = []
+set_bodies: set[str] = set()
+int_non_corporate = 0
+
+for int_index, str_source in enumerate(list_sources):
+    path_source = pathlib.Path(str_source)
+    if not path_source.is_file():
+        continue
+    for str_block in re_pem.findall(path_source.read_text(encoding="utf-8", errors="replace")):
+        # Dedupe on the base64 body, never on the BEGIN line every certificate shares.
+        str_body = "".join(str_block.split())
+        if str_body not in set_bodies:
+            set_bodies.add(str_body)
+            list_seen.append(str_block)
+            # Index 0 is the corporate CA; everything after it is pre-existing trust.
+            if int_index > 0:
+                int_non_corporate += 1
+
+if not list_seen:
+    print("No certificates found for the union bundle", file=sys.stderr)
+    sys.exit(1)
+
+# A "union" of exactly one source is a REPLACEMENT wearing the word union. If certifi is
+# unimportable AND the host set no bundle, writing this file would narrow the trust store to
+# the corporate CA alone — the precise defect this function was written to remove, arrived at
+# from the other direction. Fail instead, so wire_corporate_ca leaves TLS untouched.
+if int_non_corporate == 0:
+    print(
+        "Refusing to write a CA bundle containing ONLY the corporate certificate: that "
+        "narrows the trust store instead of widening it. Install certifi (pip install "
+        "certifi) or point PIP_CERT/REQUESTS_CA_BUNDLE at the host's CA bundle, then retry.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+path_out.parent.mkdir(parents=True, exist_ok=True)
+path_out.write_text("\n".join(list_seen) + "\n", encoding="utf-8")
+print(len(list_seen))
+PYEOF
 }
 
 # ── wire_corporate_ca ─────────────────────────────────────────────────────────
@@ -210,20 +265,30 @@ wire_corporate_ca() {
 
 	# Resolve the absolute (Windows-safe) path in the shell via to_native_path —
 	# one less Python subprocess, and cygpath handles Git Bash drive mapping.
-	local str_cert_abs
+	local str_cert_abs str_bundle_abs str_count
+
 	str_cert_abs="$(to_native_path "$CORPORATE_CA_PEM")"
 
-	export REQUESTS_CA_BUNDLE="$str_cert_abs"
-	export SSL_CERT_FILE="$str_cert_abs"
-	export CURL_CA_BUNDLE="$str_cert_abs"
-	export PIP_CERT="$str_cert_abs"
-	export PIP_TRUSTED_HOST="pypi.org files.pythonhosted.org pypi.python.org"
-	print_status "config" "SSL bundle: $str_cert_abs"
+	if ! str_count="$(build_union_ca_bundle "$str_cert_abs")"; then
+		print_status "error" "Could not build the union CA bundle — leaving TLS settings untouched"
+		print_status "error" "Pointing them at the corporate CA alone would NARROW the trust store and break every other TLS connection."
+		return 1
+	fi
 
-	append_ca_to_certifi "$str_cert_abs"
+	str_bundle_abs="$(to_native_path "$CA_BUNDLE_PEM")"
 
-	# Point Poetry's resolver at the cert too (best-effort).
+	# Every consumer gets the UNION, never the corporate CA on its own.
+	export REQUESTS_CA_BUNDLE="$str_bundle_abs"
+	export SSL_CERT_FILE="$str_bundle_abs"
+	export CURL_CA_BUNDLE="$str_bundle_abs"
+	export PIP_CERT="$str_bundle_abs"
+	print_status "config" "SSL bundle (union, ${str_count} certs): $str_bundle_abs"
+
+	# PIP_TRUSTED_HOST is deliberately NOT exported: it disables verification for PyPI
+	# outright, which defeats the bundle this function exists to build.
+
+	# Point Poetry's resolver at the union too (best-effort).
 	if resolve_poetry; then
-		run_poetry config certificates.pypi.cert "$str_cert_abs" 2>/dev/null || true
+		run_poetry config certificates.pypi.cert "$str_bundle_abs" 2>/dev/null || true
 	fi
 }

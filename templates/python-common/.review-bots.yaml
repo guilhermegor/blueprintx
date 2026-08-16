@@ -1,0 +1,29 @@
+# Reviewers whose comments are FINDINGS, not answers — read by bin/check_review_threads.py.
+#
+# This list IS the provider-agnosticism. The gate's logic names no tool: it subtracts these
+# logins from a thread's authors and asks whether anything is left. Swapping or adding a
+# reviewer is adding a row here, never an edit to the gate.
+#
+# ⚠️ Reviewer shapes genuinely differ, and the difference matters:
+#   - some post inline review THREADS (their findings are what this gate tracks)
+#   - some post only a STATUS CHECK and no thread at all (nothing for this gate to see)
+# A roster that assumes every reviewer speaks in threads is born broken, which is why a PR
+# with zero threads is a pass here rather than a failure.
+#
+# Delete this file to opt out; the gate then self-skips with a message instead of failing.
+
+reviewers:
+  - login: coderabbitai[bot]
+    posts: threads
+    note: >-
+      Resolves its own threads on seeing the fix ("Addressed in commit <sha>"), which is why
+      isResolved cannot be the signal — measured on blueprintx#170, all 14 threads read
+      resolved while 11 held no author reply.
+
+  - login: github-actions[bot]
+    posts: status
+    note: Workflow output, never a review finding.
+
+  - login: copilot-pull-request-reviewer[bot]
+    posts: threads
+    note: GitHub's built-in reviewer; enabled per-repo by enable_repo_rules.sh.

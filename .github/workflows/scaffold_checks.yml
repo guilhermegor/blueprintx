@@ -15,6 +15,36 @@ concurrency:
 
 jobs:
 
+  review-threads:
+    name: Review threads answered
+    runs-on: ubuntu-latest
+    # PRs only: there is no review thread to check on a push to main.
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet pyyaml
+
+      # A review finding has two halves - change the code, and REPLY on the thread. Only the
+      # first is visible from the editor, and the second is what a future session reads to
+      # learn what was decided and why. isResolved cannot be the signal: a good reviewer bot
+      # closes its own threads on seeing the fix, so the flag records ITS satisfaction.
+      # Measured on #170 - all 14 threads read resolved while 11 held no author reply.
+      # The reviewer roster lives in .review-bots.yaml, so no tool is named in the logic.
+      - name: Every review thread carries an answer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python bin/ci/check_review_threads.py
+
   lint-shell:
     name: ShellCheck — bin/**/*.sh
     runs-on: ubuntu-latest

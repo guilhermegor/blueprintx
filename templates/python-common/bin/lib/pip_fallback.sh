@@ -290,18 +290,145 @@ pip_fallback_write_requirements_file() {
 
 	pip_fallback_ensure_toml_reader
 	pip_fallback_emit_pip_requirements_from_pyproject "$str_groups_csv" >"$str_req_file"
+	pip_fallback_prune_unused_db_drivers "$str_req_file"
 }
 
+# The package name at the head of a requirement line, stripped of extras, version
+# specifiers and environment markers ("mysql-connector-python>=8.3,<9.0" -> the name).
+pip_fallback_requirement_name() {
+	local str_req="$1"
+
+	str_req="${str_req%%;*}"
+	str_req="${str_req%%[*}"
+	str_req="${str_req%%[<>=!~]*}"
+	str_req="${str_req#"${str_req%%[![:space:]]*}"}"
+	str_req="${str_req%"${str_req##*[![:space:]]}"}"
+
+	printf '%s\n' "$str_req"
+}
+
+# Which DB_BACKEND values actually need a given driver. A driver absent from this
+# table is not a DB driver at all and is never pruned.
+pip_fallback_backends_needing_driver() {
+	case "$1" in
+	psycopg) echo "postgresql" ;;
+	oracledb) echo "oracle" ;;
+	pyodbc) echo "mssql" ;;
+	mysql-connector-python) echo "mysql mariadb" ;;
+	*) echo "" ;;
+	esac
+}
+
+pip_fallback_resolve_db_backend() {
+	local str_backend
+
+	# `_read_env_var` defaults to a CWD-relative ".env"; anchor it to the project so the
+	# answer does not depend on where the recipe happened to be invoked from. Reading the
+	# wrong .env here silently prunes the driver the project actually needs.
+	str_backend="$(ENV_FILE="$PROJECT_ROOT/.env" _read_env_var DB_BACKEND 2>/dev/null || true)"
+	str_backend="${str_backend//$'\r'/}"
+	str_backend="${str_backend//[[:space:]]/}"
+
+	# Lowercase to match config/connection_db.py, which reads the same variable through
+	# `os.getenv("DB_BACKEND", "sqlite").lower()`. Without this, `DB_BACKEND=PostgreSQL` is a
+	# valid configuration for the app and an unrecognised one here — so the pruner would drop
+	# psycopg and hand the project a venv missing the driver it is configured to use, which is
+	# the exact class of failure this pruning exists to prevent.
+	printf '%s\n' "${str_backend:-sqlite}" | tr '[:upper:]' '[:lower:]'
+}
+
+# Drop every DB driver that the configured DB_BACKEND does not use.
+#
+# The service tiers declare ALL four drivers unconditionally, so a SQLite project was
+# downloading ~20 MB of pyodbc/oracledb/psycopg/mysql-connector it can never import. On a
+# corporate index that answers 403 per package (an allowlist, not an outage) that is a
+# self-inflicted failure surface: measured 2026-08-16, `mysql-connector-python` was refused
+# and took the whole install with it on a project that persists to SQLite. A dependency you
+# never requested cannot be refused.
+pip_fallback_prune_unused_db_drivers() {
+	local str_req_file="$1"
+	local str_backend
+	local str_req
+	local str_name
+	local str_backends
+	local str_pruned
+	local -a arr_keep=()
+	local -a arr_dropped=()
+
+	[[ -s "$str_req_file" ]] || return 0
+
+	str_backend="$(pip_fallback_resolve_db_backend)"
+
+	while IFS= read -r str_req; do
+		str_name="$(pip_fallback_requirement_name "$str_req")"
+		str_backends="$(pip_fallback_backends_needing_driver "$str_name")"
+
+		if [[ -n "$str_backends" && " $str_backends " != *" $str_backend "* ]]; then
+			arr_dropped+=("$str_name")
+			continue
+		fi
+
+		arr_keep+=("$str_req")
+	done <"$str_req_file"
+
+	if ((${#arr_dropped[@]} == 0)); then
+		return 0
+	fi
+
+	printf '%s\n' "${arr_keep[@]}" >"$str_req_file"
+	str_pruned="$(
+		IFS=', '
+		echo "${arr_dropped[*]}"
+	)"
+	print_status "config" "DB_BACKEND=$str_backend — skipping unused DB drivers: $str_pruned"
+}
+
+# Install the requirements, degrading from one batch to one-at-a-time.
+#
+# `pip install -r` is ATOMIC: a single refused wheel discards a batch in which every other
+# package already downloaded successfully. Behind a corporate index that 403s per package,
+# that turns one unavailable dependency into an empty venv. So the batch is only the fast
+# path — on failure we retry per requirement, so everything installable IS installed and the
+# report names every package the index refused, not just the first one.
 pip_fallback_install_requirements_file_into_venv() {
 	local str_venv_python="$1"
 	local str_req_file="$2"
+	local str_req
+	local str_failed
+	local -a arr_failed=()
 
 	if [[ ! -s "$str_req_file" ]]; then
 		print_status "warning" "No dependencies were generated from pyproject.toml for pip fallback"
 		return 0
 	fi
 
-	"$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" -r "$str_req_file"
+	if "$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" -r "$str_req_file"; then
+		return 0
+	fi
+
+	print_status "warning" "Batch install failed — retrying one requirement at a time to isolate it"
+
+	while IFS= read -r str_req; do
+		[[ -n "$str_req" && "$str_req" != \#* ]] || continue
+
+		if ! "$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" "$str_req"; then
+			arr_failed+=("$str_req")
+			print_status "warning" "Index refused: $str_req"
+		fi
+	done <"$str_req_file"
+
+	if ((${#arr_failed[@]} == 0)); then
+		print_status "success" "All requirements installed individually"
+		return 0
+	fi
+
+	str_failed="$(
+		IFS=', '
+		echo "${arr_failed[*]}"
+	)"
+	print_status "error" "The package index refused: $str_failed"
+	print_status "error" "An HTTP 403 here means the index ALLOWLIST rejected the package, not that the network is down — the remedies are opposite. Ask for it to be allowlisted, or vendor it (see 'make wheelhouse')."
+	return 1
 }
 
 pip_fallback_install_groups_in_venv() {

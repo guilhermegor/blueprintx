@@ -70,6 +70,45 @@ def test_find_file_problems_reports_without_raising(tmp_path: Path) -> None:
 	assert any("absent" in p for p in list_problems)
 
 
+def test_header_only_file_passes_its_cnpj_contract(tmp_path: Path) -> None:
+	"""A source reporting "nothing today" by shipping its header alone is not a broken file.
+
+	Negative control for the ``any()``-over-an-empty-series trap: ``any()`` of an empty series
+	is ``False``, the same answer a column of garbage gives, so the pre-fix code reproved a
+	well-formed header-only file as "holds no valid CNPJ" and killed the run.
+	"""
+	path_csv = tmp_path / "empty.csv"
+	path_csv.write_text("cnpj;amount\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
+	assert find_file_problems(cls_contract, path_csv, "") == []
+
+
+def test_populated_cnpj_column_with_no_valid_value_still_fails(tmp_path: Path) -> None:
+	"""The emptiness guard must not relax the check for a column that HAS values.
+
+	The other half of the control above: skipping an empty column is right, skipping a
+	populated-but-invalid one would delete the check entirely.
+	"""
+	path_csv = tmp_path / "garbage.csv"
+	path_csv.write_text("cnpj;amount\nnot-a-cnpj;10\nalso-not;20\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
+	list_problems = find_file_problems(cls_contract, path_csv, "")
+	assert any("holds no valid CNPJ" in p for p in list_problems)
+
+
+def test_missing_cnpj_value_is_not_stringified_to_nan(tmp_path: Path) -> None:
+	"""A blank cell must not reach the validator as the literal string ``"nan"``.
+
+	``.astype(str)`` is not NA-safe below pandas 3: it renders a missing value as ``"nan"``,
+	which then fails validation for the wrong reason. ``safe_str`` yields ``""``. A valid
+	sibling row keeps the column passing, proving the blank was skipped rather than counted.
+	"""
+	path_csv = tmp_path / "blank.csv"
+	path_csv.write_text("cnpj;amount\n;10\n11.222.333/0001-81;20\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
+	assert find_file_problems(cls_contract, path_csv, "") == []
+
+
 def test_empty_contract_constrains_nothing(tmp_path: Path) -> None:
 	"""An empty contract still declares intent and passes any well-formed file."""
 	path_csv = _write_csv(tmp_path)
@@ -121,3 +160,95 @@ def test_read_table_quote_none_reads_malformed_regulatory_dump(tmp_path: Path) -
 	assert len(df_none) == 3  # all rows survive; the stray quote is literal text
 	assert df_none["note"].iloc[1] == '"parecer aprovado'
 	assert df_none["amount"].tolist() == ["10", "20", "30"]
+
+
+def test_read_table_json_preserves_zero_padding_and_decimal_scale(tmp_path: Path) -> None:
+	"""The JSON branch honours the same "read as text" guarantee the CSV branch does.
+
+	``read_table``'s docstring promises the file is *always* read as text, never with pandas'
+	inference — but the JSON branch used ``pd.read_json``, which infers regardless. Measured:
+	it returns ``1000.5`` for a document that literally contains the STRING ``"1000.50"``, and
+	``7`` for ``"007"``. The scale is unrecoverable afterwards, so a money column ingested from
+	an API silently lost its cents.
+	"""
+	path_json = tmp_path / "money.json"
+	path_json.write_text(
+		'[{"code": "007", "amount": "1000.50"}, {"code": "042", "amount": 0.10}]',
+		encoding="utf-8",
+	)
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	df_out = read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+	assert df_out["code"].tolist() == ["007", "042"]  # leading zeros survive
+	# The second row arrives as a bare JSON number — the exact source token still survives.
+	assert df_out["amount"].tolist() == ["1000.50", "0.10"]
+
+
+def test_padded_column_name_is_stripped_at_the_read_boundary(tmp_path: Path) -> None:
+	"""A header cell with a trailing space must not produce an unreachable column.
+
+	The nasty part is that it does not look like a defect: the column PRINTS as ``amount``
+	while only ``df["amount "]`` reaches it, so the contract reports a required column missing
+	and every lookup raises KeyError on a name plainly visible in ``df.columns``. It is
+	per-dataset, never per-format — a sibling table from the same publisher is usually clean.
+	"""
+	path_csv = tmp_path / "padded_header.csv"
+	path_csv.write_text("code ;amount \nABC;10\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	df_out = read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+	assert list(df_out.columns) == ["code", "amount"]
+
+
+def test_positional_payload_drops_a_surplus_position_that_is_empty_everywhere(
+	tmp_path: Path,
+) -> None:
+	"""A row wider than its header is tolerated only when the surplus is empty on every row."""
+	path_json = tmp_path / "wide.json"
+	path_json.write_text(
+		'{"columns": ["code", "amount"], "rows": [["ABC", "10", null], ["DEF", "20", null]]}',
+		encoding="utf-8",
+	)
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	df_out = read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+	assert list(df_out.columns) == ["code", "amount"]
+	assert df_out["amount"].tolist() == ["10", "20"]
+
+
+def test_positional_payload_raises_when_the_surplus_holds_a_value(tmp_path: Path) -> None:
+	"""A surplus position carrying data must raise, never be trimmed away.
+
+	The payload is positional, so a surplus value cannot be named — and blind trimming is
+	exactly how a source column stops arriving with nothing going red: a contract validates
+	column PRESENCE, not payload WIDTH.
+	"""
+	path_json = tmp_path / "wide_valued.json"
+	path_json.write_text(
+		'{"columns": ["code", "amount"], "rows": [["ABC", "10", "surprise"]]}',
+		encoding="utf-8",
+	)
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	with pytest.raises(ContractError, match="surplus position"):
+		read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_positional_payload_raises_on_a_row_narrower_than_its_header(tmp_path: Path) -> None:
+	"""A short row is a defect too — padding it would invent data."""
+	path_json = tmp_path / "narrow.json"
+	path_json.write_text('{"columns": ["code", "amount"], "rows": [["ABC"]]}', encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("code", "amount"), ())
+	with pytest.raises(ContractError, match="narrower"):
+		read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_column_names_colliding_after_trimming_are_rejected(tmp_path: Path) -> None:
+	"""Two names that differ only by surrounding spaces must not silently become one.
+
+	Stripping is the fix for an unreachable padded column, but it can collide: a source
+	shipping both ``code`` and ``code `` yields two columns named ``code``. The contract's
+	required-column check still passes — the name IS present — while every later lookup
+	returns a DataFrame instead of a Series and ``apply_dtypes`` types an ambiguous schema.
+	"""
+	path_csv = tmp_path / "collide.csv"
+	path_csv.write_text("code;code ;amount\nABC;DEF;10\n", encoding="utf-8")
+	cls_contract = FileContract("data", "data", ("code",), ())
+	with pytest.raises(ContractError, match="collide after trimming"):
+		read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)

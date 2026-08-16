@@ -220,4 +220,13 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
+    # script prints: it would die with UnicodeEncodeError before reporting anything. And
+    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
+    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
+    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
+
     sys.exit(main())

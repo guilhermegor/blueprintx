@@ -52,6 +52,8 @@ site/
 
 # Corporate CA (generated locally by `make get_corporate_ca` — never committed)
 bin/corporate_ca.pem
+# The UNION bundle wire_corporate_ca derives from it (certifi + host bundle + corporate CA)
+bin/ca_bundle.pem
 
 # Claude Code machine-local settings + its mid-save temp siblings. The
 # `.tmp.<pid>.<hash>` file is written briefly during a save; a `git add -A` that

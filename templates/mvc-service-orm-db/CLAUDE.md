@@ -20,14 +20,31 @@ The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at 
 
 ## Library coupling (seams for peripheral dependencies)
 
-Model / View / Controller may use the skeleton's **core data libraries directly** —
-`pandas` (the model/view vocabulary) and SQLAlchemy via `config.connection_db`.
+`pandas` is the **vocabulary** Model / View / Controller speak, not an API they call.
+`pd.DataFrame` may appear as a parameter or return **annotation** anywhere, but the pandas
+*surface* — constructing a frame, reading one — lives behind a seam in `utils/`
+(`utils.tabular_reader`, `utils.frames`). SQLAlchemy reaches the layers via
+`config.connection_db`; in `model/` it is allowed for the **declaration** of an entity, since
+in a declarative mapping the entity *is* its `DeclarativeBase` / `Mapped` / `mapped_column`.
+
 **Every other third-party dependency** (network, vendor SDKs, OS-specific APIs,
 exotic file formats) must be reached through a **seam in `utils/`** (a
 gateway/adapter, or a `WebhookNotifier`-style port), so the layer depends on our
 function, not the vendor API. This confines breakage from a vendor change to a
 single adapter. Example seams shipped here: `utils/webhook/` (teams/slack behind a
 port), `utils/paths.py` (OS-independent path resolution).
+
+**This is enforced, not advised.** `.layer-policy.yaml` at the project root declares, per
+layer, which third-party modules are allowed and why; `bin/check_layer_imports.py` reads it in
+pre-commit and CI. Two things worth knowing before you try to work around it:
+
+- **Deferring an import into a function changes nothing.** The gate judges every scope alike —
+  the layer still knows the vendor, so hiding the import inside a method is not an exemption
+  (the message says so explicitly). The optional-dependency pattern
+  (`try: import x / except ImportError: degrade`) is legitimate, but it belongs in the `utils/`
+  seam that *owns* the optional dependency and returns the degraded result.
+- **Adding an entry to `allow` requires writing the reason.** An allowlist entry without one is
+  a rule the next person widens. If the reason is hard to write, the seam is the answer.
 
 The **standard library** (`re`, `pathlib`, `datetime`, `json`, …) is unrestricted
 in every layer — it carries no coupling risk. Route it through `utils/` only when
@@ -67,7 +84,7 @@ and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 **`config/connection_db.build_engine()`** reads `DB_BACKEND` from `.env` and returns a SQLAlchemy `Engine`; `build_session_factory()` returns a bound `sessionmaker`. Supported: `sqlite`, `postgresql`, `mariadb`, `mysql`, `mssql`, `oracle`. `SQL_ECHO=true` logs SQL. SQL Server honours `DB_MSSQL_AUTH` (`sql` for UID/PWD, `aad` for Azure AD Interactive).
 
-**`model/example_entity`** is the reference model: a `DeclarativeBase`, an ORM-mapped `ExampleRecord`, and an `ExampleEntity` service that opens sessions for writes and uses `pd.read_sql` for reads, then **types every column on load** with `apply_dtypes(df, dict_dtypes=_DICT_DTYPES)` (`utils.dtypes`). Copy it per entity and adjust `_DICT_DTYPES`.
+**`model/example_entity`** is the reference model: a `DeclarativeBase`, an ORM-mapped `ExampleRecord`, and an `ExampleEntity` service that opens sessions for writes and **reads through the session** (`session.scalars(select(...))`), projecting each mapped object into a plain mapping and handing those to `utils.frames.from_records`, which **types every column on load**. Copy it per entity and adjust `_DICT_DTYPES`. Note it never calls the pandas API — `pd.DataFrame` is only the return annotation, so copying it propagates the boundary rather than a vendor call.
 
 **`view/report_renderer.RenderToExcel`** is the reference view: take a DataFrame, write `.xlsx` via openpyxl, return the path. Add JSON/CSV/HTML renderers alongside it.
 
@@ -75,7 +92,9 @@ and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 ## Session lifecycle rule
 
-The service class owns the `sessionmaker`. Open a session per write and close it in a `finally`; reads use `pd.read_sql` on an engine connection. Keep `commit()` at the service boundary — never inside a lower-level helper.
+The service class owns the `sessionmaker`. Open a session per write **and per read**, and close it in a `finally`. Keep `commit()` at the service boundary — never inside a lower-level helper.
+
+Reads go through the session (`session.scalars(select(...))`), not `pd.read_sql`: the bare pandas readers are banned project-wide so every read funnels through a seam that enforces types, and the frame is built by `utils.frames.from_records`. Materialise the rows **before** closing the session — a lazily-loaded attribute touched after `close()` raises `DetachedInstanceError`.
 
 ## Adding a new model entity
 

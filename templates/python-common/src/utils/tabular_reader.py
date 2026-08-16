@@ -12,8 +12,17 @@ configurable delimiter; ``.json`` → a JSON array of records; otherwise Excel).
   seam never opens connections (that stays a controller/boundary concern).
 - :func:`find_file_problems` — validates a file against a contract and returns problems
   **without raising** (the boundary uses it to abort, skip, or notify).
+- :func:`decode_positional_payload` — decodes an API payload whose rows are positional
+  arrays beside a separate ``columns`` header, handling a row wider than its own header
+  asymmetrically (drop a surplus position only when it is empty everywhere; raise when it
+  holds a value). The ``.json`` reader uses it automatically for a
+  ``{"columns": …, "rows": …}`` document.
 - :class:`FileContract` — declares the columns a file must have and the columns that must
   hold valid CNPJs (a coercible-type check).
+
+Column NAMES are as untrusted as column values: they are stripped at the read boundary,
+because a publisher shipping ``"Symb "`` yields a column that prints as ``Symb`` while only
+``df["Symb "]`` reaches it.
 
 Bare ``pd.read_*`` is banned project-wide (ruff ``TID251``); this seam (and tests) is the one
 exempt place, so every read funnels through a contract + dtype check. Projects keep their
@@ -26,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import csv
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -33,6 +43,7 @@ import pandas as pd
 
 from utils.br_identifiers import is_valid_cnpj, unmask_cnpj
 from utils.dtypes import apply_dtypes
+from utils.text import safe_str
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
@@ -313,13 +324,87 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 	for str_col in cls_contract.tuple_cnpj_cols:
 		if str_col not in df_input.columns:
 			continue
-		series_valid = df_input[str_col].astype(str).map(lambda v: is_valid_cnpj(unmask_cnpj(v)))
+		series_col = df_input[str_col]
+		# An EMPTY column is not a broken column. Over an empty series the any-reducer
+		# answers False, the exact answer a column of garbage gives, so without this guard
+		# a source reporting "nothing today" by shipping its header alone is reproved as
+		# holding no valid CNPJ and the run dies on a perfectly well-formed file. A column
+		# that HAS values and none valid must still fail, so the guard is emptiness only.
+		if series_col.empty:
+			continue
+		# Coerce with the NA-safe string helper rather than astype-to-str. Below pandas 3 the
+		# latter renders a missing value as the literal nan, and that string then fails
+		# validation for entirely the wrong reason.
+		series_valid = series_col.map(
+			lambda obj_cell: is_valid_cnpj(unmask_cnpj(safe_str(obj_cell)))
+		)
 		if not bool(series_valid.any()):
 			list_problems.append(
 				f"Column '{str_col}' in '{cls_contract.str_name}' holds no valid CNPJ "
 				f"(unexpected data type)"
 			)
 	return list_problems
+
+
+@type_checker
+def decode_positional_payload(
+	list_columns: Sequence[str], list_rows: Sequence[Sequence[Any]]
+) -> pd.DataFrame:
+	"""Decode an API payload whose rows are positional arrays beside a separate header.
+
+	An endpoint returning ``{"columns": [...], "rows": [[...], ...]}`` can send rows **wider
+	than its own header** — and it is per table, not per format, so a sibling endpoint that
+	matches exactly is no evidence about this one. The width mismatch is handled
+	**asymmetrically**: a surplus position is dropped only when it is empty on *every* row,
+	and raises when it ever holds a value. The payload is positional, so a surplus value
+	cannot be named — and trimming it blindly is exactly how a source column stops arriving
+	with nothing going red, since a contract validates column PRESENCE, not payload WIDTH.
+
+	Never ``zip()`` (it truncates in silence) and never pad: a short row is a defect too, it
+	simply happens to be the direction that blows up on its own.
+
+	Parameters
+	----------
+	list_columns : sequence of str
+		The header the payload declares, in order.
+	list_rows : sequence of sequence
+		The rows as positional arrays.
+
+	Returns
+	-------
+	pd.DataFrame
+		A frame with exactly ``list_columns`` as its columns.
+
+	Raises
+	------
+	ContractError
+		If a row is narrower than the header, or if a surplus position holds a value.
+	"""
+	int_declared = len(list_columns)
+	list_narrow = [int_i for int_i, seq_row in enumerate(list_rows) if len(seq_row) < int_declared]
+	if list_narrow:
+		raise ContractError(
+			[
+				f"Positional payload has {len(list_narrow)} row(s) narrower than the declared "
+				f"{int_declared} columns (first at index {list_narrow[0]}); "
+				f"padding would invent data"
+			]
+		)
+
+	int_widest = max((len(seq_row) for seq_row in list_rows), default=int_declared)
+	for int_pos in range(int_declared, int_widest):
+		list_surplus = [seq_row[int_pos] for seq_row in list_rows if len(seq_row) > int_pos]
+		if any(obj_value not in (None, "") for obj_value in list_surplus):
+			raise ContractError(
+				[
+					f"Positional payload row is wider than its header and surplus position "
+					f"{int_pos} holds a value — it cannot be named, so it must not be dropped"
+				]
+			)
+
+	return pd.DataFrame(
+		[list(seq_row)[:int_declared] for seq_row in list_rows], columns=list(list_columns)
+	)
 
 
 @type_checker
@@ -424,6 +509,60 @@ def _read_raw(
 	int_header_row: int = 0,
 	int_csv_quoting: int = csv.QUOTE_MINIMAL,
 ) -> pd.DataFrame:
+	"""Read a file into a raw DataFrame and normalise its column NAMES.
+
+	Ingestion validates a source's values and tends to trust its column names; both are
+	untrusted, and the name defect is the nastier of the two because it is invisible. A
+	publisher that ships ``"Symb "`` with a trailing space produces a column that PRINTS as
+	``Symb`` while only ``df["Symb "]`` reaches it — so the contract reports a required column
+	*missing* and every lookup raises ``KeyError`` on a name plainly visible in
+	``df.columns``. Stripping at the read boundary is the one place that fixes it for every
+	caller, and it is per-dataset, never per-format: a sibling table from the same endpoint
+	is usually clean, which is exactly why nobody expects it.
+
+	See :func:`_read_raw_dispatch` for the per-format reading itself.
+	"""
+	df_raw = _read_raw_dispatch(
+		path_file,
+		str_sheet,
+		str_dtype,
+		str_csv_sep,
+		list_columns,
+		str_encoding,
+		int_header_row,
+		int_csv_quoting,
+	)
+	list_normalised = [str(col).strip() for col in df_raw.columns]
+	# Stripping can COLLIDE. When a source publishes one name twice — once padded with
+	# spaces and once not — trimming leaves two columns under a single label. The
+	# required-column check still passes, since the label IS present, while the identifier
+	# check and the dtype step then work on an ambiguous schema. Fail here, while the cause
+	# is still visible; one line further down the duplicate can no longer be told apart from
+	# a source that genuinely repeats a label.
+	list_duplicates = sorted({c for c in list_normalised if list_normalised.count(c) > 1})
+	if list_duplicates:
+		raise ContractError(
+			[
+				f"Column names collide after trimming whitespace: {', '.join(list_duplicates)}. "
+				f"The source published the same name with and without surrounding spaces; "
+				f"disambiguate it before reading."
+			]
+		)
+	df_raw.columns = list_normalised
+	return df_raw
+
+
+@type_checker
+def _read_raw_dispatch(
+	path_file: Path,
+	str_sheet: str,
+	str_dtype: str | None,
+	str_csv_sep: str,
+	list_columns: Sequence[str] | None = None,
+	str_encoding: str = "utf-8-sig",
+	int_header_row: int = 0,
+	int_csv_quoting: int = csv.QUOTE_MINIMAL,
+) -> pd.DataFrame:
 	"""Read a file into a raw DataFrame, dispatching by extension (CSV, JSON, or Excel).
 
 	Parameters
@@ -480,7 +619,21 @@ def _read_raw(
 			quoting=int_csv_quoting,
 		)
 	if str_suffix == ".json":
-		df_json = pd.read_json(path_file)
+		# Never use pandas' own JSON reader here. It infers types before anything can ask it
+		# not to, and the later astype cannot undo that. It coerces even values the document
+		# QUOTES as strings — measured, "1000.50" comes back as 1000.5 and "007" as 7 — so
+		# the "always read as text" guarantee read_table documents was false on this branch
+		# alone while the CSV branch honoured it. Parsing floats and ints as str keeps the
+		# exact source token, which is what a Decimal column is later built from.
+		obj_json = json.loads(
+			path_file.read_text(encoding=str_encoding), parse_float=str, parse_int=str
+		)
+		# A payload carrying BOTH a header and positional rows is unambiguous, so decode it
+		# rather than handing pandas a dict it would read as two unrelated columns.
+		if isinstance(obj_json, dict) and {"columns", "rows"} <= set(obj_json):
+			df_json = decode_positional_payload(obj_json["columns"], obj_json["rows"])
+		else:
+			df_json = pd.DataFrame(obj_json)
 		return df_json.astype(str_dtype) if str_dtype is not None else df_json
 	# An empty sheet name means "the first worksheet, whatever it is named" — external files
 	# arrive with locale-dependent default sheet names such as Planilha1 or Sheet1, so read the

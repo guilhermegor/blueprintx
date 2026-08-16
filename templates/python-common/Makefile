@@ -135,6 +135,7 @@ lint:
 	@$(POETRY) run codespell .
 	@$(POETRY) run pydocstyle .
 	@$(POETRY) run python bin/check_docstrings.py
+	@$(POETRY) run python bin/check_layer_imports.py
 	@bash bin/lint_shell.sh
 	@bash bin/lint_sql.sh
 	@bash bin/lint_yaml.sh

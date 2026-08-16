@@ -1,3 +1,12 @@
+# `bin/precommit.sh` installs BOTH `commit-msg` and `pre-push`. pre-commit applies a hook to
+# EVERY installed git hook type unless a stage is declared, so without this line every static
+# gate below (tests, mypy, lint-*, check_*) would run twice: once on commit and again on push.
+# The duplication is invisible in the config — the fast hooks correctly carry no `stages:`
+# because they belong on commit, and nothing says that silence also enlists them in the push.
+# Hooks that belong elsewhere still say so explicitly (`commit-msg`, `pre-push`, `manual`).
+default_stages:
+  - pre-commit
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -144,6 +153,18 @@ repos:
       - id: check-dtypes
         name: numeric dtype policy check (no binary floats)
         entry: bash bin/poetry_exec.sh run python bin/check_dtypes.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      # Structural gate for the layer-import policy: a third-party dependency is reached
+      # through a seam in utils/, never imported by model/view/controller. ruff's banned-api
+      # is a BLOCKLIST and by construction cannot catch a vendor nobody thought to list;
+      # this is deny-by-default per layer. Self-skips when .layer-policy.yaml is absent.
+      - id: check-layer-imports
+        name: layer import policy (vendors live behind a seam)
+        entry: bash bin/poetry_exec.sh run python bin/check_layer_imports.py
         language: system
         types:
           - python
