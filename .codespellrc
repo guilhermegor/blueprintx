@@ -7,4 +7,14 @@
 # back as `./docs/…`). The basename form matches under every invocation style.
 skip = *.png,*.svg,*.ico,*.jpg,*.json,*.lock,*.po,*.pyc,*-lessons.md
 quiet-level = 3
-ignore-words-list = nd,fpr,strat,enty,filetest,nome,nomes,caracteres,prefere,atual,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX,itens,controle,controles,validador,validadores,cabecalho,ambiente,ambientes,superficie,indice,indices,meu,seu,sua,seus,suas,ser,vai,vao,relevante,relevantes,comando,comandos,sera,serao,seria,seriam
+# ⚠️ WRITE EVERY ENTRY IN LOWERCASE. codespell lowercases the word it found before looking it
+# up, so a lowercase entry covers `classe`/`Classe`/`CLASSE`, while a CAPITALISED entry matches
+# only that exact casing. Measured the hard way: de-duplicating this list kept `Classe` and
+# dropped `classe`, and the lowercase word was immediately flagged again. The old `Classe,classe`
+# pairs were working around this — one lowercase entry replaces both.
+#
+# Kept in SYNC with templates/python-common/.codespellrc — the two drifted in BOTH directions
+# (30 words missing there, 25 missing here), and the copy that ships into new projects was the
+# stale one, so every scaffolded project inherited the older vocabulary. When a failed commit
+# teaches this repo a word, it must land in both files.
+ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,datas,data,caracteres,caractere,momento,repete,essencial,construtor,comando,comandos,sequencia,referencia,valores,coluna,colunas,linha,linhas,arquivo,arquivos,cabecalho,conteudo,tamanho,saida,entrada,obrigatorio,opcional,usuario,parametro,parametros,retorno,entao,acao,nao,erros,prefere,itens,controle,controles,validador,validadores,ambiente,ambientes,superficie,indice,indices,meu,seu,sua,seus,suas,ser,vai,vao,relevante,relevantes,sera,serao,seria,seriam,autor,responde

@@ -1,11 +1,12 @@
 name: Run Tests
 
 on:
+  # No `outputs:` here on purpose. This used to declare `ready_for_release` as
+  # `${{ jobs.test.result == 'success' }}`, which is not a valid workflow_call output value —
+  # only `jobs.<id>.outputs.<name>` is in scope there, so the output resolved to the empty
+  # string on every run while looking like a working release gate. It had no consumers, and a
+  # caller that needs the verdict already has it as `needs.<job>.result`.
   workflow_call:
-    outputs:
-      ready_for_release:
-        description: "Whether all tests passed successfully"
-        value: ${{ jobs.test.result == 'success' }}
   workflow_dispatch:
   pull_request:
     branches:
@@ -100,7 +101,7 @@ jobs:
 
       - name: Load Cached Virtual Environment
         id: cached-venv
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           # Cache build outputs only. poetry.lock is a TRACKED file: caching it means a
           # restored cache overwrites the repo's committed lockfile, so anything downstream
@@ -219,17 +220,32 @@ jobs:
         # "found twice" error on the deeper DDD tree).
         run: cd src && poetry run mypy --config-file ../mypy.ini .
 
-      - name: Run Non-Python Lint Gates (shell, sql, yaml)
+      - name: Run Non-Python Lint Gates (shell, sql, yaml, actions)
         if: runner.os == 'Linux'
         # Mirrors `make lint` and the pre-commit lint-* hooks (one home, zero drift).
         # shellcheck/shfmt are system tools; install them so the shell gate actually runs
         # in CI (the wrappers skip gracefully on a box without them).
+        #
+        # actionlint: the graceful skip is correct on a contributor's machine and is PLACEBO
+        # in CI — a gate reporting its own blindness as OK. LINT_ACTIONS_REQUIRED=1 turns the
+        # skip into a failure, so a broken install can never read as a passing gate.
+        #
+        # ⚠️ Pinning the version pins what is ASKED FOR, never what ARRIVES — and what arrives
+        # is unpacked and EXECUTED on the runner. Hence the SHA-256 check before extracting.
+        env:
+          ACTIONLINT_VERSION: "1.7.7"
+          ACTIONLINT_SHA256: "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
         run: |
           sudo apt-get update && sudo apt-get install -y shellcheck
           poetry run pip install shfmt-py >/dev/null 2>&1 || true
+          curl -fsSL -o /tmp/actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint
           bash bin/lint_shell.sh --check
           bash bin/lint_sql.sh
           bash bin/lint_yaml.sh
+          LINT_ACTIONS_REQUIRED=1 bash bin/lint_actions.sh
 
       - name: Run Integration Tests
         # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a

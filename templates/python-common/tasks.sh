@@ -5,6 +5,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# print_status lives in bin/lib/common.sh. Sourcing it is NOT optional: tasks.sh already calls
+# print_status, and without this line those calls die "command not found" (exit 127) — which
+# under `set -e` aborts the task. Measured: `./tasks.sh init` exited 127 at enable_repo_rules,
+# so enable_repo_rules and enable_security never ran in ANY scaffolded project. The Makefile
+# was unaffected (its recipes shell out to bin/*.sh, which source the lib themselves), so the
+# break was invisible to anyone using `make` — and tasks.sh is precisely the interface for a
+# box without make, i.e. the one least able to diagnose it.
+# shellcheck source=bin/lib/common.sh
+source "$SCRIPT_DIR/bin/lib/common.sh"
+
 # Every Poetry call routes through bin/poetry_exec.sh, which resolves Poetry
 # (poetry -> python -m poetry) on THIS machine — so no task depends on a bare
 # `poetry` being on PATH. Resolution chatter goes to stderr, so $(poetry_exec …)
@@ -160,10 +170,25 @@ lint() {
 	bash "$SCRIPT_DIR/bin/lint_shell.sh"
 	bash "$SCRIPT_DIR/bin/lint_sql.sh"
 	bash "$SCRIPT_DIR/bin/lint_yaml.sh"
+	bash "$SCRIPT_DIR/bin/lint_actions.sh"
 }
 
 check_docstrings() {
 	poetry_exec run python bin/check_docstrings.py
+}
+
+check_commit_msg() {
+	# Pre-flight a commit message BEFORE `git commit -F <file>`. commitizen and gitlint reject
+	# at the commit-msg stage — after every pre-commit gate has already run — so each rejected
+	# message costs a full gate run, and the fixes arrive one at a time. Invokes the project's
+	# OWN hooks, so it cannot drift from what the commit will enforce.
+	# FILE=<path>, matching the Makefile's `make check_commit_msg FILE=<path>` and the
+	# FEAT=/DUMP= convention already used in this file.
+	if [ -z "${FILE:-}" ]; then
+		print_status "error" "Usage: FILE=<message-file> ./tasks.sh check_commit_msg"
+		return 2
+	fi
+	poetry_exec run pre-commit run --hook-stage commit-msg --commit-msg-filename "$FILE"
 }
 
 install_shell_linters() {
@@ -301,8 +326,9 @@ Testing
   fix_playwright       Reinstall Playwright browsers
 
 Linting
-  lint                 Run ruff, mypy, codespell, pydocstyle, check_docstrings, shell/sql/yaml
+  lint                 Run ruff, mypy, codespell, pydocstyle, check_docstrings, shell/sql/yaml/actions
   check_docstrings     Check docstring type/raises consistency
+  check_commit_msg     Pre-flight a commit message: FILE=<path> ./tasks.sh check_commit_msg
   install_shell_linters  Install shellcheck + shfmt as system binaries (optional; pip is primary)
 
 Database
@@ -359,6 +385,7 @@ test_urls_docstrings) test_urls_docstrings ;;
 fix_playwright) fix_playwright ;;
 lint) lint ;;
 check_docstrings) check_docstrings ;;
+check_commit_msg) check_commit_msg ;;
 install_shell_linters) install_shell_linters ;;
 db_up) db_up ;;
 db_backup) db_backup ;;

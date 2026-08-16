@@ -22,4 +22,18 @@ quiet-level = 3
 # discovering them one failed-commit-at-a-time wastes a full pre-commit run each
 # time. EXTEND this list with your locale's vocabulary; never `skip` a whole file
 # (that hides real typos in the code identifiers there).
-ignore-words-list = nd,fpr,strat,enty,filetest,nome,ZAR,fro,hsi,HSI,WEGE,zar,SMLL,Classe,classe,erro,serie,emiss,TERMO,termo,INDX,atual,nomes,datas,data,caracteres,caractere,momento,repete,essencial,construtor,comando,comandos,sequencia,referencia,valores,coluna,colunas,linha,linhas,arquivo,arquivos,cabecalho,conteudo,tamanho,saida,entrada,obrigatorio,opcional,usuario,parametro,parametros,retorno,entao,acao,nao,erros
+# ⚠️ WRITE EVERY ENTRY IN LOWERCASE. codespell lowercases the word it found before looking it
+# up, so a lowercase entry covers `classe`/`Classe`/`CLASSE`, while a CAPITALISED entry matches
+# only that exact casing. Measured the hard way: de-duplicating this list kept `Classe` and
+# dropped `classe`, and the lowercase word was immediately flagged again. The old `Classe,classe`
+# pairs were working around this — one lowercase entry replaces both.
+#
+# The second half of the list is COMMIT- AND DOC-PROSE vocabulary (`ser`, `sera`, `vai`,
+# `meu`, `itens`, `autor`, …) as opposed to the domain nouns above it. It is here because a
+# gate that rejects at the commit-msg / pre-commit boundary costs a FULL gate run per retry,
+# and these words are discovered one failed commit at a time. Measured, not guessed: this
+# half is the set that 200 real commit messages plus this repo's PT-BR `docs/` actually
+# tripped. Keep it in sync with the repo-root `.codespellrc` — the two lists drifted in BOTH
+# directions before (30 words missing here, 25 missing there), and the copy that ships to new
+# projects was the stale one, so every scaffolded project inherited the older vocabulary.
+ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,datas,data,caracteres,caractere,momento,repete,essencial,construtor,comando,comandos,sequencia,referencia,valores,coluna,colunas,linha,linhas,arquivo,arquivos,cabecalho,conteudo,tamanho,saida,entrada,obrigatorio,opcional,usuario,parametro,parametros,retorno,entao,acao,nao,erros,prefere,itens,controle,controles,validador,validadores,ambiente,ambientes,superficie,indice,indices,meu,seu,sua,seus,suas,ser,vai,vao,relevante,relevantes,sera,serao,seria,seriam,autor,responde

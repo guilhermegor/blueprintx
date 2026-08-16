@@ -13,6 +13,16 @@ default_install_hook_types:
   - pre-commit
   - commit-msg
 
+# pre-commit enlists a hook in EVERY installed hook type unless the hook declares a stage.
+# Without this line the Layer-3 hooks below — which carry `always_run: true` and no `stages:`
+# — run once on commit AND again on commit-msg: two full `mkdocs build --strict` runs, two
+# repo-wide codespell scans, per commit. The duplication is invisible in the config, because
+# the silence that correctly means "on commit" also means "on every other installed hook".
+# Same fix as templates/python-common/.pre-commit-config.yaml (#158); this config was missed.
+# Hooks that belong elsewhere still say so explicitly (`commit-msg` below).
+default_stages:
+  - pre-commit
+
 repos:
   # Layer 1 — generic hygiene (no custom logic).
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -63,12 +73,33 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: codespell-sync
+        name: codespell ignore-list sync (root vs template)
+        entry: bash bin/ci/check_codespell_sync.sh
+        language: system
+        pass_filenames: false
+        files: \.codespellrc$
+
       - id: shellcheck
         name: shellcheck (bin/**/*.sh)
         entry: bash bin/ci/check_shell.sh
         language: system
         pass_filenames: false
         files: ^bin/.*\.sh$
+
+      - id: lint-actions
+        name: actionlint (workflows, repo + templates)
+        entry: bash bin/ci/check_actions.sh
+        language: system
+        pass_filenames: false
+        files: (^|/)\.github/workflows/.*\.(yml|yaml)$
+
+      - id: test-copy-lists
+        name: shared test copy lists (scaffolds vs python-common)
+        entry: python3 bin/ci/check_test_copy_lists.py
+        language: system
+        pass_filenames: false
+        files: ^(bin/scaffold/python_.*\.sh|templates/python-common/tests/unit/.*\.py)$
 
       - id: validate-meta
         name: validate skeleton.meta integrity

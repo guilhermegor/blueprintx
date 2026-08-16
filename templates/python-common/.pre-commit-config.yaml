@@ -226,6 +226,17 @@ repos:
           - sql
         pass_filenames: false
 
+      # yamllint validates YAML; actionlint validates a WORKFLOW — different questions, and
+      # only the second is the one GitHub asks. A workflow can be impeccable YAML and still be
+      # rejected wholesale by GitHub, which produces NO red check: the PR just looks like it is
+      # waiting, so a dead gate and a slow gate are indistinguishable from the outside.
+      - id: lint-actions
+        name: actionlint (github actions workflows)
+        entry: bash bin/lint_actions.sh
+        language: system
+        files: ^\.github/workflows/.*\.(yml|yaml)$
+        pass_filenames: false
+
       # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a
       # fresh project with an empty suite does not block every commit; real
       # failures (exit 1) still block.
@@ -244,6 +255,20 @@ repos:
         types:
           - file
         pass_filenames: false
+
+      # A non-empty index at push time is the fingerprint of a REJECTED commit: the push then
+      # ships the previous commit and prints success, so every signal is green while the work
+      # stays behind. Neither CI (a commit that does not exist is not a diff) nor pre-commit
+      # (it already rejected; the loss is downstream) can see it. Guards the INDEX, not the
+      # dirty tree — unstaged edits while pushing are routine, and a noisy guard gets disabled.
+      - id: check-clean-index
+        name: pre-push — index must be empty (a rejected commit leaves it populated)
+        entry: bash bin/check_clean_index.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages:
+          - pre-push
 
       # Coverage is the slow full-suite gate — run it on pre-push, not per-commit,
       # so day-to-day commits stay fast (static gates above still run per-commit).

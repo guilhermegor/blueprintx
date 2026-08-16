@@ -79,4 +79,13 @@ echo "::group::make unit_tests"
 make unit_tests
 echo "::endgroup::"
 
-echo "OK: $SKELETON scaffolds clean, lints clean, and unit tests pass."
+# The integration suite is where every bin/*.sh seam is actually EXECUTED — the unit suite
+# cannot reach a shell script. Without this step those tests were written, shipped into every
+# tier, and never run by the one harness that proves a tier works, so a broken shell seam
+# looked exactly like a working one. `|| [ $? -eq 5 ]` tolerates pytest's "no tests collected"
+# for a tier that ships none; a real failure (exit 1) still fails the run.
+echo "::group::make integration_tests"
+make integration_tests || [ $? -eq 5 ]
+echo "::endgroup::"
+
+echo "OK: $SKELETON scaffolds clean, lints clean, and unit + integration tests pass."

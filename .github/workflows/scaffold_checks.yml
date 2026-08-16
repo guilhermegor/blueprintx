@@ -25,6 +25,8 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -50,6 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
@@ -57,11 +61,61 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  test-copy-lists:
+    name: Shared test copy lists — scaffolds vs python-common
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # A shared test that no scaffold copies is written, committed, and never runs in any
+      # generated project — and the only tell is the test COUNT, which nobody reads. Its
+      # first run found test_startup_fragility_order.py, the guard on the very fix #160
+      # shipped, absent from all five tiers.
+      - name: Every shared test is reachable from every scaffold
+        run: python3 bin/ci/check_test_copy_lists.py
+
+  lint-actions:
+    name: actionlint — workflows (repo + templates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # ⚠️ Pinning the version pins what is ASKED FOR, never what ARRIVES — and what arrives
+      # is unpacked and EXECUTED on this runner. Hence the SHA-256 check before extracting.
+      - name: Install actionlint (pinned + checksum-verified)
+        env:
+          ACTIONLINT_VERSION: "1.7.7"
+          ACTIONLINT_SHA256: "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+        run: |
+          curl -fsSL -o /tmp/actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint
+
+      # yamllint says "is this valid YAML?"; actionlint says "will GitHub run this?" — and a
+      # workflow GitHub refuses produces no red check at all, only a PR that looks like it is
+      # waiting. The templates are in scope because their workflows never execute here, so
+      # every defect in them was previously found by whoever scaffolded a project.
+      - name: Lint workflows
+        env:
+          LINT_ACTIONS_REQUIRED: "1"
+        run: bash bin/ci/check_actions.sh
+
   validate-meta:
     name: Validate skeleton.meta integrity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Check required fields and scaffold paths
         run: bash bin/ci/validate_meta.sh
@@ -71,6 +125,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Assert pyproject.toml and blueprintx.sh versions match
         run: bash bin/ci/check_version_sync.sh
@@ -80,6 +136,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -113,6 +171,8 @@ jobs:
           - react-spa-webpack
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Run blueprintx new --dry-run for ${{ matrix.skeleton }}
         env:
@@ -137,6 +197,8 @@ jobs:
           - lib-minimal
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -178,6 +240,8 @@ jobs:
           - mvc-service-orm-db
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -208,6 +272,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -239,6 +305,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -249,3 +317,9 @@ jobs:
 
       - name: Run codespell (skips binaries and lockfiles)
         run: bash bin/ci/check_spelling.sh
+
+      # The locale vocabulary this repo learns must reach the copy that ships into every
+      # scaffolded project — the two lists drifted in both directions before, and the stale
+      # side was the template, so only generated projects paid for it.
+      - name: Codespell ignore-list sync (root vs template)
+        run: bash bin/ci/check_codespell_sync.sh

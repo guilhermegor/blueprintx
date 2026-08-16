@@ -120,7 +120,7 @@ fix_playwright:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint check_docstrings install_shell_linters
+.PHONY: lint check_docstrings check_commit_msg install_shell_linters
 
 # Optional: install shellcheck + shfmt as SYSTEM binaries (choco/scoop/brew/apt).
 # The primary route is pip (shellcheck-py/shfmt-py dev-deps via `poetry install`);
@@ -139,9 +139,27 @@ lint:
 	@bash bin/lint_shell.sh
 	@bash bin/lint_sql.sh
 	@bash bin/lint_yaml.sh
+	@bash bin/lint_actions.sh
 
 check_docstrings:
 	@$(POETRY) run python bin/check_docstrings.py
+
+# Pre-flight a commit message BEFORE `git commit -F <file>`.
+#
+# commitizen and gitlint reject at the commit-msg stage — i.e. AFTER every pre-commit gate has
+# already run — so each rejected message costs a full gate run, and the fixes come one at a
+# time (title too long, then a body line too long, then the next one). This runs only the
+# commit-msg hooks against a message file, in seconds:
+#
+#   printf 'fix(scope): message\n' > .commitmsg
+#   make check_commit_msg FILE=.commitmsg && git commit -F .commitmsg
+#
+# It invokes the project's OWN hooks, so it cannot drift from what the commit will enforce.
+# When re-wrapping an over-long body line, re-wrap the whole paragraph
+# (`textwrap.fill(width=76)`) — fixing one line by hand pushes the overflow into the next.
+check_commit_msg:
+	@test -n "$(FILE)" || { echo "usage: make check_commit_msg FILE=<message-file>" >&2; exit 2; }
+	@$(POETRY) run pre-commit run --hook-stage commit-msg --commit-msg-filename "$(FILE)"
 
 # -------------------
 # DATABASE
@@ -224,8 +242,9 @@ help:
 	@echo "  fix_playwright       Reinstall Playwright browsers"
 	@echo ""
 	@echo "Linting"
-	@echo "  lint                 Run ruff, codespell, pydocstyle, check_docstrings"
+	@echo "  lint                 Run ruff, mypy, codespell, pydocstyle, check_docstrings, shell/sql/yaml/actions"
 	@echo "  check_docstrings     Check docstring type/raises consistency"
+	@echo "  check_commit_msg FILE=<p>  Pre-flight a commit message before 'git commit -F'"
 	@echo "  install_shell_linters  Install shellcheck + shfmt as system binaries (optional; pip is primary)"
 	@echo ""
 	@echo "Database"

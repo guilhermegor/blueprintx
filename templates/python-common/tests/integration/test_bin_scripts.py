@@ -502,6 +502,138 @@ def test_get_corporate_ca_refuses_with_guidance_off_windows(tmp_path: Path) -> N
 	assert not (tmp_path / "bin" / "corporate_ca.pem").exists()
 
 
+def _init_repo_with_one_commit(path_repo: Path) -> str:
+	"""Create a git work tree with one commit and return the resolved ``git`` binary.
+
+	Parameters
+	----------
+	path_repo : pathlib.Path
+		Directory to initialise as a git work tree; created if absent.
+
+	Returns
+	-------
+	str
+		Absolute path to the ``git`` executable.
+	"""
+	str_git = shutil.which("git")
+	if str_git is None:
+		pytest.skip("git not available -- integration guard only")
+
+	path_repo.mkdir(parents=True, exist_ok=True)
+	list_identity = ["-c", "user.email=t@t.invalid", "-c", "user.name=t"]
+	# Constant, trusted argv -- a resolved git plus repo-internal paths.
+	subprocess.run([str_git, "init", "-q", str(path_repo)], check=True)  # noqa: S603
+	(path_repo / "seed.txt").write_text("seed\n", encoding="utf-8")
+	subprocess.run(  # noqa: S603
+		[str_git, "-C", str(path_repo), "add", "seed.txt"], check=True
+	)
+	list_commit = [str_git, "-C", str(path_repo), *list_identity]
+	list_commit += ["commit", "-q", "--no-verify", "-m", "seed"]
+	subprocess.run(list_commit, check=True, capture_output=True)  # noqa: S603
+	return str_git
+
+
+def test_clean_index_guard_allows_a_push_with_an_empty_index(tmp_path: Path) -> None:
+	"""The routine case -- nothing staged -- must pass, or the guard gets disabled.
+
+	This is the half that decides whether the guard survives: it fires on a POPULATED index,
+	never on a merely dirty tree, so an unstaged edit while pushing (which is normal) is not
+	blocked.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir holding the git work tree.
+	"""
+	path_repo = tmp_path / "repo"
+	_init_repo_with_one_commit(path_repo)
+	# Edit a tracked file without staging it. The tree is now dirty while the index stays
+	# empty, which is the routine state the guard must never block.
+	(path_repo / "seed.txt").write_text("edited\n", encoding="utf-8")
+
+	cls_result = _run("check_clean_index.sh", cwd=path_repo)
+
+	assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+
+
+def test_clean_index_guard_blocks_a_populated_index(tmp_path: Path) -> None:
+	"""The should-fail proof: staged-but-uncommitted work stops the push.
+
+	A guard that has never been observed failing is indistinguishable from one wired to a
+	condition that cannot occur, so the negative control is the test that matters here. The
+	staged file is named in the output, because the whole point is that the rejected commit
+	left work behind that nobody was told about.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir holding the git work tree.
+	"""
+	path_repo = tmp_path / "repo"
+	str_git = _init_repo_with_one_commit(path_repo)
+	(path_repo / "left_behind.py").write_text("x = 1\n", encoding="utf-8")
+	# `git add` ran and no commit consumed it -- the fingerprint of a rejected commit.
+	subprocess.run(  # noqa: S603
+		[str_git, "-C", str(path_repo), "add", "left_behind.py"], check=True
+	)
+
+	cls_result = _run("check_clean_index.sh", cwd=path_repo)
+
+	assert cls_result.returncode != 0, "a populated index must block the push"
+	str_output = cls_result.stdout + cls_result.stderr
+	# The verdict names the likely cause and the file, not just "blocked".
+	assert "REJECTED" in str_output
+	assert "left_behind.py" in str_output
+	# The remedy travels with the refusal, including the escape hatch.
+	assert "--no-verify" in str_output
+
+
+def test_clean_index_guard_is_inert_off_a_git_tree(tmp_path: Path) -> None:
+	"""Outside a git work tree there is nothing to guard, and the hook must never block.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir that is deliberately not a git repository.
+	"""
+	cls_result = _run("check_clean_index.sh", cwd=tmp_path)
+
+	assert cls_result.returncode == 0
+
+
+# --------------------------
+# tasks.sh — the no-make interface
+# --------------------------
+
+
+def test_tasks_sh_resolves_the_print_status_it_calls() -> None:
+	"""``tasks.sh`` must source the lib defining ``print_status``, which it calls.
+
+	Measured before the fix: ``./tasks.sh init`` exited **127** at ``enable_repo_rules`` with
+	``print_status: command not found``, so its last two steps never ran in any scaffolded
+	project. The Makefile was unaffected -- its recipes shell out to ``bin/*.sh``, which source
+	the lib themselves -- so the break was invisible to anyone using ``make``, and ``tasks.sh``
+	is exactly the interface for a box without make.
+
+	Driven through the usage guard because that path calls ``print_status`` and then returns,
+	touching neither the network nor Poetry.
+	"""
+	str_bash = shutil.which("bash") or "bash"
+	path_tasks = Path(__file__).resolve().parents[2] / "tasks.sh"
+	# Constant, trusted argv built from repo-internal paths -- no user input reaches it.
+	cls_result = subprocess.run(  # noqa: S603
+		[str_bash, str(path_tasks), "check_commit_msg"],
+		capture_output=True,
+		text=True,
+		check=False,
+		cwd=str(path_tasks.parent),
+	)
+	str_output = cls_result.stdout + cls_result.stderr
+	assert "command not found" not in str_output
+	assert cls_result.returncode == 2, "the usage guard exits 2, not 127"
+	assert "FILE=" in str_output
+
+
 def test_get_corporate_ca_never_disables_tls_verification() -> None:
 	"""The script must not reach the network with verification switched off.
 
