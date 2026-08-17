@@ -32,6 +32,7 @@ from datetime import date, datetime
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from utils.http_downloader import download_file
 from utils.retry import LogEmitter
@@ -162,9 +163,11 @@ def download_daily(
 	)
 	path_cache_dir.mkdir(parents=True, exist_ok=True)
 	# Publish atomically — see Notes in the docstring for why a rename is required here.
-	path_staging = path_cached.with_name(f"{path_cached.name}.{os.getpid()}.part")
+	path_staging = path_cached.with_name(f"{path_cached.name}.{uuid4().hex}.part")
 	try:
 		path_written = fn_download(str_url, path_staging)
+		if not path_written.is_file() or path_written.stat().st_size == 0:
+			raise OSError(f"daily cache download produced an empty artifact for {str_url!r}")
 		os.replace(path_written, path_cached)
 	finally:
 		path_staging.unlink(missing_ok=True)

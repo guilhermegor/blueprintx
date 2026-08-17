@@ -53,7 +53,10 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
 			continue
 		for cls_target in cls_node.targets:
 			if isinstance(cls_target, ast.Name) and cls_target.id == "__all__":
-				if not isinstance(cls_node.value, ast.List):
+				# `__all__` may be a list OR a tuple — both are valid Python. Accepting only
+				# the list form made a complete tuple declaration read as EMPTY, which reports
+				# every public member as missing: a gate that fails loudest on correct code.
+				if not isinstance(cls_node.value, (ast.List, ast.Tuple)):
 					return []
 				return [
 					cls_elt.value
@@ -134,9 +137,9 @@ def main() -> int:
 		``0`` when every declared export list is complete, ``1`` otherwise.
 	"""
 	list_inits = [
-		p
-		for p in _SRC.rglob("__init__.py")
-		if _EXCLUDED_PARTS.isdisjoint(p.parts) and declared_all(p) is not None
+		path_init
+		for path_init in _SRC.rglob("__init__.py")
+		if _EXCLUDED_PARTS.isdisjoint(path_init.parts) and declared_all(path_init) is not None
 	]
 	if not list_inits:
 		print(
@@ -147,7 +150,9 @@ def main() -> int:
 		)
 		return 1
 
-	list_problems = [str_problem for p in list_inits for str_problem in check_package(p)]
+	list_problems = [
+		str_problem for path_init in list_inits for str_problem in check_package(path_init)
+	]
 	for str_problem in list_problems:
 		print(f"❌ {str_problem}", file=sys.stderr)
 	if list_problems:

@@ -192,6 +192,34 @@ def test_a_failed_download_never_publishes_a_partial_file(tmp_path: Path) -> Non
 	assert list(tmp_path.glob("*.part")) == []
 
 
+def test_an_empty_download_does_not_replace_a_good_cache_entry(tmp_path: Path) -> None:
+	"""A zero-byte download raises instead of publishing over a valid file.
+
+	Publishing it would contradict the module's own zero-byte-as-miss contract: the next call
+	would treat the empty file as a miss and refetch, but this call already returned its path
+	to a caller who is about to parse nothing.
+	"""
+	path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
+	path_cached.parent.mkdir(parents=True, exist_ok=True)
+	path_cached.write_bytes(b"good bytes")
+
+	def fn_download(str_url: str, path_dest: Path) -> Path:
+		path_dest.write_bytes(b"")
+		return path_dest
+
+	with pytest.raises(OSError, match="empty artifact"):
+		download_daily(
+			"https://example.com/a.csv",
+			tmp_path,
+			"src",
+			date(2026, 8, 17),
+			".csv",
+			bool_use_cache=False,
+			fn_download=fn_download,
+		)
+	assert path_cached.read_bytes() == b"good bytes"
+
+
 def test_download_daily_creates_the_cache_directory(tmp_path: Path) -> None:
 	"""The parent tree is created rather than assumed."""
 	fn_download, _ = _fake_download()

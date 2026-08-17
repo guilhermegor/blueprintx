@@ -74,6 +74,14 @@ def test_member_missing_from_all_is_flagged(tmp_path: Path) -> None:
 	assert "OTHER" in list_problems[0]
 
 
+def test_a_tuple_all_is_read_like_a_list(tmp_path: Path) -> None:
+	"""``__all__`` may be a tuple; reading only the list form reports everything as missing."""
+	path_init = _package(
+		tmp_path, '__all__ = ("THING", "helper")\n', "THING = 1\ndef helper():\n    pass\n"
+	)
+	assert _load_gate().check_package(path_init) == []
+
+
 def test_package_without_all_is_out_of_scope(tmp_path: Path) -> None:
 	"""No ``__all__`` means no promise, so nothing to enforce."""
 	path_init = _package(tmp_path, "# no exports declared\n", "THING = 1\n")

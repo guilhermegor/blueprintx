@@ -56,7 +56,7 @@ def test_source_keys_are_unique_across_the_family() -> None:
 	"""
 	pytest.importorskip("config.contracts", reason="contracts ship to service tiers only")
 	dict_contracts = _contracts()
-	list_keys = [cls_c.str_source_key for cls_c in dict_contracts.values()]
+	list_keys = [cls_contract.str_source_key for cls_contract in dict_contracts.values()]
 	assert len(list_keys) == len(set(list_keys)), f"duplicate str_source_key in {list_keys}"
 
 
@@ -72,27 +72,37 @@ def test_no_contract_declares_the_same_column_twice() -> None:
 		assert len(tuple_required) == len(set(tuple_required)), f"{str_id} repeats a column"
 
 
-def test_column_names_do_not_collide_across_the_family() -> None:
-	"""One column name must mean one thing across every contract in the family.
+# Column names two contracts legitimately share. Empty by default and it must STAY a conscious
+# list: two sources requiring `cnpj` is ordinary, so the value of the check below is not that
+# sharing is forbidden — it is that sharing is DECLARED, and a name appearing in two contracts
+# by accident cannot pass as intentional.
+FROZENSET_SHARED_COLUMNS: frozenset[str] = frozenset()
 
-	This is the family-level invariant the per-contract tests cannot reach. The template ships
-	a single contract, so today this passes trivially — it is here to fail on the day a second
-	source declares an existing column name for a **different** field, which is the point at
-	which a consumer's ``UNION ALL`` starts splitting one logical field in two.
 
-	When a project grows a reader family where several readers project ONE source file, extend
-	this to the stronger form: assert one source path maps to exactly one column name, and one
-	column name to exactly one source path.
+def test_column_names_shared_across_contracts_are_declared() -> None:
+	"""A column name in two contracts must be listed as intentionally shared.
+
+	This is the family-level invariant per-contract tests cannot reach. The earlier form of
+	this test failed on ANY shared name, which is wrong: `tuple_required` carries no
+	source-field identity, so equal names are not evidence of a collision, and two contracts
+	requiring the same logical column is normal. Failing on that would block valid families —
+	a gate that cries wolf gets disabled, which costs more than it saves.
+
+	So the assertion is about **declaration**, not uniqueness. When a project grows a reader
+	family where several readers project ONE source file, replace this with the stronger form:
+	one source path maps to exactly one column name, and one column name to exactly one source
+	path. That form needs the source-field mapping the contracts do not carry yet.
 	"""
 	pytest.importorskip("config.contracts", reason="contracts ship to service tiers only")
-	dict_seen: dict[str, str] = {}
+	dict_owner: dict[str, str] = {}
 	list_problems: list[str] = []
 	for str_id, cls_contract in _contracts().items():
 		for str_column in cls_contract.tuple_required:
-			str_owner = dict_seen.setdefault(str_column, str_id)
-			if str_owner != str_id:
-				list_problems.append(f"column '{str_column}' declared by {str_owner} and {str_id}")
-	# A shared column name is not automatically wrong — two sources may legitimately carry the
-	# same field. What must not happen is it going UNNOTICED, so this fails loudly and the
-	# project either renames one or records the sharing here on purpose.
+			str_owner = dict_owner.setdefault(str_column, str_id)
+			if str_owner != str_id and str_column not in FROZENSET_SHARED_COLUMNS:
+				list_problems.append(
+					f"column '{str_column}' is required by both {str_owner} and {str_id} — if "
+					f"that is intentional, add it to FROZENSET_SHARED_COLUMNS; if not, the two "
+					f"contracts disagree about what the name means"
+				)
 	assert not list_problems, "; ".join(list_problems)
