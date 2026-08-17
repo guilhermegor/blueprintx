@@ -190,6 +190,20 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Structural gate for the documentation-language boundary: prose for a READER may be in
+      # the project's locale (README.md, docs/), while code — comments, docstrings, symbol
+      # names, commit messages, CI output — stays English. Prose alone was not enough: the rule
+      # was breached TWICE in one session, the second time because a sweep grepped only `.py`
+      # and left 55 Portuguese comment lines in `src/config/*.yaml`, which then became the
+      # convention the next author copied. A partial sweep leaves a PRECEDENT, not just debt.
+      # Hence every commented file type, not merely the one the last violation was in.
+      - id: check-comment-language
+        name: documentation-language boundary (code is English)
+        entry: bash bin/poetry_exec.sh run python bin/check_comment_language.py
+        language: system
+        files: \.(py|ya?ml|sql|sh|toml|cfg|ini)$|\.env\.example$
+        exclude: ^docs/
+
       - id: mypy
         name: mypy (static type check)
         # Run from src/ so it is the single package base (bare config.x/utils.x imports

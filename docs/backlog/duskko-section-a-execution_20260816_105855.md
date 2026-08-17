@@ -90,8 +90,12 @@ de integração de cada tier viajavam sem nunca rodar. Agora rodam.
 
 **Segundo extra — `bin/ci/check_test_copy_lists.py`.** A copy-list de testes é mantida à mão
 em cada um dos 5 scaffolds, e um teste esquecido lá é escrito, commitado e **nunca roda em
-projeto nenhum**. 🔴 O único tell é a **contagem** de testes, nunca a cor: 234 → 234 depois de
-somar 18 testes é indistinguível de 234 → 252, e ninguém lê o número. Na primeira execução o
+projeto nenhum**. 🔴 Antes do gate, o único sinal disponível era a **contagem** de testes — e ninguém a
+compara com o esperado: uma rodada que soma 18 testes e continua mostrando 234 fica tão verde
+quanto a que mostra 252. Mas a contagem é fraca mesmo quando lida, porque um total idêntico
+esconde um teste que sumiu e outro que entrou. Por isso o gate não conta: ele compara
+**conjuntos** — o conjunto de testes compartilhados alcançáveis por cada scaffold contra o
+conjunto que existe em `templates/python-common/tests/unit/`, e nomeia cada ausente. Na primeira execução o
 gate achou `test_startup_fragility_order.py` — o guarda do próprio fix da **#160** — ausente
 das 5 tiers. Também documenta um buraco honesto: o `lib-minimal` vendoriza os utils sob
 `_internal/` e por isso **não recebe os testes deles** (precisaria do mesmo
@@ -115,17 +119,32 @@ das 5 tiers. Também documenta um buraco honesto: o `lib-minimal` vendoriza os u
       estruturalmente em vez de depender de onde a linha quebra; varredura confirmou 0 em todo
       `docs/backlog/`.
 
-## PR B — idioma (grupo 2)
+## PR B — idioma (grupo 2) — ✅ ENTREGUE
 
-- [ ] **#141** — `bin/check_comment_language.py` (existe em `recon_al_cvm`, ausente dos templates)
-      - [ ] **a calibração É a entrega** — 1º rascunho deu 19 achados, 18 falsos
-      - [ ] casar **palavras funcionais** do idioma, nunca acento
-      - [ ] redigir antes de casar, nesta ordem: spans de crase dupla → crase simples → aspas →
-            URLs → tokens pontuados → siglas em CAIXA ALTA (inclusive acentuadas) → termos de arte
-      - [ ] 🔴 ler comentários como **blocos**, não linhas (citação atravessa linhas)
-      - [ ] redação **preserva comprimento** (N espaços) para o achado nomear a linha certa
-      - [ ] `.py` exato via `tokenize` + `ast.get_docstring`; `#`/`--` só linha-cheia nos demais
-      - [ ] escape hatch por **linha** (`lang:pt-ok`), nunca por bloco
+Branch `feat/docs-language-gate-141`, empilhada sobre a PR A. Verificado nas **5 tiers**.
+
+- [x] **#141** — `bin/check_comment_language.py` **portado** de `recon_al_cvm` (494 linhas, já
+      calibrado em campo) em vez de reescrito. A escada: reusar o que existe e funciona.
+      - [x] a calibração veio junta e foi **provada por mutação**: remover a redação de sigla,
+            a de token pontuado, a preservação de comprimento ou o escopo-por-linha do escape
+            faz **exatamente 1** teste falhar. Nenhuma das 4 regras é decorativa.
+      - [x] 18 testes nomeados por classe de falso positivo em
+            `tests/unit/test_comment_language_gate.py`
+      - [x] controle positivo + negativo: pega português real (2 achados, linha certa) e passa
+            nos 6 falsos positivos medidos (rótulos acentuados, `COM` da Microsoft, `emails.yaml`,
+            `bradesco.com.br`, URL com `/para/que/nao`, citação atravessando 2 linhas)
+      - [x] **os templates já passam**: 129 arquivos varridos nas 6 pastas, 0 achados — o gate
+            entra verde, não com uma dívida a pagar
+      - [x] duas melhorias sobre o original, ambas lições desta sessão: **falha quando a
+            descoberta casa zero arquivos** (senão passa vaziamente para sempre) e **imprime a
+            contagem no sucesso** (gate silencioso é indistinguível de gate ausente — medido:
+            118 arquivos no mvc, 142 no ddd-native, 78 no lib-minimal)
+      - [x] ligado nas 4 superfícies: hook, `make lint`, `tasks.sh lint`, step de CI
+      - [x] adicionado às 5 copy-lists — e o gate `check_test_copy_lists.py` da PR A **provou**
+            (26 → 27 testes compartilhados, todos alcançáveis)
+
+Contagem por tier após a B: mvc-native **256**, mvc-orm **256**, ddd-native **251**,
+ddd-orm **251**, lib-minimal **89** — todas +18, e 30 de integração em cada.
 
 ## PR C — núcleo de ingestão (grupo 3)
 

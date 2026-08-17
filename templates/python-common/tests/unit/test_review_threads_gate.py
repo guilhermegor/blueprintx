@@ -129,11 +129,18 @@ def test_the_bot_may_acknowledge_and_resolve_after_a_real_answer() -> None:
 	assert cls_gate.find_thread_problems(list_threads, _ROSTER) == []
 
 
-def test_an_answer_on_a_still_open_thread_counts() -> None:
-	"""Answering is the requirement; resolving is a separate act.
+def test_an_answered_but_open_thread_is_now_reported() -> None:
+	"""CONTRACT CHANGE: both halves are required — reply AND resolve.
 
-	A thread left open after a substantive reply — because the discussion continues — is not
-	what this gate exists to catch. ``required_conversation_resolution`` covers that half.
+	This test previously asserted the opposite, reasoning that resolving was covered by
+	GitHub's ``required_conversation_resolution``. That reasoning holds only where the setting
+	is actually enabled, and it was **off on this repo** — which is exactly how a PR merged
+	with two live, unanswered threads. Delegating half a rule to a server-side toggle nobody
+	verified is how the rule stops existing.
+
+	Both layers now run: this gate fails fast in CI and on pre-push, and the ruleset
+	provisioned by ``bin/enable_repo_rules.sh`` blocks the merge button. A thread whose
+	discussion genuinely continues is a PR that is not ready to merge, so blocking is correct.
 	"""
 	cls_gate = _load_gate()
 	list_threads = [
@@ -145,7 +152,9 @@ def test_an_answer_on_a_still_open_thread_counts() -> None:
 			bool_resolved=False,
 		)
 	]
-	assert cls_gate.find_thread_problems(list_threads, _ROSTER) == []
+	list_problems = cls_gate.find_thread_problems(list_threads, _ROSTER)
+	assert len(list_problems) == 1
+	assert "NOT resolved" in list_problems[0]
 
 
 def test_a_pr_with_no_threads_passes() -> None:
@@ -175,7 +184,10 @@ def test_the_roster_is_read_from_the_declared_file(tmp_path: Path) -> None:
 		encoding="utf-8",
 	)
 	set_roster = cls_gate.load_roster(tmp_path)
-	assert set_roster == {"some-other-reviewer[bot]"}
+	assert set_roster == {"some-other-reviewer"}, (
+		"logins are normalised on load: GraphQL omits the bot-login suffix a declared "
+		"reviewer carries, and comparing those spellings literally made this gate vacuous"
+	)
 
 	# And it behaves the same for that tool as for any other.
 	list_threads = [_thread([("some-other-reviewer[bot]", "**Finding.** " + _LONG)])]
@@ -191,3 +203,160 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr() -> None:
 	cls_gate = _load_gate()
 	with pytest.raises(RuntimeError):
 		cls_gate.fetch_threads("no-such-owner-xyz", "no-such-repo-xyz", 1)
+
+
+# --------------------------
+# 🔴 The bot-login spelling — why this gate was silently vacuous
+# --------------------------
+
+
+def test_graphql_drops_the_bot_suffix_that_the_roster_carries() -> None:
+	"""REST says ``coderabbitai[bot]``; GraphQL's ``author.login`` says ``coderabbitai``.
+
+	The roster is written in the REST spelling because that is what GitHub shows everywhere
+	else, but this gate reads GraphQL. A literal comparison therefore NEVER matched, so every
+	reviewer comment counted as an "answer" and the gate reported "all threads answered" on a
+	PR where nobody had replied to anything — permanently, silently green.
+
+	⚠️ The existing fixtures could not catch it: they spell the login ``coderabbitai[bot]``,
+	i.e. the test and the code shared the same wrong assumption about the data, and only
+	production disagreed. These fixtures use the spelling GraphQL actually returns.
+	"""
+	cls_gate = _load_gate()
+	assert cls_gate.normalise_login("coderabbitai[bot]") == "coderabbitai"
+	assert cls_gate.normalise_login("coderabbitai") == "coderabbitai"
+	# A human login is untouched, so nobody is accidentally treated as a reviewer.
+	assert cls_gate.normalise_login("guilhermegor") == "guilhermegor"
+
+
+def test_a_reviewer_comment_in_graphql_spelling_is_not_an_answer(tmp_path: Path) -> None:
+	"""The production shape: roster in REST spelling, thread authors in GraphQL spelling.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir holding the roster file.
+	"""
+	cls_gate = _load_gate()
+	(tmp_path / ".review-bots.yaml").write_text(
+		"reviewers:\n  - login: coderabbitai[bot]\n    posts: threads\n",
+		encoding="utf-8",
+	)
+	set_roster = cls_gate.load_roster(tmp_path)
+
+	# GraphQL spelling — no suffix. Before the fix this counted as an answer.
+	list_threads = [_thread([("coderabbitai", "**Finding.** " + _LONG)])]
+	assert len(cls_gate.find_thread_problems(list_threads, set_roster)) == 1
+
+
+def test_a_human_reply_in_the_same_thread_still_answers_it(tmp_path: Path) -> None:
+	"""The positive half: normalisation must not make every thread unanswerable.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir holding the roster file.
+	"""
+	cls_gate = _load_gate()
+	(tmp_path / ".review-bots.yaml").write_text(
+		"reviewers:\n  - login: coderabbitai[bot]\n    posts: threads\n",
+		encoding="utf-8",
+	)
+	set_roster = cls_gate.load_roster(tmp_path)
+
+	list_threads = [_thread([("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)])]
+	assert cls_gate.find_thread_problems(list_threads, set_roster) == []
+
+
+# --------------------------
+# Both halves: replied AND resolved
+# --------------------------
+
+
+def test_an_answered_but_unresolved_thread_is_reported(tmp_path: Path) -> None:
+	"""Replying is half the job — an open thread lets a PR merge mid-conversation.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir holding the roster file.
+	"""
+	cls_gate = _load_gate()
+	(tmp_path / ".review-bots.yaml").write_text(
+		"reviewers:\n  - login: coderabbitai[bot]\n    posts: threads\n",
+		encoding="utf-8",
+	)
+	set_roster = cls_gate.load_roster(tmp_path)
+
+	list_threads = [
+		_thread(
+			[("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
+			bool_resolved=False,
+		)
+	]
+	list_problems = cls_gate.find_thread_problems(list_threads, set_roster)
+	assert len(list_problems) == 1
+	assert "NOT resolved" in list_problems[0]
+
+
+def test_deleting_the_roster_is_not_a_silent_opt_out(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""An absent roster means "never adopted" — unless the default branch still carries it.
+
+	An empty roster makes the gate a no-op, so `rm .review-bots.yaml` is a one-line way to
+	switch the gate off from inside the very PR it is meant to police. When git can prove the
+	file exists on the default branch, its absence here is a DELETION and must be loud.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir standing in for a checkout with no roster.
+	monkeypatch : pytest.MonkeyPatch
+		Used to stub the default-branch probe, so the test needs no real remote.
+	"""
+	cls_gate = _load_gate()
+
+	# Never adopted → still a no-op, which keeps the gate opt-in for other repos.
+	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: False)
+	assert cls_gate.load_roster(tmp_path) == set()
+
+	# Present upstream, absent here → deletion.
+	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
+	with pytest.raises(RuntimeError, match="disables this gate"):
+		cls_gate.load_roster(tmp_path)
+
+
+def test_ci_mode_asserts_only_the_half_it_can_re_evaluate() -> None:
+	"""A job must not assert a condition nothing can re-trigger it to re-check.
+
+	Resolving a thread emits `pull_request_review_thread`, which is not a workflow trigger, so
+	nothing re-runs CI after a resolve. Asserting the resolve half there leaves a run red
+	FOREVER on a PR that is finished — measured as 7 stale red runs on a single PR. A check that
+	is red-by-design after you did the right thing is how people learn that red means nothing.
+
+	So CI asserts REPLY only (a comment does re-trigger it), while the resolve half is enforced
+	where it can be evaluated live: the branch ruleset and the local hooks.
+	"""
+	cls_gate = _load_gate()
+	list_open_but_answered = [
+		_thread(
+			[("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
+			bool_resolved=False,
+		)
+	]
+	# CI mode tolerates it — it could not tell you when it was fixed.
+	assert (
+		cls_gate.find_thread_problems(list_open_but_answered, _ROSTER, bool_require_resolved=False)
+		== []
+	)
+	# Local mode still catches it — a local run is always current.
+	assert len(cls_gate.find_thread_problems(list_open_but_answered, _ROSTER)) == 1
+
+	# ⚠️ The half CI DOES own must still fire, or dropping the resolve check would have
+	# quietly disabled the job altogether.
+	list_unanswered = [_thread([("coderabbitai", "**Finding.** " + _LONG)])]
+	assert (
+		len(cls_gate.find_thread_problems(list_unanswered, _ROSTER, bool_require_resolved=False))
+		== 1
+	)

@@ -20,35 +20,6 @@ on:
 
 jobs:
 
-  review-threads:
-    name: Review threads answered
-    runs-on: ubuntu-latest
-    # PRs only: there is no review thread to check on a push.
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - run: pip install --quiet pyyaml
-
-      # A review finding has two halves - change the code, and REPLY on the thread. Only the
-      # first is visible from the editor; the second is what a future session reads to learn
-      # what was decided and why. isResolved cannot be the signal, because a good reviewer bot
-      # closes its own threads on seeing the fix - the flag records ITS satisfaction, not your
-      # reasoning. The reviewer roster is data in .review-bots.yaml, so swapping tools is a
-      # row there and never an edit to the gate. Delete that file to opt out.
-      - name: Every review thread carries an answer
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: python bin/check_review_threads.py
 
   test:
     name: Run Automated Tests (${{ matrix.os }})
@@ -183,6 +154,15 @@ jobs:
         # its gates as explicit steps, not via pre-commit, so this must be listed here or a
         # hook-skipping contributor bypasses it.
         run: poetry run python bin/check_layer_imports.py
+
+      - name: Run Documentation-Language Boundary Enforcement
+        if: runner.os == 'Linux'
+        # Mirrors the `check-comment-language` pre-commit hook: prose for a READER may be in the
+        # project's locale, while code — comments, docstrings, symbol names — stays English.
+        # Runs in AUDIT mode here (no filenames), which sweeps every commented file type rather
+        # than only what a given commit staged: the failure this guards against is a PARTIAL
+        # sweep leaving a precedent that the next author copies, so the CI pass must be total.
+        run: poetry run python bin/check_comment_language.py
 
       - name: Run Docs Skeleton Enforcement
         if: runner.os == 'Linux'

@@ -1,4 +1,9 @@
-"""Fail a PR whose review threads were resolved without anyone answering them.
+"""Fail a PR whose review threads are not FINISHED — answered AND resolved.
+
+A finding takes two actions and this gate requires both:
+
+1. **Reply** on the thread with what changed and why.
+2. **Resolve** the conversation once that reply is posted.
 
 A review finding is dealt with in **two** halves — change the code, and **reply on the thread**
 — and only the first is visible from the editor. The second is what a future session reads: a
@@ -46,6 +51,37 @@ except ModuleNotFoundError:  # pragma: no cover - the gate self-skips without it
 
 
 _ROSTER_FILE = ".review-bots.yaml"
+
+# ⚠️ GraphQL and REST disagree on a bot's login, and the gate lives or dies on it.
+#
+# REST reports `coderabbitai[bot]`; the GraphQL `author { login }` field returns the Bot
+# actor's login WITHOUT the suffix — `coderabbitai`. The roster is written in the REST form
+# (that is the login GitHub shows everywhere else), so a literal comparison against GraphQL
+# output NEVER MATCHED. Every reviewer comment therefore counted as an "answer", and the gate
+# reported "all threads answered" on a PR where nobody had replied to anything.
+#
+# It is the worst possible failure for a gate: permanently, silently green. Both sides are now
+# normalised, and `test_review_threads_gate.py` pins the bot-suffix case by name.
+_BOT_SUFFIX = "[bot]"
+
+
+def normalise_login(str_login: str) -> str:
+	"""Return a login comparable across GitHub's REST and GraphQL spellings.
+
+	Parameters
+	----------
+	str_login : str
+	    A login as either API reports it, e.g. ``coderabbitai[bot]`` or ``coderabbitai``.
+
+	Returns
+	-------
+	str
+	    The login without a trailing ``[bot]`` suffix, so the two spellings compare equal.
+	"""
+	str_clean = (str_login or "").strip()
+	return str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
+
+
 # Floor for a "substantive" reply. Measured, not invented: the replies on the PR that motivated
 # this gate ran 100-667 characters (median 439), and an earlier sample of genuine verdict
 # replies ran 356-1126. 100 sits at or below the shortest real one, so it excludes "done" and
@@ -70,6 +106,26 @@ query($owner:String!, $repo:String!, $number:Int!) {
 """
 
 
+def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
+	"""Return whether the roster file is present on the repository's default branch.
+
+	Returns
+	-------
+	bool
+		``True`` only when git can prove the file exists there. Any failure (no git, shallow
+		clone, no remote) returns ``False``, so an unresolvable state never invents a violation.
+	"""
+	for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
+		cls_run = subprocess.run(  # noqa: S603
+			["git", "-C", str(path_root), "cat-file", "-e", f"{str_ref}:{_ROSTER_FILE}"],
+			capture_output=True,
+			check=False,
+		)
+		if cls_run.returncode == 0:
+			return True
+	return False
+
+
 def load_roster(path_root: pathlib.Path) -> set[str]:
 	"""Read the declared review-bot logins.
 
@@ -85,11 +141,24 @@ def load_roster(path_root: pathlib.Path) -> set[str]:
 	    which makes the gate a no-op rather than a source of false failures.
 	"""
 	path_roster = path_root / _ROSTER_FILE
-	if yaml is None or not path_roster.is_file():
+	if yaml is None:
+		return set()
+	if not path_roster.is_file():
+		# ⚠️ ABSENT is only "not adopted here" when it was never there. If the DEFAULT branch
+		# carries the roster and this branch does not, the file was DELETED — and since an
+		# empty roster makes the gate a no-op, deleting it is a one-line way to switch the
+		# gate off inside the very PR it is meant to police. Fail loudly instead.
+		if _roster_exists_on_default_branch(path_root):
+			raise RuntimeError(
+				f"{_ROSTER_FILE} exists on the default branch but not here — deleting it "
+				f"disables this gate. Restore it, or remove it on the default branch first."
+			)
 		return set()
 	dict_roster = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
 	return {
-		str(d.get("login", "")) for d in (dict_roster.get("reviewers") or []) if d.get("login")
+		normalise_login(str(d.get("login", "")))
+		for d in (dict_roster.get("reviewers") or [])
+		if d.get("login")
 	}
 
 
@@ -139,7 +208,11 @@ def fetch_threads(str_owner: str, str_repo: str, int_number: int) -> list[dict]:
 
 
 def find_thread_problems(
-	list_threads: list[dict], set_roster: set[str], int_min_chars: int = _MIN_REPLY_CHARS
+	list_threads: list[dict],
+	set_roster: set[str],
+	int_min_chars: int = _MIN_REPLY_CHARS,
+	*,
+	bool_require_resolved: bool = True,
 ) -> list[str]:
 	"""Return one problem per thread that nobody outside the roster answered.
 
@@ -151,12 +224,20 @@ def find_thread_problems(
 	    Logins that count as reviewers rather than as answers.
 	int_min_chars : int, optional
 	    Minimum length for a reply to count as substantive.
+	bool_require_resolved : bool, keyword-only, optional
+	    Whether an answered-but-open thread is a problem. ⚠️ CI passes ``False``: see
+	    ``main`` for why a job that cannot re-evaluate a condition must not assert it.
 
 	Returns
 	-------
 	list of str
 	    Human-readable problems; empty when every thread carries an answer.
 	"""
+	# Normalise the roster here too, so the predicate is correct however the caller built the
+	# set — `load_roster` already normalises, but a hand-built set (a test, another caller)
+	# would otherwise silently never match, which is the exact defect this function had.
+	set_roster = {normalise_login(s) for s in set_roster}
+
 	list_problems: list[str] = []
 	for dict_thread in list_threads:
 		list_comments = dict_thread["comments"]["nodes"]
@@ -165,22 +246,34 @@ def find_thread_problems(
 		list_answers = [
 			c
 			for c in list_comments
-			if (c.get("author") or {}).get("login") not in set_roster
+			if normalise_login((c.get("author") or {}).get("login") or "") not in set_roster
 			and len((c.get("body") or "").strip()) >= int_min_chars
 		]
-		if list_answers:
-			continue
-
 		str_first = (list_comments[0].get("body") or "").strip().splitlines()
 		str_title = next(
 			(s for s in str_first if s.startswith("**")),
 			str_first[0] if str_first else "",
-		)
-		str_state = "resolved" if dict_thread.get("isResolved") else "open"
-		list_problems.append(
-			f"{dict_thread.get('path', '?')}: thread is {str_state} but nobody outside the "
-			f"reviewer roster answered it — {str_title.strip('* ')[:90]}"
-		)
+		).strip("* ")[:90]
+		str_path = dict_thread.get("path", "?")
+
+		if not list_answers:
+			str_state = "resolved" if dict_thread.get("isResolved") else "open"
+			list_problems.append(
+				f"{str_path}: thread is {str_state} but nobody outside the "
+				f"reviewer roster answered it — {str_title}"
+			)
+			continue
+
+		# ANSWERED but still OPEN. Both halves are required: the reply records the reasoning,
+		# and resolving records that the exchange is finished. The ruleset provisioned by
+		# bin/enable_repo_rules.sh already enforces resolution server-side
+		# (required_review_thread_resolution), so this is the LOCAL half of the same rule — it
+		# fails in CI and on pre-push instead of only at the merge button.
+		if bool_require_resolved and not dict_thread.get("isResolved"):
+			list_problems.append(
+				f"{str_path}: thread is answered but NOT resolved — resolve the conversation "
+				f"once the reply is posted — {str_title}"
+			)
 	return list_problems
 
 
@@ -206,20 +299,37 @@ def main() -> int:
 
 	str_owner, _, str_repo = str_repo_full.partition("/")
 	list_threads = fetch_threads(str_owner, str_repo, int(str_number))
-	list_problems = find_thread_problems(list_threads, set_roster)
+	# ⚠️ A JOB MUST NOT ASSERT WHAT IT CANNOT RE-EVALUATE.
+	#
+	# Resolving a thread emits `pull_request_review_thread`, which is NOT a workflow trigger,
+	# so nothing re-runs this after a resolve. Asserting the resolve half here produces a run
+	# that is red FOREVER on a PR that is actually finished — measured: 7 stale red runs on one
+	# PR, every one of them from a moment that had already passed.
+	#
+	# A check that is red-by-design after you did the right thing is the fastest way to teach
+	# people that red does not mean anything. So CI asserts only the REPLY half, which a review
+	# comment genuinely does re-trigger. The resolve half is enforced where it CAN be evaluated
+	# live: the `required_conversation_resolution` ruleset at the merge button, and the local
+	# pre-merge / Stop hooks. Set REVIEW_THREADS_REQUIRE_RESOLVED=1 to assert both (the local
+	# default, since a local run is always current).
+	bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
+	list_problems = find_thread_problems(
+		list_threads, set_roster, bool_require_resolved=bool_require_resolved
+	)
 
 	for str_problem in list_problems:
 		print(f"❌ {str_problem}")
 	if list_problems:
 		print(
-			f"\n{len(list_problems)} of {len(list_threads)} review thread(s) carry no answer.\n"
+			f"\n{len(list_problems)} of {len(list_threads)} review thread(s) are not finished.\n"
 			"Resolving a thread is not answering it: a reviewer bot closes its own threads when "
 			"it sees the fix, so the resolved flag records ITS satisfaction, not your reasoning. "
 			"Reply with what changed and why — that reply is what the next session reads to learn "
 			"the decision."
 		)
 		return 1
-	print(f"All {len(list_threads)} review thread(s) answered.")
+	str_scope = "answered and resolved" if bool_require_resolved else "answered"
+	print(f"All {len(list_threads)} review thread(s) {str_scope}.")
 	return 0
 
 
