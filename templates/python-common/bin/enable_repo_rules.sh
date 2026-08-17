@@ -181,15 +181,26 @@ report_blocking_checks() {
 	# failure this ruleset exists to remove, one level up. $1 = owner/repo.
 	local str_repo="$1"
 	local str_id str_live
-	str_id="$(gh api "repos/$str_repo/rulesets" --jq \
-		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)"
+	# ⚠️ A failed READ must never be reported as an empty ANSWER. Swallowing the error turns a
+	# permission failure, a rate limit or a dropped connection into "nothing blocks a merge" —
+	# a job announcing the exact blindness it exists to remove. "I could not check" and "I
+	# checked and found nothing" are different verdicts and must print differently.
+	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
+		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
+		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
+		return 0
+	fi
+	str_id="$(printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
 		return 0
 	fi
-	str_live="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
+	if ! str_live="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
 		'[.rules[]? | select(.type == "required_status_checks")
-		  | .parameters.required_status_checks[]?.context] | join(", ")' 2>/dev/null || true)"
+		  | .parameters.required_status_checks[]?.context] | join(", ")' 2>&1)"; then
+		print_status "warning" "Could not READ ruleset '$RULESET_NAME' from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_live:-no output from gh}"
+		return 0
+	fi
 	if [ -z "$str_live" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is active but declares NO required status checks — CI runs and blocks NOTHING. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
 	else
