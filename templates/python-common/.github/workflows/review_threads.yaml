@@ -48,8 +48,15 @@ permissions:
 concurrency:
   # Keyed on the PR, not the ref: several review comments can land in seconds and only the
   # latest verdict matters.
+  #
+  # ⚠️ cancel-in-progress MUST stay false: this job's name is seeded into REQUIRED_CHECKS by
+  # bin/enable_repo_rules.sh, and a cancelled run still publishes a check run under that name
+  # with conclusion `cancelled` — not success. The merge gate then reads red with no event
+  # left to turn it green (measured blueprintx#185: a `pull_request_review` run cancelled a
+  # `pull_request` one and the PR sat BLOCKED on a verdict nobody produced). Queueing costs a
+  # few seconds; cancelling costs a deadlock that looks exactly like a real failure.
   group: review-threads-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
 

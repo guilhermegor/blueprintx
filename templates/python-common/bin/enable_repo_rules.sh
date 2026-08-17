@@ -51,16 +51,29 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 RULESET_NAME="pr-quality-gate"
 
-# ⚠️ EMPTY BY DEFAULT, ON PURPOSE — DO NOT GUESS CHECK NAMES.
+# ⚠️ DO NOT GUESS CHECK NAMES — but do not leave this empty either.
+#
 # A required status check that never reports blocks every PR FOREVER (GitHub waits for a result
-# that will never arrive), and the names here must match the check-run names exactly — which for a
-# matrix job include the expanded matrix values. Populate it from a REAL PR once CI has run:
+# that will never arrive), and the names must match the check-run names exactly — which for a
+# matrix job include the expanded matrix values. That is why the rest of this list is yours to
+# populate from a REAL PR once CI has run:
 #
 #   gh api repos/:owner/:repo/commits/<pr-head-sha>/check-runs --jq '.check_runs[].name' | sort -u
 #
-# then list the ones that must gate merges. While empty, the rule is simply not added, and CI
-# still runs on every PR — it just does not block the merge button.
-REQUIRED_CHECKS=()
+# The seeded entry is NOT a guess: it is the `name:` of the job in the `review_threads.yaml`
+# this same template ships, so it is correct by construction, and it triggers `on: pull_request`,
+# so it reports on EVERY pull request from the moment it opens — the one property a required
+# check must have. It is also safe to require in the other direction: the job asserts only that
+# every thread was REPLIED to (`REVIEW_THREADS_REQUIRE_RESOLVED=0`), and a reply re-triggers it
+# via `pull_request_review_comment`. Requiring RESOLUTION here would deadlock, because resolving
+# a thread fires no workflow trigger — that half is enforced natively by the ruleset's
+# `required_review_thread_resolution`, which evaluates at the merge button and cannot go stale.
+#
+# 🔴 Why this matters more than it looks: an EMPTY list means CI runs on every PR and blocks
+# nothing. Measured blueprintx 2026-08-16: a PR merged with **32 of 47 checks passed** and no
+# rule objected, because the only things standing between a red check and `main` were a hook and
+# a habit — and both are probabilistic. A gate nobody can bypass by forgetting is the whole point.
+REQUIRED_CHECKS=("Review threads answered")
 
 require_gh() {
 	# gh must be installed and authenticated. Missing either is a skip, not a failure.
@@ -138,22 +151,61 @@ apply_ruleset() {
 	str_id=$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
 
+	# Keep the API's own words: never discard output whose failure you then explain. The old
+	# form swallowed stderr and blamed admin rights for every failure, including the ones that
+	# were a malformed payload.
+	local str_err
 	if [ -n "$str_id" ]; then
 		print_status "info" "Updating existing ruleset '$RULESET_NAME' (id $str_id)..."
-		if build_ruleset_json | gh api -X PUT "repos/$str_repo/rulesets/$str_id" --input - >/dev/null 2>&1; then
+		if str_err="$(build_ruleset_json | gh api -X PUT "repos/$str_repo/rulesets/$str_id" --input - 2>&1 >/dev/null)"; then
 			print_status "success" "Ruleset '$RULESET_NAME' updated"
 			return 0
 		fi
 	else
 		print_status "info" "Creating ruleset '$RULESET_NAME' on ~DEFAULT_BRANCH..."
-		if build_ruleset_json | gh api -X POST "repos/$str_repo/rulesets" --input - >/dev/null 2>&1; then
+		if str_err="$(build_ruleset_json | gh api -X POST "repos/$str_repo/rulesets" --input - 2>&1 >/dev/null)"; then
 			print_status "success" "Ruleset '$RULESET_NAME' created"
 			return 0
 		fi
 	fi
 
-	print_status "warning" "Could not apply ruleset to $str_repo (needs repo-admin rights) — a maintainer must run 'make enable_repo_rules'"
+	print_status "warning" "Could not apply ruleset to $str_repo: ${str_err:-no output from gh} — a maintainer with repo-admin rights must run 'make enable_repo_rules'"
 	return 0
+}
+
+report_blocking_checks() {
+	# Read the SERVER back instead of echoing what we meant to send. `apply_ruleset` returns 0
+	# even when the API refused it (deliberately — this step must never abort `init`), so a
+	# summary built from REQUIRED_CHECKS would announce a gate that may not exist. A
+	# provisioning step that reports its own INPUT has verified nothing; that is the same
+	# failure this ruleset exists to remove, one level up. $1 = owner/repo.
+	local str_repo="$1"
+	local str_id str_live
+	# ⚠️ A failed READ must never be reported as an empty ANSWER. Swallowing the error turns a
+	# permission failure, a rate limit or a dropped connection into "nothing blocks a merge" —
+	# a job announcing the exact blindness it exists to remove. "I could not check" and "I
+	# checked and found nothing" are different verdicts and must print differently.
+	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
+		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
+		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
+		return 0
+	fi
+	str_id="$(printf '%s\n' "$str_id" | head -1)"
+	if [ -z "$str_id" ]; then
+		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
+		return 0
+	fi
+	if ! str_live="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
+		'[.rules[]? | select(.type == "required_status_checks")
+		  | .parameters.required_status_checks[]?.context] | join(", ")' 2>&1)"; then
+		print_status "warning" "Could not READ ruleset '$RULESET_NAME' from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_live:-no output from gh}"
+		return 0
+	fi
+	if [ -z "$str_live" ]; then
+		print_status "warning" "Ruleset '$RULESET_NAME' is active but declares NO required status checks — CI runs and blocks NOTHING. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
+	else
+		print_status "config" "Merge-blocking checks live on $str_repo: $str_live"
+	fi
 }
 
 enable_code_scanning() {
@@ -212,9 +264,11 @@ main() {
 	ensure_optout_label "$str_repo"
 	apply_ruleset "$str_repo"
 
-	if [ ${#REQUIRED_CHECKS[@]} -eq 0 ]; then
-		print_status "info" "No required status checks declared — CI runs but does not block merges. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
-	fi
+	# Say which checks actually block, every time, and say it from the SERVER's answer. A step
+	# silent about the blocking set is indistinguishable from one that provisioned nothing —
+	# and "nothing blocks" is the failure this list exists to prevent, so it must never be the
+	# quiet outcome.
+	report_blocking_checks "$str_repo"
 }
 
 main "$@"
