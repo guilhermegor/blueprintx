@@ -193,7 +193,7 @@ O gate de threads de review **passava vaziamente desde sempre** — comparava a 
 roster (`coderabbitai[bot]`) com a que o GraphQL devolve (`coderabbitai`). Foi assim que a #180
 mergeou com 2 threads abertos. Substituído por quatro camadas, sendo a decisiva um **hook de
 `Stop`** que recusa encerrar o turno com thread pendente (dotfiles-dev PR #127) — porque bloquear
-o merge impede um desfecho ruim mas **não conduz o trabalho**.
+o merge impede um desfecho ruim, mas **não conduz o trabalho**.
 
 ---
 

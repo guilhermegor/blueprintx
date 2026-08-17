@@ -128,11 +128,15 @@ distinguir *não-declarado* de *declarado-pendente*.
 
 | | antes | depois |
 |---|---|---|
-| lições com disposição registrada | 73 / 243 (só citação) | **243 / 243** |
+| lições com disposição registrada | 73 / 243 (só citação) | **244 / 244** |
 | dívida real (`queued`) | desconhecida | **6** |
 | issues abertas órfãs | 9 reportadas (12 reais) | **0** |
 
-Distribuição final: **156 delivered · 76 tracked · 6 queued · 4 advisory · 2 superseded**.
+O denominador sobe de 243 para 244 porque o store **ganhou uma lição durante esta sessão** —
+`scaffold-copy-excludes-build-artifacts`, do achado colateral abaixo. As 243 originais foram
+todas estampadas; a 244ª nasceu já com `Status:`.
+
+Distribuição final: **156 delivered · 76 tracked · 6 queued · 4 advisory · 2 superseded** = 244.
 
 As 6 `queued` são a dívida honesta que sobrou, cada uma com a evidência da ausência anotada:
 `confirm-the-spec-document-before-writing-the-reader` (sem `config/contracts/CLAUDE.md`),
