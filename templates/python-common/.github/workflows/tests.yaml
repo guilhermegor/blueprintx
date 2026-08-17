@@ -22,7 +22,12 @@ jobs:
 
 
   test:
-    name: Run Automated Tests (${{ matrix.os }})
+    # ⚠️ The name must carry EVERY matrix axis. With only `os` in it, the 3×5 matrix produced
+    # 15 check runs sharing 3 names — and a required status check is resolved BY NAME, so a
+    # green leg and a red leg of the same name are indistinguishable to the merge gate. A
+    # required check must map to exactly one run, or it is decorative in the worst way: it
+    # reports a colour drawn from a run nobody chose.
+    name: Run Automated Tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
