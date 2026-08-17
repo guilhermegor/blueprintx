@@ -297,3 +297,31 @@ def test_an_answered_but_unresolved_thread_is_reported(tmp_path: Path) -> None:
 	list_problems = cls_gate.find_thread_problems(list_threads, set_roster)
 	assert len(list_problems) == 1
 	assert "NOT resolved" in list_problems[0]
+
+
+def test_deleting_the_roster_is_not_a_silent_opt_out(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""An absent roster means "never adopted" — unless the default branch still carries it.
+
+	An empty roster makes the gate a no-op, so `rm .review-bots.yaml` is a one-line way to
+	switch the gate off from inside the very PR it is meant to police. When git can prove the
+	file exists on the default branch, its absence here is a DELETION and must be loud.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir standing in for a checkout with no roster.
+	monkeypatch : pytest.MonkeyPatch
+		Used to stub the default-branch probe, so the test needs no real remote.
+	"""
+	cls_gate = _load_gate()
+
+	# Never adopted → still a no-op, which keeps the gate opt-in for other repos.
+	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: False)
+	assert cls_gate.load_roster(tmp_path) == set()
+
+	# Present upstream, absent here → deletion.
+	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
+	with pytest.raises(RuntimeError, match="disables this gate"):
+		cls_gate.load_roster(tmp_path)

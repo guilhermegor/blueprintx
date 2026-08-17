@@ -19,6 +19,23 @@ name: Review Threads
 # so. See the BlueprintX issue #156. `bin/lint_actions.sh` catches that class now.)
 #
 # Kept out of `tests.yaml` on purpose: a review comment must not re-run the full test matrix. One job, a few seconds, as often as needed.
+#
+# ⚠️ KNOWN CEILING — RESOLUTION DOES NOT RE-TRIGGER THIS.
+# `pull_request_review_comment` fires on a comment, never on a thread being RESOLVED. Resolution
+# is reported only as the `pull_request_review_thread` webhook, which is not a workflow trigger.
+# So the honest sequence is: you reply (this runs, and correctly FAILS — still unresolved), you
+# resolve, and nothing re-runs. The check sits stale-red on a PR that is actually finished.
+# Measured: after resolving, the job had to be re-run by hand before it went green.
+#
+# That is why this must NOT be a required check — a required check that cannot refresh itself
+# blocks every PR forever. The layering is what makes it sound, each covering the other's gap:
+#   - THIS job: catches a missing REPLY, live, because a comment does re-trigger it.
+#   - the `required_conversation_resolution` ruleset: catches a missing RESOLVE, live, at the
+#     merge button — exactly the half this job cannot refresh.
+#   - the local `pr_merge_threads_guard.sh` PreToolUse hook: both halves, queried live at the
+#     moment of `gh pr merge`, which is the only instant that can never be stale.
+# Closing this properly inside Actions needs a webhook receiver or GitHub App dispatching a
+# `repository_dispatch` on `resolved`; not worth a always-on listener for this repo.
 on:
   pull_request:
   pull_request_review:

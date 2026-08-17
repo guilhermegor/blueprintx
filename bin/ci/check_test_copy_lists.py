@@ -112,10 +112,17 @@ _RE_EXPLICIT_CP = re.compile(
     re.M,
 )
 
-# Same anchoring for the workflow copy list: an active `cp` whose source is the shared
-# workflows dir, never a mention in a comment.
+# Same anchoring for the workflow copy list, plus one more constraint the test form does not
+# need: the shared path must be the **SOURCE operand**, i.e. immediately after `cp` and its
+# flags. Allowing it anywhere on the line counts a REVERSE copy —
+#   cp "$project_path/.github/workflows/tests.yaml" "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml"
+# — as delivery, when it installs nothing in the generated project. Verified: the looser regex
+# reported `tests.yaml` reachable from exactly that line.
 _RE_WORKFLOW_CP = re.compile(
-    r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*?COMMON_TEMPLATE_ROOT/\.github/workflows/"
+    # `cp`, then only FLAGS, then the shared path as the first operand. Anything else between
+    # them would let the destination match instead of the source.
+    r"^[^\S\n]*(?!#)\S*\bcp\b(?:\s+-{1,2}[A-Za-z-]+)*\s+"
+    r"[\"']?\$(?:\{)?COMMON_TEMPLATE_ROOT(?:\})?/\.github/workflows/"
     r"([a-z0-9_\-]+\.ya?ml)",
     re.M,
 )

@@ -106,6 +106,26 @@ query($owner:String!, $repo:String!, $number:Int!) {
 """
 
 
+def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
+	"""Return whether the roster file is present on the repository's default branch.
+
+	Returns
+	-------
+	bool
+		``True`` only when git can prove the file exists there. Any failure (no git, shallow
+		clone, no remote) returns ``False``, so an unresolvable state never invents a violation.
+	"""
+	for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
+		cls_run = subprocess.run(  # noqa: S603
+			["git", "-C", str(path_root), "cat-file", "-e", f"{str_ref}:{_ROSTER_FILE}"],
+			capture_output=True,
+			check=False,
+		)
+		if cls_run.returncode == 0:
+			return True
+	return False
+
+
 def load_roster(path_root: pathlib.Path) -> set[str]:
 	"""Read the declared review-bot logins.
 
@@ -121,7 +141,18 @@ def load_roster(path_root: pathlib.Path) -> set[str]:
 	    which makes the gate a no-op rather than a source of false failures.
 	"""
 	path_roster = path_root / _ROSTER_FILE
-	if yaml is None or not path_roster.is_file():
+	if yaml is None:
+		return set()
+	if not path_roster.is_file():
+		# ⚠️ ABSENT is only "not adopted here" when it was never there. If the DEFAULT branch
+		# carries the roster and this branch does not, the file was DELETED — and since an
+		# empty roster makes the gate a no-op, deleting it is a one-line way to switch the
+		# gate off inside the very PR it is meant to police. Fail loudly instead.
+		if _roster_exists_on_default_branch(path_root):
+			raise RuntimeError(
+				f"{_ROSTER_FILE} exists on the default branch but not here — deleting it "
+				f"disables this gate. Restore it, or remove it on the default branch first."
+			)
 		return set()
 	dict_roster = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
 	return {
