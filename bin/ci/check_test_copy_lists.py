@@ -57,6 +57,9 @@ DICT_EXPECTED_ABSENT = {
         "test_env_config.py": "lib-minimal ships no src/config/env_config.py",
         # Contract oracles describe an ingested external file; a library tier ships none.
         "test_contract_oracle_example.py": "lib-minimal ships no contract oracle registry",
+        # The gate walks src/ packages that declare __all__; lib-minimal declares none.
+        "test_all_exports_gate.py": "lib-minimal ships no package declaring __all__",
+        "test_contract_family_conventions.py": "lib-minimal ships no contract family",
         # startup.py is a service-tier singleton; a library has no import-time bootstrap.
         "test_startup_fragility_order.py": "lib-minimal ships no src/config/startup.py",
         # NOT missing — DELIVERED BY A THIRD MECHANISM this gate does not model: the scaffold
@@ -84,6 +87,8 @@ DICT_EXPECTED_ABSENT = {
         "test_outlook_gateway.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_paths.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_provenance.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
+        "test_daily_cache.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
+        "test_raw_workspace.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_retry.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_sidecar_metadata.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_signatures.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
@@ -133,6 +138,17 @@ _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
 # commented out, exactly like the explicit form above. Both patterns need the guard: adding
 # `(?!#)` to only one of them leaves the other able to satisfy the gate from a comment.
 _RE_UTILS_LOOP = re.compile(r"^[^\S\n]*(?!#)\S*\s*for\s+util\s+in\s+(.*?);\s*do", re.M | re.S)
+# The names may live in the loop header OR in a `local -a utils=( … )` array the loop iterates
+# — the scaffolds declare the array so the step can print a COUNT instead of an enumeration
+# that goes stale. Reading only the header would call every shared test undelivered the moment
+# a scaffold switches form, which is a FALSE FAILURE in a gate whose value is its false-pass
+# detection. Same no-comment anchoring as the rest.
+_RE_UTILS_ARRAY = re.compile(
+    r"^[^\S\n]*(?!#)\S*\s*local\s+-a\s+utils=\((.*?)\)", re.M | re.S
+)
+# A util name, so a shell token in the same position (`"${utils[@]}"`, a `\` continuation) is
+# not mistaken for a module.
+_RE_UTIL_NAME = re.compile(r"[a-z][a-z0-9_]*")
 # Proof the loop body actually copies the test beside the module — likewise not from a comment.
 _RE_UTILS_TEST_CP = re.compile(
     r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*tests/unit/test_\$\{util\}\.py", re.M
@@ -183,8 +199,12 @@ def reachable_tests(str_source: str) -> set:
         str_body = cls_fn.group(1)
         cls_loop = _RE_UTILS_LOOP.search(str_body)
         if cls_loop and _RE_UTILS_TEST_CP.search(str_body):
-            for str_util in cls_loop.group(1).split():
-                if str_util != "\\":
+            str_names = cls_loop.group(1)
+            cls_array = _RE_UTILS_ARRAY.search(str_body)
+            if cls_array:
+                str_names = f"{str_names} {cls_array.group(1)}"
+            for str_util in str_names.split():
+                if _RE_UTIL_NAME.fullmatch(str_util):
                     set_reachable.add(f"test_{str_util}.py")
 
     return set_reachable

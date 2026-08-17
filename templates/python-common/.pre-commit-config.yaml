@@ -146,6 +146,18 @@ repos:
           - python
         pass_filenames: false
 
+      # A package that declares __all__ must name every public member its submodules define.
+      # The usual introspective test DISCOVERS the family through __all__ and therefore cannot
+      # see a member missing from it: the sweep just returns one fewer item and passes by not
+      # looking. This walks the FILES instead, so the hole closes.
+      - id: check-all-exports
+        name: __all__ names every public member
+        entry: bash bin/poetry_exec.sh run python bin/check_all_exports.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
       # Structural gate against binary floats in ingested source columns. float64 stores
       # 1984223115.42 as 1984223115.4200000762939453125 — an irreversible, silent loss no
       # contract check or eyeballed frame reveals. Use list_decimal_cols (exact Decimal) or

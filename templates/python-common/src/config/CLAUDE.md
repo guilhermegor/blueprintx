@@ -211,3 +211,56 @@ against the live header and **always exits 0** (self-skips to success when the r
 a check that never reports would block nothing, but this one is a *reporter*, not a gate); the
 `contract_drift.yaml` workflow runs it weekly (and on manual dispatch, **never** on PR/push) and
 opens/updates one deduplicated issue when drift is found.
+
+## Reader-authoring discipline (eight rules that are not enforceable by a gate)
+
+Everything above is checked by something. These eight are judgment calls a reader author makes
+while writing the contract, and each one has produced a green suite over wrong data.
+
+**`tuple_required` is a failure switch, not a description of the file.** A column no module
+reads still aborts the whole run when the source drops it — for a report that would merely have
+been narrower. Require only what the run actually consumes, and keep the reader's dtype dict a
+**subset** of the contract, pinned by a test so the two cannot drift.
+
+**Pinning the contract does not protect the reader.** The contract asserts the FILE's shape;
+the reader then renames, selects and casts, and none of that is covered. Measured: 495 tests
+green while the real export raised `KeyError`, because nobody wrote the rename. Build the
+reader test's **input** from the pinned header fixture, not from a hand-typed frame.
+
+**A presence check must tolerate a legitimately empty artifact.** `series.any()` on an empty
+frame is `False` — the same answer a column of garbage gives — so a header-only member (how many
+sources say "nothing to report today") is rejected as malformed. Decide explicitly what empty
+means: `continue` on an empty series, fail on a populated one with no valid value, and log at
+**warning** when a read returns zero rows. When enumerating an archive, print **rows** per
+member; the empty member then shows up before any code is written.
+
+**A required column walks its whole ancestor chain.** In a hierarchical spec, `[1..1]` on a
+leaf means "mandatory **given** its container" — and the container may be `[0..1]`. Marking the
+leaf required fails every record that legitimately lacks the optional container, which is
+usually most of them.
+
+**Identical schemas make a wrong source selection untestable.** When two members of an archive
+share a schema, every schema-shaped assertion goes blind to a reader pointed at the wrong one.
+The fix is in the **fixture**: stamp each member's identity into a shared column so the tests
+can tell them apart.
+
+**A drift job must disable the client cache.** A cached read cannot detect drift, and a
+*partially* populated cache is reported **as** drift (9 false positives, measured). Construct
+drift clients with caching off — see `utils/daily_cache.py`, whose switch exists for exactly
+this, and the test asserting `bin/check_contract_drift.py` does not use it.
+
+**A probe injects a fail-fast retry, not the production policy.** A "not found" while probing
+is **expected**, not transient, so the patient exponential backoff that protects a real
+ingestion turns a probe into a 43-minute walk. Inject a 1-attempt policy.
+
+**Enumerate a source through its index API, not its HTML.** Probe for a machine-readable index
+(CKAN, Socrata, OpenAPI) **before** writing a crawler. Finding one changes the design, not just
+the implementation.
+
+### The principle underneath three of them
+
+**Cache, retry and timeout policy is a property of the CALLER's intent, never of the client.**
+The drift job, the probe and the daily ingestion all talk to the same source and want three
+different policies. When a job reuses a client written for another purpose, audit *every*
+default it carries — that is where a 43-minute probe and a cache that hides drift both come
+from.

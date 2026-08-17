@@ -211,6 +211,10 @@ copy_common_templates() {
         "$project_path/tests/unit/test_backlog_ledger.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
         "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_all_exports_gate.py" \
+        "$project_path/tests/unit/test_all_exports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_family_conventions.py" \
+        "$project_path/tests/unit/test_contract_family_conventions.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \
@@ -524,15 +528,21 @@ copy_shared_utils() {
     local project_path="$1"
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
-    for util in br_identifiers dtypes decimals logs logs_emitter text paths signatures dates \
-        tabular_reader provenance sidecar_metadata retry http_downloader zip_extractor frames \
-        outlook_gateway; do
+    local -a utils=(
+        br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
+        tabular_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
+        outlook_gateway raw_workspace daily_cache
+    )
+    for util in "${utils[@]}"; do
         cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
         if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" ]; then
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
-    print_status "success" "Shared utils (br_identifiers/dtypes/decimals/logs/text/paths/signatures/dates/tabular_reader/provenance/sidecar_metadata/retry/http_downloader/zip_extractor/frames) + tests applied"
+    # A COUNT, never an enumeration: the old message listed 15 of the 17 names and had already
+    # drifted (lesson `ci-python-gates` — the enumeration is what goes stale). The number still
+    # proves the step ran, which silence would not.
+    print_status "success" "Shared utils + their tests applied (${#utils[@]} modules)"
 }
 
 # Runtime type-checking engine — single source in python-common/optional/typing.
