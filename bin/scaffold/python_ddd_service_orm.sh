@@ -527,7 +527,7 @@ copy_shared_utils() {
     local -a utils=(
         br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
         tabular_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
-        outlook_gateway raw_workspace
+        outlook_gateway raw_workspace daily_cache
     )
     for util in "${utils[@]}"; do
         cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"

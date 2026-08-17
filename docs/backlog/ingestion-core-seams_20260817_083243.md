@@ -31,22 +31,34 @@ backfill manual.
 
 ## Execução
 
-### #120 — `raw_workspace`
+### #120 — `raw_workspace` — ✅ ENTREGUE
 
-- [ ] `src/utils/raw_workspace.py` — um único ponto para "onde os bytes crus deste read vivem"
-- [ ] `path_raw=None` → `TemporaryDirectory`, sem resíduo em disco depois do read
-- [ ] `path_raw=<dir>` → criado com `parents=True` e **mantido**, byte-a-byte
-- [ ] teste dos dois ramos, incluindo a asserção de que o temp **sumiu**
+- [x] `src/utils/raw_workspace.py` — um único ponto para "onde os bytes crus deste read vivem"
+- [x] `path_raw=None` → `TemporaryDirectory`, sem resíduo em disco depois do read
+- [x] `path_raw=<dir>` → criado com `parents=True` e **mantido**, byte-a-byte
+- [x] teste dos dois ramos, incl. a asserção de que o temp **sumiu** (roda FORA do bloco `with`;
+      dentro dele não prova nada)
+- [x] 🔴 `@contextmanager` fica **por fora** do `@type_checker`: na ordem inversa o checker
+      compara o `_GeneratorContextManager` com a anotação `Iterator[Path]` e **toda** chamada
+      levanta `TypeError`. Amenda registrada na lição `runtime-type-checking`.
 
-### #150 — cache diário no seam
+### #150 — cache diário no seam — ✅ ENTREGUE
 
-- [ ] cache em disco chaveado pela **data de referência do dado**, nunca relógio de parede
-- [ ] dentro do seam, para nenhum call site conseguir passar por fora
-- [ ] cria a pasta pai em vez de assumir que o arquivador criou
-- [ ] **loga qual ramo rodou** (hit de cache vs rede)
-- [ ] flag explícita no construtor + wrapper `_uncached()` — política de cache é do **chamador**,
-      não do cliente (o job de drift precisa do oposto, `drift-job-must-disable-the-client-cache`)
-- [ ] docstring declara a granularidade de mudança que o cache assume
+- [x] `src/utils/daily_cache.py` — cache em disco chaveado pela **data de referência do dado**,
+      nunca relógio de parede (um run às 23:59 e outro às 00:01 pedindo o mesmo dia de
+      referência precisam acertar o mesmo arquivo)
+- [x] cria a pasta pai em vez de assumir que o arquivador criou
+- [x] **loga qual ramo rodou** (HIT vs miss vs bypass) — cache silencioso é indistinguível de
+      cache que nunca engatou, e "por que este dado está velho?" fica sem resposta no log
+- [x] flag explícita `bool_use_cache` — política de cache é do **chamador**, não do cliente
+- [x] **guarda contra arquivo de 0 byte**: `write_bytes` não é atômico, então um run
+      interrompido deixa arquivo vazio, e servi-lo entrega um caminho válido para nada
+- [x] teste executável de que o job de drift **não** usa o cache — hoje ele está correto por
+      **acidente** (ninguém ligou o cache nele), e acidente reverte com um import conveniente
+- [x] docstring declara a granularidade de mudança que o cache assume
+- [x] 🔴 lição nova: `pythonpath = . src` carrega cada módulo **duas vezes**, então uma
+      subclasse vinda de `src.utils.retry` não é a mesma classe que `utils.retry` — a checagem
+      nominal recusa. Ver `two-import-paths-for-one-module-break-nominal-type-checks`.
 
 ### #128 — disciplina de contrato + 2 gates
 

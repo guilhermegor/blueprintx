@@ -84,6 +84,7 @@ DICT_EXPECTED_ABSENT = {
         "test_outlook_gateway.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_paths.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_provenance.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
+        "test_daily_cache.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_raw_workspace.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_retry.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_sidecar_metadata.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
