@@ -151,22 +151,50 @@ apply_ruleset() {
 	str_id=$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
 
+	# Keep the API's own words: never discard output whose failure you then explain. The old
+	# form swallowed stderr and blamed admin rights for every failure, including the ones that
+	# were a malformed payload.
+	local str_err
 	if [ -n "$str_id" ]; then
 		print_status "info" "Updating existing ruleset '$RULESET_NAME' (id $str_id)..."
-		if build_ruleset_json | gh api -X PUT "repos/$str_repo/rulesets/$str_id" --input - >/dev/null 2>&1; then
+		if str_err="$(build_ruleset_json | gh api -X PUT "repos/$str_repo/rulesets/$str_id" --input - 2>&1 >/dev/null)"; then
 			print_status "success" "Ruleset '$RULESET_NAME' updated"
 			return 0
 		fi
 	else
 		print_status "info" "Creating ruleset '$RULESET_NAME' on ~DEFAULT_BRANCH..."
-		if build_ruleset_json | gh api -X POST "repos/$str_repo/rulesets" --input - >/dev/null 2>&1; then
+		if str_err="$(build_ruleset_json | gh api -X POST "repos/$str_repo/rulesets" --input - 2>&1 >/dev/null)"; then
 			print_status "success" "Ruleset '$RULESET_NAME' created"
 			return 0
 		fi
 	fi
 
-	print_status "warning" "Could not apply ruleset to $str_repo (needs repo-admin rights) — a maintainer must run 'make enable_repo_rules'"
+	print_status "warning" "Could not apply ruleset to $str_repo: ${str_err:-no output from gh} — a maintainer with repo-admin rights must run 'make enable_repo_rules'"
 	return 0
+}
+
+report_blocking_checks() {
+	# Read the SERVER back instead of echoing what we meant to send. `apply_ruleset` returns 0
+	# even when the API refused it (deliberately — this step must never abort `init`), so a
+	# summary built from REQUIRED_CHECKS would announce a gate that may not exist. A
+	# provisioning step that reports its own INPUT has verified nothing; that is the same
+	# failure this ruleset exists to remove, one level up. $1 = owner/repo.
+	local str_repo="$1"
+	local str_id str_live
+	str_id="$(gh api "repos/$str_repo/rulesets" --jq \
+		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)"
+	if [ -z "$str_id" ]; then
+		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
+		return 0
+	fi
+	str_live="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
+		'[.rules[]? | select(.type == "required_status_checks")
+		  | .parameters.required_status_checks[]?.context] | join(", ")' 2>/dev/null || true)"
+	if [ -z "$str_live" ]; then
+		print_status "warning" "Ruleset '$RULESET_NAME' is active but declares NO required status checks — CI runs and blocks NOTHING. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
+	else
+		print_status "config" "Merge-blocking checks live on $str_repo: $str_live"
+	fi
 }
 
 enable_code_scanning() {
@@ -225,14 +253,11 @@ main() {
 	ensure_optout_label "$str_repo"
 	apply_ruleset "$str_repo"
 
-	# Say which checks actually block, every time. A provisioning step that is silent about the
-	# blocking set is indistinguishable from one that provisioned nothing — and "nothing blocks"
-	# is the failure this list exists to prevent, so it must never be the quiet outcome.
-	if [ ${#REQUIRED_CHECKS[@]} -eq 0 ]; then
-		print_status "warning" "No required status checks declared — CI runs but blocks NOTHING. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
-	else
-		print_status "config" "Merge-blocking checks (${#REQUIRED_CHECKS[@]}): ${REQUIRED_CHECKS[*]}"
-	fi
+	# Say which checks actually block, every time, and say it from the SERVER's answer. A step
+	# silent about the blocking set is indistinguishable from one that provisioned nothing —
+	# and "nothing blocks" is the failure this list exists to prevent, so it must never be the
+	# quiet outcome.
+	report_blocking_checks "$str_repo"
 }
 
 main "$@"

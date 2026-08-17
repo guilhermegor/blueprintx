@@ -9,7 +9,7 @@ lição, enfim porque elas são probabilísticas e não determinísticas"*. Est�
 
 ## Medição (antes)
 
-```
+```text
 required_status_checks       : null      ← ZERO checks obrigatórios
 enforce_admins               : false     ← toda proteção é conselho para o dono
 required_conversation_resolution : true  ← existe, e era decorativa
