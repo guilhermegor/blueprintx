@@ -51,16 +51,29 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 RULESET_NAME="pr-quality-gate"
 
-# ⚠️ EMPTY BY DEFAULT, ON PURPOSE — DO NOT GUESS CHECK NAMES.
+# ⚠️ DO NOT GUESS CHECK NAMES — but do not leave this empty either.
+#
 # A required status check that never reports blocks every PR FOREVER (GitHub waits for a result
-# that will never arrive), and the names here must match the check-run names exactly — which for a
-# matrix job include the expanded matrix values. Populate it from a REAL PR once CI has run:
+# that will never arrive), and the names must match the check-run names exactly — which for a
+# matrix job include the expanded matrix values. That is why the rest of this list is yours to
+# populate from a REAL PR once CI has run:
 #
 #   gh api repos/:owner/:repo/commits/<pr-head-sha>/check-runs --jq '.check_runs[].name' | sort -u
 #
-# then list the ones that must gate merges. While empty, the rule is simply not added, and CI
-# still runs on every PR — it just does not block the merge button.
-REQUIRED_CHECKS=()
+# The seeded entry is NOT a guess: it is the `name:` of the job in the `review_threads.yaml`
+# this same template ships, so it is correct by construction, and it triggers `on: pull_request`,
+# so it reports on EVERY pull request from the moment it opens — the one property a required
+# check must have. It is also safe to require in the other direction: the job asserts only that
+# every thread was REPLIED to (`REVIEW_THREADS_REQUIRE_RESOLVED=0`), and a reply re-triggers it
+# via `pull_request_review_comment`. Requiring RESOLUTION here would deadlock, because resolving
+# a thread fires no workflow trigger — that half is enforced natively by the ruleset's
+# `required_review_thread_resolution`, which evaluates at the merge button and cannot go stale.
+#
+# 🔴 Why this matters more than it looks: an EMPTY list means CI runs on every PR and blocks
+# nothing. Measured blueprintx 2026-08-16: a PR merged with **32 of 47 checks passed** and no
+# rule objected, because the only things standing between a red check and `main` were a hook and
+# a habit — and both are probabilistic. A gate nobody can bypass by forgetting is the whole point.
+REQUIRED_CHECKS=("Review threads answered")
 
 require_gh() {
 	# gh must be installed and authenticated. Missing either is a skip, not a failure.
@@ -212,8 +225,13 @@ main() {
 	ensure_optout_label "$str_repo"
 	apply_ruleset "$str_repo"
 
+	# Say which checks actually block, every time. A provisioning step that is silent about the
+	# blocking set is indistinguishable from one that provisioned nothing — and "nothing blocks"
+	# is the failure this list exists to prevent, so it must never be the quiet outcome.
 	if [ ${#REQUIRED_CHECKS[@]} -eq 0 ]; then
-		print_status "info" "No required status checks declared — CI runs but does not block merges. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
+		print_status "warning" "No required status checks declared — CI runs but blocks NOTHING. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
+	else
+		print_status "config" "Merge-blocking checks (${#REQUIRED_CHECKS[@]}): ${REQUIRED_CHECKS[*]}"
 	fi
 }
 
