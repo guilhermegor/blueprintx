@@ -178,6 +178,25 @@ ddd-orm **251**, lib-minimal **89** — todas +18, e 30 de integração em cada.
 - Cards do kanban: o hook só move o card da issue que originou a branch. Bundlar N issues deixa
   N-1 cards parados — **mover à mão**.
 
+## Estado (fim da sessão 2026-08-16)
+
+- **PR #180 mergeada** (`3a6a7f9`) — grupo 1. **PR #182 mergeada** (`b039a42`) — grupo 2.
+- Issues fechadas: **#126, #146, #156, #123, #141, #174**; cards em Done.
+- **#173** comentada: buraco 1 de 3 fechado (`required_conversation_resolution: true`).
+- ⚠️ **Release pendente: v0.15.4.** Nada foi cortado desde a v0.15.3.
+- **Grupos 3–5 não iniciados**: #128/#120/#150 (ingestão), #119 (queries/SQLite),
+  #125/#122 (box Windows).
+
+### O que a sessão descobriu além do escopo
+
+O gate de threads de review **passava vaziamente desde sempre** — comparava a grafia REST do
+roster (`coderabbitai[bot]`) com a que o GraphQL devolve (`coderabbitai`). Foi assim que a #180
+mergeou com 2 threads abertos. Substituído por quatro camadas, sendo a decisiva um **hook de
+`Stop`** que recusa encerrar o turno com thread pendente (dotfiles-dev PR #127) — porque bloquear
+o merge impede um desfecho ruim mas **não conduz o trabalho**.
+
+---
+
 ## Fora deste corte
 
 Seções B e C da triagem, mais os itens da seção A que ficaram de fora dos grupos 1–5:
