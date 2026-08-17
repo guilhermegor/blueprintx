@@ -325,3 +325,38 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
 	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
 	with pytest.raises(RuntimeError, match="disables this gate"):
 		cls_gate.load_roster(tmp_path)
+
+
+def test_ci_mode_asserts_only_the_half_it_can_re_evaluate() -> None:
+	"""A job must not assert a condition nothing can re-trigger it to re-check.
+
+	Resolving a thread emits `pull_request_review_thread`, which is not a workflow trigger, so
+	nothing re-runs CI after a resolve. Asserting the resolve half there leaves a run red
+	FOREVER on a PR that is finished — measured as 7 stale red runs on a single PR. A check that
+	is red-by-design after you did the right thing is how people learn that red means nothing.
+
+	So CI asserts REPLY only (a comment does re-trigger it), while the resolve half is enforced
+	where it can be evaluated live: the branch ruleset and the local hooks.
+	"""
+	cls_gate = _load_gate()
+	list_open_but_answered = [
+		_thread(
+			[("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
+			bool_resolved=False,
+		)
+	]
+	# CI mode tolerates it — it could not tell you when it was fixed.
+	assert (
+		cls_gate.find_thread_problems(list_open_but_answered, _ROSTER, bool_require_resolved=False)
+		== []
+	)
+	# Local mode still catches it — a local run is always current.
+	assert len(cls_gate.find_thread_problems(list_open_but_answered, _ROSTER)) == 1
+
+	# ⚠️ The half CI DOES own must still fire, or dropping the resolve check would have
+	# quietly disabled the job altogether.
+	list_unanswered = [_thread([("coderabbitai", "**Finding.** " + _LONG)])]
+	assert (
+		len(cls_gate.find_thread_problems(list_unanswered, _ROSTER, bool_require_resolved=False))
+		== 1
+	)

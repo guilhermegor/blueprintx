@@ -81,4 +81,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Only the half this job can re-evaluate — see the ceiling note at the top of the file.
+          REVIEW_THREADS_REQUIRE_RESOLVED: "0"
         run: python bin/ci/check_review_threads.py

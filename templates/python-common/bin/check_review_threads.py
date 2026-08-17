@@ -208,7 +208,11 @@ def fetch_threads(str_owner: str, str_repo: str, int_number: int) -> list[dict]:
 
 
 def find_thread_problems(
-	list_threads: list[dict], set_roster: set[str], int_min_chars: int = _MIN_REPLY_CHARS
+	list_threads: list[dict],
+	set_roster: set[str],
+	int_min_chars: int = _MIN_REPLY_CHARS,
+	*,
+	bool_require_resolved: bool = True,
 ) -> list[str]:
 	"""Return one problem per thread that nobody outside the roster answered.
 
@@ -220,6 +224,9 @@ def find_thread_problems(
 	    Logins that count as reviewers rather than as answers.
 	int_min_chars : int, optional
 	    Minimum length for a reply to count as substantive.
+	bool_require_resolved : bool, keyword-only, optional
+	    Whether an answered-but-open thread is a problem. ⚠️ CI passes ``False``: see
+	    ``main`` for why a job that cannot re-evaluate a condition must not assert it.
 
 	Returns
 	-------
@@ -262,7 +269,7 @@ def find_thread_problems(
 		# bin/enable_repo_rules.sh already enforces resolution server-side
 		# (required_review_thread_resolution), so this is the LOCAL half of the same rule — it
 		# fails in CI and on pre-push instead of only at the merge button.
-		if not dict_thread.get("isResolved"):
+		if bool_require_resolved and not dict_thread.get("isResolved"):
 			list_problems.append(
 				f"{str_path}: thread is answered but NOT resolved — resolve the conversation "
 				f"once the reply is posted — {str_title}"
@@ -292,7 +299,23 @@ def main() -> int:
 
 	str_owner, _, str_repo = str_repo_full.partition("/")
 	list_threads = fetch_threads(str_owner, str_repo, int(str_number))
-	list_problems = find_thread_problems(list_threads, set_roster)
+	# ⚠️ A JOB MUST NOT ASSERT WHAT IT CANNOT RE-EVALUATE.
+	#
+	# Resolving a thread emits `pull_request_review_thread`, which is NOT a workflow trigger,
+	# so nothing re-runs this after a resolve. Asserting the resolve half here produces a run
+	# that is red FOREVER on a PR that is actually finished — measured: 7 stale red runs on one
+	# PR, every one of them from a moment that had already passed.
+	#
+	# A check that is red-by-design after you did the right thing is the fastest way to teach
+	# people that red does not mean anything. So CI asserts only the REPLY half, which a review
+	# comment genuinely does re-trigger. The resolve half is enforced where it CAN be evaluated
+	# live: the `required_conversation_resolution` ruleset at the merge button, and the local
+	# pre-merge / Stop hooks. Set REVIEW_THREADS_REQUIRE_RESOLVED=1 to assert both (the local
+	# default, since a local run is always current).
+	bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
+	list_problems = find_thread_problems(
+		list_threads, set_roster, bool_require_resolved=bool_require_resolved
+	)
 
 	for str_problem in list_problems:
 		print(f"❌ {str_problem}")
@@ -305,7 +328,8 @@ def main() -> int:
 			"the decision."
 		)
 		return 1
-	print(f"All {len(list_threads)} review thread(s) answered and resolved.")
+	str_scope = "answered and resolved" if bool_require_resolved else "answered"
+	print(f"All {len(list_threads)} review thread(s) {str_scope}.")
 	return 0
 
 
