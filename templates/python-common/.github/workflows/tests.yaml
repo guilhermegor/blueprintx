@@ -143,6 +143,15 @@ jobs:
         # pre-commit, so this must be listed here or a hook-skipping contributor bypasses it.
         run: poetry run python bin/check_provenance.py
 
+      - name: Run __all__ Export Completeness Check
+        if: runner.os == 'Linux'
+        # Mirrors the `check-all-exports` pre-commit hook: a package declaring __all__ must name
+        # every public member its submodules define. An introspective test that discovers the
+        # family THROUGH __all__ structurally cannot catch a member missing from it. CI runs its
+        # gates as explicit steps, not via pre-commit, so this must be listed here or a
+        # hook-skipping contributor bypasses it.
+        run: poetry run python bin/check_all_exports.py
+
       - name: Run Numeric Dtype Policy Enforcement
         if: runner.os == 'Linux'
         # Mirrors the `check-dtypes` pre-commit hook: no ingested source column may be typed

@@ -211,6 +211,10 @@ copy_common_templates() {
         "$project_path/tests/unit/test_backlog_ledger.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
         "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_all_exports_gate.py" \
+        "$project_path/tests/unit/test_all_exports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_family_conventions.py" \
+        "$project_path/tests/unit/test_contract_family_conventions.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \

@@ -57,6 +57,9 @@ DICT_EXPECTED_ABSENT = {
         "test_env_config.py": "lib-minimal ships no src/config/env_config.py",
         # Contract oracles describe an ingested external file; a library tier ships none.
         "test_contract_oracle_example.py": "lib-minimal ships no contract oracle registry",
+        # The gate walks src/ packages that declare __all__; lib-minimal declares none.
+        "test_all_exports_gate.py": "lib-minimal ships no package declaring __all__",
+        "test_contract_family_conventions.py": "lib-minimal ships no contract family",
         # startup.py is a service-tier singleton; a library has no import-time bootstrap.
         "test_startup_fragility_order.py": "lib-minimal ships no src/config/startup.py",
         # NOT missing — DELIVERED BY A THIRD MECHANISM this gate does not model: the scaffold

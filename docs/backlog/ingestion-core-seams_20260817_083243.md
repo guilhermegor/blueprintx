@@ -60,15 +60,37 @@ backfill manual.
       subclasse vinda de `src.utils.retry` não é a mesma classe que `utils.retry` — a checagem
       nominal recusa. Ver `two-import-paths-for-one-module-break-nominal-type-checks`.
 
-### #128 — disciplina de contrato + 2 gates
+### #128 — disciplina de contrato + 2 gates — ✅ ENTREGUE
 
-- [ ] estender `src/config/CLAUDE.md` com as 8 lições de disciplina de reader
-- [ ] gate de **colisão de nome**: um caminho de origem mapeia para exatamente um nome de coluna
-      na família de readers, e vice-versa
-- [ ] gate de **população de `__all__`**: caminhar a árvore de módulos e exigir que cada membro
-      esteja exportado (descobrir *através* de `__all__` não enxerga o membro ausente dele)
+- [x] `src/config/CLAUDE.md` ganhou a seção **"Reader-authoring discipline"** com as 8 regras
+      que nenhum gate consegue checar, mais o princípio por trás de três delas: **política de
+      cache/retry/timeout é do CHAMADOR, nunca do cliente** — o job de drift, a sonda e a
+      ingestão diária falam com a mesma fonte e querem três políticas diferentes
+- [x] **`bin/check_all_exports.py`** — gate de população de `__all__`. Caminha os **ARQUIVOS**,
+      não os exports: um sweep que descobre a família *através* de `__all__` não enxerga o
+      membro ausente dela (devolve um item a menos e passa por não olhar). Ligado no hook e na
+      CI, 8 testes, e **três controles**: verde, vermelho, e **recusa em descoberta vazia**
+- [x] **`tests/unit/test_contract_family_conventions.py`** — as invariantes de família que os
+      testes por-contrato estruturalmente não alcançam: `str_source_key` único, nenhuma coluna
+      repetida dentro de um contrato, e nenhuma colisão de nome de coluna entre contratos.
+      Descoberta por `pkgutil`, **não** por `__all__` — coleção escrita à mão é buraco em
+      qualquer nível — e falha se o roster vier vazio
+- [x] ⚠️ a forma forte do gate de colisão (um caminho de origem ↔ um nome de coluna) precisa de
+      uma família onde N readers projetam UM arquivo; o template ships um contrato só, então
+      fica documentada no teste como a extensão a fazer quando o projeto crescer. Registrado
+      como limite honesto, não como entrega.
 
 ---
+
+## Verificação executada
+
+- `bin/ci/scaffold_lint_test.sh` em **3 tiers**: `mvc-service-native-db` (293 unit + 30
+  integration), `ddd-service-native-db` (288 + 30), `lib-minimal` (98 + 30) — scaffold real,
+  `make lint` limpo em todas
+- `check_test_copy_lists.py`: **31** testes compartilhados alcançáveis nas 5 tiers (era 27)
+- controle negativo em cada gate novo, nos dois sentidos
+- 🔴 o ruff **local** (0.15.14) não pegou os `ERA001` de prosa que o ruff **pinado pelo
+  projeto** pegou — verificar na versão que o projeto pina não é formalidade
 
 ## Verificação (toda PR)
 
