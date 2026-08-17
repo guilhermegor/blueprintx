@@ -1,6 +1,6 @@
 """Unit tests for the daily on-disk vendor cache."""
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -88,7 +88,8 @@ def test_download_daily_fetches_on_a_miss(tmp_path: Path) -> None:
 def test_download_daily_reuses_the_file_on_a_second_call(tmp_path: Path) -> None:
 	"""The second call for the same reference day does not hit the network."""
 	fn_download, list_calls = _fake_download()
-	for _ in range(2):
+
+	def fn_call() -> None:
 		download_daily(
 			"https://example.com/a.csv",
 			tmp_path,
@@ -97,6 +98,9 @@ def test_download_daily_reuses_the_file_on_a_second_call(tmp_path: Path) -> None
 			".csv",
 			fn_download=fn_download,
 		)
+
+	fn_call()  # miss — downloads
+	fn_call()  # same reference day — must NOT download again
 	assert len(list_calls) == 1
 
 
@@ -161,6 +165,33 @@ def test_download_daily_treats_a_zero_byte_file_as_a_miss(tmp_path: Path) -> Non
 	assert len(list_calls) == 1
 
 
+def test_a_failed_download_never_publishes_a_partial_file(tmp_path: Path) -> None:
+	"""A download that dies mid-write leaves NO cache file behind.
+
+	The zero-byte guard only catches the empty case. A *truncated non-empty* artifact would be
+	served as a hit and reach the parser, so the file must become visible under its final name
+	only after the download completed — and the staging file must not linger either, or the
+	cache directory fills with debris nobody ever reads.
+	"""
+
+	def fn_download(str_url: str, path_dest: Path) -> Path:
+		path_dest.write_bytes(b"half a fi")  # non-empty, and wrong
+		raise OSError("connection dropped mid-transfer")
+
+	path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
+	with pytest.raises(OSError, match="connection dropped"):
+		download_daily(
+			"https://example.com/a.csv",
+			tmp_path,
+			"src",
+			date(2026, 8, 17),
+			".csv",
+			fn_download=fn_download,
+		)
+	assert not path_cached.exists()
+	assert list(tmp_path.glob("*.part")) == []
+
+
 def test_download_daily_creates_the_cache_directory(tmp_path: Path) -> None:
 	"""The parent tree is created rather than assumed."""
 	fn_download, _ = _fake_download()
@@ -181,8 +212,9 @@ def test_download_daily_logs_which_branch_ran(tmp_path: Path) -> None:
 	# A cache silent about hit-vs-network cannot be told from one that never engaged, and
 	# "why is this data stale?" becomes unanswerable from the log alone.
 	cls_emitter = _RecordingEmitter()
-	fn_download, _ = _fake_download()
-	for _ in range(2):
+	fn_download, list_calls = _fake_download()
+
+	def fn_call() -> None:
 		download_daily(
 			"https://example.com/a.csv",
 			tmp_path,
@@ -192,6 +224,10 @@ def test_download_daily_logs_which_branch_ran(tmp_path: Path) -> None:
 			cls_logger=cls_emitter,
 			fn_download=fn_download,
 		)
+
+	fn_call()  # miss
+	fn_call()  # hit
+	assert list_calls == ["https://example.com/a.csv"]
 	assert "miss" in cls_emitter.list_messages[0]
 	assert "HIT" in cls_emitter.list_messages[1]
 
@@ -213,7 +249,27 @@ def test_drift_driver_does_not_use_the_daily_cache() -> None:
 
 
 def test_download_daily_rejects_a_datetime_as_the_reference_date(tmp_path: Path) -> None:
-	"""A wall-clock ``datetime`` is not a reference date and is refused at the seam."""
+	"""A wall-clock ``datetime`` is refused even though it IS a ``date``.
+
+	``datetime`` subclasses ``date``, so the annotation alone accepts ``datetime.now()`` and it
+	even formats into a plausible filename — the exact wall-clock key the module exists to
+	prevent, with nothing downstream to complain. Only an explicit guard catches it, so only an
+	explicit test proves the guard is there.
+	"""
+	fn_download, _ = _fake_download()
+	with pytest.raises(TypeError):
+		download_daily(
+			"https://example.com/a.csv",
+			tmp_path,
+			"src",
+			datetime(2026, 8, 17),  # type: ignore[arg-type]
+			".csv",
+			fn_download=fn_download,
+		)
+
+
+def test_download_daily_rejects_a_string_reference_date(tmp_path: Path) -> None:
+	"""A string is refused at the seam by the runtime checker."""
 	fn_download, _ = _fake_download()
 	with pytest.raises(TypeError):
 		download_daily(

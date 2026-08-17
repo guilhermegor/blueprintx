@@ -28,7 +28,8 @@ source change?".
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -117,7 +118,31 @@ def download_daily(
 	-------
 	pathlib.Path
 		Path to the artifact for ``dt_reference``.
+
+	Notes
+	-----
+	A miss downloads into a unique staging name inside the cache directory and then renames it
+	over the final path, so the file becomes visible under its cache name only once complete.
+	The zero-byte guard alone is not enough: a truncated but non-empty file — disk full, a
+	killed process, or another process reading while this one writes — would be served as a hit
+	and reach the parser. The rename is atomic on POSIX, and on Windows for a same-filesystem
+	move, which staging inside the cache directory guarantees. The staging name carries the PID
+	so two concurrent downloads cannot corrupt each other; whichever finishes last wins, and
+	both wrote the same day's bytes.
+
+	A ``datetime`` is rejected explicitly even though it satisfies the ``date`` annotation: it
+	is a **subclass**, so the runtime checker accepts a wall-clock value, and it formats into a
+	perfectly plausible filename — the exact failure this module exists to prevent, with nothing
+	downstream to complain. One reference day is one file, so the shape that silently means
+	"now" cannot be allowed in.
 	"""
+	# Reject the wall-clock shape outright — see Notes above for why the annotation cannot.
+	if isinstance(dt_reference, datetime):
+		raise TypeError(
+			"dt_reference must be a date (the DATA's reference day), not a datetime: a "
+			"wall-clock value keys the cache on when the run happened, not on what the data is"
+		)
+
 	cls_emitter: LogEmitter = cls_logger if cls_logger is not None else LogEmitter()
 	path_cached = daily_cache_path(path_cache_dir, str_key, dt_reference, str_suffix)
 	str_day = f"{dt_reference:%Y-%m-%d}"
@@ -136,4 +161,11 @@ def download_daily(
 		f"daily cache {str_reason} for {str_key} ({str_day}) — downloading {str_url}", "info"
 	)
 	path_cache_dir.mkdir(parents=True, exist_ok=True)
-	return fn_download(str_url, path_cached)
+	# Publish atomically — see Notes in the docstring for why a rename is required here.
+	path_staging = path_cached.with_name(f"{path_cached.name}.{os.getpid()}.part")
+	try:
+		path_written = fn_download(str_url, path_staging)
+		os.replace(path_written, path_cached)
+	finally:
+		path_staging.unlink(missing_ok=True)
+	return path_cached
