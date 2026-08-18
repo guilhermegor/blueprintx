@@ -27,13 +27,29 @@ name: Review Threads
 # resolve, and nothing re-runs. The check sits stale-red on a PR that is actually finished.
 # Measured: after resolving, the job had to be re-run by hand before it went green.
 #
-# That is why this must NOT be a required check — a required check that cannot refresh itself
-# blocks every PR forever. The layering is what makes it sound, each covering the other's gap:
-#   - THIS job: catches a missing REPLY, live, because a comment does re-trigger it.
-#   - the `required_conversation_resolution` ruleset: catches a missing RESOLVE, live, at the
-#     merge button — exactly the half this job cannot refresh.
+# ⚠️ SUPERSEDED 2026-08-17 (blueprintx#173). This block used to conclude "that is why this must
+# NOT be a required check". That conclusion was WRONG, and it was load-bearing: while it stood,
+# `REQUIRED_CHECKS` in bin/enable_repo_rules.sh shipped EMPTY, so a generated project ran its CI
+# and blocked nothing. Measured upstream: a PR merged with 32 of 47 checks passed.
+#
+# The reasoning was only half right. The ceiling above is real — resolution cannot re-trigger a
+# workflow — but this job does not ASSERT resolution: it runs with
+# `REVIEW_THREADS_REQUIRE_RESOLVED=0` and asserts only that every thread got a REPLY, and a reply
+# DOES re-trigger it via `pull_request_review_comment`. It also runs `on: pull_request`, so it
+# reports on every PR from the moment it opens — the property a required check must have. That is
+# why `bin/enable_repo_rules.sh` now seeds REQUIRED_CHECKS with this job's `name:`.
+#
+# The split that makes it sound — give each half to whoever can re-evaluate it:
+#   - THIS job (REQUIRED): catches a missing REPLY, live, because a comment re-triggers it.
+#   - the ruleset's `required_review_thread_resolution`: catches a missing RESOLVE at the merge
+#     button — the half this job cannot refresh, and it cannot go stale because it is evaluated
+#     at merge time rather than published as a check run.
 #   - the local `pr_merge_threads_guard.sh` PreToolUse hook: both halves, queried live at the
-#     moment of `gh pr merge`, which is the only instant that can never be stale.
+#     moment of `gh pr merge`.
+#
+# ⚠️ Because this IS required, `cancel-in-progress` must stay **false** below: a cancelled run
+# still publishes a check run under this job's name with conclusion `cancelled`, which is not
+# success, and no event remains to turn it green.
 # Closing this properly inside Actions needs a webhook receiver or GitHub App dispatching a
 # `repository_dispatch` on `resolved`; not worth a always-on listener for this repo.
 on:
