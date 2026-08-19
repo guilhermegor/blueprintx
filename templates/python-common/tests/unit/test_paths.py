@@ -106,13 +106,26 @@ def test_to_absolute_absolute_path_is_returned_unchanged(tmp_path: Path) -> None
 	assert to_absolute(path_in) == path_in
 
 
-def test_to_absolute_windows_driveless_path_is_not_absolute() -> None:
-	"""Pin the Windows half on POSIX CI: a POSIX-shaped value is DRIVE-relative there.
+def test_to_absolute_anchors_a_path_the_platform_calls_driveless(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""Pin the Windows half on POSIX CI, exercising ``to_absolute`` and not only the stdlib.
 
 	``/home/x/out`` is rooted but carries no drive, so Windows anchors it to whichever drive
-	the reading process sits on — and ``is_absolute()`` reports ``False``, which is exactly
-	the branch that makes :func:`to_absolute` resolve it against ours instead. Without this
-	test the mechanism is unobservable outside a Windows box.
+	the *reading* process sits on, and ``is_absolute()`` reports ``False``. That verdict is the
+	branch that must route through ``resolve()``. Asserting only ``PureWindowsPath`` would pin
+	the premise while leaving our own function untested — a regression handing the driveless
+	input straight back would still pass. So the platform verdict is simulated and the real
+	function is called.
 	"""
+	# The premise, on the pure flavour, is that a rooted but driveless path is NOT absolute.
 	assert PureWindowsPath("/home/x/out").is_absolute() is False
 	assert PureWindowsPath("C:/home/x/out").is_absolute() is True
+
+	# Under that same verdict, to_absolute must anchor the path rather than pass it through.
+	monkeypatch.chdir(tmp_path)
+	monkeypatch.setattr(Path, "is_absolute", lambda _self: False)
+	path_out = to_absolute(Path("out/report.xlsx"))
+	# os.path.isabs is used here because Path.is_absolute is the thing being simulated.
+	assert os.path.isabs(str(path_out))
+	assert str(path_out).startswith(str(tmp_path.resolve()))
