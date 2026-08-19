@@ -1,7 +1,11 @@
 [sqlfluff]
-# Default dialect for the project's `.sql` files. Override per-dialect in
-# bin/lint_sql.sh if a project mixes engines (e.g. encode the db in each query's
-# filename prefix and run one pass per dialect).
+# Fallback dialect, used only by a `.sql` file outside the per-engine layout.
+#
+# Mixing engines needs NO change here and none in bin/lint_sql.sh. Queries live at
+# src/config/queries/<engine>/<table>__<purpose>.sql, and sqlfluff resolves config per file
+# directory — so each engine's folder carries its own one-line `.sqlfluff` declaring its
+# dialect, and a new engine is a new folder. The engine is a DIRECTORY, never a filename
+# prefix: a prefix declares the engine a second time and can then disagree with the first.
 dialect = sqlite
 # Queries commonly use DB-API positional `?` bind params; the placeholder templater
 # swaps them for a stub so they parse (a bare `?` is not valid SQL grammar otherwise).

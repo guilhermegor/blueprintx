@@ -175,6 +175,49 @@ def _connect_oracle() -> Any:
 	)
 
 
+# Engine name -> connection builder. Module-level so the engine NAMES have exactly ONE
+# source — the factory below and the `config/queries/<engine>/` directory layout both read
+# these names instead of re-spelling the list.
+#
+# ⚠️ It must FOLLOW the `_connect_*` functions it maps to — the dict is evaluated at import,
+# so those names have to exist by then. The placement is a language constraint, not
+# disorganisation; signposted here so nobody "tidies" it to the top of the file.
+_DICT_BUILDERS: dict[str, Callable[[], Any]] = {
+	"sqlite": _connect_sqlite,
+	"postgresql": _connect_postgresql,
+	"mariadb": _connect_mysql,
+	"mysql": _connect_mysql,
+	"mssql": _connect_mssql,
+	"oracle": _connect_oracle,
+}
+
+_STR_DEFAULT_BACKEND = "sqlite"
+
+
+@type_checker
+def active_backend() -> str:
+	"""Return the configured engine name — the single reader of ``DB_BACKEND``.
+
+	Returns
+	-------
+	str
+		The lower-cased engine name, defaulting to ``sqlite``.
+
+	Notes
+	-----
+	Everything that needs to know the engine calls this, so the default exists in exactly
+	one place and cannot disagree with itself. That matters more than it looks: the query
+	loader resolves ``config/queries/<engine>/`` from this value, so a second reader with
+	its own default would file queries under one engine and connect with another.
+
+	``DB_BACKEND`` lives in a git-ignored ``.env``, which no pre-commit hook and no CI job
+	can read. Assume every long-lived machine's copy is stale — ``bin/ensure_env.sh``
+	deliberately never overwrites an existing ``.env`` — and let the runtime be the guard.
+	"""
+	load_dotenv()
+	return os.getenv("DB_BACKEND", _STR_DEFAULT_BACKEND).lower()
+
+
 @type_checker
 def build_connection() -> Any:
 	"""Build a native DB-API connection from environment configuration.
@@ -191,23 +234,12 @@ def build_connection() -> Any:
 
 	Notes
 	-----
-	Reads ``DB_BACKEND`` (default ``sqlite``). Supported: ``sqlite``,
-	``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses
+	Reads ``DB_BACKEND`` via :func:`active_backend` (default ``sqlite``). Supported:
+	``sqlite``, ``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses
 	``DB_PATH``; the rest read ``DB_DSN`` first, then compose from ``DB_*`` vars.
 	"""
-	load_dotenv()
-	str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
-
-	dict_builders: dict[str, Callable[[], Any]] = {
-		"sqlite": _connect_sqlite,
-		"postgresql": _connect_postgresql,
-		"mariadb": _connect_mysql,
-		"mysql": _connect_mysql,
-		"mssql": _connect_mssql,
-		"oracle": _connect_oracle,
-	}
-
-	if str_backend not in dict_builders:
-		str_supported = ", ".join(dict_builders)
+	str_backend = active_backend()
+	if str_backend not in _DICT_BUILDERS:
+		str_supported = ", ".join(_DICT_BUILDERS)
 		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
-	return dict_builders[str_backend]()
+	return _DICT_BUILDERS[str_backend]()

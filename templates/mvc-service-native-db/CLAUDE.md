@@ -105,7 +105,15 @@ and classes whose own metaclass would conflict (SQLAlchemy declarative models).
 
 ## Adding a new DB backend
 
-Add a `_connect_<name>()` helper in `config/connection_db.py` and register it in the `dict_builders` map inside `build_connection()`.
+Add a `_connect_<name>()` helper in `config/connection_db.py` and register it in the module-level `_DICT_BUILDERS` map (it sits *below* the `_connect_*` functions because it is evaluated at import — that placement is deliberate). Then create `src/config/queries/<name>/` with a one-line `.sqlfluff` declaring the sqlfluff dialect. No change to `bin/lint_sql.sh` is needed.
+
+## SQL queries — the engine is a directory, not a filename prefix
+
+Queries live at `src/config/queries/<engine>/<table>__<purpose>.sql`, and `config/query_loader.load_query("<table>__<purpose>.sql")` resolves the directory from `DB_BACKEND` via `connection_db.active_backend()` — the single reader of that variable. **Never spell the engine in the filename** and never pass a path: the loader refuses a name carrying a directory, because doing so would route around the one check it exists to make.
+
+Why it is shaped this way: `DB_BACKEND` lives in a git-ignored `.env`, so no pre-commit hook and no CI job can ever see it — a gate over tracked files is structurally blind to it. Deriving the directory from the config makes the wrong dialect **unreachable** instead of merely rejected, which beats any check. When a query is genuinely missing, the error names the engines whose directory *does* hold it, so a typo and a misconfiguration do not read identically.
+
+The directory names the **engine**, not the database instance — two SQL Server databases share one `mssql/`. Each `.sql` opens with a `database / table(s) / purpose` header comment.
 
 ## Data-handling guardrails (advisory)
 

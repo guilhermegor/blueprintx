@@ -35,7 +35,9 @@ project/
     config/
       startup.py         # logger, MS Teams webhook, runtime constants (singletons)
       inputs.yaml · outputs.yaml · webhooks.yaml · emails.yaml
-      signatures/ · queries/
+      signatures/
+      queries/<engine>/    # SQL filed per DB_BACKEND (sqlite/, mssql/, ...)
+      query_loader.py      # load_query() -> resolves queries/<DB_BACKEND>/
   tests/{unit,integration,performance}/
   bin/                   # shell helpers called by the Makefile
   data/ · assets/ · docs/

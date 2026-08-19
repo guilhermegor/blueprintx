@@ -51,6 +51,32 @@ def _compose_dsn(str_backend: str) -> str:
 	return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
 
 
+_STR_DEFAULT_BACKEND = "sqlite"
+
+
+def active_backend() -> str:
+	"""Return the configured engine name — the single reader of ``DB_BACKEND``.
+
+	Returns
+	-------
+	str
+		The lower-cased engine name, defaulting to ``sqlite``.
+
+	Notes
+	-----
+	Everything that needs to know the engine calls this, so the default exists in exactly
+	one place and cannot disagree with itself. The query loader resolves
+	``config/queries/<engine>/`` from this value, so a second reader with its own default
+	would file queries under one engine and connect with another.
+
+	``DB_BACKEND`` lives in a git-ignored ``.env``, which no pre-commit hook and no CI job
+	can read. Assume every long-lived machine's copy is stale — ``bin/ensure_env.sh``
+	deliberately never overwrites an existing ``.env`` — and let the runtime be the guard.
+	"""
+	load_dotenv()
+	return os.getenv("DB_BACKEND", _STR_DEFAULT_BACKEND).lower()
+
+
 def build_database_handler() -> DatabaseHandler:
 	"""Build a database handler based on environment configuration.
 
@@ -78,8 +104,7 @@ def build_database_handler() -> DatabaseHandler:
 	For schema-less backends (JSON, CSV, joblib) use ``build_storage_handler()`` from
 	``chassis.db_wschema.application``.
 	"""
-	load_dotenv()
-	str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
+	str_backend = active_backend()
 
 	def _sqlite() -> SQLiteDatabaseHandler:
 		path_db = Path(os.getenv("DB_PATH", "./data/app.db"))
