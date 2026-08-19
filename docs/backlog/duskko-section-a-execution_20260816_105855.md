@@ -153,89 +153,138 @@ ddd-orm **251**, lib-minimal **89** — todas +18, e 30 de integração em cada.
 - [ ] **#120** — seam `raw_workspace` (retenção de artefato bronze) — nunca foi entregue
 - [ ] **#150** — cachear download de vendor diário-estável dentro do seam
 
-## PR D — queries / SQLite (grupo 4) — ✅ ENTREGUE
+## PR D — queries / SQLite (group 4) — ✅ DELIVERED
 
-Branch `feat/queries-engine-layout-119`, cortada de `main` @ `fdba82a` (pós-release v0.15.4).
+**PR #191 merged** (`fa5ea9f`), issue #119 closed, released as `v0.15.5`. Branch
+`feat/queries-engine-layout-119`, cut from `main` @ `fdba82a`.
 
-- [x] **#119** — layout `queries/<engine>/` + resolver `load_query` + guard de runtime para config
-      git-ignorada (`src/config/queries/` existia e estava **vazio** nos dois tiers native-db)
-      - [x] **derivar, não checar**: `config/queries/<engine>/<table>__<purpose>.sql`. O engine é
-            um **diretório**, nunca um prefixo de nome de arquivo — um prefixo declara o engine
-            uma segunda vez e passa a poder discordar da primeira. Não existe caminho de código
-            que entregue T-SQL a uma conexão SQLite, então nada precisa perceber.
-      - [x] `load_query(str_filename, str_backend, path_queries_root)` **puro** em
-            `templates/python-common/src/utils/queries.py` — separa a regra da fronteira de I/O
-            (mesmo padrão de `is_bot_author`/`pr_author_login` da #123). O caller fino por tier
-            (`src/config/query_loader.py`) injeta o engine e a raiz.
-      - [x] **`active_backend()` é o leitor ÚNICO de `DB_BACKEND`** — mvc-native em
-            `config/connection_db.py` (com `_DICT_BUILDERS` içado a módulo), ddd-native em
-            `chassis/db_schema/application/database_factory.py`. No DDD o dict **não** foi içado:
-            os builders são closures sobre `str_backend`, então içar não é drop-in — assimetria
-            deliberada, não descuido.
-      - [x] o loader **recusa** um nome com componente de diretório (`mssql/x.sql`): passar o
-            engine no nome contornaria exatamente a checagem que ele existe para fazer
-      - [x] a mensagem de erro **distingue** backend errado de nome errado — nomeia os engines
-            cujo diretório *carrega* o arquivo (`EXISTS for: mssql, oracle`) ou diz
-            `exists for no engine` + os diretórios presentes. Sem isso, typo e má configuração
-            se leem idênticos.
-      - [x] **6 testes** em `tests/unit/test_queries.py`, nomeados por classe de falha, com
-            **prova de mutação**: trocando `/ str_backend` por um glob, exatamente o teste de
-            roteamento (`..._when_two_engines_carry_the_same_name`) falha; restaurado, passa.
-      - [x] exemplo `.sql` em cada engine com o header `database / table(s) / purpose`, e os
-            dois são **deliberadamente diferentes** (`TOP (n)` + `[bracket]` no tsql) para que o
-            roteamento seja observável, não decorativo
-      - [x] 🟢 **bônus da lição, medido:** sqlfluff resolve config **por diretório**, então cada
-            `queries/<engine>/.sqlfluff` declara seu dialeto e **uma única passada** cobre os
-            dois. Deletado o conselho (rejeitado) de "rodar uma passada por `--dialect`" de
-            `.sqlfluff`, `.sqlfluffignore` e `bin/lint_sql.sh`. Controle negativo provado:
-            removendo `mssql/.sqlfluff`, o T-SQL vira `Found unparsable section` sob
-            `dialect=sqlite` — a falha de produção reproduzida no linter; restaurado, exit 0.
-      - [x] `.env.example` **seccionado por escopo** nas 4 tiers com `DB_BACKEND` (não só nas
-            native): a lista plana é a união de seis backends, então cinco sextos dela é inerte
-            e lê como configuração viva. Cada bloco agora nomeia os `DB_BACKEND` que o leem.
-      - [x] AC do `tasks.sh init`: **já satisfeito** — `bin/ensure_env.sh` nunca sobrescreve um
-            `.env` existente. Isso está correto (não pode pisar em credenciais) e é justamente o
-            que torna a deriva permanente, então o guard de runtime é o backstop. Documentado
-            com ⚠️ em `src/config/CLAUDE.md`, não deixado como conhecimento tácito.
-      - [x] docs: seção "derive, don't check" + a tabela de roteamento do guard em
-            `templates/python-common/src/config/CLAUDE.md`, mais as duas páginas
-            `docs/py-*-service-native-db.md` e o "Adding a new DB backend" das duas CLAUDE.md
-            de tier (a instrução antiga apontava para um dict que não existe mais)
+- [x] **#119** — `queries/<engine>/` layout + `load_query` resolver + runtime guard for
+      git-ignored config (`src/config/queries/` existed and was **empty** in both native tiers)
+      - [x] **derive, don't check**: `config/queries/<engine>/<table>__<purpose>.sql`. The engine
+            is a **directory**, never a filename prefix — a prefix declares the engine a second
+            time and can then disagree with the first. No code path hands T-SQL to a SQLite
+            connection, so nothing has to notice.
+      - [x] pure `load_query(str_filename, str_backend, path_queries_root)` in
+            `templates/python-common/src/utils/queries.py` — the rule separated from the I/O
+            boundary (same shape as `is_bot_author` / `pr_author_login` from #123). The thin
+            per-tier caller (`src/config/query_loader.py`) injects the engine and the root.
+      - [x] **`active_backend()` is the single reader of `DB_BACKEND`** — mvc-native in
+            `config/connection_db.py`, ddd-native in
+            `chassis/db_schema/application/database_factory.py`.
+      - [x] the loader **refuses** a name carrying a directory component: spelling the engine
+            there would route around the very check it exists to make
+      - [x] the error **distinguishes** a wrong backend from a wrong name — it lists the engines
+            whose directory *does* carry the file (`EXISTS for: mssql, oracle`), or says
+            `exists for no engine` plus the directories present. Without that, a typo and a
+            misconfiguration read identically.
+      - [x] **8 tests** in `tests/unit/test_queries.py`, named per failure class, with a
+            **mutation proof**: swapping `/ str_backend` for a glob fails exactly the routing
+            test; restored, it passes.
+      - [x] an example `.sql` per engine carrying the `database / table(s) / purpose` header, the
+            two **deliberately different** (`TOP (n)` vs `LIMIT n`) so the routing is observable
+            rather than decorative, and capped identically so one filename stays one contract
+      - [x] 🟢 **measured bonus from the lesson:** sqlfluff resolves config **per directory**, so
+            each `queries/<engine>/.sqlfluff` declares its dialect and **one pass** covers both.
+            Deleted the (rejected) "run one pass per `--dialect`" advice from `.sqlfluff`,
+            `.sqlfluffignore` and `bin/lint_sql.sh`. Negative control proven: removing
+            `mssql/.sqlfluff` makes the T-SQL `Found unparsable section` under `dialect=sqlite` —
+            the production failure reproduced inside the linter; restored, exit 0.
+      - [x] `.env.example` **sectioned by scope** in the 4 tiers reading `DB_BACKEND` (not only
+            the native ones): the flat list is the union of six backends, so five sixths of it is
+            inert while reading as live configuration. Each block now names the `DB_BACKEND`
+            values that actually read it.
+      - [x] the `tasks.sh init` AC was **already satisfied** — `bin/ensure_env.sh` never
+            overwrites an existing `.env`. That is correct (it must not clobber credentials) and
+            is exactly what makes drift permanent, so the runtime guard is the backstop.
+            Documented with a ⚠️ in `src/config/CLAUDE.md` rather than left as tacit knowledge.
+      - [x] docs: a "derive, don't check" section plus the guard-routing table in
+            `templates/python-common/src/config/CLAUDE.md`, both `docs/py-*-service-native-db.md`
+            pages, and the "Adding a new DB backend" entry in both tier CLAUDE.md files (the old
+            instruction pointed at a dict that no longer exists)
 
-**Verificação:** 8 gates da raiz verdes (copy-lists **32** testes compartilhados alcançáveis nas
-5 tiers, spell, shell, actionlint, meta, version-sync, codespell-sync, docs build) + os 5 tiers
-por `bin/ci/scaffold_lint_test.sh`.
+**Verification:** 8 root gates green (copy lists: **32** shared tests reachable from all 5 tiers,
+spell, shell, actionlint, meta, version sync, codespell sync, docs build) plus all 5 tiers via
+`bin/ci/scaffold_lint_test.sh`.
 
-### 🔴 Achado no caminho: `exclude` do mypy não cobre módulo importado (#190)
+### 🔴 Found along the way: mypy's `exclude` does not cover an imported module (#190)
 
-Adicionar `config/query_loader.py` deixou o **ddd-native vermelho com 20 erros de mypy** em
-`chassis/db_schema/infrastructure/*_handler.py` — arquivos que a PR não toca.
+Adding `config/query_loader.py` turned **ddd-native red with 20 mypy errors** in
+`chassis/db_schema/infrastructure/*_handler.py` — files this work never touched.
 
-`mypy.ini` traz `exclude = ^chassis/…`, mas **`exclude` só pula DESCOBERTA de arquivo, não
-módulo alcançado por `import`**. O exclude valia só enquanto nada fora de `chassis/` o
-importasse — propriedade da fiação da aplicação, não da config. `query_loader` importa
-`database_factory` (para ler o backend ativo), que importa os seis handlers: **31 → 33
-arquivos checados**, e 20 erros antigos apareceram pela primeira vez.
+`mypy.ini` carries `exclude = ^chassis/`, but **`exclude` filters file DISCOVERY only, not a
+module reached through an `import`**. That exclude held only while nothing outside `chassis/`
+imported it — a property of the application's wiring, not of the config. `query_loader` imports
+`database_factory` (to read the active backend), which imports all six handlers: **31 → 33 files
+checked**, and 20 long-standing errors surfaced for the first time.
 
-Correção: `[mypy-chassis.*] ignore_errors = True` — `ignore_errors` é o setting que segue o
-módulo, tornando verdadeira a intenção que o comentário do `exclude` já declarava. Depois:
-`Success: no issues found in 33 source files` (os 2 arquivos extras continuam sendo checados;
-só os erros do chassis é que estão silenciados). A dívida real fica na **#190**.
+Fix: `[mypy-chassis.*] ignore_errors = True` — `ignore_errors` is the setting that follows the
+module, making true the intent the `exclude` comment already stated. After it:
+`Success: no issues found in 33 source files` (the 2 extra files are still checked; only the
+chassis errors are silenced). The real debt is tracked in **#190**.
 
-⚠️ **Duas hipóteses erradas antes da medição certa** — registradas porque o custo foi real:
+⚠️ **Two wrong hypotheses before the right measurement** — recorded because the cost was real:
 
-1. *"É `mypy = ">=1.8.0"` sem teto deixando entrar o major 2.x."* Plausível e falsa. Teto
-   `<3.0` **não exclui nada** (2.3.1 satisfaz `<3.0`); teto `<2.0` resolveu **1.20.2** e
-   falhou igual, com os mesmos 20 erros mais um. A versão nunca foi a variável. O teto foi
-   revertido nas 5 tiers.
-2. *"É pré-existente, não é minha mudança."* Também falsa. O controle que devia ter vindo
-   **primeiro** — o mesmo tier em `origin/main` limpo — passa: `Success: no issues found in
-   31 source files`, com o **mesmo mypy 2.3.1** que eu havia acusado.
+1. *"It is `mypy = ">=1.8.0"` with no ceiling letting the 2.x major in."* Plausible and false. A
+   `<3.0` cap **excludes nothing** (2.3.1 satisfies it); a `<2.0` cap resolved **1.20.2** and
+   failed identically, with the same 20 errors plus one. The version was never the variable. Both
+   caps were reverted.
+2. *"It is pre-existing, not my change."* Also false. The control that should have run **first** —
+   the same tier on a clean `origin/main` — passes: `Success: no issues found in 31 source files`,
+   on the **same mypy 2.3.1** that had been accused.
 
-Lição procedural: **"nenhum arquivo meu aparece na lista de erros" não é evidência de que a
-minha mudança não causou os erros.** Uma aresta de import muda *o que o checker olha*, então
-um arquivo que ninguém editou passa a falhar por causa de uma edição em outro lugar. Rodar o
-controle em árvore limpa vem antes de teorizar sobre a dependência.
+Procedural lesson: **"none of my files appear in the error list" is not evidence that my change
+did not cause the errors.** An import edge changes *what the checker looks at*, so a file nobody
+edited starts failing because of an edit somewhere else. Run the clean-tree control before
+theorising about the dependency.
+
+### CodeRabbit review on PR #191 — 6 accepted, 1 refused
+
+🔴 **The serious finding was mine and was exploitable.** `load_query` validated the *filename* as
+a single segment and accepted **anything** as the *backend*. That yields **two** distinct
+mechanisms, worth separating because a guard catching only one leaves the other standing:
+
+1. **Parent traversal** — `DB_BACKEND=..` resolves `<root>/../<file>`, walking one level out of
+   the queries tree. Reproduced before fixing: without the guard it returned `'ESCAPED-SECRET'`
+   from a file seeded outside the root.
+2. **Root discard via an absolute path** — `DB_BACKEND=/somewhere-absolute` traverses nothing:
+   `pathlib`'s `/` **discards the left operand** when the right is absolute, so the queries root
+   simply stops participating in the path. No `..` involved.
+
+Validating one operand and not the other was the defect. Both now share one rule (which rejects
+both cases above, plus `.`, empty, and separators of either flavour), and `active_backend()`
+validates against `SET_BACKENDS` in both native tiers. This undid the asymmetry the PR had called
+deliberate: the DDD builders now take the backend as an argument, so the map lives at module
+level and the engine names have **one** source. The old justification was true of the code as
+written — but the code did not need to be written that way.
+
+Other accepted findings: `DB_PORT` now ships **commented out** in all 4 tiers (the per-backend
+default already existed in `_compose_dsn`; the seed was defeating it for five of the six
+engines); `LIMIT 1000` added to the sqlite variant to match the mssql `TOP (1000)` (one filename
+is one contract — the result set must not depend on the backend); the `.sql` header corrected
+(measured: SQLite **accepts** bracket quoting and rejects `TOP`, the opposite of what I had
+written in the file that teaches the convention); the `.env` visibility claim narrowed in all 4
+places the sentence had been copied to; `DB_ODBC_DRIVER` quoted; the stale Poetry comment in
+`lint_sql.sh` refreshed (staleness introduced by my own edit).
+
+**Refused:** alphabetical `.env.example` ordering. dotenv-linter's `UnorderedKey` interleaves the
+scope blocks that #119 exists to create, and dotenv-linter is not a gate in this repo. Argued on
+the merits in the thread, with the door open if it ever becomes a real gate.
+
+⚠️ **Three rounds lost in series** on the same file (`S108` → `ERA001` → `ruff format`), all
+invisible outside the harness. The generated project's `make lint` **short-circuits**, so each
+round reveals only the first error — declaring "the threads are handled" before running the gate
+cost roughly 12 minutes of serial discovery.
+
+### 🔴 Recurring CI hang (#192)
+
+The `Scaffold + lint + test` job hung on the `Install scaffold tooling (envsubst)` step **twice in
+two days** (#188: 6h0m15s until GitHub's limit; #191: cancelled by hand). It is **not** a missing
+`-y` (checked — the flag is already there): it is `apt-get update` against a network that never
+answers, with nothing bounding it. Two defects: the step installs a package the runner **already
+has** (its own comment says so — the install exists only for `act`), and `grep -c timeout-minutes`
+returns **0** across 13 jobs, so GitHub's 6-hour default applies. Widened by the wrap-up audit:
+**9 of 9 template workflows** also carry zero `timeout-minutes`, so every scaffolded project
+inherits the same shape. Filed as **#192**, outside this PR.
 
 ## PR E — box Windows do Werner (grupo 5)
 
