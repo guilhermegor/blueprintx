@@ -155,7 +155,8 @@ ddd-orm **251**, lib-minimal **89** — todas +18, e 30 de integração em cada.
 
 ## PR D — queries / SQLite (grupo 4) — ✅ ENTREGUE
 
-Branch `feat/queries-engine-layout-119`, cortada de `main` @ `fdba82a` (pós-release v0.15.4).
+**PR #191 mergeada** (`fa5ea9f`), issue #119 fechada. Branch `feat/queries-engine-layout-119`,
+cortada de `main` @ `fdba82a` (pós-release v0.15.4).
 
 - [x] **#119** — layout `queries/<engine>/` + resolver `load_query` + guard de runtime para config
       git-ignorada (`src/config/queries/` existia e estava **vazio** nos dois tiers native-db)
@@ -236,6 +237,44 @@ Lição procedural: **"nenhum arquivo meu aparece na lista de erros" não é evi
 minha mudança não causou os erros.** Uma aresta de import muda *o que o checker olha*, então
 um arquivo que ninguém editou passa a falhar por causa de uma edição em outro lugar. Rodar o
 controle em árvore limpa vem antes de teorizar sobre a dependência.
+
+### Review do CodeRabbit na PR #191 — 6 aceitos, 1 recusado
+
+🔴 **O achado sério era meu e era explorável.** `load_query` validava o *filename* como
+segmento único e aceitava **qualquer coisa** no *backend* — e o `/` do `pathlib` **substitui**
+o lado esquerdo quando o direito é absoluto. Reproduzido antes de corrigir: sem o guard,
+`DB_BACKEND=..` retornou `'ESCAPED-SECRET'` de um arquivo semeado fora da raiz. Validar um
+operando e não o outro era o defeito; agora ambos passam pela mesma regra, e `active_backend()`
+valida contra `SET_BACKENDS` nos dois tiers native. Isso desfez a assimetria que a PR chamava
+de deliberada: os builders do DDD agora recebem o backend como argumento, então o dict vive a
+nível de módulo e os nomes das engines têm **uma** fonte. A justificativa antiga era verdadeira
+para o código como estava — mas o código não precisava estar assim.
+
+Outros aceitos: `DB_PORT` passa a shipar **comentado** nas 4 tiers (o default por backend já
+existia em `_compose_dsn`; o seed é que o anulava para cinco das seis engines); `LIMIT 1000` no
+sqlite para casar o `TOP (1000)` do mssql (um filename é um contrato — o result set não pode
+depender do backend); cabeçalho do `.sql` corrigido (medido: SQLite **aceita** colchetes e
+rejeita `TOP`, o oposto do que eu havia escrito no arquivo que ensina a convenção); alegação
+sobre `.env` estreitada nos 4 lugares onde a frase estava copiada; aspas no `DB_ODBC_DRIVER`;
+comentário obsoleto do Poetry em `lint_sql.sh` (obsolescência introduzida pela minha edição).
+
+**Recusado:** ordenação alfabética do `.env.example`. O `UnorderedKey` do dotenv-linter
+interleava os blocos de escopo que a #119 existe para criar, e dotenv-linter não é gate deste
+repo. Recusa argumentada no thread, com a porta aberta para revisitar se ele virar gate.
+
+⚠️ **Três rodadas perdidas em série** no mesmo arquivo (`S108` → `ERA001` → `ruff format`),
+todas invisíveis fora do harness. O `make lint` do projeto gerado **curto-circuita**, então
+cada rodada revela só o primeiro erro — declarar "tratei os threads" antes de rodar o gate
+custou ~12 min de descoberta em série.
+
+### 🔴 Travamento de CI recorrente (#192)
+
+O job `Scaffold + lint + test` travou no passo `Install scaffold tooling (envsubst)` **duas
+vezes em dois dias** (#188: 6h0m15s até o limite do GitHub; #191: cancelado à mão). Não é falta
+de `-y` (verificado — já tem): é `apt-get update` numa rede que não responde, sem nada que o
+delimite. Dois defeitos: o passo instala um pacote que o runner **já tem** (o comentário dele
+mesmo diz isso — a instalação existe só para `act`), e `grep -c timeout-minutes` no workflow
+retorna **0** em 13 jobs, então vale o default de 6h. Aberta como **#192**, fora desta PR.
 
 ## PR E — box Windows do Werner (grupo 5)
 
