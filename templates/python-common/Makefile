@@ -187,10 +187,14 @@ run:
 # -------------------
 # CONTEXT
 # -------------------
-.PHONY: export_context
+.PHONY: export_context export_deps
 
 export_context:
 	@bash bin/export_repo_content.sh
+
+# Locked deps as requirements-lock.txt, for hosts that can pip but not Poetry.
+export_deps:
+	@bash bin/export_deps.sh
 
 # -------------------
 # SHIP
@@ -264,6 +268,7 @@ help:
 	@echo ""
 	@echo "Context / Ship"
 	@echo "  export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM"
+	@echo "  export_deps          Export locked deps to requirements-lock.txt (pip-only hosts)"
 	@echo "  ship                 Package the committed main tree into dist/<name>_<ts>.zip"
 	@echo ""
 	@echo "Offline (only present when scaffolded without GitHub)"

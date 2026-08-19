@@ -16,6 +16,7 @@ import platform
 from typing import TYPE_CHECKING
 
 from utils.logs import log_message
+from utils.paths import to_absolute
 from utils.signatures import resolve_signature
 
 
@@ -100,12 +101,17 @@ class OutlookGateway(metaclass=TypeChecker):
 			if self.path_signatures_dir is not None
 			else ""
 		)
+		# Outlook runs as its own process, so a relative attachment path re-anchors in ITS
+		# working directory rather than ours, and on Windows a driveless path re-anchors to
+		# whichever drive it sits on. The existence check downstream runs in our process, so
+		# it passes and the attachment is then silently dropped.
+		list_attachments_abs = [str(to_absolute(Path(str_path))) for str_path in list_attachments]
 		_com_send_email(
 			str_subject=str_subject,
 			str_to="; ".join(list_to),
 			str_cc="; ".join(list_cc),
 			str_body=to_html_body(str_body),
-			list_attachments=list_attachments,
+			list_attachments=list_attachments_abs,
 			str_send_behalf_of=self.str_sender,
 			bool_auto_send=bool_auto_send,
 			str_html_signature=str_signature,
@@ -166,7 +172,10 @@ class OutlookGateway(metaclass=TypeChecker):
 				str_email_account=str_email_account,
 				str_folder=str_folder,
 				str_subject_substring=str_subject_substring,
-				str_dest_dir=str(path_dest_dir),
+				# Outlook writes the file itself; a driveless destination lands on ITS drive
+				# while our existence check looks at ours -- a false failure reported over a
+				# file that really did save.
+				str_dest_dir=str(to_absolute(path_dest_dir)),
 				list_file_formats=list_formats,
 				str_subfolder=str_subfolder,
 			)

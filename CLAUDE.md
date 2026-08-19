@@ -81,7 +81,7 @@ Once a project is created the template Makefile provides:
 ```bash
 make init_venv     # bootstrap poetry venv
 make vscode_init   # install VS Code extensions + keybindings
-make export_deps   # export poetry deps to requirements.txt via pre-commit hook
+make export_deps   # export locked deps to requirements-lock.txt (pip-only hosts)
 make export_context # flatten the repo into repo_context.txt for pasting into a web-UI LLM
 poetry run pytest tests/unit/
 poetry run pytest tests/integration/
