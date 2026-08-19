@@ -55,6 +55,11 @@ DICT_EXPECTED_ABSENT = {
         # A distributable library has no runtime .env to read, so the service tiers'
         # env-config seam (and its test) is not shipped.
         "test_env_config.py": "lib-minimal ships no src/config/env_config.py",
+        # A clean exclusion, not the vendoring hole below: the per-engine query loader
+        # resolves config/queries/<DB_BACKEND>/, and a distributable library selects no
+        # database engine and ships no queries directory. utils/queries.py is not vendored
+        # into lib-minimal at all, so its test has nothing to cover.
+        "test_queries.py": "lib-minimal ships no DB engine selection or queries/ tree",
         # Contract oracles describe an ingested external file; a library tier ships none.
         "test_contract_oracle_example.py": "lib-minimal ships no contract oracle registry",
         # The gate walks src/ packages that declare __all__; lib-minimal declares none.

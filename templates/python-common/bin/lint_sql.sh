@@ -3,13 +3,16 @@
 # lint_sql.sh — sqlfluff over the project's SQL query files.
 #
 # Single source of truth for SQL linting: called by both `make lint` / `./tasks.sh lint`
-# and the pre-commit `lint-sql` hook. Lints every `.sql` under src/config/queries with the
-# default dialect from .sqlfluff (sqlfluff honours .sqlfluffignore for runtime-templated
-# queries). sqlfluff is a poetry dev-dep, so this is GUARDED on `command -v poetry` and
-# SKIPPED gracefully (exit 0) when absent — a constrained box never hard-fails.
+# and the pre-commit `lint-sql` hook. Lints every `.sql` under src/config/queries (sqlfluff
+# honours .sqlfluffignore for runtime-templated queries). sqlfluff is a poetry dev-dep, so
+# this resolves Poetry through the bootstrap lib (`resolve_poetry` / `run_poetry`, which also
+# find a `python -m poetry`-only install) and SKIPS gracefully (exit 0) when it cannot be
+# resolved — a constrained box never hard-fails.
 #
-# Mixing engines? Encode the db in each query's filename prefix and run one sqlfluff pass
-# per --dialect here (see the .sqlfluff header comment).
+# ONE pass covers every engine. Queries are filed at src/config/queries/<engine>/, and
+# sqlfluff resolves config per file directory, so each engine's own `.sqlfluff` supplies its
+# dialect. Adding an engine is adding a folder — never a second pass with another --dialect,
+# and never a dialect encoded in the filename.
 
 set -euo pipefail
 

@@ -175,6 +175,66 @@ def _connect_oracle() -> Any:
 	)
 
 
+# Engine name -> connection builder. Module-level so the engine NAMES have exactly ONE
+# source — the factory below and the `config/queries/<engine>/` directory layout both read
+# these names instead of re-spelling the list.
+#
+# ⚠️ It must FOLLOW the `_connect_*` functions it maps to — the dict is evaluated at import,
+# so those names have to exist by then. The placement is a language constraint, not
+# disorganisation; signposted here so nobody "tidies" it to the top of the file.
+_DICT_BUILDERS: dict[str, Callable[[], Any]] = {
+	"sqlite": _connect_sqlite,
+	"postgresql": _connect_postgresql,
+	"mariadb": _connect_mysql,
+	"mysql": _connect_mysql,
+	"mssql": _connect_mssql,
+	"oracle": _connect_oracle,
+}
+
+# The supported engine names, derived from the dispatch map so the two cannot drift.
+SET_BACKENDS: frozenset[str] = frozenset(_DICT_BUILDERS)
+
+_STR_DEFAULT_BACKEND = "sqlite"
+
+
+@type_checker
+def active_backend() -> str:
+	"""Return the configured engine name — the single reader of ``DB_BACKEND``.
+
+	Returns
+	-------
+	str
+		The lower-cased engine name, defaulting to ``sqlite``.
+
+	Raises
+	------
+	ValueError
+		If ``DB_BACKEND`` does not name a supported engine.
+
+	Notes
+	-----
+	Everything that needs to know the engine calls this, so the default exists in exactly
+	one place and cannot disagree with itself. That matters more than it looks: the query
+	loader resolves ``config/queries/<engine>/`` from this value, so a second reader with
+	its own default would file queries under one engine and connect with another.
+
+	It is validated **here**, not only where the connection is opened, because the value is
+	used to build a filesystem path before any connection exists. Rejecting it at the single
+	reader means an unsupported engine fails with a message naming the supported ones,
+	rather than as a confusing missing-query error somewhere downstream.
+
+	``DB_BACKEND`` lives in a git-ignored ``.env``, which no gate over tracked files can
+	validate. Assume every long-lived machine's copy is stale — ``bin/ensure_env.sh``
+	deliberately never overwrites an existing ``.env`` — and let the runtime be the guard.
+	"""
+	load_dotenv()
+	str_backend = os.getenv("DB_BACKEND", _STR_DEFAULT_BACKEND).lower()
+	if str_backend not in SET_BACKENDS:
+		str_supported = ", ".join(sorted(SET_BACKENDS))
+		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
+	return str_backend
+
+
 @type_checker
 def build_connection() -> Any:
 	"""Build a native DB-API connection from environment configuration.
@@ -184,30 +244,11 @@ def build_connection() -> Any:
 	Any
 		An open DB-API 2.0 connection for the configured backend.
 
-	Raises
-	------
-	ValueError
-		If ``DB_BACKEND`` does not match a supported backend.
-
 	Notes
 	-----
-	Reads ``DB_BACKEND`` (default ``sqlite``). Supported: ``sqlite``,
-	``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses
-	``DB_PATH``; the rest read ``DB_DSN`` first, then compose from ``DB_*`` vars.
+	Reads ``DB_BACKEND`` via :func:`active_backend`, which rejects an unsupported value
+	(propagating :class:`ValueError`) before any lookup here. Supported: ``sqlite``,
+	``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses ``DB_PATH``;
+	the rest read ``DB_DSN`` first, then compose from ``DB_*`` vars.
 	"""
-	load_dotenv()
-	str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
-
-	dict_builders: dict[str, Callable[[], Any]] = {
-		"sqlite": _connect_sqlite,
-		"postgresql": _connect_postgresql,
-		"mariadb": _connect_mysql,
-		"mysql": _connect_mysql,
-		"mssql": _connect_mssql,
-		"oracle": _connect_oracle,
-	}
-
-	if str_backend not in dict_builders:
-		str_supported = ", ".join(dict_builders)
-		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
-	return dict_builders[str_backend]()
+	return _DICT_BUILDERS[active_backend()]()

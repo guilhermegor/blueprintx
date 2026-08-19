@@ -53,7 +53,8 @@ project/
       outputs.yaml
       webhooks.yaml
       emails.yaml
-      queries/              # .sql / .graphql files
+      queries/<engine>/     # SQL filed per DB_BACKEND (sqlite/, mssql/, ...)
+      query_loader.py       # load_query() -> resolves queries/<DB_BACKEND>/
       signatures/           # email HTML templates
     main.py
   tests/{unit,integration,performance}/

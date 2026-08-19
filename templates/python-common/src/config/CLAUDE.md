@@ -12,8 +12,10 @@ configuration, startup singletons, and the connection factory — nothing else.*
   `.env`, lazy-imports the one configured driver).
 - **YAML config** — `inputs.yaml` / `outputs.yaml` (and any `*_dev.yaml`/`*_prd.yaml`
   variants): declarative values only, no logic.
-- **`queries/`** — SQL query files, one per `<db>__<table>__<purpose>.sql`, each opening
+- **`queries/<engine>/`** — SQL query files, one per `<table>__<purpose>.sql`, each opening
   with a header comment (database/schema, table(s), purpose). Keep inline SQL out of code.
+  The **engine is the directory** — `sqlite/`, `mssql/`, … matching `DB_BACKEND` — and
+  `config/query_loader.load_query("<table>__<purpose>.sql")` resolves it. See below.
 - **`contracts/`** — `FileContract` declarations, one per input source (see the dedicated
   section below).
 - **`signatures/`** — e-mail signature templates.
@@ -30,6 +32,71 @@ configuration, startup singletons, and the connection factory — nothing else.*
 side-effectful logic. A singleton that does I/O at import, or business rules hidden in a
 YAML loader, couples the whole app to this layer and makes it untestable. Keep it
 declarative; push behaviour outward.
+
+## Queries are filed per engine — derive, don't check
+
+**Layout.** `src/config/queries/<engine>/<table>__<purpose>.sql`. The caller names only the
+query: `load_query("example_entity__select_active.sql")`. `config/query_loader` resolves the
+directory from `DB_BACKEND` through `active_backend()` — the single reader of that variable,
+so the default (`sqlite`) exists in exactly one place and cannot disagree with itself.
+
+**Why a directory and not an `<engine>__` filename prefix.** A prefix declares the engine a
+second time and must then be *validated* against the first. A check is always second-best to
+a structure in which the wrong state cannot be represented: with directories there is no code
+path that hands T-SQL to a SQLite connection, so nothing has to notice. Never spell the engine
+in a filename, and never pass a path to `load_query` — it refuses a name carrying a directory
+component precisely because that would route around the routing.
+
+**Why the guard is at runtime and not in a `bin/check_*.py`.** This repo's reflex is to make a
+convention structural by wiring a gate into pre-commit + CI. That reflex has a blind spot: a
+repository-only check cannot validate the backend a **local or deployed environment** actually
+selects, because `DB_BACKEND` lives in a git-ignored `.env` that is never committed and that CI
+never has. Route the guard by *where the wrong value lives*:
+
+| the value lives in | the guard belongs at | it protects |
+|---|---|---|
+| a tracked file (`src/`, `pyproject.toml`, `.env.example`) | pre-commit + CI | the repo, every machine |
+| a **git-ignored** file (`.env`, a local override) | **runtime**, at the single funnel the value passes through | the machine actually running |
+
+Ship both — they are not redundant. Runtime guards the machine you have, whose `.env` drifted
+or was never configured; the static side keeps the **seed** honest, since `bin/ensure_env.sh`
+copies `.env.example` to create a new `.env`. ⚠️ `ensure_env.sh` reports *".env already exists
+— leaving it untouched"*, which is correct (it must never clobber real credentials) and is
+exactly what makes drift permanent: a project scaffolded months ago keeps its day-one `.env`
+forever. **Assume every long-lived machine's `.env` is stale.**
+
+**Where resolution has to happen.** At load, not at execution: the executor receives only the
+SQL *text*, and by then nothing can tell which dialect it holds. Those two facts never meeting
+is *why* a mismatch used to surface as an `OperationalError` thrown from inside pandas — after
+every input had been read, several layers below its cause, with the query, the contract and
+the whole test suite correct.
+
+**Diagnosis.** When a query is missing, the error names the engines whose directory *does*
+carry it. Without that, a typo and a misconfiguration read identically.
+
+**What it does not do.** The layout removes an engine mismatch encoded in a *filename*. It
+cannot make a wrong `DB_BACKEND` right: that value picks the driver and the SQL together, so an
+incorrect one routes consistently to the wrong engine. `active_backend()` rejects a value that
+names no supported engine — it cannot know which supported engine you meant.
+
+**Both segments are untrusted.** `load_query` requires the filename *and* the backend to be a
+single path segment. `pathlib`'s `/` operator **replaces** the left side when the right is
+absolute, so an unvalidated `DB_BACKEND=/tmp` would relocate the whole lookup, and `..` would
+escape the queries tree. Validating one operand and not the other was the real hole.
+
+**The directory names the ENGINE, not the instance.** Two SQL Server databases share one
+`mssql/`. When routing must become per-instance, the directory becomes a *connection* name and
+the engine is looked up from that connection's config — say which reading is meant, because
+`<db>__…` once meant either and both readings coexisted until one broke.
+
+**Free bonus:** sqlfluff resolves config per file directory, so each `queries/<engine>/` holds
+a one-line `.sqlfluff` naming its dialect. Adding an engine is adding a folder — never a
+second `--dialect` pass in `bin/lint_sql.sh`.
+
+This shape applies to any `.env` key selecting a **behaviour** rather than a credential —
+`EMAIL_BACKEND`, `ENV`, `PIPELINE_INTENT`, `STORAGE_BACKEND`. A wrong password fails loudly at
+connect; a wrong *mode* runs the wrong code path and fails somewhere unrelated, or worse,
+succeeds against the wrong target.
 
 ## Runtime type-checking in the config layer
 

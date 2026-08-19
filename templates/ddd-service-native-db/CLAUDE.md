@@ -81,7 +81,17 @@ Wires everything together: loads `.env`, calls `build_database_handler()` or `bu
 
 ## Adding a new DB backend
 
-Subclass `DatabaseHandler` in `src/chassis/db_schema/infrastructure/<name>_handler.py`, implement all six abstract methods, export from `src/chassis/db_schema/infrastructure/__init__.py`, and add the key to the `builders` dict in `database_factory.py`.
+Subclass `DatabaseHandler` in `src/chassis/db_schema/infrastructure/<name>_handler.py`, implement all six abstract methods, export from `src/chassis/db_schema/infrastructure/__init__.py`, and add the key to the module-level `_DICT_BUILDERS` map in `database_factory.py` (each builder takes the backend name, so the map lives at module scope and `SET_BACKENDS` derives from it — one source for the engine names). Then create `src/config/queries/<name>/` with a one-line `.sqlfluff` declaring the sqlfluff dialect. No change to `bin/lint_sql.sh` is needed.
+
+## SQL queries — the engine is a directory, not a filename prefix
+
+Queries live at `src/config/queries/<engine>/<table>__<purpose>.sql`, and `config/query_loader.load_query("<table>__<purpose>.sql")` resolves the directory from `DB_BACKEND` via `chassis.db_schema.application.database_factory.active_backend()` — the single reader of that variable. **Never spell the engine in the filename** and never pass a path: the loader refuses a name carrying a directory, because doing so would route around the one check it exists to make.
+
+Why it is shaped this way: `DB_BACKEND` lives in a git-ignored `.env`, so a repository-only check cannot validate the backend a local or deployed environment actually selects — the file is never committed, and CI never has one. Deriving the directory from the config makes a filename-encoded engine mismatch **unreachable** instead of merely rejected, which beats any check. When a query is genuinely missing, the error names the engines whose directory *does* hold it, so a typo and a misconfiguration do not read identically.
+
+⚠️ **What this does not do:** the layout removes mismatches encoded in a *filename*. It cannot make a wrong `DB_BACKEND` right — that value selects the driver and the SQL together, so an incorrect one simply routes consistently to the wrong engine. `active_backend()` rejects a value that names no supported engine; it cannot know which supported engine you meant.
+
+The directory names the **engine**, not the database instance — two SQL Server databases share one `mssql/`. Each `.sql` opens with a `database / table(s) / purpose` header comment.
 
 ## Adding a new chassis provider
 

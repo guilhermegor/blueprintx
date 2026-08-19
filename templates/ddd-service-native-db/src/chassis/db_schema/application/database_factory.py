@@ -51,6 +51,70 @@ def _compose_dsn(str_backend: str) -> str:
 	return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
 
 
+def _sqlite() -> SQLiteDatabaseHandler:
+	"""Open a SQLite handler at ``DB_PATH``, creating the parent directory."""
+	path_db = Path(os.getenv("DB_PATH", "./data/app.db"))
+	path_db.parent.mkdir(parents=True, exist_ok=True)
+	return SQLiteDatabaseHandler(path_db)
+
+
+# Engine name -> handler builder. Each builder takes the backend name so the map can live at
+# MODULE level: as closures over an enclosing `str_backend` these had to be rebuilt inside the
+# factory on every call, which also kept the engine NAMES private to that call — and the names
+# are exactly what `active_backend()` must validate against and what the
+# `config/queries/<engine>/` layout mirrors. One source, three readers.
+_DICT_BUILDERS: dict[str, Callable[[str], DatabaseHandler]] = {
+	"sqlite": lambda _: _sqlite(),
+	"postgresql": lambda b: PostgresDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
+	"mariadb": lambda b: MariaDBDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
+	"mysql": lambda b: MySQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
+	"mssql": lambda b: MSSQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
+	"oracle": lambda b: OracleDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
+}
+
+# The supported engine names, derived from the dispatch map so the two cannot drift.
+SET_BACKENDS: frozenset[str] = frozenset(_DICT_BUILDERS)
+
+_STR_DEFAULT_BACKEND = "sqlite"
+
+
+def active_backend() -> str:
+	"""Return the configured engine name — the single reader of ``DB_BACKEND``.
+
+	Returns
+	-------
+	str
+		The lower-cased engine name, defaulting to ``sqlite``.
+
+	Raises
+	------
+	ValueError
+		If ``DB_BACKEND`` does not name a supported engine.
+
+	Notes
+	-----
+	Everything that needs to know the engine calls this, so the default exists in exactly
+	one place and cannot disagree with itself. The query loader resolves
+	``config/queries/<engine>/`` from this value, so a second reader with its own default
+	would file queries under one engine and connect with another.
+
+	It is validated **here**, not only where a connection is opened, because the value is
+	used to build a filesystem path before any handler exists. Rejecting it at the single
+	reader means an unsupported engine fails with a message naming the supported ones,
+	rather than as a confusing missing-query error somewhere downstream.
+
+	``DB_BACKEND`` lives in a git-ignored ``.env``, which no gate over tracked files can
+	validate. Assume every long-lived machine's copy is stale — ``bin/ensure_env.sh``
+	deliberately never overwrites an existing ``.env`` — and let the runtime be the guard.
+	"""
+	load_dotenv()
+	str_backend = os.getenv("DB_BACKEND", _STR_DEFAULT_BACKEND).lower()
+	if str_backend not in SET_BACKENDS:
+		str_supported = ", ".join(sorted(SET_BACKENDS))
+		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
+	return str_backend
+
+
 def build_database_handler() -> DatabaseHandler:
 	"""Build a database handler based on environment configuration.
 
@@ -59,15 +123,11 @@ def build_database_handler() -> DatabaseHandler:
 	DatabaseHandler
 		Configured backend handler ready for CRUD operations.
 
-	Raises
-	------
-	ValueError
-		If ``DB_BACKEND`` does not match a supported backend.
-
 	Notes
 	-----
-	Reads ``DB_BACKEND`` to pick the SQL backend. Supported: ``sqlite``, ``postgresql``,
-	``mariadb``, ``mysql``, ``mssql``, ``oracle``.
+	Reads ``DB_BACKEND`` through :func:`active_backend`, which rejects an unsupported value
+	(propagating :class:`ValueError`) before any lookup here. Supported: ``sqlite``,
+	``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``.
 
 	SQLite uses ``DB_PATH`` (default: ``./data/app.db``).
 
@@ -78,24 +138,5 @@ def build_database_handler() -> DatabaseHandler:
 	For schema-less backends (JSON, CSV, joblib) use ``build_storage_handler()`` from
 	``chassis.db_wschema.application``.
 	"""
-	load_dotenv()
-	str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
-
-	def _sqlite() -> SQLiteDatabaseHandler:
-		path_db = Path(os.getenv("DB_PATH", "./data/app.db"))
-		path_db.parent.mkdir(parents=True, exist_ok=True)
-		return SQLiteDatabaseHandler(path_db)
-
-	dict_builders: dict[str, Callable[[], DatabaseHandler]] = {
-		"sqlite": _sqlite,
-		"postgresql": lambda: PostgresDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
-		"mariadb": lambda: MariaDBDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
-		"mysql": lambda: MySQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
-		"mssql": lambda: MSSQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
-		"oracle": lambda: OracleDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(str_backend)),
-	}
-
-	if str_backend not in dict_builders:
-		str_supported = ", ".join(dict_builders)
-		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
-	return dict_builders[str_backend]()
+	str_backend = active_backend()
+	return _DICT_BUILDERS[str_backend](str_backend)
