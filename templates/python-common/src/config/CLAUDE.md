@@ -49,9 +49,9 @@ component precisely because that would route around the routing.
 
 **Why the guard is at runtime and not in a `bin/check_*.py`.** This repo's reflex is to make a
 convention structural by wiring a gate into pre-commit + CI. That reflex has a blind spot: a
-gate can only read what is **in the repository**, and `DB_BACKEND` lives in a git-ignored
-`.env` that is never committed and that CI never has. Route the guard by *where the wrong
-value lives*:
+repository-only check cannot validate the backend a **local or deployed environment** actually
+selects, because `DB_BACKEND` lives in a git-ignored `.env` that is never committed and that CI
+never has. Route the guard by *where the wrong value lives*:
 
 | the value lives in | the guard belongs at | it protects |
 |---|---|---|
@@ -73,6 +73,16 @@ the whole test suite correct.
 
 **Diagnosis.** When a query is missing, the error names the engines whose directory *does*
 carry it. Without that, a typo and a misconfiguration read identically.
+
+**What it does not do.** The layout removes an engine mismatch encoded in a *filename*. It
+cannot make a wrong `DB_BACKEND` right: that value picks the driver and the SQL together, so an
+incorrect one routes consistently to the wrong engine. `active_backend()` rejects a value that
+names no supported engine — it cannot know which supported engine you meant.
+
+**Both segments are untrusted.** `load_query` requires the filename *and* the backend to be a
+single path segment. `pathlib`'s `/` operator **replaces** the left side when the right is
+absolute, so an unvalidated `DB_BACKEND=/tmp` would relocate the whole lookup, and `..` would
+escape the queries tree. Validating one operand and not the other was the real hole.
 
 **The directory names the ENGINE, not the instance.** Two SQL Server databases share one
 `mssql/`. When routing must become per-instance, the directory becomes a *connection* name and

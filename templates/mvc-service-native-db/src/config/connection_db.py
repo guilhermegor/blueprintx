@@ -191,6 +191,9 @@ _DICT_BUILDERS: dict[str, Callable[[], Any]] = {
 	"oracle": _connect_oracle,
 }
 
+# The supported engine names, derived from the dispatch map so the two cannot drift.
+SET_BACKENDS: frozenset[str] = frozenset(_DICT_BUILDERS)
+
 _STR_DEFAULT_BACKEND = "sqlite"
 
 
@@ -203,6 +206,11 @@ def active_backend() -> str:
 	str
 		The lower-cased engine name, defaulting to ``sqlite``.
 
+	Raises
+	------
+	ValueError
+		If ``DB_BACKEND`` does not name a supported engine.
+
 	Notes
 	-----
 	Everything that needs to know the engine calls this, so the default exists in exactly
@@ -210,12 +218,21 @@ def active_backend() -> str:
 	loader resolves ``config/queries/<engine>/`` from this value, so a second reader with
 	its own default would file queries under one engine and connect with another.
 
-	``DB_BACKEND`` lives in a git-ignored ``.env``, which no pre-commit hook and no CI job
-	can read. Assume every long-lived machine's copy is stale — ``bin/ensure_env.sh``
+	It is validated **here**, not only where the connection is opened, because the value is
+	used to build a filesystem path before any connection exists. Rejecting it at the single
+	reader means an unsupported engine fails with a message naming the supported ones,
+	rather than as a confusing missing-query error somewhere downstream.
+
+	``DB_BACKEND`` lives in a git-ignored ``.env``, which no gate over tracked files can
+	validate. Assume every long-lived machine's copy is stale — ``bin/ensure_env.sh``
 	deliberately never overwrites an existing ``.env`` — and let the runtime be the guard.
 	"""
 	load_dotenv()
-	return os.getenv("DB_BACKEND", _STR_DEFAULT_BACKEND).lower()
+	str_backend = os.getenv("DB_BACKEND", _STR_DEFAULT_BACKEND).lower()
+	if str_backend not in SET_BACKENDS:
+		str_supported = ", ".join(sorted(SET_BACKENDS))
+		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
+	return str_backend
 
 
 @type_checker
@@ -227,19 +244,11 @@ def build_connection() -> Any:
 	Any
 		An open DB-API 2.0 connection for the configured backend.
 
-	Raises
-	------
-	ValueError
-		If ``DB_BACKEND`` does not match a supported backend.
-
 	Notes
 	-----
-	Reads ``DB_BACKEND`` via :func:`active_backend` (default ``sqlite``). Supported:
-	``sqlite``, ``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses
-	``DB_PATH``; the rest read ``DB_DSN`` first, then compose from ``DB_*`` vars.
+	Reads ``DB_BACKEND`` via :func:`active_backend`, which rejects an unsupported value
+	(propagating :class:`ValueError`) before any lookup here. Supported: ``sqlite``,
+	``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses ``DB_PATH``;
+	the rest read ``DB_DSN`` first, then compose from ``DB_*`` vars.
 	"""
-	str_backend = active_backend()
-	if str_backend not in _DICT_BUILDERS:
-		str_supported = ", ".join(_DICT_BUILDERS)
-		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
-	return _DICT_BUILDERS[str_backend]()
+	return _DICT_BUILDERS[active_backend()]()

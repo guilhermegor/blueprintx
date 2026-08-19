@@ -111,7 +111,9 @@ Add a `_connect_<name>()` helper in `config/connection_db.py` and register it in
 
 Queries live at `src/config/queries/<engine>/<table>__<purpose>.sql`, and `config/query_loader.load_query("<table>__<purpose>.sql")` resolves the directory from `DB_BACKEND` via `connection_db.active_backend()` — the single reader of that variable. **Never spell the engine in the filename** and never pass a path: the loader refuses a name carrying a directory, because doing so would route around the one check it exists to make.
 
-Why it is shaped this way: `DB_BACKEND` lives in a git-ignored `.env`, so no pre-commit hook and no CI job can ever see it — a gate over tracked files is structurally blind to it. Deriving the directory from the config makes the wrong dialect **unreachable** instead of merely rejected, which beats any check. When a query is genuinely missing, the error names the engines whose directory *does* hold it, so a typo and a misconfiguration do not read identically.
+Why it is shaped this way: `DB_BACKEND` lives in a git-ignored `.env`, so a repository-only check cannot validate the backend a local or deployed environment actually selects — the file is never committed, and CI never has one. Deriving the directory from the config makes a filename-encoded engine mismatch **unreachable** instead of merely rejected, which beats any check. When a query is genuinely missing, the error names the engines whose directory *does* hold it, so a typo and a misconfiguration do not read identically.
+
+⚠️ **What this does not do:** the layout removes mismatches encoded in a *filename*. It cannot make a wrong `DB_BACKEND` right — that value selects the driver and the SQL together, so an incorrect one simply routes consistently to the wrong engine. `active_backend()` rejects a value that names no supported engine; it cannot know which supported engine you meant.
 
 The directory names the **engine**, not the database instance — two SQL Server databases share one `mssql/`. Each `.sql` opens with a `database / table(s) / purpose` header comment.
 

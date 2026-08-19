@@ -80,8 +80,50 @@ def test_load_query_rejects_a_filename_carrying_an_engine_directory(tmp_path: Pa
 	"""Spelling the engine in the name would route around the loader — so it is refused."""
 	_seed_query(tmp_path, "mssql", "example__select.sql", "DECLARE @x INT;")
 
-	with pytest.raises(ValueError, match="bare filename"):
+	with pytest.raises(ValueError, match="single path segment"):
 		load_query("mssql/example__select.sql", "sqlite", tmp_path)
+
+
+@pytest.mark.parametrize(
+	"str_backend",
+	["/somewhere-absolute", "../../etc", "..", ".", "", "sqlite/../mssql", "C:\\Windows"],
+	ids=["absolute", "parent-walk", "dotdot", "dot", "empty", "embedded-walk", "windows-drive"],
+)
+def test_load_query_rejects_a_backend_that_is_not_a_single_segment(
+	tmp_path: Path, str_backend: str
+) -> None:
+	"""The backend comes from a git-ignored .env, so it is untrusted input, not a constant.
+
+	``pathlib``'s ``/`` operator **replaces** the left operand when the right is absolute, so
+	an unvalidated absolute ``DB_BACKEND`` would silently relocate the entire lookup outside
+	the project; ``..`` would walk out of the queries tree. The loader already refused a
+	filename carrying a directory — refusing it on one operand and not the other was the
+	real defect.
+
+	The absolute case uses a synthetic path rather than a real system directory: the value
+	only has to *be* absolute for the guard, and naming a real one would trip ruff's S108
+	without making the case any truer.
+	"""
+	_seed_query(tmp_path, "sqlite", "example__select.sql", "SELECT 1;")
+
+	with pytest.raises(ValueError, match="single path segment"):
+		load_query("example__select.sql", str_backend, tmp_path)
+
+
+def test_load_query_does_not_read_outside_the_queries_root(tmp_path: Path) -> None:
+	"""Negative control for the traversal guard: prove the escape target is reachable.
+
+	Without this, the test above could pass merely because the file does not exist. Here the
+	file DOES exist at the escaped location, so a loader that resolved the path would return
+	its contents — the guard is what stops it.
+	"""
+	path_root = tmp_path / "queries"
+	_seed_query(path_root, "sqlite", "example__select.sql", "SELECT 1;")
+	path_secret = tmp_path / "example__select.sql"
+	path_secret.write_text("SELECT 'escaped';", encoding="utf-8")
+
+	with pytest.raises(ValueError, match="single path segment"):
+		load_query("example__select.sql", "..", path_root)
 
 
 # --------------------------
