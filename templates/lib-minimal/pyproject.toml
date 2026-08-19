@@ -52,7 +52,6 @@ openpyxl = ">=3.1.0"
 pre-commit = ">=4.1.0"
 pretty-errors = ">=1.2.25"
 commitizen = ">=4.4.1"
-poetry-plugin-export = ">=1.8"
 # Build + publish tooling for the PyPI / Test-PyPI release workflows (twine is the
 # publish fallback when `poetry publish` is unavailable).
 build = ">=1.2.2"

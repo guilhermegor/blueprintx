@@ -81,6 +81,15 @@ runs outside the venv. `bin/install_shell_linters.sh` (`make install_shell_linte
 an **optional** system-binary installer (choco/scoop/brew/apt) for boxes whose venv drive
 blocks executing the vendored binary; the pip route is primary.
 
+`bin/export_deps.sh` (`make export_deps`) exports the locked set to `requirements-lock.txt`
+for pip-only hosts. It is the reference for the **diagnostic half** of this rule: it captures
+the export output instead of discarding it, re-prints Poetry's own words on failure, and names
+the remedy against `${POETRY_CMD[*]}` — never a bare `poetry`, which may not be the install
+that failed. `export` is a *plugin* subcommand, so `requirements.txt` pins
+`poetry-plugin-export` beside Poetry: the audit question is never "is Poetry installed?" but
+"which install resolves when `.venv/bin` is NOT on `PATH`, and does that one have the
+subcommand?".
+
 `bin/ensure_env.sh` seeds `.env` from `.env.example` for `init` (no-op if `.env`
 exists; aborts only itself on a missing template). `bin/precommit.sh` installs the
 pre-commit hooks and **skips gracefully** when run off a git work tree (a shipped zip

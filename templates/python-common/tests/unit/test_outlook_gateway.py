@@ -42,3 +42,29 @@ def test_resolve_dispatch_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
 	monkeypatch.delenv("EMAIL_SEND__DEFAULTS", raising=False)
 	monkeypatch.delenv("EMAIL_AUTO_SEND__DEFAULTS", raising=False)
 	assert resolve_dispatch("other") == (True, False)
+
+
+def test_send_email_hands_com_an_absolute_attachment_path(
+	mocker: MockerFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""A relative attachment reaches Outlook absolute — it does not share our CWD."""
+	monkeypatch.chdir(tmp_path)
+	mocker.patch("src.utils.outlook_gateway.running_on_windows", return_value=True)
+	cls_com = mocker.patch("src.utils.outlook_gateway._com_send_email")
+	cls_gateway = OutlookGateway("sender@example.com")
+	cls_gateway.send_email("subject", ["to@example.com"], [], "body", ["out/report.xlsx"])
+	list_sent = cls_com.call_args.kwargs["list_attachments"]
+	assert Path(list_sent[0]).is_absolute()
+	assert Path(list_sent[0]).name == "report.xlsx"
+
+
+def test_download_attachment_hands_com_an_absolute_dest_dir(
+	mocker: MockerFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""The COM save destination is absolute, so exists() and Outlook look at the same file."""
+	monkeypatch.chdir(tmp_path)
+	mocker.patch("src.utils.outlook_gateway.running_on_windows", return_value=True)
+	cls_com = mocker.patch("src.utils.outlook_gateway._com_download_attch", return_value={})
+	cls_gateway = OutlookGateway("sender@example.com")
+	cls_gateway.download_attachment("acct", "Inbox", "subject~", Path("downloads"))
+	assert Path(cls_com.call_args.kwargs["str_dest_dir"]).is_absolute()

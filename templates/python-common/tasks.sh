@@ -291,6 +291,10 @@ export_context() {
 	bash "$SCRIPT_DIR/bin/export_repo_content.sh" "${1:-}"
 }
 
+export_deps() {
+	bash "$SCRIPT_DIR/bin/export_deps.sh"
+}
+
 # -------------------
 # HELP
 # -------------------
@@ -345,6 +349,7 @@ Run
 
 Context / Ship
   export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM
+  export_deps          Export locked deps to requirements-lock.txt (pip-only hosts)
   ship                 Package the committed main tree into dist/<name>_<ts>.zip
 
 Library (only present for the library scaffold)
@@ -394,6 +399,7 @@ db_restore) db_restore ;;
 docs_server) docs_server ;;
 run) run ;;
 export_context) export_context "${2:-}" ;;
+export_deps) export_deps ;;
 ship) ship ;;
 install_dist_locally) install_dist_locally ;;
 changelog) changelog ;;

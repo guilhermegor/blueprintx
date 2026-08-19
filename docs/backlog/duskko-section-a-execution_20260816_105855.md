@@ -146,12 +146,15 @@ Branch `feat/docs-language-gate-141`, empilhada sobre a PR A. Verificado nas **5
 Contagem por tier após a B: mvc-native **256**, mvc-orm **256**, ddd-native **251**,
 ddd-orm **251**, lib-minimal **89** — todas +18, e 30 de integração em cada.
 
-## PR C — núcleo de ingestão (grupo 3)
+## PR C — núcleo de ingestão (grupo 3) — ✅ ENTREGUE
 
-- [ ] **#128** — disciplina de contrato de ingestão (8 lições) + gates de colisão de nome e de
+**PR #186 mergeada** (`b130c6e`). Registro detalhado em
+`ingestion-core-seams_20260817_083243.md`; aqui fica só o estado.
+
+- [x] **#128** — disciplina de contrato de ingestão (8 lições) + gates de colisão de nome e de
       população de `__all__`
-- [ ] **#120** — seam `raw_workspace` (retenção de artefato bronze) — nunca foi entregue
-- [ ] **#150** — cachear download de vendor diário-estável dentro do seam
+- [x] **#120** — seam `raw_workspace` (retenção de artefato bronze)
+- [x] **#150** — cachear download de vendor diário-estável dentro do seam
 
 ## PR D — queries / SQLite (group 4) — ✅ DELIVERED
 
@@ -286,10 +289,54 @@ returns **0** across 13 jobs, so GitHub's 6-hour default applies. Widened by the
 **9 of 9 template workflows** also carry zero `timeout-minutes`, so every scaffolded project
 inherits the same shape. Filed as **#192**, outside this PR.
 
-## PR E — box Windows do Werner (grupo 5)
+## PR E — box Windows do Werner (grupo 5) — ✅ ENTREGUE
 
-- [ ] **#125** — pinar `poetry-plugin-export` no instalador de bootstrap, não só como dev-dep
-- [ ] **#122** — `to_absolute` público em toda passagem para processo externo
+Branch `fix/windows-box-handoffs-125-122`, cortada de `main` @ `3530771`. Verificado nas
+**5 tiers** via `bin/ci/scaffold_lint_test.sh` (unit + integração) e `make lint` na raiz.
+
+- [x] **#125** — a issue pedia pinar o plugin "no instalador de bootstrap"; a premissa tinha
+      **mudado desde que foi escrita**, e verificar isso primeiro trocou a entrega
+      - [x] 🔴 medido: **nenhum recipe dos templates chamava `poetry export`**. O alvo
+            (`export_deps`) foi removido em `14cd52f`, e o `CLAUDE.md` da raiz continuava
+            anunciando `make export_deps` — documentação de um comando inexistente
+      - [x] o dev-dep `poetry-plugin-export` nas 5 tiers era **código morto**: um plugin
+            instalado na `.venv`, onde não mora Poetry nenhum para carregá-lo. Removido — a
+            correção honesta é uma fonte só, não duas
+      - [x] plugin pinado em `requirements.txt` (de onde o `ensure_poetry` instala). Um dev-dep
+            alcança a venv do projeto e nada mais, então o recipe funcionaria de um shell
+            ativado e falharia do cron, da CI e do host offline que ele existe para servir
+      - [x] ⚠️ **a decisão do dono corrigiu meu rumo**: chamar `poetry export` direto estava
+            errado — o `bin/poetry_exec.sh`/`ensure_poetry` já existe justamente para os boxes
+            de acesso restrito. `bin/export_deps.sh` **reusa** essa máquina em vez de repetir a
+            resolução, e a regra da casa ("nunca um `poetry` pelado") sai respeitada de graça
+      - [x] **metade diagnóstica** da lição implementada: a saída do export é **capturada e
+            re-impressa** na falha, e o remédio nomeia `${POETRY_CMD[*]}` — o binário que de
+            fato falhou — nunca um `poetry` pelado. Nunca `>/dev/null 2>&1` num comando cuja
+            falha você depois explica: a explicação vira um chute sobre texto que você se
+            recusou a ler
+      - [x] gate nas **4 superfícies**: `bin/export_deps.sh`, `Makefile`, `tasks.sh`, docs
+            (`python-common/CLAUDE.md` + `bin/CLAUDE.md` + `CLAUDE.md` da raiz)
+- [x] **#122** — `to_absolute` público, chamado nas duas passagens COM do Outlook
+      - [x] `_to_absolute` → `to_absolute`; era privado, então nada podia reusá-lo — que é
+            exatamente por que a lição consta como **RECORRIDA**
+      - [x] os dois hand-offs reais: `Attachments.Add` (envio) e `SaveAsFile` (download).
+            Varredura por `subprocess` nos handlers de DB: **falso alarme** — o `mysqldump`
+            escreve no *nosso* file handle (`stdout=handle`), o caminho nunca sai do processo
+      - [x] os dois mecanismos documentados na docstring, porque só o primeiro é óbvio:
+            CWD-relativo re-ancora no diretório *deles*; e no Windows um valor com forma POSIX
+            é **drive-relativo** (rooted mas sem drive → `is_absolute()` é `False`), então cai
+            no drive de quem lê. Ambos invisíveis a um `exists()`, que roda no **nosso** processo
+      - [x] o mecanismo Windows fica **pinado na CI POSIX** com `PureWindowsPath`, senão é
+            inobservável fora de uma máquina Windows
+- [x] **controle negativo nos dois**, provado por mutação em scaffold real:
+      - revertendo só o hand-off de envio → falha **exatamente**
+        `test_send_email_hands_com_an_absolute_attachment_path` (1 failed, 315 passed)
+      - trocando a captura por `2>/dev/null` → falha **exatamente**
+        `test_export_deps_reprints_what_poetry_said_on_failure` (1 failed, 31 passed)
+      - ⚠️ as duas primeiras tentativas de mutação foram **inválidas**: o lint curto-circuitou
+        antes (`F841` variável órfã, depois `F401` import órfão) e o teste nunca chegou a
+        julgar. Uma mutação precisa produzir o código *pré-fix* de verdade, não um código
+        quebrado de um jeito que outro gate pega primeiro
 
 ---
 
@@ -312,8 +359,8 @@ inherits the same shape. Filed as **#192**, outside this PR.
 - Issues fechadas: **#126, #146, #156, #123, #141, #174**; cards em Done.
 - **#173** comentada: buraco 1 de 3 fechado (`required_conversation_resolution: true`).
 - ⚠️ **Release pendente: v0.15.4.** Nada foi cortado desde a v0.15.3.
-- **Grupos 3–5 não iniciados**: #128/#120/#150 (ingestão), #119 (queries/SQLite),
-  #125/#122 (box Windows).
+- **Grupos 1–5 entregues.** Restam a release e o `make new` do duskko; #192 (hang da CI)
+  segue aberta, fora deste corte.
 
 ### O que a sessão descobriu além do escopo
 

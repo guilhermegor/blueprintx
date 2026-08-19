@@ -5,6 +5,8 @@ import os
 from pathlib import Path, PureWindowsPath
 import time
 
+import pytest
+
 from src.utils.paths import (
 	copy_into,
 	date_tokens,
@@ -12,6 +14,7 @@ from src.utils.paths import (
 	is_windows_path,
 	resolve_input,
 	resolve_path,
+	to_absolute,
 )
 
 
@@ -85,3 +88,31 @@ def test_resolve_input_missing_returns_none(tmp_path: Path) -> None:
 	"""A spec that matches nothing resolves to ``None``."""
 	spec = {"dir": str(tmp_path), "filename_pattern": "absent_*.xlsx"}
 	assert resolve_input(spec, date(2026, 4, 30)) is None
+
+
+def test_to_absolute_relative_path_anchors_to_our_cwd(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""A CWD-relative path is anchored here, so a foreign process cannot re-anchor it."""
+	monkeypatch.chdir(tmp_path)
+	path_out = to_absolute(Path("out/report.xlsx"))
+	assert path_out.is_absolute()
+	assert path_out == (Path.cwd() / "out" / "report.xlsx").resolve()
+
+
+def test_to_absolute_absolute_path_is_returned_unchanged(tmp_path: Path) -> None:
+	"""An already-absolute path is handed off verbatim — no resolve(), no symlink rewrite."""
+	path_in = tmp_path / "report.xlsx"
+	assert to_absolute(path_in) == path_in
+
+
+def test_to_absolute_windows_driveless_path_is_not_absolute() -> None:
+	"""Pin the Windows half on POSIX CI: a POSIX-shaped value is DRIVE-relative there.
+
+	``/home/x/out`` is rooted but carries no drive, so Windows anchors it to whichever drive
+	the reading process sits on — and ``is_absolute()`` reports ``False``, which is exactly
+	the branch that makes :func:`to_absolute` resolve it against ours instead. Without this
+	test the mechanism is unobservable outside a Windows box.
+	"""
+	assert PureWindowsPath("/home/x/out").is_absolute() is False
+	assert PureWindowsPath("C:/home/x/out").is_absolute() is True

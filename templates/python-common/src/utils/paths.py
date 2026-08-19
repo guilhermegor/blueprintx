@@ -238,12 +238,12 @@ def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | Non
 		str_dir = str(spec.get("dir", "")).format(**dict_tokens)
 		str_pattern = str(spec.get("filename_pattern", "*")).format(**dict_tokens)
 		path_match = _latest_match(resolve_path(str_dir), str_pattern)
-		return _to_absolute(path_match) if path_match is not None else None
+		return to_absolute(path_match) if path_match is not None else None
 	str_path = str(spec or "").format(**dict_tokens)
 	if not str_path.strip():
 		return None
 	path_resolved = resolve_path(str_path)
-	return _to_absolute(path_resolved) if path_resolved.exists() else None
+	return to_absolute(path_resolved) if path_resolved.exists() else None
 
 
 @type_checker
@@ -274,24 +274,35 @@ def resolve_input_glob(spec: dict[str, str] | None, dt_ref: date) -> list[Path]:
 	if not path_dir.exists():
 		return []
 	return sorted(
-		_to_absolute(path)
+		to_absolute(path)
 		for path in path_dir.iterdir()
 		if path.is_file() and Path(path.name.casefold()).match(str_pattern)
 	)
 
 
 @type_checker
-def _to_absolute(path_resolved: Path) -> Path:
-	"""Return a resolved input path made absolute so external tools can open it.
+def to_absolute(path_resolved: Path) -> Path:
+	r"""Return a path made absolute so a **foreign process** resolves it the way we do.
 
-	A relative resolved path satisfies Python's CWD-anchored :meth:`~pathlib.Path.exists`, but
-	breaks any consumer that does not share the process working directory. Absolute paths
-	resolve identically everywhere; an already-absolute path is returned unchanged.
+	Call this at every boundary a path leaves this process — attachment argv, a COM
+	``SaveAsFile`` destination, subprocess arguments. It is not an input rule: the recurrences
+	were *outputs*, and both mechanisms are invisible to an :meth:`~pathlib.Path.exists` guard
+	because that guard runs in **our** process.
+
+	**CWD-relative** — a relative path satisfies Python's CWD-anchored ``exists()`` and then
+	breaks any consumer that does not share our working directory.
+
+	**Drive-relative (Windows)** — a POSIX-shaped configured value such as ``/home/x/out``
+	renders ``\\home\\x\\out``: rooted but **driveless**, so ``is_absolute()`` is ``False`` and
+	it anchors to whichever drive the *reading* process sits on. Resolving here anchors it to
+	ours instead, which is the only drive both sides agree on.
+
+	An already-absolute path is returned unchanged.
 
 	Parameters
 	----------
 	path_resolved : pathlib.Path
-		The resolved input path.
+		The path to hand off.
 
 	Returns
 	-------

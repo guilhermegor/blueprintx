@@ -646,3 +646,76 @@ def test_get_corporate_ca_never_disables_tls_verification() -> None:
 	assert "check_hostname" not in str_source
 	# The supported path reads the store the browser already trusts.
 	assert "enum_certificates" in str_source
+
+
+# --------------------------
+# bin/export_deps.sh
+# --------------------------
+
+
+def _stub_poetry(path_dir: Path, str_export_body: str) -> dict[str, str]:
+	"""Put a fake ``poetry`` first on PATH and return the env that selects it.
+
+	``resolve_poetry`` takes the first ``command -v poetry`` hit, so a stub earlier on PATH
+	is how this seam is exercised without a real Poetry install — and without the network.
+
+	Parameters
+	----------
+	path_dir : pathlib.Path
+		Directory the stub is written into (prepended to ``PATH``).
+	str_export_body : str
+		Shell body run for the ``export`` subcommand; ``--version`` always succeeds.
+
+	Returns
+	-------
+	dict of {str: str}
+		Environment overrides placing the stub ahead of any real Poetry.
+	"""
+	path_stub = path_dir / "poetry"
+	path_stub.write_text(
+		"#!/usr/bin/env bash\n"
+		'if [[ "$1" == "--version" ]]; then echo "Poetry (version 2.4.0)"; exit 0; fi\n'
+		'if [[ "$1" == "export" ]]; then\n'
+		f"{str_export_body}\n"
+		"fi\n"
+		"exit 0\n",
+		encoding="utf-8",
+	)
+	path_stub.chmod(0o755)
+	return {"PATH": f"{path_dir}{os.pathsep}{os.environ['PATH']}"}
+
+
+def test_export_deps_writes_the_lock_file(tmp_path: Path) -> None:
+	"""The happy path forwards ``--output`` and reports the artifact it wrote."""
+	path_out = tmp_path / "requirements-lock.txt"
+	dict_env = _stub_poetry(tmp_path, '\tprintf "pandas==2.2.0\\n" >"$5"; exit 0')
+	dict_env["OUTPUT_FILE"] = str(path_out)
+
+	cls_result = _run("export_deps.sh", dict_env=dict_env)
+
+	assert cls_result.returncode == 0
+	assert path_out.read_text(encoding="utf-8") == "pandas==2.2.0\n"
+	assert "requirements-lock.txt" in cls_result.stdout + cls_result.stderr
+
+
+def test_export_deps_reprints_what_poetry_said_on_failure(tmp_path: Path) -> None:
+	"""A failure must surface Poetry's OWN words, never a guess about discarded output.
+
+	The defect this guards is diagnosing a command whose output you threw away: the original
+	handler asserted "the plugin is missing" about text it had sent to /dev/null, and was
+	wrong. The message below is the one only Poetry could have produced.
+	"""
+	dict_env = _stub_poetry(
+		tmp_path, '\techo "The command \\"export\\" does not exist." >&2; exit 1'
+	)
+	dict_env["OUTPUT_FILE"] = str(tmp_path / "requirements-lock.txt")
+
+	cls_result = _run("export_deps.sh", dict_env=dict_env)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0
+	# Poetry's verbatim words survived to the operator.
+	assert 'The command "export" does not exist.' in str_all
+	# ... and the remedy names the RESOLVED binary, not a bare `poetry`.
+	assert "Resolved Poetry:" in str_all
+	assert "self add poetry-plugin-export" in str_all
