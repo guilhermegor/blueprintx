@@ -39,6 +39,7 @@ jobs:
   reconcile:
     name: Close linked issues of merged PRs
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Reconcile
         env:

@@ -23,6 +23,7 @@ jobs:
 
   details:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       new_version: ${{ steps.release.outputs.new_version }}
       suffix: ${{ steps.release.outputs.suffix }}
@@ -63,6 +64,7 @@ jobs:
   check_test_pypi:
     needs: details
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Fetch Information from Test PyPI
         run: |
@@ -90,6 +92,7 @@ jobs:
   setup_and_build:
     needs: [details, check_test_pypi, run_tests]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         python-version: ["3.12.8"]
@@ -181,6 +184,7 @@ jobs:
     name: test_pypi
     needs: setup_and_build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: release-test-pypi
     permissions:

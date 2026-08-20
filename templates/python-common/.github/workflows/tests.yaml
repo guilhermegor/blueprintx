@@ -29,6 +29,7 @@ jobs:
     # reports a colour drawn from a run nobody chose.
     name: Run Automated Tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
@@ -230,7 +231,7 @@ jobs:
           ACTIONLINT_VERSION: "1.7.7"
           ACTIONLINT_SHA256: "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
         run: |
-          sudo apt-get update && sudo apt-get install -y shellcheck
+          command -v shellcheck >/dev/null || { sudo apt-get update && sudo apt-get install -y shellcheck; }
           poetry run pip install shfmt-py >/dev/null 2>&1 || true
           curl -fsSL -o /tmp/actionlint.tar.gz \
             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"

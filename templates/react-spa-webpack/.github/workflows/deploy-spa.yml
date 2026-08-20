@@ -19,6 +19,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       # Repository name → SPA basepath. Safe (slug); env-quoted to satisfy
       # GitHub Actions injection-safety guidelines.

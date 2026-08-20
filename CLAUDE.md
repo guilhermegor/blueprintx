@@ -51,6 +51,11 @@ Two of those exist because a defect can only be seen from *this* side of the cop
   first run found 8 real defects, including `actions/cache@v3` (a version GitHub no longer
   runs) in three tiers. Resolves gracefully when actionlint is absent; CI sets
   `LINT_ACTIONS_REQUIRED=1`, because a skip in CI is a gate reporting its own blindness as OK.
+  It also runs `check_job_timeouts` over the same discovered set — every job with `runs-on:`
+  must carry `timeout-minutes:`. That check needs no external tool, so it deliberately runs
+  **before** the actionlint resolve and never inherits its graceful skip. GitHub's default
+  bound is 6 hours, and an unbounded job that hangs reports `cancelled` — indistinguishable
+  from a human pressing cancel (measured twice in two days, #192).
 
 `bin/ci/scaffold_lint_test.sh <tier>` is the real verification for template work — it scaffolds
 a project and runs **that project's** `make lint`, `make unit_tests` and `make integration_tests`.
