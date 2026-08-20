@@ -23,6 +23,7 @@ jobs:
 
   details:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       new_version: ${{ steps.release.outputs.new_version }}
       suffix: ${{ steps.release.outputs.suffix }}
@@ -62,6 +63,7 @@ jobs:
   check_pypi:
     needs: details
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Fetch Information from PyPI
         run: |
@@ -88,6 +90,7 @@ jobs:
   setup_and_build:
     needs: [details, check_pypi, run_tests]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         python-version: ["3.12.8"]
@@ -182,6 +185,7 @@ jobs:
     name: pypi
     needs: setup_and_build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: release-pypi
     permissions:
@@ -206,6 +210,7 @@ jobs:
     name: Create GitHub Release
     needs: [setup_and_build, details]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       TAG_NAME: ${{ needs.details.outputs.tag_name }}
     permissions:
@@ -250,6 +255,7 @@ jobs:
     needs: [pypi, details]
     if: needs.details.outputs.suffix == ''
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     env:

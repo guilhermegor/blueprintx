@@ -42,6 +42,7 @@ jobs:
     if: github.event_name == 'pull_request'
     name: Classify and gate this PR
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -63,6 +64,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.backfill
     name: Re-evaluate every open PR (policy backfill)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
