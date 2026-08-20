@@ -10,12 +10,12 @@ from typing import Optional
 from urllib.parse import urlparse
 
 try:
-    import mysql.connector as mysql_connector  # type: ignore
+    import mysql.connector as mysql_connector
 except ImportError:  # pragma: no cover - optional dependency
-    mysql_connector = None
+    mysql_connector = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db.infrastructure.helpers import DsnParts, ensure_id
 
 
 class MariaDBDatabaseHandler(DatabaseHandler):
@@ -45,7 +45,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         self.dsn = dsn
         self.table = table
         self.id_field = id_field
-        self.connection_kwargs = self._parse_dsn(dsn)
+        self.connection_kwargs: DsnParts = self._parse_dsn(dsn)
         self.host = self.connection_kwargs.get("host") or "localhost"
         self.port = int(self.connection_kwargs.get("port") or 3306)
         self.user = self.connection_kwargs.get("user") or "root"
@@ -211,7 +211,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
     def _connect(self):
         """Create a mysql-connector connection using the parsed DSN."""
 
-        return mysql_connector.connect(**self.connection_kwargs)  # type: ignore[arg-type]
+        return mysql_connector.connect(**self.connection_kwargs)
 
     def _ensure_table(self) -> None:
         """Create the backing table when it does not exist."""
@@ -228,7 +228,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
             )
             conn.commit()
 
-    def _parse_dsn(self, dsn: str) -> dict[str, object]:
+    def _parse_dsn(self, dsn: str) -> DsnParts:
         """Parse a MariaDB DSN into keyword arguments for mysql-connector."""
 
         parsed = urlparse(dsn)

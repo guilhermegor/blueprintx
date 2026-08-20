@@ -12,10 +12,10 @@ from urllib.parse import urlparse
 try:
     import psycopg
 except ImportError:  # pragma: no cover - optional dependency
-    psycopg = None
+    psycopg = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db.infrastructure.helpers import DsnParts, ensure_id
 
 
 class PostgresDatabaseHandler(DatabaseHandler):
@@ -47,11 +47,15 @@ class PostgresDatabaseHandler(DatabaseHandler):
         parsed = self._parse_dsn(dsn)
         self.host = parsed.get("host") or "localhost"
         self.port = parsed.get("port") or 5432
-        self.user = parsed.get("user") or os.getenv("DB_USER", "user")
-        self.password = parsed.get("password") or os.getenv("DB_PASSWORD", "password")
-        self.dbname = (
-            parsed.get("dbname") or parsed.get("database") or os.getenv("DB_NAME", "app")
-        )
+        # ⚠️ Chain the literal default as its own `or` term rather than passing it to
+        # `os.getenv`. Inside an `or`, mypy resolves getenv's generic `default` against the
+        # LEFT operand's type, so `getenv("DB_USER", "user")` comes back as `str | None`
+        # and every argv built from it becomes a `list[str | None]`. Chaining also fixes a
+        # real behavioural gap: an env var set to the EMPTY string now falls back too,
+        # instead of silently connecting as "".
+        self.user = parsed.get("user") or os.getenv("DB_USER") or "user"
+        self.password = parsed.get("password") or os.getenv("DB_PASSWORD") or "password"
+        self.dbname = parsed.get("database") or os.getenv("DB_NAME") or "app"
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -202,7 +206,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
 
         return psycopg.connect(self.dsn)
 
-    def _parse_dsn(self, dsn: str) -> dict[str, object]:
+    def _parse_dsn(self, dsn: str) -> DsnParts:
         """Parse a PostgreSQL DSN into connection parts for pg_dump."""
 
         parsed = urlparse(dsn)
@@ -211,7 +215,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
             "password": parsed.password,
             "host": parsed.hostname,
             "port": parsed.port,
-            "dbname": (parsed.path.lstrip("/") if parsed.path else None),
+            "database": (parsed.path.lstrip("/") if parsed.path else None),
         }
 
     def _ensure_table(self) -> None:
