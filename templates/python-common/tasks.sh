@@ -168,6 +168,7 @@ lint() {
 	poetry_exec run python bin/check_docstrings.py
 	poetry_exec run python bin/check_layer_imports.py
 	poetry_exec run python bin/check_comment_language.py
+	poetry_exec run python bin/check_function_length.py
 	bash "$SCRIPT_DIR/bin/lint_shell.sh"
 	bash "$SCRIPT_DIR/bin/lint_sql.sh"
 	bash "$SCRIPT_DIR/bin/lint_yaml.sh"
@@ -176,6 +177,11 @@ lint() {
 
 check_docstrings() {
 	poetry_exec run python bin/check_docstrings.py
+}
+
+# Mirrors `make check_function_length`. Makefile and tasks.sh must stay in sync.
+check_function_length() {
+	poetry_exec run python bin/check_function_length.py
 }
 
 check_commit_msg() {
@@ -337,6 +343,7 @@ test_urls_docstrings) test_urls_docstrings ;;
 fix_playwright) fix_playwright ;;
 lint) lint ;;
 check_docstrings) check_docstrings ;;
+check_function_length) check_function_length ;;
 check_commit_msg) check_commit_msg ;;
 install_shell_linters) install_shell_linters ;;
 db_up) db_up ;;

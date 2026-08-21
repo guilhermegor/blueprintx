@@ -206,3 +206,6 @@ pyrightconfig.json
 docs/blueprintx-lessons.md
 # Same convention, dotfiles-dev toolchain half (fixes land in ai_clients/claude/)
 docs/dotfiles-dev-lessons.md
+
+# Cache written by templates/python-common/bin/test_urls_docstrings.sh when run from here.
+.url_check_cache/

@@ -57,6 +57,13 @@ Two of those exist because a defect can only be seen from *this* side of the cop
   bound is 6 hours, and an unbounded job that hangs reports `cancelled` — indistinguishable
   from a human pressing cancel (measured twice in two days, #192).
 
+The **function-length gate** is wired on both sides but has only ONE implementation:
+`templates/python-common/bin/check_function_length.py`, which BlueprintX runs over its own
+tree via `--root .` (pre-commit hook `function-length`, the `function-length` CI job,
+`make check_function_length`, `./tasks.sh check_function_length`) and which every generated
+project runs on itself. A second copy was the obvious shape and is exactly what
+`check_codespell_sync.sh` exists to police, so there is not one.
+
 `bin/ci/scaffold_lint_test.sh <tier>` is the real verification for template work — it scaffolds
 a project and runs **that project's** `make lint`, `make unit_tests` and `make integration_tests`.
 Checking at the template root is a false green: the generated project pins different linter

@@ -146,6 +146,17 @@ repos:
           - python
         pass_filenames: false
 
+      # Cap a function at 60 lines of CODE. Ruff has no per-function line-count rule
+      # (PLR0915 counts statements, a different metric), and the docstring is subtracted
+      # because this project mandates NumPy docstrings — a raw span would measure how well
+      # a function is documented, not how long it is.
+      - id: function-length
+        name: function length (60 lines, docstring excluded)
+        entry: bash bin/poetry_exec.sh run python bin/check_function_length.py
+        language: system
+        files: \.(py|sh)$
+        pass_filenames: false
+
       # A package that declares __all__ must name every public member its submodules define.
       # The usual introspective test DISCOVERS the family through __all__ and therefore cannot
       # see a member missing from it: the sweep just returns one fewer item and passes by not

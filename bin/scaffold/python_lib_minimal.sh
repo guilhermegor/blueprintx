@@ -447,6 +447,8 @@ lib_minimal_copy_project_scaffolding() {
         "$project_path/tests/unit/test_layer_imports_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
+        "$project_path/tests/unit/test_function_length_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
         "$project_path/tests/unit/test_review_threads_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \

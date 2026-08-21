@@ -52,10 +52,15 @@ precommit:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint
+.PHONY: lint check_function_length
 
 lint:
 	@poetry run pre-commit run --all-files
+
+# Also reachable on its own, so a contributor can check the one rule without paying for the
+# whole hook set. `make lint` covers it via the pre-commit hook.
+check_function_length:
+	@python3 templates/python-common/bin/check_function_length.py --root .
 
 # -------------------
 # DOCS

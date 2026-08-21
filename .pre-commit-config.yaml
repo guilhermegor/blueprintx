@@ -94,6 +94,16 @@ repos:
         pass_filenames: false
         files: (^|/)\.github/workflows/.*\.(yml|yaml)$
 
+      - id: function-length
+        name: function length (60 lines, docstring excluded)
+        # Runs templates/python-common/bin/check_function_length.py over THIS repo via
+        # --root, rather than keeping a second copy: bin/ci/check_codespell_sync.sh exists
+        # only because two copies of a shared asset drifted apart.
+        entry: python3 templates/python-common/bin/check_function_length.py --root .
+        language: system
+        pass_filenames: false
+        files: \.(py|sh)$
+
       - id: test-copy-lists
         name: shared test copy lists (scaffolds vs python-common)
         entry: python3 bin/ci/check_test_copy_lists.py

@@ -31,6 +31,20 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  function-length:
+    name: Function length — 60 lines, docstring excluded
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # No dependency and no setup-python step: the gate is stdlib-only ast/re, which is
+      # the whole reason it is a hand-rolled script rather than another linter to install.
+      - name: Check function length across bin/ and templates/
+        run: python3 templates/python-common/bin/check_function_length.py --root .
+
   test-copy-lists:
     name: Shared test copy lists — scaffolds vs python-common
     runs-on: ubuntu-latest

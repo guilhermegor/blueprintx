@@ -20,7 +20,7 @@ from collections.abc import Callable
 import functools
 import logging
 import time
-from typing import TYPE_CHECKING, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
@@ -80,6 +80,84 @@ class LogEmitter(metaclass=TypeChecker):
 
 
 @type_checker
+class _RetryPolicy(NamedTuple):
+	"""The settings one decorated callable retries under.
+
+	Bundled rather than passed as six positional arguments so the retry loop can live at
+	module level — where it is readable and independently testable — instead of inside a
+	closure two levels deep.
+
+	Attributes
+	----------
+	int_max_attempts : int
+		Total attempts, including the first.
+	float_base_wait_s : float
+		Wait before the first retry, in seconds.
+	float_factor : float
+		Growth factor applied to the wait between retries.
+	tuple_exceptions : tuple of type[Exception]
+		The transient exception types that trigger a retry.
+	cls_emitter : LogEmitter
+		Sink each retry warning is written to.
+	str_fn_name : str
+		Name used in the warning; a callable instance may have no ``__name__``.
+	"""
+
+	int_max_attempts: int
+	float_base_wait_s: float
+	float_factor: float
+	tuple_exceptions: tuple[type[Exception], ...]
+	cls_emitter: LogEmitter
+	str_fn_name: str
+
+
+def _call_with_backoff(
+	fn: Callable[..., _R], cls_policy: _RetryPolicy, tuple_args: tuple, dict_kwargs: dict
+) -> _R:
+	"""Call ``fn``, retrying the policy's transient exceptions with exponential backoff.
+
+	Parameters
+	----------
+	fn : Callable
+		The target callable.
+	cls_policy : _RetryPolicy
+		Attempt count, wait growth, retryable types, and the warning sink.
+	tuple_args : tuple
+		Positional arguments forwarded to ``fn``.
+	dict_kwargs : dict
+		Keyword arguments forwarded to ``fn``.
+
+	Returns
+	-------
+	_R
+		``fn``'s return value on the first successful attempt.
+
+	Raises
+	------
+	Exception
+		Re-raises ``fn``'s own exception once the attempts are exhausted. Only the
+		configured transient types are retried; any other exception propagates
+		immediately on the first failure.
+	"""
+	int_attempt = 0
+	while True:
+		int_attempt += 1
+		try:
+			return fn(*tuple_args, **dict_kwargs)
+		except cls_policy.tuple_exceptions as cls_err:
+			if int_attempt >= cls_policy.int_max_attempts:
+				raise
+			float_wait = cls_policy.float_base_wait_s * cls_policy.float_factor ** (
+				int_attempt - 1
+			)
+			cls_policy.cls_emitter.log_message(
+				f"{cls_policy.str_fn_name} failed (attempt {int_attempt}/"
+				f"{cls_policy.int_max_attempts}): {cls_err}. Retrying in {float_wait:.1f}s.",
+				"warning",
+			)
+			time.sleep(float_wait)
+
+
 def retry_with_backoff(
 	int_max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
 	float_base_wait_s: float = _DEFAULT_BASE_WAIT_S,
@@ -138,46 +216,23 @@ def retry_with_backoff(
 			The wrapped callable with the retry/backoff behaviour.
 		"""
 		# A plain function has __name__; a callable instance may not — fall back to its type.
-		str_fn_name = getattr(fn, "__name__", type(fn).__name__)
+		cls_policy = _RetryPolicy(
+			int_max_attempts=int_max_attempts,
+			float_base_wait_s=float_base_wait_s,
+			float_factor=float_factor,
+			tuple_exceptions=tuple_exceptions,
+			cls_emitter=cls_emitter,
+			str_fn_name=getattr(fn, "__name__", type(fn).__name__),
+		)
 
 		@functools.wraps(fn)
 		def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
-			"""Call the wrapped callable, retrying transient failures with backoff.
+			"""Forward the call to :func:`_call_with_backoff` under ``cls_policy``.
 
-			Parameters
-			----------
-			*args : _P.args
-				Positional arguments forwarded to the wrapped callable.
-			**kwargs : _P.kwargs
-				Keyword arguments forwarded to the wrapped callable.
-
-			Returns
-			-------
-			_R
-				The wrapped callable's return value on the first successful attempt.
-
-			Raises
-			------
-			Exception
-				Re-raises the wrapped callable's own exception once the attempts are
-				exhausted (only the configured transient types are retried; any other
-				exception propagates immediately on the first failure).
+			Arguments, return value and raising behaviour are that function's; they are
+			documented there rather than restated here, so the two cannot drift.
 			"""
-			int_attempt = 0
-			while True:
-				int_attempt += 1
-				try:
-					return fn(*args, **kwargs)
-				except tuple_exceptions as cls_err:
-					if int_attempt >= int_max_attempts:
-						raise
-					float_wait = float_base_wait_s * float_factor ** (int_attempt - 1)
-					cls_emitter.log_message(
-						f"{str_fn_name} failed (attempt {int_attempt}/{int_max_attempts}): "
-						f"{cls_err}. Retrying in {float_wait:.1f}s.",
-						"warning",
-					)
-					time.sleep(float_wait)
+			return _call_with_backoff(fn, cls_policy, args, kwargs)
 
 		return wrapper
 

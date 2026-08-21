@@ -151,51 +151,88 @@ def imported_names(cls_node: ast.Import | ast.ImportFrom) -> list[tuple[str, str
     return list_out
 
 
-def find_file_problems(
-    path_file: pathlib.Path, str_layer: str, dict_policy: dict, set_first_party: set[str]
-) -> list[str]:
-    """Return every import-policy violation in one file (never raises).
+def resolve_layer_policy(dict_policy: dict, str_layer: str) -> tuple[dict, dict]:
+    """Return the allow-list and annotation-only map that govern one layer.
+
+    The annotation-only map is layered: a file-wide default, overridden per layer. A layer
+    may narrow a vendor to annotations even where a sibling layer legitimately calls it.
+    Measured: the ORM tier's controller names ``Engine`` only in signatures, while its model
+    genuinely CONSTRUCTS with ``DeclarativeBase``/``mapped_column`` — one global verdict
+    cannot serve both, and the loose one would be the one that survives.
 
     Parameters
     ----------
-    path_file : pathlib.Path
-        The module to check.
-    str_layer : str
-        The layer the file belongs to (its first path component under ``src/``).
     dict_policy : dict
         The parsed ``.layer-policy.yaml``.
-    set_first_party : set of str
-        Top-level package names that belong to this project.
+    str_layer : str
+        The layer being checked.
 
     Returns
     -------
-    list of str
-        Human-readable problems; empty when the file complies.
+    tuple of dict
+        ``(dict_allow, dict_annotation_only)`` for this layer.
     """
-    try:
-        cls_tree = ast.parse(path_file.read_text(encoding="utf-8"))
-    except SyntaxError as cls_exc:
-        return [f"{path_file}: could not parse ({cls_exc})"]
-
-    dict_layers = dict_policy.get("layers", {})
-    dict_layer = dict_layers.get(str_layer) or {}
-    dict_allow = dict_layer.get("allow") or {}
-    # A layer may narrow a vendor to annotations even where a sibling layer legitimately
-    # calls it. Measured: the ORM tier's controller names `Engine` only in signatures, while
-    # its model genuinely CONSTRUCTS with DeclarativeBase/mapped_column — one global verdict
-    # cannot serve both, and the loose one would be the one that survives.
+    dict_layer = (dict_policy.get("layers", {}) or {}).get(str_layer) or {}
     dict_annotation_only = {
         **(dict_policy.get("annotation_only") or {}),
         **(dict_layer.get("annotation_only") or {}),
     }
+    return dict_layer.get("allow") or {}, dict_annotation_only
 
-    set_annotation_ids = annotation_node_ids(cls_tree)
-    list_functions = [
+
+def function_line_spans(cls_tree: ast.AST) -> list:
+    """Return the (first, last) line of every function in the tree.
+
+    Parameters
+    ----------
+    cls_tree : ast.AST
+        The parsed module.
+
+    Returns
+    -------
+    list of tuple
+        One ``(int_first, int_last)`` pair per function, used only to phrase the message —
+        an import deferred into a function is judged exactly like a top-level one.
+    """
+    return [
         (cls_n.lineno, max(getattr(c, "lineno", cls_n.lineno) for c in ast.walk(cls_n)))
         for cls_n in ast.walk(cls_tree)
         if isinstance(cls_n, ast.FunctionDef | ast.AsyncFunctionDef)
     ]
 
+
+def disallowed_import_problems(
+    cls_tree: ast.AST,
+    path_file: pathlib.Path,
+    str_layer: str,
+    dict_allow: dict,
+    dict_annotation_only: dict,
+    set_first_party: set[str],
+) -> tuple[list, dict]:
+    """Report every import this layer may not take, and collect the annotation-only aliases.
+
+    Parameters
+    ----------
+    cls_tree : ast.AST
+        The parsed module.
+    path_file : pathlib.Path
+        The module being checked, for the message.
+    str_layer : str
+        The layer the file belongs to.
+    dict_allow : dict
+        Vendors this layer may import outright.
+    dict_annotation_only : dict
+        Vendors this layer may name in annotations only.
+    set_first_party : set of str
+        Top-level package names that belong to this project.
+
+    Returns
+    -------
+    tuple
+        ``(list_problems, dict_annotation_aliases)`` — the findings, and the local names
+        bound to annotation-only vendors, for the second pass to police.
+    """
+    list_functions = function_line_spans(cls_tree)
     list_problems: list[str] = []
     dict_annotation_aliases: dict[str, str] = {}
     set_reported: set[tuple[int, str]] = set()
@@ -224,6 +261,41 @@ def find_file_problems(
                 f"Reach it through a seam in utils/, or add it to '{str_layer}'.allow in "
                 f"{_POLICY_FILE} with a written reason."
             )
+    return list_problems, dict_annotation_aliases
+
+
+def annotation_only_misuse_problems(
+    cls_tree: ast.AST,
+    path_file: pathlib.Path,
+    str_layer: str,
+    dict_annotation_aliases: dict,
+    dict_annotation_only: dict,
+) -> list:
+    """Report every use of an annotation-only vendor that is not an annotation.
+
+    ``-> pd.DataFrame`` in a signature is the vocabulary the layers share and couples
+    nothing; ``pd.read_sql(...)`` is a call every copied file inherits.
+
+    Parameters
+    ----------
+    cls_tree : ast.AST
+        The parsed module.
+    path_file : pathlib.Path
+        The module being checked, for the message.
+    str_layer : str
+        The layer the file belongs to.
+    dict_annotation_aliases : dict
+        Local name → vendor root, for vendors restricted to annotations.
+    dict_annotation_only : dict
+        Vendor root → the written reason, quoted back in the message.
+
+    Returns
+    -------
+    list of str
+        Human-readable problems; empty when every use is an annotation.
+    """
+    set_annotation_ids = annotation_node_ids(cls_tree)
+    list_problems: list[str] = []
 
     for str_alias, str_root in dict_annotation_aliases.items():
         for cls_node in ast.walk(cls_tree):
@@ -237,6 +309,41 @@ def find_file_problems(
                 f"{dict_annotation_only.get(str_root, '')}"
             )
     return list_problems
+
+
+def find_file_problems(
+    path_file: pathlib.Path, str_layer: str, dict_policy: dict, set_first_party: set[str]
+) -> list[str]:
+    """Return every import-policy violation in one file (never raises).
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The module to check.
+    str_layer : str
+        The layer the file belongs to (its first path component under ``src/``).
+    dict_policy : dict
+        The parsed ``.layer-policy.yaml``.
+    set_first_party : set of str
+        Top-level package names that belong to this project.
+
+    Returns
+    -------
+    list of str
+        Human-readable problems; empty when the file complies.
+    """
+    try:
+        cls_tree = ast.parse(path_file.read_text(encoding="utf-8"))
+    except SyntaxError as cls_exc:
+        return [f"{path_file}: could not parse ({cls_exc})"]
+
+    dict_allow, dict_annotation_only = resolve_layer_policy(dict_policy, str_layer)
+    list_problems, dict_annotation_aliases = disallowed_import_problems(
+        cls_tree, path_file, str_layer, dict_allow, dict_annotation_only, set_first_party
+    )
+    return list_problems + annotation_only_misuse_problems(
+        cls_tree, path_file, str_layer, dict_annotation_aliases, dict_annotation_only
+    )
 
 
 def main() -> int:

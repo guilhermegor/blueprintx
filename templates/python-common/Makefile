@@ -120,7 +120,7 @@ fix_playwright:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint check_docstrings check_commit_msg install_shell_linters
+.PHONY: lint check_docstrings check_function_length check_commit_msg install_shell_linters
 
 # Optional: install shellcheck + shfmt as SYSTEM binaries (choco/scoop/brew/apt).
 # The primary route is pip (shellcheck-py/shfmt-py dev-deps via `poetry install`);
@@ -137,6 +137,7 @@ lint:
 	@$(POETRY) run python bin/check_docstrings.py
 	@$(POETRY) run python bin/check_layer_imports.py
 	@$(POETRY) run python bin/check_comment_language.py
+	@$(POETRY) run python bin/check_function_length.py
 	@bash bin/lint_shell.sh
 	@bash bin/lint_sql.sh
 	@bash bin/lint_yaml.sh
@@ -144,6 +145,11 @@ lint:
 
 check_docstrings:
 	@$(POETRY) run python bin/check_docstrings.py
+
+# Also reachable on its own, so the one rule can be checked without paying for the whole
+# lint set. `make lint` covers it above.
+check_function_length:
+	@$(POETRY) run python bin/check_function_length.py
 
 # Pre-flight a commit message BEFORE `git commit -F <file>`.
 #
