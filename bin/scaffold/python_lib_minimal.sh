@@ -108,104 +108,43 @@ create_python_files() {
     # Public package init. Exposes __version__ (resolved from the installed distribution's
     # metadata), which install_dist_locally's wheel smoke-test asserts. Tab-indented so a fresh
     # scaffold passes `make lint`.
-    cat > "$project_path/src/$PROJECT_NAME/__init__.py" <<EOF
-"""$PROJECT_NAME package."""
-
-from importlib.metadata import PackageNotFoundError, version
-
-
-try:
-	__version__ = version("$PROJECT_NAME")
-except PackageNotFoundError:  # pragma: no cover - source tree without an installed dist
-	__version__ = "0.0.0"
-
-
-__all__ = ["__version__"]
-EOF
+    # ⚠️ PROJECT_NAME must be exported ON THIS COMMAND: envsubst reads the ENVIRONMENT,
+    # not the shell's variables, and PROJECT_NAME is not exported until
+    # lib_minimal_render_pyproject runs later. Without it the substitution silently
+    # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
+    # package that still scaffolds without error. The heredoc this replaced used shell
+    # interpolation, which sees unexported variables; envsubst does not.
+    PROJECT_NAME="$PROJECT_NAME" envsubst '${PROJECT_NAME}' \
+        < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/package__init__.py.tmpl" \
+        > "$project_path/src/$PROJECT_NAME/__init__.py"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/main.py" "$project_path/src/$PROJECT_NAME/main.py"
 
     # Create test file with project name substitution. Tab-indented and fully
     # annotated/docstringed so a freshly scaffolded project passes `make lint`.
     mkdir -p "$project_path/tests/unit"
-    sed "s/\${PROJECT_NAME}/$PROJECT_NAME/g" << 'EOF' > "$project_path/tests/unit/test_main.py"
-"""Unit tests for the library entry point."""
-
-import pytest
-
-from ${PROJECT_NAME}.main import main
-
-
-def test_main(capsys: pytest.CaptureFixture[str]) -> None:
-	"""The entry point prints the placeholder greeting to stdout."""
-	main()
-	captured = capsys.readouterr()
-	assert "Hello from lib-minimal!" in captured.out
-EOF
+    # ⚠️ PROJECT_NAME must be exported ON THIS COMMAND: envsubst reads the ENVIRONMENT,
+    # not the shell's variables, and PROJECT_NAME is not exported until
+    # lib_minimal_render_pyproject runs later. Without it the substitution silently
+    # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
+    # package that still scaffolds without error. The heredoc this replaced used shell
+    # interpolation, which sees unexported variables; envsubst does not.
+    PROJECT_NAME="$PROJECT_NAME" envsubst '${PROJECT_NAME}' \
+        < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_main.py.tmpl" \
+        > "$project_path/tests/unit/test_main.py"
 
     # Smoke-test the runtime type-checking engine in the wheel layout. lib-minimal is the only
     # tier that rewrites the engine's own imports to `<pkg>._internal.utils.typing`; a broken
     # rewrite would fail here and nowhere else, so this guards that path (the full behavioural
     # matrix is covered by the service tiers' test_typing.py).
-    sed "s/\${PROJECT_NAME}/$PROJECT_NAME/g" << 'EOF' > "$project_path/tests/unit/test_typing.py"
-"""Smoke test: the runtime type-checking engine resolves in the wheel layout."""
-
-import pytest
-
-from ${PROJECT_NAME}._internal.utils.typing import TypeChecker, type_checker
-
-
-class _Sample(metaclass=TypeChecker):
-	"""Exercise the metaclass after the ``_internal`` import rewrite."""
-
-	@staticmethod
-	def doubled(x: int) -> int:
-		"""Return ``x`` doubled.
-
-		Parameters
-		----------
-		x : int
-			A number.
-
-		Returns
-		-------
-		int
-			``x * 2``.
-		"""
-		return x * 2
-
-
-def test_engine_imports_and_enforces_after_rewrite() -> None:
-	"""The rewritten engine imports and rejects a wrong-typed argument."""
-	assert _Sample.doubled(5) == 10
-	with pytest.raises(TypeError):
-		_Sample.doubled("five")
-
-
-def test_decorator_rejects_wrong_type() -> None:
-	"""The decorator validates a standalone function's arguments."""
-
-	@type_checker
-	def add(a: int, b: int) -> int:
-		"""Add two ints.
-
-		Parameters
-		----------
-		a : int
-			First addend.
-		b : int
-			Second addend.
-
-		Returns
-		-------
-		int
-			The sum.
-		"""
-		return a + b
-
-	assert add(1, 2) == 3
-	with pytest.raises(TypeError):
-		add(1, "two")
-EOF
+    # ⚠️ PROJECT_NAME must be exported ON THIS COMMAND: envsubst reads the ENVIRONMENT,
+    # not the shell's variables, and PROJECT_NAME is not exported until
+    # lib_minimal_render_pyproject runs later. Without it the substitution silently
+    # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
+    # package that still scaffolds without error. The heredoc this replaced used shell
+    # interpolation, which sees unexported variables; envsubst does not.
+    PROJECT_NAME="$PROJECT_NAME" envsubst '${PROJECT_NAME}' \
+        < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_typing.py.tmpl" \
+        > "$project_path/tests/unit/test_typing.py"
 
     print_status "success" "Python files created"
 }
@@ -377,8 +316,14 @@ copy_templates() {
     print_status "success" "Templates copied and configured"
 }
 
-copy_common_templates() {
+# lib-minimal's own template copy step. It is NOT the four service tiers' shared
+# scaffold_copy_common_templates: this tier renders a different pyproject (PyPI Trove
+# classifier, library.mk) and installs the GitHub assets inline, where the service
+# scaffolds have a separate copy_github_assets. Split by DESTINATION CONCERN, the same
+# way the shared lib is, so a new asset has an obvious home.
+lib_minimal_render_pyproject() {
     local project_path="$1"
+
 
     print_status "info" "Applying common Python templates..."
 
@@ -402,6 +347,10 @@ copy_common_templates() {
         PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME \
         COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE PROJECT_LICENSE_CLASSIFIER
     envsubst < "$BLUEPRINTX_ROOT/templates/lib-minimal/pyproject.toml" > "$project_path/pyproject.toml"
+}
+
+lib_minimal_copy_tooling_configs() {
+    local project_path="$1"
 
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
@@ -426,6 +375,13 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
+}
+
+# GitHub-platform assets only. apply_offline_mode drops all of .github/, so everything
+# here is reachable exactly when the project has a remote.
+lib_minimal_copy_github_assets() {
+    local project_path="$1"
+
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
     # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
     # after the last push is still checked — a push-only trigger goes stale exactly then.
@@ -462,6 +418,11 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+}
+
+lib_minimal_copy_project_scaffolding() {
+    local project_path="$1"
+
     cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
@@ -501,7 +462,16 @@ copy_common_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
     cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.json" "$project_path/.vscode/extensions.json"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
+}
 
+copy_common_templates() {
+    local project_path="$1"
+
+    print_status "info" "Applying common Python templates..."
+    lib_minimal_render_pyproject "$project_path"
+    lib_minimal_copy_tooling_configs "$project_path"
+    lib_minimal_copy_github_assets "$project_path"
+    lib_minimal_copy_project_scaffolding "$project_path"
     print_status "success" "Common templates applied"
 }
 

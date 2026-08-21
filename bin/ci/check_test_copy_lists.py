@@ -68,12 +68,14 @@ DICT_EXPECTED_ABSENT = {
         # startup.py is a service-tier singleton; a library has no import-time bootstrap.
         "test_startup_fragility_order.py": "lib-minimal ships no src/config/startup.py",
         # NOT missing — DELIVERED BY A THIRD MECHANISM this gate does not model: the scaffold
-        # GENERATES it from a heredoc (python_lib_minimal.sh), because the file needs the
-        # package name substituted in and covers a smaller matrix than the service tiers'.
-        # Verified present and running in a real lib-minimal scaffold. Modelling heredoc
-        # generation would mean a third parser for one case; the stale-exclusion check below
-        # will flag this entry the day it becomes an ordinary `cp`.
-        "test_typing.py": "lib-minimal GENERATES it from a heredoc, not a cp",
+        # RENDERS it from templates/lib-minimal/rendered/test_typing.py.tmpl via envsubst,
+        # because the file needs the package name substituted in and covers a smaller matrix
+        # than the service tiers'. (It was a heredoc until blueprintx#189 moved it into a
+        # template file; the mechanism changed, the exclusion did not.) Verified present and
+        # running in a real lib-minimal scaffold. Modelling the render would mean a third
+        # parser for one case; the stale-exclusion check below will flag this entry the day
+        # it becomes an ordinary `cp` from python-common.
+        "test_typing.py": "lib-minimal RENDERS it from a template, not a cp",
         # ⚠️ NOT a clean exclusion — a known gap, recorded honestly rather than hidden.
         # lib-minimal vendors the shared helpers into `<pkg>/_internal/utils/` and rewrites
         # their import prefix, so these tests — written against the service tiers' flat
