@@ -25,12 +25,32 @@ in #191. What remained was whether the debt becomes type-clean code.
 
 - [x] Decided 2026-08-20: **type the handlers**. They are copied into every generated DDD
       project, so "reference scaffolding" is a claim about intent, not about who runs the code.
-- [ ] Root of the majority (8 of 20): the `except ImportError: <driver> = None` fallback,
-      copied across all six handlers — fixing the shape once fixes most of them
-- [ ] Type the DSN parsing and the `pg_dump` / `mysqldump` argv builders (`list[str]`)
-- [ ] Drop `[mypy-chassis.*] ignore_errors` and the `^chassis/` exclude once the tree is clean
-- [ ] Audit the remaining `exclude` entries for the same import-reachability hole
-      (`capabilities/example_feature/` is the obvious next one)
+- [x] Root cause was narrower than the issue assumed: **14** of the 20 (not 8) descend from a
+      single annotation, `_parse_dsn(...) -> dict[str, object]`. One shared `DsnParts`
+      TypedDict in `chassis/db` fixed the DSN parsing, the `env[...]` assignments and the
+      `pg_dump`/`mysqldump` argv builders in one move.
+- [x] The other 6 were bare `# type: ignore` on the optional-driver imports, which silenced
+      the `= None` fallback below them and were then reported as `unused-ignore`. Narrowed to
+      `type: ignore[assignment]`.
+- [x] Dropped `[mypy-chassis.*] ignore_errors` **and** the `^chassis/` exclude — the tree is
+      type-clean, not silenced.
+- [x] Audited the remaining excludes. `^capabilities/example_feature/` was excluded **and
+      checked anyway** (`main.py` and `app/container.py` import it), so it was suppressing
+      discovery of files the import graph pulled straight back in. Dropped it too: 58 → 69
+      checked files, zero new errors.
+- [x] Verified with `bin/ci/scaffold_lint_test.sh` on **all five** Python tiers, since
+      `mypy.ini` is shared: ddd-native 33 → 69, ddd-orm 60, mvc-native 36, mvc-orm 35,
+      lib-minimal 20 — `Success` on every one, 311/316/98 unit + 32 integration per tier.
+
+### Deliberately not done in #190
+
+- **No unit test for `_parse_dsn`.** The DDD tier ships no tests of its own (every test comes
+  from `python-common/tests/`, which runs in MVC and lib tiers where the handler does not
+  exist), so a tier-local test has no copy mechanism today. The runnable check is mypy itself,
+  proven in both directions: 20 errors before, 0 after.
+- **ruff still excludes `src/chassis`.** mypy and ruff no longer agree, which is a real
+  divergence and not drift — filed as **#203** with the measurement to run first, rather than
+  silently widening this PR into a ~1300-line style cleanup.
 
 ## #189 — function-length gate (60 lines, docstring excluded)
 
@@ -54,6 +74,9 @@ here.
 
 - **#201** (open) — a template unit test invokes the real `gh` binary and the live network.
   Surfaced by the `act` verification on the #192 branch; deliberately not bundled into it.
+- **#203** (open) — ruff vs mypy now disagree about `src/chassis`. Surfaced by #190; the
+  `mypy.ini` comment claiming the two lists mirrored each other had become false, so it was
+  corrected rather than left to rot.
 - Lessons captured in the global store: `every-ci-job-needs-a-timeout.md` (updated with the
   implementation numbers and the act-image probe) and
   `unit-tests-must-not-reach-real-binaries.md` (new, backing #201).
