@@ -43,6 +43,57 @@ def _bin_script(str_name: str) -> Path:
 	return Path(__file__).resolve().parents[2] / "bin" / str_name
 
 
+# --------------------------
+# print_status — an unknown status must not look like ordinary output
+# --------------------------
+
+
+def _print_status(str_status: str) -> subprocess.CompletedProcess:
+	"""Source ``bin/lib/common.sh`` and call ``print_status`` with one status.
+
+	Parameters
+	----------
+	str_status : str
+		The status word to pass, valid or not.
+
+	Returns
+	-------
+	subprocess.CompletedProcess
+		The completed ``bash -c`` run, with stdout and stderr captured separately.
+	"""
+	path_lib = Path(__file__).resolve().parents[2] / "bin" / "lib" / "common.sh"
+	str_bash = shutil.which("bash") or "bash"
+	return subprocess.run(  # noqa: S603
+		[str_bash, "-c", f'source "{path_lib}"; print_status {str_status} "probe message"'],
+		capture_output=True,
+		text=True,
+		check=False,
+	)
+
+
+def test_a_known_status_prints_its_marker_on_stdout() -> None:
+	"""A valid status keeps its coloured marker and stays on stdout."""
+	cls_result = _print_status("warning")
+
+	assert "probe message" in cls_result.stdout
+	assert "[!]" in cls_result.stdout
+
+
+def test_an_unknown_status_is_named_on_stderr_not_printed_as_plain_output() -> None:
+	"""A typo'd status must be visibly wrong, not silently downgraded.
+
+	The fallback branch used to print an UNMARKED ``[ ] message`` on stdout, so a
+	misspelled ``warn`` rendered exactly like neutral chatter — 35 such calls existed
+	across the scaffolds, every one a warning nobody could pick out of the log. The
+	branch now routes to stderr and names the offending status.
+	"""
+	cls_result = _print_status("warn")
+
+	assert cls_result.stdout == ""
+	assert "unknown status 'warn'" in cls_result.stderr
+	assert "probe message" in cls_result.stderr
+
+
 def _run(
 	str_script: str,
 	*args: str,

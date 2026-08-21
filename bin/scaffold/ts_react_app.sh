@@ -4,6 +4,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
+# shellcheck source=bin/lib/scaffold_git_remote.sh
+source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -448,68 +450,9 @@ initialize_git_repo() {
 }
 
 prompt_git_remote_setup() {
-    local project_path="$1"
-
-    print_status "info" "Optional: add a remote origin / create a GitHub repo (the local repo is already initialized)"
-    read -r -p "Add remote origin and (optionally) create the GitHub repo now? [y/N]: " answer || true
-
-    case "$answer" in
-        y|Y)
-            push_done=0
-            (
-                cd "$project_path"
-                if git remote get-url origin >/dev/null 2>&1; then
-                    print_status "warning" "Remote 'origin' already exists; skipped add"
-                else
-                    git remote add origin "git@github.com:${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}.git" || true
-                fi
-            )
-            if command -v gh >/dev/null 2>&1; then
-                read -r -p "Create GitHub repo ${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME} and push now? [y/N]: " create_ans || true
-                case "$create_ans" in
-                    y|Y)
-                        local vis_choice vis_flag repo_slug
-                        read -r -p "Visibility [1] Public (default)  [2] Private: " vis_choice || true
-                        vis_flag="--public"
-                        [ "$vis_choice" = "2" ] && vis_flag="--private"
-                        repo_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
-                        (
-                            cd "$project_path"
-                            if gh repo create "$repo_slug" --source . --remote origin --push --description "$PROJECT_DESCRIPTION" "$vis_flag"; then
-                                push_done=1
-                                gh repo edit "$repo_slug" --default-branch main >/dev/null 2>&1 || true
-                                print_status "success" "Repository created and pushed via gh."
-                            else
-                                print_status "warning" "gh repo create failed; check authentication or if the repo already exists."
-                                print_status "info" "Manual fallback: create the repo on GitHub and run 'git push -u origin main'."
-                            fi
-                        )
-                        ;;
-                    *) print_status "info" "Skipped GitHub repo creation/push" ;;
-                esac
-            else
-                print_status "info" "gh CLI not found; to publish run: git push -u origin main (ensure repo exists on GitHub)."
-            fi
-            if [ "$push_done" -eq 0 ]; then
-                if git -C "$project_path" remote get-url origin >/dev/null 2>&1; then
-                    if git -C "$project_path" push -u origin main >/dev/null 2>&1; then
-                        print_status "success" "Pushed to origin/main."
-                    else
-                        print_status "warning" "Push to origin/main failed; create the repo on GitHub and retry 'git push -u origin main'."
-                    fi
-                else
-                    print_status "warning" "Remote 'origin' missing; cannot push. Create repo and run 'git push -u origin main'."
-                fi
-            fi
-            print_status "success" "Git repo initialized."
-            ;;
-        *)
-            print_status "info" "Skipped remote setup"
-            ;;
-    esac
-
-    apply_branch_protection "$project_path"
-    prompt_pages_setup
+	scaffold_prompt_git_remote_setup "$1"
+	apply_branch_protection "$1"
+	prompt_pages_setup
 }
 
 apply_offline_mode() {

@@ -300,7 +300,7 @@ def scaffold_source_text(path_scaffold: pathlib.Path) -> str:
     A copy list is "reachable from this scaffold" whether the ``cp`` line sits in the
     scaffold itself or in a lib the scaffold sources — the generated project is identical
     either way. Reading only the scaffold was correct while every list was inline; the
-    moment ``copy_common_templates`` moved into ``bin/lib/scaffold_common.sh`` it would
+    moment ``copy_common_templates`` moved into ``bin/lib/scaffold_python_templates.sh`` it would
     have made this gate report every shared test as missing from four tiers.
 
     ⚠️ The failure would have been loud, which is luck rather than design. The dangerous
