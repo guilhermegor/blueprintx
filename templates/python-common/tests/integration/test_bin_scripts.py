@@ -422,8 +422,13 @@ def test_corporate_ca_bundle_is_a_union_not_a_replacement(tmp_path: Path) -> Non
 	"""
 	path_bin = tmp_path / "bin"
 	(path_bin / "lib").mkdir(parents=True)
-	for path_lib in (Path(__file__).resolve().parents[2] / "bin" / "lib").glob("*.sh"):
-		shutil.copy(path_lib, path_bin / "lib" / path_lib.name)
+	# ⚠️ *.sh AND *.py. bin/lib/ holds shell libs plus the Python helpers they invoke
+	# (ca_bundle.py, pip_requirements.py) — code that used to be inline heredocs. A glob
+	# of only "*.sh" builds a lib directory that cannot exist in a real project, and the
+	# test then fails on the missing file rather than on the behaviour it asserts.
+	for str_pattern in ("*.sh", "*.py"):
+		for path_lib in (Path(__file__).resolve().parents[2] / "bin" / "lib").glob(str_pattern):
+			shutil.copy(path_lib, path_bin / "lib" / path_lib.name)
 
 	path_corporate = path_bin / "corporate_ca.pem"
 	path_corporate.write_text(_fake_pem("Q09SUE9SQVRFQ0E="), encoding="utf-8")
@@ -468,8 +473,13 @@ def test_bundle_construction_refuses_when_only_the_corporate_ca_is_available(
 	"""
 	path_bin = tmp_path / "bin"
 	(path_bin / "lib").mkdir(parents=True)
-	for path_lib in (Path(__file__).resolve().parents[2] / "bin" / "lib").glob("*.sh"):
-		shutil.copy(path_lib, path_bin / "lib" / path_lib.name)
+	# ⚠️ *.sh AND *.py. bin/lib/ holds shell libs plus the Python helpers they invoke
+	# (ca_bundle.py, pip_requirements.py) — code that used to be inline heredocs. A glob
+	# of only "*.sh" builds a lib directory that cannot exist in a real project, and the
+	# test then fails on the missing file rather than on the behaviour it asserts.
+	for str_pattern in ("*.sh", "*.py"):
+		for path_lib in (Path(__file__).resolve().parents[2] / "bin" / "lib").glob(str_pattern):
+			shutil.copy(path_lib, path_bin / "lib" / path_lib.name)
 	path_corporate = path_bin / "corporate_ca.pem"
 	path_corporate.write_text(_fake_pem("Q09SUE9SQVRFQ0E="), encoding="utf-8")
 

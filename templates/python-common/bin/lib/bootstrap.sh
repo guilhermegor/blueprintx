@@ -183,72 +183,13 @@ build_union_ca_bundle() {
 	CA_BUNDLE_PEM="$BIN_DIR/ca_bundle.pem"
 	export CA_BUNDLE_PEM
 
-	BX_CA_CORPORATE="$str_cert" BX_CA_OUT="$CA_BUNDLE_PEM" "$PYTHON" - <<'PYEOF'
-import os
-import pathlib
-import re
-import sys
-
-path_out = pathlib.Path(os.environ["BX_CA_OUT"])
-list_sources = [os.environ["BX_CA_CORPORATE"]]
-
-# Whatever the host already trusts, in the order tools consult it. A corporate image often
-# provisions one of these; replacing it is how a working box stops working.
-for str_var in ("PIP_CERT", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA_BUNDLE"):
-    str_existing = os.environ.get(str_var, "")
-    # Skip a bundle we generated ourselves on a previous run, or the union would grow forever.
-    if str_existing and pathlib.Path(str_existing) != path_out:
-        list_sources.append(str_existing)
-
-try:
-    import certifi
-
-    list_sources.append(certifi.where())
-except ModuleNotFoundError:
-    print("certifi not importable — union built without it", file=sys.stderr)
-
-re_pem = re.compile(
-    r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.DOTALL
-)
-list_seen: list[str] = []
-set_bodies: set[str] = set()
-int_non_corporate = 0
-
-for int_index, str_source in enumerate(list_sources):
-    path_source = pathlib.Path(str_source)
-    if not path_source.is_file():
-        continue
-    for str_block in re_pem.findall(path_source.read_text(encoding="utf-8", errors="replace")):
-        # Dedupe on the base64 body, never on the BEGIN line every certificate shares.
-        str_body = "".join(str_block.split())
-        if str_body not in set_bodies:
-            set_bodies.add(str_body)
-            list_seen.append(str_block)
-            # Index 0 is the corporate CA; everything after it is pre-existing trust.
-            if int_index > 0:
-                int_non_corporate += 1
-
-if not list_seen:
-    print("No certificates found for the union bundle", file=sys.stderr)
-    sys.exit(1)
-
-# A "union" of exactly one source is a REPLACEMENT wearing the word union. If certifi is
-# unimportable AND the host set no bundle, writing this file would narrow the trust store to
-# the corporate CA alone — the precise defect this function was written to remove, arrived at
-# from the other direction. Fail instead, so wire_corporate_ca leaves TLS untouched.
-if int_non_corporate == 0:
-    print(
-        "Refusing to write a CA bundle containing ONLY the corporate certificate: that "
-        "narrows the trust store instead of widening it. Install certifi (pip install "
-        "certifi) or point PIP_CERT/REQUESTS_CA_BUNDLE at the host's CA bundle, then retry.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-path_out.parent.mkdir(parents=True, exist_ok=True)
-path_out.write_text("\n".join(list_seen) + "\n", encoding="utf-8")
-print(len(list_seen))
-PYEOF
+	# The union logic lives in ca_bundle.py next to this file. It was a ~66-line
+	# `"$PYTHON" - <<'PYEOF'` heredoc here — security-relevant code that ruff never linted
+	# and mypy never checked, because no Python tool can see inside a shell string. The
+	# interface is unchanged: BX_CA_CORPORATE and BX_CA_OUT in, certificate count out,
+	# non-zero exit when the union would narrow the trust store instead of widening it.
+	BX_CA_CORPORATE="$str_cert" BX_CA_OUT="$CA_BUNDLE_PEM" \
+		"$PYTHON" "$(dirname "${BASH_SOURCE[0]}")/ca_bundle.py"
 }
 
 # ── wire_corporate_ca ─────────────────────────────────────────────────────────

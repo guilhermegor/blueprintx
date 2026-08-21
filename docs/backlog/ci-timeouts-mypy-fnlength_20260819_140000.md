@@ -56,13 +56,43 @@ in #191. What remained was whether the debt becomes type-clean code.
 
 - [x] Decided 2026-08-20: **route 2** — Python and shell in the same PR, including the
       `copy_common_templates` duplication across the 5 scaffolds
-- [ ] `bin/check_function_length.py` on `ast` (Ruff has no per-function line-count rule;
-      `PLR0915` counts statements, a different metric)
-- [ ] Wire into all 4 surfaces on both sides (pre-commit, CI, `Makefile`, `tasks.sh`)
-- [ ] Fail when discovery matches zero files; print the count on success
-- [ ] Negative control + an entry in the 5 hand-maintained copy lists
-- [ ] Refactor the ~13 shell functions over the ceiling, largest first
-      (`pip_fallback_emit_pip_requirements_from_pyproject` at 155 lines)
+- [x] `bin/check_function_length.py` on `ast`. Reproduces the issue's three Python numbers
+      exactly (69/68/65), which is the agreement that pins the metric per #167. Shell is
+      measured at the same single ceiling, exactly rather than heuristically, because
+      `shfmt` guarantees the `name() {` / column-0 `}` shape.
+- [x] Fails on zero discovery; prints the file count on success.
+- [x] `--root`, so BlueprintX runs the template's file over its own tree instead of keeping
+      a second copy that would drift.
+- [x] The real count is **21**, not the ~13 in the issue — and 11 of those were two
+      duplicated families.
+- [x] `copy_common_templates` ×4: the copies differed by **one token**. Now one lib split by
+      destination concern. 380 lines → 24. Proven byte-identical against `origin/main`.
+- [x] `prompt_git_remote_setup` ×6: 391 lines → 35, and it surfaced two real defects
+      (see below).
+- [ ] Remaining 11 over the ceiling: `copy_common_templates` in lib-minimal (127),
+      `prompt_pages_setup` in ts_react_app (73), and 9 in python-common
+      (`pip_fallback` 155, `process_python_files` 74, `build_union_ca_bundle` 73,
+      `retry_with_backoff` 69, `find_file_problems` 68, `main` 65, `show_help` 65,
+      `check_url` 63)
+- [ ] Wire into all 4 surfaces on both sides (pre-commit, CI, `Makefile`, `tasks.sh`) —
+      deliberately last: a gate that ships red is a gate someone disables
+- [ ] Negative control + an entry in the copy lists
+
+### Defects the dedupe surfaced (fixed here)
+
+- **35 `print_status "warn"` calls** across the 5 Python scaffolds. The function accepts
+  `warning`; `warn` fell through to the catch-all and printed an unmarked `[ ] message` —
+  every one of them a warning that rendered exactly like ordinary output. The catch-all now
+  names the bad status on stderr, so the next typo cannot hide the same way.
+- **`push_done=1` inside a `( … )` subshell**, so the flag never reached the parent and the
+  follow-up push always ran, in six scaffolds. ShellCheck had reported it all along as
+  SC2030/SC2031 — at `info`, below the gate's `--severity=warning` floor. `check_shell.sh`
+  now runs a second pass for exactly those two codes.
+- **My own gate change broke `check_test_copy_lists.py` in the dangerous direction.** Making
+  it follow `source` was necessary, but with one shared lib it over-reported reachability:
+  lib-minimal sources the git-remote half without calling the Python copy functions, so four
+  shared tests were claimed to reach a tier that never copies them. Fixed by splitting the
+  lib in two so `source` means what the gate assumes.
 
 ## Note
 
@@ -74,6 +104,8 @@ here.
 
 - **#201** (open) — a template unit test invokes the real `gh` binary and the live network.
   Surfaced by the `act` verification on the #192 branch; deliberately not bundled into it.
+- **#205** (open) — `cp -r` ships `templates/**/__pycache__` into generated projects.
+  Found by the before/after tree diff used to prove the #189 dedupe changed nothing.
 - **#203** (open) — ruff vs mypy now disagree about `src/chassis`. Surfaced by #190; the
   `mypy.ini` comment claiming the two lists mirrored each other had become false, so it was
   corrected rather than left to rot.
