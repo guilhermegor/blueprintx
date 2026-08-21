@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Optional
 
 try:
-    import oracledb  # type: ignore
+    import oracledb
 except ImportError:  # pragma: no cover - optional dependency
-    oracledb = None
+    oracledb = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id

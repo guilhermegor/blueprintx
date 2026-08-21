@@ -10,12 +10,12 @@ from typing import Optional
 from urllib.parse import urlparse
 
 try:
-    import mysql.connector as mysql_connector  # type: ignore
+    import mysql.connector as mysql_connector
 except ImportError:  # pragma: no cover - optional dependency
-    mysql_connector = None
+    mysql_connector = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db.infrastructure.helpers import DsnParts, ensure_id
 
 
 class MySQLDatabaseHandler(DatabaseHandler):
@@ -46,7 +46,7 @@ class MySQLDatabaseHandler(DatabaseHandler):
         self.table = table
         self.id_field = id_field
         parsed = self._parse_dsn(dsn)
-        self.connection_kwargs = {
+        self.connection_kwargs: DsnParts = {
             "user": parsed.get("user"),
             "password": parsed.get("password"),
             "host": parsed.get("host", "localhost"),
@@ -57,7 +57,7 @@ class MySQLDatabaseHandler(DatabaseHandler):
         self.port = int(self.connection_kwargs["port"] or 3306)
         self.user = self.connection_kwargs["user"] or "root"
         self.password = self.connection_kwargs["password"] or ""
-        self.dbname = self.connection_kwargs["database"] or parsed.get("database") or "app"
+        self.dbname = self.connection_kwargs["database"] or "app"
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -197,7 +197,7 @@ class MySQLDatabaseHandler(DatabaseHandler):
     def _connect(self):
         """Create a mysql-connector connection using the parsed DSN."""
 
-        return mysql_connector.connect(**self.connection_kwargs)  # type: ignore[arg-type]
+        return mysql_connector.connect(**self.connection_kwargs)
 
     def _ensure_table(self) -> None:
         """Create the backing table when it does not exist."""
@@ -214,7 +214,7 @@ class MySQLDatabaseHandler(DatabaseHandler):
             )
             conn.commit()
 
-    def _parse_dsn(self, dsn: str) -> dict[str, object]:
+    def _parse_dsn(self, dsn: str) -> DsnParts:
         """Parse a MySQL DSN into keyword arguments for mysql-connector."""
 
         parsed = urlparse(dsn)

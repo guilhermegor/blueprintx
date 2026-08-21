@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 try:
-    import pyodbc  # type: ignore
+    import pyodbc
 except ImportError:  # pragma: no cover - optional dependency
     pyodbc = None
 
