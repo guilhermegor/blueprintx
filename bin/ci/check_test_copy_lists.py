@@ -294,6 +294,38 @@ def asset_problems(
     return list_problems
 
 
+def scaffold_source_text(path_scaffold: pathlib.Path) -> str:
+    """Return a scaffold's text joined with every ``bin/lib`` script it sources.
+
+    A copy list is "reachable from this scaffold" whether the ``cp`` line sits in the
+    scaffold itself or in a lib the scaffold sources — the generated project is identical
+    either way. Reading only the scaffold was correct while every list was inline; the
+    moment ``copy_common_templates`` moved into ``bin/lib/scaffold_common.sh`` it would
+    have made this gate report every shared test as missing from four tiers.
+
+    ⚠️ The failure would have been loud, which is luck rather than design. The dangerous
+    version of this is the mirror image: a gate that reads too NARROW a source and finds
+    nothing to complain about. Keep the union honest whenever a copy list moves.
+
+    Parameters
+    ----------
+    path_scaffold : pathlib.Path
+        A ``bin/scaffold/python_*.sh`` script.
+
+    Returns
+    -------
+    str
+        The scaffold's own text, followed by the text of each lib it sources.
+    """
+    str_source = path_scaffold.read_text(encoding="utf-8")
+    list_parts = [str_source]
+    for str_lib in re.findall(r'source\s+"\$SCRIPT_DIR/\.\./lib/([A-Za-z0-9_]+\.sh)"', str_source):
+        path_lib = _ROOT / "bin/lib" / str_lib
+        if path_lib.is_file():
+            list_parts.append(path_lib.read_text(encoding="utf-8"))
+    return "\n".join(list_parts)
+
+
 def scaffold_problems(path_scaffold: pathlib.Path, set_shared: set, set_workflows: set) -> list:
     """Return every copy-list problem for one scaffold, across both asset classes.
 
@@ -311,7 +343,7 @@ def scaffold_problems(path_scaffold: pathlib.Path, set_shared: set, set_workflow
     list of str
         One message per problem, tests first.
     """
-    str_source = path_scaffold.read_text(encoding="utf-8")
+    str_source = scaffold_source_text(path_scaffold)
 
     return asset_problems(
         path_scaffold,
