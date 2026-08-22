@@ -31,10 +31,13 @@ PR, the trigger alone is a nicety nobody notices failing.
 - [x] Posts via `secrets.GH_PAT_REVIEW_TRIGGER`, **never** `GITHUB_TOKEN`
 - [x] **Fails, never skips, when the PAT is absent** — a `continue-on-error` would recreate
       the exact silent no-op being fixed. Fork PRs land here too, correctly.
-- [ ] ⚠️ **Manual step, owner only:** create the PAT (fine-grained, this repo,
+- [x] ⚠️ **Manual step, owner only:** create the PAT (fine-grained, this repo,
       `Pull requests: Read and write`) and
       `gh secret set GH_PAT_REVIEW_TRIGGER --repo guilhermegor/blueprintx --body '<pat>'`.
       Until then the job is red on every PR — which is the honest reading.
+      **Done 2026-08-22 16:36Z.** Verified, not assumed: `gh secret list` shows
+      `GH_PAT_REVIEW_TRIGGER` and no longer shows `CODERABBIT_TRIGGER_PAT` (the dead
+      CodeRabbit key was deleted), and the last 7 *CodeRabbit Trigger* runs are green.
 
 ## Half B — the gate (#208)
 
@@ -77,6 +80,11 @@ submit a review. The behaviour is right (any roster member satisfies it), but th
 a reviewer that structurally cannot. Fixing it means `load_roster` exposing the `posts` field,
 which changes its signature and its tests — worth doing, not worth folding into this PR.
 
+→ **Filed as #218**, and it is worse than cosmetic: `set_reported` intersects the review
+authors with the WHOLE roster, so a review submitted by `github-actions[bot]` (which
+`GITHUB_TOKEN` can do) would satisfy a gate whose entire point is "a real reviewer looked at
+this". Same class of hole #208 closed.
+
 ## The secret's NAME was a defect (2026-08-22, found by it biting)
 
 - [x] Renamed `CODERABBIT_TRIGGER_PAT` → **`GH_PAT_REVIEW_TRIGGER`**. The old name reads as
@@ -93,18 +101,32 @@ which changes its signature and its tests — worth doing, not worth folding int
 - [x] The shape check that caught this stays: `token class: UNRECOGNISED prefix` turned a mute
       401 into the answer in one run, after two rounds of guessing.
 
-⚠️ **The old secret is still stored under the old name and holds a CodeRabbit key.** Delete it
-rather than leaving a dead credential: `gh secret delete CODERABBIT_TRIGGER_PAT`.
+- [x] ⚠️ The old secret held a CodeRabbit key under the old name. **Deleted 2026-08-22** —
+      `gh secret list` no longer returns `CODERABBIT_TRIGGER_PAT`.
 
 ## Not done here, deliberately
 
-- **The gate is not yet a required check.** It ships enforcing, but adding it to
-  `required_status_checks` before the PAT exists would block every PR on a secret that is
-  not there. Sequence: set the secret → confirm one PR auto-triggers → then require it.
+- **~~The gate is not yet a required check.~~ It already was — this line was wrong when
+  written.** Corrected 2026-08-22 against the live API, not recall: `Review threads answered`
+  has been in `main`'s `required_status_checks` since #173 (2026-08-17), and
+  `templates/python-common/bin/enable_repo_rules.sh:76` declares it as
+  `REQUIRED_CHECKS`. What #208 changed is what that already-required job fails on — so the
+  merge block for a never-reviewed PR went live the moment #216 merged. No follow-up action.
+  ⚠️ The *trigger* job (`Ask CodeRabbit for a review`) is deliberately **not** required and
+  should not become one: it is an actuator, not a verdict. The gate already fails when no
+  review arrives, whatever the reason; requiring the trigger too would paint one cause red
+  twice, and the workflow's own concurrency comment states the split.
 - **Two copies of `check_review_threads.py` remain** (repo + template), already drifted in
   comments before this change. That is the shape `check_codespell_sync.sh` exists to police
   and the `--root` treatment #189 gave the function-length gate. Worth its own issue; folding
-  it in here would bury the gate change.
+  it in here would bury the gate change. → **filed as #217** (measured: 524 lines each,
+  identical but for one 5-line comment block).
 - **Template propagation of the trigger workflow.** Every scaffolded repo starts at 0 stars,
   so it has this problem by construction. Related to #129, which owns `.coderabbit.yaml`
-  but not the auto-trigger question.
+  but not the auto-trigger question. **Still open** — deliberately left with #129 rather than
+  split into a third ticket.
+
+## Completed 2026-08-22 — kept as a record
+
+Every box is ticked. The two deferred follow-ups are tracked as **#217** and **#218**; the
+template-propagation question stays with **#129**.

@@ -81,7 +81,12 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
 - [x] Cards do kanban corrigidos — o hook so move o card da issue que originou a branch, e eu
       bundlei 8 numa branch so.
 - [ ] **#173** aplicar o PR gate ao proprio BlueprintX (`required_conversation_resolution`,
-      checks obrigatorios, GitGuardian) — medido: nada bloqueia merge hoje.
+      checks obrigatorios, GitGuardian) — ~~medido: nada bloqueia merge hoje~~ **desatualizado.**
+      Medido na API em 2026-08-22: `required_conversation_resolution=true` e **15** required
+      status checks em `main` (threads, spell, shellcheck, actionlint, mkdocs, version sync,
+      meta, copy-lists e os 7 jobs de scaffold+lint+test). Falta **so o GitGuardian**
+      (#153/#155) e ver o merge recusado numa PR viva — ver
+      `pr-gate-blocks-merge_20260817_104500.md`.
 
 ## Aberto durante a sessao (fora do Tier A, registrado para depois)
 

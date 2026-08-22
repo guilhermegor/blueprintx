@@ -74,6 +74,17 @@ Cada metade fica com quem consegue reavaliá-la.
 
 ### Pendente
 
-- [ ] decidir com o dono se o conjunto obrigatório cresce além do check de threads
+- [x] decidir com o dono se o conjunto obrigatório cresce além do check de threads
       (candidatos: `Scaffold + lint + test — *`, `Spell check`, `ShellCheck`, `MkDocs build`)
-- [ ] provar o bloqueio numa PR real antes de fechar a #173
+      — **decidido e aplicado.** Medido na API em 2026-08-22: `main` exige **15** contexts,
+      todos os candidatos incluídos, mais `actionlint — workflows (repo + templates)`,
+      `Version sync — pyproject vs CLI`, `Validate skeleton.meta integrity`,
+      `Shared test copy lists — scaffolds vs python-common` e os dois jobs multi-intent.
+      ⚠️ `strict` segue `false` (não exige branch atualizada antes do merge) e
+      `required_approving_review_count` é **0** — o bloqueio vem dos checks, não de aprovação
+      humana. `required_conversation_resolution` está `true`.
+- [ ] provar o bloqueio numa PR real antes de fechar a #173 — **parcial.** O que está provado
+      (#208): o script sai 1 nas PRs #204/#213 e 0 na #209, e o job que o roda já é
+      obrigatório desde esta sessão. O que **não** está provado é o botão de merge recusando
+      numa PR viva — as duas coisas foram medidas separadamente e a composição delas nunca
+      foi observada. Fechar a #173 só depois de ver o merge recusado de fato.
