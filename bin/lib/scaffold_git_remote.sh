@@ -35,15 +35,93 @@
 # Set by the caller before scaffold_prompt_git_remote_setup; empty means no --homepage.
 : "${SCAFFOLD_REPO_HOMEPAGE:=}"
 
+# Set BY this lib, read by the caller's `main`: 1 only once `origin` has been verified to be
+# the repository this scaffold names.
+#
+# ⚠️ A RETURN VALUE IS NOT ENOUGH, because `main` asks its question much later and asks it of
+# git, not of us. Every tier selects online mode with `rev-parse @{u}` — "is there an upstream
+# tracking branch?" — which is TRUE for a pre-existing clone whose origin points at someone
+# else's repository. So a mismatch could be refused here, swallowed by the caller's `|| true`,
+# and the scaffold would still take the online path and push the generated assets there.
+# Raised by review on #215; the `|| true` alone was not the fix it looked like.
+SCAFFOLD_REMOTE_VERIFIED=0
+
+scaffold_repo_slug() {
+	printf '%s' "${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
+}
+
+scaffold_remote_slug() {
+	# Reduce a GitHub remote URL to its `owner/repo`, so ssh, scp-style and https
+	# spellings of the SAME repository compare equal. Anything else returns unchanged
+	# and therefore never equals a slug.
+	#
+	# ⚠️ THE HOST MUST BE MATCHED AS A HOST, NOT AS A SUBSTRING. The first version of
+	# this matched `*github.com[:/]*` and cut at the LAST occurrence, so
+	# `https://evil.example/github.com/octocat/widget.git` reduced to `octocat/widget`
+	# and the guard accepted a remote pointing at an arbitrary host — defeating the
+	# whole check for exactly the crafted input it exists to stop. Measured, not
+	# theorised. Raised by review on #215.
+	local str_url="${1%.git}"
+	local str_rest
+	str_url="${str_url%/}"
+
+	case "$str_url" in
+	# scp-style: [user@]github.com:owner/repo
+	*@github.com:*) str_rest="${str_url##*@github.com:}" ;;
+	github.com:*) str_rest="${str_url#github.com:}" ;;
+	# URL forms: <scheme>://[user[:password]@]github.com/owner/repo
+	*://*)
+		str_rest="${str_url#*://}"
+		str_rest="${str_rest#*@}"
+		case "$str_rest" in
+		# Anchored: `github.com.evil.com/...` and `evil.example/github.com/...` both miss.
+		github.com/*) str_rest="${str_rest#github.com/}" ;;
+		*) str_rest="$str_url" ;;
+		esac
+		;;
+	*) str_rest="$str_url" ;;
+	esac
+	printf '%s' "$str_rest"
+}
+
 scaffold_add_git_remote() {
+	# Returns non-zero when `origin` exists but points somewhere other than the
+	# repository this scaffold was told to create.
+	#
+	# ⚠️ The verification is the point (#212). This used to treat "origin exists" as
+	# "nothing to do" and move on — after which `gh repo create --push`, the follow-up
+	# push, and branch protection all operated against whatever that remote happened to
+	# be. Scaffolding into an existing clone therefore wrote to someone else's
+	# repository. Low likelihood, and the highest-consequence operations in this file.
 	local str_project_path="$1"
+	local str_slug str_url
+	local -a list_urls=()
+	str_slug="$(scaffold_repo_slug)"
 
 	if git -C "$str_project_path" remote get-url origin >/dev/null 2>&1; then
-		print_status "warning" "Remote 'origin' already exists; skipped add"
+		# ⚠️ EVERY url, fetch AND push. `remote.origin.pushurl` may differ from the fetch
+		# URL, so checking only `get-url origin` lets a remote that FETCHES from the right
+		# repository PUSH the generated project somewhere else — and pushing is the whole
+		# risk here. `--all` also covers a remote with several configured URLs.
+		mapfile -t list_urls < <(
+			git -C "$str_project_path" remote get-url --all origin 2>/dev/null
+			git -C "$str_project_path" remote get-url --push --all origin 2>/dev/null
+		)
+		for str_url in "${list_urls[@]}"; do
+			if [ "$(scaffold_remote_slug "$str_url")" != "$str_slug" ]; then
+				print_status "error" \
+					"Remote 'origin' points at a different repository — refusing to continue."
+				print_status "info" "  configured: ${str_url}"
+				print_status "info" "  expected:   git@github.com:${str_slug}.git"
+				print_status "info" \
+					"Remove or retarget 'origin' yourself, then re-run — never guessing which you meant."
+				return 1
+			fi
+		done
+		print_status "info" "Remote 'origin' already points at ${str_slug}"
 		return 0
 	fi
-	git -C "$str_project_path" remote add origin \
-		"git@github.com:${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}.git" || true
+	git -C "$str_project_path" remote add origin "git@github.com:${str_slug}.git"
 }
 
 scaffold_create_github_repo() {
@@ -56,8 +134,8 @@ scaffold_create_github_repo() {
 	# so nobody ever saw it. Testing the subshell's status keeps the `cd` contained without
 	# needing a variable to escape it.
 	local str_project_path="$1"
-	local str_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
-	local str_vis_choice str_vis_flag
+	local str_slug str_vis_choice str_vis_flag
+	str_slug="$(scaffold_repo_slug)"
 	local -a list_homepage=()
 
 	if ! command -v gh >/dev/null 2>&1; then
@@ -109,8 +187,13 @@ scaffold_push_initial_commit() {
 }
 
 scaffold_prompt_git_remote_setup() {
+	# Returns 0 only when `origin` is present AND verified to be the repository this
+	# scaffold names — so a caller can gate branch protection / Pages on the remote
+	# itself rather than on "the prompt returned" (#212). Declining is a normal
+	# non-zero: there is no remote, so there is nothing to protect.
 	local str_project_path="$1"
 	local str_answer
+	SCAFFOLD_REMOTE_VERIFIED=0
 
 	print_status "info" \
 		"Optional: add a remote origin / create a GitHub repo (the local repo is already initialized)"
@@ -120,11 +203,14 @@ scaffold_prompt_git_remote_setup() {
 	y | Y) ;;
 	*)
 		print_status "info" "Skipped remote setup"
-		return 0
+		return 1
 		;;
 	esac
 
-	scaffold_add_git_remote "$str_project_path"
+	scaffold_add_git_remote "$str_project_path" || return 1
+	# Read by each scaffold's `main` (a different file), which shellcheck cannot follow.
+	# shellcheck disable=SC2034
+	SCAFFOLD_REMOTE_VERIFIED=1
 	if ! scaffold_create_github_repo "$str_project_path"; then
 		scaffold_push_initial_commit "$str_project_path"
 	fi
