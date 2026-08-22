@@ -63,13 +63,16 @@ in #191. What remained was whether the debt becomes type-clean code.
 - [x] Fails on zero discovery; prints the file count on success.
 - [x] `--root`, so BlueprintX runs the template's file over its own tree instead of keeping
       a second copy that would drift.
-- [x] The real count is **21**, not the ~13 in the issue — and 11 of those were two
-      duplicated families.
+- [x] The real count is **20**, not the ~13 in the issue — and 11 of those were two
+      duplicated families. ⚠️ It read 21 until review caught a defect in the metric: only a
+      function's OWN docstring was subtracted, so a decorator factory was charged for its
+      closures' NumPy sections. `retry_with_backoff` was the single false positive and is
+      reverted to byte-identical with `origin/main`.
 - [x] `copy_common_templates` ×4: the copies differed by **one token**. Now one lib split by
       destination concern. 380 lines → 24. Proven byte-identical against `origin/main`.
 - [x] `prompt_git_remote_setup` ×6: 391 lines → 35, and it surfaced two real defects
       (see below).
-- [x] **21 → 0.** `check_function_length.py --root .` now reports
+- [x] **20 → 0.** `check_function_length.py --root .` now reports
       `function length OK (276 file(s) checked)`.
 - [x] Wired into all 4 surfaces on **both** sides — but with ONE implementation, not two:
       BlueprintX runs the template's file over its own tree via `--root .`. A second copy is
@@ -161,3 +164,22 @@ Every one of these was invisible until a long function was pulled apart:
    lib-minimal that nothing copies there. Fixed by splitting the lib in two.
 5. **`make help` had drifted** from `./tasks.sh help`, missing two real targets.
 6. **#206**, above — pre-existing, filed rather than folded in.
+
+## Closed out 2026-08-22
+
+All three issues delivered and merged: #192 (PR #202), #190 (PR #204), #189 (PR #209 + the
+#213 cleanup). Released as **v0.15.7** (#192 + #190) and **v0.15.8** (#189), each verified on
+per-job conclusions, tag presence and non-draft state.
+
+⚠️ **Two corrections to what this ledger claimed earlier**, kept visible rather than edited
+away, because both are the more instructive half:
+
+1. The gate's metric counted **nested** docstrings, so a decorator factory paid for its
+   closures' documentation. That number made me shorten those docstrings — documentation
+   deleted to satisfy a counter, which is the exact incentive the docstring exclusion exists
+   to remove. Corrected; the tree's real count was 20, never 21.
+2. A careless `cp` shipped a **second copy** of the gate at `bin/lib/`, in the PR arguing
+   against duplication. It was already the stale copy. Removed in #213.
+
+Nine issues opened from findings along the way: #201, #203, #205, #206, #207, #208, #211,
+#212. Kept as a record per the backlog discipline — do not delete this file.
