@@ -120,7 +120,7 @@ fix_playwright:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint check_docstrings check_commit_msg install_shell_linters
+.PHONY: lint check_docstrings check_function_length check_commit_msg install_shell_linters
 
 # Optional: install shellcheck + shfmt as SYSTEM binaries (choco/scoop/brew/apt).
 # The primary route is pip (shellcheck-py/shfmt-py dev-deps via `poetry install`);
@@ -137,6 +137,7 @@ lint:
 	@$(POETRY) run python bin/check_docstrings.py
 	@$(POETRY) run python bin/check_layer_imports.py
 	@$(POETRY) run python bin/check_comment_language.py
+	@$(POETRY) run python bin/check_function_length.py
 	@bash bin/lint_shell.sh
 	@bash bin/lint_sql.sh
 	@bash bin/lint_yaml.sh
@@ -144,6 +145,11 @@ lint:
 
 check_docstrings:
 	@$(POETRY) run python bin/check_docstrings.py
+
+# Also reachable on its own, so the one rule can be checked without paying for the whole
+# lint set. `make lint` covers it above.
+check_function_length:
+	@$(POETRY) run python bin/check_function_length.py
 
 # Pre-flight a commit message BEFORE `git commit -F <file>`.
 #
@@ -219,65 +225,9 @@ docs_server:
 .PHONY: help
 
 help:
-	@echo ""
-	@echo "Usage: make <target>"
-	@echo ""
-	@echo "Virtual Environment"
-	@echo "  init                 Seed .env, bootstrap venv, install pre-commit hooks"
-	@echo "  ensure_env           Seed .env from .env.example if .env is missing"
-	@echo "  venv                 Create Poetry venv and install dependencies"
-	@echo "  update_venv          Update all Poetry dependencies"
-	@echo "  precommit            Install pre-commit hooks (commit-msg + pre-push; skips off a git tree)"
-	@echo "  enable_pages         Enable GitHub Pages once (gh-pages branch w/ mike, else Actions); needs gh + repo-admin, else skips"
-	@echo "  enable_repo_rules    Apply the pr-quality-gate ruleset + merge settings; needs gh + repo-admin, else skips"
-	@echo "  enable_security      Enable private vuln reporting + Dependabot alerts/security updates; needs gh + repo-admin, else skips"
-	@echo "  bump_version         Bump version from Conventional Commits, tag, and update CHANGELOG.md (cz bump)"
-	@echo "  changelog            Regenerate CHANGELOG.md from git tags (cz changelog)"
-	@echo ""
-	@echo "Corporate CA"
-	@echo "  get_corporate_ca     Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)"
-	@echo ""
-	@echo "Testing"
-	@echo "  unit_tests           Run unit tests with pytest"
-	@echo "  integration_tests    Run integration tests with pytest"
-	@echo "  test_cov             Run unit tests with coverage report and badge"
-	@echo "  test_slowest         Report the 20 slowest unit tests"
-	@echo "  test_feat FEAT=<kw>  Run unit tests matching keyword <kw>"
-	@echo "  test_urls_docstrings Check all URLs inside docstrings"
-	@echo "  fix_playwright       Reinstall Playwright browsers"
-	@echo ""
-	@echo "Linting"
-	@echo "  lint                 Run ruff, mypy, codespell, pydocstyle, check_docstrings, shell/sql/yaml/actions"
-	@echo "  check_docstrings     Check docstring type/raises consistency"
-	@echo "  check_commit_msg FILE=<p>  Pre-flight a commit message before 'git commit -F'"
-	@echo "  install_shell_linters  Install shellcheck + shfmt as system binaries (optional; pip is primary)"
-	@echo ""
-	@echo "Database"
-	@echo "  db_up                Start Docker services, ensure schema, apply migrations"
-	@echo "  db_backup            Dump the database to BACKUP_STORE_PATH"
-	@echo "  db_restore DUMP=<p>  Restore database from a dump file at path <p>"
-	@echo ""
-	@echo "Docs"
-	@echo "  docs_server          Serve MkDocs site locally at http://0.0.0.0:8000"
-	@echo ""
-	@echo "Library (only present for the library scaffold)"
-	@echo "  install_dist_locally Build the wheel, install it, and smoke-import the package"
-	@echo ""
-	@echo "Run"
-	@echo "  run                  Run src/main.py (auto-installs Poetry if missing)"
-	@echo ""
-	@echo "Context / Ship"
-	@echo "  export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM"
-	@echo "  export_deps          Export locked deps to requirements-lock.txt (pip-only hosts)"
-	@echo "  ship                 Package the committed main tree into dist/<name>_<ts>.zip"
-	@echo ""
-	@echo "Offline (only present when scaffolded without GitHub)"
-	@echo "  new_branch NAME=<x>  Create a branch (feat/…, fix/…) off the default branch (main/master)"
-	@echo "  git_merge_to_main    Merge the current clean branch into main/master and delete it"
-	@echo "  git_diff_export              Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/"
-	@echo "  git_diff_check FILE=<path>   Check whether a .diff applies cleanly"
-	@echo "  git_diff_apply FILE=<path>   Apply a .diff to the working tree (no commit)"
-	@echo ""
+	@printf '\nUsage: make <target>\n\n'
+	@cat bin/help.txt
+	@printf '\n'
 
 # Library-only targets (install_dist_locally) — present only when scaffolded as a
 # distributable library (lib-minimal). The leading '-' silently skips this when absent.

@@ -81,7 +81,14 @@ print_status() {
 		echo -e "${MAGENTA}========================================${NC}\n"
 		;;
 	*)
-		echo -e "[ ] ${message}"
+		# A typo'd status used to land here and print an UNMARKED line, so a warning
+		# rendered exactly like neutral output — measured in blueprintx: 35 calls spelled
+		# "warn" instead of "warning" across five scaffolds, every one of them a warning
+		# the user could not tell apart from ordinary chatter. Nothing uses this branch
+		# deliberately, so it names the bad status on stderr instead of swallowing it.
+		echo -e "${YELLOW}[?]${NC} ${message}" >&2
+		echo "print_status: unknown status '${status}' — expected one of:" \
+			"success|error|warning|info|config|debug|section" >&2
 		;;
 	esac
 

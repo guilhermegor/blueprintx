@@ -410,6 +410,87 @@ def upsert_comment(str_repo: str, int_pr: int, str_body: str) -> None:
     _api("POST", f"{API}/repos/{str_repo}/issues/{int_pr}/comments", {"body": str_body})
 
 
+def poll_axes_until_terminal(
+    str_repo: str, str_head_sha: str, int_max_polls: int, int_poll_seconds: int
+) -> tuple[dict, dict]:
+    """Poll the head commit's check runs until every axis reaches a terminal state.
+
+    ⚠️ Stops ONLY when every axis is terminal — never on ``gate_state() != "pending"``,
+    which would freeze the comment on the first transient red while other checks still run.
+
+    Parameters
+    ----------
+    str_repo : str
+        ``owner/name``.
+    str_head_sha : str
+        The PR head commit whose check runs are read.
+    int_max_polls : int
+        Maximum polls before giving up and reporting whatever was last seen.
+    int_poll_seconds : int
+        Seconds between polls.
+
+    Returns
+    -------
+    tuple of dict
+        ``(dict_axes, dict_failing)`` as returned by :func:`collect_axes`.
+    """
+    import time
+
+    dict_axis_rules = {
+        "tests": ("Run Automated Tests",),
+        "lint": ("Ruff", "mypy", "lint"),
+        # Match the ANALYSES, not the `CodeQL` umbrella check (see collect_axes).
+        "code scanning": ("Analyze",),
+    }
+
+    # ⚠️ A poll count below one observes NOTHING, and `gate_state({})` is "success" — so the
+    # gate would label a PR green having never read a single check run. Clamp rather than
+    # trust the environment: that is the vacuous pass this file warns about elsewhere.
+    int_max_polls = max(1, int_max_polls)
+
+    dict_axes, dict_failing = {}, {}
+    for int_attempt in range(int_max_polls):
+        list_runs = (
+            _api("GET", f"{API}/repos/{str_repo}/commits/{str_head_sha}/check-runs?per_page=100")
+            or {}
+        ).get("check_runs", [])
+        dict_axes, dict_failing = collect_axes(list_runs, dict_axis_rules)
+        if axes_are_terminal(dict_axes):
+            break
+        if int_attempt < int_max_polls - 1:
+            time.sleep(int_poll_seconds)
+    return dict_axes, dict_failing
+
+
+def sync_gate_labels(
+    str_repo: str, int_pr: int, list_current: list, list_desired: list
+) -> None:
+    """Apply the desired risk/size/gate labels and drop the stale ones.
+
+    Only the three families this gate owns are touched; any other label a human added
+    survives untouched.
+
+    Parameters
+    ----------
+    str_repo : str
+        ``owner/name``.
+    int_pr : int
+        The pull request number.
+    list_current : list of str
+        Labels currently on the PR.
+    list_desired : list of str
+        The labels this run computed.
+    """
+    _api(
+        "POST",
+        f"{API}/repos/{str_repo}/issues/{int_pr}/labels",
+        {"labels": list_desired},
+    )
+    for str_stale in list_current:
+        if str_stale.split(":")[0] in ("risk", "size", "gate") and str_stale not in list_desired:
+            _api("DELETE", f"{API}/repos/{str_repo}/issues/{int_pr}/labels/{str_stale}")
+
+
 def main() -> int:
     """Run the gate for one PR: classify, label, comment, and arm auto-merge when eligible.
 
@@ -419,8 +500,6 @@ def main() -> int:
         Always 0 — the gate reports; the RULESET decides whether a PR may merge. A gate that
         fails the run would just be a second, redundant blocking signal.
     """
-    import time
-
     str_repo = os.environ["GITHUB_REPOSITORY"]
     int_pr = int(os.environ["PR_NUMBER"])
     int_max_polls = int(os.environ.get("GATE_MAX_POLLS", "26"))
@@ -447,36 +526,16 @@ def main() -> int:
             {"id": dict_pr.get("node_id")},
         )
 
-    dict_axis_rules = {
-        "tests": ("Run Automated Tests",),
-        "lint": ("Ruff", "mypy", "lint"),
-        # Match the ANALYSES, not the `CodeQL` umbrella check (see collect_axes).
-        "code scanning": ("Analyze",),
-    }
-
-    dict_axes, dict_failing = {}, {}
-    for int_attempt in range(int_max_polls):
-        list_runs = (
-            _api("GET", f"{API}/repos/{str_repo}/commits/{str_head_sha}/check-runs?per_page=100")
-            or {}
-        ).get("check_runs", [])
-        dict_axes, dict_failing = collect_axes(list_runs, dict_axis_rules)
-        # Stop ONLY when every axis is terminal — never on `gate_state() != "pending"`, which
-        # would freeze the comment on the first transient red while other checks still run.
-        if axes_are_terminal(dict_axes):
-            break
-        if int_attempt < int_max_polls - 1:
-            time.sleep(int_poll_seconds)
-
-    list_desired = [f"risk:{str_risk}", f"size:{str_size}", f"gate:{gate_state(dict_axes)}"]
-    _api(
-        "POST",
-        f"{API}/repos/{str_repo}/issues/{int_pr}/labels",
-        {"labels": list_desired},
+    dict_axes, dict_failing = poll_axes_until_terminal(
+        str_repo, str_head_sha, int_max_polls, int_poll_seconds
     )
-    for str_stale in list_labels:
-        if str_stale.split(":")[0] in ("risk", "size", "gate") and str_stale not in list_desired:
-            _api("DELETE", f"{API}/repos/{str_repo}/issues/{int_pr}/labels/{str_stale}")
+
+    sync_gate_labels(
+        str_repo,
+        int_pr,
+        list_labels,
+        [f"risk:{str_risk}", f"size:{str_size}", f"gate:{gate_state(dict_axes)}"],
+    )
 
     upsert_comment(
         str_repo, int_pr, render_comment(str_risk, str_size, dict_axes, bool_eligible, dict_failing)

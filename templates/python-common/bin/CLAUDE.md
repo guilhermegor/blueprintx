@@ -53,6 +53,37 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/bootstrap.sh"
 ```
 
+### The lib's Python companions — and why they are files
+
+`bin/lib/` holds two `.py` helpers beside the shell libs that invoke them:
+
+| File | Invoked by | Interface |
+|------|-----------|-----------|
+| `lib/ca_bundle.py` | `bootstrap.sh::build_union_ca_bundle` | `BX_CA_CORPORATE` + `BX_CA_OUT` in; certificate count out; non-zero when the union would NARROW the trust store |
+| `lib/pip_requirements.py` | `pip_fallback.sh::pip_fallback_emit_pip_requirements_from_pyproject` | `PROJECT_ROOT` + `BX_GROUPS` in; one pip requirement per line out |
+
+Both were `"$PYTHON" - <<'PYEOF'` heredocs inside their shell functions — 151 and 66
+lines of Python that **no Python tool could see**: ruff never linted them, mypy never
+checked them, pytest could not import them, and an editor rendered them as one long
+string. The 60-line function gate flagged the enclosing shell functions at 155 and 73
+lines; the length was the symptom and the invisibility was the disease. Extracting them
+surfaced three real ruff findings on the first run.
+
+⚠️ **A shell lib and its `.py` companion travel together.** Copying `bootstrap.sh`
+alone now yields a lib that cannot run — which the integration suite caught immediately,
+because its fixture globbed only `*.sh`. Anything that materialises `bin/lib/` must take
+both extensions.
+
+⚠️ **Do not push new logic back into a heredoc.** A heredoc is right for inert text a
+script *emits*; the moment it is fed to an interpreter it is a program, and a program
+belongs in a file its language's tooling can read.
+
+`bin/help.txt` follows the same principle for text rather than code: the command list is
+read by **both** `make help` and `./tasks.sh help`. It used to be a heredoc in `tasks.sh`
+and ~65 `@echo` lines in the `Makefile`, kept in sync by a CLAUDE.md rule — and they had
+already drifted, with `make help` missing `test_cov_report` and `test_cov_serve` entirely,
+so two real targets were undiscoverable from the entry point most people use.
+
 `get_corporate_ca.sh` is the **manual** generator for `bin/corporate_ca.pem` — it
 disables TLS verification *on purpose* to capture a TLS-inspecting proxy's CA,
 so run it only on such a network. The pem is git-ignored; its mere presence

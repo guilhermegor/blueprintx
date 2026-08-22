@@ -17,6 +17,7 @@ Targets (no make required):
   venv          Create local Poetry venv using .python-version (installs deps)
   precommit     Install pre-commit hooks (pre-commit + commit-msg stages)
   lint          Run all pre-commit hooks across the repo (mirrors CI)
+  check_function_length  Fail any function over 60 lines of code (docstring excluded)
   update_venv   Update Poetry dependencies
   mkdocs_server  Install docs deps (if needed) and serve with live reload
   changelog     Regenerate root CHANGELOG.md from git tags (cz changelog)

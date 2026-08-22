@@ -4,6 +4,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
+# shellcheck source=bin/lib/scaffold_git_remote.sh
+source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -348,68 +350,52 @@ EOF
     esac
 }
 
-prompt_pages_setup() {
-    # GitHub stopped auto-enabling Pages on gh-pages pushes (~2022). The
-    # deploy-spa workflow pushes the build to gh-pages, but the Pages
-    # service stays off — and a fresh deploy 404s — until it's enabled
-    # once. The default GITHUB_TOKEN lacks the permission to do it from
-    # the workflow, so we offer it here using the local gh token.
-    local repo="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
-    local owner="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}"
+pages_prerequisites_met() {
+    # Everything that must be true before it is even worth asking. Each is a silent return
+    # rather than a warning: a user without gh has not done anything wrong.
+    local repo="$1"
 
-    if ! command -v gh >/dev/null 2>&1; then
-        return
-    fi
-    if ! gh auth status >/dev/null 2>&1; then
-        return
-    fi
-    if ! gh repo view "$repo" >/dev/null 2>&1; then
-        return
-    fi
+    command -v gh >/dev/null 2>&1 || return 1
+    gh auth status >/dev/null 2>&1 || return 1
+    gh repo view "$repo" >/dev/null 2>&1 || return 1
+}
 
-    local manual_cmd="gh api -X POST repos/$repo/pages -f 'source[branch]=gh-pages' -f 'source[path]=/'"
+wait_for_gh_pages_branch() {
+    # Pages can only be pointed at the gh-pages branch once that branch EXISTS — and it is
+    # created by the deploy-spa workflow on the FIRST push to main, which takes ~1-3 min.
+    # Enabling before then fails with a 404 and leaves the user staring at "Site not found".
+    local repo="$1" manual_cmd="$2"
+    local attempts=0
+    local max_attempts=12 # ~3 min at 15s intervals
+    local wait_ans
 
-    print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
-    read -r -p "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: " pages_ans || true
-    case "$pages_ans" in
-        y|Y) ;;
-        *) print_status "info" "Skipped GitHub Pages setup"; return ;;
+    gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1 && return 0
+
+    print_status "info" "The 'gh-pages' branch doesn't exist yet — the first deploy creates it (~1-3 min)."
+    read -r -p "Wait for the first deploy and enable Pages automatically? [Y/n]: " wait_ans || true
+    case "$wait_ans" in
+    n | N)
+        print_status "info" "After the first deploy finishes, enable Pages with:"
+        print_status "info" "  $manual_cmd"
+        return 1
+        ;;
     esac
 
-    # Pages can only be pointed at the gh-pages branch once that branch
-    # exists — and it is created by the deploy-spa workflow on the FIRST push
-    # to main, which takes ~1-3 min. Enabling before then fails with a 404 and
-    # leaves the user staring at a "Site not found" page. So: if the branch
-    # isn't there yet, offer to wait for the first deploy, then enable.
-    if ! gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1; then
-        print_status "info" "The 'gh-pages' branch doesn't exist yet — the first deploy creates it (~1-3 min)."
-        read -r -p "Wait for the first deploy and enable Pages automatically? [Y/n]: " wait_ans || true
-        case "$wait_ans" in
-            n|N)
-                print_status "info" "After the first deploy finishes, enable Pages with:"
-                print_status "info" "  $manual_cmd"
-                return
-                ;;
-        esac
+    while [ "$attempts" -lt "$max_attempts" ]; do
+        sleep 15
+        gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1 && return 0
+        attempts=$((attempts + 1))
+        print_status "info" "Still waiting for the first deploy... (${attempts}/${max_attempts})"
+    done
 
-        local attempts=0
-        local max_attempts=12  # ~3 min at 15s intervals
-        while [ "$attempts" -lt "$max_attempts" ]; do
-            sleep 15
-            if gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1; then
-                break
-            fi
-            attempts=$((attempts + 1))
-            print_status "info" "Still waiting for the first deploy... (${attempts}/${max_attempts})"
-        done
-    fi
+    print_status "warning" "The 'gh-pages' branch still isn't there — the first deploy may still be running or it failed."
+    print_status "info" "Check the run, then enable Pages with:"
+    print_status "info" "  $manual_cmd"
+    return 1
+}
 
-    if ! gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1; then
-        print_status "warning" "The 'gh-pages' branch still isn't there — the first deploy may still be running or it failed."
-        print_status "info" "Check the run, then enable Pages with:"
-        print_status "info" "  $manual_cmd"
-        return
-    fi
+enable_gh_pages() {
+    local repo="$1" owner="$2" manual_cmd="$3"
 
     if gh api --method POST "/repos/$repo/pages" \
         -f 'source[branch]=gh-pages' -f 'source[path]=/' >/dev/null 2>&1; then
@@ -420,6 +406,32 @@ prompt_pages_setup() {
         print_status "warning" "Could not enable Pages automatically."
         print_status "info" "  $manual_cmd"
     fi
+}
+
+prompt_pages_setup() {
+    # GitHub stopped auto-enabling Pages on gh-pages pushes (~2022). The deploy-spa workflow
+    # pushes the build to gh-pages, but the Pages service stays off — and a fresh deploy
+    # 404s — until it is enabled once. The default GITHUB_TOKEN lacks the permission to do it
+    # from the workflow, so it is offered here using the local gh token.
+    local owner="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}"
+    local repo="$owner/${PROJECT_NAME}"
+    local manual_cmd="gh api -X POST repos/$repo/pages -f 'source[branch]=gh-pages' -f 'source[path]=/'"
+    local pages_ans
+
+    pages_prerequisites_met "$repo" || return
+
+    print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
+    read -r -p "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: " pages_ans || true
+    case "$pages_ans" in
+    y | Y) ;;
+    *)
+        print_status "info" "Skipped GitHub Pages setup"
+        return
+        ;;
+    esac
+
+    wait_for_gh_pages_branch "$repo" "$manual_cmd" || return
+    enable_gh_pages "$repo" "$owner" "$manual_cmd"
 }
 
 # Always initialise a local git repo with a first commit, independent of any
@@ -448,68 +460,9 @@ initialize_git_repo() {
 }
 
 prompt_git_remote_setup() {
-    local project_path="$1"
-
-    print_status "info" "Optional: add a remote origin / create a GitHub repo (the local repo is already initialized)"
-    read -r -p "Add remote origin and (optionally) create the GitHub repo now? [y/N]: " answer || true
-
-    case "$answer" in
-        y|Y)
-            push_done=0
-            (
-                cd "$project_path"
-                if git remote get-url origin >/dev/null 2>&1; then
-                    print_status "warning" "Remote 'origin' already exists; skipped add"
-                else
-                    git remote add origin "git@github.com:${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}.git" || true
-                fi
-            )
-            if command -v gh >/dev/null 2>&1; then
-                read -r -p "Create GitHub repo ${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME} and push now? [y/N]: " create_ans || true
-                case "$create_ans" in
-                    y|Y)
-                        local vis_choice vis_flag repo_slug
-                        read -r -p "Visibility [1] Public (default)  [2] Private: " vis_choice || true
-                        vis_flag="--public"
-                        [ "$vis_choice" = "2" ] && vis_flag="--private"
-                        repo_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
-                        (
-                            cd "$project_path"
-                            if gh repo create "$repo_slug" --source . --remote origin --push --description "$PROJECT_DESCRIPTION" "$vis_flag"; then
-                                push_done=1
-                                gh repo edit "$repo_slug" --default-branch main >/dev/null 2>&1 || true
-                                print_status "success" "Repository created and pushed via gh."
-                            else
-                                print_status "warning" "gh repo create failed; check authentication or if the repo already exists."
-                                print_status "info" "Manual fallback: create the repo on GitHub and run 'git push -u origin main'."
-                            fi
-                        )
-                        ;;
-                    *) print_status "info" "Skipped GitHub repo creation/push" ;;
-                esac
-            else
-                print_status "info" "gh CLI not found; to publish run: git push -u origin main (ensure repo exists on GitHub)."
-            fi
-            if [ "$push_done" -eq 0 ]; then
-                if git -C "$project_path" remote get-url origin >/dev/null 2>&1; then
-                    if git -C "$project_path" push -u origin main >/dev/null 2>&1; then
-                        print_status "success" "Pushed to origin/main."
-                    else
-                        print_status "warning" "Push to origin/main failed; create the repo on GitHub and retry 'git push -u origin main'."
-                    fi
-                else
-                    print_status "warning" "Remote 'origin' missing; cannot push. Create repo and run 'git push -u origin main'."
-                fi
-            fi
-            print_status "success" "Git repo initialized."
-            ;;
-        *)
-            print_status "info" "Skipped remote setup"
-            ;;
-    esac
-
-    apply_branch_protection "$project_path"
-    prompt_pages_setup
+	scaffold_prompt_git_remote_setup "$1"
+	apply_branch_protection "$1"
+	prompt_pages_setup
 }
 
 apply_offline_mode() {

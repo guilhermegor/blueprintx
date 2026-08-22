@@ -56,13 +56,66 @@ in #191. What remained was whether the debt becomes type-clean code.
 
 - [x] Decided 2026-08-20: **route 2** — Python and shell in the same PR, including the
       `copy_common_templates` duplication across the 5 scaffolds
-- [ ] `bin/check_function_length.py` on `ast` (Ruff has no per-function line-count rule;
-      `PLR0915` counts statements, a different metric)
-- [ ] Wire into all 4 surfaces on both sides (pre-commit, CI, `Makefile`, `tasks.sh`)
-- [ ] Fail when discovery matches zero files; print the count on success
-- [ ] Negative control + an entry in the 5 hand-maintained copy lists
-- [ ] Refactor the ~13 shell functions over the ceiling, largest first
-      (`pip_fallback_emit_pip_requirements_from_pyproject` at 155 lines)
+- [x] `bin/check_function_length.py` on `ast`. Reproduces the issue's three Python numbers
+      exactly (69/68/65), which is the agreement that pins the metric per #167. Shell is
+      measured at the same single ceiling, exactly rather than heuristically, because
+      `shfmt` guarantees the `name() {` / column-0 `}` shape.
+- [x] Fails on zero discovery; prints the file count on success.
+- [x] `--root`, so BlueprintX runs the template's file over its own tree instead of keeping
+      a second copy that would drift.
+- [x] The real count is **21**, not the ~13 in the issue — and 11 of those were two
+      duplicated families.
+- [x] `copy_common_templates` ×4: the copies differed by **one token**. Now one lib split by
+      destination concern. 380 lines → 24. Proven byte-identical against `origin/main`.
+- [x] `prompt_git_remote_setup` ×6: 391 lines → 35, and it surfaced two real defects
+      (see below).
+- [x] **21 → 0.** `check_function_length.py --root .` now reports
+      `function length OK (276 file(s) checked)`.
+- [x] Wired into all 4 surfaces on **both** sides — but with ONE implementation, not two:
+      BlueprintX runs the template's file over its own tree via `--root .`. A second copy is
+      exactly what `check_codespell_sync.sh` exists to police.
+- [x] Negative control: `tests/unit/test_function_length_gate.py`, 9 tests, including "a
+      function over the ceiling IS reported", "a long docstring does NOT count", and "audit
+      mode FAILS when discovery matches nothing". Added to the copy lists — the copy-list
+      gate caught its absence in all 5 scaffolds first, which is what it is for (32 → 33).
+
+### How the remaining 11 were resolved
+
+Three were not really shell at all — they were heredocs, and the length was the symptom:
+
+- `pip_fallback…` (155) and `build_union_ca_bundle` (73) wrapped 151 and 66 lines of Python
+  that **no Python tool could see**. Now `bin/lib/pip_requirements.py` and
+  `bin/lib/ca_bundle.py`; extraction cost 3 ruff findings on the first run.
+- `show_help` (65) was 64 lines of help text — duplicated as ~65 `@echo` lines in the
+  Makefile, which had **already drifted** (`make help` was missing `test_cov_report` and
+  `test_cov_serve`). Both now read `bin/help.txt`.
+
+The other eight were split by concern: `copy_common_templates`/`create_python_files` in
+lib-minimal, `prompt_pages_setup`, `check_url`, `process_python_files`, `find_file_problems`,
+`pr_gate.main`, `retry_with_backoff`.
+
+### Decision recorded (2026-08-21)
+
+The metric was NOT changed. The question came up because a 65-line `cat <<EOF` and a 155-line
+embedded Python program counted the same — but the answer was to take the inert blob out of
+the function and give it its own file, which is what the gate was asking for all along. Both
+heredoc cases are now genuinely short, with no exception carved into the rule.
+
+### Defects the dedupe surfaced (fixed here)
+
+- **35 `print_status "warn"` calls** across the 5 Python scaffolds. The function accepts
+  `warning`; `warn` fell through to the catch-all and printed an unmarked `[ ] message` —
+  every one of them a warning that rendered exactly like ordinary output. The catch-all now
+  names the bad status on stderr, so the next typo cannot hide the same way.
+- **`push_done=1` inside a `( … )` subshell**, so the flag never reached the parent and the
+  follow-up push always ran, in six scaffolds. ShellCheck had reported it all along as
+  SC2030/SC2031 — at `info`, below the gate's `--severity=warning` floor. `check_shell.sh`
+  now runs a second pass for exactly those two codes.
+- **My own gate change broke `check_test_copy_lists.py` in the dangerous direction.** Making
+  it follow `source` was necessary, but with one shared lib it over-reported reachability:
+  lib-minimal sources the git-remote half without calling the Python copy functions, so four
+  shared tests were claimed to reach a tier that never copies them. Fixed by splitting the
+  lib in two so `source` means what the gate assumes.
 
 ## Note
 
@@ -74,9 +127,37 @@ here.
 
 - **#201** (open) — a template unit test invokes the real `gh` binary and the live network.
   Surfaced by the `act` verification on the #192 branch; deliberately not bundled into it.
+- **#207** (open) — `ruff.toml` excludes `"bin"`, so the 16 Python files that ARE the
+  project's quality machinery are neither linted nor type-checked; 58 findings behind it,
+  including an unsafe YAML load and a banned API. Third instance of the #190/#203 shape and
+  the largest. Found while checking whether the extracted heredocs were really being linted —
+  they were not; I had named the paths explicitly.
+- **#206** (open) — `check-urls` never scans a ONE-LINE docstring and reports "All docstring
+  URLs are reachable". Measured: the same 404 URL passes on one line and fails across three.
+  Found while splitting `process_python_files`; the split reproduces the blind spot exactly,
+  verified end-to-end before and after, so the defect is pre-existing and untouched here.
+- **#205** (open) — `cp -r` ships `templates/**/__pycache__` into generated projects.
+  Found by the before/after tree diff used to prove the #189 dedupe changed nothing.
 - **#203** (open) — ruff vs mypy now disagree about `src/chassis`. Surfaced by #190; the
   `mypy.ini` comment claiming the two lists mirrored each other had become false, so it was
   corrected rather than left to rot.
 - Lessons captured in the global store: `every-ci-job-needs-a-timeout.md` (updated with the
   implementation numbers and the act-image probe) and
   `unit-tests-must-not-reach-real-binaries.md` (new, backing #201).
+
+## Defects found by the refactors themselves
+
+Every one of these was invisible until a long function was pulled apart:
+
+1. **35 `print_status "warn"`** — the function takes `warning`; those 35 printed an unmarked
+   `[ ] message`. Fixed, and the catch-all now names a bad status on stderr.
+2. **`push_done=1` inside a subshell** in 6 scaffolds — the flag never reached the parent.
+   ShellCheck had it all along as SC2030/SC2031, below the gate's `--severity=warning` floor.
+3. **`envsubst` reads the ENVIRONMENT** — converting lib-minimal's heredocs produced the
+   empty string for `${PROJECT_NAME}` (`version("")`, `from .main import main`), a broken
+   package from a green scaffold run. Caught only by the before/after tree diff.
+4. **My own gate change over-reported reachability** — teaching `check_test_copy_lists.py` to
+   follow `source` was necessary but, with one shared lib, claimed four tests reached
+   lib-minimal that nothing copies there. Fixed by splitting the lib in two.
+5. **`make help` had drifted** from `./tasks.sh help`, missing two real targets.
+6. **#206**, above — pre-existing, filed rather than folded in.

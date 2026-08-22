@@ -4,6 +4,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
+# shellcheck source=bin/lib/scaffold_python_templates.sh
+source "$SCRIPT_DIR/../lib/scaffold_python_templates.sh"
+# shellcheck source=bin/lib/scaffold_git_remote.sh
+source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -158,99 +162,10 @@ copy_templates() {
 }
 
 copy_common_templates() {
-    local project_path="$1"
-
-    print_status "info" "Applying common Python templates..."
-
-    HOMEPAGE="${HOMEPAGE:-https://example.com/${PROJECT_NAME}}"
-    REPOSITORY="${REPOSITORY:-https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}}"
-    BUG_REPORTS_URL="${BUG_REPORTS_URL:-${REPOSITORY}/issues}"
-    SOURCE_URL="${SOURCE_URL:-${REPOSITORY}}"
-
-    COPYRIGHT_YEAR="$(date +%Y)"
-    AUTHOR_NAME="${GITHUB_USERNAME}"
-    PROJECT_LICENSE="${LICENSE_CHOICE}"
-
-    export PROJECT_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
-        PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME \
-        COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE
-    envsubst < "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/pyproject.toml" > "$project_path/pyproject.toml"
-
-    cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
-    cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
-    cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
-    # Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
-    # review tools is a row here rather than an edit to the gate.
-    cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$project_path/mypy.ini"
-    cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$project_path/.sqlfluff"
-    cp "$COMMON_TEMPLATE_ROOT/.sqlfluffignore" "$project_path/.sqlfluffignore"
-    cp "$COMMON_TEMPLATE_ROOT/.hadolint.yaml" "$project_path/.hadolint.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.yamllint" "$project_path/.yamllint"
-    cp "$COMMON_TEMPLATE_ROOT/.shellcheckrc" "$project_path/.shellcheckrc"
-    cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
-    envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
-    cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
-    cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
-    cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
-    # Seed CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
-    # release; cz changelog regenerates it from tags at release/docs-build time.
-    cp "$COMMON_TEMPLATE_ROOT/CHANGELOG.md" "$project_path/CHANGELOG.md"
-    cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
-    cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
-    cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
-    cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
-    # Reference integration test for the shared bin/ shell seams (poetry_exec.sh,
-    # precommit.sh). Ships from python-common — the per-tier `cp -r tests/.` does not
-    # reach python-common/tests/. See bin/CLAUDE.md "Testing shell scripts".
-    mkdir -p "$project_path/tests/integration"
-    cp "$COMMON_TEMPLATE_ROOT/tests/integration/test_bin_scripts.py" \
-        "$project_path/tests/integration/test_bin_scripts.py"
-    rm -f "$project_path/tests/integration/.keep"
-    # Network-block guard + introspective-convention example — ship from
-    # python-common to every tier (the per-tier `cp -r tests/.` does not reach
-    # python-common/tests/). The conftest makes a real network call impossible in
-    # any test; the example demonstrates enforcing a family convention via __all__.
-    mkdir -p "$project_path/tests/unit"
-    cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
-        "$project_path/tests/unit/test_pr_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
-        "$project_path/tests/unit/test_backlog_ledger.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
-        "$project_path/tests/unit/test_layer_imports_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_all_exports_gate.py" \
-        "$project_path/tests/unit/test_all_exports_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_family_conventions.py" \
-        "$project_path/tests/unit/test_contract_family_conventions.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
-        "$project_path/tests/unit/test_comment_language_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \
-        "$project_path/tests/unit/test_startup_fragility_order.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
-        "$project_path/tests/unit/test_review_threads_gate.py"
-    mkdir -p "$project_path/tests/fixtures"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
-        "$project_path/tests/unit/test_contract_oracle_example.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \
-        "$project_path/tests/fixtures/example_source__header.csv"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
-        "$project_path/tests/unit/test_family_convention_example.py"
-    cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
-    cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
-    cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
-    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh" "$project_path/bin/commit.sh"
-    mkdir -p "$project_path/dist"
-    cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
-    cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$project_path/.coveragerc"
-    # VS Code: shared settings (python-common) + per-tier tasks (commands differ).
-    mkdir -p "$project_path/.vscode"
-    cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
-    cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.json" "$project_path/.vscode/extensions.json"
-    cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
-
-    print_status "success" "Common templates applied"
+	# The 95-line body this replaced was byte-identical across the four service
+	# scaffolds except for the tier name, twice. It lives in bin/lib/scaffold_python_templates.sh
+	# now; this wrapper keeps the call sites and the per-tier name in one place.
+	scaffold_copy_common_templates "mvc-service-orm-db" "$1"
 }
 
 copy_mkdocs_templates() {
@@ -305,12 +220,12 @@ apply_branch_protection() {
     fi
 
     if ! gh auth status >/dev/null 2>&1; then
-        print_status "warn" "gh not authenticated; skipping main branch protection."
+        print_status "warning" "gh not authenticated; skipping main branch protection."
         return
     fi
 
     if ! gh repo view "$repo" >/dev/null 2>&1; then
-        print_status "warn" "GitHub repo $repo not reachable; skipping branch protection."
+        print_status "warning" "GitHub repo $repo not reachable; skipping branch protection."
         return
     fi
 
@@ -348,7 +263,7 @@ EOF
             then
                 print_status "success" "Branch '$branch' protected on GitHub."
             else
-                print_status "warn" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
+                print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
             fi
             ;;
         *) print_status "info" "Skipped branch protection";;
@@ -745,69 +660,10 @@ initialize_git_repo() {
 }
 
 prompt_git_remote_setup() {
-    local project_path="$1"
-
-    print_status "info" "Optional: add a remote origin / create a GitHub repo (the local repo is already initialized)"
-    read -r -p "Add remote origin and (optionally) create the GitHub repo now? [y/N]: " answer || true
-
-    case "$answer" in
-        y|Y)
-            push_done=0
-            (
-                cd "$project_path"
-                if git remote get-url origin >/dev/null 2>&1; then
-                    print_status "warn" "Remote 'origin' already exists; skipped add"
-                else
-                    git remote add origin "git@github.com:${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}.git" || true
-                fi
-            )
-            # Offer to create GitHub repo via gh and push if available
-            if command -v gh >/dev/null 2>&1; then
-                read -r -p "Create GitHub repo ${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME} and push now? [y/N]: " create_ans || true
-                case "$create_ans" in
-                    y|Y)
-                        local vis_choice vis_flag repo_slug
-                        read -r -p "Visibility [1] Public (default)  [2] Private: " vis_choice || true
-                        vis_flag="--public"
-                        [ "$vis_choice" = "2" ] && vis_flag="--private"
-                        repo_slug="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
-                        (
-                            cd "$project_path"
-                            if gh repo create "$repo_slug" --source . --remote origin --push --description "$PROJECT_DESCRIPTION" "$vis_flag"; then
-                                push_done=1
-                                gh repo edit "$repo_slug" --default-branch main >/dev/null 2>&1 || true
-                                print_status "success" "Repository created and pushed via gh."
-                            else
-                                print_status "warn" "gh repo create failed; check authentication or if the repo already exists."
-                                print_status "info" "Manual fallback: create the repo on GitHub and run 'git push -u origin main'."
-                            fi
-                        )
-                        ;;
-                    *) print_status "info" "Skipped GitHub repo creation/push";;
-                esac
-            else
-                print_status "info" "gh CLI not found; to publish run: git push -u origin main (ensure repo exists on GitHub)."
-            fi
-            if [ "$push_done" -eq 0 ]; then
-                if git -C "$project_path" remote get-url origin >/dev/null 2>&1; then
-                    if git -C "$project_path" push -u origin main >/dev/null 2>&1; then
-                        print_status "success" "Pushed to origin/main."
-                    else
-                        print_status "warn" "Push to origin/main failed; create the repo on GitHub and retry 'git push -u origin main'."
-                    fi
-                else
-                    print_status "warn" "Remote 'origin' missing; cannot push. Create repo and run 'git push -u origin main'."
-                fi
-            fi
-            print_status "success" "Git repo initialized."
-            ;;
-        *)
-            print_status "info" "Skipped remote setup"
-            ;;
-    esac
-    # Branch protection is applied later, in commit_and_push_github_assets, only
-    # for the online path and only after the .github assets have been pushed —
-    # so the asset push is never blocked by the rules we are about to set.
+	scaffold_prompt_git_remote_setup "$1"
+	# Branch protection is applied later, in commit_and_push_github_assets, only for the
+	# online path and only after the .github assets have been pushed — so the asset push
+	# is never blocked by the rules we are about to set.
 }
 
 apply_offline_mode() {

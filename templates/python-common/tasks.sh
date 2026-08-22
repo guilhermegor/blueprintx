@@ -168,6 +168,7 @@ lint() {
 	poetry_exec run python bin/check_docstrings.py
 	poetry_exec run python bin/check_layer_imports.py
 	poetry_exec run python bin/check_comment_language.py
+	poetry_exec run python bin/check_function_length.py
 	bash "$SCRIPT_DIR/bin/lint_shell.sh"
 	bash "$SCRIPT_DIR/bin/lint_sql.sh"
 	bash "$SCRIPT_DIR/bin/lint_yaml.sh"
@@ -176,6 +177,11 @@ lint() {
 
 check_docstrings() {
 	poetry_exec run python bin/check_docstrings.py
+}
+
+# Mirrors `make check_function_length`. Makefile and tasks.sh must stay in sync.
+check_function_length() {
+	poetry_exec run python bin/check_function_length.py
 }
 
 check_commit_msg() {
@@ -300,69 +306,15 @@ export_deps() {
 # -------------------
 
 show_help() {
-	cat <<EOF
-
-Usage: ./tasks.sh <command>
-
-Virtual Environment
-  init                 Seed .env, bootstrap venv, install pre-commit hooks
-  ensure_env           Seed .env from .env.example if .env is missing
-  venv                 Create Poetry venv and install dependencies
-  update_venv          Update all Poetry dependencies
-  precommit            Install pre-commit hooks (commit-msg + pre-push; skips off a git tree)
-  enable_pages         Enable GitHub Pages once (gh-pages branch w/ mike, else Actions); needs gh + repo-admin, else skips
-  enable_repo_rules    Apply the pr-quality-gate ruleset + merge settings; needs gh + repo-admin, else skips
-  enable_security      Enable private vuln reporting + Dependabot alerts/security updates; needs gh + repo-admin, else skips
-  bump_version         Bump version from Conventional Commits, tag, and update CHANGELOG.md (cz bump)
-  changelog            Regenerate CHANGELOG.md from git tags (cz changelog)
-
-Corporate CA
-  get_corporate_ca     Extract a TLS-proxy CA into bin/corporate_ca.pem (corporate networks)
-
-Testing
-  unit_tests           Run unit tests with pytest
-  integration_tests    Run integration tests with pytest
-  test_cov             Run unit tests with coverage report and badge
-  test_cov_report      Coverage with term-missing + HTML report (htmlcov/)
-  PORT=<n> test_cov_serve  Serve htmlcov/ at http://localhost:<n> (default 8000)
-  test_slowest         Report the 20 slowest unit tests
-  FEAT=<kw> test_feat  Run unit tests matching keyword <kw>
-  test_urls_docstrings Check all URLs inside docstrings
-  fix_playwright       Reinstall Playwright browsers
-
-Linting
-  lint                 Run ruff, mypy, codespell, pydocstyle, check_docstrings, shell/sql/yaml/actions
-  check_docstrings     Check docstring type/raises consistency
-  check_commit_msg     Pre-flight a commit message: FILE=<path> ./tasks.sh check_commit_msg
-  install_shell_linters  Install shellcheck + shfmt as system binaries (optional; pip is primary)
-
-Database
-  db_up                Start Docker services, ensure schema, apply migrations
-  db_backup            Dump the database to BACKUP_STORE_PATH
-  db_restore           Restore database from DUMP=<path>
-
-Docs
-  docs_server          Serve MkDocs site locally at http://0.0.0.0:8000
-
-Run
-  run                  Run src/main.py (auto-installs Poetry if missing)
-
-Context / Ship
-  export_context       Flatten the repo into repo_context.txt for pasting into a web-UI LLM
-  export_deps          Export locked deps to requirements-lock.txt (pip-only hosts)
-  ship                 Package the committed main tree into dist/<name>_<ts>.zip
-
-Library (only present for the library scaffold)
-  install_dist_locally Build the wheel, install it, and smoke-import the package
-
-Offline (only present when scaffolded without GitHub)
-  NAME=<x> new_branch  Create a branch (feat/…, fix/…) off the default branch (main/master)
-  git_merge_to_main    Merge the current clean branch into main/master and delete it
-  git_diff_export             Export commits (DIFF_RANGE, default main..HEAD) to git_diffs/
-  git_diff_check <path>       Check whether a .diff applies cleanly
-  git_diff_apply <path>       Apply a .diff to the working tree (no commit)
-
-EOF
+	# The command list lives in bin/help.txt, read by BOTH this and `make help`.
+	# It was duplicated — a heredoc here and ~65 `@echo` lines in the Makefile — with a
+	# CLAUDE.md rule telling humans to keep them in sync. They had already drifted:
+	# `make help` was missing test_cov_report and test_cov_serve entirely, so two real
+	# targets were undiscoverable from the entry point most people use. One file makes
+	# the drift impossible instead of forbidden.
+	printf '\nUsage: ./tasks.sh <command>\n\n'
+	cat "$(dirname "${BASH_SOURCE[0]}")/bin/help.txt"
+	printf '\n'
 }
 
 # -------------------
@@ -391,6 +343,7 @@ test_urls_docstrings) test_urls_docstrings ;;
 fix_playwright) fix_playwright ;;
 lint) lint ;;
 check_docstrings) check_docstrings ;;
+check_function_length) check_function_length ;;
 check_commit_msg) check_commit_msg ;;
 install_shell_linters) install_shell_linters ;;
 db_up) db_up ;;

@@ -52,6 +52,11 @@ cmd_changelog() {
 	echo "Regenerated CHANGELOG.md"
 }
 
+# Mirrors `make check_function_length`. Makefile and tasks.sh must stay in sync.
+cmd_check_function_length() {
+	python3 templates/python-common/bin/check_function_length.py --root .
+}
+
 main() {
 	local target="${1:-help}"
 	shift || true
@@ -68,6 +73,7 @@ main() {
 		venv) cmd_venv ;;
 		precommit) cmd_precommit ;;
 		lint) cmd_lint ;;
+		check_function_length) cmd_check_function_length ;;
 		update_venv) cmd_update_venv ;;
 		mkdocs_server|mkdocs_serve) cmd_mkdocs_serve ;;
 		changelog) cmd_changelog ;;
