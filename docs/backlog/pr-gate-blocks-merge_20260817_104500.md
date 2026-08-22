@@ -83,8 +83,18 @@ Cada metade fica com quem consegue reavaliá-la.
       ⚠️ `strict` segue `false` (não exige branch atualizada antes do merge) e
       `required_approving_review_count` é **0** — o bloqueio vem dos checks, não de aprovação
       humana. `required_conversation_resolution` está `true`.
-- [ ] provar o bloqueio numa PR real antes de fechar a #173 — **parcial.** O que está provado
-      (#208): o script sai 1 nas PRs #204/#213 e 0 na #209, e o job que o roda já é
-      obrigatório desde esta sessão. O que **não** está provado é o botão de merge recusando
-      numa PR viva — as duas coisas foram medidas separadamente e a composição delas nunca
-      foi observada. Fechar a #173 só depois de ver o merge recusado de fato.
+- [x] provar o bloqueio numa PR real antes de fechar a #173 — **provado 2026-08-22 na PR
+      #219**, e provado por acidente: a PR e a medicao sao a mesma coisa. Antes de o
+      CodeRabbit responder, a #219 respondeu `mergeable=MERGEABLE` mas
+      **`mergeStateStatus=BLOCKED`** — os dois campos discordando e o segundo sendo o que
+      manda. O check `Review threads answered` estava `fail` com a mensagem nova do #208:
+      *"no declared reviewer ever reported on this PR"*.
+      Isto fecha a composicao que faltava: ate aqui o script saindo 1 (#204/#213) e o job
+      sendo obrigatorio tinham sido medidos **separadamente**, e nenhum dos dois prova que o
+      botao de merge recusa.
+      ⚠️ Dois efeitos colaterais uteis da mesma observacao:
+      1. Toda PR nasce vermelha e fica assim ate a review chegar. E o comportamento correto,
+         mas significa que `Review threads answered` **nunca** e verde no momento em que a PR
+         abre — quem olhar cedo demais vai ler como defeito.
+      2. A mensagem listou `github-actions` entre os revisores esperados. E exatamente o
+         defeito da **#218**, agora visto em producao e nao so lido no codigo.
