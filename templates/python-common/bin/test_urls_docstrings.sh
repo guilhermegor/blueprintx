@@ -58,11 +58,24 @@ LIST_URL_ALLOWLIST=(
 )
 
 url_is_allowlisted() {
+	# ⚠️ Match the HOSTNAME, never a substring of the whole URL. A plain `*domain*` test
+	# allowlists `https://attacker.example/path/openai.com` and
+	# `https://openai.com.attacker.example/` — both skip probing and get cached as reachable.
+	# Strip scheme, then userinfo, then everything from the first `/`, `?`, `#` or `:`, and
+	# require an exact match or a real subdomain.
 	local str_url="$1"
-	local str_domain
+	local str_domain str_host
+
+	[[ "$str_url" =~ ^https?:// ]] || return 1
+	str_host="${str_url#*://}"
+	str_host="${str_host##*@}"
+	str_host="${str_host%%/*}"
+	str_host="${str_host%%\?*}"
+	str_host="${str_host%%#*}"
+	str_host="${str_host%%:*}"
 
 	for str_domain in "${LIST_URL_ALLOWLIST[@]}"; do
-		if [[ "$str_url" == *"$str_domain"* ]] && [[ "$str_url" =~ ^https?:// ]]; then
+		if [[ "$str_host" == "$str_domain" || "$str_host" == *".$str_domain" ]]; then
 			return 0
 		fi
 	done

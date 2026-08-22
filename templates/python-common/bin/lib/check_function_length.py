@@ -164,14 +164,14 @@ def python_functions(path_file: pathlib.Path) -> list:
 		cls_tree = ast.parse(path_file.read_text(encoding="utf-8"), filename=str(path_file))
 	except SyntaxError as cls_err:
 		# ⚠️ A file this gate cannot parse is a FINDING, not silence. The first version
-		# printed the error and handed back nothing, which the caller could only read as
-		# an absence of over-long functions — so a malformed file passed the audit by
-		# being unreadable. That is the same vacuous pass this gate fails discovery over.
+		# printed the error and returned an empty list, which file_problems then read as
+		# "no functions over the limit" — so a malformed file passed the audit by being
+		# unreadable. That is the same vacuous pass this gate fails discovery over.
 		raise UnparsableFileError(f"{path_file}: could not parse ({cls_err})") from cls_err
 
 	list_found = []
 	for cls_node in ast.walk(cls_tree):
-		if not isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef):
+		if not isinstance(cls_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
 			continue
 		int_span = (cls_node.end_lineno or cls_node.lineno) - cls_node.lineno + 1
 		list_found.append((cls_node.name, cls_node.lineno, int_span - docstring_span(cls_node)))

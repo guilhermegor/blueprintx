@@ -161,14 +161,14 @@ def normalize_version_spec(str_spec: str) -> str:
 	return f"=={str_spec}"
 
 
-def build_requirement(str_name: str, spec: str | dict) -> str | None:
+def build_requirement(str_name: str, union_spec: str | dict) -> str | None:
 	"""Render one Poetry dependency declaration as a pip requirement line.
 
 	Parameters
 	----------
 	str_name : str
 		The dependency name as declared.
-	spec : str or dict
+	union_spec : str or dict
 		Its declaration: a version string, or a table carrying ``version``/``extras``/
 		``markers``/``optional``.
 
@@ -187,27 +187,27 @@ def build_requirement(str_name: str, spec: str | dict) -> str | None:
 	if str_name.lower() == "python":
 		return None
 
-	if isinstance(spec, str):
-		return f"{str_name}{normalize_version_spec(spec)}"
+	if isinstance(union_spec, str):
+		return f"{str_name}{normalize_version_spec(union_spec)}"
 
-	if isinstance(spec, dict):
-		if spec.get("optional"):
+	if isinstance(union_spec, dict):
+		if union_spec.get("optional"):
 			return None
 		for str_key in TUPLE_UNSUPPORTED_KEYS:
-			if str_key in spec:
+			if str_key in union_spec:
 				raise SystemExit(
 					f"Unsupported dependency type for pip fallback: {str_name} -> {str_key}"
 				)
 
-		list_extras = spec.get("extras") or []
+		list_extras = union_spec.get("extras") or []
 		str_extras = f"[{','.join(list_extras)}]" if list_extras else ""
-		str_version = normalize_version_spec(spec.get("version", ""))
-		str_markers = spec.get("markers", "")
+		str_version = normalize_version_spec(union_spec.get("version", ""))
+		str_markers = union_spec.get("markers", "")
 
 		str_requirement = f"{str_name}{str_extras}{str_version}"
 		return f"{str_requirement} ; {str_markers}" if str_markers else str_requirement
 
-	raise SystemExit(f"Unsupported dependency format for {str_name}: {spec!r}")
+	raise SystemExit(f"Unsupported dependency format for {str_name}: {union_spec!r}")
 
 
 def pep621_requirements(dict_project: dict, list_groups: list) -> list:
@@ -250,16 +250,16 @@ def poetry_requirements(dict_poetry: dict, list_groups: list) -> list:
 	"""
 	list_requirements: list[str] = []
 	if "main" in list_groups:
-		for str_name, spec in dict_poetry.get("dependencies", {}).items():
-			str_line = build_requirement(str_name, spec)
+		for str_name, union_spec in dict_poetry.get("dependencies", {}).items():
+			str_line = build_requirement(str_name, union_spec)
 			if str_line:
 				list_requirements.append(str_line)
 
 	dict_group_table = dict_poetry.get("group", {})
 	for str_group in list_groups:
 		dict_deps = dict_group_table.get(str_group, {}).get("dependencies", {})
-		for str_name, spec in dict_deps.items():
-			str_line = build_requirement(str_name, spec)
+		for str_name, union_spec in dict_deps.items():
+			str_line = build_requirement(str_name, union_spec)
 			if str_line:
 				list_requirements.append(str_line)
 	return list_requirements
@@ -274,7 +274,9 @@ def main() -> int:
 		0 on success.
 	"""
 	path_root = Path(os.environ["PROJECT_ROOT"])
-	list_groups = [str_g for str_g in os.environ.get("BX_GROUPS", "main").split(",") if str_g]
+	list_groups = [
+		str_group for str_group in os.environ.get("BX_GROUPS", "main").split(",") if str_group
+	]
 	dict_pyproject = tomllib.loads(
 		path_root.joinpath("pyproject.toml").read_text(encoding="utf-8")
 	)

@@ -143,16 +143,33 @@ def test_a_decorator_does_not_count_towards_the_limit(tmp_path: Path) -> None:
 	assert gate.file_problems(path_file) == []
 
 
-def test_an_unparsable_file_is_reported_rather_than_skipped(tmp_path: Path) -> None:
-	"""A file the gate cannot parse is a finding, never a silent pass.
+def test_an_unparsable_file_is_a_finding_not_a_silent_pass(tmp_path: Path) -> None:
+	"""A file the gate cannot parse must FAIL, never read as clean.
 
-	Reporting it as "no functions found" would let a broken file through by being
-	unreadable — the same shape as a discovery glob that matches nothing.
+	⚠️ The first version of this test asserted the opposite — `file_problems(...) == []` —
+	because the implementation printed the parse error and returned an empty list, which the
+	audit then read as "no function over the limit". A broken file passed by being
+	unreadable, and the test locked that in. Caught in review on blueprintx#209.
+
+	"Cannot be checked" and "is clean" are opposite facts; a gate that prints them the same
+	way is the vacuous pass this whole file exists to prevent.
 	"""
 	path_file = _python_file(tmp_path, "def f(:\n")
 
-	assert gate.file_problems(path_file) == []
-	assert not path_file.with_suffix(".ok").exists()
+	list_problems = gate.file_problems(path_file)
+
+	assert len(list_problems) == 1
+	assert "could not parse" in list_problems[0]
+
+
+def test_audit_mode_fails_on_an_unparsable_file(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""The parse finding must reach the exit code, not just the output."""
+	_python_file(tmp_path, "def f(:\n")
+	monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+
+	assert gate.main([]) == 1
 
 
 # --------------------------

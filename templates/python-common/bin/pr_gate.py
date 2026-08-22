@@ -443,6 +443,11 @@ def poll_axes_until_terminal(
         "code scanning": ("Analyze",),
     }
 
+    # ⚠️ A poll count below one observes NOTHING, and `gate_state({})` is "success" — so the
+    # gate would label a PR green having never read a single check run. Clamp rather than
+    # trust the environment: that is the vacuous pass this file warns about elsewhere.
+    int_max_polls = max(1, int_max_polls)
+
     dict_axes, dict_failing = {}, {}
     for int_attempt in range(int_max_polls):
         list_runs = (
