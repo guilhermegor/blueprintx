@@ -198,11 +198,35 @@ scan_file_for_urls() {
 	while IFS= read -r str_line; do
 		((int_line_num++))
 
+		# ⚠️ A delimiter line IS docstring content — scan it BEFORE flipping the state.
+		# This `continue` used to skip the scan, blinding the gate on TWO shapes (measured
+		# with a seeded-cache negative control; blueprintx#206 reported the first):
+		#
+		#   1. `"""One line holding https://…"""` — the whole docstring, never scanned. This
+		#      is the most common docstring shape in the tree, so the blind spot was the
+		#      common case and the gate still printed "All docstring URLs are reachable".
+		#   2. the OPENING line of a multi-line docstring (`"""Summary … https://…`) — the
+		#      summary line is exactly where a reference URL tends to sit.
+		#
+		# Self-concealing by construction: an unscanned URL is never fetched, so it is never
+		# cached and nothing in the output hints a line was skipped — the count printed is of
+		# files scanned, not URLs checked.
+		#
+		# ⚠️ A closing `"""` that shares a line with text (`… https://…"""`) was NOT among
+		# them, and the reason is a SEPARATE defect worth knowing about: the guard below
+		# anchors on `^[[:space:]]*"""`, so such a line is not recognised as a delimiter at
+		# all. Its URL was therefore scanned as ordinary body text — right answer, wrong
+		# mechanism — and the state never flips back to false, so every line after it is read
+		# as still inside the docstring. That over-scans (false positives) rather than blinding
+		# (false negatives), and NumPy convention closes on its own line, so it is left alone
+		# here rather than folded into a fix for the opposite failure mode.
 		if [[ "$str_line" =~ ^[[:space:]]*\"\"\" ]]; then
+			check_urls_in_line "$str_file" "$int_line_num" "$str_line"
 			bool_in_docstring="$(toggle_docstring_state "$str_line" '"""' "$bool_in_docstring")"
 			continue
 		fi
 		if [[ "$str_line" =~ ^[[:space:]]*\'\'\' ]]; then
+			check_urls_in_line "$str_file" "$int_line_num" "$str_line"
 			bool_in_docstring="$(toggle_docstring_state "$str_line" "'''" "$bool_in_docstring")"
 			continue
 		fi

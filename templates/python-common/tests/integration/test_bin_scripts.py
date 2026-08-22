@@ -780,3 +780,128 @@ def test_export_deps_reprints_what_poetry_said_on_failure(tmp_path: Path) -> Non
 	# ... and the remedy names the RESOLVED binary, not a bare `poetry`.
 	assert "Resolved Poetry:" in str_all
 	assert "self add poetry-plugin-export" in str_all
+
+
+# --------------------------
+# check-urls — every docstring SHAPE must actually be scanned (blueprintx#206)
+# --------------------------
+
+_URL_404 = "https://example.invalid/blueprintx/does-not-exist"
+
+# The three shapes the delimiter-line `continue` used to swallow. Each holds the SAME
+# unreachable URL, so a shape that reports clean is reporting a check nobody ran.
+DICT_DOCSTRING_SHAPES = {
+	"one_line": f'"""A one-line docstring holding {_URL_404} inline."""\n',
+	"opening_line": f'"""Summary carrying {_URL_404}.\n\n\tMore prose.\n\t"""\n',
+	"closing_line": f'"""Summary.\n\n\tMore prose, then the link {_URL_404}"""\n',
+	"body_line": f'"""Summary.\n\n\tThe link sits on its own line: {_URL_404}\n\t"""\n',
+}
+
+
+def _seed_url_cache(path_root: Path, str_url: str, str_status: str) -> None:
+	"""Seed the hook's on-disk cache so the scan resolves offline.
+
+	The cache is keyed by the md5 of the URL (see ``get_cache`` in the hook), and a cache
+	hit short-circuits every network path. That makes this an OFFLINE negative control —
+	and a sharper one than a live fetch, because only a line the scanner actually read can
+	consult the cache at all.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		The directory the hook will run in (the cache is CWD-relative).
+	str_url : str
+		The URL to pre-resolve.
+	str_status : str
+		The HTTP status to serve for it, e.g. ``"404"``.
+
+	Returns
+	-------
+	None
+	"""
+	import hashlib
+
+	path_cache = path_root / ".url_check_cache"
+	path_cache.mkdir(exist_ok=True)
+	# Not a security use — mirrors the hook's own `md5sum` cache key.
+	str_key = hashlib.md5(str_url.encode()).hexdigest()  # noqa: S324
+	(path_cache / str_key).write_text(f"{str_status}\n", encoding="utf-8")
+
+
+def _run_url_hook(path_root: Path) -> subprocess.CompletedProcess:
+	"""Run the check-urls hook against a directory.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to scan; also the hook's CWD, so its cache resolves there.
+
+	Returns
+	-------
+	subprocess.CompletedProcess
+		The completed run.
+	"""
+	# Constant, trusted argv; no shell involved.
+	return subprocess.run(  # noqa: S603
+		[shutil.which("bash") or "bash", str(_bin_script("test_urls_docstrings.sh")), "."],
+		cwd=path_root,
+		capture_output=True,
+		text=True,
+		check=False,
+	)
+
+
+@pytest.mark.parametrize("str_shape", sorted(DICT_DOCSTRING_SHAPES))
+def test_check_urls_fails_on_unreachable_url_in_every_docstring_shape(
+	tmp_path: Path, str_shape: str
+) -> None:
+	"""A 404 must fail the gate whatever docstring shape holds it.
+
+	⚠️ Negative control. Before blueprintx#206 the hook `continue`d past every delimiter
+	line, so three of these four shapes reported ``All docstring URLs are reachable`` and
+	exited 0 — the failure mode this repo writes gates to prevent: a green that asserts a
+	check nobody ran.
+	"""
+	(tmp_path / "module_under_test.py").write_text(
+		DICT_DOCSTRING_SHAPES[str_shape], encoding="utf-8"
+	)
+	_seed_url_cache(tmp_path, _URL_404, "404")
+
+	cls_result = _run_url_hook(tmp_path)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0, f"{str_shape} reported clean: {str_all}"
+	assert _URL_404 in str_all
+	assert "All docstring URLs are reachable" not in str_all
+
+
+def test_check_urls_passes_when_the_same_url_resolves(tmp_path: Path) -> None:
+	"""The positive control: the identical fixture passes when the URL answers 200.
+
+	Without this pair, the test above could be satisfied by a hook that fails on everything.
+	"""
+	(tmp_path / "module_under_test.py").write_text(
+		DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
+	)
+	_seed_url_cache(tmp_path, _URL_404, "200")
+
+	cls_result = _run_url_hook(tmp_path)
+
+	assert cls_result.returncode == 0
+	assert "All docstring URLs are reachable" in cls_result.stdout + cls_result.stderr
+
+
+def test_check_urls_ignores_a_url_outside_any_docstring(tmp_path: Path) -> None:
+	"""A URL in ordinary code or a ``#`` comment is out of scope and must not fail the gate.
+
+	Scanning the delimiter line widened what the hook reads; this pins that it did not widen
+	into non-docstring lines.
+	"""
+	(tmp_path / "module_under_test.py").write_text(
+		f'STR_ENDPOINT = "{_URL_404}"  # not a docstring\n', encoding="utf-8"
+	)
+	_seed_url_cache(tmp_path, _URL_404, "404")
+
+	cls_result = _run_url_hook(tmp_path)
+
+	assert cls_result.returncode == 0

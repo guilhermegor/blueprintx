@@ -2,9 +2,24 @@
 
 Wraps wwdates' :class:`~wwdates.br.anbima.DatesBRAnbima` so the whole project
 shares one calendar instance and a small, intention-revealing function surface
-instead of each caller building its own. The first call that needs holiday data
-fetches and caches the ANBIMA holiday table (network on first use, cached
-thereafter); pure date arithmetic that does not consult holidays is local.
+instead of each caller building its own. Every call is **local** — no network, no
+cache warm-up.
+
+⚠️ That is a property of the pinned floor, not of the name. wwdates 1.0.0 made
+``wwdates.br.anbima.DatesBRAnbima`` the OFFLINE implementation and moved the
+page-scraping one to ``wwdates.br.anbima_web.DatesBRAnbimaWeb``. Under the old
+``>=0.1.0`` floor the same import could resolve to 0.1.0 and silently bring the
+networked semantics back under this exact name, which is why the service tiers pin
+``wwdates >=1.0.0`` (blueprintx#110). Accuracy is not the trade: wwdates measured an
+EMPTY symmetric difference against ANBIMA's published table across 2001-2099, the full
+span ANBIMA publishes. Reach for ``DatesBRAnbimaWeb`` explicitly only to cover dates
+outside that span or to verify against the live source.
+
+The floor is open (``>=``, the repo-wide constraint style), so it resolves to the newest
+wwdates — 2.0.0 at the time of writing. Verified against both wheels rather than assumed:
+1.0.0 and 2.0.0 each export ``DatesBRAnbima`` from ``wwdates.br.anbima`` with no HTTP
+client imported, an all-optional ``__init__``, and every method this module calls. 2.0.0's
+major is the addition of US calendars, not a change to this one.
 
 Pass dates as :class:`datetime.date` (or :class:`datetime.datetime`); helpers that
 return a calendar day return a :class:`datetime.date`.
@@ -31,7 +46,7 @@ else:
 
 
 # One shared calendar for the whole process (mirrors loggers._CLS_LOG). Cheap to
-# construct; the holiday table is fetched lazily on the first holiday-aware call.
+# construct, and the holiday table ships with the package — nothing is fetched, ever.
 _CLS_CALENDAR = DatesBRAnbima()
 
 
@@ -135,7 +150,7 @@ def holidays() -> list[tuple[str, date]]:
 	Returns
 	-------
 	list of tuple of (str, datetime.date)
-		Each holiday's name and date. Triggers the holiday-table fetch on first
-		use (cached thereafter).
+		Each holiday's name and date. Read from the package's bundled table — no
+		network call, so this is safe in a test suite and behind a corporate proxy.
 	"""
 	return _CLS_CALENDAR.holidays()

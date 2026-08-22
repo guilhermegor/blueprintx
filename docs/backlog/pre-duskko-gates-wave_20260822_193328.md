@@ -103,13 +103,62 @@ nasceria fora do lint.
 
 ⚠️ Os 68 achados restantes em `optional/` são **pré-existentes** (idênticos antes e depois — conferido com stash) e fora de escopo: `optional/` é staging de template, não existe em projeto gerado.
 
-## Slice 2 — #206: `check-urls` nunca lê docstring de uma linha
+## Slice 2 — #206: `check-urls` nunca lê docstring de uma linha ✅ ENTREGUE
 
-- [ ] Corrigir o parser e **esperar 404s reais aparecerem** — é o efeito declarado na issue.
+- [x] Corrigido: o `continue` na linha de delimitador pulava o scan. Agora `check_urls_in_line`
+      roda **antes** do flip de estado, nas duas ramificações (`"""` e `'''`).
+- [x] **O bug era maior que a issue** — e a medição também corrigiu uma suposição minha.
+      Levantei "três formas cegas"; o controle negativo mostrou **duas**:
 
-## Slice 3 — #110: `wwdates >=1.0.0`
+      | forma | cega antes? |
+      |---|---|
+      | `"""docstring de uma linha com URL"""` | ✅ sim (a que a issue reportou) |
+      | linha de **abertura** de docstring multi-linha (`"""Resumo … URL`) | ✅ sim, **não estava na issue** |
+      | linha de **fechamento** com texto (`… URL"""`) | ❌ não |
 
-- [ ] Bump nas tiers de serviço.
+      O fechamento passava por um motivo que vale registrar: o guard ancora em
+      `^[[:space:]]*"""`, então uma `"""` no fim de uma linha com texto **não é reconhecida
+      como delimitador** — o URL era escaneado como corpo (resposta certa, mecanismo errado) e
+      o estado nunca volta para `false`, de modo que tudo depois é lido como se ainda estivesse
+      dentro do docstring. Isso **super-escaneia** (falso positivo), o oposto do defeito do
+      #206, e a convenção NumPy fecha em linha própria — deixado como está, documentado no
+      script em vez de emendado num fix para a falha inversa.
+
+- [x] **6 testes de controle negativo**, offline: semeiam o cache do próprio hook (chaveado por
+      md5 do URL) em vez de bater na rede. Mais afiado que um fetch real — **só uma linha que
+      o scanner de fato leu consegue consultar o cache**. 4 formas de docstring + controle
+      positivo (mesmo fixture com 200 → passa) + controle de escopo (URL fora de docstring →
+      ignorado). Verificado que reprovam no script sem o fix: 2 falham, exatamente as 2 cegas.
+- [x] **Os 404s reais apareceram**, como a issue previu — 2, ambos corrigidos:
+      - `src/utils/sidecar_metadata.py:61` — `https://dados.cvm.gov.br/dados/FI/DOC/CAD` → **404**.
+        Reescrito como host + path (o hook pula URL host-only), seguindo a convenção que o
+        próprio `bin/CLAUDE.md` já enunciava.
+      - `optional/webhook/infrastructure/slack_notifier.py:7` —
+        `https://api.slack.com/messaging/webhooks` → **302**. Atualizado para o home 200 atual
+        (`https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/`).
+- [x] **Verificação:** `src`, `bin`, `tests`, `optional` → todos exit 0. shellcheck + `bash -n`
+      limpos; 40 testes de integração passam.
+
+## Slice 3 — #110: `wwdates >=1.0.0` ✅ ENTREGUE
+
+- [x] Bump nas 4 tiers de serviço (`ddd-*`, `mvc-*`), estilo `>=` conforme a decisão da issue.
+- [x] ⚠️ **A issue está desatualizada num ponto factual** e vale corrigir nela: ela afirma que
+      "`0.1.0` e `1.0.0` são as únicas releases". O PyPI hoje tem **`0.1.0`, `1.0.0`, `1.0.1`,
+      `2.0.0`**. Com piso aberto, `>=1.0.0` resolve para a **2.0.0** — outro major, que é
+      justamente o mecanismo que a issue temia (um major mudar o significado de `DatesBRAnbima`
+      sob o mesmo nome).
+- [x] **Verificado nos wheels reais, não no README**, baixando 1.0.0 e 2.0.0 do PyPI:
+      - as duas exportam `DatesBRAnbima` de `wwdates/br/anbima.py`;
+      - nenhuma importa cliente HTTP (`requests`/`urllib`/`httpx`) → offline de verdade;
+      - `__init__` só tem argumentos opcionais → `DatesBRAnbima()` continua válido;
+      - os 6 métodos que o wrapper chama existem nas duas.
+
+      O major da 2.0.0 é a **adição** dos calendários dos EUA, não uma mudança neste. O bump é
+      seguro e o wrapper tem **diff zero de código**, como a issue previu.
+- [x] Corrigidas as **3 afirmações obsoletas** em `src/utils/dates.py` que descreviam a
+      semântica com rede da 0.1.0 (docstring do módulo, comentário do singleton, docstring de
+      `holidays()`) — "buscado preguiçosamente", "network on first use, cached thereafter".
+      Um doc rastreado vale mais que memória na próxima sessão.
 
 ## Slice 4 — #167: gate de complexidade
 

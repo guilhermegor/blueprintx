@@ -57,8 +57,12 @@ def cvm_meta_url(str_base_url: str, str_dataset_key: str) -> str:
 	Parameters
 	----------
 	str_base_url : str
-		The dataset's base/directory URL (the portion before the data file), e.g.
-		``https://dados.cvm.gov.br/dados/FI/DOC/CAD``.
+		The dataset's base/directory URL (the portion before the data file) — for CVM, the
+		host ``https://dados.cvm.gov.br`` followed by the path ``/dados/FI/DOC/CAD``.
+		⚠️ Written as host + path rather than one URL on purpose: the ``check-urls`` hook
+		fetches every fetchable docstring URL and that directory answers 404 to a scripted
+		probe, while the host answers 200. It skips host-only URLs, which is why this form
+		passes and the joined one does not. See ``bin/CLAUDE.md`` → "Docstring URL convention".
 	str_dataset_key : str
 		The dataset key naming the descriptor (``cad_fi`` -> ``meta_cad_fi.txt``).
 
