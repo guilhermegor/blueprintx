@@ -243,6 +243,9 @@ def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None
 	THREADS are worse and were not what the review flagged — thread 101 is simply never
 	examined and the gate prints "All 100 ... answered" over unfinished conversations, which is
 	the false pass this whole file exists to eliminate.
+
+	The roster review is served ONLY on page two, so the last two assertions check that the
+	merged data reaches the verdicts — without pagination this PR reads as never reviewed.
 	"""
 	cls_gate = _load_gate()
 	list_calls: list[tuple[str | None, str | None]] = []
@@ -280,11 +283,10 @@ def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None
 	assert len(dict_pr["reviews"]["nodes"]) == 2, "page-two reviews must be merged in"
 	assert len(dict_pr["reviewThreads"]["nodes"]) == 2, "page-two threads must be merged in"
 
-	# And the merged data must reach the verdicts: the roster review is ONLY on page two, so
-	# without pagination this PR would be reported as never reviewed.
-	assert cls_gate.find_missing_review_problem(
-		dict_pr["reviews"]["nodes"], _ROSTER, "someone"
-	) is None
+	assert (
+		cls_gate.find_missing_review_problem(dict_pr["reviews"]["nodes"], _ROSTER, "someone")
+		is None
+	)
 	assert len(cls_gate.find_thread_problems(dict_pr["reviewThreads"]["nodes"], _ROSTER)) == 2
 
 
