@@ -772,7 +772,11 @@ main() {
 
     # GitHub-only assets exist iff a GitHub remote was established. With an upstream
     # tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
-    if git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    # ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
+    # for a pre-existing clone whose origin points elsewhere, and this branch pushes to it.
+    # SCAFFOLD_REMOTE_VERIFIED is the missing half (#212, raised by review on #215).
+    if [ "$SCAFFOLD_REMOTE_VERIFIED" = "1" ] \
+        && git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         copy_github_assets "$PROJECT_PATH"
         # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
         # make bump_version (cz bump). Strip BEFORE the assets commit so its Makefile/tasks.sh

@@ -42,6 +42,30 @@ branch, a review and a verification run — not because they share a cause.
 - [x] Control on the control: neutering the comparison to `if true` makes the check fail
       with exactly the three mismatch assertions. It has teeth.
 
+## Review round 1 (CodeRabbit on #215) — four findings, all valid
+
+- [x] **Host confusion, Major.** `scaffold_remote_slug` matched `github.com` as a SUBSTRING and
+      cut at the last occurrence, so `https://evil.example/github.com/octocat/widget.git`
+      reduced to `octocat/widget` and the guard accepted an arbitrary host — defeating #212 for
+      exactly the crafted input it exists to stop. Reproduced before fixing. Now parses the
+      supported URL forms and anchors the host; `github.com.evil.com/...` misses too.
+- [x] **Push URL never checked, Major.** `git remote get-url origin` returns only the FETCH
+      url, so a remote that fetches from the right repository could push elsewhere — and the
+      push is the whole risk. Now checks `--all` fetch **and** `--push --all`.
+- [x] **`|| true` was not the fix it looked like, Major.** Each `main` selects online mode with
+      `rev-parse @{u}`, which answers "is there an upstream?", never "is it OURS" — true for a
+      pre-existing clone. A refusal was swallowed and the online path still pushed. All six
+      selectors now also require `SCAFFOLD_REMOTE_VERIFIED=1`, set by the lib.
+- [x] **Status-only assertion, Minor.** `expect_add_remote` checked the exit code only; a pass
+      that added no remote, or a fail that rewrote the existing one, both slipped through. It
+      now asserts the resulting origin state in both directions.
+- [x] **Seeding covered one of four cache types, Minor.** The assertion rejects `__pycache__`,
+      `.pytest_cache`, `.ruff_cache`, `.mypy_cache` and loose `*.py[cod]`; only the first was
+      ever seeded, so three quarters of it could not fail — the same vacuous shape the seeding
+      exists to close, inside the PR that added the seeding. All five now seeded.
+- [x] 3 new host-confusion slug cases, 2 new refusal cases, 1 push-URL case; the tier harness
+      re-run green on `mvc-service-native-db`.
+
 ## Not done here, deliberately
 
 - The six copies of `initialize_git_repo` are still six copies. Deduping them is the

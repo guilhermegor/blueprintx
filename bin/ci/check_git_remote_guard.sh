@@ -44,13 +44,47 @@ make_repo_with_origin() {
 
 expect_add_remote() {
     # $1 = existing origin URL (empty for none), $2 = expected outcome (pass|fail)
-    local str_url="$1" str_want="$2" str_path str_got="pass"
+    #
+    # ⚠️ The exit status is NOT the whole assertion. A pass that added no remote, or a fail
+    # that rewrote the existing one, would both slip past a status-only check — and "the
+    # guard refused but retargeted origin anyway" is the failure mode with teeth. So a pass
+    # must leave origin resolving to OUR slug, and a fail must leave it untouched.
+    local str_url="$1" str_want="$2" str_path str_got="pass" str_after
     str_path="$(make_repo_with_origin "$str_url")"
     scaffold_add_git_remote "$str_path" >/dev/null 2>&1 || str_got="fail"
+    str_after="$(git -C "$str_path" remote get-url origin 2>/dev/null || true)"
     rm -rf "$str_path"
+
     if [ "$str_got" != "$str_want" ]; then
         print_status "error" \
             "scaffold_add_git_remote with origin='${str_url:-<none>}' → $str_got (expected $str_want)"
+        int_failures=$((int_failures + 1))
+        return 0
+    fi
+    if [ "$str_want" = "pass" ] && [ "$(scaffold_remote_slug "$str_after")" != "octocat/widget" ]; then
+        print_status "error" \
+            "passed with origin='${str_url:-<none>}' but origin is now '${str_after:-<none>}'"
+        int_failures=$((int_failures + 1))
+    fi
+    if [ "$str_want" = "fail" ] && [ "$str_after" != "$str_url" ]; then
+        print_status "error" \
+            "refused origin='${str_url}' but rewrote it to '${str_after:-<none>}'"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
+expect_push_url_mismatch() {
+    # A remote whose FETCH url is ours but whose PUSH url is not. `git remote get-url origin`
+    # returns only the fetch URL, so a fetch-only check waves this through — and it is the
+    # push that writes to the other repository.
+    local str_path str_got="pass"
+    str_path="$(make_repo_with_origin "git@github.com:octocat/widget.git")"
+    git -C "$str_path" remote set-url --push origin "git@github.com:someone-else/widget.git"
+    scaffold_add_git_remote "$str_path" >/dev/null 2>&1 || str_got="fail"
+    rm -rf "$str_path"
+    if [ "$str_got" != "fail" ]; then
+        print_status "error" \
+            "a matching fetch URL with a MISMATCHED push URL was accepted — pushes would go elsewhere"
         int_failures=$((int_failures + 1))
     fi
 }
@@ -63,8 +97,17 @@ main() {
     expect_slug "https://github.com/octocat/widget" "octocat/widget"
     expect_slug "https://github.com/octocat/widget.git" "octocat/widget"
     expect_slug "ssh://git@github.com/octocat/widget.git" "octocat/widget"
+    expect_slug "ssh://git@github.com/octocat/widget" "octocat/widget"
     # A non-GitHub remote reduces to itself, so it can never equal an owner/repo slug.
     expect_slug "git@gitlab.com:octocat/widget.git" "git@gitlab.com:octocat/widget"
+    # 🔴 HOST CONFUSION — the bypasses the first implementation accepted. `github.com` must be
+    # matched as a HOST, not as a substring: cutting at the last occurrence reduced the first
+    # of these to `octocat/widget` and the guard waved an arbitrary host through.
+    expect_slug "https://evil.example/github.com/octocat/widget.git" \
+        "https://evil.example/github.com/octocat/widget"
+    expect_slug "https://github.com.evil.com/octocat/widget" \
+        "https://github.com.evil.com/octocat/widget"
+    expect_slug "https://github.com/octocat/widget/extra" "octocat/widget/extra"
 
     expect_add_remote "" "pass"                                      # no origin → add it
     expect_add_remote "git@github.com:octocat/widget.git" "pass"     # same repo, ssh
@@ -72,6 +115,9 @@ main() {
     expect_add_remote "git@github.com:someone-else/widget.git" "fail"  # ← the one with teeth
     expect_add_remote "git@github.com:octocat/other-project.git" "fail"
     expect_add_remote "git@gitlab.com:octocat/widget.git" "fail"
+    expect_add_remote "https://evil.example/github.com/octocat/widget.git" "fail"
+    expect_add_remote "https://github.com.evil.com/octocat/widget.git" "fail"
+    expect_push_url_mismatch
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures git-remote guard assertion(s) failed"

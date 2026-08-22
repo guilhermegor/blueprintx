@@ -531,7 +531,11 @@ main() {
     # When the project is not connected to a GitHub remote (no upstream tracking
     # branch after setup), switch to offline mode: drop GitHub-only assets and
     # ship the git-diff sync workflow instead.
-    if ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    # ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
+    # for a pre-existing clone whose origin points elsewhere. Offline is the safe default, so
+    # an unverified remote falls here too (#212, raised by review on #215).
+    if [ "$SCAFFOLD_REMOTE_VERIFIED" != "1" ] \
+        || ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         apply_offline_mode "$PROJECT_PATH"
     fi
 
