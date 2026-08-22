@@ -103,12 +103,21 @@ _MIN_REPLY_CHARS = 100
 # on #204 and #213 (both merged unreviewed) the roster posted an issue COMMENT — the
 # star-gate refusal notice — but `reviews` was 0. So "the roster said something" would have
 # passed both; "the roster submitted a review" fails both and passes #209 (10) and #215 (1).
+# ⚠️ THE `states:` FILTER ON `reviews` IS LOAD-BEARING — measured, not defensive. Without it the
+# connection also returns unsubmitted DRAFT reviews. Verified on #216: opening a draft review and
+# re-querying showed it in the connection. The gate would then read "a reviewer reported" off
+# something nobody else can see — the vacuous pass this whole check exists to remove. It lives
+# outside the query string on purpose: a comment inside it is shipped over the wire on every
+# call, and its wording would collide with the test that pins the filter. Raised by review on #216.
 _QUERY = """
 query($owner:String!, $repo:String!, $number:Int!) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
       author { login }
-      reviews(first:100) { nodes { author { login } } }
+      reviews(
+        first:100,
+        states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
+      ) { nodes { author { login } } }
       reviewThreads(first:100) {
         nodes {
           isResolved

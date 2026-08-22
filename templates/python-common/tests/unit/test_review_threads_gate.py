@@ -221,6 +221,21 @@ def test_a_review_from_outside_the_roster_is_not_the_declared_review() -> None:
 	assert cls_gate.find_missing_review_problem([_review("some-human")], _ROSTER, "h") is not None
 
 
+def test_the_query_excludes_unsubmitted_reviews() -> None:
+	"""A PENDING review must not count as "a reviewer reported".
+
+	Measured on blueprintx#216: opening a draft review and re-querying showed it in the
+	``reviews`` connection, so without the ``states:`` filter the gate would read a reporting
+	reviewer off something nobody can see — the vacuous pass it exists to remove.
+
+	The filter lives in a GraphQL string that no unit test can execute, so this pins its
+	presence instead: cheap, and it fails the moment someone "simplifies" the query.
+	"""
+	cls_gate = _load_gate()
+	assert "states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]" in cls_gate._QUERY
+	assert "PENDING" not in cls_gate._QUERY
+
+
 def test_a_roster_members_own_pr_is_exempt() -> None:
 	"""A reviewer's own PR cannot require itself to review it.
 

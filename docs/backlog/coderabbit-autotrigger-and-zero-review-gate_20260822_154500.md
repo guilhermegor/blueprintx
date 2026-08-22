@@ -28,12 +28,12 @@ PR, the trigger alone is a nicety nobody notices failing.
 - [x] `synchronize` included deliberately: with auto-review off, "reviewed at open, real code
       pushed after" is exactly the hole this closes
 - [x] Drafts skipped; `ready_for_review` brings them back
-- [x] Posts via `secrets.CODERABBIT_TRIGGER_PAT`, **never** `GITHUB_TOKEN`
+- [x] Posts via `secrets.GH_PAT_REVIEW_TRIGGER`, **never** `GITHUB_TOKEN`
 - [x] **Fails, never skips, when the PAT is absent** — a `continue-on-error` would recreate
       the exact silent no-op being fixed. Fork PRs land here too, correctly.
 - [ ] ⚠️ **Manual step, owner only:** create the PAT (fine-grained, this repo,
       `Pull requests: Read and write`) and
-      `gh secret set CODERABBIT_TRIGGER_PAT --repo guilhermegor/blueprintx`.
+      `gh secret set GH_PAT_REVIEW_TRIGGER --repo guilhermegor/blueprintx --body '<pat>'`.
       Until then the job is red on every PR — which is the honest reading.
 
 ## Half B — the gate (#208)
