@@ -103,11 +103,17 @@ Cada metade fica com quem consegue reavaliá-la.
       Ou seja: o bloqueio era **sobredeterminado** — duas causas suficientes simultaneas, e uma
       medicao que nao separa qual delas agiu.
 
-      🔴 **Consequencia imediata, maior que esta caixa:** o `github-advanced-security` **nao
-      existia** no ultimo commit mergeado (`47e7b5a`, PR #216) e aparece em toda PR desde
-      entao. Ate ele voltar a passar, **nenhuma PR merga sem `--admin`** — e um bloqueio novo,
-      de servico do GitHub, nao de codigo deste repo. `code-scanning/default-setup` esta
-      `state=configured` com 6 linguagens.
+      🔴 **Consequencia imediata, maior que esta caixa — agora rastreada na #221.** O
+      `github-advanced-security` **nao existia** no ultimo commit mergeado (`47e7b5a`, PR #216)
+      e aparece em toda PR desde entao. Ate ele voltar a passar, **nenhuma PR merga sem
+      `--admin`** — e um bloqueio novo, de servico do GitHub, nao de codigo deste repo.
+      Causa-raiz no log do job, nao inferida: `CAPIError: 400 The requested model is not
+      supported`, com `COPILOT_AGENT_MODEL: sweagent-capi:claude-opus-4.6` contra
+      `api.individual.githubcopilot.com` — o agente do Copilot Autofix pede um modelo que a API
+      individual recusa. O CodeQL em si esta **saudavel** (`state=configured`, 6 linguagens,
+      scans passando, 0 alertas); quebra so o agente de AI findings montado em cima.
+      ⚠️ Mergear com `--admin` derruba **todos** os blocks juntos, inclusive o gate do #208 —
+      o custo exato contra o qual o proprio #208 argumenta.
 
       ⚠️ **A licao que eu escrevi hoje e a que eu violei.** "Medir as partes nao prova a
       composicao" — e entao provei a composicao com uma medicao de uma variavel que eu nao
