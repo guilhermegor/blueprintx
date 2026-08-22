@@ -236,6 +236,58 @@ def test_the_query_excludes_unsubmitted_reviews() -> None:
 	assert "PENDING" not in cls_gate._QUERY
 
 
+def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None:
+	"""A PR with more than 100 reviews or threads must not be judged on page one alone.
+
+	``first:100`` is a CAP, not "all". Truncated REVIEWS cause a false failure; truncated
+	THREADS are worse and were not what the review flagged — thread 101 is simply never
+	examined and the gate prints "All 100 ... answered" over unfinished conversations, which is
+	the false pass this whole file exists to eliminate.
+	"""
+	cls_gate = _load_gate()
+	list_calls: list[tuple[str | None, str | None]] = []
+
+	def fake_page(_o: str, _r: str, _n: int, str_rc: str | None, str_tc: str | None) -> dict:
+		list_calls.append((str_rc, str_tc))
+		if str_rc is None and str_tc is None:
+			return {
+				"author": {"login": "someone"},
+				"reviews": {
+					"pageInfo": {"hasNextPage": True, "endCursor": "R1"},
+					"nodes": [{"author": {"login": "human"}}],
+				},
+				"reviewThreads": {
+					"pageInfo": {"hasNextPage": True, "endCursor": "T1"},
+					"nodes": [_thread([("coderabbitai", "**A.** " + _LONG)])],
+				},
+			}
+		return {
+			"author": {"login": "someone"},
+			"reviews": {
+				"pageInfo": {"hasNextPage": False, "endCursor": None},
+				"nodes": [{"author": {"login": "coderabbitai"}}],
+			},
+			"reviewThreads": {
+				"pageInfo": {"hasNextPage": False, "endCursor": None},
+				"nodes": [_thread([("coderabbitai", "**B.** " + _LONG)])],
+			},
+		}
+
+	monkeypatch.setattr(cls_gate, "_fetch_page", fake_page)
+	dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+
+	assert list_calls == [(None, None), ("R1", "T1")], "the second page must be requested"
+	assert len(dict_pr["reviews"]["nodes"]) == 2, "page-two reviews must be merged in"
+	assert len(dict_pr["reviewThreads"]["nodes"]) == 2, "page-two threads must be merged in"
+
+	# And the merged data must reach the verdicts: the roster review is ONLY on page two, so
+	# without pagination this PR would be reported as never reviewed.
+	assert cls_gate.find_missing_review_problem(
+		dict_pr["reviews"]["nodes"], _ROSTER, "someone"
+	) is None
+	assert len(cls_gate.find_thread_problems(dict_pr["reviewThreads"]["nodes"], _ROSTER)) == 2
+
+
 def test_a_roster_members_own_pr_is_exempt() -> None:
 	"""A reviewer's own PR cannot require itself to review it.
 

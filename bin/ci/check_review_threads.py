@@ -109,16 +109,28 @@ _MIN_REPLY_CHARS = 100
 # something nobody else can see — the vacuous pass this whole check exists to remove. It lives
 # outside the query string on purpose: a comment inside it is shipped over the wire on every
 # call, and its wording would collide with the test that pins the filter. Raised by review on #216.
+# ⚠️ BOTH CONNECTIONS PAGINATE, AND THE THREADS HALF IS THE DANGEROUS ONE.
+#
+# `first:100` is a CAP, not "all". Raised by review on #216 for `reviews`, where truncation
+# causes a false FAILURE — annoying, and it needs 100 non-roster reviews before the roster's
+# first (measured: `first` returns OLDEST first, `last` returns newest). The same cap on
+# `reviewThreads` is worse and nobody flagged it: thread 101 is simply never examined, and the
+# gate prints "All 100 review thread(s) answered" over unfinished conversations — a false PASS,
+# which is the exact shape this file exists to eliminate.
 _QUERY = """
-query($owner:String!, $repo:String!, $number:Int!) {
+query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
       author { login }
       reviews(
-        first:100,
+        first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
-      ) { nodes { author { login } } }
-      reviewThreads(first:100) {
+      ) {
+        pageInfo { hasNextPage endCursor }
+        nodes { author { login } }
+      }
+      reviewThreads(first:100, after:$tc) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
           isOutdated
@@ -188,6 +200,52 @@ def load_roster(path_root: pathlib.Path) -> set[str]:
 	}
 
 
+def _fetch_page(
+	str_owner: str,
+	str_repo: str,
+	int_number: int,
+	str_review_cursor: str | None,
+	str_thread_cursor: str | None,
+) -> dict:
+	"""Run one page of the query.
+
+	Returns
+	-------
+	dict
+	    The ``pullRequest`` node for this page.
+
+	Raises
+	------
+	RuntimeError
+	    If the API call fails, so an unreachable API is never mistaken for a clean PR.
+	"""
+	list_cmd = [
+		"gh",
+		"api",
+		"graphql",
+		"-f",
+		f"query={_QUERY}",
+		"-F",
+		f"owner={str_owner}",
+		"-F",
+		f"repo={str_repo}",
+		"-F",
+		f"number={int_number}",
+		"-F",
+		f"rc={str_review_cursor}" if str_review_cursor else "rc=",
+		"-F",
+		f"tc={str_thread_cursor}" if str_thread_cursor else "tc=",
+	]
+	# Constant argv built from CI-provided identifiers; no shell is involved.
+	cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
+	if cls_run.returncode != 0:
+		raise RuntimeError(f"GraphQL query failed: {cls_run.stderr.strip()[:400]}")
+	dict_out = json.loads(cls_run.stdout)
+	if "errors" in dict_out:
+		raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
+	return dict_out["data"]["repository"]["pullRequest"]
+
+
 def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
 	"""Fetch the PR's author, submitted reviews and review threads in one GraphQL call.
 
@@ -210,27 +268,27 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
 	RuntimeError
 	    If the API call fails, so an unreachable API is never mistaken for a clean PR.
 	"""
-	list_cmd = [
-		"gh",
-		"api",
-		"graphql",
-		"-f",
-		f"query={_QUERY}",
-		"-F",
-		f"owner={str_owner}",
-		"-F",
-		f"repo={str_repo}",
-		"-F",
-		f"number={int_number}",
-	]
-	# Constant argv built from CI-provided identifiers; no shell is involved.
-	cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
-	if cls_run.returncode != 0:
-		raise RuntimeError(f"GraphQL query failed: {cls_run.stderr.strip()[:400]}")
-	dict_out = json.loads(cls_run.stdout)
-	if "errors" in dict_out:
-		raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
-	return dict_out["data"]["repository"]["pullRequest"]
+	dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None)
+	dict_reviews = dict_pr["reviews"]
+	dict_threads = dict_pr["reviewThreads"]
+
+	# Follow both cursors until neither has a next page. Independent cursors, one request each
+	# round: passing a cursor for a connection that is already exhausted just re-returns its
+	# last (empty) page, so the loop terminates on the slower of the two.
+	while dict_reviews["pageInfo"]["hasNextPage"] or dict_threads["pageInfo"]["hasNextPage"]:
+		dict_next = _fetch_page(
+			str_owner,
+			str_repo,
+			int_number,
+			dict_reviews["pageInfo"]["endCursor"] if dict_reviews["pageInfo"]["hasNextPage"] else None,
+			dict_threads["pageInfo"]["endCursor"] if dict_threads["pageInfo"]["hasNextPage"] else None,
+		)
+		for dict_side, str_key in ((dict_reviews, "reviews"), (dict_threads, "reviewThreads")):
+			if not dict_side["pageInfo"]["hasNextPage"]:
+				continue
+			dict_side["nodes"].extend(dict_next[str_key]["nodes"])
+			dict_side["pageInfo"] = dict_next[str_key]["pageInfo"]
+	return dict_pr
 
 
 def find_missing_review_problem(
