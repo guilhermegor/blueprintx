@@ -83,50 +83,42 @@ Cada metade fica com quem consegue reavaliá-la.
       ⚠️ `strict` segue `false` (não exige branch atualizada antes do merge) e
       `required_approving_review_count` é **0** — o bloqueio vem dos checks, não de aprovação
       humana. `required_conversation_resolution` está `true`.
-- [ ] provar o bloqueio numa PR real antes de fechar a #173 — ⚠️ **DESTICADO 2026-08-22, no
-      mesmo dia em que foi tickado.** Um commit vazio de isolamento (`a1ba4a6`) mostrou que a
-      observacao estava **confundida**.
+- [x] provar o bloqueio numa PR real antes de fechar a #173 — **PROVADO 2026-08-22, com
+      controle negativo**, depois de duas conclusoes precipitadas minhas no mesmo dia. A
+      cronologia importa mais que o resultado, entao fica registrada inteira.
 
-      **O que continua verdadeiro.** As 20:46 na `9e7d1fe`, `mergeable=MERGEABLE` e
-      `mergeStateStatus=BLOCKED` — os dois campos discordando, o segundo sendo o que manda — e
-      `Review threads answered` em `fail` com a mensagem nova do #208: *"no declared reviewer
-      ever reported on this PR"*. O gate estava vermelho e e mesmo obrigatorio.
+      **A prova, agora com os dois lados:**
 
-      **O que nao esta provado.** Que foi ELE que segurou o botao. Em `a1ba4a6` os **15**
-      required checks ficaram verdes com **uma** run cada, zero threads em aberto, PR
-      nao-draft, 0 aprovacoes exigidas — e a PR seguiu **`BLOCKED`**. O culpado nao esta entre
-      os 15: e o check **`github-advanced-security`** (workflow dinamico *"Code scanning AI
-      findings"*, gerado pelo GitHub, `path: dynamic/agents/github-advanced-security`), que
-      reprova no passo *"Processing Request (Linux)"* com `output.title` e `output.summary`
-      **nulos**. Nao esta em `required_status_checks.contexts`, nao pertence a nenhum workflow
-      deste repo, e bloqueia assim mesmo. Estava reprovando tambem na `9e7d1fe`.
-      Ou seja: o bloqueio era **sobredeterminado** — duas causas suficientes simultaneas, e uma
-      medicao que nao separa qual delas agiu.
+      | commit | gate `Review threads answered` | `github-advanced-security` | `mergeStateStatus` |
+      |---|---|---|---|
+      | `9e7d1fe` | **fail** (nenhuma review) | fail | **BLOCKED** |
+      | `7efc1e4` | success | **fail** | **CLEAN** |
 
-      🔴 **Consequencia imediata, maior que esta caixa — agora rastreada na #221.** O
-      `github-advanced-security` **nao existia** no ultimo commit mergeado (`47e7b5a`, PR #216)
-      e aparece em toda PR desde entao. Ate ele voltar a passar, **nenhuma PR merga sem
-      `--admin`** — e um bloqueio novo, de servico do GitHub, nao de codigo deste repo.
-      Causa-raiz no log do job, nao inferida: `CAPIError: 400 The requested model is not
-      supported`, com `COPILOT_AGENT_MODEL: sweagent-capi:claude-opus-4.6` contra
-      `api.individual.githubcopilot.com` — o agente do Copilot Autofix pede um modelo que a API
-      individual recusa. O CodeQL em si esta **saudavel** (`state=configured`, 6 linguagens,
-      scans passando, 0 alertas); quebra so o agente de AI findings montado em cima.
-      ⚠️ Mergear com `--admin` derruba **todos** os blocks juntos, inclusive o gate do #208 —
-      o custo exato contra o qual o proprio #208 argumenta.
+      A segunda linha e o controle negativo que faltava: com o GHAS vermelho e o gate verde a
+      PR fica **CLEAN**, logo o GHAS **nao bloqueia**. Na primeira linha a unica diferenca e o
+      gate. **Foi ele que segurou o botao.**
 
-      ⚠️ **A licao que eu escrevi hoje e a que eu violei.** "Medir as partes nao prova a
-      composicao" — e entao provei a composicao com uma medicao de uma variavel que eu nao
-      sabia existir. Um controle negativo so vale se voce enumerar o que MAIS poderia produzir
-      o efeito. `mergeStateStatus=BLOCKED` diz *que* esta bloqueado, nunca *por que*: a
-      pergunta seguinte e sempre `commits/<sha>/check-runs` **inteiro**, nao so os required.
+      ⚠️ **Duas conclusoes precipitadas, ambas a partir de UMA leitura de um campo assincrono.**
+      1. Primeiro tickei esta caixa lendo `BLOCKED` ao lado do gate vermelho — sem enumerar o
+         que mais poderia estar bloqueando.
+      2. Depois destiquei, ao ver `a1ba4a6` (15/15 verdes, GHAS vermelho) responder `BLOCKED`,
+         e culpei o GHAS. Errado tambem: `7efc1e4` tem a **mesma** configuracao e responde
+         `CLEAN`. A unica explicacao consistente e que a leitura na `a1ba4a6` estava
+         **atrasada** — a hipotese de propagacao que eu tinha declarado refutada cedo demais,
+         duas vezes.
 
-      **Como fechar de verdade:** com o GHAS verde (ou removido do caminho), abrir uma PR onde
-      o unico check vermelho seja `Review threads answered`, e so entao ler `BLOCKED`.
+      **A regra que sobra, e que custou tres rodadas:** `mergeStateStatus` e **computado de
+      forma assincrona**. Uma leitura isolada nao sustenta conclusao nenhuma — nem positiva nem
+      negativa. Reler depois de todos os checks completarem, e so concluir quando duas leituras
+      separadas concordarem. E `BLOCKED` segue dizendo *que*, nunca *por que*: a conclusao
+      causal exige o controle negativo, nao so a observacao.
 
-      Dois efeitos colaterais que a observacao original registrou e seguem validos:
+      Dois efeitos colaterais registrados na observacao original e ainda validos:
       1. Toda PR nasce vermelha e fica assim ate a review chegar. E o comportamento correto,
          mas `Review threads answered` **nunca** e verde no instante em que a PR abre — quem
          olhar cedo demais le como defeito.
       2. A mensagem listou `github-actions` entre os revisores esperados — o defeito da
          **#218**, visto em producao e nao so lido no codigo.
+
+      O `github-advanced-security` segue reprovando em toda PR (**#221**) — e ruido vermelho
+      permanente, sem titulo nem sumario, mas **nao** bloqueia merge.

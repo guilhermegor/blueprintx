@@ -103,7 +103,8 @@ this". Same class of hole #208 closed.
 
 - [x] ⚠️ The old secret held a CodeRabbit key under the old name. **The GitHub secret was
       deleted 2026-08-22** — `gh secret list` no longer returns `CODERABBIT_TRIGGER_PAT`.
-- [ ] 🔴 ⚠️ **The credential itself is NOT revoked, and deleting the secret did not revoke it.**
+- [x] 🔴 ⚠️ **The credential itself is NOT revoked, and deleting the secret did not revoke it.**
+      **Revoked by the owner 2026-08-22.**
       Raised in review on PR #219 and correct: `gh secret delete` removes GitHub's encrypted
       *copy*; the key stays live in CodeRabbit and keeps working for anyone who has the value.
       Two facts make that worse than a stale copy: the value was pasted through a terminal (so
@@ -138,10 +139,11 @@ this". Same class of hole #208 closed.
 
 ## Completed 2026-08-22 — kept as a record
 
-Every box **that this work could close** is ticked. Two things are deliberately not claimed:
+Every box is ticked. Two things are deliberately not claimed:
 
-- **One box stays open**: revoking the CodeRabbit key. It is owner-only (no CLI, no API) and
-  ticking it would assert a revocation nobody performed.
+- **The revocation is done** (owner, 2026-08-22). It stayed open for exactly as long as it
+  was unperformed — which is the point: it is owner-only (no CLI, no API), so ticking it early
+  would have asserted something nobody did.
 - **"No follow-up action" above is scoped to the required-check CONFIGURATION only** — raised
   in review and worth stating plainly, since the sentence sits next to a paragraph about the
   gate's behaviour and could be read as covering it.
