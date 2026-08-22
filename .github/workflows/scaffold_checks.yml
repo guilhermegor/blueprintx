@@ -31,6 +31,20 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  git-remote-guard:
+    name: Scaffold origin verification — mismatched remote must fail
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # No setup step: the check sources the scaffold lib and drives it against throwaway
+      # local repos. It never reaches the network, and `gh` is never invoked.
+      - name: Verify an existing origin pointing elsewhere is refused
+        run: bash bin/ci/check_git_remote_guard.sh
+
   function-length:
     name: Function length — 60 lines, docstring excluded
     runs-on: ubuntu-latest

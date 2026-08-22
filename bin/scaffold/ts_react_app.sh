@@ -460,9 +460,13 @@ initialize_git_repo() {
 }
 
 prompt_git_remote_setup() {
-	scaffold_prompt_git_remote_setup "$1"
-	apply_branch_protection "$1"
-	prompt_pages_setup
+	# Branch protection and Pages both write to the remote, so they run only once that
+	# remote is verified to be the repository this scaffold names — not merely because
+	# the prompt returned (#212).
+	if scaffold_prompt_git_remote_setup "$1"; then
+		apply_branch_protection "$1"
+		prompt_pages_setup
+	fi
 }
 
 apply_offline_mode() {
@@ -519,6 +523,8 @@ main() {
     apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
+    # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
+    scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 

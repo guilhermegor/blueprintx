@@ -287,7 +287,9 @@ initialize_git_repo() {
 }
 
 prompt_git_remote_setup() {
-	scaffold_prompt_git_remote_setup "$1"
+	# Non-zero just means "no verified remote" (#212); main already routes that to
+	# offline mode via the @{u} check, so it must not abort the scaffold under `set -e`.
+	scaffold_prompt_git_remote_setup "$1" || true
 	# Branch protection is applied later, in commit_and_push_github_assets, only for the
 	# online path and only after the .github assets have been pushed — so the asset push
 	# is never blocked by the rules we are about to set.
@@ -763,6 +765,8 @@ main() {
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
+    # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
+    scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
