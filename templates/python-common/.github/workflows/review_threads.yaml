@@ -47,9 +47,12 @@ name: Review Threads
 #   - the local `pr_merge_threads_guard.sh` PreToolUse hook: both halves, queried live at the
 #     moment of `gh pr merge`.
 #
-# ⚠️ Because this IS required, `cancel-in-progress` must stay **false** below: a cancelled run
-# still publishes a check run under this job's name with conclusion `cancelled`, which is not
-# success, and no event remains to turn it green.
+# ⚠️ SUPERSEDED 2026-08-22 (#216). This block used to say `cancel-in-progress` must stay
+# **false** below because a cancelled run publishes a `cancelled` conclusion. There is no
+# concurrency block at all now, and the reason is worse than that: see the note above `jobs:`.
+# `false` does not stop a QUEUED run being cancelled by the next one, and a run cancelled before
+# it starts publishes NOTHING — leaving the required context `Expected — Waiting for status to
+# be reported`, which no re-run clears.
 # Closing this properly inside Actions needs a webhook receiver or GitHub App dispatching a
 # `repository_dispatch` on `resolved`; not worth a always-on listener for this repo.
 on:
@@ -61,18 +64,26 @@ permissions:
   contents: read
   pull-requests: read
 
-concurrency:
-  # Keyed on the PR, not the ref: several review comments can land in seconds and only the
-  # latest verdict matters.
-  #
-  # ⚠️ cancel-in-progress MUST stay false: this job's name is seeded into REQUIRED_CHECKS by
-  # bin/enable_repo_rules.sh, and a cancelled run still publishes a check run under that name
-  # with conclusion `cancelled` — not success. The merge gate then reads red with no event
-  # left to turn it green (measured blueprintx#185: a `pull_request_review` run cancelled a
-  # `pull_request` one and the PR sat BLOCKED on a verdict nobody produced). Queueing costs a
-  # few seconds; cancelling costs a deadlock that looks exactly like a real failure.
-  group: review-threads-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+# ⚠️ NO `concurrency:` BLOCK, DELIBERATELY — DO NOT "TIDY THIS UP".
+#
+# There was one, keyed on the PR with `cancel-in-progress: false`, on the reasoning that only the
+# latest verdict matters and that `false` made it safe for a required check. Both halves were
+# wrong, and the second is wrong in a way the old note understated.
+#
+# `cancel-in-progress: false` does NOT mean "nothing gets cancelled". It means a RUNNING job is
+# not cancelled — but only ONE run may sit PENDING per group, so each newly queued run cancels
+# the one already waiting. Answering three review threads in one burst produced **10 runs in 25
+# seconds** on blueprintx#216: five `success`, five `cancelled`.
+#
+# And a run cancelled while still QUEUED never starts, so it publishes no check run at all. The
+# required context is then left `Expected — Waiting for status to be reported` — not red, which
+# you could re-run, but UNREPORTED, which nothing clears: resolving a thread emits no workflow
+# trigger, and re-running a sibling run does not satisfy the expectation. The PR sits BLOCKED
+# with every visible check green and no failure to point at. That is strictly worse than the
+# `cancelled` conclusion the old note predicted, because there is nothing to click.
+#
+# The job is a few seconds of one runner. Letting every event have its own run costs less than
+# one deadlock, and it is the only shape that cannot exhibit this at all.
 
 jobs:
 

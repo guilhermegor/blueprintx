@@ -157,14 +157,147 @@ def test_an_answered_but_open_thread_is_now_reported() -> None:
 	assert "NOT resolved" in list_problems[0]
 
 
-def test_a_pr_with_no_threads_passes() -> None:
-	"""A reviewer that posts only a status check leaves no thread, and that is not a failure.
+def test_no_threads_is_not_a_THREAD_problem() -> None:
+	"""A reviewer posting only a status check leaves no thread — not a THREAD failure.
 
 	Measured: one tool posted five inline threads on a PR while another posted none at all. A
 	roster that assumes every reviewer speaks in threads is born broken.
+
+	⚠️ This function's silence on the empty set is correct but is NOT the whole verdict — see
+	``find_missing_review_problem``, which owns "there were never any threads because nobody
+	reviewed". Keeping the two apart is what lets each say something true.
 	"""
 	cls_gate = _load_gate()
 	assert cls_gate.find_thread_problems([], _ROSTER) == []
+
+
+# --------------------------
+# 🔴 The empty set — a PR that merged with NO review at all
+# --------------------------
+
+
+def _review(str_login: str) -> dict:
+	"""Build a submitted review authored by ``str_login``."""
+	return {"author": {"login": str_login}}
+
+
+def test_a_pr_nobody_reviewed_fails() -> None:
+	"""Zero reviews from the roster must FAIL — the case the gate most needs to catch.
+
+	Measured on PR #204: the reviewer was star-gated, posted only its refusal notice, and the
+	PR merged with 29 of 30 checks green. Reading threads alone, "found nothing" and "never
+	ran" are both zero, and the gate reported the second as ``All 0 review thread(s)
+	answered.``
+	"""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem([], _ROSTER, "some-human")
+	assert str_problem is not None
+	assert "never ran" in str_problem, "the message must not read like 'found nothing'"
+
+
+def test_a_reviewer_that_found_nothing_passes() -> None:
+	"""A submitted review with zero threads is a clean PR, not an absent reviewer.
+
+	This is the half that makes the check above safe to require: without it the gate would be
+	unsatisfiable on any PR a reviewer genuinely had no findings for.
+	"""
+	cls_gate = _load_gate()
+	assert cls_gate.find_missing_review_problem([_review("coderabbitai")], _ROSTER, "h") is None
+
+
+def test_the_review_author_spelling_does_not_matter() -> None:
+	"""REST and GraphQL disagree on a bot login, and this predicate must survive both.
+
+	The same mismatch made the thread half of this gate permanently green once already.
+	"""
+	cls_gate = _load_gate()
+	for str_login in ("coderabbitai", "coderabbitai[bot]"):
+		assert cls_gate.find_missing_review_problem([_review(str_login)], _ROSTER, "h") is None
+
+
+def test_a_review_from_outside_the_roster_is_not_the_declared_review() -> None:
+	"""A passing human comment is not the reviewer this gate was told to expect."""
+	cls_gate = _load_gate()
+	assert cls_gate.find_missing_review_problem([_review("some-human")], _ROSTER, "h") is not None
+
+
+def test_the_query_excludes_unsubmitted_reviews() -> None:
+	"""A PENDING review must not count as "a reviewer reported".
+
+	Measured on blueprintx#216: opening a draft review and re-querying showed it in the
+	``reviews`` connection, so without the ``states:`` filter the gate would read a reporting
+	reviewer off something nobody can see — the vacuous pass it exists to remove.
+
+	The filter lives in a GraphQL string that no unit test can execute, so this pins its
+	presence instead: cheap, and it fails the moment someone "simplifies" the query.
+	"""
+	cls_gate = _load_gate()
+	assert "states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]" in cls_gate._QUERY
+	assert "PENDING" not in cls_gate._QUERY
+
+
+def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None:
+	"""A PR with more than 100 reviews or threads must not be judged on page one alone.
+
+	``first:100`` is a CAP, not "all". Truncated REVIEWS cause a false failure; truncated
+	THREADS are worse and were not what the review flagged — thread 101 is simply never
+	examined and the gate prints "All 100 ... answered" over unfinished conversations, which is
+	the false pass this whole file exists to eliminate.
+
+	The roster review is served ONLY on page two, so the last two assertions check that the
+	merged data reaches the verdicts — without pagination this PR reads as never reviewed.
+	"""
+	cls_gate = _load_gate()
+	list_calls: list[tuple[str | None, str | None]] = []
+
+	def fake_page(_o: str, _r: str, _n: int, str_rc: str | None, str_tc: str | None) -> dict:
+		list_calls.append((str_rc, str_tc))
+		if str_rc is None and str_tc is None:
+			return {
+				"author": {"login": "someone"},
+				"reviews": {
+					"pageInfo": {"hasNextPage": True, "endCursor": "R1"},
+					"nodes": [{"author": {"login": "human"}}],
+				},
+				"reviewThreads": {
+					"pageInfo": {"hasNextPage": True, "endCursor": "T1"},
+					"nodes": [_thread([("coderabbitai", "**A.** " + _LONG)])],
+				},
+			}
+		return {
+			"author": {"login": "someone"},
+			"reviews": {
+				"pageInfo": {"hasNextPage": False, "endCursor": None},
+				"nodes": [{"author": {"login": "coderabbitai"}}],
+			},
+			"reviewThreads": {
+				"pageInfo": {"hasNextPage": False, "endCursor": None},
+				"nodes": [_thread([("coderabbitai", "**B.** " + _LONG)])],
+			},
+		}
+
+	monkeypatch.setattr(cls_gate, "_fetch_page", fake_page)
+	dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+
+	assert list_calls == [(None, None), ("R1", "T1")], "the second page must be requested"
+	assert len(dict_pr["reviews"]["nodes"]) == 2, "page-two reviews must be merged in"
+	assert len(dict_pr["reviewThreads"]["nodes"]) == 2, "page-two threads must be merged in"
+
+	assert (
+		cls_gate.find_missing_review_problem(dict_pr["reviews"]["nodes"], _ROSTER, "someone")
+		is None
+	)
+	assert len(cls_gate.find_thread_problems(dict_pr["reviewThreads"]["nodes"], _ROSTER)) == 2
+
+
+def test_a_roster_members_own_pr_is_exempt() -> None:
+	"""A reviewer's own PR cannot require itself to review it.
+
+	A gate nobody can satisfy is one people learn to bypass with ``--admin``, and the bypass
+	habit swallows the real blocks too.
+	"""
+	cls_gate = _load_gate()
+	assert cls_gate.find_missing_review_problem([], _ROSTER, "coderabbitai[bot]") is None
 
 
 def test_an_absent_roster_makes_the_gate_a_no_op(tmp_path: Path) -> None:
@@ -202,7 +335,7 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr() -> None:
 	"""
 	cls_gate = _load_gate()
 	with pytest.raises(RuntimeError):
-		cls_gate.fetch_threads("no-such-owner-xyz", "no-such-repo-xyz", 1)
+		cls_gate.fetch_pull_request("no-such-owner-xyz", "no-such-repo-xyz", 1)
 
 
 # --------------------------

@@ -1,0 +1,136 @@
+name: CodeRabbit Trigger
+
+# Ask CodeRabbit for a review on every PR, because it will not ask itself here.
+#
+# ⚠️ WHY THIS FILE EXISTS AT ALL. CodeRabbit declines AUTOMATIC reviews on a repository with
+# fewer than 10 stars ("This repository does not receive automatic reviews because it has
+# fewer than 10 stars"). A freshly scaffolded repository has 0, so it is under the threshold by
+# construction — this is not an edge case, it is every new project's starting state. That
+# threshold is CodeRabbit's and is NOT
+# configurable from `.coderabbit.yaml` — there is no popularity key in the schema, and
+# `auto_review.enabled` already defaults to `true`, so editing config changes nothing. The
+# plan is not the problem either: the run config reports `Plan: Pro Plus`.
+#
+# The consequence is the real defect: in the repo where this was built, two PRs MERGED having
+# never been reviewed, with every check green, because nothing was watching for the absence
+# (blueprintx#204, #213). Every measurement cited below was taken there.
+#
+# ⚠️ WHY A PAT AND NOT `GITHUB_TOKEN` — THIS IS THE WHOLE DESIGN, MEASURED, DO NOT "SIMPLIFY".
+# CodeRabbit honours a manual `@coderabbitai review` regardless of auto-review config, but it
+# IGNORES bot-authored comments. A comment posted with `GITHUB_TOKEN` is authored by
+# `github-actions[bot]` (`user.type: Bot`) and was measured on blueprintx#210: 5 minutes, no reply, no
+# refusal, silently dropped. A comment posted with a user PAT is authored by that user
+# (`user.type: User`, `author_association: OWNER`) and is indistinguishable from one typed in
+# the browser — measured on blueprintx#215: replied in 9 seconds and produced 4 review threads.
+#
+# ⚠️ THE NAME MATTERS AND USED TO BE WRONG. This was `CODERABBIT_TRIGGER_PAT`, which reads as
+# "CodeRabbit's PAT" when it means "a GITHUB PAT that triggers CodeRabbit". Measured cost: the
+# first person to set it stored a CodeRabbit API key from app.coderabbit.ai/settings/api-keys —
+# a reasonable reading of the name — and got two rounds of `401 Bad credentials` for it. Both
+# products call their credential a token, so the variable name is the only disambiguator, and a
+# scaffolded project inherits whatever name is chosen here.
+#
+# ⚠️ And it cannot be `GITHUB_PAT_…`, however well that would read: Actions reserves the whole
+# prefix — `HTTP 422: Secret names must not start with GITHUB_`, verified against the API. `GH_`
+# is the closest legal spelling.
+#
+# SETUP (one manual step, and the workflow fails loudly until it is done):
+#   1. Create a **GitHub** PAT (github.com/settings/personal-access-tokens — NOT a CodeRabbit
+#      API key) on the account that should appear as the commenter. Fine-grained, this
+#      repository only, with `Pull requests: Read and write`. The value starts `github_pat_`.
+#   2. `gh secret set GH_PAT_REVIEW_TRIGGER --repo <owner>/<repo> --body '<pat>'`
+#
+# The scaffolder does step 2 for you when `GH_PAT_REVIEW_TRIGGER` is exported in the environment
+# at scaffold time; it prints this command when it is not. Scope the PAT to **All repositories**
+# if you scaffold often — a per-repository PAT has to be edited for every new project, which is
+# most of the automation gone.
+#
+# The paired gate is `review_threads.yaml` → `bin/ci/check_review_threads.py`, which fails a PR
+# where no declared reviewer ever submitted a review. Without that gate this workflow is a
+# best-effort nicety; without this workflow that gate blocks every PR. They ship together.
+
+on:
+  pull_request:
+    # `synchronize` is deliberate: with auto-review off, a push after the first review is
+    # otherwise never looked at, and "reviewed at open, real code pushed after" is exactly the
+    # hole this file exists to close. CodeRabbit reviews incrementally, so the cost is bounded.
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  # Several pushes in a row need one trigger, not one each. Cancelling is safe here: this
+  # workflow publishes no verdict anyone waits on — unlike review_threads.yml, whose
+  # cancel-in-progress must stay false because it IS a required check.
+  group: coderabbit-trigger-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+
+  trigger:
+    name: Ask CodeRabbit for a review
+    # A draft is not ready to be reviewed; `ready_for_review` brings it back.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # ⚠️ FAIL, NEVER SKIP, WHEN THE PAT IS ABSENT.
+      #
+      # A `continue-on-error` or an `if: secrets.X != ''` here would turn a missing secret into
+      # a silent no-op — and a silent no-op is precisely the state this whole file is fixing: no
+      # review happens, and nothing says so. A fork PR gets no secrets either, so it lands here
+      # too, correctly: a fork PR genuinely cannot self-trigger and a human must ask.
+      # ⚠️ THE SHAPE CHECK EARNS ITS KEEP: a bare `401 Bad credentials` from the API step below
+      # cannot tell "the token is wrong" from "the token was STORED wrong", and those have
+      # opposite fixes. Two rounds were lost to that ambiguity. `gh secret set … < file` keeps
+      # the file's trailing newline, and a token with `\n` 401s exactly like an expired one.
+      #
+      # ⚠️ This repository is PUBLIC and so are these logs. Report only CLASS and BOOLEANS —
+      # never the value, never a substring of it, never its exact length. Actions masks the
+      # secret, but a substring of a masked value is NOT masked.
+      - name: The trigger PAT must exist and be well-formed
+        env:
+          GH_PAT_REVIEW_TRIGGER: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
+        run: |
+          if [ -z "$GH_PAT_REVIEW_TRIGGER" ]; then
+            echo "::error::GH_PAT_REVIEW_TRIGGER is not set, so no review can be requested." >&2
+            echo "GITHUB_TOKEN cannot substitute: CodeRabbit ignores bot-authored comments" >&2
+            echo "(measured on blueprintx#210). Set a user PAT with Pull requests: write —" >&2
+            echo "  gh secret set GH_PAT_REVIEW_TRIGGER --repo $GITHUB_REPOSITORY --body '<pat>'" >&2
+            exit 1
+          fi
+
+          case "$GH_PAT_REVIEW_TRIGGER" in
+          github_pat_*) echo "token class: fine-grained (github_pat_)" ;;
+          ghp_*) echo "token class: classic PAT (ghp_)" ;;
+          gho_*) echo "token class: OAuth (gho_) — this is a gh-CLI login token, not a PAT" ;;
+          ghs_*) echo "token class: installation/app (ghs_) — cannot act as a user" ;;
+          *) echo "::warning::token class: UNRECOGNISED prefix — is this a token at all?" ;;
+          esac
+
+          # The whitespace test is the one that catches a redirect-stored secret.
+          if printf '%s' "$GH_PAT_REVIEW_TRIGGER" | grep -qE '[[:space:]]'; then
+            echo "::error::the stored secret contains whitespace (very likely a trailing newline)." >&2
+            echo "That 401s exactly like a bad token. Re-store it with --body, never a redirect:" >&2
+            echo "  gh secret set GH_PAT_REVIEW_TRIGGER --repo $GITHUB_REPOSITORY --body '<pat>'" >&2
+            exit 1
+          fi
+          echo "no whitespace in the stored value."
+
+      # Fails with GitHub's own reason, which the step above has already narrowed: if the value
+      # is well-formed and STILL 401s, the token itself is expired, revoked, or scoped to the
+      # wrong resource owner — none of which this repo can fix.
+      - name: The PAT must authenticate as a user
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
+        run: gh api user --jq '"authenticates as \(.login) [\(.type)]"'
+
+      - name: Request the review
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            -f body='@coderabbitai review' \
+            --jq '"requested by \(.user.login) [\(.user.type)]"'

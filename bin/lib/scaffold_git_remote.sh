@@ -186,6 +186,46 @@ scaffold_push_initial_commit() {
 	fi
 }
 
+scaffold_set_review_trigger_secret() {
+	# Give the new repo the PAT its coderabbit_trigger workflow needs, from the environment.
+	#
+	# ⚠️ WHY THE SCAFFOLD DOES THIS AT ALL. Actions secrets are per-repository and `gh repo
+	# create` copies none, so every scaffolded project starts with the workflow present and the
+	# secret absent — the job red on its first PR. The scaffolder is already authenticated with
+	# `gh` right here (it just created the repo and is about to protect the branch), so this is
+	# one call at the only moment the information and the authority coexist.
+	#
+	# ⚠️ NEVER PERSIST THE VALUE IN THIS REPO. It is read from the environment — the shell gets
+	# it from a git-ignored `~/.claude/.env` — so no BlueprintX file ever holds a credential.
+	# A `.env` here would be a SECOND copy of the same secret on disk, and the second copy is
+	# the one nobody remembers to rotate.
+	#
+	# Absent variable is a warning, not a failure: scaffolding must not abort over an optional
+	# reviewer integration. The workflow itself is the thing that fails loudly, later, on the
+	# first PR — where the person who can fix it is looking.
+	local str_slug
+	str_slug="$(scaffold_repo_slug)"
+
+	if [ -z "${GH_PAT_REVIEW_TRIGGER:-}" ]; then
+		print_status "warning" \
+			"GH_PAT_REVIEW_TRIGGER not in the environment — the review trigger will be red on the first PR"
+		print_status "info" \
+			"  gh secret set GH_PAT_REVIEW_TRIGGER --repo ${str_slug} --body '<github_pat_...>'"
+		return 0
+	fi
+	if ! command -v gh >/dev/null 2>&1; then
+		return 0
+	fi
+	# --body, never a redirect: a trailing newline in a stored token 401s exactly like an
+	# expired one, and the error says nothing about which. Measured, twice.
+	if gh secret set GH_PAT_REVIEW_TRIGGER --repo "$str_slug" \
+		--body "$GH_PAT_REVIEW_TRIGGER" >/dev/null 2>&1; then
+		print_status "success" "Review-trigger secret set on ${str_slug}"
+	else
+		print_status "warning" "Could not set GH_PAT_REVIEW_TRIGGER on ${str_slug} — set it by hand"
+	fi
+}
+
 scaffold_prompt_git_remote_setup() {
 	# Returns 0 only when `origin` is present AND verified to be the repository this
 	# scaffold names — so a caller can gate branch protection / Pages on the remote
@@ -214,5 +254,6 @@ scaffold_prompt_git_remote_setup() {
 	if ! scaffold_create_github_repo "$str_project_path"; then
 		scaffold_push_initial_commit "$str_project_path"
 	fi
+	scaffold_set_review_trigger_secret
 	print_status "success" "Git repo initialized."
 }

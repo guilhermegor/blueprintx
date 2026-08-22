@@ -108,6 +108,17 @@ if [ -n "$str_leaked" ]; then
 fi
 echo "No interpreter/tool caches leaked into the generated project."
 
+# This harness scaffolds OFFLINE (it declines the remote), so the GitHub-only assets must be
+# absent. Asserting it here is what stops a workflow being shipped into a project that has no
+# Actions to run it: dead weight that can never go green, and nothing else would notice.
+for str_online_only in coderabbit_trigger.yaml review_threads.yaml; do
+    if [ -e "$PROJECT_PATH/.github/workflows/$str_online_only" ]; then
+        echo "ERROR: offline scaffold shipped the GitHub-only $str_online_only" >&2
+        exit 1
+    fi
+done
+echo "No GitHub-only workflows in the offline project."
+
 cd "$PROJECT_PATH"
 
 echo "::group::poetry install (runtime + dev)"

@@ -89,6 +89,19 @@ expect_push_url_mismatch() {
     fi
 }
 
+expect_absent_pat_does_not_abort() {
+    # Scaffolding must not die because an OPTIONAL reviewer integration has no credential.
+    # The scaffolds run under `set -e`, so a non-zero here would abort a project mid-creation
+    # over a secret — trading a red check on a future PR for a broken scaffold today.
+    local int_rc=0
+    ( unset GH_PAT_REVIEW_TRIGGER; scaffold_set_review_trigger_secret >/dev/null 2>&1 ) || int_rc=$?
+    if [ "$int_rc" -ne 0 ]; then
+        print_status "error" \
+            "scaffold_set_review_trigger_secret returned $int_rc with no PAT — that aborts the scaffold"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 main() {
     # The same repository, spelled four ways, must reduce to one slug — otherwise the
     # guard would reject a remote the user set up correctly and be disabled by the first
@@ -118,6 +131,7 @@ main() {
     expect_add_remote "https://evil.example/github.com/octocat/widget.git" "fail"
     expect_add_remote "https://github.com.evil.com/octocat/widget.git" "fail"
     expect_push_url_mismatch
+    expect_absent_pat_does_not_abort
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures git-remote guard assertion(s) failed"
