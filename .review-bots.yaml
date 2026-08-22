@@ -8,7 +8,14 @@
 #   - some post inline review THREADS (their findings are what this gate tracks)
 #   - some post only a STATUS CHECK and no thread at all (nothing for this gate to see)
 # A roster that assumes every reviewer speaks in threads is born broken, which is why a PR
-# with zero threads is a pass here rather than a failure.
+# with zero threads is not a THREAD failure.
+#
+# ⚠️ SUPERSEDED 2026-08-22 (#208). This block used to end "…is a pass here rather than a
+# failure", and that half was wrong. Zero threads is ALSO what you get when no reviewer ever
+# ran — opposite facts, one number — and the gate reported the second as success: PRs #204
+# and #213 merged unreviewed with every check green. Zero threads is now judged against a
+# SUBMITTED REVIEW, not against silence. A reviewer that ran and found nothing still passes;
+# one that never ran fails.
 #
 # Delete this file to opt out; the gate then self-skips with a message instead of failing.
 

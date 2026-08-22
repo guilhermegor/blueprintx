@@ -54,6 +54,29 @@ PR, the trigger alone is a nicety nobody notices failing.
 - [x] Live negative control: #204 and #213 now exit 1; #209 exits 0.
 - [x] Template copy synced (`templates/python-common/bin/`), keeping its two local wordings
 
+## Superseded-rule sweep (wrap-up, 2026-08-22)
+
+The new rule went into the code; the OLD rule kept living in the prose beside it — in tracked
+files, which outrank memory next session. Found by grepping for the old wording:
+
+- [x] `bin/ci/check_review_threads.py` **and** the template copy — the module docstring ended
+      *"which is why an empty thread list is a pass, not a failure."* Rewritten: an empty list is
+      not a THREAD failure, and `find_missing_review_problem` owns the other question.
+- [x] `.review-bots.yaml` **and** `templates/python-common/.review-bots.yaml` — same claim, and
+      this one **ships into every generated project**, so the stale rule would have travelled.
+      Marked `SUPERSEDED 2026-08-22 (#208)` rather than silently deleted.
+- [x] The test name `test_a_pr_with_no_threads_passes` — renamed to
+      `test_no_threads_is_not_a_THREAD_problem`, because a test NAME is a rule statement too and
+      that one asserted the superseded claim.
+
+## Follow-up found during the sweep, deliberately not built
+
+`find_missing_review_problem`'s message lists every roster login as expected —
+including `github-actions[bot]`, which is declared `posts: status` and therefore can never
+submit a review. The behaviour is right (any roster member satisfies it), but the message names
+a reviewer that structurally cannot. Fixing it means `load_roster` exposing the `posts` field,
+which changes its signature and its tests — worth doing, not worth folding into this PR.
+
 ## Not done here, deliberately
 
 - **The gate is not yet a required check.** It ships enforcing, but adding it to

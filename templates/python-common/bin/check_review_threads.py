@@ -32,7 +32,14 @@ always last.
 named in the logic here. Adding a reviewer is adding a row. Note the shapes genuinely differ:
 one tool posts inline threads, another posts only a status check and no thread at all — a
 roster that assumes "every reviewer speaks in threads" is born broken, which is why an empty
-thread list is a pass, not a failure.
+thread list is not a THREAD failure.
+
+⚠️ It is not a pass either, and this paragraph used to say it was. An empty thread list is what
+you get both when a reviewer ran and found nothing AND when no reviewer ever ran — opposite
+facts, one number. Reading threads alone the gate reported the second as success, and PRs #204
+and #213 merged unreviewed with every check green. :func:`find_missing_review_problem` owns that
+question separately, keyed on a SUBMITTED REVIEW rather than on threads, so the two outcomes can
+print different sentences.
 """
 
 from __future__ import annotations

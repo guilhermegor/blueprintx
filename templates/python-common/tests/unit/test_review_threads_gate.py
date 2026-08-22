@@ -158,7 +158,7 @@ def test_an_answered_but_open_thread_is_now_reported() -> None:
 
 
 def test_no_threads_is_not_a_THREAD_problem() -> None:
-	"""A reviewer that posts only a status check leaves no thread, and that is not a failure.
+	"""A reviewer that posts only a status check leaves no thread, and that is not a THREAD failure.
 
 	Measured: one tool posted five inline threads on a PR while another posted none at all. A
 	roster that assumes every reviewer speaks in threads is born broken.
