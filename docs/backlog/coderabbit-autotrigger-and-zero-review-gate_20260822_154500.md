@@ -101,8 +101,18 @@ this". Same class of hole #208 closed.
 - [x] The shape check that caught this stays: `token class: UNRECOGNISED prefix` turned a mute
       401 into the answer in one run, after two rounds of guessing.
 
-- [x] ⚠️ The old secret held a CodeRabbit key under the old name. **Deleted 2026-08-22** —
-      `gh secret list` no longer returns `CODERABBIT_TRIGGER_PAT`.
+- [x] ⚠️ The old secret held a CodeRabbit key under the old name. **The GitHub secret was
+      deleted 2026-08-22** — `gh secret list` no longer returns `CODERABBIT_TRIGGER_PAT`.
+- [ ] 🔴 ⚠️ **The credential itself is NOT revoked, and deleting the secret did not revoke it.**
+      Raised in review on PR #219 and correct: `gh secret delete` removes GitHub's encrypted
+      *copy*; the key stays live in CodeRabbit and keeps working for anyone who has the value.
+      Two facts make that worse than a stale copy: the value was pasted through a terminal (so
+      it is in shell history and this session's transcript), and it was stored under a name
+      that made it look like something else, which is how it got mishandled in the first place.
+      **Owner-only, cannot be automated:** CodeRabbit exposes no CLI or API for key deletion —
+      revoke it at `app.coderabbit.ai/settings/api-keys` and record the date here.
+      ⚠️ **Standing rule this earns:** deleting the *store* is never revoking the *credential*.
+      A mis-stored secret has two homes and the fix has two steps.
 
 ## Not done here, deliberately
 
@@ -128,5 +138,19 @@ this". Same class of hole #208 closed.
 
 ## Completed 2026-08-22 — kept as a record
 
-Every box is ticked. The two deferred follow-ups are tracked as **#217** and **#218**; the
-template-propagation question stays with **#129**.
+Every box **that this work could close** is ticked. Two things are deliberately not claimed:
+
+- **One box stays open**: revoking the CodeRabbit key. It is owner-only (no CLI, no API) and
+  ticking it would assert a revocation nobody performed.
+- **"No follow-up action" above is scoped to the required-check CONFIGURATION only** — raised
+  in review and worth stating plainly, since the sentence sits next to a paragraph about the
+  gate's behaviour and could be read as covering it.
+
+The two deferred follow-ups are tracked as **#217** and **#218**; the template-propagation
+question stays with **#129**. A **third** was found by running this gate for the first time and
+is now **#220**: the review that arrived on PR #219 was attributed to the *superseded* commit
+(`9e7d1fe`) while head was `9ae76ab`, and the gate passed — it asks whether a review exists,
+never of which commit. `synchronize` triggers the request; nothing checks what came back was
+about the current code. The live merge rejection this ledger's sibling
+(`pr-gate-blocks-merge_20260817_104500.md`) was waiting on **was** observed, on PR #219 itself
+— see that file.
