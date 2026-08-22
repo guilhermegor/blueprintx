@@ -84,41 +84,41 @@ Cada metade fica com quem consegue reavaliá-la.
       `required_approving_review_count` é **0** — o bloqueio vem dos checks, não de aprovação
       humana. `required_conversation_resolution` está `true`.
 - [x] provar o bloqueio numa PR real antes de fechar a #173 — **PROVADO 2026-08-22, com
-      controle negativo**, depois de duas conclusoes precipitadas minhas no mesmo dia. A
-      cronologia importa mais que o resultado, entao fica registrada inteira.
+  controle negativo**, depois de duas conclusoes precipitadas minhas no mesmo dia.
 
-      **A prova, agora com os dois lados:**
+### A prova do bloqueio (#173) — com os dois lados
 
-      | commit | gate `Review threads answered` | `github-advanced-security` | `mergeStateStatus` |
-      |---|---|---|---|
-      | `9e7d1fe` | **fail** (nenhuma review) | fail | **BLOCKED** |
-      | `7efc1e4` | success | **fail** | **CLEAN** |
+| commit | gate `Review threads answered` | `github-advanced-security` | `mergeStateStatus` |
+|---|---|---|---|
+| `9e7d1fe` | **fail** (nenhuma review) | fail | **BLOCKED** |
+| `7efc1e4` | success | **fail** | **CLEAN** |
 
-      A segunda linha e o controle negativo que faltava: com o GHAS vermelho e o gate verde a
-      PR fica **CLEAN**, logo o GHAS **nao bloqueia**. Na primeira linha a unica diferenca e o
-      gate. **Foi ele que segurou o botao.**
+A segunda linha e o controle negativo que faltava: com o GHAS vermelho e o gate verde a PR
+fica **CLEAN**, logo o GHAS **nao bloqueia**. Na primeira linha a unica diferenca e o gate.
+**Foi ele que segurou o botao.**
 
-      ⚠️ **Duas conclusoes precipitadas, ambas a partir de UMA leitura de um campo assincrono.**
-      1. Primeiro tickei esta caixa lendo `BLOCKED` ao lado do gate vermelho — sem enumerar o
-         que mais poderia estar bloqueando.
-      2. Depois destiquei, ao ver `a1ba4a6` (15/15 verdes, GHAS vermelho) responder `BLOCKED`,
-         e culpei o GHAS. Errado tambem: `7efc1e4` tem a **mesma** configuracao e responde
-         `CLEAN`. A unica explicacao consistente e que a leitura na `a1ba4a6` estava
-         **atrasada** — a hipotese de propagacao que eu tinha declarado refutada cedo demais,
-         duas vezes.
+⚠️ **Duas conclusoes precipitadas, ambas a partir de UMA leitura de um campo assincrono:**
 
-      **A regra que sobra, e que custou tres rodadas:** `mergeStateStatus` e **computado de
-      forma assincrona**. Uma leitura isolada nao sustenta conclusao nenhuma — nem positiva nem
-      negativa. Reler depois de todos os checks completarem, e so concluir quando duas leituras
-      separadas concordarem. E `BLOCKED` segue dizendo *que*, nunca *por que*: a conclusao
-      causal exige o controle negativo, nao so a observacao.
+1. Primeiro tickei esta caixa lendo `BLOCKED` ao lado do gate vermelho — sem enumerar o que
+   mais poderia estar bloqueando.
+2. Depois destiquei, ao ver `a1ba4a6` (15/15 verdes, GHAS vermelho) responder `BLOCKED`, e
+   culpei o GHAS. Errado tambem: `7efc1e4` tem a **mesma** configuracao e responde `CLEAN`.
+   A unica explicacao consistente e que a leitura na `a1ba4a6` estava **atrasada** — a hipotese
+   de propagacao que eu tinha declarado refutada cedo demais, duas vezes.
 
-      Dois efeitos colaterais registrados na observacao original e ainda validos:
-      1. Toda PR nasce vermelha e fica assim ate a review chegar. E o comportamento correto,
-         mas `Review threads answered` **nunca** e verde no instante em que a PR abre — quem
-         olhar cedo demais le como defeito.
-      2. A mensagem listou `github-actions` entre os revisores esperados — o defeito da
-         **#218**, visto em producao e nao so lido no codigo.
+**A regra que sobra, e que custou tres rodadas:** `mergeStateStatus` e **computado de forma
+assincrona**. Uma leitura isolada nao sustenta conclusao nenhuma — nem positiva nem negativa.
+Reler depois de todos os checks completarem, e so concluir quando duas leituras separadas
+concordarem. E `BLOCKED` segue dizendo *que*, nunca *por que*: a conclusao causal exige o
+controle negativo, nao so a observacao.
 
-      O `github-advanced-security` segue reprovando em toda PR (**#221**) — e ruido vermelho
-      permanente, sem titulo nem sumario, mas **nao** bloqueia merge.
+Dois efeitos colaterais registrados na observacao original e ainda validos:
+
+1. Toda PR nasce vermelha e fica assim ate a review chegar. E o comportamento correto, mas
+   `Review threads answered` **nunca** e verde no instante em que a PR abre — quem olhar cedo
+   demais le como defeito.
+2. A mensagem listou `github-actions` entre os revisores esperados — o defeito da **#218**,
+   visto em producao e nao so lido no codigo.
+
+O `github-advanced-security` segue reprovando em toda PR (**#221**) — e ruido vermelho
+permanente, sem titulo nem sumario, mas **nao** bloqueia merge.

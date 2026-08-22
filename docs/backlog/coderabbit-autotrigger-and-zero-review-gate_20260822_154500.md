@@ -103,17 +103,17 @@ this". Same class of hole #208 closed.
 
 - [x] ⚠️ The old secret held a CodeRabbit key under the old name. **The GitHub secret was
       deleted 2026-08-22** — `gh secret list` no longer returns `CODERABBIT_TRIGGER_PAT`.
-- [x] 🔴 ⚠️ **The credential itself is NOT revoked, and deleting the secret did not revoke it.**
-      **Revoked by the owner 2026-08-22.**
-      Raised in review on PR #219 and correct: `gh secret delete` removes GitHub's encrypted
-      *copy*; the key stays live in CodeRabbit and keeps working for anyone who has the value.
-      Two facts make that worse than a stale copy: the value was pasted through a terminal (so
-      it is in shell history and this session's transcript), and it was stored under a name
-      that made it look like something else, which is how it got mishandled in the first place.
-      **Owner-only, cannot be automated:** CodeRabbit exposes no CLI or API for key deletion —
-      revoke it at `app.coderabbit.ai/settings/api-keys` and record the date here.
-      ⚠️ **Standing rule this earns:** deleting the *store* is never revoking the *credential*.
-      A mis-stored secret has two homes and the fix has two steps.
+- [x] ⚠️ **The credential itself was revoked too — deleting the secret did not do it.**
+  Raised in review on PR #219 and correct: `gh secret delete` removes GitHub's encrypted
+  *copy*; the key stayed live in CodeRabbit and kept working for anyone holding the value.
+  Two facts made that worse than a stale copy: the value had been pasted through a terminal
+  (so it was in shell history and a session transcript), and it was stored under a name that
+  made it look like something else, which is how it got mishandled in the first place.
+  **Revoked by the owner at `app.coderabbit.ai/settings/api-keys` on 2026-08-22** — owner-only,
+  since CodeRabbit exposes no CLI or API for key deletion.
+
+  ⚠️ **Standing rule this earns:** deleting the *store* is never revoking the *credential*.
+  A mis-stored secret has two homes and the fix has two steps.
 
 ## Not done here, deliberately
 
