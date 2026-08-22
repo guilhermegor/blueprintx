@@ -87,6 +87,13 @@ repos:
         pass_filenames: false
         files: ^bin/.*\.sh$
 
+      - id: git-remote-guard
+        name: scaffold origin verification (mismatched remote must fail)
+        entry: bash bin/ci/check_git_remote_guard.sh
+        language: system
+        pass_filenames: false
+        files: ^bin/(lib/scaffold_git_remote\.sh|ci/check_git_remote_guard\.sh)$
+
       - id: lint-actions
         name: actionlint (workflows, repo + templates)
         entry: bash bin/ci/check_actions.sh

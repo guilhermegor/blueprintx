@@ -615,8 +615,11 @@ prompt_git_remote_setup() {
 	# The About-sidebar Website field, same URL apply_online_docs_url writes into
 	# pyproject — the most visible entry point on the repo page; blank looks unfinished.
 	SCAFFOLD_REPO_HOMEPAGE="https://${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}.github.io/${PROJECT_NAME}/"
-	scaffold_prompt_git_remote_setup "$1"
-	apply_branch_protection "$1"
+	# Protection is applied to the remote only once that remote is verified to be the
+	# repository this scaffold names — not merely because the prompt returned (#212).
+	if scaffold_prompt_git_remote_setup "$1"; then
+		apply_branch_protection "$1"
+	fi
 }
 
 apply_offline_mode() {
@@ -934,13 +937,19 @@ main() {
     apply_private_consumer_source "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
+    # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
+    scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
     # When the project is not connected to a GitHub remote (no upstream tracking
     # branch after setup), switch to offline mode: drop GitHub-only assets and
     # ship the git-diff sync workflow instead.
-    if ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    # ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
+    # for a pre-existing clone whose origin points elsewhere. Offline is the safe default, so
+    # an unverified remote falls here too (#212, raised by review on #215).
+    if [ "$SCAFFOLD_REMOTE_VERIFIED" != "1" ] \
+        || ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         apply_offline_mode "$PROJECT_PATH"
     else
         apply_online_tag_versioning "$PROJECT_PATH"

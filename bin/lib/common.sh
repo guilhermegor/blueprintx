@@ -266,3 +266,25 @@ apply_env_wise_config() {
     done
     print_status "success" "Env-wise config generated (dev/prd); plain inputs/outputs.yaml removed"
 }
+
+scaffold_purge_caches() {
+    # Strip interpreter/tool caches from a freshly generated tree.
+    #
+    # The scaffolds copy template trees with `cp -r`, which has no exclusion
+    # mechanism, so any __pycache__ / .pytest_cache / .ruff_cache / .mypy_cache
+    # left in templates/ by a local tool run is copied straight into the new
+    # project. CI cannot see it — a fresh checkout has no caches — and the
+    # generated .gitignore then hides the result from `git status` downstream,
+    # so it ships silently from a maintainer's machine and nowhere else.
+    #
+    # Purging once, after the copy phase, keeps ONE implementation instead of an
+    # exclusion argument repeated at ~30 `cp -r` call sites (and needs no rsync).
+    local project_path="$1"
+    [ -d "$project_path" ] || return 0
+
+    find "$project_path" -type d \
+        \( -name '__pycache__' -o -name '.pytest_cache' \
+        -o -name '.ruff_cache' -o -name '.mypy_cache' \) \
+        -prune -exec rm -rf {} + 2>/dev/null || true
+    find "$project_path" -type f -name '*.py[cod]' -delete 2>/dev/null || true
+}

@@ -33,9 +33,59 @@ git config --global user.email >/dev/null 2>&1 || git config --global user.email
 git config --global user.name >/dev/null 2>&1 || git config --global user.name "ci-bot"
 
 WORK_DIR="$(mktemp -d)"
-trap 'rm -rf "$WORK_DIR"' EXIT
 PROJECT_NAME="ci_scaffold"
 PROJECT_PATH="$WORK_DIR/$PROJECT_NAME"
+
+# Seed interpreter caches into templates/ BEFORE scaffolding (#205).
+#
+# `cp -r` has no exclusion mechanism, so a __pycache__ sitting in templates/ is copied
+# into the generated project. CI checks out fresh and therefore never has one — which is
+# exactly why this shipped unnoticed from maintainers' machines for as long as it did. The
+# only way this harness can see the defect is to reproduce the precondition itself.
+# ⚠️ ONE ENTRY PER DIRECTORY NAME THE ASSERTION REJECTS. Seeding only __pycache__ while the
+# check also rejects .pytest_cache/.ruff_cache/.mypy_cache would leave three quarters of that
+# assertion never exercised — a check that cannot fail for the cases it claims to cover, which
+# is the same vacuous shape the seeding exists to close. Raised by review on #215.
+SEEDED_CACHES=(
+    "$REPO_ROOT/templates/$SKELETON/src/__pycache__"
+    "$REPO_ROOT/templates/$SKELETON/src/.pytest_cache"
+    "$REPO_ROOT/templates/python-common/src/utils/__pycache__"
+    "$REPO_ROOT/templates/python-common/src/utils/.ruff_cache"
+    "$REPO_ROOT/templates/python-common/optional/typing/__pycache__"
+    "$REPO_ROOT/templates/python-common/optional/typing/.mypy_cache"
+)
+# Loose compiled artifacts, which live OUTSIDE a cache directory and are pruned by the second
+# `find` in scaffold_purge_caches — the half the directory fixtures above cannot reach.
+SEEDED_FILES=(
+    "$REPO_ROOT/templates/python-common/src/utils/seeded_probe.pyc"
+    "$REPO_ROOT/templates/python-common/src/utils/seeded_probe.pyo"
+)
+cleanup() {
+    rm -rf "$WORK_DIR" "${SEEDED_CACHES[@]}" "${SEEDED_FILES[@]}"
+}
+trap cleanup EXIT
+
+int_seeded=0
+for str_cache in "${SEEDED_CACHES[@]}"; do
+    # Only seed under a directory the template already has — creating the parent would
+    # change what the scaffold copies, which is not what this test is for.
+    [ -d "$(dirname "$str_cache")" ] || continue
+    mkdir -p "$str_cache"
+    printf 'seeded by scaffold_lint_test.sh\n' >"$str_cache/seeded.cpython-000.pyc"
+    int_seeded=$((int_seeded + 1))
+done
+for str_file in "${SEEDED_FILES[@]}"; do
+    [ -d "$(dirname "$str_file")" ] || continue
+    printf 'seeded by scaffold_lint_test.sh\n' >"$str_file"
+    int_seeded=$((int_seeded + 1))
+done
+# Every rejected directory name must have been seeded at least once, or that branch of the
+# assertion is untested. lib-minimal has no templates/lib-minimal/src, hence the -ge 4 floor
+# (the four python-common fixtures) rather than a count of the whole list.
+[ "$int_seeded" -ge 4 ] || {
+    echo "ERROR: seeded $int_seeded fixture(s) — too few for the purge check to mean anything" >&2
+    exit 1
+}
 
 echo "::group::Scaffold $SKELETON (offline, no opt-ins)"
 # Feed a generous run of "n" answers: declines docker / storage / data-dir /
@@ -45,6 +95,18 @@ echo "::group::Scaffold $SKELETON (offline, no opt-ins)"
 printf 'n\n%.0s' {1..12} | GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold_rel" \
     "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
+
+# The generated project's own .gitignore lists __pycache__/, so a copied cache is invisible
+# to `git status` downstream — `find` is the only witness (#205).
+str_leaked="$(find "$PROJECT_PATH" \
+    \( -type d \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.ruff_cache' \
+    -o -name '.mypy_cache' \) -o -type f -name '*.py[cod]' \) -print)"
+if [ -n "$str_leaked" ]; then
+    echo "ERROR: the scaffold shipped interpreter/tool caches into the generated project:" >&2
+    echo "$str_leaked" >&2
+    exit 1
+fi
+echo "No interpreter/tool caches leaked into the generated project."
 
 cd "$PROJECT_PATH"
 
