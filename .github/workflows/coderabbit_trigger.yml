@@ -1,0 +1,83 @@
+name: CodeRabbit Trigger
+
+# Ask CodeRabbit for a review on every PR, because it will not ask itself here.
+#
+# ⚠️ WHY THIS FILE EXISTS AT ALL. CodeRabbit declines AUTOMATIC reviews on a repository with
+# fewer than 10 stars ("This repository does not receive automatic reviews because it has
+# fewer than 10 stars"). This repo has 0. That threshold is CodeRabbit's and is NOT
+# configurable from `.coderabbit.yaml` — there is no popularity key in the schema, and
+# `auto_review.enabled` already defaults to `true`, so editing config changes nothing. The
+# plan is not the problem either: the run config reports `Plan: Pro Plus`.
+#
+# The consequence was the real defect: PR #204 and #213 both MERGED having never been
+# reviewed, with every check green, because nothing was watching for the absence.
+#
+# ⚠️ WHY A PAT AND NOT `GITHUB_TOKEN` — THIS IS THE WHOLE DESIGN, MEASURED, DO NOT "SIMPLIFY".
+# CodeRabbit honours a manual `@coderabbitai review` regardless of auto-review config, but it
+# IGNORES bot-authored comments. A comment posted with `GITHUB_TOKEN` is authored by
+# `github-actions[bot]` (`user.type: Bot`) and was measured on #210: 5 minutes, no reply, no
+# refusal, silently dropped. A comment posted with a user PAT is authored by that user
+# (`user.type: User`, `author_association: OWNER`) and is indistinguishable from one typed in
+# the browser — measured on #215: replied in 9 seconds and produced 4 review threads.
+#
+# SETUP (one manual step, and the workflow fails loudly until it is done):
+#   1. Create a PAT on the account that should appear as the commenter.
+#      Fine-grained, this repository only, with `Pull requests: Read and write`.
+#   2. `gh secret set CODERABBIT_TRIGGER_PAT --repo <owner>/<repo>`
+#
+# The paired gate is `review_threads.yml` → `bin/ci/check_review_threads.py`, which fails a PR
+# where no declared reviewer ever submitted a review. Without that gate this workflow is a
+# best-effort nicety; without this workflow that gate blocks every PR. They ship together.
+
+on:
+  pull_request:
+    # `synchronize` is deliberate: with auto-review off, a push after the first review is
+    # otherwise never looked at, and "reviewed at open, real code pushed after" is exactly the
+    # hole this file exists to close. CodeRabbit reviews incrementally, so the cost is bounded.
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  # Several pushes in a row need one trigger, not one each. Cancelling is safe here: this
+  # workflow publishes no verdict anyone waits on — unlike review_threads.yml, whose
+  # cancel-in-progress must stay false because it IS a required check.
+  group: coderabbit-trigger-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+
+  trigger:
+    name: Ask CodeRabbit for a review
+    # A draft is not ready to be reviewed; `ready_for_review` brings it back.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # ⚠️ FAIL, NEVER SKIP, WHEN THE PAT IS ABSENT.
+      #
+      # A `continue-on-error` or an `if: secrets.X != ''` here would turn a missing secret into
+      # a silent no-op — and a silent no-op is precisely the state this whole file is fixing: no
+      # review happens, and nothing says so. A fork PR gets no secrets either, so it lands here
+      # too, correctly: a fork PR genuinely cannot self-trigger and a human must ask.
+      - name: The trigger PAT must exist
+        env:
+          CODERABBIT_TRIGGER_PAT: ${{ secrets.CODERABBIT_TRIGGER_PAT }}
+        run: |
+          if [ -z "$CODERABBIT_TRIGGER_PAT" ]; then
+            echo "::error::CODERABBIT_TRIGGER_PAT is not set, so no review can be requested." >&2
+            echo "GITHUB_TOKEN cannot substitute: CodeRabbit ignores bot-authored comments" >&2
+            echo "(measured on PR #210). Set a user PAT with Pull requests: write —" >&2
+            echo "  gh secret set CODERABBIT_TRIGGER_PAT --repo $GITHUB_REPOSITORY" >&2
+            exit 1
+          fi
+
+      - name: Request the review
+        env:
+          GH_TOKEN: ${{ secrets.CODERABBIT_TRIGGER_PAT }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            -f body='@coderabbitai review' \
+            --jq '"requested by \(.user.login) [\(.user.type)]"'

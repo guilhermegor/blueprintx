@@ -80,18 +80,28 @@ def normalise_login(str_login: str) -> str:
 	"""
 	str_clean = (str_login or "").strip()
 	return str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
-
-
 # Floor for a "substantive" reply. Measured, not invented: the replies on the PR that motivated
 # this gate ran 100-667 characters (median 439), and an earlier sample of genuine verdict
 # replies ran 356-1126. 100 sits at or below the shortest real one, so it excludes "done" and
 # "fixed" without ever arguing with a real answer.
 _MIN_REPLY_CHARS = 100
 
+# ⚠️ `reviews` is here because THREADS ALONE CANNOT SEE AN ABSENT REVIEWER.
+#
+# A reviewer that ran and found nothing produces zero threads. A reviewer that never ran
+# produces zero threads. Reading only `reviewThreads`, those are the same number, and the
+# gate reported the second as success — see `find_missing_review_problem`.
+#
+# A submitted review is the discriminator, and it had to be measured rather than assumed:
+# on #204 and #213 (both merged unreviewed) the roster posted an issue COMMENT — the
+# star-gate refusal notice — but `reviews` was 0. So "the roster said something" would have
+# passed both; "the roster submitted a review" fails both and passes #209 (10) and #215 (1).
 _QUERY = """
 query($owner:String!, $repo:String!, $number:Int!) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
+      author { login }
+      reviews(first:100) { nodes { author { login } } }
       reviewThreads(first:100) {
         nodes {
           isResolved
@@ -162,8 +172,8 @@ def load_roster(path_root: pathlib.Path) -> set[str]:
 	}
 
 
-def fetch_threads(str_owner: str, str_repo: str, int_number: int) -> list[dict]:
-	"""Fetch the PR's review threads through the GitHub GraphQL API.
+def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
+	"""Fetch the PR's author, submitted reviews and review threads in one GraphQL call.
 
 	Parameters
 	----------
@@ -176,8 +186,8 @@ def fetch_threads(str_owner: str, str_repo: str, int_number: int) -> list[dict]:
 
 	Returns
 	-------
-	list of dict
-	    One entry per review thread.
+	dict
+	    The ``pullRequest`` node, carrying ``author``, ``reviews`` and ``reviewThreads``.
 
 	Raises
 	------
@@ -204,7 +214,52 @@ def fetch_threads(str_owner: str, str_repo: str, int_number: int) -> list[dict]:
 	dict_out = json.loads(cls_run.stdout)
 	if "errors" in dict_out:
 		raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
-	return dict_out["data"]["repository"]["pullRequest"]["reviewThreads"]["nodes"]
+	return dict_out["data"]["repository"]["pullRequest"]
+
+
+def find_missing_review_problem(
+	list_reviews: list[dict],
+	set_roster: set[str],
+	str_pr_author: str = "",
+) -> str | None:
+	"""Return a problem when no declared reviewer ever reported on this PR.
+
+	Parameters
+	----------
+	list_reviews : list of dict
+	    Submitted reviews, each with an ``author`` node.
+	set_roster : set of str
+	    Logins of the declared reviewers.
+	str_pr_author : str, optional
+	    Login of the PR author; a roster member's own PR is exempt.
+
+	Returns
+	-------
+	str or None
+	    A human-readable problem, or ``None`` when at least one reviewer reported.
+	"""
+	set_roster = {normalise_login(s) for s in set_roster}
+	if normalise_login(str_pr_author) in set_roster:
+		# A reviewer's own PR (a bot's dependency bump). Requiring it to review itself is a
+		# gate nobody can satisfy, and those get bypassed with --admin, taking the real
+		# blocks with them.
+		return None
+
+	set_reported = {
+		normalise_login((d.get("author") or {}).get("login") or "") for d in list_reviews
+	} & set_roster
+	if set_reported:
+		return None
+
+	return (
+		f"no declared reviewer ever reported on this PR — expected one of "
+		f"{', '.join(sorted(set_roster))} to submit a review, and none did. "
+		"This is NOT 'the reviewer found nothing': a reviewer that ran and found nothing "
+		"still submits a review, so zero threads would be fine. Zero REVIEWS means the "
+		"reviewer never ran, and nothing on this PR has been looked at.\n"
+		"Trigger it (a comment such as '@coderabbitai review' from a user account, which "
+		"is what .github/workflows/coderabbit_trigger.yml automates) and re-run this check."
+	)
 
 
 def find_thread_problems(
@@ -277,6 +332,51 @@ def find_thread_problems(
 	return list_problems
 
 
+def report_verdict(
+	list_problems: list[str],
+	int_threads: int,
+	bool_require_resolved: bool,
+) -> int:
+	"""Print the verdict and return the exit code.
+
+	Parameters
+	----------
+	list_problems : list of str
+	    Problems from :func:`find_thread_problems`.
+	int_threads : int
+	    How many review threads were examined.
+	bool_require_resolved : bool
+	    Whether the resolve half was asserted, so the wording matches what was checked.
+
+	Returns
+	-------
+	int
+	    ``1`` when there are problems, ``0`` otherwise.
+	"""
+	for str_problem in list_problems:
+		print(f"❌ {str_problem}")
+	if list_problems:
+		print(
+			f"\n{len(list_problems)} of {int_threads} review thread(s) are not finished.\n"
+			"A finding takes BOTH halves: REPLY with what changed and why, then RESOLVE the "
+			"conversation.\n"
+			"- Resolving without replying is not answering: a reviewer bot closes its own threads "
+			"when it sees the fix, so the resolved flag records ITS satisfaction, never your "
+			"reasoning — and that reasoning is what the next session reads.\n"
+			"- Replying without resolving leaves the thread live, so nothing distinguishes a "
+			"finished exchange from one still in progress, and the PR can merge with it open."
+		)
+		return 1
+	if not int_threads:
+		# Reached only once a reviewer HAS reported — find_missing_review_problem owns the
+		# other case, and the two must never print the same sentence again.
+		print("A declared reviewer reported and raised no findings (0 review threads).")
+		return 0
+	str_scope = "answered and resolved" if bool_require_resolved else "answered"
+	print(f"All {int_threads} review thread(s) {str_scope}.")
+	return 0
+
+
 def main() -> int:
 	"""Check the current PR's review threads.
 
@@ -298,7 +398,24 @@ def main() -> int:
 		return 0
 
 	str_owner, _, str_repo = str_repo_full.partition("/")
-	list_threads = fetch_threads(str_owner, str_repo, int(str_number))
+	dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
+	list_threads = dict_pr["reviewThreads"]["nodes"]
+
+	# ⚠️ THE EMPTY SET IS THE CASE THIS GATE MOST NEEDS TO CATCH, AND IT USED TO PASS IT.
+	#
+	# With zero threads the loop below finds zero problems and the gate printed
+	# "All 0 review thread(s) answered." — green. So the check that exists to stop a PR
+	# merging with unfinished review conversations could not stop one merging with NO REVIEW
+	# AT ALL, the only case where nothing else is watching. Measured on #204: 29 of 30 checks
+	# passed and it merged with the reviewer having posted only its refusal notice.
+	str_missing = find_missing_review_problem(
+		dict_pr.get("reviews", {}).get("nodes", []),
+		set_roster,
+		(dict_pr.get("author") or {}).get("login") or "",
+	)
+	if str_missing:
+		print(f"❌ {str_missing}")
+		return 1
 	# ⚠️ A JOB MUST NOT ASSERT WHAT IT CANNOT RE-EVALUATE.
 	#
 	# Resolving a thread emits `pull_request_review_thread`, which is NOT a workflow trigger,
@@ -317,20 +434,7 @@ def main() -> int:
 		list_threads, set_roster, bool_require_resolved=bool_require_resolved
 	)
 
-	for str_problem in list_problems:
-		print(f"❌ {str_problem}")
-	if list_problems:
-		print(
-			f"\n{len(list_problems)} of {len(list_threads)} review thread(s) are not finished.\n"
-			"Resolving a thread is not answering it: a reviewer bot closes its own threads when "
-			"it sees the fix, so the resolved flag records ITS satisfaction, not your reasoning. "
-			"Reply with what changed and why — that reply is what the next session reads to learn "
-			"the decision."
-		)
-		return 1
-	str_scope = "answered and resolved" if bool_require_resolved else "answered"
-	print(f"All {len(list_threads)} review thread(s) {str_scope}.")
-	return 0
+	return report_verdict(list_problems, len(list_threads), bool_require_resolved)
 
 
 if __name__ == "__main__":
