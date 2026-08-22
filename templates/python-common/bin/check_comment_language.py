@@ -498,10 +498,7 @@ def audit_paths() -> list:
 		# — `~/docs/myproject`, a CI workspace under `fixtures/` — would match the skip list on
 		# EVERY file. The audit would then find nothing and fail with the vacuous-audit error,
 		# on a tree that is perfectly fine. The bug depends only on where someone cloned.
-		if any(
-			str_part in TUPLE_SKIP_DIRS
-			for str_part in path_file.relative_to(PATH_ROOT).parts
-		):
+		if any(str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts):
 			continue
 		list_paths.append(path_file)
 	# `.env.example` carries `#` comments but its suffix is `.example`, already in DICT_MARKERS,

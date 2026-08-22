@@ -52,9 +52,6 @@ exclude = [
     # is intrinsic metaprogramming — fully excluded, like src/chassis (mypy excludes it too).
     "src/*/_internal/utils/typing",
 
-    # check tooling: ruff-format would tabify space-indented helpers and trip E101
-    "bin",
-
     # other
     ".pants.d",
     ".pyenv",
@@ -137,6 +134,50 @@ ignore-fully-untyped = false  # flag functions that are completely untyped
 allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 
 [lint.per-file-ignores]
+# ⚠️ `bin` was ONCE in [exclude] above, with the reason "ruff-format would tabify
+# space-indented helpers and trip E101". Two things were wrong with that (blueprintx#207):
+#
+#   1. It described a HYPOTHETICAL. The 27 E101s were already there — all of them in the one
+#      file that genuinely mixed both (`check_review_threads.py`: 337 tab lines + 21 space
+#      lines). The other 13 files were internally consistent; ruff-format was never the
+#      threat. The exclude was protecting the tree from a diff, not from a defect.
+#   2. It excluded the 16 files that ARE this project's quality machinery from BOTH the
+#      linter and the type checker — the gates policing everything else were the only code
+#      nobody policed. Behind it sat 73 findings. Same shape as blueprintx#190/#203, and the
+#      largest of the three.
+#
+# `bin/` is now formatted like the rest of the tree (tabs) and linted like the rest of the
+# tree, with exactly one rule relaxed:
+"bin/*.py" = [
+    # ERA001 has a 100% false-positive rate on this directory, measured twice. Every gate in
+    # `bin/` carries long wrapped prose comments explaining WHY it exists and what it once got
+    # wrong — that is the house style here and it is the reason these files are readable. The
+    # eradicate heuristic reads any continuation line containing `(`, `:` or `=` as code:
+    #
+    #     # last (empty) page, so the loop terminates on the slower of the two.
+    #     # (required_review_thread_resolution), so this is the LOCAL half of the same rule — it
+    #
+    # 15 findings in `bin/`, 15 false positives; blueprintx#169 independently measured 9 more
+    # with the same result. 0 true positives in 24. Suppressing per line would put a `# noqa`
+    # on 15 prose comments and teach the next author that noqa is how you write a comment.
+    # ⚠️ This is scoped to `bin/` ON PURPOSE. `src/` keeps ERA001 — commented-out code there is
+    # still forbidden (CLAUDE.md), and the global decision stays open in blueprintx#169.
+    "ERA001",
+    # E101 fires on `TAB + spaces` at the start of a line. `bin/` was space-indented and is now
+    # tabbed like the rest of the tree (code AND docstring bodies — `src/` has always used tabs
+    # inside docstrings, which is why D206 is ignored globally). What survives that conversion is
+    # the 2-space HANGING INDENT of a wrapped Markdown bullet inside a module docstring:
+    #
+    #     - **"the source has a column the contract doesn't list" is drift ONLY when the contract
+    #       claims completeness** (``bool_full_column``). …
+    #
+    # Those 2 spaces are the bullet's alignment — a tab there would be 4+ columns and break the
+    # continuation. E101 cannot tell prose alignment from indentation, and a `# noqa` is not
+    # available inside a docstring (it would render as literal text). 4 lines, one file.
+    # ⚠️ Scoped to `bin/`: `src/` and `tests/` pass E101 clean today and keep the rule.
+    "E101",
+]
+
 "tests/**/*.py" = [
     "S101",  # use of assert
     "TID251",  # tests legitimately read back outputs with pd.read_* to assert on them
