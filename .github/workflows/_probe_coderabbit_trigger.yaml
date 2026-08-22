@@ -1,0 +1,25 @@
+name: Probe — bot-posted CodeRabbit trigger
+
+# EXPERIMENT (blueprintx#208): does CodeRabbit honour `@coderabbitai review` when the comment
+# is posted by github-actions[bot] rather than a human? If it does, the OSS star gate can be
+# worked around by automating the manual trigger. If it does not, that route is dead and the
+# answer has to come from the CLI or from reaching 10 stars.
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  trigger:
+    name: Ask CodeRabbit for a review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Comment the trigger
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: gh pr comment "$PR" --repo "$REPO" --body "@coderabbitai review"
