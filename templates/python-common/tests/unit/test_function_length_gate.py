@@ -110,6 +110,30 @@ def test_a_long_docstring_does_not_count_towards_the_limit(tmp_path: Path) -> No
 	assert gate.file_problems(path_file) == []
 
 
+def test_a_nested_function_docstring_does_not_count_either(tmp_path: Path) -> None:
+	"""A closure's documentation belongs to the closure, not to its enclosing function.
+
+	The first implementation subtracted only the OUTER docstring, so a decorator factory
+	paid for its `decorator` and `wrapper` sections and measured over the ceiling while its
+	actual code was short. The fix a wrong metric invites is deleting documentation, which
+	is what the exclusion exists to prevent — hence this test.
+	"""
+	str_doc = "\n".join(f"\t\tLine {i}." for i in range(gate.INT_MAX_LINES + 20))
+	path_file = _python_file(
+		tmp_path,
+		"def outer() -> None:\n"
+		'\t"""Outer."""\n'
+		"\n"
+		"\tdef inner() -> None:\n"
+		f'\t\t"""Inner.\n\n{str_doc}\n\t\t"""\n'
+		"\t\tint_x = 1\n"
+		"\n"
+		"\treturn inner\n",
+	)
+
+	assert gate.file_problems(path_file) == []
+
+
 def test_a_decorator_does_not_count_towards_the_limit(tmp_path: Path) -> None:
 	"""Decorator lines sit above ``def`` and are excluded by the span definition."""
 	str_decorators = "\n".join("@staticmethod" for _ in range(5))

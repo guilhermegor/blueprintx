@@ -18,12 +18,23 @@ heavily documented functions, and they are precisely the pair a raw ceiling woul
 
 THE DEFINITION, stated exactly, because a gate is only as pinned as its metric
 (the trap recorded in blueprintx#167, where a hand-rolled counter reported 85%
-violations against standard mccabe's 8%):
+violations against standard mccabe's 8% — and which caught this file too: the first
+implementation over-reported ``retry_with_backoff`` by counting its nested closures'
+docstrings, so agreement with the issue's numbers was itself the bug):
 
-- **Python** — ``node.end_lineno - node.lineno + 1``, minus the docstring's own span.
-  ``node.lineno`` is the ``def`` line, so **decorators are excluded** for free. Applies
-  to ``def``, ``async def``, and methods alike. Blank lines and comments inside the body
-  DO count: they are part of what a reader scrolls through.
+- **Python** — ``node.end_lineno - node.lineno + 1``, minus **every docstring inside that
+  span, nested definitions included**. ``node.lineno`` is the ``def`` line, so
+  **decorators are excluded** for free. Applies to ``def``, ``async def``, and methods
+  alike. Blank lines and comments inside the body DO count: they are part of what a reader
+  scrolls through.
+
+  ⚠️ The "nested included" half was WRONG in the first implementation, and it is the
+  reason this file says so out loud. Subtracting only the outer docstring makes a decorator
+  factory pay for its closures' documentation: ``retry_with_backoff`` measured 69 and
+  "needed" a refactor, when almost all the excess was the ``decorator`` and ``wrapper``
+  NumPy sections. Shortening those to get under the ceiling is documentation deleted to
+  satisfy a counter — precisely the incentive the exclusion exists to remove. Corrected, it
+  measures well under the limit untouched, and the tree's real count went 21 → 20.
 - **Shell** — from the ``name() {`` line to the first line that is exactly ``}`` at
   column 0, inclusive. This is exact rather than heuristic **because the repo runs
   ``shfmt``**, which guarantees that shape; it deliberately avoids brace-depth counting,
@@ -68,13 +79,13 @@ TUPLE_SKIP_DIRS = (
 STR_SHELL_OPEN_SUFFIX = "() {"
 
 
-def docstring_span(node: ast.AST) -> int:
-	"""Return how many lines the function's own docstring occupies.
+def own_docstring_span(node: ast.AST) -> int:
+	"""Return how many lines one node's own docstring occupies.
 
 	Parameters
 	----------
 	node : ast.AST
-		A function or method node.
+		A function, method, or class node.
 
 	Returns
 	-------
@@ -93,6 +104,39 @@ def docstring_span(node: ast.AST) -> int:
 	if not bool_is_docstring:
 		return 0
 	return (cls_first.end_lineno or cls_first.lineno) - cls_first.lineno + 1
+
+
+def docstring_span(node: ast.AST) -> int:
+	"""Return every docstring line inside a function, nested definitions included.
+
+	⚠️ NESTED DOCSTRINGS COUNT AS DOCUMENTATION TOO, and subtracting only the outer one was
+	a real defect in this metric. A decorator factory holds its `decorator` and `wrapper`
+	closures inside its own span, so their docstrings landed on the OUTER function's tally —
+	which is the rule contradicting itself, since the whole reason docstrings are excluded is
+	that a ceiling must not measure how well something is documented.
+
+	Measured, and the reason this is not a cosmetic fix: `retry_with_backoff` came out at 69
+	lines and "needed" a refactor. Nearly all of the excess was the two closures' NumPy
+	sections. Trimming them to get under the ceiling is documentation deleted to satisfy a
+	counter — the exact incentive the exclusion exists to prevent.
+
+	Parameters
+	----------
+	node : ast.AST
+		A function or method node.
+
+	Returns
+	-------
+	int
+		Total docstring lines in the node's own body and in every definition nested in it.
+	"""
+	int_total = own_docstring_span(node)
+	for cls_child in ast.walk(node):
+		if cls_child is node:
+			continue
+		if isinstance(cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+			int_total += own_docstring_span(cls_child)
+	return int_total
 
 
 def python_functions(path_file: pathlib.Path) -> list:
