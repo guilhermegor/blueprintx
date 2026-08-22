@@ -77,6 +77,25 @@ submit a review. The behaviour is right (any roster member satisfies it), but th
 a reviewer that structurally cannot. Fixing it means `load_roster` exposing the `posts` field,
 which changes its signature and its tests — worth doing, not worth folding into this PR.
 
+## The secret's NAME was a defect (2026-08-22, found by it biting)
+
+- [x] Renamed `CODERABBIT_TRIGGER_PAT` → **`GH_PAT_REVIEW_TRIGGER`**. The old name reads as
+      "CodeRabbit's PAT" when it means "a **GitHub** PAT that triggers CodeRabbit". Measured
+      cost: the first person to set it stored a **CodeRabbit API key** from
+      `app.coderabbit.ai/settings/api-keys` — a fair reading of the name — and spent two rounds
+      on `401 Bad credentials`. Both products call their credential a token, so the variable
+      name is the only thing disambiguating them.
+- [x] Not `GITHUB_PAT_…`, however well it reads: Actions reserves the prefix.
+      Verified against the API, not recalled: `HTTP 422: Secret names must not start with
+      GITHUB_`. `GH_` is the closest legal spelling.
+- [x] The workflow's SETUP block now says "**GitHub** PAT … NOT a CodeRabbit API key" and states
+      the expected `github_pat_` prefix, so the right artifact is identifiable before storing.
+- [x] The shape check that caught this stays: `token class: UNRECOGNISED prefix` turned a mute
+      401 into the answer in one run, after two rounds of guessing.
+
+⚠️ **The old secret is still stored under the old name and holds a CodeRabbit key.** Delete it
+rather than leaving a dead credential: `gh secret delete CODERABBIT_TRIGGER_PAT`.
+
 ## Not done here, deliberately
 
 - **The gate is not yet a required check.** It ships enforcing, but adding it to

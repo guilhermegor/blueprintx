@@ -20,10 +20,22 @@ name: CodeRabbit Trigger
 # (`user.type: User`, `author_association: OWNER`) and is indistinguishable from one typed in
 # the browser — measured on #215: replied in 9 seconds and produced 4 review threads.
 #
+# ⚠️ THE NAME MATTERS AND USED TO BE WRONG. This was `CODERABBIT_TRIGGER_PAT`, which reads as
+# "CodeRabbit's PAT" when it means "a GITHUB PAT that triggers CodeRabbit". Measured cost: the
+# first person to set it stored a CodeRabbit API key from app.coderabbit.ai/settings/api-keys —
+# a reasonable reading of the name — and got two rounds of `401 Bad credentials` for it. Both
+# products call their credential a token, so the variable name is the only disambiguator, and a
+# scaffolded project inherits whatever name is chosen here.
+#
+# ⚠️ And it cannot be `GITHUB_PAT_…`, however well that would read: Actions reserves the whole
+# prefix — `HTTP 422: Secret names must not start with GITHUB_`, verified against the API. `GH_`
+# is the closest legal spelling.
+#
 # SETUP (one manual step, and the workflow fails loudly until it is done):
-#   1. Create a PAT on the account that should appear as the commenter.
-#      Fine-grained, this repository only, with `Pull requests: Read and write`.
-#   2. `gh secret set CODERABBIT_TRIGGER_PAT --repo <owner>/<repo>`
+#   1. Create a **GitHub** PAT (github.com/settings/personal-access-tokens — NOT a CodeRabbit
+#      API key) on the account that should appear as the commenter. Fine-grained, this
+#      repository only, with `Pull requests: Read and write`. The value starts `github_pat_`.
+#   2. `gh secret set GH_PAT_REVIEW_TRIGGER --repo <owner>/<repo>`
 #
 # The paired gate is `review_threads.yml` → `bin/ci/check_review_threads.py`, which fails a PR
 # where no declared reviewer ever submitted a review. Without that gate this workflow is a
@@ -71,17 +83,17 @@ jobs:
       # secret, but a substring of a masked value is NOT masked.
       - name: The trigger PAT must exist and be well-formed
         env:
-          CODERABBIT_TRIGGER_PAT: ${{ secrets.CODERABBIT_TRIGGER_PAT }}
+          GH_PAT_REVIEW_TRIGGER: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
         run: |
-          if [ -z "$CODERABBIT_TRIGGER_PAT" ]; then
-            echo "::error::CODERABBIT_TRIGGER_PAT is not set, so no review can be requested." >&2
+          if [ -z "$GH_PAT_REVIEW_TRIGGER" ]; then
+            echo "::error::GH_PAT_REVIEW_TRIGGER is not set, so no review can be requested." >&2
             echo "GITHUB_TOKEN cannot substitute: CodeRabbit ignores bot-authored comments" >&2
             echo "(measured on PR #210). Set a user PAT with Pull requests: write —" >&2
-            echo "  gh secret set CODERABBIT_TRIGGER_PAT --repo $GITHUB_REPOSITORY --body '<pat>'" >&2
+            echo "  gh secret set GH_PAT_REVIEW_TRIGGER --repo $GITHUB_REPOSITORY --body '<pat>'" >&2
             exit 1
           fi
 
-          case "$CODERABBIT_TRIGGER_PAT" in
+          case "$GH_PAT_REVIEW_TRIGGER" in
           github_pat_*) echo "token class: fine-grained (github_pat_)" ;;
           ghp_*) echo "token class: classic PAT (ghp_)" ;;
           gho_*) echo "token class: OAuth (gho_) — this is a gh-CLI login token, not a PAT" ;;
@@ -90,10 +102,10 @@ jobs:
           esac
 
           # The whitespace test is the one that catches a redirect-stored secret.
-          if printf '%s' "$CODERABBIT_TRIGGER_PAT" | grep -qE '[[:space:]]'; then
+          if printf '%s' "$GH_PAT_REVIEW_TRIGGER" | grep -qE '[[:space:]]'; then
             echo "::error::the stored secret contains whitespace (very likely a trailing newline)." >&2
             echo "That 401s exactly like a bad token. Re-store it with --body, never a redirect:" >&2
-            echo "  gh secret set CODERABBIT_TRIGGER_PAT --repo $GITHUB_REPOSITORY --body '<pat>'" >&2
+            echo "  gh secret set GH_PAT_REVIEW_TRIGGER --repo $GITHUB_REPOSITORY --body '<pat>'" >&2
             exit 1
           fi
           echo "no whitespace in the stored value."
@@ -103,12 +115,12 @@ jobs:
       # wrong resource owner — none of which this repo can fix.
       - name: The PAT must authenticate as a user
         env:
-          GH_TOKEN: ${{ secrets.CODERABBIT_TRIGGER_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
         run: gh api user --jq '"authenticates as \(.login) [\(.type)]"'
 
       - name: Request the review
         env:
-          GH_TOKEN: ${{ secrets.CODERABBIT_TRIGGER_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
