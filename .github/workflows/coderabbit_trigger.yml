@@ -61,7 +61,15 @@ jobs:
       # a silent no-op — and a silent no-op is precisely the state this whole file is fixing: no
       # review happens, and nothing says so. A fork PR gets no secrets either, so it lands here
       # too, correctly: a fork PR genuinely cannot self-trigger and a human must ask.
-      - name: The trigger PAT must exist
+      # ⚠️ THE SHAPE CHECK EARNS ITS KEEP: a bare `401 Bad credentials` from the API step below
+      # cannot tell "the token is wrong" from "the token was STORED wrong", and those have
+      # opposite fixes. Two rounds were lost to that ambiguity. `gh secret set … < file` keeps
+      # the file's trailing newline, and a token with `\n` 401s exactly like an expired one.
+      #
+      # ⚠️ This repository is PUBLIC and so are these logs. Report only CLASS and BOOLEANS —
+      # never the value, never a substring of it, never its exact length. Actions masks the
+      # secret, but a substring of a masked value is NOT masked.
+      - name: The trigger PAT must exist and be well-formed
         env:
           CODERABBIT_TRIGGER_PAT: ${{ secrets.CODERABBIT_TRIGGER_PAT }}
         run: |
@@ -69,9 +77,34 @@ jobs:
             echo "::error::CODERABBIT_TRIGGER_PAT is not set, so no review can be requested." >&2
             echo "GITHUB_TOKEN cannot substitute: CodeRabbit ignores bot-authored comments" >&2
             echo "(measured on PR #210). Set a user PAT with Pull requests: write —" >&2
-            echo "  gh secret set CODERABBIT_TRIGGER_PAT --repo $GITHUB_REPOSITORY" >&2
+            echo "  gh secret set CODERABBIT_TRIGGER_PAT --repo $GITHUB_REPOSITORY --body '<pat>'" >&2
             exit 1
           fi
+
+          case "$CODERABBIT_TRIGGER_PAT" in
+          github_pat_*) echo "token class: fine-grained (github_pat_)" ;;
+          ghp_*) echo "token class: classic PAT (ghp_)" ;;
+          gho_*) echo "token class: OAuth (gho_) — this is a gh-CLI login token, not a PAT" ;;
+          ghs_*) echo "token class: installation/app (ghs_) — cannot act as a user" ;;
+          *) echo "::warning::token class: UNRECOGNISED prefix — is this a token at all?" ;;
+          esac
+
+          # The whitespace test is the one that catches a redirect-stored secret.
+          if printf '%s' "$CODERABBIT_TRIGGER_PAT" | grep -qE '[[:space:]]'; then
+            echo "::error::the stored secret contains whitespace (very likely a trailing newline)." >&2
+            echo "That 401s exactly like a bad token. Re-store it with --body, never a redirect:" >&2
+            echo "  gh secret set CODERABBIT_TRIGGER_PAT --repo $GITHUB_REPOSITORY --body '<pat>'" >&2
+            exit 1
+          fi
+          echo "no whitespace in the stored value."
+
+      # Fails with GitHub's own reason, which the step above has already narrowed: if the value
+      # is well-formed and STILL 401s, the token itself is expired, revoked, or scoped to the
+      # wrong resource owner — none of which this repo can fix.
+      - name: The PAT must authenticate as a user
+        env:
+          GH_TOKEN: ${{ secrets.CODERABBIT_TRIGGER_PAT }}
+        run: gh api user --jq '"authenticates as \(.login) [\(.type)]"'
 
       - name: Request the review
         env:
