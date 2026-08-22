@@ -84,9 +84,11 @@ parar o desenvolvimento na BlueprintX e scaffoldar.
       checks obrigatorios, GitGuardian) — ~~medido: nada bloqueia merge hoje~~ **desatualizado.**
       Medido na API em 2026-08-22: `required_conversation_resolution=true` e **15** required
       status checks em `main` (threads, spell, shellcheck, actionlint, mkdocs, version sync,
-      meta, copy-lists e os 7 jobs de scaffold+lint+test). O merge recusado foi
-      observado na PR #219 (`mergeStateStatus=BLOCKED`). Falta **so o GitGuardian**
-      (#153/#155) — ver `pr-gate-blocks-merge_20260817_104500.md`.
+      meta, copy-lists e os 7 jobs de scaffold+lint+test). ⚠️ O merge recusado na PR #219
+      **nao isola o gate**: o check `github-advanced-security` reprovava no mesmo commit, entao
+      o bloqueio era sobredeterminado (medido com o commit vazio `a1ba4a6`). Falta o
+      GitGuardian (#153/#155) **e** uma observacao limpa — ver
+      `pr-gate-blocks-merge_20260817_104500.md`.
 
 ## Aberto durante a sessao (fora do Tier A, registrado para depois)
 
