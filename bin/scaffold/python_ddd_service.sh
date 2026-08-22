@@ -440,6 +440,11 @@ copy_github_assets() {
     # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
     # after the last push is still checked — a push-only trigger goes stale exactly then.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
+    # Its other half: the gate above fails a PR nobody reviewed, and this asks for the review.
+    # A new repo has 0 stars, so CodeRabbit declines to review it automatically BY CONSTRUCTION
+    # — ship the gate without the trigger and every PR blocks; ship the trigger without the
+    # gate and nothing notices when it stops working. GitHub-only, hence here.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/coderabbit_trigger.yaml" "$project_path/.github/workflows/coderabbit_trigger.yaml"
     # PR quality gate (classify by path, sticky comment, native auto-merge) + the reconciler
     # that closes linked issues of BOT-merged PRs (a bot merge suppresses both the issue close
     # and delete_branch_on_merge). GitHub-only, like tests.yaml.
