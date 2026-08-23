@@ -34,9 +34,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
-# Pinned so a silent upstream rule change cannot turn a green tree red without a diff. Bump
-# deliberately, the way the actionlint pin is bumped.
-STR_HADOLINT_IMAGE="hadolint/hadolint:v2.12.0-alpine"
+# ⚠️ PINNED BY DIGEST, not by tag. A tag is a mutable pointer: `v2.12.0-alpine` can be re-pushed
+# to different bytes, and this image is PULLED AND EXECUTED on the machine running the gate. The
+# tag pins what is ASKED FOR; the digest pins what ARRIVES — the same distinction lint_actions.sh
+# already draws when it verifies actionlint's SHA-256 before extracting the tarball.
+#
+# The tag is kept alongside for readability; Docker resolves the digest and ignores the tag when
+# both are given. Re-resolve on a deliberate bump:
+#   docker buildx imagetools inspect hadolint/hadolint:<tag> | sed -n 's/^Digest: //p'
+STR_HADOLINT_IMAGE="hadolint/hadolint:v2.12.0-alpine@sha256:3c206a451cec6d486367e758645269fd7d696c5ccb6ff59d8b03b0e45268a199"
 
 resolve_hadolint_mode() {
 	# Print "system" (a binary on PATH), "docker" (the pinned image, daemon reachable), or ""

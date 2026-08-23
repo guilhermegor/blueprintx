@@ -25,7 +25,11 @@ discover_files() {
 		git ls-files -z
 		return 0
 	fi
-	find . -type f \
+	# ⚠️ THE PRUNE GROUP MUST COME FIRST, with no test before it. A leading `-type f` is false
+	# for a DIRECTORY, so the branch short-circuits and `-prune` is never evaluated — find then
+	# descends into .venv and node_modules and lints dependency filenames. Measured: the leading
+	# form returned .venv/lib/junk.py and node_modules/pkg/index.js; this form returns neither.
+	find . \
 		\( -path ./.git -o -path ./.venv -o -path ./node_modules \) -prune \
 		-o -type f -print0
 }
