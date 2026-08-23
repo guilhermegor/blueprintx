@@ -340,3 +340,130 @@ def test_the_same_nested_tree_without_the_prefix_is_rejected(tmp_path: Path) -> 
 	int_code, _ = _run_main(tmp_path)
 
 	assert int_code == 1
+
+
+# --------------------------
+# direction — the OTHER question this gate answers (blueprintx#140)
+# --------------------------
+
+_DIRECTION_POLICY = (
+	"layers:\n"
+	"  utils:\n"
+	"    allow: {}\n"
+	"    deny_layers:\n"
+	'      model: "utils/ is a seam for the layers, not a consumer of them."\n'
+	"  model:\n"
+	"    allow: {}\n"
+	"  config:\n"
+	"    allow: {}\n"
+)
+
+
+def _seed_layers(path_root: Path) -> None:
+	"""Create every sibling layer the direction fixtures refer to.
+
+	⚠️ All of them must EXIST on disk. ``first_party_roots`` learns the project's own package
+	names by scanning src/, so a layer that is only named in the policy is an unknown module
+	to the VENDOR half — and the direction test then fails for the wrong reason.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		The project root to build under.
+
+	Returns
+	-------
+	None
+	"""
+	_seed_one_layer(path_root, "utils")
+	_seed_one_layer(path_root, "model")
+	_seed_one_layer(path_root, "config")
+
+
+def _seed_one_layer(path_root: Path, str_layer: str) -> None:
+	"""Create one layer package under ``src/``.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		The project root.
+	str_layer : str
+		The layer's directory name.
+
+	Returns
+	-------
+	None
+	"""
+	(path_root / "src" / str_layer).mkdir(parents=True, exist_ok=True)
+	(path_root / "src" / str_layer / "__init__.py").write_text("", encoding="utf-8")
+
+
+def _direction_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
+	"""Run the gate over one module placed in ``utils/`` under a direction policy.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway directory.
+	str_source : str
+		The module source to check.
+
+	Returns
+	-------
+	tuple of (int, str)
+		The gate's exit code and its output.
+	"""
+	_seed_layers(tmp_path)
+	(tmp_path / "src" / "utils" / "probe.py").write_text(str_source, encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_DIRECTION_POLICY, encoding="utf-8")
+	return _run_main(tmp_path)
+
+
+def test_a_seam_importing_the_layer_it_serves_is_rejected(tmp_path: Path) -> None:
+	"""⚠️ No vendor is involved, and that is the point.
+
+	The vendor half of this gate asks "may this layer reach OUTSIDE the project?". Direction
+	asks "may it reach THAT layer?" — a different question, and utils/ importing model/ is a
+	cycle the vendor rule cannot see. It was prose only (src/utils/CLAUDE.md: "utils/ is
+	imported by them, never the reverse") and prose does not fail a build.
+	"""
+	int_code, str_out = _direction_case(tmp_path, "from model import thing\n")
+
+	assert int_code == 1
+	assert "must not import" in str_out
+	assert "not a consumer" in str_out
+
+
+def test_a_wrong_direction_deferred_into_a_function_is_still_rejected(tmp_path: Path) -> None:
+	"""Deferring the import does not undo the coupling — same rule as for a vendor."""
+	int_code, _ = _direction_case(
+		tmp_path, 'def f() -> None:\n\t"""D."""\n\timport model\n\n\tprint(model)\n'
+	)
+
+	assert int_code == 1
+
+
+def test_an_allowed_direction_passes(tmp_path: Path) -> None:
+	"""The positive control: a sibling not named in deny_layers is fine."""
+	int_code, _ = _direction_case(tmp_path, "from config import settings\n")
+
+	assert int_code == 0
+
+
+def test_a_layer_declaring_no_direction_is_unrestricted(tmp_path: Path) -> None:
+	"""A layer with no ``deny_layers`` may reach its siblings.
+
+	Unlike the VENDOR half this is not deny-by-default, and the asymmetry is deliberate: the
+	set of vendors is open-ended, while the set of layers is small, named in the same file,
+	and each project decides its own direction. An absent entry is a real answer, not an
+	unasked question.
+	"""
+	_seed_layers(tmp_path)
+	(tmp_path / "src" / "model" / "probe.py").write_text(
+		"from utils import thing\n", encoding="utf-8"
+	)
+	(tmp_path / ".layer-policy.yaml").write_text(_DIRECTION_POLICY, encoding="utf-8")
+
+	int_code, _ = _run_main(tmp_path)
+
+	assert int_code == 0

@@ -72,6 +72,14 @@ layers:
         guarded import so a tier without numpy still loads. Legitimate here precisely
         because utils/ IS the seam layer.
 
+    # Direction. utils/ is imported BY the layers, never the reverse — a cycle here is a
+    # design error, and it was prose only (src/utils/CLAUDE.md) until this entry existed.
+    deny_layers:
+      model: "utils/ is a seam for the layers, not a consumer of them."
+      view: "utils/ is a seam for the layers, not a consumer of them."
+      controller: "utils/ is a seam for the layers, not a consumer of them."
+
+
   config:
     # The composition root: the one layer whose job IS to know concrete implementations.
     # What it must NOT know is the DOMAIN — a vendor SDK for the business belongs in a seam.
@@ -79,3 +87,10 @@ layers:
       dotenv: "loads .env at startup; this is the layer that owns environment resolution"
       yaml: "parses inputs.yaml / outputs.yaml"
       sqlalchemy: "builds the Engine and the sessionmaker for every supported backend"
+
+    # Direction. config/ is imported by every layer, so it must not import one back: the
+    # composition root knowing a domain layer is how a "root" becomes a participant.
+    deny_layers:
+      model: "the composition root wires the layers; it must not depend on one."
+      view: "the composition root wires the layers; it must not depend on one."
+      controller: "the composition root wires the layers; it must not depend on one."

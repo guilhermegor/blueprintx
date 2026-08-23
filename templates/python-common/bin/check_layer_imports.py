@@ -341,9 +341,61 @@ def find_file_problems(
 	list_problems, dict_annotation_aliases = disallowed_import_problems(
 		cls_tree, path_file, str_layer, dict_allow, dict_annotation_only, set_first_party
 	)
-	return list_problems + annotation_only_misuse_problems(
+	list_problems += annotation_only_misuse_problems(
 		cls_tree, path_file, str_layer, dict_annotation_aliases, dict_annotation_only
 	)
+	return list_problems + direction_problems(cls_tree, path_file, str_layer, dict_policy)
+
+
+def direction_problems(
+	cls_tree: ast.Module, path_file: pathlib.Path, str_layer: str, dict_policy: dict
+) -> list[str]:
+	"""Return every import that points the WRONG WAY between first-party layers.
+
+	The vendor half of this gate asks "may this layer reach outside the project?". This half
+	asks the opposite question — "may this layer reach that layer?" — and they are genuinely
+	different: ``utils/`` importing ``model/`` involves no vendor at all, yet it is the design
+	error that turns a seam into a cycle. Both rules were prose only
+	(``src/utils/CLAUDE.md``: *"utils/ is imported by them, never the reverse"*), and prose
+	does not fail a build.
+
+	⚠️ Silent when a layer declares no ``deny_layers``. That is deliberate and is NOT the
+	self-skip this gate was just fixed for: the vendor policy is deny-by-default because the
+	set of vendors is open-ended, while the set of layers is small, named in the same file,
+	and each project decides its own direction. An absent entry means "this layer may reach
+	its siblings", which is a real answer rather than an unasked question.
+
+	Parameters
+	----------
+	cls_tree : ast.Module
+		The parsed module.
+	path_file : pathlib.Path
+		The module's path, for the message.
+	str_layer : str
+		The layer the file belongs to.
+	dict_policy : dict
+		The parsed ``.layer-policy.yaml``.
+
+	Returns
+	-------
+	list of str
+		Human-readable problems; empty when the file complies.
+	"""
+	dict_layer = (dict_policy.get("layers", {}) or {}).get(str_layer) or {}
+	dict_deny = dict_layer.get("deny_layers") or {}
+	if not dict_deny:
+		return []
+
+	# Scope does not change the verdict here either: an import deferred into a function still
+	# couples the layers, exactly as it does for a vendor.
+	return [
+		f"{path_file}:{cls_node.lineno}: layer '{str_layer}' must not import "
+		f"'{str_root}'. {dict_deny[str_root]}"
+		for cls_node in ast.walk(cls_tree)
+		if isinstance(cls_node, ast.Import | ast.ImportFrom)
+		for str_root, _ in imported_names(cls_node)
+		if str_root in dict_deny
+	]
 
 
 def _report_absent_policy(int_modules: int) -> int:
