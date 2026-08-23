@@ -1,1 +1,5 @@
 poetry>=2.3.4 ; python_full_version >= "3.12"
+# Poetry 2.x dropped `poetry shell` from core; this plugin restores it. It belongs HERE (the
+# bootstrap install, pip-installed into the interpreter Poetry runs from) rather than as a
+# project dependency, which would reach `.venv` — where no Poetry exists to load it.
+poetry-plugin-shell>=1.0 ; python_full_version >= "3.12"

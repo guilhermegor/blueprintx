@@ -3,3 +3,8 @@ poetry>=2.4 ; python_full_version >= "3.10"
 # a dev-dep: a dev-dep reaches the project venv and nothing else, so the recipe would work
 # from an activated shell and fail from cron, CI, and the offline host it exists to serve.
 poetry-plugin-export>=1.8 ; python_full_version >= "3.10"
+# Poetry 2.x removed `poetry shell` from core; this plugin restores it. Same reasoning as the
+# export plugin above, and the same home for the same reason: a Poetry plugin has to live in
+# the interpreter POETRY runs from, which is what this file installs. Declared as a project
+# dependency it would land in `.venv`, where no Poetry exists to load it — installed, and inert.
+poetry-plugin-shell>=1.0 ; python_full_version >= "3.10"

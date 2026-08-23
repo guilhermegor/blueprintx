@@ -135,6 +135,13 @@ copy_templates() {
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
+    # The BOOTSTRAP installer's pin: Poetry itself plus its plugins (export, shell). Not
+    # application dependencies -- bin/lib/bootstrap.sh pip-installs this file into the
+    # interpreter Poetry runs from, which is the only place a Poetry plugin can be loaded.
+    # ⚠️ Four of the five Python scaffolds omitted this copy, so `poetry export` shipped
+    # without its plugin in every service tier while lib-minimal alone had it (blueprintx#116
+    # family: each scaffold hand-maintains its own cp list, so a shared file drifts silently).
+    cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
