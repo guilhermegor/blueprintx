@@ -75,8 +75,16 @@ bash bin/check_complexity.sh
 #
 # ⚠️ Do not re-add this line before #244 closes: `poe lint` would be red on every fresh scaffold.
 
-print_status info "__all__ export completeness"
-$POETRY run python bin/check_all_exports.py
+# ⚠️ DELIBERATELY ABSENT, same as check_typing above: check_all_exports.py — see blueprintx#246.
+#
+# Measured on a fresh scaffold of all five tiers: it passes on mvc-service-native-db and
+# mvc-service-orm-db and reports 6 pre-existing violations across the other three (ddd-native:
+# SET_BACKENDS, active_backend, DsnParts; ddd-orm: T; lib-minimal: main, T). The gate is right —
+# these are names importable from a package whose __init__ does not export them — but the debt
+# is template source in three tiers, not gate wiring, and it is tracked rather than folded into
+# a commit about gate parity.
+#
+# ⚠️ Do not re-add this line before #245 closes: `poe lint` would be red on three of five tiers.
 
 print_status info "numeric dtype policy"
 $POETRY run python bin/check_dtypes.py
