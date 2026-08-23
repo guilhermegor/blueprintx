@@ -39,6 +39,8 @@ from utils.tabular_reader import FileContract  # noqa: E402, TID251
 
 _REGISTRY_PATH = pathlib.Path("src/config/contract_oracles.yaml")
 _REPORT_PATH = pathlib.Path("contract_drift_report.md")
+# Per-source override: `timeout_s:` in the registry entry.
+_DEFAULT_TIMEOUT_SECONDS = 60
 
 
 def load_registry() -> dict:
@@ -86,8 +88,15 @@ def live_header(dict_entry: dict) -> tuple[str, ...]:
 	"""
 	str_sep = dict_entry.get("sep", ";")
 	str_encoding = dict_entry.get("encoding", "utf-8-sig")
+	# The bound is passed EXPLICITLY even though the seam defaults it. This job runs
+	# unattended on a schedule with nobody watching, so a source that accepts the connection
+	# and then never sends bytes is the failure that hangs it until the runner's own ceiling
+	# — which reports as `cancelled`, indistinguishable from a human pressing cancel.
+	int_timeout_s = int(dict_entry.get("timeout_s", _DEFAULT_TIMEOUT_SECONDS))
 	with tempfile.TemporaryDirectory() as str_tmp:
-		path_art = download_file(dict_entry["url"], pathlib.Path(str_tmp) / "artifact")
+		path_art = download_file(
+			dict_entry["url"], pathlib.Path(str_tmp) / "artifact", int_timeout_s
+		)
 		with path_art.open(encoding=str_encoding) as fh:
 			for str_line in fh:
 				if str_line.strip():
@@ -95,8 +104,17 @@ def live_header(dict_entry: dict) -> tuple[str, ...]:
 	return ()
 
 
-def drift_for_source(cls_contract: FileContract, dict_entry: dict) -> tuple[list[str], list[str]]:
+def drift_for_source(
+	cls_contract: FileContract, dict_entry: dict
+) -> tuple[list[str] | None, list[str]]:
 	"""Return ``(drift_lines, note_lines)`` for one source — notes are logged, never reported.
+
+	⚠️ ``drift_lines`` is ``None`` when the source could **not be checked**, and ``[]`` when it
+	was checked and matched. Returning ``[]`` for both is the defect this signature exists to
+	prevent: the caller then prints its all-clear line for a comparison that never happened —
+	a reporting job announcing its own blindness as a clean bill of health, which is precisely
+	the failure this job exists to catch in someone else's data. Measured elsewhere: a source
+	outage printed ``no layout drift detected``.
 
 	The two directions are **not** symmetric:
 
@@ -120,13 +138,22 @@ def drift_for_source(cls_contract: FileContract, dict_entry: dict) -> tuple[list
 
 	Returns
 	-------
-	tuple of (list of str, list of str)
-		``(drift_lines, note_lines)`` — drift lines open/update the issue; note lines only log.
+	tuple of (list of str or None, list of str)
+		``(drift_lines, note_lines)`` — ``None`` drift lines mean the source was unreachable
+		and nothing was compared; ``[]`` means checked and clean. Drift lines open/update the
+		issue; note lines only log.
 	"""
 	try:
 		tuple_live = live_header(dict_entry)
-	except OSError as cls_err:
-		return [], [f"could not fetch {dict_entry.get('url')}: {cls_err} (not treated as drift)"]
+	except Exception as cls_err:  # noqa: BLE001 — see below
+		# Deliberately broad. This function's contract is that ONE source can never end the
+		# run, and the reasons it may fail are open-ended: a network error, a malformed URL in
+		# the registry, a non-2xx, an undecodable body. Every one of them means the same thing
+		# to the caller — "not checked" — and each is surfaced as SKIPPED, never swallowed.
+		return None, [
+			f"could not fetch {dict_entry.get('url')}: "
+			f"{type(cls_err).__name__}: {cls_err} (NOT checked — not drift either)"
+		]
 	set_live = set(tuple_live)
 	set_contract = set(cls_contract.tuple_required)
 	list_lines: list[str] = []
@@ -142,7 +169,7 @@ def drift_for_source(cls_contract: FileContract, dict_entry: dict) -> tuple[list
 	return list_lines, []
 
 
-def build_report(dict_registry: dict, dict_contracts: dict) -> tuple[str, list[str]]:
+def build_report(dict_registry: dict, dict_contracts: dict) -> tuple[str, list[str], list[str]]:
 	"""Assemble the drift report and the log-only notes across all configured sources.
 
 	Parameters
@@ -154,12 +181,15 @@ def build_report(dict_registry: dict, dict_contracts: dict) -> tuple[str, list[s
 
 	Returns
 	-------
-	tuple of (str, list of str)
-		The Markdown report body (``""`` when every contract still matches its source) and the
-		note lines, which are logged but deliberately never open an issue.
+	tuple of (str, list of str, list of str)
+		The Markdown report body (``""`` when every checked contract still matches its source),
+		the note lines (logged, never opening an issue), and the keys of the sources that were
+		**not checked at all**. The third element is the one that keeps an empty report from
+		being read as an all-clear.
 	"""
 	list_sections: list[str] = []
 	list_notes: list[str] = []
+	list_skipped: list[str] = []
 	for str_key, dict_entry in dict_registry.items():
 		cls_contract = dict_contracts.get(str_key)
 		if cls_contract is None:
@@ -169,11 +199,14 @@ def build_report(dict_registry: dict, dict_contracts: dict) -> tuple[str, list[s
 			continue
 		list_lines, list_entry_notes = drift_for_source(cls_contract, dict_entry)
 		list_notes.extend(f"{str_key}: {note}" for note in list_entry_notes)
+		if list_lines is None:
+			list_skipped.append(str_key)
+			continue
 		if list_lines:
 			list_sections.append(
 				f"### `{str_key}`\n\n" + "\n".join(f"- {ln}" for ln in list_lines)
 			)
-	return "\n\n".join(list_sections), list_notes
+	return "\n\n".join(list_sections), list_notes, list_skipped
 
 
 def main() -> int:
@@ -189,14 +222,22 @@ def main() -> int:
 		print("No oracles configured in config/contract_oracles.yaml — skipping drift check.")
 		_REPORT_PATH.write_text("", encoding="utf-8")
 		return 0
-	str_report, list_notes = build_report(dict_registry, contracts_by_source_key())
+	str_report, list_notes, list_skipped = build_report(dict_registry, contracts_by_source_key())
 	_REPORT_PATH.write_text(str_report, encoding="utf-8")
 	for str_note in list_notes:
 		print(f"note: {str_note}")
 	if str_report:
 		print("Contract drift detected:\n")
 		print(str_report)
-	else:
+	if list_skipped:
+		# NEVER the all-clear line when anything went unchecked. The skipped sources stay OUT
+		# of the report body on purpose: the report opens an issue, and "the source is down"
+		# must not arrive looking like "our contract is wrong".
+		print(
+			f"SKIPPED: {len(list_skipped)} of {len(dict_registry)} source(s) could not be "
+			f"checked — {', '.join(sorted(list_skipped))}. This run proves nothing about them."
+		)
+	elif not str_report:
 		print("No contract drift — every contract still matches its source.")
 	return 0
 

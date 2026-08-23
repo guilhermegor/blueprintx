@@ -453,6 +453,8 @@ lib_minimal_copy_project_scaffolding() {
     # python-common/tests/). The conftest makes a real network call impossible in
     # any test; the example demonstrates enforcing a family convention via __all__.
     mkdir -p "$project_path/tests/unit"
+    # The tests/ leaf doc — one source for every tier (blueprintx#124, #152).
+    cp "$COMMON_TEMPLATE_ROOT/tests/CLAUDE.md" "$project_path/tests/CLAUDE.md"
     cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
         "$project_path/tests/unit/test_pr_gate.py"

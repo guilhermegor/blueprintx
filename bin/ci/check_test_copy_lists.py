@@ -62,6 +62,10 @@ DICT_EXPECTED_ABSENT = {
         "test_queries.py": "lib-minimal ships no DB engine selection or queries/ tree",
         # Contract oracles describe an ingested external file; a library tier ships none.
         "test_contract_oracle_example.py": "lib-minimal ships no contract oracle registry",
+        # The weekly drift reporter re-fetches the sources in config/contract_oracles.yaml;
+        # a library tier ships neither the registry nor bin/check_contract_drift.py, so the
+        # test would have no module to load.
+        "test_contract_drift.py": "lib-minimal ships no contract_drift driver or registry",
         # The gate walks src/ packages that declare __all__; lib-minimal declares none.
         "test_all_exports_gate.py": "lib-minimal ships no package declaring __all__",
         "test_contract_family_conventions.py": "lib-minimal ships no contract family",
