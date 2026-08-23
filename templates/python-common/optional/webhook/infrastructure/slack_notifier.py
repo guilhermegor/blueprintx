@@ -4,7 +4,7 @@ This adapter satisfies the ``WebhookNotifier`` port (see ``domain/ports.py``).
 There is no lightweight Slack client dependency, so the transport uses the standard library
 (``urllib.request``) to keep the provider dependency-free — Slack incoming
 webhooks accept a JSON ``POST`` with a ``text`` field
-(see https://api.slack.com/messaging/webhooks).
+(see https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/).
 """
 
 import json

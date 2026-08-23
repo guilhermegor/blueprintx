@@ -161,6 +161,19 @@ repos:
       # The usual introspective test DISCOVERS the family through __all__ and therefore cannot
       # see a member missing from it: the sweep just returns one fewer item and passes by not
       # looking. This walks the FILES instead, so the hole closes.
+      # Cyclomatic complexity, with a DIFFERENT ceiling per tree: 1 for tests/, 2 for src/,
+      # 8 for bin/. The tests/ number is the load-bearing one — a test with a branch tests two
+      # paths and the green never says which ran, so complexity 1 is the mechanical form of
+      # "each test asserts one behaviour", a rule tests/CLAUDE.md states in prose and could
+      # never enforce. Two ruff invocations, not one config: per-file-ignores can switch a
+      # rule off for a path but cannot give it a different max-complexity.
+      - id: check-complexity
+        name: cyclomatic complexity (tests 1, src 2, bin 8)
+        entry: bash bin/check_complexity.sh
+        language: system
+        files: \.py$
+        pass_filenames: false
+
       - id: check-all-exports
         name: __all__ names every public member
         entry: bash bin/poetry_exec.sh run python bin/check_all_exports.py

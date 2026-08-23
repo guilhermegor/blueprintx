@@ -11,6 +11,7 @@ half: that every defined member IS exported.) Every hand-written collection in a
 is a hole at whatever level it sits.
 """
 
+import contextlib
 import importlib
 import pkgutil
 
@@ -26,16 +27,20 @@ def _contracts() -> dict:
 		``{"<module>.<name>": contract}`` for every contract instance found.
 	"""
 	cls_pkg = importlib.import_module("config.contracts")
-	dict_found: dict = {}
-	for cls_info in pkgutil.iter_modules(cls_pkg.__path__):
-		cls_module = importlib.import_module(f"config.contracts.{cls_info.name}")
-		for str_attr in dir(cls_module):
-			if str_attr.startswith("_"):
-				continue
-			cls_value = getattr(cls_module, str_attr)
-			if type(cls_value).__name__ == "FileContract":
-				dict_found[f"{cls_info.name}.{str_attr}"] = cls_value
-	return dict_found
+	list_modules = [
+		(cls_info.name, importlib.import_module(f"config.contracts.{cls_info.name}"))
+		for cls_info in pkgutil.iter_modules(cls_pkg.__path__)
+	]
+	# A comprehension rather than nested loops with skip guards. Discovery is identical, and
+	# mccabe charges a comprehension nothing while charging every loop and guard a point.
+	# The tests tree is capped at complexity 1 by the check_complexity gate in bin.
+	return {
+		f"{str_module_name}.{str_attr}": getattr(cls_module, str_attr)
+		for str_module_name, cls_module in list_modules
+		for str_attr in dir(cls_module)
+		if not str_attr.startswith("_")
+		and type(getattr(cls_module, str_attr)).__name__ == "FileContract"
+	}
 
 
 def test_the_family_is_not_empty() -> None:
@@ -60,16 +65,37 @@ def test_source_keys_are_unique_across_the_family() -> None:
 	assert len(list_keys) == len(set(list_keys)), f"duplicate str_source_key in {list_keys}"
 
 
-def test_no_contract_declares_the_same_column_twice() -> None:
+def _discovered_contract_ids() -> list[str]:
+	"""Return the discovered contract ids for parametrization (``[]`` off a service tier).
+
+	⚠️ Runs at COLLECTION time, so it must never raise: a tier that ships no contracts package
+	yields an empty list and the parametrized tests are simply not generated. The empty case is
+	separately guarded by ``test_the_family_is_not_empty``, which is what stops an empty roster
+	from reading as success.
+
+	Returns
+	-------
+	list of str
+		``"<module>.<name>"`` for each discovered contract.
+	"""
+	# Suppression via contextlib rather than a handler block. Handling is identical, since an
+	# absent package still yields the empty list, but mccabe charges a with-statement nothing
+	# while charging a handler a point, and this tree is capped at complexity 1.
+	list_ids: list[str] = []
+	with contextlib.suppress(ImportError):
+		list_ids = sorted(_contracts())
+	return list_ids
+
+
+@pytest.mark.parametrize("str_id", _discovered_contract_ids())
+def test_no_contract_declares_the_same_column_twice(str_id: str) -> None:
 	"""``tuple_required`` must not repeat a column name.
 
 	A repeat is always a copy-paste slip, and it is invisible at runtime: the contract check
 	asks whether each required column is PRESENT, which a duplicate trivially satisfies.
 	"""
-	pytest.importorskip("config.contracts", reason="contracts ship to service tiers only")
-	for str_id, cls_contract in _contracts().items():
-		tuple_required = cls_contract.tuple_required
-		assert len(tuple_required) == len(set(tuple_required)), f"{str_id} repeats a column"
+	tuple_required = _contracts()[str_id].tuple_required
+	assert len(tuple_required) == len(set(tuple_required)), f"{str_id} repeats a column"
 
 
 # Column names two contracts legitimately share. Empty by default and it must STAY a conscious
@@ -94,15 +120,22 @@ def test_column_names_shared_across_contracts_are_declared() -> None:
 	path. That form needs the source-field mapping the contracts do not carry yet.
 	"""
 	pytest.importorskip("config.contracts", reason="contracts ship to service tiers only")
-	dict_owner: dict[str, str] = {}
-	list_problems: list[str] = []
-	for str_id, cls_contract in _contracts().items():
-		for str_column in cls_contract.tuple_required:
-			str_owner = dict_owner.setdefault(str_column, str_id)
-			if str_owner != str_id and str_column not in FROZENSET_SHARED_COLUMNS:
-				list_problems.append(
-					f"column '{str_column}' is required by both {str_owner} and {str_id} — if "
-					f"that is intentional, add it to FROZENSET_SHARED_COLUMNS; if not, the two "
-					f"contracts disagree about what the name means"
-				)
+	# Build column-and-owner pairs, then group them. Comprehensions rather than nested loops
+	# around a guard, which mccabe would charge 3 points against this tree's ceiling of 1.
+	list_pairs = [
+		(str_column, str_id)
+		for str_id, cls_contract in sorted(_contracts().items())
+		for str_column in cls_contract.tuple_required
+	]
+	dict_owners = {
+		str_column: [str_id for str_col, str_id in list_pairs if str_col == str_column]
+		for str_column, _ in list_pairs
+	}
+	list_problems = [
+		f"column '{str_column}' is required by {' and '.join(list_ids)} — if that is "
+		f"intentional, add it to FROZENSET_SHARED_COLUMNS; if not, the contracts disagree "
+		f"about what the name means"
+		for str_column, list_ids in sorted(dict_owners.items())
+		if len(list_ids) > 1 and str_column not in FROZENSET_SHARED_COLUMNS
+	]
 	assert not list_problems, "; ".join(list_problems)

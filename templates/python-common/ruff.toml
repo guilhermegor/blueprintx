@@ -52,9 +52,6 @@ exclude = [
     # is intrinsic metaprogramming — fully excluded, like src/chassis (mypy excludes it too).
     "src/*/_internal/utils/typing",
 
-    # check tooling: ruff-format would tabify space-indented helpers and trip E101
-    "bin",
-
     # other
     ".pants.d",
     ".pyenv",
@@ -83,9 +80,26 @@ select = [
     "PD",  # pandas-vet - checks for common pandas issues
     "D",   # pydocstring - this enables all docstring checks
     "TID", # flake8-tidy-imports - enables the banned-api gate below
+    "W",   # pycodestyle warnings - trailing whitespace, invalid regex escapes (see W191 below)
+    "PL",  # pylint - magic values, over-wide signatures, module-level global
+    "PT",  # flake8-pytest-style - pytest idioms (one assertion per behaviour, etc.)
 ]
 ignore = [
     "D206",  # docstring should be indented with spaces, not tabs
+    # W191 (tab-indentation) treats a tab as a violation, while `[format] indent-style =
+    # "tab"` below makes the formatter PRODUCE tabs. Enabling it would set the linter against
+    # the formatter, and the formatter wins — the same principle the E701 note states, in
+    # reverse: there the formatter already forbids the style, here it already requires it.
+    #
+    # ⚠️ Ignoring W191 is what makes the rest of `W` adoptable, and the difference is the
+    # whole measurement: W191 accounted for 6022 of 6022 findings, so `W` minus W191 is ZERO
+    # today. It costs nothing now and catches trailing whitespace and invalid regex escapes
+    # from here on (blueprintx#222).
+    #
+    # ⚠️ Measuring this is itself a trap: `ruff check --config 'lint.ignore=["W191"]'` does
+    # NOT merge the way it reads and still reported all 6022. Only `--ignore W191` gives the
+    # real number, and the wrong one supports the wrong conclusion ("W is not adoptable").
+    "W191",
     # E701 (multiple statements on one line) is deliberately NOT ignored. It is
     # tempting to add it here to allow `if cond: break`, but that would be dead
     # config: `ruff format` (Black semantics, not configurable) expands a compound
@@ -121,11 +135,39 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "config.contracts.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
 
 [lint.isort]
+# ⚠️ DECLARED, never inferred. Without this ruff has to GUESS whether `config`/`utils` are
+# first-party, and different ruff versions guess differently: a script that puts `src` on
+# sys.path had its imports sorted one way by the ruff that wrote it and the other way by the
+# newer ruff pinned in a generated project. The visible symptom is not a lint error — it is
+# `make lint` MODIFYING a freshly scaffolded tree, so the scaffold check fails on the diff
+# rather than on any rule, and the message names no rule to fix.
+#
+# A superset of every tier's layer names: one that does not exist in a given tier simply
+# never matches, so all five tiers share this one declaration.
+known-first-party = [
+    "app",
+    "capabilities",
+    "chassis",
+    "config",
+    "controller",
+    "model",
+    "utils",
+    "view",
+]
 force-single-line = false
 combine-as-imports = true
 split-on-trailing-comma = true
 force-sort-within-sections = true
 lines-after-imports = 2
+
+[lint.pylint]
+# ⚠️ 8, not pylint's default of 5, and the number is measured rather than picked. The reader
+# and mail seams take a genuine spread of options (encoding, separator, header row, dtype,
+# column names, sheet, quoting), and every one of them is a real dimension of the read — a
+# config object would move the same arguments behind a constructor and buy nothing. At 5 the
+# gate reported 12 functions; at 8 it reports ONE, `read_table` with 11, which is the widest
+# public API here and therefore the finding worth keeping visible.
+max-args = 8
 
 [lint.pydocstyle]
 convention = "numpy"
@@ -137,8 +179,56 @@ ignore-fully-untyped = false  # flag functions that are completely untyped
 allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 
 [lint.per-file-ignores]
+# ⚠️ `bin` was ONCE in [exclude] above, with the reason "ruff-format would tabify
+# space-indented helpers and trip E101". Two things were wrong with that (blueprintx#207):
+#
+#   1. It described a HYPOTHETICAL. The 27 E101s were already there — all of them in the one
+#      file that genuinely mixed both (`check_review_threads.py`: 337 tab lines + 21 space
+#      lines). The other 13 files were internally consistent; ruff-format was never the
+#      threat. The exclude was protecting the tree from a diff, not from a defect.
+#   2. It excluded the 16 files that ARE this project's quality machinery from BOTH the
+#      linter and the type checker — the gates policing everything else were the only code
+#      nobody policed. Behind it sat 73 findings. Same shape as blueprintx#190/#203, and the
+#      largest of the three.
+#
+# `bin/` is now formatted like the rest of the tree (tabs) and linted like the rest of the
+# tree, with exactly one rule relaxed:
+"bin/*.py" = [
+    # ERA001 has a 100% false-positive rate on this directory, measured twice. Every gate in
+    # `bin/` carries long wrapped prose comments explaining WHY it exists and what it once got
+    # wrong — that is the house style here and it is the reason these files are readable. The
+    # eradicate heuristic reads any continuation line containing `(`, `:` or `=` as code:
+    #
+    #     # last (empty) page, so the loop terminates on the slower of the two.
+    #     # (required_review_thread_resolution), so this is the LOCAL half of the same rule — it
+    #
+    # 15 findings in `bin/`, 15 false positives; blueprintx#169 independently measured 9 more
+    # with the same result. 0 true positives in 24. Suppressing per line would put a `# noqa`
+    # on 15 prose comments and teach the next author that noqa is how you write a comment.
+    # ⚠️ This is scoped to `bin/` ON PURPOSE. `src/` keeps ERA001 — commented-out code there is
+    # still forbidden (CLAUDE.md), and the global decision stays open in blueprintx#169.
+    "ERA001",
+    # E101 fires on `TAB + spaces` at the start of a line. `bin/` was space-indented and is now
+    # tabbed like the rest of the tree (code AND docstring bodies — `src/` has always used tabs
+    # inside docstrings, which is why D206 is ignored globally). What survives that conversion is
+    # the 2-space HANGING INDENT of a wrapped Markdown bullet inside a module docstring:
+    #
+    #     - **"the source has a column the contract doesn't list" is drift ONLY when the contract
+    #       claims completeness** (``bool_full_column``). …
+    #
+    # Those 2 spaces are the bullet's alignment — a tab there would be 4+ columns and break the
+    # continuation. E101 cannot tell prose alignment from indentation, and a `# noqa` is not
+    # available inside a docstring (it would render as literal text). 4 lines, one file.
+    # ⚠️ Scoped to `bin/`: `src/` and `tests/` pass E101 clean today and keep the rule.
+    "E101",
+]
+
 "tests/**/*.py" = [
     "S101",  # use of assert
+    # A literal in a test IS the case under test: `assert add(1, 2) == 3` says what it means,
+    # and naming those numbers moves the case away from the assertion that reads it. 21 of the
+    # 29 findings were in tests/, all of that shape.
+    "PLR2004",
     "TID251",  # tests legitimately read back outputs with pd.read_* to assert on them
 ]
 # The seam itself is the one place allowed to call the bare pandas readers.

@@ -56,7 +56,7 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
 				# `__all__` may be a list OR a tuple — both are valid Python. Accepting only
 				# the list form made a complete tuple declaration read as EMPTY, which reports
 				# every public member as missing: a gate that fails loudest on correct code.
-				if not isinstance(cls_node.value, (ast.List, ast.Tuple)):
+				if not isinstance(cls_node.value, ast.List | ast.Tuple):
 					return []
 				return [
 					cls_elt.value
@@ -85,7 +85,7 @@ def public_names(path_module: pathlib.Path) -> set[str]:
 	set_names: set[str] = set()
 	cls_tree = ast.parse(path_module.read_text(encoding="utf-8"))
 	for cls_node in cls_tree.body:
-		if isinstance(cls_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+		if isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
 			set_names.add(cls_node.name)
 		elif isinstance(cls_node, ast.Assign):
 			set_names.update(

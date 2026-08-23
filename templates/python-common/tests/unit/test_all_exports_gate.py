@@ -23,7 +23,11 @@ def _load_gate() -> ModuleType:
 	"""
 	path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_all_exports.py"
 	cls_spec = importlib.util.spec_from_file_location("_check_all_exports", path_gate)
-	assert cls_spec is not None and cls_spec.loader is not None
+	# Split rather than combined. A conjunction in one assertion reports only that the
+	# whole thing was false, so a failure cannot say WHICH half broke — an absent loader
+	# and an absent spec are different faults with different causes.
+	assert cls_spec is not None
+	assert cls_spec.loader is not None
 	cls_module = importlib.util.module_from_spec(cls_spec)
 	cls_spec.loader.exec_module(cls_module)
 	return cls_module
@@ -124,15 +128,20 @@ def test_zero_discovery_fails_instead_of_reporting_success(
 	assert cls_gate.main() == 1
 
 
+_PATH_CONTRACTS_INIT = (
+	Path(__file__).resolve().parents[2] / "src" / "config" / "contracts" / "__init__.py"
+)
+
+
+# The condition is fixed at import time (does this tier ship the package?), so it is not a path
+# THROUGH the test — but an `if` in the body makes it one, to a reader and to mccabe alike.
+@pytest.mark.skipif(
+	not _PATH_CONTRACTS_INIT.is_file(), reason="contracts package ships to service tiers only"
+)
 def test_the_shipped_contracts_package_passes_the_gate() -> None:
 	"""The template's own export list is complete.
 
 	The gate enters green rather than with a debt to pay — a gate that ships already failing
 	teaches its first reader to skip it.
 	"""
-	path_init = (
-		Path(__file__).resolve().parents[2] / "src" / "config" / "contracts" / "__init__.py"
-	)
-	if not path_init.is_file():
-		pytest.skip("contracts package ships to service tiers only")
-	assert _load_gate().check_package(path_init) == []
+	assert _load_gate().check_package(_PATH_CONTRACTS_INIT) == []

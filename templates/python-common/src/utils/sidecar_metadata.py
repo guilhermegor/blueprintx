@@ -44,6 +44,11 @@ else:
 		from chassis.typing import type_checker
 
 
+# A descriptor needs a header line plus at least one field line to carry anything. Named so
+# the guard states that, rather than testing a bare 2.
+_INT_MIN_DESCRIPTOR_LINES = 2
+
+
 @type_checker
 def cvm_meta_url(str_base_url: str, str_dataset_key: str) -> str:
 	"""Build a CVM sidecar-descriptor URL from a dataset's base URL (the reference locator).
@@ -57,8 +62,12 @@ def cvm_meta_url(str_base_url: str, str_dataset_key: str) -> str:
 	Parameters
 	----------
 	str_base_url : str
-		The dataset's base/directory URL (the portion before the data file), e.g.
-		``https://dados.cvm.gov.br/dados/FI/DOC/CAD``.
+		The dataset's base/directory URL (the portion before the data file) — for CVM, the
+		host ``https://dados.cvm.gov.br`` followed by the path ``/dados/FI/DOC/CAD``.
+		⚠️ Written as host + path rather than one URL on purpose: the ``check-urls`` hook
+		fetches every fetchable docstring URL and that directory answers 404 to a scripted
+		probe, while the host answers 200. It skips host-only URLs, which is why this form
+		passes and the joined one does not. See ``bin/CLAUDE.md`` → "Docstring URL convention".
 	str_dataset_key : str
 		The dataset key naming the descriptor (``cad_fi`` -> ``meta_cad_fi.txt``).
 
@@ -135,15 +144,17 @@ def parse_sidecar_metadata(str_text: str, str_sep: str = ";") -> dict[str, dict[
 		Field key -> {remaining header -> cell value}. Empty when the text has no data rows.
 	"""
 	list_lines = [line for line in str_text.splitlines() if line.strip()]
-	if len(list_lines) < 2:
+	if len(list_lines) < _INT_MIN_DESCRIPTOR_LINES:
 		return {}
 	list_headers = [cell.strip() for cell in list_lines[0].split(str_sep)]
-	dict_result: dict[str, dict[str, str]] = {}
-	for str_line in list_lines[1:]:
-		list_cells = [cell.strip() for cell in str_line.split(str_sep)]
-		str_key = list_cells[0]
-		dict_result[str_key] = {
+	list_rows = [[cell.strip() for cell in str_line.split(str_sep)] for str_line in list_lines[1:]]
+	# Each row is projected onto the header, with short rows padded by empty strings. Written
+	# as a projection rather than an accumulating loop, so the shape of the result is visible
+	# in the expression instead of assembled one statement at a time.
+	return {
+		list_cells[0]: {
 			str_header: (list_cells[int_idx] if int_idx < len(list_cells) else "")
 			for int_idx, str_header in enumerate(list_headers[1:], start=1)
 		}
-	return dict_result
+		for list_cells in list_rows
+	}

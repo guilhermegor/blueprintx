@@ -78,15 +78,17 @@ def normalise_login(str_login: str) -> str:
 	Parameters
 	----------
 	str_login : str
-	    A login as either API reports it, e.g. ``coderabbitai[bot]`` or ``coderabbitai``.
+		A login as either API reports it, e.g. ``coderabbitai[bot]`` or ``coderabbitai``.
 
 	Returns
 	-------
 	str
-	    The login without a trailing ``[bot]`` suffix, so the two spellings compare equal.
+		The login without a trailing ``[bot]`` suffix, so the two spellings compare equal.
 	"""
 	str_clean = (str_login or "").strip()
 	return str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
+
+
 # Floor for a "substantive" reply. Measured, not invented: the replies on the PR that motivated
 # this gate ran 100-667 characters (median 439), and an earlier sample of genuine verdict
 # replies ran 356-1126. 100 sits at or below the shortest real one, so it excludes "done" and
@@ -154,8 +156,10 @@ def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
 		clone, no remote) returns ``False``, so an unresolvable state never invents a violation.
 	"""
 	for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
+		# S607 (partial path) is resolution BY DESIGN: use the `git` on PATH, the one the
+		# developer's shell and CI already use, not a path hardcoded here.
 		cls_run = subprocess.run(  # noqa: S603
-			["git", "-C", str(path_root), "cat-file", "-e", f"{str_ref}:{_ROSTER_FILE}"],
+			["git", "-C", str(path_root), "cat-file", "-e", f"{str_ref}:{_ROSTER_FILE}"],  # noqa: S607
 			capture_output=True,
 			check=False,
 		)
@@ -170,13 +174,20 @@ def load_roster(path_root: pathlib.Path) -> set[str]:
 	Parameters
 	----------
 	path_root : pathlib.Path
-	    Repository root holding ``.review-bots.yaml``.
+		Repository root holding ``.review-bots.yaml``.
 
 	Returns
 	-------
 	set of str
-	    Logins treated as reviewers rather than as answers. Empty when the file is absent,
-	    which makes the gate a no-op rather than a source of false failures.
+		Logins treated as reviewers rather than as answers. Empty when the file was NEVER
+		there, which makes the gate a no-op rather than a source of false failures.
+
+	Raises
+	------
+	RuntimeError
+		When the roster is absent HERE but present on the default branch — that is a
+		deletion, and since an empty roster makes this gate a no-op, it would switch the
+		gate off inside the very PR it is meant to police.
 	"""
 	path_roster = path_root / _ROSTER_FILE
 	if yaml is None:
@@ -212,12 +223,12 @@ def _fetch_page(
 	Returns
 	-------
 	dict
-	    The ``pullRequest`` node for this page.
+		The ``pullRequest`` node for this page.
 
 	Raises
 	------
 	RuntimeError
-	    If the API call fails, so an unreachable API is never mistaken for a clean PR.
+		If the API call fails, so an unreachable API is never mistaken for a clean PR.
 	"""
 	list_cmd = [
 		"gh",
@@ -252,21 +263,21 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
 	Parameters
 	----------
 	str_owner : str
-	    Repository owner.
+		Repository owner.
 	str_repo : str
-	    Repository name.
+		Repository name.
 	int_number : int
-	    Pull-request number.
+		Pull-request number.
 
 	Returns
 	-------
 	dict
-	    The ``pullRequest`` node, carrying ``author``, ``reviews`` and ``reviewThreads``.
+		The ``pullRequest`` node, carrying ``author``, ``reviews`` and ``reviewThreads``.
 
 	Raises
 	------
 	RuntimeError
-	    If the API call fails, so an unreachable API is never mistaken for a clean PR.
+		If the API call fails, so an unreachable API is never mistaken for a clean PR.
 	"""
 	dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None)
 	dict_reviews = dict_pr["reviews"]
@@ -280,8 +291,12 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
 			str_owner,
 			str_repo,
 			int_number,
-			dict_reviews["pageInfo"]["endCursor"] if dict_reviews["pageInfo"]["hasNextPage"] else None,
-			dict_threads["pageInfo"]["endCursor"] if dict_threads["pageInfo"]["hasNextPage"] else None,
+			dict_reviews["pageInfo"]["endCursor"]
+			if dict_reviews["pageInfo"]["hasNextPage"]
+			else None,
+			dict_threads["pageInfo"]["endCursor"]
+			if dict_threads["pageInfo"]["hasNextPage"]
+			else None,
 		)
 		for dict_side, str_key in ((dict_reviews, "reviews"), (dict_threads, "reviewThreads")):
 			if not dict_side["pageInfo"]["hasNextPage"]:
@@ -301,16 +316,16 @@ def find_missing_review_problem(
 	Parameters
 	----------
 	list_reviews : list of dict
-	    Submitted reviews, each with an ``author`` node.
+		Submitted reviews, each with an ``author`` node.
 	set_roster : set of str
-	    Logins of the declared reviewers.
+		Logins of the declared reviewers.
 	str_pr_author : str, optional
-	    Login of the PR author; a roster member's own PR is exempt.
+		Login of the PR author; a roster member's own PR is exempt.
 
 	Returns
 	-------
 	str or None
-	    A human-readable problem, or ``None`` when at least one reviewer reported.
+		A human-readable problem, or ``None`` when at least one reviewer reported.
 	"""
 	set_roster = {normalise_login(s) for s in set_roster}
 	if normalise_login(str_pr_author) in set_roster:
@@ -348,19 +363,21 @@ def find_thread_problems(
 	Parameters
 	----------
 	list_threads : list of dict
-	    Review threads as returned by :func:`fetch_threads`.
+		Review threads as returned by :func:`fetch_pull_request` (its ``reviewThreads``).
 	set_roster : set of str
-	    Logins that count as reviewers rather than as answers.
+		Logins that count as reviewers rather than as answers.
 	int_min_chars : int, optional
-	    Minimum length for a reply to count as substantive.
+		Minimum length for a reply to count as substantive.
 	bool_require_resolved : bool, keyword-only, optional
-	    Whether an answered-but-open thread is a problem. ⚠️ CI passes ``False``: see
-	    ``main`` for why a job that cannot re-evaluate a condition must not assert it.
+		Whether an answered-but-open thread is a problem. ⚠️ CI passes ``False``: see
+		``main`` for why a job that cannot re-evaluate a condition must not assert it.
 
 	Returns
 	-------
 	list of str
-	    Human-readable problems; empty when every thread carries an answer.
+		Human-readable problems; empty when every thread carries an answer — and, when
+		``bool_require_resolved`` is set, is resolved as well. Both halves are the contract:
+		the reply records the reasoning, the resolution records that the exchange is over.
 	"""
 	# Normalise the roster here too, so the predicate is correct however the caller built the
 	# set — `load_roster` already normalises, but a hand-built set (a test, another caller)
@@ -416,16 +433,16 @@ def report_verdict(
 	Parameters
 	----------
 	list_problems : list of str
-	    Problems from :func:`find_thread_problems`.
+		Problems from :func:`find_thread_problems`.
 	int_threads : int
-	    How many review threads were examined.
+		How many review threads were examined.
 	bool_require_resolved : bool
-	    Whether the resolve half was asserted, so the wording matches what was checked.
+		Whether the resolve half was asserted, so the wording matches what was checked.
 
 	Returns
 	-------
 	int
-	    ``1`` when there are problems, ``0`` otherwise.
+		``1`` when there are problems, ``0`` otherwise.
 	"""
 	for str_problem in list_problems:
 		print(f"❌ {str_problem}")
@@ -457,7 +474,7 @@ def main() -> int:
 	Returns
 	-------
 	int
-	    ``0`` when every thread is answered (or the repo declares no roster), ``1`` otherwise.
+		``0`` when every thread is answered (or the repo declares no roster), ``1`` otherwise.
 	"""
 	str_repo_full = os.environ.get("GITHUB_REPOSITORY", "")
 	str_number = os.environ.get("PR_NUMBER", "")
@@ -500,7 +517,9 @@ def main() -> int:
 	# A check that is red-by-design after you did the right thing is the fastest way to teach
 	# people that red does not mean anything. So CI asserts only the REPLY half, which a review
 	# comment genuinely does re-trigger. The resolve half is enforced where it CAN be evaluated
-	# live: the `required_conversation_resolution` ruleset at the merge button, and the local
+	# live: the server-side setting at the merge button — `required_conversation_resolution`
+	# on classic branch protection, `required_review_thread_resolution` on a ruleset (the form
+	# bin/enable_repo_rules.sh provisions) — and the local
 	# pre-merge / Stop hooks. Set REVIEW_THREADS_REQUIRE_RESOLVED=1 to assert both (the local
 	# default, since a local run is always current).
 	bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"

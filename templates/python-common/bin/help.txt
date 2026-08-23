@@ -29,6 +29,7 @@ Linting
   check_docstrings     Check docstring type/raises consistency
   check_commit_msg     Pre-flight the commit message at FILE=<path> before 'git commit -F'
   check_function_length  Fail any function over 60 lines of code (docstring excluded)
+  check_complexity     Fail any function over the per-tree complexity ceiling (tests 1, src 2, bin 8)
   install_shell_linters  Install shellcheck + shfmt as system binaries (optional; pip is primary)
 
 Database

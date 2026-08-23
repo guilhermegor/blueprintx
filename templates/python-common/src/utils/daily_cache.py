@@ -51,6 +51,26 @@ else:
 
 
 @type_checker
+def _is_usable_cache_entry(path_cached: Path) -> bool:
+	"""Return whether a cached artifact may be served as a hit.
+
+	⚠️ A zero-byte file counts as a MISS, not a hit. ``write_bytes`` is not atomic, so an
+	interrupted run can leave an empty file behind — and serving it would hand the caller a
+	valid-looking path to nothing, which fails much later and far away.
+
+	Parameters
+	----------
+	path_cached : pathlib.Path
+		The candidate cache entry.
+
+	Returns
+	-------
+	bool
+		``True`` only for an existing, non-empty file.
+	"""
+	return path_cached.is_file() and path_cached.stat().st_size > 0
+
+
 def daily_cache_path(
 	path_cache_dir: Path, str_key: str, dt_reference: date, str_suffix: str
 ) -> Path:
@@ -137,21 +157,13 @@ def download_daily(
 	downstream to complain. One reference day is one file, so the shape that silently means
 	"now" cannot be allowed in.
 	"""
-	# Reject the wall-clock shape outright — see Notes above for why the annotation cannot.
-	if isinstance(dt_reference, datetime):
-		raise TypeError(
-			"dt_reference must be a date (the DATA's reference day), not a datetime: a "
-			"wall-clock value keys the cache on when the run happened, not on what the data is"
-		)
+	_require_reference_date(dt_reference)
 
 	cls_emitter: LogEmitter = cls_logger if cls_logger is not None else LogEmitter()
 	path_cached = daily_cache_path(path_cache_dir, str_key, dt_reference, str_suffix)
 	str_day = f"{dt_reference:%Y-%m-%d}"
 
-	# A zero-byte file counts as a MISS, not a hit. `write_bytes` is not atomic, so an
-	# interrupted run can leave an empty file behind — and serving it would hand the caller a
-	# valid-looking path to nothing, which fails much later and far away.
-	if bool_use_cache and path_cached.is_file() and path_cached.stat().st_size > 0:
+	if bool_use_cache and _is_usable_cache_entry(path_cached):
 		cls_emitter.log_message(
 			f"daily cache HIT for {str_key} ({str_day}): {path_cached}", "info"
 		)
@@ -162,7 +174,65 @@ def download_daily(
 		f"daily cache {str_reason} for {str_key} ({str_day}) — downloading {str_url}", "info"
 	)
 	path_cache_dir.mkdir(parents=True, exist_ok=True)
-	# Publish atomically — see Notes in the docstring for why a rename is required here.
+	_download_and_publish(str_url, path_cached, fn_download)
+	return path_cached
+
+
+def _require_reference_date(dt_reference: date) -> None:
+	"""Reject a datetime where a reference DATE is required.
+
+	The annotation cannot enforce this — ``datetime`` is a subclass of ``date`` — and the
+	distinction is load-bearing: a wall-clock value keys the cache on when the run happened
+	rather than on what the data is, so every run gets its own entry and the cache never hits.
+
+	Parameters
+	----------
+	dt_reference : datetime.date
+		The value to check.
+
+	Returns
+	-------
+	None
+
+	Raises
+	------
+	TypeError
+		If ``dt_reference`` is a ``datetime``.
+	"""
+	if isinstance(dt_reference, datetime):
+		raise TypeError(
+			"dt_reference must be a date (the DATA's reference day), not a datetime: a "
+			"wall-clock value keys the cache on when the run happened, not on what the data is"
+		)
+
+
+def _download_and_publish(
+	str_url: str, path_cached: Path, fn_download: Callable[[str, Path], Path]
+) -> None:
+	"""Download to a staging file and publish it atomically under the cache name.
+
+	The rename is what makes the entry appear only once it is COMPLETE: ``write_bytes`` is
+	not atomic, so a download interrupted mid-write would otherwise leave a truncated file
+	sitting under the final name, where the next run serves it as a hit.
+
+	Parameters
+	----------
+	str_url : str
+		The source URL.
+	path_cached : pathlib.Path
+		Final cache path; created by rename once the download completed.
+	fn_download : Callable[[str, pathlib.Path], pathlib.Path]
+		The download transport.
+
+	Returns
+	-------
+	None
+
+	Raises
+	------
+	OSError
+		If the download produced a missing or empty artifact.
+	"""
 	path_staging = path_cached.with_name(f"{path_cached.name}.{uuid4().hex}.part")
 	try:
 		path_written = fn_download(str_url, path_staging)
@@ -171,4 +241,3 @@ def download_daily(
 		os.replace(path_written, path_cached)
 	finally:
 		path_staging.unlink(missing_ok=True)
-	return path_cached

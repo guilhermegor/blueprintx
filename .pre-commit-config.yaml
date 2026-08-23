@@ -111,6 +111,18 @@ repos:
         pass_filenames: false
         files: \.(py|sh)$
 
+      - id: check-complexity
+        name: cyclomatic complexity (tests 1, src 2, bin 8)
+        # Same treatment as function-length above: ONE implementation, run over this repo via
+        # --root rather than kept as a second copy. ⚠️ BlueprintX's own tree has no src/ or
+        # tests/, so today this checks only bin/ (2 files) at the bin ceiling of 8 — the gate
+        # earns its keep here by travelling with the template it polices, not by the size of
+        # what it currently finds.
+        entry: bash templates/python-common/bin/check_complexity.sh --root .
+        language: system
+        pass_filenames: false
+        files: \.py$
+
       - id: test-copy-lists
         name: shared test copy lists (scaffolds vs python-common)
         entry: python3 bin/ci/check_test_copy_lists.py

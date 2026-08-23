@@ -108,7 +108,9 @@ def _engine_dirs(path_queries_root: Path) -> list[Path]:
 
 
 @type_checker
-def load_query(str_filename: str, str_backend: str, path_queries_root: Path) -> str:
+def load_query(  # complexity-ok: each branch is a documented lookup failure with its own remedy
+	str_filename: str, str_backend: str, path_queries_root: Path
+) -> str:
 	"""Read the SQL text filed for ``str_backend`` under the queries root.
 
 	Parameters

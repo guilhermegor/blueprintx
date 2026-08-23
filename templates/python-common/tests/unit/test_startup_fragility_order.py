@@ -45,13 +45,20 @@ def _logger_lineno(cls_tree: ast.Module) -> int:
 	int
 		The 1-based line number of the ``LOGGER = …`` statement.
 	"""
-	for cls_node in cls_tree.body:
-		if isinstance(cls_node, ast.Assign) and any(
+	# A generator plus next-with-default rather than a loop with a guard and a trailing raise.
+	# Same answer, same failure, and mccabe charges a comprehension nothing while charging the
+	# loop and its guard a point each. This tree is capped at complexity 1.
+	list_lines = [
+		cls_node.lineno
+		for cls_node in cls_tree.body
+		if isinstance(cls_node, ast.Assign)
+		and any(
 			isinstance(cls_target, ast.Name) and cls_target.id == "LOGGER"
 			for cls_target in cls_node.targets
-		):
-			return cls_node.lineno
-	raise AssertionError("startup.py no longer assigns a module-level LOGGER")
+		)
+	]
+	assert list_lines, "startup.py no longer assigns a module-level LOGGER"
+	return list_lines[0]
 
 
 # --------------------------
@@ -69,11 +76,14 @@ def test_every_config_read_before_the_logger_is_guarded() -> None:
 	cls_tree = _startup_tree()
 	int_logger_line = _logger_lineno(cls_tree)
 
-	set_guarded: set[int] = set()
-	for cls_node in ast.walk(cls_tree):
-		if isinstance(cls_node, ast.Try):
-			for cls_inner in ast.walk(cls_node):
-				set_guarded.add(id(cls_inner))
+	# Every node sitting inside any try-block, collected in one comprehension rather than a
+	# nested loop pair, which mccabe would charge 3 points against this tree's ceiling of 1.
+	set_guarded = {
+		id(cls_inner)
+		for cls_node in ast.walk(cls_tree)
+		if isinstance(cls_node, ast.Try)
+		for cls_inner in ast.walk(cls_node)
+	}
 
 	list_unguarded = [
 		cls_node.lineno
@@ -138,7 +148,15 @@ def test_the_failable_block_catches_exception_not_baseexception() -> None:
 		)
 	]
 	assert list_config_tries, "the failable config block is no longer wrapped"
-	for cls_try in list_config_tries:
-		for cls_handler in cls_try.handlers:
-			assert isinstance(cls_handler.type, ast.Name)
-			assert cls_handler.type.id == "Exception"
+	# Flatten first, then assert once on the collected names. The loop form asserted N times
+	# behind one green and stopped at the first bad handler; this reports every offender, and
+	# keeps the test at the complexity 1 this tree is capped at.
+	list_caught = [
+		cls_handler.type.id if isinstance(cls_handler.type, ast.Name) else ast.dump(cls_handler)
+		for cls_try in list_config_tries
+		for cls_handler in cls_try.handlers
+	]
+	assert list_caught, "the failable config block catches nothing"
+	assert set(list_caught) == {"Exception"}, (
+		f"the config read must catch Exception, never BaseException — found {list_caught}"
+	)

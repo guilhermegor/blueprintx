@@ -54,7 +54,9 @@ _RE_SEPARATORS: re.Pattern[str] = re.compile(r"[\s-]+")
 
 
 @type_checker
-def resolve_config_path(str_env: str, str_kind: str, path_dir: Path) -> Path:
+def resolve_config_path(  # complexity-ok: each branch is a distinct, documented config failure
+	str_env: str, str_kind: str, path_dir: Path
+) -> Path:
 	"""Resolve the config file for ``str_kind``, preferring the plain file when present.
 
 	Plain mode (a ``<kind>.yaml`` exists) returns that file regardless of ``str_env``.

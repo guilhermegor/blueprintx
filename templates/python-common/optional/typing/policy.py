@@ -47,7 +47,8 @@ WIDEN_INT_TO_NUMPY: bool = True
 PEP484_NUMERIC_TOWER: bool = False
 
 
-def _int_hint() -> Any:
+def _int_hint(  # complexity-ok: type metaprogramming
+) -> Any:
 	"""Build the ``int`` replacement hint from the numeric knobs.
 
 	Returns

@@ -169,6 +169,7 @@ lint() {
 	poetry_exec run python bin/check_layer_imports.py
 	poetry_exec run python bin/check_comment_language.py
 	poetry_exec run python bin/check_function_length.py
+	bash "$SCRIPT_DIR/bin/check_complexity.sh"
 	bash "$SCRIPT_DIR/bin/lint_shell.sh"
 	bash "$SCRIPT_DIR/bin/lint_sql.sh"
 	bash "$SCRIPT_DIR/bin/lint_yaml.sh"
@@ -182,6 +183,11 @@ check_docstrings() {
 # Mirrors `make check_function_length`. Makefile and tasks.sh must stay in sync.
 check_function_length() {
 	poetry_exec run python bin/check_function_length.py
+}
+
+# Mirrors `make check_complexity`. Makefile and tasks.sh must stay in sync.
+check_complexity() {
+	bash "$SCRIPT_DIR/bin/check_complexity.sh"
 }
 
 check_commit_msg() {
@@ -344,6 +350,7 @@ fix_playwright) fix_playwright ;;
 lint) lint ;;
 check_docstrings) check_docstrings ;;
 check_function_length) check_function_length ;;
+check_complexity) check_complexity ;;
 check_commit_msg) check_commit_msg ;;
 install_shell_linters) install_shell_linters ;;
 db_up) db_up ;;

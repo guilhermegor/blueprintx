@@ -355,6 +355,12 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
+    # Per-layer import policy read by bin/check_layer_imports.py (pre-commit + CI).
+    # ⚠️ Per-tier, never shared: the layer NAMES differ, and lib-minimal nests them
+    # inside the distributable package (hence its src_prefix_depth). Without this file
+    # the gate used to self-skip in silence, so this tier shipped with no import
+    # boundary while its CI stayed green; it now FAILS instead.
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     # Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
     # review tools is a row here rather than an edit to the gate.

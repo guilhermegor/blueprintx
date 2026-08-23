@@ -1,4 +1,10 @@
-# Per-layer import policy, read by bin/check_layer_imports.py (pre-commit + CI).
+# Per-layer import policy for python-common's OWN src/ — the shared utils/ and config/
+# that every Python tier receives verbatim.
+#
+# ⚠️ This directory is a staging area, not a project, which is exactly why it went
+# unchecked: the gate self-skipped without a policy, so the code that ships to EVERY
+# tier was the one tree nobody applied the boundary to. Checking it here catches a
+# vendor creeping into a shared helper before it is copied five ways.
 #
 # The rule: a third-party dependency is reached through a seam in utils/, never imported by
 # model/, view/ or controller/. The layer then depends on OUR function, not on a vendor API,
@@ -27,33 +33,10 @@ annotation_only:
     utils.tabular_reader.read_table / read_query (they enforce a FileContract + dtypes).
 
 layers:
-  # Modules sitting directly under src/ (an entrypoint such as main.py). It has no
-  # directory to name its layer, and it is precisely where a bypass would be easiest.
+  # There is no entrypoint here (this is not a runnable project), but the layer is named
+  # so a stray module dropped directly under src/ cannot bypass the policy.
   __root__:
     allow: {}
-
-  model:
-    allow:
-      sqlalchemy: >-
-        ORM tier only, and DECLARATION only: in a declarative-mapping design the entity IS
-        its sqlalchemy declaration (DeclarativeBase / Mapped / mapped_column / column types),
-        so hiding it behind a seam would mean hiding the model from itself. Session and
-        engine construction still belong to config.connection_db, and reads go through the
-        utils/ seams — see blueprintx#172.
-
-  view:
-    allow:
-      openpyxl: >-
-        The Excel writer IS the view's output format, not a peripheral dependency: a seam
-        over it would forward the same calls with no swap in sight. Revisit if a second
-        workbook backend ever appears.
-
-  controller:
-    allow: {}  # orchestration wires our own layers; it should need no vendor at all
-    annotation_only:
-      sqlalchemy: >-
-        The orchestrator names Engine in signatures (Callable[[], Engine], -> Engine) and
-        never constructs one — config.connection_db.build_engine does. Type, not API.
 
   utils:
     # utils/ IS the seam layer — this is where vendors are supposed to live. Listed
@@ -71,18 +54,11 @@ layers:
         numpy integers where int is annotated when WIDEN_INT_TO_NUMPY is on, probed with a
         guarded import so a tier without numpy still loads. Legitimate here precisely
         because utils/ IS the seam layer.
-
-    # Direction. utils/ is imported BY the layers, never the reverse — a cycle here is a
-    # design error, and it was prose only (src/utils/CLAUDE.md) until this entry existed.
     deny_layers:
       config: >-
         The seam layer must not depend on the composition root that configures it. The other
         direction already exists (config/startup.py imports utils), so this one would close a
         real cycle rather than a hypothetical one.
-      model: "utils/ is a seam for the layers, not a consumer of them."
-      view: "utils/ is a seam for the layers, not a consumer of them."
-      controller: "utils/ is a seam for the layers, not a consumer of them."
-
 
   config:
     # The composition root: the one layer whose job IS to know concrete implementations.
@@ -90,11 +66,7 @@ layers:
     allow:
       dotenv: "loads .env at startup; this is the layer that owns environment resolution"
       yaml: "parses inputs.yaml / outputs.yaml"
-      sqlalchemy: "builds the Engine and the sessionmaker for every supported backend"
-
-    # Direction. config/ is imported by every layer, so it must not import one back: the
-    # composition root knowing a domain layer is how a "root" becomes a participant.
-    deny_layers:
-      model: "the composition root wires the layers; it must not depend on one."
-      view: "the composition root wires the layers; it must not depend on one."
-      controller: "the composition root wires the layers; it must not depend on one."
+      psycopg: "PostgreSQL driver, imported lazily by the configured DB_BACKEND"
+      pyodbc: "SQL Server driver, imported lazily by the configured DB_BACKEND"
+      oracledb: "Oracle driver, imported lazily by the configured DB_BACKEND"
+      mysql: "MySQL/MariaDB driver, imported lazily by the configured DB_BACKEND"

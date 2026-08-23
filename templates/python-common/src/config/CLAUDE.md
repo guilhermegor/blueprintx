@@ -35,6 +35,12 @@ declarative; push behaviour outward.
 
 ## Queries are filed per engine — derive, don't check
 
+> ⚠️ This section is rule 3 of the tier's **boundary rules** ("derive the boundary from the
+> config that exists; never restate it") applied to one case. The general form, with the test
+> that decides it, is in the tier's root `CLAUDE.md`; the two are the same rule and should not
+> drift apart. If you change the reasoning here, change it there.
+
+
 **Layout.** `src/config/queries/<engine>/<table>__<purpose>.sql`. The caller names only the
 query: `load_query("example_entity__select_active.sql")`. `config/query_loader` resolves the
 directory from `DB_BACKEND` through `active_backend()` — the single reader of that variable,

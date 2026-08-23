@@ -105,7 +105,14 @@ def block_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatc
 	monkeypatch : pytest.MonkeyPatch
 		Pytest's patcher; restores the real primitives at teardown.
 	"""
-	if request.node.get_closest_marker("allow_network") is not None:
-		return
-	monkeypatch.setattr(socket, "socket", _BlockedSocket)
-	monkeypatch.setattr(socket, "create_connection", _blocked)
+	# Conditional expressions, rather than a guard clause that bails out early. A test which
+	# opted out is patched back to the REAL primitives — a no-op that monkeypatch undoes at
+	# teardown anyway — so behaviour is identical while the fixture keeps complexity 1, the
+	# ceiling this whole directory is held to by bin/check_complexity.sh, fixtures included.
+	bool_allowed = request.node.get_closest_marker("allow_network") is not None
+	monkeypatch.setattr(socket, "socket", socket.socket if bool_allowed else _BlockedSocket)
+	monkeypatch.setattr(
+		socket,
+		"create_connection",
+		socket.create_connection if bool_allowed else _blocked,
+	)

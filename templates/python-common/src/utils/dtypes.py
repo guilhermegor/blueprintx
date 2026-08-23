@@ -9,8 +9,10 @@ columns, which need ``to_datetime`` rather than ``astype``.
 
 from __future__ import annotations
 
+import collections
 from collections.abc import Sequence
 from decimal import Decimal
+import functools
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -37,6 +39,10 @@ else:
 # sees a fully green suite). The nullable ``"string"`` dtype behaves identically on 2 and 3,
 # and its elements are still ordinary ``str`` — ``isinstance(x, str)`` keeps passing.
 _DTYPE_TEXT = "string"
+
+# Text spellings that mean "missing" once a value has been through a stringifying reader.
+# Named rather than inlined so the set has one home if a source adds another spelling.
+_FROZENSET_MISSING_TEXT = frozenset({"nan", "none", "<na>"})
 
 
 @type_checker
@@ -91,27 +97,116 @@ def _to_decimal(value: object) -> object:
 	ValueError
 		If ``value`` is a binary ``float`` — precision was already lost upstream.
 	"""
-	if value is None or value is pd.NA:
+	if value is pd.NA:
 		return pd.NA
-	if isinstance(value, Decimal):
-		return value
-	# NaN is a float, but it means "missing", not "a value we lost precision on" — pandas uses
-	# it as the missing marker in any numeric column. Test it before the float rejection below,
-	# or every blank cell in such a column would raise instead of staying NA.
-	if isinstance(value, float) and value != value:
-		return pd.NA
-	if isinstance(value, float):
-		raise ValueError(
-			f"Refusing to convert float {value!r} to Decimal: the source's exact value is "
-			"already lost. Parse the source losslessly instead — "
-			"json.loads(..., parse_float=Decimal), or read the column as text."
-		)
-	if isinstance(value, int):
-		return Decimal(value)
+	return _decimal_by_type(value)
+
+
+# Dispatch on the value's TYPE rather than an isinstance chain — the house rule
+# (rules/python.md, "Composition Patterns"). Dispatch follows the MRO, so the float handler
+# is reached for a float and the int one for an int, without the ordering that the chain had
+# to get right by hand. ``pd.NA`` is not a type, so its check stays in the caller above.
+@functools.singledispatch
+def _decimal_by_type(value: object) -> object:
+	"""Convert anything not handled by a registered type: as text, or NA when it reads empty.
+
+	Parameters
+	----------
+	value : object
+		One cell from a decimal-typed column.
+
+	Returns
+	-------
+	object
+		A :class:`decimal.Decimal`, or :data:`pandas.NA`.
+	"""
 	str_value = str(value).strip()
-	if not str_value or str_value.lower() in {"nan", "none", "<na>"}:
+	if not str_value or str_value.lower() in _FROZENSET_MISSING_TEXT:
 		return pd.NA
 	return Decimal(str_value)
+
+
+@_decimal_by_type.register
+def _decimal_from_none(value: None) -> object:
+	"""Map a missing value to :data:`pandas.NA`.
+
+	Parameters
+	----------
+	value : None
+		The missing value.
+
+	Returns
+	-------
+	object
+		:data:`pandas.NA`.
+	"""
+	return pd.NA
+
+
+@_decimal_by_type.register
+def _decimal_from_decimal(value: Decimal) -> object:
+	"""Pass an already-exact Decimal through untouched.
+
+	Parameters
+	----------
+	value : Decimal
+		The value.
+
+	Returns
+	-------
+	object
+		``value``.
+	"""
+	return value
+
+
+@_decimal_by_type.register
+def _decimal_from_int(value: int) -> object:
+	"""Convert an int, which carries no lost precision.
+
+	Parameters
+	----------
+	value : int
+		The value.
+
+	Returns
+	-------
+	object
+		The converted value.
+	"""
+	return Decimal(value)
+
+
+@_decimal_by_type.register
+def _decimal_from_float(value: float) -> object:
+	"""Reject a binary float — the source's exact value is already gone.
+
+	⚠️ NaN is a float, but it means "missing", not "a value we lost precision on": pandas
+	uses it as the missing marker in any numeric column, so it must map to NA rather than
+	raise, or every blank cell in such a column would fail the load.
+
+	Parameters
+	----------
+	value : float
+		The rejected value.
+
+	Returns
+	-------
+	object
+		:data:`pandas.NA` for NaN; never returns otherwise.
+
+	Raises
+	------
+	ValueError
+		For any non-NaN float — precision was already lost upstream.
+	"""
+	if value != value:  # noqa: PLR0124 — NaN is the only value not equal to itself
+		return pd.NA
+	raise ValueError(
+		f"Refusing to convert float {value!r} to Decimal: the source's exact value is "
+		"already lost. Parse the source losslessly instead — "
+		"json.loads(..., parse_float=Decimal), or read the column as text."
+	)
 
 
 @type_checker
@@ -174,31 +269,62 @@ def apply_dtypes(
 	list_referenced = (
 		list(dict_dtypes.keys()) + list_date_cols + list_datetime_cols + list_decimal_cols
 	)
+	_validate_referenced_columns(df_input, list_referenced)
+
+	df_typed = df_input.copy()
+	if dict_dtypes:
+		df_typed = df_typed.astype(_resolve_text_dtypes(dict_dtypes))
+
+	# One assign call rather than three mutating loops, the pandas idiom this project prefers
+	# and documents in its Python rules file. The whole set of derived columns becomes one
+	# expression, so the result's shape is visible instead of accumulated a statement at a
+	# time. Column names need not be identifiers for the double-star form.
+	dict_derived = {
+		**{
+			str_col: pd.to_datetime(df_typed[str_col], errors="raise")
+			for str_col in list_datetime_cols
+		},
+		**{
+			str_col: pd.to_datetime(df_typed[str_col], errors="raise").dt.date
+			for str_col in list_date_cols
+		},
+		**{str_col: df_typed[str_col].map(_to_decimal) for str_col in list_decimal_cols},
+	}
+	return df_typed.assign(**dict_derived)
+
+
+def _validate_referenced_columns(  # complexity-ok: two distinct validation faults
+	df_input: pd.DataFrame, list_referenced: list[str]
+) -> None:
+	"""Fail fast when a referenced column is absent or claimed by more than one target type.
+
+	Validation is separated from the coercion it guards so each reads as one job.
+
+	Parameters
+	----------
+	df_input : pd.DataFrame
+		The source frame.
+	list_referenced : list of str
+		Every column named across the four target-type sets, in declaration order.
+
+	Returns
+	-------
+	None
+
+	Raises
+	------
+	KeyError
+		If any referenced column is absent from ``df_input``.
+	ValueError
+		If a column appears in more than one of the four sets.
+	"""
 	set_missing = {str_col for str_col in list_referenced if str_col not in df_input.columns}
 	if set_missing:
 		raise KeyError(f"Columns not found in DataFrame: {sorted(set_missing)}")
 
-	set_seen: set[str] = set()
-	set_overlap: set[str] = set()
-	for str_col in list_referenced:
-		if str_col in set_seen:
-			set_overlap.add(str_col)
-		set_seen.add(str_col)
+	# A Counter states "named more than once" directly, where the seen/overlap pair of sets
+	# had to build the same fact one element at a time.
+	cls_counts = collections.Counter(list_referenced)
+	set_overlap = {str_col for str_col, int_n in cls_counts.items() if int_n > 1}
 	if set_overlap:
 		raise ValueError(f"Columns assigned more than one target type: {sorted(set_overlap)}")
-
-	df_typed = df_input.copy()
-
-	if dict_dtypes:
-		df_typed = df_typed.astype(_resolve_text_dtypes(dict_dtypes))
-
-	for str_col in list_datetime_cols:
-		df_typed[str_col] = pd.to_datetime(df_typed[str_col], errors="raise")
-
-	for str_col in list_date_cols:
-		df_typed[str_col] = pd.to_datetime(df_typed[str_col], errors="raise").dt.date
-
-	for str_col in list_decimal_cols:
-		df_typed[str_col] = df_typed[str_col].map(_to_decimal)
-
-	return df_typed

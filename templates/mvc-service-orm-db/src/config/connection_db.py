@@ -19,7 +19,10 @@ from utils.typing import type_checker
 
 
 @type_checker
-def _normalize_odbc_bool(str_value: str) -> str:
+# ⚠️ The two helpers below carry the complexity hatch. Each branch is one documented
+# backend/auth option in a DSN, and the branching IS the assembly: collapsing it would
+# hide which option produced which connection string.
+def _normalize_odbc_bool(str_value: str) -> str:  # complexity-ok: DSN option mapping
 	"""Map a ``.env`` boolean to the ``yes``/``no`` an ODBC keyword expects.
 
 	ODBC keywords like ``Encrypt`` / ``TrustServerCertificate`` accept ``yes``/``no`` —
@@ -48,7 +51,7 @@ def _normalize_odbc_bool(str_value: str) -> str:
 
 
 @type_checker
-def _compose_url(str_backend: str) -> str:
+def _compose_url(str_backend: str) -> str:  # complexity-ok: DSN assembly per backend
 	"""Build a SQLAlchemy URL from generic environment variables.
 
 	Parameters

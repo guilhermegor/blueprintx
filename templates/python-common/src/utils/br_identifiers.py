@@ -29,6 +29,12 @@ else:
 		from chassis.typing import type_checker
 
 
+# The check-digit arithmetic both identifiers share: the weighted sum is taken modulo 11, and
+# a remainder below 2 yields a digit of 0 rather than a negative one. Named because these two
+# numbers ARE the rule — a reader meeting a bare 11 cannot tell it from an array bound.
+_INT_MODULUS = 11
+_INT_MIN_REMAINDER = 2
+
 _LEN_CNPJ: int = 14
 _LEN_CPF: int = 11
 _ASCII_ZERO: int = ord("0")
@@ -129,7 +135,7 @@ def _cnpj_check_digit(str_base: str, tuple_weights: tuple[int, ...]) -> int:
 		for str_char, int_weight in zip(str_base, tuple_weights, strict=True)
 	)
 	int_rest = int_sum % 11
-	return 0 if int_rest < 2 else 11 - int_rest
+	return 0 if int_rest < _INT_MIN_REMAINDER else _INT_MODULUS - int_rest
 
 
 @type_checker
@@ -149,20 +155,35 @@ def is_valid_cnpj(str_value: str) -> bool:
 		zeros) are rejected.
 	"""
 	str_clean = unmask_cnpj(str_value)
-	if len(str_clean) != _LEN_CNPJ:
-		return False
+	# One conjunction rather than a stack of early exits. For a pure predicate this states
+	# the whole definition in one place — right length, numeric check digits, not a repeated
+	# character filler, correct digits — where the guard form scattered it over four exits.
+	# Conjunction short-circuits, so the check digits are still computed only on a well shaped
+	# value, and an expression costs nothing against the ceiling that branching does.
+	return (
+		len(str_clean) == _LEN_CNPJ
+		and str_clean[12:].isdigit()
+		and not (str_clean.isdigit() and len(set(str_clean)) == 1)
+		and str_clean[12:] == _cnpj_check_digits(str_clean[:12])
+	)
 
-	str_check = str_clean[12:]
-	if not str_check.isdigit():
-		return False
 
-	if str_clean.isdigit() and len(set(str_clean)) == 1:
-		return False
+def _cnpj_check_digits(str_base: str) -> str:
+	"""Return the two check digits for a 12-character CNPJ base.
 
-	str_base = str_clean[:12]
+	Parameters
+	----------
+	str_base : str
+		The first 12 characters of an unmasked CNPJ.
+
+	Returns
+	-------
+	str
+		The two check digits, concatenated.
+	"""
 	int_dv1 = _cnpj_check_digit(str_base, _CNPJ_WEIGHTS_DV1)
 	int_dv2 = _cnpj_check_digit(f"{str_base}{int_dv1}", _CNPJ_WEIGHTS_DV2)
-	return str_check == f"{int_dv1}{int_dv2}"
+	return f"{int_dv1}{int_dv2}"
 
 
 @type_checker
@@ -227,7 +248,7 @@ def _cpf_check_digit(str_base: str, int_start_weight: int) -> int:
 		int(str_char) * (int_start_weight - int_idx) for int_idx, str_char in enumerate(str_base)
 	)
 	int_rest = int_sum % 11
-	return 0 if int_rest < 2 else 11 - int_rest
+	return 0 if int_rest < _INT_MIN_REMAINDER else _INT_MODULUS - int_rest
 
 
 @type_checker
@@ -246,12 +267,28 @@ def is_valid_cpf(str_value: str) -> bool:
 		check digits. Repeated-digit values (e.g. all ones) are rejected.
 	"""
 	str_clean = unmask_cpf(str_value)
-	if len(str_clean) != _LEN_CPF or not str_clean.isdigit():
-		return False
+	# One conjunction rather than a stack of early exits; see the CNPJ validator for why.
+	return (
+		len(str_clean) == _LEN_CPF
+		and str_clean.isdigit()
+		and len(set(str_clean)) > 1
+		and str_clean[9:] == _cpf_check_digits(str_clean)
+	)
 
-	if len(set(str_clean)) == 1:
-		return False
 
+def _cpf_check_digits(str_clean: str) -> str:
+	"""Return the two check digits for an 11-digit CPF.
+
+	Parameters
+	----------
+	str_clean : str
+		An unmasked, 11-digit CPF.
+
+	Returns
+	-------
+	str
+		The two check digits, concatenated.
+	"""
 	int_dv1 = _cpf_check_digit(str_clean[:9], 10)
 	int_dv2 = _cpf_check_digit(str_clean[:10], 11)
-	return str_clean[9:] == f"{int_dv1}{int_dv2}"
+	return f"{int_dv1}{int_dv2}"

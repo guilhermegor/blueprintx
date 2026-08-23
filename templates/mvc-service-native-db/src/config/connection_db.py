@@ -95,7 +95,10 @@ def _connect_mysql() -> Any:
 
 
 @type_checker
-def _normalize_odbc_bool(str_value: str) -> str:
+# ⚠️ The two helpers below carry the complexity hatch. Each branch is one documented
+# backend/auth option in a DSN, and the branching IS the assembly: collapsing it would
+# hide which option produced which connection string.
+def _normalize_odbc_bool(str_value: str) -> str:  # complexity-ok: DSN option mapping
 	"""Map a ``.env`` boolean to the ``yes``/``no`` an ODBC keyword expects.
 
 	ODBC keywords like ``Encrypt`` / ``TrustServerCertificate`` accept ``yes``/``no`` —
@@ -124,7 +127,7 @@ def _normalize_odbc_bool(str_value: str) -> str:
 
 
 @type_checker
-def _connect_mssql() -> Any:
+def _connect_mssql() -> Any:  # complexity-ok: DSN assembly per auth mode
 	"""Open a SQL Server connection via ``pyodbc`` (SQL auth or Azure AD).
 
 	``DB_MSSQL_AUTH`` selects the auth mode: the default ``sql`` uses ``UID``/``PWD``;

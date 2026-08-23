@@ -59,6 +59,24 @@ jobs:
       - name: Check function length across bin/ and templates/
         run: python3 templates/python-common/bin/check_function_length.py --root .
 
+  complexity:
+    name: Cyclomatic complexity — tests 1, src 2, bin 8
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # ruff IS the metric here (C901), so unlike function-length this one needs it present.
+      # The gate hard-fails when ruff cannot be resolved rather than skipping: in CI a
+      # graceful skip is a gate reporting its own blindness as OK.
+      - name: Install ruff
+        run: pipx install ruff
+
+      - name: Check cyclomatic complexity across bin/ and templates/
+        run: bash templates/python-common/bin/check_complexity.sh --root .
+
   test-copy-lists:
     name: Shared test copy lists — scaffolds vs python-common
     runs-on: ubuntu-latest

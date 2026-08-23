@@ -40,11 +40,14 @@ def resolve_signature(path_signatures_dir: Path, str_sender_email: str) -> str:
 	str
 		Signature HTML (``<sender>.html``, else ``default.html``, else empty).
 	"""
-	for str_name in (f"{str_sender_email}.html", "default.html"):
-		path_sig = path_signatures_dir / str_name
-		if path_sig.exists():
-			return path_sig.read_text(encoding="utf-8")
-	return ""
+	# "First existing candidate, else empty" stated as a search rather than a loop with an
+	# exit in the middle. The preference order stays visible in the tuple, which is where a
+	# reader looks for it.
+	list_candidates = [
+		path_signatures_dir / str_name for str_name in (f"{str_sender_email}.html", "default.html")
+	]
+	path_sig = next((path for path in list_candidates if path.exists()), None)
+	return path_sig.read_text(encoding="utf-8") if path_sig is not None else ""
 
 
 @type_checker

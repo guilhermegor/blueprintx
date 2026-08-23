@@ -198,11 +198,35 @@ scan_file_for_urls() {
 	while IFS= read -r str_line; do
 		((int_line_num++))
 
-		if [[ "$str_line" =~ ^[[:space:]]*\"\"\" ]]; then
+		# ⚠️ A delimiter line IS docstring content — scan it BEFORE flipping the state.
+		# This `continue` used to skip the scan, blinding the gate on TWO shapes (measured
+		# with a seeded-cache negative control; blueprintx#206 reported the first):
+		#
+		#   1. `"""One line holding https://…"""` — the whole docstring, never scanned. This
+		#      is the most common docstring shape in the tree, so the blind spot was the
+		#      common case and the gate still printed "All docstring URLs are reachable".
+		#   2. the OPENING line of a multi-line docstring (`"""Summary … https://…`) — the
+		#      summary line is exactly where a reference URL tends to sit.
+		#
+		# Self-concealing by construction: an unscanned URL is never fetched, so it is never
+		# cached and nothing in the output hints a line was skipped — the count printed is of
+		# files scanned, not URLs checked.
+		#
+		# ⚠️ A THIRD shape, deferred when the two above were fixed and closed on review: a
+		# closing delimiter sharing a line with text (`… https://…"""`). The guard used to
+		# anchor on `^[[:space:]]*"""`, so such a line was not recognised as a delimiter at
+		# all — its URL was scanned as ordinary body text (right answer, wrong mechanism) and,
+		# worse, the state never flipped back, so every LATER line was read as still inside the
+		# docstring and its URLs were fetched too. That over-scans rather than blinds, which is
+		# why it was not urgent; it is also two characters to fix. Both delimiters are now
+		# matched WHEREVER they sit on the line.
+		if [[ "$str_line" == *'"""'* ]]; then
+			check_urls_in_line "$str_file" "$int_line_num" "$str_line"
 			bool_in_docstring="$(toggle_docstring_state "$str_line" '"""' "$bool_in_docstring")"
 			continue
 		fi
-		if [[ "$str_line" =~ ^[[:space:]]*\'\'\' ]]; then
+		if [[ "$str_line" == *"'''"* ]]; then
+			check_urls_in_line "$str_file" "$int_line_num" "$str_line"
 			bool_in_docstring="$(toggle_docstring_state "$str_line" "'''" "$bool_in_docstring")"
 			continue
 		fi

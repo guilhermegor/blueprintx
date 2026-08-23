@@ -89,10 +89,10 @@ def test_parse_br_number_series_handles_br_and_plain() -> None:
 	assert pd.isna(series_out.iloc[4])
 
 
-def test_parse_br_number_series_mirrors_scalar() -> None:
+@pytest.mark.parametrize("str_raw", ["2.084.960,76", "1234.56", "10,5"])
+def test_parse_br_number_series_mirrors_scalar(str_raw: str) -> None:
 	"""The vectorised parser agrees with the scalar normaliser on BR input."""
 	pd = pytest.importorskip("pandas")
-	for str_raw in ("2.084.960,76", "1234.56", "10,5"):
-		float_scalar = float(_normalise_br_number(str_raw))
-		float_series = parse_br_number_series(pd.Series([str_raw])).iloc[0]
-		assert float_series == pytest.approx(float_scalar)
+	float_scalar = float(_normalise_br_number(str_raw))
+	float_series = parse_br_number_series(pd.Series([str_raw])).iloc[0]
+	assert float_series == pytest.approx(float_scalar)

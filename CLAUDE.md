@@ -57,6 +57,19 @@ Two of those exist because a defect can only be seen from *this* side of the cop
   bound is 6 hours, and an unbounded job that hangs reports `cancelled` — indistinguishable
   from a human pressing cancel (measured twice in two days, #192).
 
+The **cyclomatic-complexity gate** follows the same one-implementation rule:
+`templates/python-common/bin/check_complexity.sh`, run over this repo via `--root .`
+(pre-commit hook `check-complexity`, the `complexity` CI job) and over itself inside every
+generated project. Its ceiling **differs by tree** — 1 for `tests/`, 2 for `src/`, 8 for
+`bin/` — because the argument differs: a test with a branch tests two paths and the green
+never says which ran, while the gates in `bin/` are parsing tools by nature (at 2 they were
+74% violating, a number nobody pays and therefore a gate nobody keeps). It does **not**
+reimplement mccabe; ruff already ships it as `C901`, and a hand-rolled counter that treats
+`assert`/`with` as decision points reports 85% of `tests/` violating where the real figure is
+8%. ⚠️ BlueprintX's own tree has no `src/` or `tests/`, so on this side it checks `bin/`
+only — it travels with the template it polices rather than earning its keep from what it
+finds here.
+
 The **function-length gate** is wired on both sides but has only ONE implementation:
 `templates/python-common/bin/check_function_length.py`, which BlueprintX runs over its own
 tree via `--root .` (pre-commit hook `function-length`, the `function-length` CI job,

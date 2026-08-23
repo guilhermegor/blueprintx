@@ -66,6 +66,11 @@ _MONTHS_PT_ABBR: tuple[str, ...] = (
 )
 
 
+# A drive-letter prefix is exactly two characters, such as C-colon. Named so the length test
+# reads as "is there room for a drive letter?" rather than as an arbitrary bound.
+_INT_DRIVE_PREFIX_LEN = 2
+
+
 @type_checker
 def is_windows_path(str_path: str) -> bool:
 	r"""Return whether ``str_path`` looks like a Windows drive or UNC path.
@@ -81,7 +86,11 @@ def is_windows_path(str_path: str) -> bool:
 		``True`` for ``X:\...`` drive paths or ``\\server\share`` UNC paths.
 	"""
 	str_stripped = str_path.strip()
-	if len(str_stripped) >= 2 and str_stripped[1] == ":" and str_stripped[0].isalpha():
+	if (
+		len(str_stripped) >= _INT_DRIVE_PREFIX_LEN
+		and str_stripped[1] == ":"
+		and str_stripped[0].isalpha()
+	):
 		return True
 	return str_stripped.startswith("\\\\")
 
@@ -106,11 +115,11 @@ def resolve_path(str_path: str) -> Path:
 		A path object suitable for the host OS.
 	"""
 	str_stripped = str_path.strip()
-	if is_windows_path(str_stripped):
-		if os.name == "nt":
-			return Path(str_stripped)
-		return Path(PureWindowsPath(str_stripped))
-	return Path(str_stripped).expanduser()
+	if not is_windows_path(str_stripped):
+		return Path(str_stripped).expanduser()
+	# On Windows the string is already native; elsewhere it is parsed through PureWindowsPath
+	# so its parts come out right even though the path is not reachable locally.
+	return Path(str_stripped) if os.name == "nt" else Path(PureWindowsPath(str_stripped))
 
 
 @type_checker
@@ -234,12 +243,51 @@ def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | Non
 		The resolved file, or ``None`` when nothing matches.
 	"""
 	dict_tokens = date_tokens(dt_ref)
+	# Two genuinely different resolutions behind one name, so each gets its own function and
+	# this one only chooses. The mapping form searches a directory; the string form names a
+	# file outright.
 	if isinstance(spec, dict):
-		str_dir = str(spec.get("dir", "")).format(**dict_tokens)
-		str_pattern = str(spec.get("filename_pattern", "*")).format(**dict_tokens)
-		path_match = _latest_match(resolve_path(str_dir), str_pattern)
-		return to_absolute(path_match) if path_match is not None else None
-	str_path = str(spec or "").format(**dict_tokens)
+		return _resolve_mapping_spec(spec, dict_tokens)
+	return _resolve_plain_spec(str(spec or ""), dict_tokens)
+
+
+def _resolve_mapping_spec(dict_spec: dict[str, str], dict_tokens: dict) -> Path | None:
+	"""Resolve a ``{dir, filename_pattern}`` spec to the newest matching file.
+
+	Parameters
+	----------
+	dict_spec : dict of {str: str}
+		The mapping form of an input spec.
+	dict_tokens : dict
+		Date tokens used to fill the templates.
+
+	Returns
+	-------
+	pathlib.Path or None
+		The newest match as an absolute path, or ``None``.
+	"""
+	str_dir = str(dict_spec.get("dir", "")).format(**dict_tokens)
+	str_pattern = str(dict_spec.get("filename_pattern", "*")).format(**dict_tokens)
+	path_match = _latest_match(resolve_path(str_dir), str_pattern)
+	return to_absolute(path_match) if path_match is not None else None
+
+
+def _resolve_plain_spec(str_spec: str, dict_tokens: dict) -> Path | None:
+	"""Resolve a plain path-string spec to an existing absolute file.
+
+	Parameters
+	----------
+	str_spec : str
+		The string form of an input spec (may be empty).
+	dict_tokens : dict
+		Date tokens used to fill the template.
+
+	Returns
+	-------
+	pathlib.Path or None
+		The resolved file as an absolute path, or ``None`` when blank or absent.
+	"""
+	str_path = str_spec.format(**dict_tokens)
 	if not str_path.strip():
 		return None
 	path_resolved = resolve_path(str_path)
@@ -269,15 +317,9 @@ def resolve_input_glob(spec: dict[str, str] | None, dt_ref: date) -> list[Path]:
 		return []
 	dict_tokens = date_tokens(dt_ref)
 	str_dir = str(spec.get("dir", "")).format(**dict_tokens)
-	str_pattern = str(spec.get("filename_pattern", "*")).format(**dict_tokens).casefold()
-	path_dir = resolve_path(str_dir)
-	if not path_dir.exists():
-		return []
-	return sorted(
-		to_absolute(path)
-		for path in path_dir.iterdir()
-		if path.is_file() and Path(path.name.casefold()).match(str_pattern)
-	)
+	str_pattern = str(spec.get("filename_pattern", "*")).format(**dict_tokens)
+	list_matches = _matching_files(resolve_path(str_dir), str_pattern)
+	return sorted(to_absolute(path) for path in list_matches)
 
 
 @type_checker
@@ -328,14 +370,38 @@ def _latest_match(path_dir: Path, str_pattern: str) -> Path | None:
 	pathlib.Path or None
 		The most recently modified matching file, or ``None``.
 	"""
+	# The default keyword carries the empty case, so no second guard is needed for it.
+	return max(
+		_matching_files(path_dir, str_pattern),
+		key=lambda path: path.stat().st_mtime,
+		default=None,
+	)
+
+
+def _matching_files(path_dir: Path, str_pattern: str) -> list[Path]:
+	"""Return every file in ``path_dir`` whose name matches ``str_pattern``, case-insensitively.
+
+	The one place the case-insensitive scan lives. It was written twice — once to pick the
+	newest match and once to return them all — which is two chances for the matching rule to
+	drift apart while both callers keep passing their own tests.
+
+	Parameters
+	----------
+	path_dir : pathlib.Path
+		Directory to search; a missing directory yields an empty list rather than raising.
+	str_pattern : str
+		Glob pattern, matched case-insensitively against file names.
+
+	Returns
+	-------
+	list of pathlib.Path
+		Matching files, in directory order.
+	"""
 	if not path_dir.exists():
-		return None
+		return []
 	str_pattern_low = str_pattern.casefold()
-	list_matches = [
+	return [
 		path
 		for path in path_dir.iterdir()
 		if path.is_file() and Path(path.name.casefold()).match(str_pattern_low)
 	]
-	if not list_matches:
-		return None
-	return max(list_matches, key=lambda p: p.stat().st_mtime)

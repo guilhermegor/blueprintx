@@ -11,6 +11,8 @@ distinction (annotation vs API) that a blunter rule would flatten.
 
 import importlib.util
 from pathlib import Path
+import subprocess
+import sys
 from types import ModuleType
 
 import pytest
@@ -31,7 +33,11 @@ def _load_gate() -> ModuleType:
 	"""
 	path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_layer_imports.py"
 	cls_spec = importlib.util.spec_from_file_location("_check_layer_imports", path_gate)
-	assert cls_spec is not None and cls_spec.loader is not None
+	# Split rather than combined. A conjunction in one assertion reports only that the
+	# whole thing was false, so a failure cannot say WHICH half broke — an absent loader
+	# and an absent spec are different faults with different causes.
+	assert cls_spec is not None
+	assert cls_spec.loader is not None
 	cls_module = importlib.util.module_from_spec(cls_spec)
 	cls_spec.loader.exec_module(cls_module)
 	return cls_module
@@ -209,3 +215,394 @@ def test_a_module_directly_under_src_is_not_skipped(tmp_path: Path) -> None:
 	)
 	assert len(list_problems) == 1
 	assert "filings_cvm" in list_problems[0]
+
+
+# --------------------------
+# main() — the gate must never pass by not looking (blueprintx#139)
+# --------------------------
+
+
+def _run_main(path_root: Path) -> tuple[int, str]:
+	"""Run the gate's ``main()`` with ``path_root`` as the working directory.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to treat as the project root.
+
+	Returns
+	-------
+	tuple of (int, str)
+		The exit code and everything printed.
+	"""
+	# Constant, trusted argv. Invoked as a subprocess so the working directory and the
+	# printed output are the real ones main sees.
+	cls_run = subprocess.run(  # noqa: S603
+		[
+			sys.executable,
+			str(Path(__file__).resolve().parents[2] / "bin" / "check_layer_imports.py"),
+		],
+		cwd=path_root,
+		capture_output=True,
+		text=True,
+		check=False,
+	)
+	return cls_run.returncode, cls_run.stdout + cls_run.stderr
+
+
+def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
+	"""Build a minimal project tree holding one module under ``src/model/``.
+
+	Writing the policy is left to the caller: whether one exists is the very thing several of
+	these tests vary, so making it a parameter would hide the difference inside a helper.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to build in.
+	str_module : str, optional
+		Source of the single module placed under ``src/model/``.
+
+	Returns
+	-------
+	None
+	"""
+	(path_root / "src" / "model").mkdir(parents=True, exist_ok=True)
+	(path_root / "src" / "model" / "probe.py").write_text(str_module, encoding="utf-8")
+
+
+_STR_MINIMAL_POLICY = "layers:\n  model:\n    allow: {}\n"
+
+
+def test_modules_with_no_policy_file_FAIL_rather_than_pass_silently(tmp_path: Path) -> None:
+	"""⚠️ The negative control for the defect this fixed.
+
+	The gate used to ``return 0`` in silence when no policy was present, so three of the five
+	Python tiers shipped with NO import boundary at all while their CI stayed green. A gate
+	reporting its own blindness as OK is the failure mode this repo writes gates to prevent.
+	"""
+	_seed_project(tmp_path)
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 1
+	assert ".layer-policy.yaml" in str_out
+	assert "no import boundary" in str_out
+
+
+def test_a_tree_with_no_modules_and_no_policy_is_not_a_failure(tmp_path: Path) -> None:
+	"""The positive control: nothing to check is not the same as failing to check."""
+	(tmp_path / "src").mkdir()
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 0
+	assert "nothing to do" in str_out
+
+
+def test_a_clean_tree_prints_what_it_checked(tmp_path: Path) -> None:
+	"""A silent gate cannot be told from an absent one, so success names the count."""
+	_seed_project(tmp_path)
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_MINIMAL_POLICY, encoding="utf-8")
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 0
+	assert "module(s) checked" in str_out
+
+
+def test_layers_nested_inside_a_package_resolve_via_src_prefix_depth(tmp_path: Path) -> None:
+	"""lib-minimal nests its layers as ``src/<pkg>/_internal/<layer>/``.
+
+	Without the prefix the layer resolves to the PACKAGE NAME, matches no policy entry, and
+	deny-by-default rejects the whole tree for the wrong reason — which is how one engine
+	serving five layouts quietly stops serving one of them.
+	"""
+	path_deep = tmp_path / "src" / "mypkg" / "_internal" / "model"
+	path_deep.mkdir(parents=True)
+	(path_deep / "probe.py").write_text("import os\n", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(
+		"src_prefix_depth: 2\n" + _STR_MINIMAL_POLICY, encoding="utf-8"
+	)
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 0, str_out
+	assert "module(s) checked" in str_out
+
+
+def test_the_same_nested_tree_without_the_prefix_is_rejected(tmp_path: Path) -> None:
+	"""The paired control: drop the prefix and the layer no longer resolves.
+
+	Without this, the test above would pass against an engine that ignores the setting.
+	"""
+	path_deep = tmp_path / "src" / "mypkg" / "_internal" / "model"
+	path_deep.mkdir(parents=True)
+	(path_deep / "probe.py").write_text("import pandas\n", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_MINIMAL_POLICY, encoding="utf-8")
+
+	int_code, _ = _run_main(tmp_path)
+
+	assert int_code == 1
+
+
+# --------------------------
+# direction — the OTHER question this gate answers (blueprintx#140)
+# --------------------------
+
+_STR_DIRECTION_POLICY = (
+	"layers:\n"
+	"  utils:\n"
+	"    allow: {}\n"
+	"    deny_layers:\n"
+	'      model: "utils/ is a seam for the layers, not a consumer of them."\n'
+	"  model:\n"
+	"    allow: {}\n"
+	"  config:\n"
+	"    allow: {}\n"
+)
+
+
+def _seed_layers(path_root: Path) -> None:
+	"""Create every sibling layer the direction fixtures refer to.
+
+	⚠️ All of them must EXIST on disk. ``first_party_roots`` learns the project's own package
+	names by scanning src/, so a layer that is only named in the policy is an unknown module
+	to the VENDOR half — and the direction test then fails for the wrong reason.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		The project root to build under.
+
+	Returns
+	-------
+	None
+	"""
+	_seed_one_layer(path_root, "utils")
+	_seed_one_layer(path_root, "model")
+	_seed_one_layer(path_root, "config")
+
+
+def _seed_one_layer(path_root: Path, str_layer: str) -> None:
+	"""Create one layer package under ``src/``.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		The project root.
+	str_layer : str
+		The layer's directory name.
+
+	Returns
+	-------
+	None
+	"""
+	(path_root / "src" / str_layer).mkdir(parents=True, exist_ok=True)
+	(path_root / "src" / str_layer / "__init__.py").write_text("", encoding="utf-8")
+
+
+def _direction_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
+	"""Run the gate over one module placed in ``utils/`` under a direction policy.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway directory.
+	str_source : str
+		The module source to check.
+
+	Returns
+	-------
+	tuple of (int, str)
+		The gate's exit code and its output.
+	"""
+	_seed_layers(tmp_path)
+	(tmp_path / "src" / "utils" / "probe.py").write_text(str_source, encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_DIRECTION_POLICY, encoding="utf-8")
+	return _run_main(tmp_path)
+
+
+def test_a_seam_importing_the_layer_it_serves_is_rejected(tmp_path: Path) -> None:
+	"""⚠️ No vendor is involved, and that is the point.
+
+	The vendor half of this gate asks "may this layer reach OUTSIDE the project?". Direction
+	asks "may it reach THAT layer?" — a different question, and utils/ importing model/ is a
+	cycle the vendor rule cannot see. It was prose only (src/utils/CLAUDE.md: "utils/ is
+	imported by them, never the reverse") and prose does not fail a build.
+	"""
+	int_code, str_out = _direction_case(tmp_path, "from model import thing\n")
+
+	assert int_code == 1
+	assert "must not import" in str_out
+	assert "not a consumer" in str_out
+
+
+def test_a_wrong_direction_deferred_into_a_function_is_still_rejected(tmp_path: Path) -> None:
+	"""Deferring the import does not undo the coupling — same rule as for a vendor."""
+	int_code, _ = _direction_case(
+		tmp_path, 'def f() -> None:\n\t"""D."""\n\timport model\n\n\tprint(model)\n'
+	)
+
+	assert int_code == 1
+
+
+def test_an_allowed_direction_passes(tmp_path: Path) -> None:
+	"""The positive control: a sibling not named in deny_layers is fine."""
+	int_code, _ = _direction_case(tmp_path, "from config import settings\n")
+
+	assert int_code == 0
+
+
+def test_a_layer_declaring_no_direction_is_unrestricted(tmp_path: Path) -> None:
+	"""A layer with no ``deny_layers`` may reach its siblings.
+
+	Unlike the VENDOR half this is not deny-by-default, and the asymmetry is deliberate: the
+	set of vendors is open-ended, while the set of layers is small, named in the same file,
+	and each project decides its own direction. An absent entry is a real answer, not an
+	unasked question.
+	"""
+	_seed_layers(tmp_path)
+	(tmp_path / "src" / "model" / "probe.py").write_text(
+		"from utils import thing\n", encoding="utf-8"
+	)
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_DIRECTION_POLICY, encoding="utf-8")
+
+	int_code, _ = _run_main(tmp_path)
+
+	assert int_code == 0
+
+
+def test_a_duplicate_policy_key_is_rejected(tmp_path: Path) -> None:
+	"""⚠️ A repeated mapping key must FAIL, because YAML keeps only the last one.
+
+	Hit for real while writing this repo's own policies: a second ``deny_layers:`` under one
+	layer silently erased three denials. Nothing errored, the file still parsed, and the gate
+	still reported success — while enforcing less than the file appeared to say. A policy is
+	security-relevant config; losing rules in silence is the one failure it must not have.
+	"""
+	_seed_project(tmp_path)
+	(tmp_path / ".layer-policy.yaml").write_text(
+		'layers:\n  model:\n    allow: {}\n    deny_layers:\n      view: "a"\n'
+		'    deny_layers:\n      utils: "b"\n',
+		encoding="utf-8",
+	)
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 1
+	assert "duplicate key" in str_out
+	assert "Traceback" not in str_out, "the message must be readable in CI output"
+
+
+# --------------------------
+# sublayers and dotted deny targets (blueprintx#224 review)
+# --------------------------
+
+_STR_SUBLAYER_POLICY = (
+	"layers:\n"
+	"  capabilities:\n"
+	"    allow: {}\n"
+	"  capabilities/*/domain:\n"
+	"    allow: {}\n"
+	"    deny_layers:\n"
+	'      chassis.db_schema: "the domain names ports, not providers."\n'
+	"  chassis:\n"
+	"    allow: {}\n"
+)
+
+
+def _sublayer_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
+	"""Run the gate over one module inside a capability's ``domain/``.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway directory.
+	str_source : str
+		The module source to check.
+
+	Returns
+	-------
+	tuple of (int, str)
+		The gate's exit code and output.
+	"""
+	path_dom = tmp_path / "src" / "capabilities" / "notes" / "domain"
+	path_dom.mkdir(parents=True)
+	(path_dom / "ports.py").write_text(str_source, encoding="utf-8")
+	(tmp_path / "src" / "chassis").mkdir(parents=True, exist_ok=True)
+	(tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
+	return _run_main(tmp_path)
+
+
+def test_a_glob_layer_key_governs_a_capability_sublayer(tmp_path: Path) -> None:
+	"""⚠️ The three DDD sublayers have DIFFERENT rules, and one key cannot hold them.
+
+	The tier's own CLAUDE.md says domain depends on nothing, application on the domain only,
+	and infrastructure on domain ports plus external libs. Collapsed into one `capabilities`
+	entry — which is what the first-path-component rule does — that table is documentation
+	nobody can enforce.
+	"""
+	int_code, str_out = _sublayer_case(tmp_path, "from chassis.db_schema import Repo\n")
+
+	assert int_code == 1
+	assert "capabilities/*/domain" in str_out
+	assert "names ports, not providers" in str_out
+
+
+def test_a_dotted_deny_spares_the_sibling_subpackage(tmp_path: Path) -> None:
+	"""⚠️ The paired control, and the reason the deny is dotted rather than a bare root.
+
+	``chassis`` holds BOTH the DB providers and the runtime type-checking engine that this
+	project mandates on every class, the domain included. A root-level `chassis:` deny would
+	therefore fire on correct code — and a rule that cries wolf is a rule someone deletes.
+	"""
+	int_code, str_out = _sublayer_case(tmp_path, "from chassis.typing import Meta\n")
+
+	assert int_code == 0, str_out
+
+
+def test_a_glob_governs_packages_NESTED_below_the_sublayer(tmp_path: Path) -> None:
+	"""⚠️ ``fnmatch`` matches the WHOLE string, so a deeper module needs ancestor matching.
+
+	``capabilities/*/domain`` matches ``capabilities/notes/domain`` and NOT
+	``capabilities/notes/domain/entities`` — the ``*`` does not stop at ``/``, but the pattern
+	still has to consume the entire path. A module one package deeper therefore fell back to
+	the broad ``capabilities`` key and lost the sublayer rules, which is a rule that silently
+	stops applying the moment someone adds a subpackage.
+	"""
+	path_deep = tmp_path / "src" / "capabilities" / "notes" / "domain" / "entities"
+	path_deep.mkdir(parents=True)
+	(path_deep / "note.py").write_text("from chassis.db_schema import Repo\n", encoding="utf-8")
+	(tmp_path / "src" / "chassis").mkdir(parents=True, exist_ok=True)
+	(tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 1, str_out
+	assert "capabilities/*/domain" in str_out
+
+
+def test_a_dotted_deny_also_catches_the_RELATIVE_form(tmp_path: Path) -> None:
+	"""⚠️ The relative twin of a rejected import must be rejected too.
+
+	Resolving a relative import to its first component only made every DOTTED deny key miss:
+	``from ....chassis.db_schema import Repo`` reduced to ``chassis``, which no
+	``chassis.db_schema`` rule matches. The absolute form was rejected while its relative twin
+	passed — an inconsistency worse than not having the rule, because the gate looks enforced.
+	"""
+	path_dom = tmp_path / "src" / "capabilities" / "notes" / "domain"
+	path_dom.mkdir(parents=True)
+	(path_dom / "ports.py").write_text(
+		"from ....chassis.db_schema import Repo\n", encoding="utf-8"
+	)
+	(tmp_path / "src" / "chassis").mkdir(parents=True, exist_ok=True)
+	(tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 1, str_out
+	assert "chassis.db_schema" in str_out

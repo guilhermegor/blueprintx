@@ -28,7 +28,7 @@ class TypeChecker(type):
 	>>> Calculator().add(1, "two")  # raises TypeError
 	"""
 
-	def __new__(
+	def __new__(  # complexity-ok: metaclass machinery
 		cls: type[TypeChecker],
 		str_name: str,
 		tuple_bases: tuple,
@@ -61,7 +61,11 @@ class TypeChecker(type):
 		return super().__new__(cls, str_name, tuple_bases, dict_attrs)
 
 
-def _wrap_attribute(attr_value: Any) -> Any:
+# ⚠️ Hatched, like the metaclass above. This is intrinsic type-system metaprogramming, which
+# ruff already EXCLUDES outright for the DDD and lib-minimal layouts and which mypy carries
+# ignore_errors sections for in all three. Exempting it from the complexity ceiling applies
+# the existing policy to one more tool rather than making a new concession.
+def _wrap_attribute(attr_value: Any) -> Any:  # complexity-ok: metaclass machinery
 	"""Wrap a class attribute with type checking, preserving its descriptor.
 
 	Parameters

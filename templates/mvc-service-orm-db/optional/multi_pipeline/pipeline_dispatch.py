@@ -71,7 +71,13 @@ def resolve_intent(str_raw: str) -> str:
 
 
 @type_checker
-def build_pipeline(
+# ⚠️ PLR0913 is suppressed on the builder below, and the reason is the pattern rather
+# than the count: this is a COMPOSITION ROOT, so injecting collaborators is literally
+# its job (rules/common.md — 'Dependency injection: collaborators wired at
+# construction'). Folding them into a config object moves the same nine behind a
+# constructor and buys nothing; the wide signature is what makes every dependency of a
+# pipeline visible in one place.
+def build_pipeline(  # noqa: PLR0913
 	str_intent: str,
 	logger: Logger | None,
 	fn_build_engine: Callable[[], Engine],
