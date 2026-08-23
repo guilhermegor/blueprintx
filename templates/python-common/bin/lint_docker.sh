@@ -76,7 +76,19 @@ discover_dockerfiles() {
 main() {
 	cd "$SCRIPT_DIR/.."
 
-	mapfile -t list_dockerfiles < <(discover_dockerfiles)
+	# ⚠️ `mapfile < <(producer)` DISCARDS the producer's exit status — mapfile reports its own.
+	# A find that dies midway therefore yields a PARTIAL list that reads as a complete one, and
+	# this gate then lints part of the tree, or skips on "no Dockerfile", while reporting
+	# success. That is the same vacuous-green this wrapper exists to prevent, one layer up from
+	# the count assertion below. Materialise first, check the status, then read.
+	local str_discovered
+	if ! str_discovered="$(discover_dockerfiles)"; then
+		print_status "error" "Dockerfile discovery failed — refusing to lint a partial list"
+		return 1
+	fi
+	mapfile -t list_dockerfiles <<<"$str_discovered"
+	# A successful run that matched nothing yields one empty line; drop it so the count is honest.
+	[ "${#list_dockerfiles[@]}" -eq 1 ] && [ -z "${list_dockerfiles[0]}" ] && list_dockerfiles=()
 
 	if [ "${#list_dockerfiles[@]}" -eq 0 ]; then
 		print_status "info" "skip: no Dockerfile in this project (hadolint has nothing to lint)"

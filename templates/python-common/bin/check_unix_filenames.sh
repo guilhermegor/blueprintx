@@ -67,7 +67,20 @@ main() {
 
 	cd "$SCRIPT_DIR/.."
 	local -a list_files=()
-	mapfile -d '' -t list_files < <(discover_files)
+
+	# ⚠️ `mapfile < <(producer)` DISCARDS the producer's exit status — mapfile reports its own,
+	# so a git/find that dies midway hands over a PARTIAL list that looks complete. A temp file
+	# is used rather than a command substitution because discovery is NUL-delimited and a bash
+	# variable cannot carry NUL bytes.
+	local str_tmp
+	str_tmp="$(mktemp)"
+	# shellcheck disable=SC2064  # expand str_tmp NOW: the trap must name this run's file.
+	trap "rm -f '$str_tmp'" RETURN
+	if ! discover_files >"$str_tmp"; then
+		print_status "error" "file discovery failed — refusing to check a partial list"
+		exit 1
+	fi
+	mapfile -d '' -t list_files <"$str_tmp"
 
 	# ⚠️ ASSERT THE COUNT, DO NOT TRUST THE EXIT CODE. Zero discovered files is never legitimate
 	# here — every project has tracked files — so an empty list means discovery broke, not that
