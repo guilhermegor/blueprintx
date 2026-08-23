@@ -15,6 +15,7 @@ Pass ``rounding`` explicitly when the domain demands a different mode — e.g.
 from __future__ import annotations
 
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
+import functools
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -100,30 +101,137 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
 	Decimal
 		The parsed value, or ``default``.
 	"""
-	if value is None:
-		return default
-	if isinstance(value, Decimal):
-		# A passed-in non-finite Decimal — NaN or Infinity — maps to default.
-		return _finite_or(value, default)
-	if isinstance(value, bool):
-		# bool is a subclass of int; reject it so True/False never become 1/0.
-		return default
-	if isinstance(value, int):
-		# An int converts to an always-finite value — no guard needed.
-		return Decimal(value)
-	if isinstance(value, float):
-		# Go through ``repr`` so the shortest round-tripping decimal is used
-		# instead of the full binary expansion. float NaN/Inf -> default.
-		return _finite_or(Decimal(repr(value)), default)
+	return _parse_by_type(value, default)
+
+
+# Dispatch on the value's TYPE rather than an isinstance chain — the house rule
+# (rules/python.md, "Composition Patterns"). Registration order does not matter: dispatch
+# follows the MRO, so the bool handler wins over the int one it would otherwise inherit,
+# which is the subtlety the chain had to encode as comment-plus-ordering.
+@functools.singledispatch
+def _parse_by_type(value: object, default: Decimal) -> Decimal:
+	"""Parse anything not handled by a registered type: normalise as text, else ``default``.
+
+	Parameters
+	----------
+	value : object
+		Raw value to parse; stringified and normalised.
+	default : Decimal
+		Fallback for unparsable or non-finite input.
+
+	Returns
+	-------
+	Decimal
+		The parsed value, or ``default``.
+	"""
 	str_clean = _normalise_br_number(str(value))
-	if str_clean == "":
-		return default
 	try:
 		# The strings nan and inf are valid Decimal literals that parse successfully, so
-		# the finite check — not the except below — is what maps them to default.
+		# the finite check — not the handler below — is what maps them to default.
 		return _finite_or(Decimal(str_clean), default)
 	except InvalidOperation:
+		# Covers the empty string too, which is not a Decimal literal.
 		return default
+
+
+@_parse_by_type.register
+def _parse_none(value: None, default: Decimal) -> Decimal:
+	"""Map a missing value to ``default``.
+
+	Parameters
+	----------
+	value : None
+		The missing value.
+	default : Decimal
+		The fallback.
+
+	Returns
+	-------
+	Decimal
+		``default``.
+	"""
+	return default
+
+
+@_parse_by_type.register
+def _parse_decimal(value: Decimal, default: Decimal) -> Decimal:
+	"""Pass a Decimal through, mapping a non-finite one (NaN/Infinity) to ``default``.
+
+	Parameters
+	----------
+	value : Decimal
+		The value to check.
+	default : Decimal
+		The fallback for a non-finite value.
+
+	Returns
+	-------
+	Decimal
+		``value`` when finite, else ``default``.
+	"""
+	return _finite_or(value, default)
+
+
+@_parse_by_type.register
+def _parse_bool(value: bool, default: Decimal) -> Decimal:
+	"""Reject a bool so ``True``/``False`` never become 1/0.
+
+	``bool`` is a subclass of ``int``; without its own handler it would inherit the int one.
+
+	Parameters
+	----------
+	value : bool
+		The rejected value.
+	default : Decimal
+		The fallback.
+
+	Returns
+	-------
+	Decimal
+		``default``.
+	"""
+	return default
+
+
+@_parse_by_type.register
+def _parse_int(value: int, default: Decimal) -> Decimal:
+	"""Convert an int, which is always finite — no guard needed.
+
+	Parameters
+	----------
+	value : int
+		The value to convert.
+	default : Decimal
+		Unused; present to satisfy the dispatch signature.
+
+	Returns
+	-------
+	Decimal
+		The converted value.
+	"""
+	return Decimal(value)
+
+
+@_parse_by_type.register
+def _parse_float(value: float, default: Decimal) -> Decimal:
+	"""Convert a float via ``repr`` so the shortest round-tripping decimal is used.
+
+	The full binary expansion would otherwise leak into the result. A float NaN/Inf maps
+	to ``default``.
+
+	Parameters
+	----------
+	value : float
+		The value to convert.
+	default : Decimal
+		The fallback for a non-finite value.
+
+	Returns
+	-------
+	Decimal
+		The converted value, or ``default``.
+	"""
+	return _finite_or(Decimal(repr(value)), default)
 
 
 @type_checker
@@ -169,11 +277,11 @@ def _normalise_br_number(str_value: str) -> str:
 		A string Decimal can parse, or ``""`` when empty.
 	"""
 	str_stripped = str_value.strip()
-	if str_stripped == "":
-		return ""
-	if "," in str_stripped:
-		return str_stripped.replace(".", "").replace(",", ".")
-	return str_stripped
+	# No comma means nothing to normalise — which covers the empty string as well, so it
+	# needs no guard of its own.
+	if "," not in str_stripped:
+		return str_stripped
+	return str_stripped.replace(".", "").replace(",", ".")
 
 
 @type_checker

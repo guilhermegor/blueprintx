@@ -47,6 +47,9 @@ declare -A DICT_MAX_COMPLEXITY=(
 )
 
 STR_ALLOW_MARKER="complexity-ok:"
+# Upper bound on how far past the `def` the signature scan looks. A signature longer than this
+# is its own problem; the bound stops a malformed file turning the scan into a file read.
+_INT_SIGNATURE_SCAN_LINES=20
 STR_ROOT="."
 INT_FILES_SEEN=0
 
@@ -122,17 +125,35 @@ run_ruff_c901() {
 }
 
 line_has_reasoned_hatch() {
-	# True only when the reported line carries the marker AND a non-empty reason after it.
+	# True only when the function's SIGNATURE carries the marker AND a non-empty reason.
+	#
+	# ⚠️ Scans the whole signature, not just the reported line. ruff anchors C901 on the `def`,
+	# but `ruff format` re-wraps a long signature and pushes a trailing comment down onto the
+	# closing-paren line — so a hatch written correctly on the `def` silently stopped counting
+	# the moment the formatter touched the file. Measured on `CreateLog._validate_path`. This
+	# repo's own ruff.toml states the general rule: before making a style load-bearing, check
+	# whether the FORMATTER already forbids it — the formatter wins, so the gate adapts.
 	local str_file="$1" int_line="$2"
-	local str_source str_reason
+	local str_source str_reason int_scan int_last
 
-	str_source="$(sed -n "${int_line}p" "$str_file" 2>/dev/null || true)"
-	[[ "$str_source" == *"$STR_ALLOW_MARKER"* ]] || return 1
+	# The signature runs from the `def` to the first line ending in a colon.
+	int_last=$((int_line + _INT_SIGNATURE_SCAN_LINES))
+	for ((int_scan = int_line; int_scan <= int_last; int_scan++)); do
+		str_source="$(sed -n "${int_scan}p" "$str_file" 2>/dev/null || true)"
+		[[ -n "$str_source" ]] || break
 
-	str_reason="${str_source#*"$STR_ALLOW_MARKER"}"
-	# Strip surrounding whitespace; a bare marker leaves nothing behind and is rejected.
-	str_reason="${str_reason#"${str_reason%%[![:space:]]*}"}"
-	[[ -n "$str_reason" ]]
+		if [[ "$str_source" == *"$STR_ALLOW_MARKER"* ]]; then
+			str_reason="${str_source#*"$STR_ALLOW_MARKER"}"
+			# Strip leading whitespace; a bare marker leaves nothing and is rejected.
+			str_reason="${str_reason#"${str_reason%%[![:space:]]*}"}"
+			[[ -n "$str_reason" ]] && return 0
+			return 1
+		fi
+
+		# Stop at the end of the signature: the first line whose code half ends in a colon.
+		[[ "${str_source%%#*}" =~ :[[:space:]]*$ ]] && break
+	done
+	return 1
 }
 
 report_tree() {

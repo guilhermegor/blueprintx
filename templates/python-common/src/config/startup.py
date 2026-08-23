@@ -128,10 +128,11 @@ def _resolve_out_dir() -> Path:
 	bool_dated = bool(YAML_INPUTS.get("daily_infos_dated", False))
 	path_temp_root = Path(tempfile.gettempdir()) / (APP_NAME or "app")
 
-	if is_windows_path(str_base) and os.name != "nt":
-		path_root = path_temp_root
-	else:
-		path_root = Path(str_base).expanduser()
+	# The root is a value CHOICE, so it reads as one. A Windows-shaped path is unreachable
+	# off Windows, and the temp root stands in for it. What follows below stays a real
+	# handler, because that one is error handling rather than a choice.
+	bool_unreachable = is_windows_path(str_base) and os.name != "nt"
+	path_root = path_temp_root if bool_unreachable else Path(str_base).expanduser()
 
 	path_dir = path_root / _str_date_folder if bool_dated else path_root
 	try:

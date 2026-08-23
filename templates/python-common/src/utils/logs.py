@@ -52,7 +52,9 @@ LogLevel = Literal["info", "warning", "error", "critical"]
 class CreateLog(metaclass=TypeChecker):
 	"""Create and manage log files with a customizable format and caller context."""
 
-	def _validate_path(self, path: str) -> None:
+	def _validate_path(
+		self, path: str
+	) -> None:  # complexity-ok: two distinct validation faults, each with its own message
 		"""Validate a path string.
 
 		Parameters
@@ -65,10 +67,13 @@ class CreateLog(metaclass=TypeChecker):
 		ValueError
 			If ``path`` is empty or not a string.
 		"""
-		if not path:
-			raise ValueError("Path cannot be empty")
+		# ⚠️ Type BEFORE emptiness. The other order described a non-string falsy value, such
+		# as zero or an empty list, as "cannot be empty" — which sends the reader looking for
+		# a blank string that was never there.
 		if not isinstance(path, str):
 			raise ValueError("Path must be a string")
+		if not path:
+			raise ValueError("Path cannot be empty")
 
 	def creating_parent_folder(self, new_path: str) -> bool:
 		"""Create the parent folder if it does not already exist.

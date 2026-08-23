@@ -142,12 +142,14 @@ def parse_sidecar_metadata(str_text: str, str_sep: str = ";") -> dict[str, dict[
 	if len(list_lines) < 2:
 		return {}
 	list_headers = [cell.strip() for cell in list_lines[0].split(str_sep)]
-	dict_result: dict[str, dict[str, str]] = {}
-	for str_line in list_lines[1:]:
-		list_cells = [cell.strip() for cell in str_line.split(str_sep)]
-		str_key = list_cells[0]
-		dict_result[str_key] = {
+	list_rows = [[cell.strip() for cell in str_line.split(str_sep)] for str_line in list_lines[1:]]
+	# Each row is projected onto the header, with short rows padded by empty strings. Written
+	# as a projection rather than an accumulating loop, so the shape of the result is visible
+	# in the expression instead of assembled one statement at a time.
+	return {
+		list_cells[0]: {
 			str_header: (list_cells[int_idx] if int_idx < len(list_cells) else "")
 			for int_idx, str_header in enumerate(list_headers[1:], start=1)
 		}
-	return dict_result
+		for list_cells in list_rows
+	}

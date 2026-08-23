@@ -1100,3 +1100,48 @@ def test_complexity_gate_refuses_to_report_success_on_an_empty_tree(tmp_path: Pa
 
 	assert cls_result.returncode != 0
 	assert "refusing to report success" in cls_result.stdout + cls_result.stderr
+
+
+def test_complexity_hatch_survives_a_formatter_wrapped_signature(tmp_path: Path) -> None:
+	"""⚠️ The hatch must be found anywhere in the SIGNATURE, not only on the ``def`` line.
+
+	ruff anchors C901 on the ``def``, but ``ruff format`` re-wraps a long signature and pushes
+	a trailing comment down onto the closing-paren line. A hatch written correctly therefore
+	stopped counting the moment the formatter touched the file — measured on a real function
+	in this template, whose reason-carrying hatch silently stopped applying.
+	"""
+	_complexity_tree(tmp_path)
+	(tmp_path / "src" / "under_test.py").write_text(
+		"def branchy(\n"
+		"\ta,\n"
+		"\tb,\n"
+		") -> int:  # complexity-ok: validator, branching IS the work\n"
+		'\t"""Doc."""\n'
+		"\tif a:\n\t\treturn 1\n\tif b:\n\t\treturn 2\n\treturn 3\n",
+		encoding="utf-8",
+	)
+
+	cls_result = _run_complexity(tmp_path)
+
+	assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+
+
+def test_complexity_hatch_is_not_read_from_the_function_body(tmp_path: Path) -> None:
+	"""The scan stops at the end of the signature, so a marker in the body does not excuse.
+
+	Without this bound, widening the search to "the next few lines" would let a comment
+	anywhere near the top of a function silence the gate.
+	"""
+	_complexity_tree(tmp_path)
+	(tmp_path / "src" / "under_test.py").write_text(
+		"def branchy(a, b) -> int:\n"
+		'\t"""Doc."""\n'
+		"\t# complexity-ok: this is in the BODY and must not count\n"
+		"\tif a:\n\t\treturn 1\n\tif b:\n\t\treturn 2\n\treturn 3\n",
+		encoding="utf-8",
+	)
+
+	cls_result = _run_complexity(tmp_path)
+
+	assert cls_result.returncode != 0
+	assert "branchy" in cls_result.stdout + cls_result.stderr
