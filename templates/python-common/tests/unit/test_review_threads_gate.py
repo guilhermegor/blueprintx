@@ -13,6 +13,7 @@ the gate: 14 threads all reading ``isResolved: true`` while 11 held no author re
 import importlib.util
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import Mock
 
 import pytest
 
@@ -205,14 +206,14 @@ def test_a_reviewer_that_found_nothing_passes() -> None:
 	assert cls_gate.find_missing_review_problem([_review("coderabbitai")], _ROSTER, "h") is None
 
 
-def test_the_review_author_spelling_does_not_matter() -> None:
+@pytest.mark.parametrize("str_login", ["coderabbitai", "coderabbitai[bot]"])
+def test_the_review_author_spelling_does_not_matter(str_login: str) -> None:
 	"""REST and GraphQL disagree on a bot login, and this predicate must survive both.
 
 	The same mismatch made the thread half of this gate permanently green once already.
 	"""
 	cls_gate = _load_gate()
-	for str_login in ("coderabbitai", "coderabbitai[bot]"):
-		assert cls_gate.find_missing_review_problem([_review(str_login)], _ROSTER, "h") is None
+	assert cls_gate.find_missing_review_problem([_review(str_login)], _ROSTER, "h") is None
 
 
 def test_a_review_from_outside_the_roster_is_not_the_declared_review() -> None:
@@ -248,37 +249,38 @@ def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None
 	merged data reaches the verdicts — without pagination this PR reads as never reviewed.
 	"""
 	cls_gate = _load_gate()
-	list_calls: list[tuple[str | None, str | None]] = []
+	# The two pages are DATA in a side_effect sequence, not a stub that branches on its cursor
+	# arguments. The branch put a decision inside the test and the green never said which side
+	# ran; the sequence states "page one, then page two" where a reader looks for it. Mock also
+	# records the calls for free, so the hand-rolled call list is gone too.
+	dict_page_one = {
+		"author": {"login": "someone"},
+		"reviews": {
+			"pageInfo": {"hasNextPage": True, "endCursor": "R1"},
+			"nodes": [{"author": {"login": "human"}}],
+		},
+		"reviewThreads": {
+			"pageInfo": {"hasNextPage": True, "endCursor": "T1"},
+			"nodes": [_thread([("coderabbitai", "**A.** " + _LONG)])],
+		},
+	}
+	dict_page_two = {
+		"author": {"login": "someone"},
+		"reviews": {
+			"pageInfo": {"hasNextPage": False, "endCursor": None},
+			"nodes": [{"author": {"login": "coderabbitai"}}],
+		},
+		"reviewThreads": {
+			"pageInfo": {"hasNextPage": False, "endCursor": None},
+			"nodes": [_thread([("coderabbitai", "**B.** " + _LONG)])],
+		},
+	}
+	cls_page = Mock(side_effect=[dict_page_one, dict_page_two])
 
-	def fake_page(_o: str, _r: str, _n: int, str_rc: str | None, str_tc: str | None) -> dict:
-		list_calls.append((str_rc, str_tc))
-		if str_rc is None and str_tc is None:
-			return {
-				"author": {"login": "someone"},
-				"reviews": {
-					"pageInfo": {"hasNextPage": True, "endCursor": "R1"},
-					"nodes": [{"author": {"login": "human"}}],
-				},
-				"reviewThreads": {
-					"pageInfo": {"hasNextPage": True, "endCursor": "T1"},
-					"nodes": [_thread([("coderabbitai", "**A.** " + _LONG)])],
-				},
-			}
-		return {
-			"author": {"login": "someone"},
-			"reviews": {
-				"pageInfo": {"hasNextPage": False, "endCursor": None},
-				"nodes": [{"author": {"login": "coderabbitai"}}],
-			},
-			"reviewThreads": {
-				"pageInfo": {"hasNextPage": False, "endCursor": None},
-				"nodes": [_thread([("coderabbitai", "**B.** " + _LONG)])],
-			},
-		}
-
-	monkeypatch.setattr(cls_gate, "_fetch_page", fake_page)
+	monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
 	dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
 
+	list_calls = [tuple_args[3:5] for tuple_args, _ in cls_page.call_args_list]
 	assert list_calls == [(None, None), ("R1", "T1")], "the second page must be requested"
 	assert len(dict_pr["reviews"]["nodes"]) == 2, "page-two reviews must be merged in"
 	assert len(dict_pr["reviewThreads"]["nodes"]) == 2, "page-two threads must be merged in"

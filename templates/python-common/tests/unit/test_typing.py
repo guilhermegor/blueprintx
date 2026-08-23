@@ -107,30 +107,34 @@ def test_metaclass_pep604_union_rejects_other_type() -> None:
 		_Sample(1).maybe(123)
 
 
+@type_checker
+def _add(a: int, b: int) -> int:
+	"""Add two ints — the decorated subject, defined at MODULE level.
+
+	Nested inside the test it charged the test 1 for the nested ``def`` (tests/ is capped at
+	complexity 1, ``bin/check_complexity.sh``) while adding nothing: the decorator is applied at
+	definition time either way.
+
+	Parameters
+	----------
+	a : int
+		First addend.
+	b : int
+		Second addend.
+
+	Returns
+	-------
+	int
+		The sum.
+	"""
+	return a + b
+
+
 def test_decorator_checks_standalone_function() -> None:
 	"""The decorator validates a standalone function's arguments."""
-
-	@type_checker
-	def add(a: int, b: int) -> int:
-		"""Add two ints.
-
-		Parameters
-		----------
-		a : int
-			First addend.
-		b : int
-			Second addend.
-
-		Returns
-		-------
-		int
-			The sum.
-		"""
-		return a + b
-
-	assert add(1, 2) == 3
+	assert _add(1, 2) == 3
 	with pytest.raises(TypeError):
-		add(1, "two")
+		_add(1, "two")
 
 
 def test_bool_is_not_accepted_as_int() -> None:

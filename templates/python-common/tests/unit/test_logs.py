@@ -41,9 +41,9 @@ def test_basic_conf_returns_logger_writing_to_file(tmp_path: Path) -> None:
 	path_log = tmp_path / "run.log"
 	cls_log = CreateLog()
 	logger = cls_log.basic_conf(complete_path=str(path_log), basic_level="info")
+	# No explicit flush is needed. A StreamHandler flushes on every record it emits, so the
+	# flush loop that used to sit here was dead code that made the test look like it needed one.
 	logger.info("hello")
-	for handler in logger.handlers:
-		handler.flush()
 	assert path_log.exists()
 	assert "hello" in path_log.read_text()
 
@@ -54,8 +54,6 @@ def test_log_message_emits_through_logger(tmp_path: Path) -> None:
 	cls_log = CreateLog()
 	logger = cls_log.basic_conf(complete_path=str(path_log), basic_level="info")
 	cls_log.log_message(logger, "boom", "error")
-	for handler in logger.handlers:
-		handler.flush()
 	str_written = path_log.read_text()
 	# The caller-context prefix is reconstructed by walking the stack, so the exact caller
 	# under a test runner varies; assert the prefix shape rather than a specific caller name.

@@ -41,6 +41,119 @@ class _RecordingEmitter(LogEmitter):
 		self.list_messages.append(str_message)
 
 
+class _DownloadRecorder:
+	"""Callable download stub that records the URLs it was asked to fetch.
+
+	⚠️ A class at module level rather than a ``def`` nested inside each test. mccabe adds 1
+	to the enclosing function for every nested ``def``, and ``tests/`` is capped at
+	complexity 1 (``bin/check_complexity.sh``) — so an inline stub, which contains no
+	branching whatsoever, would spend the entire budget the cap exists to reserve FOR
+	branching. A lambda costs 0 but cannot record state; a class costs the enclosing test
+	nothing and each of its methods is measured on its own.
+	"""
+
+	def __init__(self, bytes_payload: bytes = b"payload") -> None:
+		self.bytes_payload = bytes_payload
+		self.list_calls: list[str] = []
+
+	def __call__(self, str_url: str, path_dest: Path) -> Path:
+		"""Record the URL and write the payload.
+
+		Parameters
+		----------
+		str_url : str
+			The URL requested.
+		path_dest : pathlib.Path
+			Where to write.
+
+		Returns
+		-------
+		pathlib.Path
+			``path_dest``, as the real downloader does.
+		"""
+		self.list_calls.append(str_url)
+		path_dest.write_bytes(self.bytes_payload)
+		return path_dest
+
+
+def _download_that_dies_midway(str_url: str, path_dest: Path) -> Path:
+	"""Write a truncated artifact, then fail — the partial-write case.
+
+	Parameters
+	----------
+	str_url : str
+		Unused; present to satisfy the downloader signature.
+	path_dest : pathlib.Path
+		Where the partial bytes land.
+
+	Returns
+	-------
+	pathlib.Path
+		Never returns; always raises.
+
+	Raises
+	------
+	OSError
+		Always, simulating a transfer dropped mid-write.
+	"""
+	path_dest.write_bytes(b"half a fi")  # non-empty, and wrong
+	raise OSError("connection dropped mid-transfer")
+
+
+def _download_that_writes_nothing(str_url: str, path_dest: Path) -> Path:
+	"""Write a zero-byte artifact and return normally.
+
+	Parameters
+	----------
+	str_url : str
+		Unused; present to satisfy the downloader signature.
+	path_dest : pathlib.Path
+		Where the empty file lands.
+
+	Returns
+	-------
+	pathlib.Path
+		``path_dest``.
+	"""
+	path_dest.write_bytes(b"")
+	return path_dest
+
+
+def _call_download(
+	path_root: Path,
+	fn_download: object,
+	dt_day: date = date(2026, 8, 17),
+	cls_logger: LogEmitter | None = None,
+) -> Path:
+	"""Invoke ``download_daily`` with this module's fixed fixture arguments.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Cache root.
+	fn_download : object
+		The download stub to inject.
+	dt_day : datetime.date, optional
+		Reference day, by default 2026-08-17.
+	cls_logger : LogEmitter or None, optional
+		Logger to inject, by default ``None``.
+
+	Returns
+	-------
+	pathlib.Path
+		The cached artifact's path.
+	"""
+	return download_daily(
+		"https://example.com/a.csv",
+		path_root,
+		"src",
+		dt_day,
+		".csv",
+		cls_logger=cls_logger,
+		fn_download=fn_download,
+	)
+
+
 def _fake_download(bytes_payload: bytes = b"payload") -> tuple:
 	"""Build a download stub plus the list recording its calls.
 
@@ -54,14 +167,8 @@ def _fake_download(bytes_payload: bytes = b"payload") -> tuple:
 	tuple
 		``(fn_download, list_calls)``.
 	"""
-	list_calls: list[str] = []
-
-	def fn_download(str_url: str, path_dest: Path) -> Path:
-		list_calls.append(str_url)
-		path_dest.write_bytes(bytes_payload)
-		return path_dest
-
-	return fn_download, list_calls
+	cls_recorder = _DownloadRecorder(bytes_payload)
+	return cls_recorder, cls_recorder.list_calls
 
 
 def test_daily_cache_path_keys_on_the_reference_date(tmp_path: Path) -> None:
@@ -88,34 +195,16 @@ def test_download_daily_fetches_on_a_miss(tmp_path: Path) -> None:
 def test_download_daily_reuses_the_file_on_a_second_call(tmp_path: Path) -> None:
 	"""The second call for the same reference day does not hit the network."""
 	fn_download, list_calls = _fake_download()
-
-	def fn_call() -> None:
-		download_daily(
-			"https://example.com/a.csv",
-			tmp_path,
-			"src",
-			date(2026, 8, 17),
-			".csv",
-			fn_download=fn_download,
-		)
-
-	fn_call()  # miss — downloads
-	fn_call()  # same reference day — must NOT download again
+	_call_download(tmp_path, fn_download)  # miss — downloads
+	_call_download(tmp_path, fn_download)  # same reference day — must NOT download again
 	assert len(list_calls) == 1
 
 
 def test_download_daily_refetches_for_a_different_reference_date(tmp_path: Path) -> None:
 	"""A new reference day is a different file, so it downloads again."""
 	fn_download, list_calls = _fake_download()
-	for dt_day in (date(2026, 8, 17), date(2026, 8, 18)):
-		download_daily(
-			"https://example.com/a.csv",
-			tmp_path,
-			"src",
-			dt_day,
-			".csv",
-			fn_download=fn_download,
-		)
+	_call_download(tmp_path, fn_download, date(2026, 8, 17))
+	_call_download(tmp_path, fn_download, date(2026, 8, 18))
 	assert len(list_calls) == 2
 
 
@@ -173,21 +262,9 @@ def test_a_failed_download_never_publishes_a_partial_file(tmp_path: Path) -> Non
 	only after the download completed — and the staging file must not linger either, or the
 	cache directory fills with debris nobody ever reads.
 	"""
-
-	def fn_download(str_url: str, path_dest: Path) -> Path:
-		path_dest.write_bytes(b"half a fi")  # non-empty, and wrong
-		raise OSError("connection dropped mid-transfer")
-
 	path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
 	with pytest.raises(OSError, match="connection dropped"):
-		download_daily(
-			"https://example.com/a.csv",
-			tmp_path,
-			"src",
-			date(2026, 8, 17),
-			".csv",
-			fn_download=fn_download,
-		)
+		_call_download(tmp_path, _download_that_dies_midway)
 	assert not path_cached.exists()
 	assert list(tmp_path.glob("*.part")) == []
 
@@ -203,10 +280,6 @@ def test_an_empty_download_does_not_replace_a_good_cache_entry(tmp_path: Path) -
 	path_cached.parent.mkdir(parents=True, exist_ok=True)
 	path_cached.write_bytes(b"good bytes")
 
-	def fn_download(str_url: str, path_dest: Path) -> Path:
-		path_dest.write_bytes(b"")
-		return path_dest
-
 	with pytest.raises(OSError, match="empty artifact"):
 		download_daily(
 			"https://example.com/a.csv",
@@ -215,7 +288,7 @@ def test_an_empty_download_does_not_replace_a_good_cache_entry(tmp_path: Path) -
 			date(2026, 8, 17),
 			".csv",
 			bool_use_cache=False,
-			fn_download=fn_download,
+			fn_download=_download_that_writes_nothing,
 		)
 	assert path_cached.read_bytes() == b"good bytes"
 
@@ -242,24 +315,22 @@ def test_download_daily_logs_which_branch_ran(tmp_path: Path) -> None:
 	cls_emitter = _RecordingEmitter()
 	fn_download, list_calls = _fake_download()
 
-	def fn_call() -> None:
-		download_daily(
-			"https://example.com/a.csv",
-			tmp_path,
-			"src",
-			date(2026, 8, 17),
-			".csv",
-			cls_logger=cls_emitter,
-			fn_download=fn_download,
-		)
-
-	fn_call()  # miss
-	fn_call()  # hit
+	_call_download(tmp_path, fn_download, cls_logger=cls_emitter)  # miss
+	_call_download(tmp_path, fn_download, cls_logger=cls_emitter)  # hit
 	assert list_calls == ["https://example.com/a.csv"]
 	assert "miss" in cls_emitter.list_messages[0]
 	assert "HIT" in cls_emitter.list_messages[1]
 
 
+_PATH_DRIFT_DRIVER = Path(__file__).resolve().parents[2] / "bin" / "check_contract_drift.py"
+
+
+# ⚠️ A decorator, not `if not …: pytest.skip(...)` inside the body. The condition is fixed at
+# import time (does this tier ship the driver?), so it is not a path THROUGH the test — but an
+# `if` in the body makes it one, both to a reader and to mccabe, and tests/ is capped at 1.
+@pytest.mark.skipif(
+	not _PATH_DRIFT_DRIVER.is_file(), reason="drift driver ships to service tiers only"
+)
 def test_drift_driver_does_not_use_the_daily_cache() -> None:
 	"""The drift job must never read through this cache.
 
@@ -268,10 +339,7 @@ def test_drift_driver_does_not_use_the_daily_cache() -> None:
 	currently correct **by accident** (nobody wired the cache in) and an accident is one
 	convenient import away from reversing.
 	"""
-	path_driver = Path(__file__).resolve().parents[2] / "bin" / "check_contract_drift.py"
-	if not path_driver.is_file():
-		pytest.skip("drift driver ships to service tiers only")
-	str_source = path_driver.read_text(encoding="utf-8")
+	str_source = _PATH_DRIFT_DRIVER.read_text(encoding="utf-8")
 	assert "daily_cache" not in str_source
 	assert "download_daily" not in str_source
 

@@ -27,6 +27,58 @@ import pytest
 # --------------------------
 
 
+# Environment probes resolved ONCE at import time, so the tests that depend on them use
+# `skipif` decorators instead of a guard clause in the body. A runtime `if … pytest.skip(…)`
+# reads as a path THROUGH the test — to a reader and to mccabe alike — when it is really a
+# statement about the machine. tests/ is capped at complexity 1 by bin/check_complexity.sh.
+_STR_GIT = shutil.which("git")
+_STR_BASH = shutil.which("bash") or "bash"
+
+
+def _skip_unless(bool_available: bool, str_reason: str) -> None:
+	"""Skip the calling test when a capability discovered AT RUNTIME is missing.
+
+	Only for conditions that cannot be known at import time (what a subprocess actually did).
+	Anything knowable up front belongs in a ``skipif`` decorator instead.
+
+	Parameters
+	----------
+	bool_available : bool
+		Whether the capability is present.
+	str_reason : str
+		Message shown for the skip.
+
+	Returns
+	-------
+	None
+	"""
+	# Short-circuit evaluation makes this an expression rather than a branch. Behaviour is
+	# the same, and the helper stays inside the very ceiling it exists to serve.
+	bool_available or pytest.skip(str_reason)
+
+
+def _materialise_bin_lib(path_bin: Path) -> None:
+	"""Copy the repo's ``bin/lib`` into a throwaway tree so a sourced lib can run there.
+
+	⚠️ Copies the WHOLE directory rather than globbing chosen extensions. The lib directory
+	holds shell libs plus the Python helpers they invoke — code that used to be inline
+	heredocs — and the earlier glob-for-shell-only form built a lib directory that cannot
+	exist in a real project, so the test failed on a missing file instead of on the behaviour
+	it asserts. copytree cannot miss the next extension somebody adds.
+
+	Parameters
+	----------
+	path_bin : pathlib.Path
+		The throwaway ``bin`` directory; ``lib`` is created inside it.
+
+	Returns
+	-------
+	None
+	"""
+	path_source = Path(__file__).resolve().parents[2] / "bin" / "lib"
+	shutil.copytree(path_source, path_bin / "lib", dirs_exist_ok=True)
+
+
 def _bin_script(str_name: str) -> Path:
 	"""Return the absolute path to a script under the repository's ``bin/``.
 
@@ -151,8 +203,10 @@ def test_poetry_exec_no_args_exits_with_usage_error() -> None:
 def test_poetry_exec_version_keeps_stdout_clean() -> None:
 	"""``version -s`` returns only the version on stdout; chatter goes to stderr."""
 	cls_result = _run("poetry_exec.sh", "version", "-s")
-	if cls_result.returncode != 0:
-		pytest.skip("Poetry could not be resolved -- offline/CI integration guard only")
+	_skip_unless(
+		cls_result.returncode == 0,
+		"Poetry could not be resolved -- offline/CI integration guard only",
+	)
 
 	# stdout is exactly the project version -- no resolution chatter leaked in.
 	str_version = cls_result.stdout.strip()
@@ -188,6 +242,7 @@ def test_precommit_skips_gracefully_off_git_tree(tmp_path: Path) -> None:
 	assert "skipping pre-commit hooks" in str_output
 
 
+@pytest.mark.skipif(_STR_GIT is None, reason="git not available -- integration guard only")
 def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) -> None:
 	"""A dubious-ownership work tree self-heals: the script registers a git safe.directory.
 
@@ -202,10 +257,6 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
 	tmp_path : pathlib.Path
 		Pytest throwaway dir; a real git work tree is initialised inside it.
 	"""
-	str_git = shutil.which("git")
-	if str_git is None:
-		pytest.skip("git not available -- integration guard only")
-
 	path_repo = tmp_path / "repo"
 	path_repo.mkdir()
 	path_home = tmp_path / "home"
@@ -213,7 +264,7 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
 	path_global_cfg = path_home / ".gitconfig"
 	# A real work tree; the throwaway HOME/config isolates the global safe.directory write.
 	subprocess.run(  # noqa: S603
-		[str_git, "init", "-q", str(path_repo)], check=True
+		[str(_STR_GIT), "init", "-q", str(path_repo)], check=True
 	)
 
 	dict_env = {
@@ -223,8 +274,10 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
 	}
 	cls_result = _run("precommit.sh", cwd=path_repo, dict_env=dict_env)
 	str_output = cls_result.stdout + cls_result.stderr
-	if "dubious ownership" not in str_output and not path_global_cfg.exists():
-		pytest.skip("git build does not honour GIT_TEST_ASSUME_DIFFERENT_OWNER -- guard only")
+	_skip_unless(
+		"dubious ownership" in str_output or path_global_cfg.exists(),
+		"git build does not honour GIT_TEST_ASSUME_DIFFERENT_OWNER -- guard only",
+	)
 
 	# The throwaway global config now holds git's own suggested path, which proves the tree
 	# resolved and init could keep going instead of the probe misreading it as absent.
@@ -263,7 +316,7 @@ def _run_prune(tmp_path: Path, str_backend: str) -> list[str]:
 		"psycopg>=3.1\nmysql-connector-python>=8.3,<9.0\n",
 		encoding="utf-8",
 	)
-	str_bash = shutil.which("bash") or "bash"
+	str_bash = _STR_BASH
 	str_script = (
 		f'export PROJECT_ROOT="{tmp_path}"; '
 		f'source "{path_lib}/common.sh"; source "{path_lib}/bootstrap.sh"; '
@@ -421,14 +474,7 @@ def test_corporate_ca_bundle_is_a_union_not_a_replacement(tmp_path: Path) -> Non
 	rest.
 	"""
 	path_bin = tmp_path / "bin"
-	(path_bin / "lib").mkdir(parents=True)
-	# ⚠️ Both extensions, not just shell. The lib directory holds shell libs plus the
-	# Python helpers they invoke — code that used to be inline heredocs. Globbing only
-	# for shell builds a lib directory that cannot exist in a real project, and the test
-	# then fails on the missing file rather than on the behaviour it asserts.
-	for str_pattern in ("*.sh", "*.py"):
-		for path_lib in (Path(__file__).resolve().parents[2] / "bin" / "lib").glob(str_pattern):
-			shutil.copy(path_lib, path_bin / "lib" / path_lib.name)
+	_materialise_bin_lib(path_bin)
 
 	path_corporate = path_bin / "corporate_ca.pem"
 	path_corporate.write_text(_fake_pem("Q09SUE9SQVRFQ0E="), encoding="utf-8")
@@ -472,14 +518,7 @@ def test_bundle_construction_refuses_when_only_the_corporate_ca_is_available(
 	breaks every connection not through the proxy.
 	"""
 	path_bin = tmp_path / "bin"
-	(path_bin / "lib").mkdir(parents=True)
-	# ⚠️ Both extensions, not just shell. The lib directory holds shell libs plus the
-	# Python helpers they invoke — code that used to be inline heredocs. Globbing only
-	# for shell builds a lib directory that cannot exist in a real project, and the test
-	# then fails on the missing file rather than on the behaviour it asserts.
-	for str_pattern in ("*.sh", "*.py"):
-		for path_lib in (Path(__file__).resolve().parents[2] / "bin" / "lib").glob(str_pattern):
-			shutil.copy(path_lib, path_bin / "lib" / path_lib.name)
+	_materialise_bin_lib(path_bin)
 	path_corporate = path_bin / "corporate_ca.pem"
 	path_corporate.write_text(_fake_pem("Q09SUE9SQVRFQ0E="), encoding="utf-8")
 
@@ -539,6 +578,7 @@ def test_corporate_ca_wiring_never_disables_verification_for_pypi() -> None:
 # --------------------------
 
 
+@pytest.mark.skipif(os.name == "nt", reason="this asserts the non-Windows refusal path")
 def test_get_corporate_ca_refuses_with_guidance_off_windows(tmp_path: Path) -> None:
 	"""On a non-Windows host the script refuses and names the system trust store.
 
@@ -549,9 +589,6 @@ def test_get_corporate_ca_refuses_with_guidance_off_windows(tmp_path: Path) -> N
 	feature, and this pins it: a future edit that silently "restores" extraction would fail
 	here rather than in production behind a proxy.
 	"""
-	if os.name == "nt":  # pragma: no cover - the guard under test is the POSIX branch
-		pytest.skip("this asserts the non-Windows refusal path")
-
 	cls_result = _run("get_corporate_ca.sh", cwd=tmp_path)
 
 	assert cls_result.returncode != 0, "the script must not report success without a pem"
@@ -576,9 +613,8 @@ def _init_repo_with_one_commit(path_repo: Path) -> str:
 	str
 		Absolute path to the ``git`` executable.
 	"""
-	str_git = shutil.which("git")
-	if str_git is None:
-		pytest.skip("git not available -- integration guard only")
+	_skip_unless(_STR_GIT is not None, "git not available -- integration guard only")
+	str_git = str(_STR_GIT)
 
 	path_repo.mkdir(parents=True, exist_ok=True)
 	list_identity = ["-c", "user.email=t@t.invalid", "-c", "user.name=t"]
@@ -905,3 +941,162 @@ def test_check_urls_ignores_a_url_outside_any_docstring(tmp_path: Path) -> None:
 	cls_result = _run_url_hook(tmp_path)
 
 	assert cls_result.returncode == 0
+
+
+# --------------------------
+# check_complexity.sh — the per-tree cyclomatic ceiling (blueprintx#167)
+# --------------------------
+
+# Complexity 3 (two `if`s + the implicit path). Over src/'s ceiling of 2, under bin/'s 8.
+_STR_BRANCHY = (
+	'def branchy(a, b):{marker}\n\t"""Doc."""\n'
+	"\tif a:\n\t\treturn 1\n\tif b:\n\t\treturn 2\n\treturn 3\n"
+)
+_STR_SIMPLE = 'def simple():\n\t"""Doc."""\n\treturn 1\n'
+
+
+def _seed_tree(path_dir: Path) -> None:
+	"""Create one tree of the complexity fixture with a complexity-1 filler module.
+
+	Parameters
+	----------
+	path_dir : pathlib.Path
+		The directory to create and seed.
+
+	Returns
+	-------
+	None
+	"""
+	path_dir.mkdir(exist_ok=True)
+	(path_dir / "filler.py").write_text(_STR_SIMPLE, encoding="utf-8")
+
+
+def _complexity_tree(path_root: Path, str_marker: str = "", str_tree: str = "src") -> None:
+	"""Materialise a minimal project the complexity gate can run against.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to build the tree in; becomes the gate's ``--root``.
+	str_marker : str
+		Text appended to the ``def`` line, e.g. an escape-hatch comment.
+	str_tree : str
+		Which tree receives the branchy function (``src``, ``tests`` or ``bin``).
+
+	Returns
+	-------
+	None
+	"""
+	shutil.copy(Path(__file__).resolve().parents[2] / "ruff.toml", path_root / "ruff.toml")
+	# Written out rather than looped. At three entries the unrolled form is both shorter and
+	# plainer than any machinery that would dodge the loop.
+	_seed_tree(path_root / "src")
+	_seed_tree(path_root / "tests")
+	_seed_tree(path_root / "bin")
+	(path_root / str_tree / "under_test.py").write_text(
+		_STR_BRANCHY.format(marker=str_marker), encoding="utf-8"
+	)
+
+
+def _run_complexity(path_root: Path) -> subprocess.CompletedProcess:
+	"""Run the complexity gate against a prepared tree.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		The ``--root`` to scan.
+
+	Returns
+	-------
+	subprocess.CompletedProcess
+		The completed run.
+	"""
+	# Constant, trusted argv; no shell involved.
+	return subprocess.run(  # noqa: S603
+		[
+			shutil.which("bash") or "bash",
+			str(_bin_script("check_complexity.sh")),
+			"--root",
+			str(path_root),
+		],
+		capture_output=True,
+		text=True,
+		check=False,
+	)
+
+
+def test_complexity_gate_fails_on_a_function_over_the_ceiling(tmp_path: Path) -> None:
+	"""⚠️ The should-fail control (blueprintx#111): a deliberately complex module must fail.
+
+	Without this, every later assertion is satisfied by a gate that passes everything —
+	which is precisely how this gate shipped its first draft green over 79 known violations.
+	"""
+	_complexity_tree(tmp_path)
+
+	cls_result = _run_complexity(tmp_path)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0
+	assert "branchy" in str_all
+	assert "C901" in str_all
+
+
+def test_complexity_gate_passes_a_clean_tree(tmp_path: Path) -> None:
+	"""The positive control, and it prints WHAT it checked — a silent gate reads as absent."""
+	_complexity_tree(tmp_path, str_marker="")
+	(tmp_path / "src" / "under_test.py").write_text(_STR_SIMPLE, encoding="utf-8")
+
+	cls_result = _run_complexity(tmp_path)
+
+	assert cls_result.returncode == 0
+	assert "Python file(s)" in cls_result.stdout
+
+
+def test_complexity_gate_honours_a_reasoned_escape_hatch(tmp_path: Path) -> None:
+	"""A validator may keep its branching — with the reason written down."""
+	_complexity_tree(tmp_path, str_marker="  # complexity-ok: validator, branching IS the work")
+
+	cls_result = _run_complexity(tmp_path)
+
+	assert cls_result.returncode == 0
+
+
+def test_complexity_gate_rejects_a_hatch_with_no_reason(tmp_path: Path) -> None:
+	"""A bare marker is not a hatch: the sentence IS the point of the mechanism."""
+	_complexity_tree(tmp_path, str_marker="  # complexity-ok:")
+
+	cls_result = _run_complexity(tmp_path)
+
+	assert cls_result.returncode != 0
+	assert "branchy" in cls_result.stdout + cls_result.stderr
+
+
+def test_complexity_gate_applies_a_different_ceiling_per_tree(tmp_path: Path) -> None:
+	"""The same function fails under src/ (max 2) and passes under bin/ (max 8).
+
+	This is the property that needs TWO ruff invocations: ruff's per-file-ignores can switch
+	a rule off for a path but cannot give that path a different max-complexity.
+	"""
+	_complexity_tree(tmp_path, str_tree="bin")
+	(tmp_path / "src" / "under_test.py").write_text(_STR_SIMPLE, encoding="utf-8")
+
+	assert _run_complexity(tmp_path).returncode == 0
+
+	_complexity_tree(tmp_path, str_tree="src")
+	(tmp_path / "bin" / "under_test.py").write_text(_STR_SIMPLE, encoding="utf-8")
+
+	assert _run_complexity(tmp_path).returncode != 0
+
+
+def test_complexity_gate_refuses_to_report_success_on_an_empty_tree(tmp_path: Path) -> None:
+	"""Zero discovered files must FAIL, never read as clean.
+
+	A broken glob otherwise reports success forever — the same blindness the gate exists to
+	catch, wearing the gate's own uniform.
+	"""
+	shutil.copy(Path(__file__).resolve().parents[2] / "ruff.toml", tmp_path / "ruff.toml")
+
+	cls_result = _run_complexity(tmp_path)
+
+	assert cls_result.returncode != 0
+	assert "refusing to report success" in cls_result.stdout + cls_result.stderr

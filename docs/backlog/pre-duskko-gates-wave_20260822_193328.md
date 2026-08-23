@@ -160,15 +160,74 @@ nasceria fora do lint.
       `holidays()`) — "buscado preguiçosamente", "network on first use, cached thereafter".
       Um doc rastreado vale mais que memória na próxima sessão.
 
-## Slice 4 — #167: gate de complexidade
+## Slice 4 — #167: gate de complexidade 🔄 EM ANDAMENTO
 
-- [ ] `bin/check_complexity.sh` — **não reimplementar mccabe**; duas invocações do ruff
-      (`per-file-ignores` só desliga regra, não muda `max-complexity` por caminho).
-- [ ] Escape hatch por linha com motivo, espelhando o `# dtype-ok: <reason>` do `check_dtypes`.
-- [ ] Wire em `.pre-commit-config.yaml` + CI, uma casa por check.
-- [ ] Teste should-fail (convenção da #111).
-- [ ] Refatorar as 79 funções.
+- [x] `bin/check_complexity.sh` — duas invocações do ruff, mccabe não reimplementado.
+- [x] Escape hatch `# complexity-ok: <reason>`, com motivo **obrigatório** (marcador pelado
+      é rejeitado — o hatch existe pela frase, não pelo marcador).
+- [x] Wire nas **5** superfícies: pre-commit, `Makefile` (em `lint` + alvo próprio), `tasks.sh`
+      (função + `case` + sync), `bin/help.txt`, CI (`tests.yaml`).
+- [x] 6 testes should-fail em `tests/integration/test_bin_scripts.py` (convenção #111):
+      reprova acima do teto, passa limpo, honra hatch com motivo, **rejeita hatch sem motivo**,
+      aplica teto diferente por árvore, e **recusa reportar sucesso com zero arquivos**.
+- [x] **`tests/` — 39 de 39 refatorados, ZERO hatches** (decisão do dono: stub vai para
+      módulo/fixture, não para escape hatch).
+- [ ] `src/` — 39 restantes.
+- [ ] `bin/` — 2 restantes.
 - [ ] Docs + README.
+
+### ⚠️ Dois defeitos que o próprio gate teve, e os dois eram CEGUEIRA
+
+O primeiro rascunho reportou **"Cyclomatic complexity within limits (76 Python file(s))"** com
+**79 violações conhecidas na árvore**. Duas causas independentes, ambas corrigidas e ambas
+documentadas no script:
+
+1. `resolve_ruff` era chamada como `$(resolve_ruff)`. `resolve_poetry` popula o array
+   `POETRY_CMD`, e **substituição de comando roda em subshell** — então o array morria ali,
+   todo `run_poetry` seguinte falhava, e o `2>/dev/null || true` que eu havia posto engolia o
+   erro. O gate reportava árvore limpa porque não rodou nada. Agora seta **global**.
+2. O loop lia `< <(run_ruff_c901 …)`. **Process substitution também é subshell**: uma falha
+   dura lá dentro só conseguiria `exit` o subshell, o loop leria vazio e a árvore reportaria
+   limpa — a mesma cegueira, pela segunda vez no mesmo arquivo. Agora a saída vai para arquivo
+   e é lida de forma síncrona, e um exit do ruff **> 1** re-imprime o que o ruff disse e falha.
+
+É exatamente a lição do `export_deps.sh` ("nunca diagnostique um comando cuja saída você
+descartou") batendo de novo, agora no gate escrito para pegar esse tipo de coisa.
+
+### ⚠️ Achado que corrige a tabela de custo aprovada
+
+A decisão do dono foi tomada sobre "38 funções com ramificação em `tests/`". Medindo função a
+função, **13 das 39 (33%) não tinham ramificação alguma**: eram stubs/closures `def`
+aninhados dentro do teste, e **mccabe cobra +1 da função que envolve cada `def` aninhado**
+(um `lambda` custa 0; comprehension, `with`, `and`/`or`, ternário e `assert` também custam 0).
+O argumento do limiar 1 — "um teste com desvio testa dois caminhos e o verde não diz qual
+rodou" — não se aplicava a nenhum deles. O custo real de ramificação era **26**, não 38.
+
+Decisão do dono ao ver o dado: **mover os stubs para módulo/fixture, zero hatches em `tests/`.**
+
+### Padrões usados em `tests/` (todos verificados por medição)
+
+| era | virou | por quê |
+|---|---|---|
+| `def fn_stub(...)` aninhado | classe callable ou função no módulo | mccabe cobra +1 do teste que envolve; o stub não ramifica |
+| stub que ramifica por chamada | `Mock(side_effect=[...])` | a sequência vira **dado**; o `if` saía do corpo do teste |
+| `for x in (...)` com assert | `@pytest.mark.parametrize` | o loop afirmava N casos atrás de UM verde; agora cada caso se nomeia no relatório |
+| `if not cond: pytest.skip()` | `@pytest.mark.skipif` | a condição é fixa em import-time; não é caminho *através* do teste |
+| skip por resultado de subprocess | helper `_skip_unless` | genuinamente runtime; short-circuit em vez de `if` |
+| `try/except ImportError` | `contextlib.suppress` | tratamento idêntico, `with` custa 0 |
+| loops aninhados de AST/discovery | comprehension | mesma descoberta, custo 0 |
+| `for h in logger.handlers: h.flush()` | **deletado** | `StreamHandler.emit()` já dá flush — era código morto |
+
+⚠️ Dois `list(map(lambda …))` escritos no caminho foram **revertidos**: usar `map` por efeito
+colateral é o "clever" que a casa proíbe. Viraram `shutil.copytree` (que ainda por cima não
+consegue esquecer a próxima extensão) e três chamadas escritas por extenso.
+
+⚠️ **Quinto grupo de falso positivo do `ERA001` nesta sessão**, agora nos comentários que eu
+mesmo escrevi para explicar os refactors: o eradicate lê `` `algo` `` seguido de `:` ou `(`
+como código. Reescritos em prosa. `tests/` e `src/` **mantêm** a regra (o ignore ficou escopado
+a `bin/`), então o custo é real e recorrente — dado a mais para a decisão da **#169**.
+
+**Verificação:** 381 testes passam, `ruff check tests` limpo, `tests/` zerado no gate.
 
 ---
 
