@@ -107,6 +107,7 @@ def _to_decimal(value: object) -> object:
 # is reached for a float and the int one for an int, without the ordering that the chain had
 # to get right by hand. ``pd.NA`` is not a type, so its check stays in the caller above.
 @functools.singledispatch
+@type_checker
 def _decimal_by_type(value: object) -> object:
 	"""Convert anything not handled by a registered type: as text, or NA when it reads empty.
 
@@ -127,6 +128,7 @@ def _decimal_by_type(value: object) -> object:
 
 
 @_decimal_by_type.register
+@type_checker
 def _decimal_from_none(value: None) -> object:
 	"""Map a missing value to :data:`pandas.NA`.
 
@@ -144,6 +146,7 @@ def _decimal_from_none(value: None) -> object:
 
 
 @_decimal_by_type.register
+@type_checker
 def _decimal_from_decimal(value: Decimal) -> object:
 	"""Pass an already-exact Decimal through untouched.
 
@@ -161,6 +164,7 @@ def _decimal_from_decimal(value: Decimal) -> object:
 
 
 @_decimal_by_type.register
+@type_checker
 def _decimal_from_int(value: int) -> object:
 	"""Convert an int, which carries no lost precision.
 
@@ -178,6 +182,7 @@ def _decimal_from_int(value: int) -> object:
 
 
 @_decimal_by_type.register
+@type_checker
 def _decimal_from_float(value: float) -> object:
 	"""Reject a binary float — the source's exact value is already gone.
 
@@ -293,6 +298,7 @@ def apply_dtypes(
 	return df_typed.assign(**dict_derived)
 
 
+@type_checker
 def _validate_referenced_columns(  # complexity-ok: two distinct validation faults
 	df_input: pd.DataFrame, list_referenced: list[str]
 ) -> None:

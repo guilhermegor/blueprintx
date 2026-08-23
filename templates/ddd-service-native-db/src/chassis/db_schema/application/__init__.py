@@ -1,5 +1,5 @@
 """Core application services and factories."""
 
-from .database_factory import build_database_handler
+from .database_factory import SET_BACKENDS, active_backend, build_database_handler
 
-__all__ = ["build_database_handler"]
+__all__ = ["SET_BACKENDS", "active_backend", "build_database_handler"]

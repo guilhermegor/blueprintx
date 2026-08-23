@@ -61,30 +61,11 @@ $POETRY run python bin/check_function_length.py
 print_status info "cyclomatic complexity"
 bash bin/check_complexity.sh
 
-# ⚠️ DELIBERATELY ABSENT: check_typing.py. It belongs in this list and is NOT here yet, which is
-# a tracked gap, not an oversight — see blueprintx#244.
-#
-# Adding it was attempted here and reverted with the reason measured: on a fresh scaffold it
-# reports 28 functions in the shipped src/utils/ that lack @type_checker. Those are real
-# omissions (the same files decorate their other private helpers), so the gate is right and the
-# template is wrong — but 7 of the 28 are @functools.singledispatch handlers documented as
-# taking "one cell from a decimal-typed column". Decorating those changes per-cell runtime cost
-# in every generated project and stacks a wrapper under `.register`, which reads the annotation
-# it dispatches on. That is a runtime-behaviour change, and it does not belong in a commit whose
-# subject is gate parity.
-#
-# ⚠️ Do not re-add this line before #244 closes: `poe lint` would be red on every fresh scaffold.
+print_status info "runtime type-checker application"
+$POETRY run python bin/check_typing.py
 
-# ⚠️ DELIBERATELY ABSENT, same as check_typing above: check_all_exports.py — see blueprintx#246.
-#
-# Measured on a fresh scaffold of all five tiers: it passes on mvc-service-native-db and
-# mvc-service-orm-db and reports 6 pre-existing violations across the other three (ddd-native:
-# SET_BACKENDS, active_backend, DsnParts; ddd-orm: T; lib-minimal: main, T). The gate is right —
-# these are names importable from a package whose __init__ does not export them — but the debt
-# is template source in three tiers, not gate wiring, and it is tracked rather than folded into
-# a commit about gate parity.
-#
-# ⚠️ Do not re-add this line before #245 closes: `poe lint` would be red on three of five tiers.
+print_status info "__all__ export completeness"
+$POETRY run python bin/check_all_exports.py
 
 print_status info "numeric dtype policy"
 $POETRY run python bin/check_dtypes.py

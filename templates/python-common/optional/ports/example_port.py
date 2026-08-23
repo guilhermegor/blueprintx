@@ -5,10 +5,16 @@ that a family of concrete classes (the *adapters*) all implement, so callers can
 adapter polymorphically and every new variant conforms to the same shape. It is private
 (``_internal``): consumers import the concrete adapters, never this port.
 
-The port is generic over ``T`` (the value it operates on) so an adapter narrows the type
+The port is generic over ``_T`` (the value it operates on) so an adapter narrows the type
 through the type parameter — e.g. ``class CsvHandler(ExamplePort[pd.DataFrame])`` — rather than
-by re-annotating the override, keeping the concrete signature Liskov-compatible. ``T`` is
-unbounded here; bind it (``TypeVar("T", bound=BaseModel)``) when every adapter shares a base.
+by re-annotating the override, keeping the concrete signature Liskov-compatible. ``_T`` is
+unbounded here; bind it (``TypeVar("_T", bound=BaseModel)``) when every adapter shares a base.
+
+The leading underscore is deliberate: an adapter parameterises the port
+(``ExamplePort[pd.DataFrame]``) and never imports the type variable by name, so ``_T`` is an
+implementation detail of this module — the same convention the typeshed stubs use. Naming it
+``T`` made it a public member this package's ``__all__`` did not export, which
+``bin/check_all_exports.py`` correctly rejects (blueprintx#246).
 """
 
 from __future__ import annotations
@@ -19,10 +25,10 @@ from typing import Generic, TypeVar
 from utils.typing import ABCTypeCheckerMeta
 
 
-T = TypeVar("T")
+_T = TypeVar("_T")
 
 
-class ExamplePort(Generic[T], metaclass=ABCTypeCheckerMeta):
+class ExamplePort(Generic[_T], metaclass=ABCTypeCheckerMeta):
 	"""Contract for one behavioural operation shared across a macro-section's adapters.
 
 	``ABCTypeCheckerMeta`` gives both abstract-method enforcement (a partial adapter fails at
@@ -36,17 +42,17 @@ class ExamplePort(Generic[T], metaclass=ABCTypeCheckerMeta):
 	"""
 
 	@abstractmethod
-	def handle(self, item: T) -> T:
+	def handle(self, item: _T) -> _T:
 		"""Perform the operation on ``item`` and return the result.
 
 		Parameters
 		----------
-		item : T
+		item : _T
 			The value the concrete adapter operates on.
 
 		Returns
 		-------
-		T
+		_T
 			The operation's result.
 
 		Raises

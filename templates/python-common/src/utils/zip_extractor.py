@@ -54,6 +54,7 @@ def _require_zip(path_zip: Path) -> None:
 		raise FileNotFoundError(f"Zip not found: {path_zip}")
 
 
+@type_checker
 def unzip_if_needed(
 	path_zip: Path,
 	path_target: Path,

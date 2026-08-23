@@ -281,6 +281,7 @@ _DICT_PARENT_FOLDER_OUTCOME = {
 }
 
 
+@type_checker
 def _report_parent_folder(
 	cls_create_log: CreateLog, logger: logging.Logger | None, path_log: str
 ) -> None:
