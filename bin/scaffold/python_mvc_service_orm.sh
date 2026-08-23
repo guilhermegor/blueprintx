@@ -482,7 +482,14 @@ copy_shared_utils() {
         outlook_gateway raw_workspace daily_cache queries
     )
     for util in "${utils[@]}"; do
-        cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
+        # A util is either a single module or a PACKAGE — retry/ was split into one in
+        # blueprintx#116, mirroring what all four proving grounds converged on. Handling both
+        # here keeps the roster ONE flat list of names instead of a second list to forget.
+        if [ -d "$COMMON_TEMPLATE_ROOT/src/utils/${util}" ]; then
+            cp -r "$COMMON_TEMPLATE_ROOT/src/utils/${util}" "$project_path/src/utils/${util}"
+        else
+            cp "$COMMON_TEMPLATE_ROOT/src/utils/${util}.py" "$project_path/src/utils/${util}.py"
+        fi
         if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" ]; then
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi

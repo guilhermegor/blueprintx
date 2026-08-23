@@ -181,9 +181,13 @@ copy_internal_utils() {
     local utils_src="$COMMON_TEMPLATE_ROOT/src/utils"
     local -a modules=(
         __init__.py dtypes.py br_identifiers.py http_downloader.py
-        retry.py tabular_reader.py provenance.py sidecar_metadata.py text.py zip_extractor.py
+        tabular_reader.py provenance.py sidecar_metadata.py text.py zip_extractor.py
         raw_workspace.py daily_cache.py
     )
+    # retry/ is a PACKAGE, not a module (blueprintx#116) — it needs cp -r, and it is listed
+    # apart from `modules` so the loop below stays a plain file copy. rewrite_internal_imports
+    # recurses, so its intra-package `from utils.retry.x` imports are rewritten like any other.
+    local -a packages=(retry)
     # logs.py is opt-in (prompt_logs): the convention is to inject a logger, not import one
     # (see the shipped utils/CLAUDE.md), so a lib only carries it when explicitly requested.
     if [[ "$INCLUDE_LOGS" == "true" ]]; then
@@ -197,6 +201,10 @@ copy_internal_utils() {
         > "$internal_dir/__init__.py"
     for module in "${modules[@]}"; do
         cp "$utils_src/$module" "$internal_dir/utils/$module"
+    done
+    local package
+    for package in "${packages[@]}"; do
+        cp -r "$utils_src/$package" "$internal_dir/utils/$package"
     done
     # Runtime type-checking engine — single source in python-common/optional/typing.
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$internal_dir/utils/typing"

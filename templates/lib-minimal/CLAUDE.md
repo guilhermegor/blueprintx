@@ -16,7 +16,7 @@ src/<project_name>/
     __init__.py            # the public API surface (control it with __all__)
     main.py                # library core / entry point — rename or split as it grows
     _internal/             # PRIVATE — ships in the wheel, but not a public API
-        utils/             # vendored helpers (dtypes, tabular_reader, retry, http_downloader,
+        utils/             # vendored helpers (dtypes, tabular_reader, retry/, http_downloader,
                            #   text, zip_extractor, br_identifiers, typing/)
         config/            # ALL private structural declarations (one config/CLAUDE.md maps them)
             contracts/     # FileContract declarations (one per input source)
@@ -66,7 +66,8 @@ of your public `__all__`. The internal imports are package-qualified
 - **No `.env`** — a distributable library has no runtime env to seed (unlike the service
   tiers), so none is shipped.
 - **Logging via dependency injection** — never hard-import a logging backend in a helper;
-  inject a logger (stdlib default), as `_internal/utils/retry.py`'s `LogEmitter` shows. The
+  inject a logger (stdlib default), as `_internal/utils/retry/log_emitter.py`'s `LogEmitter`
+  shows. The
   in-repo `logs.py` helper is **opt-in** at scaffold time; see `_internal/utils/CLAUDE.md`.
 - **Every imported package is a direct dependency.** If a module `import`s a package, declare
   it in `pyproject.toml` — even when it is already installed transitively via another dep. A
