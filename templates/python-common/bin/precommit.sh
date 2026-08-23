@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the pre-commit hooks (commit-msg + pre-push) for `poe init` / `tasks.sh init`.
+# Install the pre-commit hooks (commit-msg + pre-push) for `poe init`.
 #
 # pre-commit writes hooks into .git/hooks, so `pre-commit install` requires (a) git
 # on PATH and (b) a git work tree. On a runtime/deploy box — e.g. a shipped zip

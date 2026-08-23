@@ -35,10 +35,8 @@
 # complete and discoverable once poe is available. The shell entrypoint is the second and LAST
 # interface; do not add a third.
 #
-# `[tool.poetry.requires-plugins]` was evaluated for this job and REJECTED, measured 2026-08-23:
-# it makes `poetry install` provision a project-scoped plugin env keyed by project NAME, not
-# path, so a second scaffold of the same name in a new directory fails against the first one's
-# deleted path — reproduced by the CI harness on its second run.
+# ⚠️ Do NOT reach for `[tool.poetry.requires-plugins]` to make these runnable via poe — it
+# breaks `poetry install`. The measurement lives in blueprintx#232.
 
 # ---------------------------------------------------------------------------
 # VIRTUAL ENVIRONMENT

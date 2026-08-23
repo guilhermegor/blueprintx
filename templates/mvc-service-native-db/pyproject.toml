@@ -45,21 +45,15 @@ pywin32 = {version = ">=306", markers = "sys_platform == 'win32'"}
 # The task runner (Poe the Poet). Every project command is a task in poe_tasks.toml.
 #
 # ⚠️ A dev-dep lives in .venv, so it cannot run the tasks that CREATE .venv. Bootstrap
-# (`init`, `venv`, `ensure_env`, `precommit`) is therefore reached by running the shell
-# entrypoint directly: `bash bin/venv.sh`. That is the second and last interface.
-#
-# `[tool.poetry.requires-plugins]` was evaluated for that job and REJECTED, measured on
-# 2026-08-23: it makes `poetry install` provision a project-scoped plugin environment keyed
-# by project NAME rather than path, so a second scaffold of the same name in a new directory
-# fails against the old one's deleted path. The CI harness reproduced it on the second run.
-# Installing the plugin by hand (`poetry self add 'poethepoet[poetry_plugin]'`) still works
-# and bin/poe_exec.sh will use it; it is simply not declared here.
+# (`init`, `venv`, `ensure_env`, `precommit`) runs the shell entrypoint directly:
+# `bash bin/venv.sh`. Do NOT add `[tool.poetry.requires-plugins]` to reach them — it breaks
+# `poetry install` (blueprintx#232 carries the measurement).
 poethepoet = ">=0.35"
 pre-commit = ">=4.1.0"
 pretty-errors = ">=1.2.25"
 commitizen = ">=4.4.1"
-# Pinned to the ruff-pre-commit hook minor (.pre-commit-config.yaml) so `make
-# lint` and the hook never disagree on formatting/lints.
+# Pinned to the ruff-pre-commit hook minor (.pre-commit-config.yaml) so `poe lint`
+# and the hook never disagree on formatting/lints.
 ruff = ">=0.11.13,<0.12"
 codespell = ">=2.4.1"
 pydocstyle = ">=6.3.0"

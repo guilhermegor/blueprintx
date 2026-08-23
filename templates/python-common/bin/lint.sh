@@ -2,7 +2,7 @@
 #
 # lint.sh — the full lint set, in one place.
 #
-# Single source of truth for "run every gate": called by `poe lint`, `./tasks.sh lint`, the
+# Single source of truth for "run every gate": called by `poe lint`, the
 # generated project's CI, and bin/ci/scaffold_lint_test.sh (which runs a scaffolded project's
 # `poe lint` — the real verification for template work). It was 14 inline recipe lines
 # duplicated between the Makefile and tasks.sh; two copies of a 14-step sequence is precisely
