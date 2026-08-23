@@ -40,8 +40,7 @@ main() {
 
 	print_status "error" "Direct commits to the protected branch '$str_branch' are not allowed."
 	print_status "info" "Create a working branch before committing:"
-	print_status "info" "    make new_branch NAME=feat/my-feature"
-	print_status "info" "    (without make: ./tasks.sh new_branch feat/my-feature)"
+	print_status "info" "    poe new_branch feat/my-feature"
 	exit 1
 }
 

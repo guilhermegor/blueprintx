@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ensure a local .env exists before the rest of `make init` runs.
+# Ensure a local .env exists before the rest of `poe init` runs.
 #
 # If .env is already present, do nothing. Otherwise seed it from .env.example
 # so a fresh checkout starts with a working config skeleton. When .env.example

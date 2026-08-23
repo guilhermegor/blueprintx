@@ -78,16 +78,20 @@ both extensions.
 script *emits*; the moment it is fed to an interpreter it is a program, and a program
 belongs in a file its language's tooling can read.
 
-`bin/help.txt` follows the same principle for text rather than code: the command list is
-read by **both** `make help` and `./tasks.sh help`. It used to be a heredoc in `tasks.sh`
-and ~65 `@echo` lines in the `Makefile`, kept in sync by a CLAUDE.md rule — and they had
-already drifted, with `make help` missing `test_cov_report` and `test_cov_serve` entirely,
-so two real targets were undiscoverable from the entry point most people use.
+`bin/help.txt` is **gone**, and its lesson is now enforced by construction rather than by a
+rule. It existed because the command list lived in two places — a heredoc in `tasks.sh` and
+~65 `@echo` lines in the `Makefile` — kept in sync by a CLAUDE.md paragraph, and they had
+already drifted: `make help` was missing `test_cov_report` and `test_cov_serve` entirely, so
+two real targets were undiscoverable from the entry point most people use (blueprintx#189).
+Single-sourcing the text fixed the symptom. The poe migration removed the cause: bare `poe`
+builds its listing from each task's own `help =` field, so the help and the recipe are one
+declaration and cannot disagree. The rule that replaces the sync rule is simply: every task
+carries a `help =`.
 
 `get_corporate_ca.sh` is the **manual** generator for `bin/corporate_ca.pem` — it
 disables TLS verification *on purpose* to capture a TLS-inspecting proxy's CA,
 so run it only on such a network. The pem is git-ignored; its mere presence
-opts a project into corporate-SSL mode on the next `make venv` / `make run`.
+opts a project into corporate-SSL mode on the next `poe venv` / `poe run`.
 
 ## Resolve Poetry — never call a bare `poetry`
 
@@ -98,7 +102,7 @@ must route through the resolver.** How each surface routes:
 
 | Surface | How it calls Poetry |
 |---------|---------------------|
-| `Makefile` / `tasks.sh` / `.pre-commit-config.yaml` | `bash bin/poetry_exec.sh <args>` — the wrapper resolves+`exec`s Poetry, routing resolution status to **stderr** so `$(… version -s)` stays clean |
+| a `poe_tasks.toml` task / `.pre-commit-config.yaml` | `bash bin/poetry_exec.sh <args>` — the wrapper resolves+`exec`s Poetry, routing resolution status to **stderr** so `$(… version -s)` stays clean |
 | sourcing `bin/*.sh` that needs Poetry (`db.sh`, `fix_playwright.sh`, `precommit.sh`) | source `lib/bootstrap.sh`, `bootstrap_init` + `ensure_poetry`, then `run_poetry run …` |
 | optional-linter `bin/*.sh` (`lint_sql.sh`, `lint_yaml.sh`, `lint_shell.sh`) | **resolve, don't install**: `resolve_python` → `resolve_poetry \|\| skip (exit 0)` → `run_poetry run …`. Never guard on `command -v poetry` (it misses a `python -m poetry`-only box and skips silently) |
 
@@ -107,12 +111,12 @@ PATH.** `shellcheck-py`/`shfmt-py` are dev-deps that vendor their binaries into 
 venv (incl. `win_amd64` wheels), so `lint_shell.sh` tries `poetry run <tool>` first
 (found wherever the venv lives, incl. a Windows UNC/mapped `A:` drive), then a system
 binary, then skips — probing with `--version` so a real lint failure is never mistaken
-for "absent". A bare-PATH `command -v` would silently skip both linters when `make lint`
-runs outside the venv. `bin/install_shell_linters.sh` (`make install_shell_linters`) is
+for "absent". A bare-PATH `command -v` would silently skip both linters when `poe lint`
+runs outside the venv. `bin/install_shell_linters.sh` (`poe install_shell_linters`) is
 an **optional** system-binary installer (choco/scoop/brew/apt) for boxes whose venv drive
 blocks executing the vendored binary; the pip route is primary.
 
-`bin/export_deps.sh` (`make export_deps`) exports the locked set to `requirements-lock.txt`
+`bin/export_deps.sh` (`poe export_deps`) exports the locked set to `requirements-lock.txt`
 for pip-only hosts. It is the reference for the **diagnostic half** of this rule: it captures
 the export output instead of discarding it, re-prints Poetry's own words on failure, and names
 the remedy against `${POETRY_CMD[*]}` — never a bare `poetry`, which may not be the install

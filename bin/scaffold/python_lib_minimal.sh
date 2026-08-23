@@ -393,11 +393,14 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/.shellcheckrc" "$project_path/.shellcheckrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
-    cp "$COMMON_TEMPLATE_ROOT/Makefile" "$project_path/Makefile"
-    # Library-only Makefile targets (install_dist_locally, changelog); the shared Makefile
-    # -includes make/library.mk. tasks.sh defines the matching functions when this file is present.
-    mkdir -p "$project_path/make"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/make/library.mk" "$project_path/make/library.mk"
+    # The command interface: poe_tasks.toml replaces the Makefile + tasks.sh pair.
+    cp "$COMMON_TEMPLATE_ROOT/poe_tasks.toml" "$project_path/poe_tasks.toml"
+    # Library-only task (install_dist_locally). add_poe_include wires it into
+    # poe_tasks.toml — an unconditional include would warn on every run in tiers
+    # that do not ship the file.
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/poe_tasks.library.toml" \
+        "$project_path/poe_tasks.library.toml"
+    add_poe_include "$project_path" "poe_tasks.library.toml"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
@@ -457,7 +460,6 @@ lib_minimal_copy_github_assets() {
 lib_minimal_copy_project_scaffolding() {
     local project_path="$1"
 
-    cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$project_path/tasks.sh"
     cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
     # Reference integration test for the shared bin/ shell seams (poetry_exec.sh,
@@ -503,6 +505,7 @@ lib_minimal_copy_project_scaffolding() {
     mkdir -p "$project_path/.vscode"
     cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
     cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.json" "$project_path/.vscode/extensions.json"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
 }
 
@@ -681,7 +684,10 @@ apply_offline_mode() {
         "$project_path/bin/git_merge_to_main.sh" \
         "$project_path/bin/protect_branch.sh"
     mkdir -p "$project_path/make"
-    cp "$SHARED_TEMPLATE_ROOT/make/offline.mk" "$project_path/make/offline.mk"
+    # Offline-only tasks. add_poe_include wires the fragment in only when it is copied:
+    # poe warns on every invocation for a missing include, unlike make's silent -include.
+    cp "$SHARED_TEMPLATE_ROOT/poe_tasks.offline.toml" "$project_path/poe_tasks.offline.toml"
+    add_poe_include "$project_path" "poe_tasks.offline.toml"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
     # Swap the stock no-commit-to-branch hook for the friendly local protect-branch

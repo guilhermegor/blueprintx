@@ -60,7 +60,7 @@ the schema only when referencing a *different* schema.
 poetry run alembic revision --autogenerate -m "describe_the_change"
 
 # Apply all pending migrations
-make db_setup_schema   # or: poetry run alembic upgrade head
+bash bin/db_setup_schema.sh   # or: poetry run alembic upgrade head
 
 # Roll back one step
 poetry run alembic downgrade -1

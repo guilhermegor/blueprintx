@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Real (non-dry-run) scaffold of a Python skeleton, then run the generated
-# project's own quality gate end-to-end: `make lint` (and assert it changed
-# nothing) followed by `make unit_tests`.
+# project's own quality gate end-to-end: `poe lint` (and assert it changed
+# nothing) followed by `poe unit_tests` and `poe integration_tests`.
 #
 # This complements bin/ci/smoke_test.sh, which only does `--dry-run` (prints the
 # structure, writes no files). Here we actually generate the project and prove a
@@ -135,7 +135,7 @@ echo "::endgroup::"
 # Commit anything left in the tree as the baseline, AFTER poetry install (the
 # scaffold already commits its own output, including offline artifacts; this
 # mainly captures the generated poetry.lock). With a clean baseline, the
-# post-lint check below reflects only what `make lint` itself changes.
+# post-lint check below reflects only what `poe lint` itself changes.
 git add -A
 git commit -q --no-verify -m "ci: scaffold baseline" || true
 
@@ -174,21 +174,23 @@ case "$str_cz_version" in
         ;;
 esac
 
-echo "::group::make lint (must leave the tree unchanged)"
-make lint
-# `make lint` auto-fixes (ruff --fix / format). On a clean scaffold it must change
+echo "::group::poe lint (must leave the tree unchanged)"
+# Through the resolver, never a bare `poe`: `poetry install` puts poe in the in-project
+# .venv but NOT on PATH, which is precisely the case poe_exec.sh's first branch exists for.
+bash bin/poe_exec.sh lint
+# `poe lint` auto-fixes (ruff --fix / format). On a clean scaffold it must change
 # nothing — any diff or new file means the template shipped non-compliant code.
 if [ -n "$(git status --porcelain)" ]; then
-    echo "ERROR: 'make lint' modified the freshly scaffolded tree:" >&2
+    echo "ERROR: 'poe lint' modified the freshly scaffolded tree:" >&2
     git status --short >&2
     git --no-pager diff >&2
     exit 1
 fi
-echo "make lint left the tree clean."
+echo "poe lint left the tree clean."
 echo "::endgroup::"
 
-echo "::group::make unit_tests"
-make unit_tests
+echo "::group::poe unit_tests"
+bash bin/poe_exec.sh unit_tests
 echo "::endgroup::"
 
 # The integration suite is where every bin/*.sh seam is actually EXECUTED — the unit suite
@@ -196,8 +198,8 @@ echo "::endgroup::"
 # tier, and never run by the one harness that proves a tier works, so a broken shell seam
 # looked exactly like a working one. `|| [ $? -eq 5 ]` tolerates pytest's "no tests collected"
 # for a tier that ships none; a real failure (exit 1) still fails the run.
-echo "::group::make integration_tests"
-make integration_tests || [ $? -eq 5 ]
+echo "::group::poe integration_tests"
+bash bin/poe_exec.sh integration_tests || [ $? -eq 5 ]
 echo "::endgroup::"
 
 echo "OK: $SKELETON scaffolds clean, lints clean, and unit + integration tests pass."

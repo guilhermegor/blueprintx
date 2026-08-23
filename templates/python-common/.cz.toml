@@ -11,7 +11,7 @@
 # The symptom is a differently formatted changelog and an unprefixed tag, never a red check.
 # That is why bin/ci/scaffold_lint_test.sh asserts the file lands in the generated project.
 #
-# Consumers: `make bump_version` / `cz bump` (offline tiers), `make changelog` / `cz changelog`,
+# Consumers: `poe bump_version` / `cz bump` (offline tiers), `poe changelog` / `cz changelog`,
 # the `commitizen` pre-commit hook, the commit-msg hook, and the docs build (which regenerates
 # CHANGELOG.md so the published Changelog page tracks the tags).
 [tool.commitizen]
@@ -20,7 +20,7 @@
 # project root, not by where the config lives (verified against commitizen directly).
 #
 # Services keep their version in pyproject.toml (the nominal home), tagged by `cz bump`
-# (offline, via `make bump_version`) or the release.yaml workflow (online). The library tier
+# (offline, via `poe bump_version`) or the release.yaml workflow (online). The library tier
 # takes its version from the git tag via poetry-dynamic-versioning and is released by the CI
 # release workflows, never a hand-run bump. Either way `cz changelog` groups commits by tag.
 name = "cz_conventional_commits"

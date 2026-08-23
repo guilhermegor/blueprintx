@@ -699,36 +699,43 @@ def test_clean_index_guard_is_inert_off_a_git_tree(tmp_path: Path) -> None:
 
 
 # --------------------------
-# tasks.sh — the no-make interface
+# poe_exec.sh — the task-runner resolver
 # --------------------------
 
 
-def test_tasks_sh_resolves_the_print_status_it_calls() -> None:
-	"""``tasks.sh`` must source the lib defining ``print_status``, which it calls.
+def test_poe_exec_resolves_the_print_status_it_calls() -> None:
+	"""``poe_exec.sh`` must source the lib defining ``print_status``, which it calls.
 
-	Measured before the fix: ``./tasks.sh init`` exited **127** at ``enable_repo_rules`` with
+	Inherited from the ``tasks.sh`` test this replaces, because the DEFECT outlived the file.
+	Measured then: ``./tasks.sh init`` exited **127** at ``enable_repo_rules`` with
 	``print_status: command not found``, so its last two steps never ran in any scaffolded
-	project. The Makefile was unaffected -- its recipes shell out to ``bin/*.sh``, which source
-	the lib themselves -- so the break was invisible to anyone using ``make``, and ``tasks.sh``
-	is exactly the interface for a box without make.
+	project -- and the Makefile was unaffected, its recipes shelling out to ``bin/*.sh`` which
+	source the lib themselves. The break was therefore invisible from the interface most people
+	used.
 
-	Driven through the usage guard because that path calls ``print_status`` and then returns,
-	touching neither the network nor Poetry.
+	``poe_exec.sh`` now occupies that seat: it is the entry point every hook and workflow goes
+	through, and its unresolved-Poe path is nothing but ``print_status`` calls -- the branch that
+	runs on the machine LEAST able to diagnose it. An unsourced lib would turn a readable
+	"install poe like this" into ``command not found``.
 	"""
 	str_bash = shutil.which("bash") or "bash"
-	path_tasks = Path(__file__).resolve().parents[2] / "tasks.sh"
+	path_exec = Path(__file__).resolve().parents[2] / "bin" / "poe_exec.sh"
 	# Constant, trusted argv built from repo-internal paths -- no user input reaches it.
+	# The environment is inherited rather than scrubbed. An emptied PATH takes `dirname` with
+	# it, so SCRIPT_DIR never resolves and the run then fails for a reason unrelated to the
+	# claim. Measured while writing this test. Either branch of the resolver serves here, since
+	# a resolved Poe and the diagnostic that reports none are both built from print_status
+	# calls, so whichever one runs proves the lib is reachable.
 	cls_result = subprocess.run(  # noqa: S603
-		[str_bash, str(path_tasks), "check_commit_msg"],
+		[str_bash, str(path_exec), "--version"],
 		capture_output=True,
 		text=True,
 		check=False,
-		cwd=str(path_tasks.parent),
+		cwd=str(path_exec.parents[1]),
 	)
 	str_output = cls_result.stdout + cls_result.stderr
-	assert "command not found" not in str_output
-	assert cls_result.returncode == 2, "the usage guard exits 2, not 127"
-	assert "FILE=" in str_output
+	assert "print_status: command not found" not in str_output
+	assert "print_status: not found" not in str_output
 
 
 def test_get_corporate_ca_never_disables_tls_verification() -> None:

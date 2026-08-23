@@ -8,7 +8,7 @@ The language boundary is the AUDIENCE, not the repository.
 
 GitHub auto-detects a root SECURITY.md and flips "Security policy" to Enabled — no API call.
 The matching intake channel (private vulnerability reporting) is enabled by
-`make enable_security` / `bash bin/enable_security.sh`.
+`poe enable_security` / `bash bin/enable_security.sh`.
 -->
 
 ## Reporting a vulnerability
@@ -59,7 +59,7 @@ those to the service's own security team.
 
 ## Automated security hygiene
 
-This repository enables, via `make enable_security`:
+This repository enables, via `poe enable_security`:
 
 - **Private vulnerability reporting** — the intake channel described above.
 - **Dependabot alerts** — notifications for known-vulnerable dependencies.

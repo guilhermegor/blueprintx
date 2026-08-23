@@ -16,9 +16,9 @@ A Domain-Driven Design service with a hexagonal (ports-and-adapters) layout, usi
 ## Quick start
 
 ```bash
-make init          # bootstrap virtual environment and install pre-commit hooks
-make start         # run the application
-make docs_server   # serve this documentation at http://0.0.0.0:8000
+bash bin/venv.sh   # bootstrap the venv (poe lives inside it, so bootstrap is shell)
+poe run            # run the application
+poe docs_server   # serve this documentation at http://0.0.0.0:8000
 ```
 
 ---

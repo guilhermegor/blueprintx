@@ -5,7 +5,7 @@
 # clone or fork silently lacks. The ENTIRE ruleset is writable through the REST API, so nothing
 # here needs a click in Settings → Rules. Like enable_pages.sh, these are repo-settings writes:
 # CI's GITHUB_TOKEN (an App installation token) CANNOT make them — only a maintainer's `gh auth`
-# with repo-admin can. Hence `make init`, not CI.
+# with repo-admin can. Hence `poe init`, not CI.
 #
 # WHAT IT APPLIES (idempotent — looked up BY NAME, then PUT if it exists / POST if it does not;
 # never a blind POST, which would duplicate the ruleset):
@@ -78,11 +78,11 @@ REQUIRED_CHECKS=("Review threads answered")
 require_gh() {
 	# gh must be installed and authenticated. Missing either is a skip, not a failure.
 	if ! command -v gh >/dev/null 2>&1; then
-		print_status "warning" "gh CLI not found — skipping ruleset provisioning (run 'make enable_repo_rules' later)"
+		print_status "warning" "gh CLI not found — skipping ruleset provisioning (run 'poe enable_repo_rules' later)"
 		return 1
 	fi
 	if ! gh auth status >/dev/null 2>&1; then
-		print_status "warning" "gh not authenticated — skipping ruleset provisioning (run 'gh auth login', then 'make enable_repo_rules')"
+		print_status "warning" "gh not authenticated — skipping ruleset provisioning (run 'gh auth login', then 'poe enable_repo_rules')"
 		return 1
 	fi
 	return 0
@@ -169,7 +169,7 @@ apply_ruleset() {
 		fi
 	fi
 
-	print_status "warning" "Could not apply ruleset to $str_repo: ${str_err:-no output from gh} — a maintainer with repo-admin rights must run 'make enable_repo_rules'"
+	print_status "warning" "Could not apply ruleset to $str_repo: ${str_err:-no output from gh} — a maintainer with repo-admin rights must run 'poe enable_repo_rules'"
 	return 0
 }
 

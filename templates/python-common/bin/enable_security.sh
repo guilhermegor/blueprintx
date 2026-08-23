@@ -8,7 +8,7 @@
 #
 # Sibling of enable_repo_rules.sh / enable_pages.sh: these are repo-settings writes, so CI's
 # GITHUB_TOKEN (an App installation token) CANNOT make them — only a maintainer's `gh auth` with
-# repo-admin can. Hence `make init`, not CI. Idempotent + non-blocking throughout.
+# repo-admin can. Hence `poe init`, not CI. Idempotent + non-blocking throughout.
 #
 # NOT scripted here (it needs no API call): GitHub auto-detects a root SECURITY.md and flips
 # "Security policy" to Enabled by itself. The scaffold ships that file.
@@ -25,11 +25,11 @@ source "$SCRIPT_DIR/lib/common.sh"
 require_gh() {
 	# gh must be installed and authenticated. Missing either is a skip, not a failure.
 	if ! command -v gh >/dev/null 2>&1; then
-		print_status "warning" "gh CLI not found — skipping security toggles (run 'make enable_security' later)"
+		print_status "warning" "gh CLI not found — skipping security toggles (run 'poe enable_security' later)"
 		return 1
 	fi
 	if ! gh auth status >/dev/null 2>&1; then
-		print_status "warning" "gh not authenticated — skipping security toggles (run 'gh auth login', then 'make enable_security')"
+		print_status "warning" "gh not authenticated — skipping security toggles (run 'gh auth login', then 'poe enable_security')"
 		return 1
 	fi
 	return 0

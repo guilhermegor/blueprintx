@@ -2,9 +2,9 @@
 #
 # lint.sh — the full lint set, in one place.
 #
-# Single source of truth for "run every gate": called by `make lint`, `./tasks.sh lint`, the
+# Single source of truth for "run every gate": called by `poe lint`, `./tasks.sh lint`, the
 # generated project's CI, and bin/ci/scaffold_lint_test.sh (which runs a scaffolded project's
-# `make lint` — the real verification for template work). It was 14 inline recipe lines
+# `poe lint` — the real verification for template work). It was 14 inline recipe lines
 # duplicated between the Makefile and tasks.sh; two copies of a 14-step sequence is precisely
 # the drift the house rule ("logic goes in bin/<name>.sh, recipes just call it") exists to
 # prevent, and the copies had already diverged elsewhere in the pair (blueprintx#189).
@@ -12,7 +12,7 @@
 # ⚠️ ORDER IS LOAD-BEARING, in one specific way: the two ruff steps come FIRST and they
 # MUTATE the tree (`--fix`, then `format`). Every gate after them therefore reads the
 # formatted tree, which is what CI checks — running them later would have the gates judge a
-# tree that is about to change. This is also why `make lint` must leave the tree unchanged on
+# tree that is about to change. This is also why `poe lint` must leave the tree unchanged on
 # a clean checkout: a diff after a lint run means a gate and the formatter disagree.
 #
 # Failure semantics: `set -e` plus no masking, so the FIRST failing gate ends the run with its

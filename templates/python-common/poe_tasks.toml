@@ -1,0 +1,298 @@
+# Poe the Poet task definitions — the project's command interface.
+#
+# Replaces the twin Makefile + tasks.sh, which were two hand-maintained implementations of one
+# command list kept in sync by a written rule. That rule had already been broken measurably:
+# `poe help` was missing `test_cov_report` and `test_cov_serve` entirely (blueprintx#189).
+#
+# ⚠️ THERE IS NO SEPARATE HELP FILE ANY MORE. `bin/help.txt` is gone: running bare `poe` prints
+# the task list from the `help =` fields below, so the help and the recipe cannot drift because
+# they are the same declaration. Adding a task without `help =` makes it invisible in that
+# listing — write one.
+#
+# HOW TO RUN A TASK (three routes, all measured against poe 0.48.0 / poetry 2.4.1):
+#
+#   poe lint                              # the dev-dep in .venv, or a pipx install on PATH
+#   .venv/bin/python -m poethepoet lint   # module form; the module is poethepoet, NOT poe
+#   poetry poe lint                       # only if you installed the plugin YOURSELF
+#
+# Scripts must never hardcode one of those. `bin/poe_exec.sh` resolves them in order, the same
+# way `bin/poetry_exec.sh` resolves Poetry — see that file for why a bare binary is not safe.
+#
+# ⚠️ TASKS RUN INSIDE THE PROJECT VENV AUTOMATICALLY. Poe detects `./.venv` (which poetry.toml
+# forces to be in-project) and runs each task under it — verified: a task printing
+# `sys.executable` reports `.venv/bin/python` even with a different interpreter first on PATH.
+# So a task is written as a BARE command (`pytest tests/unit/`), never `poetry run pytest`.
+# `bin/poetry_exec.sh` survives only for genuine Poetry MANAGEMENT commands — `update`,
+# `install --with docs`, `version` — which act on the venv rather than running inside it.
+#
+# ⚠️ THE BOOTSTRAP TASKS CANNOT ASSUME THE VENV EXISTS, because they create it: `init`,
+# `ensure_env`, `venv`, `precommit`, `update_venv`. Poe is a dev-dep, so it lives INSIDE the
+# venv it would have to create. Run the shell entrypoint directly instead:
+#
+#   bash bin/venv.sh        # or bin/ensure_env.sh, bin/precommit.sh
+#
+# That is exactly what these tasks call, so nothing is lost — they exist so the task list is
+# complete and discoverable once poe is available. The shell entrypoint is the second and LAST
+# interface; do not add a third.
+#
+# `[tool.poetry.requires-plugins]` was evaluated for this job and REJECTED, measured 2026-08-23:
+# it makes `poetry install` provision a project-scoped plugin env keyed by project NAME, not
+# path, so a second scaffold of the same name in a new directory fails against the first one's
+# deleted path — reproduced by the CI harness on its second run.
+
+# ---------------------------------------------------------------------------
+# VIRTUAL ENVIRONMENT
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.init]
+sequence = ["ensure_env", "venv", "precommit", "enable_pages", "enable_repo_rules", "enable_security"]
+default_item_type = "ref"
+help = "Bootstrap everything: .env, venv, pre-commit hooks, GitHub Pages/rules/security"
+
+[tool.poe.tasks.ensure_env]
+# `|| true` mirrors the Makefile's leading '-': a failed seed (no .env.example) must abort only
+# itself, never the venv + precommit steps that follow it in `init`.
+shell = "bash bin/ensure_env.sh || true"
+help = "Seed .env from .env.example (no-op when .env already exists)"
+
+[tool.poe.tasks.venv]
+cmd = "bash bin/venv.sh"
+help = "Bootstrap the Poetry venv (pyenv-preferred, system-Python and pip fallbacks)"
+
+[tool.poe.tasks.update_venv]
+# Poetry MANAGEMENT command — it acts on the venv rather than running inside it, so it routes
+# through the Poetry resolver rather than being a bare command.
+sequence = [
+	{ cmd = "bash bin/poetry_exec.sh update" },
+	{ cmd = "echo 'Poetry project updated'" },
+]
+help = "Update locked dependencies (poetry update)"
+
+[tool.poe.tasks.precommit]
+cmd = "bash bin/precommit.sh"
+help = "Install the pre-commit, commit-msg and pre-push hooks"
+
+[tool.poe.tasks.enable_pages]
+cmd = "bash bin/enable_pages.sh"
+help = "Enable GitHub Pages with the source this project's docs model needs (admin, idempotent)"
+
+[tool.poe.tasks.enable_repo_rules]
+cmd = "bash bin/enable_repo_rules.sh"
+help = "Provision the pr-quality-gate ruleset and the repo settings the PR gate needs"
+
+[tool.poe.tasks.enable_security]
+cmd = "bash bin/enable_security.sh"
+help = "Enable private vulnerability reporting, Dependabot alerts and security updates"
+
+# Cut a version bump from Conventional Commits: cz computes the next semver, writes it to
+# pyproject.toml, regenerates CHANGELOG.md, commits "bump: X.Y.Z" and creates the vX.Y.Z tag.
+# --no-verify bypasses the commit hooks for this machine-generated commit: its single-line
+# "bump: …" message cannot satisfy gitlint's body-required rule, and the format/test hooks are
+# irrelevant to a pyproject + CHANGELOG bump. Run it on a feature branch.
+# OFFLINE tier only — the online scaffold strips this task (releases come from release.yaml).
+[tool.poe.tasks.bump_version]
+shell = """
+cz bump --yes --no-verify --git-output-to-stderr
+echo "Version bumped to $(cz version --project 2>/dev/null || bash bin/poetry_exec.sh version -s)"
+"""
+help = "Bump the version from Conventional Commits and tag it (offline tiers only)"
+
+[tool.poe.tasks.changelog]
+# Regenerate CHANGELOG.md from git tags + Conventional Commits. Preview locally; the published
+# site regenerates it in the docs workflow, and CI never commits it.
+sequence = [
+	{ cmd = "cz changelog" },
+	{ cmd = "echo 'CHANGELOG.md regenerated'" },
+]
+help = "Regenerate CHANGELOG.md from git tags (preview only)"
+
+# ---------------------------------------------------------------------------
+# CORPORATE CA
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.get_corporate_ca]
+cmd = "bash bin/get_corporate_ca.sh"
+help = "Extract a TLS-inspecting proxy's CA into bin/corporate_ca.pem (manual, never automatic)"
+
+# ---------------------------------------------------------------------------
+# TESTING
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.unit_tests]
+cmd = "pytest tests/unit/"
+help = "Run the unit suite"
+
+[tool.poe.tasks.integration_tests]
+cmd = "pytest tests/integration/"
+help = "Run the integration suite (where the bin/*.sh seams are actually executed)"
+
+[tool.poe.tasks.test_cov]
+cmd = "bash bin/test_cov.sh"
+help = "Run unit tests with coverage and regenerate the coverage badge"
+
+# Whole-tree HTML coverage for drill-down. ⚠️ Never narrow this to --cov=<module>: that reports
+# "no data" on the full suite.
+[tool.poe.tasks.test_cov_report]
+sequence = [
+	{ cmd = "pytest tests/unit/ --cov=src --cov-report=term-missing --cov-report=html" },
+	{ cmd = "echo 'HTML coverage report at htmlcov/index.html'" },
+]
+help = "Whole-tree HTML coverage report at htmlcov/index.html"
+
+[tool.poe.tasks.test_cov_serve]
+shell = "cd htmlcov && python3 -m http.server ${PORT:-8000}"
+help = "Serve the HTML coverage report (PORT=8000 by default)"
+
+[tool.poe.tasks.test_slowest]
+sequence = [
+	{ cmd = "echo 'Running tests to identify the 20 slowest tests...'" },
+	{ cmd = "pytest tests/unit/ --durations=20 --tb=short" },
+]
+help = "Report the 20 slowest unit tests"
+
+# ⚠️ There is deliberately NO `test_feat` task (the Makefile had one: `pytest tests/unit/ -k
+# "$(FEAT)"`). Poe passes any extra command-line tokens straight through to a task that
+# declares no `args`, so the filter comes for free and with less to declare:
+#
+#   poe unit_tests -k some_keyword        ->  pytest tests/unit/ -k some_keyword
+#   poe unit_tests -x --lf                ->  and any other pytest flag, without a task per flag
+#
+# Measured, not assumed. Note the corollary: DECLARING `args` on a task (as check_commit_msg
+# does) turns that passthrough off, because poe then parses the tokens itself — so declare
+# args only where a task genuinely needs a named, required parameter.
+
+[tool.poe.tasks.test_urls_docstrings]
+cmd = "bash bin/test_urls_docstrings.sh"
+help = "Validate the URLs appearing in docstrings (1-week cache)"
+
+[tool.poe.tasks.fix_playwright]
+cmd = "bash bin/fix_playwright.sh"
+help = "Reinstall the Playwright browsers (OS-aware)"
+
+# ---------------------------------------------------------------------------
+# LINTING
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.lint]
+cmd = "bash bin/lint.sh"
+help = "Run every lint gate in the order CI runs them"
+
+[tool.poe.tasks.install_shell_linters]
+# Optional: shellcheck + shfmt as SYSTEM binaries. The primary route is the pip dev-deps; this
+# is only for boxes whose venv drive blocks executing the vendored binary.
+cmd = "bash bin/install_shell_linters.sh"
+help = "Optionally install shellcheck + shfmt as system binaries (choco/scoop/brew/apt)"
+
+[tool.poe.tasks.check_docstrings]
+cmd = "python bin/check_docstrings.py"
+help = "Verify NumPy docstrings against their signatures"
+
+# The next two are reachable on their own so one rule can be checked without paying for the
+# whole lint set; `poe lint` covers both.
+[tool.poe.tasks.check_function_length]
+cmd = "python bin/check_function_length.py"
+help = "Cap a function at 60 lines of code (docstring excluded)"
+
+[tool.poe.tasks.check_complexity]
+cmd = "bash bin/check_complexity.sh"
+help = "Cyclomatic-complexity ceiling per tree (tests 1, src 2, bin 8)"
+
+# Pre-flight a commit message BEFORE `git commit -F <file>`.
+#
+# commitizen and gitlint reject at the commit-msg stage — AFTER every pre-commit gate has
+# already run — so each rejected message costs a full gate run, and the fixes arrive one at a
+# time. This runs only the commit-msg hooks against a message file, in seconds:
+#
+#   printf 'fix(scope): message\n' > .commitmsg
+#   poe check_commit_msg .commitmsg && git commit -F .commitmsg
+#
+# It invokes the project's OWN hooks, so it cannot drift from what the commit will enforce.
+# When re-wrapping an over-long body line, re-wrap the whole paragraph (textwrap.fill(width=76))
+# — fixing one line by hand pushes the overflow into the next.
+#
+# ⚠️ The Makefile needed a hand-written `test -n "$(FILE)" || { echo usage…; exit 2; }` guard.
+# Poe validates a required arg itself and prints a real usage line, so the guard is deleted
+# rather than ported: a reimplemented check is a check that can disagree with the tool.
+[tool.poe.tasks.check_commit_msg]
+cmd = "pre-commit run --hook-stage commit-msg --commit-msg-filename $file"
+help = "Pre-flight a commit message file against the project's own commit-msg hooks"
+
+	[[tool.poe.tasks.check_commit_msg.args]]
+	name = "file"
+	positional = true
+	required = true
+	help = "path to the commit message file"
+
+# ---------------------------------------------------------------------------
+# DATABASE
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.db_up]
+cmd = "bash bin/db.sh up"
+help = "Start the database services, ensure the schema and apply migrations"
+
+[tool.poe.tasks.db_backup]
+cmd = "bash bin/db.sh backup"
+help = "Back the database up (pg_dump)"
+
+[tool.poe.tasks.db_restore]
+cmd = "bash bin/db.sh restore"
+help = "Restore the database from a backup (pg_restore)"
+
+# ---------------------------------------------------------------------------
+# RUN
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.run]
+cmd = "bash bin/run.sh"
+help = "Run the project entrypoint"
+
+# ---------------------------------------------------------------------------
+# CONTEXT
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.export_context]
+cmd = "bash bin/export_repo_content.sh"
+help = "Flatten the repo into repo_context.txt for pasting into a web-UI LLM"
+
+[tool.poe.tasks.export_deps]
+cmd = "bash bin/export_deps.sh"
+help = "Export the locked set to requirements-lock.txt (hosts that can pip but not Poetry)"
+
+# ---------------------------------------------------------------------------
+# SHIP
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.ship]
+cmd = "bash bin/ship.sh"
+help = "Package the committed default-branch tree into dist/<repo>_<timestamp>.zip"
+
+# ---------------------------------------------------------------------------
+# DOCS
+# ---------------------------------------------------------------------------
+
+[tool.poe.tasks.docs_server]
+sequence = [
+	{ cmd = "bash bin/poetry_exec.sh install --with docs" },
+	{ cmd = "mkdocs serve -a 0.0.0.0:8000 --livereload" },
+]
+help = "Install the docs deps and serve the site at http://0.0.0.0:8000"
+
+# ---------------------------------------------------------------------------
+# CONDITIONAL TASK SETS — wired by the SCAFFOLD, deliberately not declared here
+# ---------------------------------------------------------------------------
+# Two task sets ship conditionally:
+#
+#   poe_tasks.library.toml — install_dist_locally; only the lib-minimal scaffold copies it
+#   poe_tasks.offline.toml — new_branch / git_merge_to_main / git_diff_*; copied only when the
+#                            project is scaffolded WITHOUT a GitHub remote
+#
+# The Makefile declared both unconditionally as `-include make/*.mk`, whose leading '-' made a
+# missing file silent. ⚠️ Poe's `include` is NOT equivalent: a missing path does not fail the
+# run, but it does print `Warning: Poe could not include file from invalid path …` on EVERY
+# invocation — measured. An online, non-library project would therefore print two warnings
+# before every `poe lint`, which is exactly how a team learns to read past warnings.
+#
+# So the include list is appended by the scaffold, naming only the fragments it actually
+# copied (`add_poe_include` in bin/lib/common.sh). Declaring `[tool.poe]` after the task
+# subtables above is valid TOML and is how the appended block lands.

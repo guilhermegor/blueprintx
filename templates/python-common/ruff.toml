@@ -139,7 +139,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # first-party, and different ruff versions guess differently: a script that puts `src` on
 # sys.path had its imports sorted one way by the ruff that wrote it and the other way by the
 # newer ruff pinned in a generated project. The visible symptom is not a lint error — it is
-# `make lint` MODIFYING a freshly scaffolded tree, so the scaffold check fails on the diff
+# `poe lint` MODIFYING a freshly scaffolded tree, so the scaffold check fails on the diff
 # rather than on any rule, and the message names no rule to fix.
 #
 # A superset of every tier's layer names: one that does not exist in a given tier simply

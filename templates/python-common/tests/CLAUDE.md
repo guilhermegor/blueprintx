@@ -16,7 +16,7 @@ tests/
   fixtures/      # pinned oracles — real artifacts, never hand-authored (see below)
 ```
 
-Run them with `make unit_tests` (`poetry run pytest tests/unit/`) or `pytest tests/unit/`.
+Run them with `poe unit_tests` or `pytest tests/unit/`.
 
 ## Imports
 
@@ -90,7 +90,7 @@ def load_gate(str_name: str) -> object:
 Importing the file the project actually ships is the point: a copy pasted into `tests/`
 passes forever while the shipped gate rots.
 
-## Formatting (must pass `make lint`)
+## Formatting (must pass `poe lint`)
 
 - **Tabs, not spaces** — `ruff.toml` sets `indent-style = "tab"`. The most common lint
   failure is a 4-space-indented test file. Indent every level with one tab.

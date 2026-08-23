@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Initial placeholder so the README ![Test Coverage](./coverage.svg) badge resolves on the
      first push instead of 404-ing. Regenerated with a real percentage by the `coverage-badge`
-     pre-commit hook (genbadge) / `make test_cov` once tests run. -->
+     pre-commit hook (genbadge) / `poe test_cov` once tests run. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="122" height="20" role="img" aria-label="coverage: n/a">
   <title>coverage: n/a</title>
   <linearGradient id="s" x2="0" y2="100%">
