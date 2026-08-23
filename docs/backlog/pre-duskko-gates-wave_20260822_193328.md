@@ -1,4 +1,50 @@
-# Leva pré-duskko — gate de complexidade (#167) + as três triviais (#207, #206, #110)
+# Leva pré-duskko — gates: #207, #206, #110, #167, #139, #140, #163, #222
+
+⚠️ **O escopo cresceu durante a sessão, por decisão do dono a cada passo.** Começou como
+#167 + três triviais; o dono depois pediu as três de fronteira (#139, #140, #163), o
+`poetry-plugin-shell`, e as regras de ruff da videoaula (#222). Tudo entregue e verificado
+com `scaffold_lint_test.sh`.
+
+## Estado final
+
+| # | O que | Estado |
+|---|---|---|
+| #207 | `bin/` fora do ruff — 73 achados | ✅ 0 |
+| #206 | `check-urls` pulava linha de delimitador | ✅ + 2 URLs stale reais corrigidos |
+| #110 | `wwdates >=1.0.0` | ✅ (issue estava desatualizada: PyPI já tem 2.0.0) |
+| #167 | gate de complexidade | ✅ 80/80, gate verde dos dois lados |
+| #139 | gate de import passava sem olhar | ✅ 4 policies novas, falha em vez de calar |
+| #140 | direção entre camadas | ✅ 0 refactors (preventivo) |
+| #163 | 3 regras de fronteira | ✅ nas 5 tiers, como teste de decisão |
+| #222 | ruff `W`(-W191) + `PL` + `PT` | ✅ 48 achados pagos |
+| — | `poetry-plugin-shell` | ✅ + achou que 4/5 scaffolds não copiavam `requirements.txt` |
+| — | `pytest.ini`: ignores genéricos de warning | ✅ estreitados; abriu **#223** |
+
+## Issues abertas de carona
+
+- **#222** — regras de ruff (fechada nesta branch)
+- **#223** — `basic_conf` nunca fecha o `FileHandler`; `ResourceWarning` invisível por
+  construção (Python não mostra por padrão). Não corrigida aqui: é mudança de comportamento
+  num helper que vai para todo projeto.
+
+## O fio condutor desta branch
+
+Sete defeitos distintos, **a mesma classe**: um gate que reporta a própria cegueira como OK.
+
+| onde | como se manifestava |
+|---|---|
+| #207 | os 16 arquivos que SÃO a máquina de qualidade eram os únicos não lintados |
+| #206 | "All docstring URLs are reachable" sobre linhas que nunca escaneou |
+| #167 (o próprio gate) | reportou verde sobre 79 violações conhecidas, por **duas** causas de subshell |
+| #139 | `return 0` calado sem policy → 3 tiers sem fronteira nenhuma |
+| #167 (hatch) | o `ruff format` movia o marcador e o hatch parava de valer, em silêncio |
+| #222 | `--config lint.ignore` não mescla → medição errada sustentou decisão errada |
+| pytest.ini | `ignore::DeprecationWarning` escondia os avisos dirigidos a este código |
+
+---
+
+## (ledger original abaixo)
+
 
 **Criado:** 2026-08-22 19:33 · **Branch:** `feat/complexity-gate-bin-lint-167`
 **Base:** `v0.15.10` · **Decisões do dono tomadas nesta sessão** (ver "Decisões" abaixo)
