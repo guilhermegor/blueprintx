@@ -1468,7 +1468,7 @@
 <tr>
 <td><strong>pytest</strong></td>
 <td>Test runner</td>
-<td><code>pytest.ini</code> — <code>make unit_tests</code> runs <code>poetry run pytest tests/unit/</code>; tests are pytest-style functions with fixtures</td>
+<td><code>pytest.ini</code> — <code>poe unit_tests</code> runs <code>pytest tests/unit/</code>; tests are pytest-style functions with fixtures</td>
 </tr>
 <tr>
 <td><strong>GitHub Actions</strong></td>
@@ -1476,9 +1476,9 @@
 <td><code>.github/workflows/tests.yaml</code> — runs linting and tests on every push</td>
 </tr>
 <tr>
-<td><strong>Makefile + <code>bin/</code></strong></td>
+<td><strong><code>poe_tasks.toml</code> + <code>bin/</code></strong></td>
 <td>Dev automation</td>
-<td><code>make init_venv</code>, <code>make update_venv</code>, <code>make start</code>, linting and test recipes</td>
+<td><code>poe venv</code>, <code>poe update_venv</code>, <code>poe run</code>, plus the linting and test tasks. Bare <code>poe</code> lists them all. Bootstrap is <code>bash bin/venv.sh</code> — poe is a dev dependency, so it lives inside the venv it would have to create</td>
 </tr>
 </tbody>
 </table>
@@ -1487,9 +1487,9 @@
 <ol>
 <li>Add library functions and classes under <code>src/&lt;project_name&gt;/</code>.</li>
 <li>Mirror the source structure under <code>tests/unit/</code> — one test module per source module.</li>
-<li>Run tests: <code>make unit_tests</code> (or <code>poetry run pytest tests/unit/ -v</code>)</li>
+<li>Run tests: <code>poe unit_tests</code> (or <code>pytest tests/unit/ -v</code>)</li>
 <li>Add integration tests in <code>tests/integration/</code> for any I/O-dependent code.</li>
-<li>Keep <code>docs/</code> in sync with the public API; host locally with <code>make mkdocs_server</code>.</li>
+<li>Keep <code>docs/</code> in sync with the public API; host locally with <code>poe docs_server</code>.</li>
 </ol>
 <hr />
 <h2 id="example-feature-addition">💡 Example feature addition<a class="headerlink" href="#example-feature-addition" title="Permanent link">&para;</a></h2>
