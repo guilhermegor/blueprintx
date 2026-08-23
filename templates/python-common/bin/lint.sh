@@ -61,6 +61,29 @@ $POETRY run python bin/check_function_length.py
 print_status info "cyclomatic complexity"
 bash bin/check_complexity.sh
 
+print_status info "runtime type-checker application"
+$POETRY run python bin/check_typing.py
+
+print_status info "__all__ export completeness"
+$POETRY run python bin/check_all_exports.py
+
+print_status info "numeric dtype policy"
+$POETRY run python bin/check_dtypes.py
+
+# ⚠️ THE ONE THAT MADE THIS ISSUE WORTH FILING. check_provenance runs as a pre-commit hook AND
+# as a CI job, and until now had no `poe lint` equivalent — so "green locally, red in CI" was a
+# reachable state on the gate whose entire purpose is stopping an ingested row from shipping
+# without its url/updated_at columns. It is the only gate in the set that CI ran and this
+# script did not.
+print_status info "ingestion provenance stamp"
+$POETRY run python bin/check_provenance.py
+
+print_status info "docs skeleton (slug + nav)"
+$POETRY run python bin/check_docs_sections.py
+
+print_status info "unix filename validity"
+bash bin/check_unix_filenames.sh
+
 print_status info "shell"
 bash bin/lint_shell.sh
 
@@ -72,5 +95,8 @@ bash bin/lint_yaml.sh
 
 print_status info "github actions"
 bash bin/lint_actions.sh
+
+print_status info "dockerfiles"
+bash bin/lint_docker.sh
 
 print_status success "lint OK — every gate passed"
