@@ -96,6 +96,11 @@ scaffold_copy_shared_tests() {
 	# conftest makes a real network call impossible in any test; the example demonstrates
 	# enforcing a family convention via __all__.
 	mkdir -p "$str_project_path/tests/unit"
+	# The tests/ leaf doc — ONE source for all six tiers (blueprintx#124, #152). It used to
+	# exist only in the two MVC tiers, byte-identical, and shipping it per-tier would have
+	# made six copies of one file: exactly the drift check_codespell_sync.sh exists to
+	# police. Layout-specific guidance lives in a table INSIDE the doc, not in six forks.
+	cp "$COMMON_TEMPLATE_ROOT/tests/CLAUDE.md" "$str_project_path/tests/CLAUDE.md"
 	cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$str_project_path/tests/conftest.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
 		"$str_project_path/tests/unit/test_pr_gate.py"
@@ -119,6 +124,10 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_contract_oracle_example.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
 		"$str_project_path/tests/unit/test_family_convention_example.py"
+	# Ships to all five tiers; self-skips at module level in lib-minimal, which carries no
+	# contract registry and therefore no drift driver.
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_drift.py" \
+		"$str_project_path/tests/unit/test_contract_drift.py"
 
 	mkdir -p "$str_project_path/tests/fixtures"
 	cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \

@@ -15,10 +15,10 @@ choices — and keeps the dependency graph flat.
 `logs.py` (the in-repo `CreateLog` / `log_message` helper) is therefore **opt-in** at scaffold
 time. Even when present, prefer to inject it rather than import it directly.
 
-### Reference implementation — `retry.py`
+### Reference implementation — `retry/log_emitter.py`
 
-`retry.py` is the starting point to copy. It defines a tiny injectable sink and defaults it to
-a stdlib-backed one, so nothing is imported unless the caller wants it:
+The `retry/` package is the starting point to copy. `log_emitter.py` defines a tiny injectable
+sink and defaults it to a stdlib-backed one, so nothing is imported unless the caller wants it:
 
 ```python
 import logging

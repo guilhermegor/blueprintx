@@ -130,7 +130,10 @@ here.
 
 - **#201** (open) — a template unit test invokes the real `gh` binary and the live network.
   Surfaced by the `act` verification on the #192 branch; deliberately not bundled into it.
-- **#207** (open) — `ruff.toml` excludes `"bin"`, so the 16 Python files that ARE the
+- ~~**#207**~~ **(CLOSED 2026-08-23, PR #224, v0.15.11)** — `ruff.toml` NO LONGER excludes
+  `"bin"`; the 73 findings behind it are at 0. ⚠️ The text below describes the state BEFORE
+  that fix — kept as the record of why, not as a live to-do.
+  ~~`ruff.toml` excludes `"bin"`, so the 16 Python files that ARE the~~
   project's quality machinery are neither linted nor type-checked; 58 findings behind it,
   including an unsafe YAML load and a banned API. Third instance of the #190/#203 shape and
   the largest. Found while checking whether the extracted heredocs were really being linted —

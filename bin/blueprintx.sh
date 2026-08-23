@@ -281,6 +281,13 @@ prompt_project_name() {
     if [ -z "$PROJECT_NAME" ]; then
         exit_error "Project name cannot be empty."
     fi
+    # The name has to serve TWO identities: the distribution name (hyphens legal) and
+    # the import package derived from it (hyphens illegal). `to_import_package_name`
+    # rescues a hyphen; nothing rescues a leading digit, a dot or a space, so those are
+    # refused here rather than shipped as a package that cannot be imported.
+    if ! is_valid_project_name "$PROJECT_NAME"; then
+        exit_error "Invalid project name '$PROJECT_NAME'. Use a letter or underscore first, then letters, digits, '-' or '_'."
+    fi
     echo "$PROJECT_NAME"
 }
 

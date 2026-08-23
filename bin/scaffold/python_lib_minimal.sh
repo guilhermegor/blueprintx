@@ -9,6 +9,10 @@ source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
+# The DISTRIBUTION name (hyphens legal on PyPI) and the IMPORT package derived from it
+# (a hyphen in an import is a parse-time SyntaxError). See to_import_package_name in
+# bin/lib/common.sh — blueprintx#113.
+PROJECT_PKG_NAME="$(to_import_package_name "$PROJECT_NAME")"
 PROJECT_DESCRIPTION="${3:-}"
 PROJECT_VERSION="${4:-0.0.1}"
 LICENSE_CHOICE="${LICENSE_CHOICE:-MIT}"
@@ -37,6 +41,12 @@ CONSUME_PRIVATE=false
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
         exit_error "Usage: $0 <project_root_dir> <project_name>"
+    fi
+    # The prompt validates too, but the scaffolds are also callable DIRECTLY
+    # (bin/ci/scaffold_lint_test.sh does exactly that), so a guard living only in
+    # prompt_project_name protects one of the two entry points. blueprintx#113.
+    if ! is_valid_project_name "$PROJECT_NAME"; then
+        exit_error "Invalid project name '$PROJECT_NAME'. Use a letter or underscore first, then letters, digits, '-' or '_'."
     fi
     print_status "success" "Input validation passed"
 }
@@ -82,11 +92,11 @@ create_directory_structure() {
 
     print_status "info" "Creating directory structure..."
 
-    mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/utils/typing
-    mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/config/contracts
+    mkdir -p "$project_path"/src/"$PROJECT_PKG_NAME"/_internal/utils/typing
+    mkdir -p "$project_path"/src/"$PROJECT_PKG_NAME"/_internal/config/contracts
     # ports live UNDER config/ — config/ is the home of all private structural declarations
     # (contracts + ports + schemas), not a top-level sibling. See _internal/config/CLAUDE.md.
-    mkdir -p "$project_path"/src/"$PROJECT_NAME"/_internal/config/ports
+    mkdir -p "$project_path"/src/"$PROJECT_PKG_NAME"/_internal/config/ports
     mkdir -p "$project_path"/tests/integration
     mkdir -p "$project_path"/tests/performance
     mkdir -p "$project_path"/tests/unit
@@ -108,27 +118,27 @@ create_python_files() {
     # Public package init. Exposes __version__ (resolved from the installed distribution's
     # metadata), which install_dist_locally's wheel smoke-test asserts. Tab-indented so a fresh
     # scaffold passes `make lint`.
-    # ⚠️ PROJECT_NAME must be exported ON THIS COMMAND: envsubst reads the ENVIRONMENT,
-    # not the shell's variables, and PROJECT_NAME is not exported until
+    # ⚠️ The render variable must be exported ON THIS COMMAND: envsubst reads the
+    # ENVIRONMENT, not the shell's variables, and it is not exported until
     # lib_minimal_render_pyproject runs later. Without it the substitution silently
     # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
     # package that still scaffolds without error. The heredoc this replaced used shell
     # interpolation, which sees unexported variables; envsubst does not.
     PROJECT_NAME="$PROJECT_NAME" envsubst '${PROJECT_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/package__init__.py.tmpl" \
-        > "$project_path/src/$PROJECT_NAME/__init__.py"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/main.py" "$project_path/src/$PROJECT_NAME/main.py"
+        > "$project_path/src/$PROJECT_PKG_NAME/__init__.py"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/main.py" "$project_path/src/$PROJECT_PKG_NAME/main.py"
 
     # Create test file with project name substitution. Tab-indented and fully
     # annotated/docstringed so a freshly scaffolded project passes `make lint`.
     mkdir -p "$project_path/tests/unit"
-    # ⚠️ PROJECT_NAME must be exported ON THIS COMMAND: envsubst reads the ENVIRONMENT,
-    # not the shell's variables, and PROJECT_NAME is not exported until
+    # ⚠️ The render variable must be exported ON THIS COMMAND: envsubst reads the
+    # ENVIRONMENT, not the shell's variables, and it is not exported until
     # lib_minimal_render_pyproject runs later. Without it the substitution silently
     # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
     # package that still scaffolds without error. The heredoc this replaced used shell
     # interpolation, which sees unexported variables; envsubst does not.
-    PROJECT_NAME="$PROJECT_NAME" envsubst '${PROJECT_NAME}' \
+    PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_main.py.tmpl" \
         > "$project_path/tests/unit/test_main.py"
 
@@ -136,13 +146,13 @@ create_python_files() {
     # tier that rewrites the engine's own imports to `<pkg>._internal.utils.typing`; a broken
     # rewrite would fail here and nowhere else, so this guards that path (the full behavioural
     # matrix is covered by the service tiers' test_typing.py).
-    # ⚠️ PROJECT_NAME must be exported ON THIS COMMAND: envsubst reads the ENVIRONMENT,
-    # not the shell's variables, and PROJECT_NAME is not exported until
+    # ⚠️ The render variable must be exported ON THIS COMMAND: envsubst reads the
+    # ENVIRONMENT, not the shell's variables, and it is not exported until
     # lib_minimal_render_pyproject runs later. Without it the substitution silently
     # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
     # package that still scaffolds without error. The heredoc this replaced used shell
     # interpolation, which sees unexported variables; envsubst does not.
-    PROJECT_NAME="$PROJECT_NAME" envsubst '${PROJECT_NAME}' \
+    PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_typing.py.tmpl" \
         > "$project_path/tests/unit/test_typing.py"
 
@@ -155,7 +165,7 @@ create_python_files() {
 # one adaptation that makes them resolve when nested inside the distributed package.
 rewrite_internal_imports() {
     local internal_dir="$1"
-    local pkg_prefix="${PROJECT_NAME}._internal"
+    local pkg_prefix="${PROJECT_PKG_NAME}._internal"
     local file
     while IFS= read -r file; do
         sed -i -E \
@@ -173,13 +183,17 @@ rewrite_internal_imports() {
 # `retry.py` is decoupled from it via an injectable `LogEmitter`.
 copy_internal_utils() {
     local project_path="$1"
-    local internal_dir="$project_path/src/$PROJECT_NAME/_internal"
+    local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
     local utils_src="$COMMON_TEMPLATE_ROOT/src/utils"
     local -a modules=(
         __init__.py dtypes.py br_identifiers.py http_downloader.py
-        retry.py tabular_reader.py provenance.py sidecar_metadata.py text.py zip_extractor.py
+        tabular_reader.py provenance.py sidecar_metadata.py text.py zip_extractor.py
         raw_workspace.py daily_cache.py
     )
+    # retry/ is a PACKAGE, not a module (blueprintx#116) — it needs cp -r, and it is listed
+    # apart from `modules` so the loop below stays a plain file copy. rewrite_internal_imports
+    # recurses, so its intra-package `from utils.retry.x` imports are rewritten like any other.
+    local -a packages=(retry)
     # logs.py is opt-in (prompt_logs): the convention is to inject a logger, not import one
     # (see the shipped utils/CLAUDE.md), so a lib only carries it when explicitly requested.
     if [[ "$INCLUDE_LOGS" == "true" ]]; then
@@ -189,10 +203,16 @@ copy_internal_utils() {
     fi
     local module
 
-    printf '"""Private internals of the %s package (not a public API)."""\n' "$PROJECT_NAME" \
+    printf '"""Private internals of the %s package (not a public API)."""\n' "$PROJECT_PKG_NAME" \
         > "$internal_dir/__init__.py"
     for module in "${modules[@]}"; do
         cp "$utils_src/$module" "$internal_dir/utils/$module"
+    done
+    local package
+    for package in "${packages[@]}"; do
+        # Contents, not the directory: `cp -r src dst` nests when dst exists.
+        mkdir -p "$internal_dir/utils/$package"
+        cp -r "$utils_src/$package/." "$internal_dir/utils/$package/"
     done
     # Runtime type-checking engine — single source in python-common/optional/typing.
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$internal_dir/utils/typing"
@@ -209,10 +229,10 @@ copy_internal_utils() {
 # without exposing it to consumers.
 copy_internal_config() {
     local project_path="$1"
-    local internal_dir="$project_path/src/$PROJECT_NAME/_internal"
+    local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
     local config_src="$COMMON_TEMPLATE_ROOT/src/config"
 
-    printf '"""Private configuration internals (data contracts) of %s."""\n' "$PROJECT_NAME" \
+    printf '"""Private configuration internals (data contracts) of %s."""\n' "$PROJECT_PKG_NAME" \
         > "$internal_dir/config/__init__.py"
     cp "$config_src/contracts/__init__.py" "$internal_dir/config/contracts/__init__.py"
     cp "$config_src/contracts/example_source.py" "$internal_dir/config/contracts/example_source.py"
@@ -231,7 +251,7 @@ copy_internal_config() {
 # (`ExamplePort`), mirroring `config/contracts/example_source.py`.
 copy_internal_ports() {
     local project_path="$1"
-    local internal_dir="$project_path/src/$PROJECT_NAME/_internal"
+    local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
     local ports_src="$COMMON_TEMPLATE_ROOT/optional/ports"
 
     cp "$ports_src/__init__.py" "$internal_dir/config/ports/__init__.py"
@@ -343,7 +363,7 @@ lib_minimal_render_pyproject() {
         *) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved" ;;
     esac
 
-    export PROJECT_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
+    export PROJECT_NAME PROJECT_PKG_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
         PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME \
         COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE PROJECT_LICENSE_CLASSIFIER
     envsubst < "$BLUEPRINTX_ROOT/templates/lib-minimal/pyproject.toml" > "$project_path/pyproject.toml"
@@ -449,6 +469,8 @@ lib_minimal_copy_project_scaffolding() {
     # python-common/tests/). The conftest makes a real network call impossible in
     # any test; the example demonstrates enforcing a family convention via __all__.
     mkdir -p "$project_path/tests/unit"
+    # The tests/ leaf doc — one source for every tier (blueprintx#124, #152).
+    cp "$COMMON_TEMPLATE_ROOT/tests/CLAUDE.md" "$project_path/tests/CLAUDE.md"
     cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
         "$project_path/tests/unit/test_pr_gate.py"

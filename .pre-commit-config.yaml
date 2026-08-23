@@ -130,6 +130,13 @@ repos:
         pass_filenames: false
         files: ^(bin/scaffold/python_.*\.sh|templates/python-common/tests/unit/.*\.py)$
 
+      - id: project-name-identities
+        name: dist name vs import package (blueprintx#113)
+        entry: bash bin/ci/check_project_name_identities.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/common\.sh|bin/blueprintx\.sh|bin/scaffold/python_.*\.sh|templates/lib-minimal/.*)$
+
       - id: validate-meta
         name: validate skeleton.meta integrity
         entry: bash bin/ci/validate_meta.sh
