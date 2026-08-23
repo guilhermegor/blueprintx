@@ -73,6 +73,80 @@ of your public `__all__`. The internal imports are package-qualified
   transitive presence is an accident of another package's tree and breaks silently the day that
   package drops or version-caps it. Run `poetry add <pkg>` for anything you import.
 
+## Three boundary rules, each with the test that applies it
+
+The section above says WHERE a boundary goes. These three say when one is worth drawing at
+all, and each is stated as a **test you can run on a decision** rather than as advice. All
+three cost real rework in a proving ground before they were written down.
+
+### 1. The seam knows the vendor; the callers do not
+
+The rule that keeps a dependency swappable is usually mis-stated as *"hide the library"*, and
+the naive reading of that does real damage: annotating the boundary with `Any`, erasing the
+vendor's type, protects nobody. It removes the type checking and leaves the coupling exactly
+where it was.
+
+What actually makes a vendor swappable is narrower: **the seam imports and TYPES the vendor;
+the callers import the seam.**
+
+```python
+# utils/http_downloader.py — the seam. It names the vendor, and it types it.
+import requests
+
+def download_file(str_url: str, path_dest: Path) -> Path: ...
+
+# model/whatever.py — the caller. It names the SEAM, and nothing else.
+from utils.http_downloader import download_file
+```
+
+> **The test.** On the day the vendor is replaced, how many files change?
+> One (the seam) means the boundary held. More than one means it never existed, however much
+> the calling code avoided saying the vendor's name.
+
+This is why `pandas` is `annotation_only` rather than banned outright: `-> pd.DataFrame` in a
+signature survives no swap and blocks none — it is the vocabulary the layers agreed on.
+`pd.read_sql(...)` is a call, and every file copied from the one that makes it inherits it.
+
+### 2. Externalise text only when the destination has a DIFFERENT change cost
+
+"Take the hard-coded text out of the code and put it in a YAML" reads as separation of
+concerns and often is not. The question is never *whether the thing is text*. It is whether
+the destination file **changes at a different rate, and by different people.**
+
+A tracked YAML that only the author of the calling code ever edits has separated nothing: it
+doubled the number of files that must change together, and added a parse step and a schema to
+keep in sync.
+
+> **The test.** Name the person who edits the new file WITHOUT touching the code, and name the
+> occasion. If you cannot name both, the text belongs where it is used.
+>
+> Passes: an e-mail template an operations lead rewords at quarter end. Passes: a locale file
+> a translator owns. Fails: a dict of column labels only the developer of that reader will
+> ever change.
+
+Measured on a 1,672-line e-mail-body module in a proving ground (2026-08-14), where the
+externalised copy was edited exclusively alongside the code that read it.
+
+### 3. Derive the boundary from the config that exists; never restate it
+
+A bootstrap or preflight phase that needs to know *which file belongs to which category*
+should **derive** that from the configuration already declaring it, rather than repeating the
+list. The duplicate looks harmless the day it is written, because the two copies are identical
+then. It is noticed only when they differ — and by then the question is which one is right.
+
+```python
+# Avoid — a second list that agrees with the first, until it does not.
+LIST_REQUIRED = ["cad_fi.csv", "inf_diario.csv"]
+
+# Prefer — the one declaration is the source; membership is derived from it.
+LIST_REQUIRED = [cls_contract.str_filename for cls_contract in contracts.ALL]
+```
+
+> **The test.** Could the two copies disagree, and would anything fail if they did?
+> If they can disagree silently, one of them must be computed from the other. This is the same
+> rule `check_codespell_sync.sh` exists to enforce for the two `.codespellrc` files — that
+> pair drifted in both directions, and the stale copy was the one shipping to projects.
+
 ## Releasing to PyPI
 
 Two workflows ship under `.github/workflows/` (present only when a GitHub remote is set up):
