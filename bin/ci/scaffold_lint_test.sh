@@ -33,7 +33,11 @@ git config --global user.email >/dev/null 2>&1 || git config --global user.email
 git config --global user.name >/dev/null 2>&1 || git config --global user.name "ci-bot"
 
 WORK_DIR="$(mktemp -d)"
-PROJECT_NAME="ci_scaffold"
+# HYPHENATED on purpose (blueprintx#113). This was `ci_scaffold` — already underscored,
+# which is exactly why the tier that derives its import package from the project name
+# scaffolded an unimportable `src/my-lib/` for years with this job green. A verification
+# name that cannot express the defect verifies nothing. Overridable for a one-off probe.
+PROJECT_NAME="${SCAFFOLD_PROJECT_NAME:-ci-scaffold}"
 PROJECT_PATH="$WORK_DIR/$PROJECT_NAME"
 
 # Seed interpreter caches into templates/ BEFORE scaffolding (#205).

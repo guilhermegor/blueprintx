@@ -127,6 +127,21 @@ jobs:
           LINT_ACTIONS_REQUIRED: "1"
         run: bash bin/ci/check_actions.sh
 
+  project-name-identities:
+    name: Dist name vs import package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install envsubst
+        run: command -v envsubst >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y gettext-base)
+
+      - name: Render the lib-minimal templates with a hyphenated name and compile them
+        run: bash bin/ci/check_project_name_identities.sh
+
   validate-meta:
     name: Validate skeleton.meta integrity
     runs-on: ubuntu-latest

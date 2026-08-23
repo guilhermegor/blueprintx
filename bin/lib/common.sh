@@ -288,3 +288,28 @@ scaffold_purge_caches() {
         -prune -exec rm -rf {} + 2>/dev/null || true
     find "$project_path" -type f -name '*.py[cod]' -delete 2>/dev/null || true
 }
+
+to_import_package_name() {
+    # Derive the Python IMPORT package name from a distribution name (blueprintx#113).
+    #
+    # A PyPI *distribution* name may contain hyphens; a Python *import package* may
+    # not — a hyphen is an operator, so `from my-lib.thing import x` is a parse-time
+    # SyntaxError. Conflating the two writes `src/my-lib/` and every deep import
+    # inside the generated package fails to compile.
+    #
+    # It hides unusually well, which is why it survived: the top-level `__init__`
+    # compiles either way (it has nothing to import from itself), and
+    # `importlib.import_module("my-lib")` succeeds on the string form. Only a
+    # submodule import written as SOURCE actually breaks — so the smoke test that
+    # catches it has to reach past the top level.
+    local str_dist="$1"
+    printf '%s' "${str_dist//-/_}"
+}
+
+is_valid_project_name() {
+    # A project name must survive both identities: a hyphenated dist name AND the
+    # underscored import package derived from it. Rejecting here is the whole fix
+    # for names no substitution can rescue (a leading digit, a dot, a space).
+    local str_name="$1"
+    [[ "$str_name" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+}
