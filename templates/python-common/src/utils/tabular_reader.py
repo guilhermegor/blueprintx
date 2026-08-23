@@ -32,7 +32,7 @@ here stays domain-agnostic.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 import csv
 from dataclasses import dataclass
 import json
@@ -782,4 +782,10 @@ def _read_excel_raw(
 
 # The dispatch table IS the format policy: one entry per extension with a dedicated reader.
 # Anything not listed is read as Excel, which covers .xlsx/.xls/.xlsm without repeating them.
-_DICT_RAW_READERS = {".csv": _read_csv_raw, ".json": _read_json_raw}
+# ⚠️ Annotated, not inferred. Without the explicit Callable type mypy infers the value type
+# from the two entries and then refuses the dispatched call — "Cannot call function of unknown
+# type" — which only shows up in a GENERATED project, since that is where mypy runs over src/.
+_DICT_RAW_READERS: dict[str, Callable[..., pd.DataFrame]] = {
+	".csv": _read_csv_raw,
+	".json": _read_json_raw,
+}

@@ -65,7 +65,7 @@ def test_source_keys_are_unique_across_the_family() -> None:
 	assert len(list_keys) == len(set(list_keys)), f"duplicate str_source_key in {list_keys}"
 
 
-def _discovered_contract_ids() -> list:
+def _discovered_contract_ids() -> list[str]:
 	"""Return the discovered contract ids for parametrization (``[]`` off a service tier).
 
 	⚠️ Runs at COLLECTION time, so it must never raise: a tier that ships no contracts package
