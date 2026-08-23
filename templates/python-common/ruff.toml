@@ -135,6 +135,25 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "config.contracts.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
 
 [lint.isort]
+# ⚠️ DECLARED, never inferred. Without this ruff has to GUESS whether `config`/`utils` are
+# first-party, and different ruff versions guess differently: a script that puts `src` on
+# sys.path had its imports sorted one way by the ruff that wrote it and the other way by the
+# newer ruff pinned in a generated project. The visible symptom is not a lint error — it is
+# `make lint` MODIFYING a freshly scaffolded tree, so the scaffold check fails on the diff
+# rather than on any rule, and the message names no rule to fix.
+#
+# A superset of every tier's layer names: one that does not exist in a given tier simply
+# never matches, so all five tiers share this one declaration.
+known-first-party = [
+    "app",
+    "capabilities",
+    "chassis",
+    "config",
+    "controller",
+    "model",
+    "utils",
+    "view",
+]
 force-single-line = false
 combine-as-imports = true
 split-on-trailing-comma = true

@@ -18,6 +18,10 @@ from chassis.db.domain.ports import DatabaseHandler, Record
 
 _TS_FMT = "%Y%m%d_%H%M%S"
 
+# A record_id is `<name>_<date>_<time>_<sha8>`. Both the split count and the expected
+# length derive from this one number, so they cannot drift apart.
+_INT_RECORD_ID_PARTS = 4
+
 
 class JoblibHandler(DatabaseHandler):
 	"""Immutable binary artifact store backed by joblib with integrity verification.
@@ -219,8 +223,12 @@ class JoblibHandler(DatabaseHandler):
 			``_saved_at`` metadata mismatches, or HMAC verification fails.
 		"""
 
-		list_parts = record_id.rsplit("_", 3)
-		if len(list_parts) != 4:
+		# ⚠️ The split count and the expected length are ONE fact: a record_id is
+		# `<name>_<date>_<time>_<sha8>`, so it splits into _INT_RECORD_ID_PARTS pieces on the
+		# last _INT_RECORD_ID_PARTS - 1 separators. Written as two bare numbers they can drift
+		# apart, and the failure is a confusing "invalid format" on a valid id.
+		list_parts = record_id.rsplit("_", _INT_RECORD_ID_PARTS - 1)
+		if len(list_parts) != _INT_RECORD_ID_PARTS:
 			raise ValueError(f"Invalid record_id format: {record_id!r}")
 		str_sha256_expected = list_parts[-1]
 		str_sha256_actual = hashlib.sha256(bytes_data).hexdigest()[:8]
@@ -235,7 +243,9 @@ class JoblibHandler(DatabaseHandler):
 			bytes_sig_stored = path_sig.read_bytes()
 			bytes_sig_actual = hmac.new(self._key, bytes_data, hashlib.sha256).digest()
 			if not hmac.compare_digest(bytes_sig_stored, bytes_sig_actual):
-				raise ValueError(f"HMAC verification failed for {record_id!r} — file may be tampered")
+				raise ValueError(
+					f"HMAC verification failed for {record_id!r} — file may be tampered"
+				)
 		buf = io.BytesIO(bytes_data)
 		dict_record = joblib.load(buf)  # noqa: S301
 		str_ts_expected = f"{list_parts[-3]}_{list_parts[-2]}"

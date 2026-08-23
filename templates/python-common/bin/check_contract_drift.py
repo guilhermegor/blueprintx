@@ -26,6 +26,10 @@ import tempfile
 # invoked as ``python bin/check_contract_drift.py`` from the project root (as the workflow does).
 sys.path.insert(0, "src")
 
+# ⚠️ This order is stable only because `ruff.toml` DECLARES known-first-party. Left to
+# inference, ruff has to guess whether `config`/`utils` are first-party once `src` is on
+# sys.path, and different ruff versions guess differently — which shows up not as a lint
+# error but as `make lint` MODIFYING a freshly scaffolded tree.
 import yaml  # noqa: E402 — after the sys.path bootstrap above
 
 from config import contracts as contracts_module  # noqa: E402

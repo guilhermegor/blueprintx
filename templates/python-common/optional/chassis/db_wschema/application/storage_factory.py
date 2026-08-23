@@ -43,7 +43,9 @@ def build_storage_handler() -> DatabaseHandler:
 	bytes_secret = os.getenv("JOBLIB_SECRET_KEY", "").encode() or None
 
 	dict_builders: dict[str, Callable[[], DatabaseHandler]] = {
-		"json": lambda: JSONDatabaseHandler(path_data_dir / os.getenv("DB_FILE_JSON", "records.json")),
+		"json": lambda: JSONDatabaseHandler(
+			path_data_dir / os.getenv("DB_FILE_JSON", "records.json")
+		),
 		"csv": lambda: CSVDatabaseHandler(path_data_dir / os.getenv("DB_FILE_CSV", "records.csv")),
 		"joblib": lambda: JoblibHandler(
 			path_data_dir / os.getenv("JOBLIB_DIR", "artifacts"),
@@ -53,5 +55,7 @@ def build_storage_handler() -> DatabaseHandler:
 
 	if str_backend not in dict_builders:
 		str_supported = ", ".join(dict_builders)
-		raise ValueError(f"Unsupported STORAGE_BACKEND {str_backend!r}. Supported: {str_supported}")
+		raise ValueError(
+			f"Unsupported STORAGE_BACKEND {str_backend!r}. Supported: {str_supported}"
+		)
 	return dict_builders[str_backend]()

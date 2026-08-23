@@ -87,10 +87,14 @@ class CSVDatabaseHandler(DatabaseHandler):
 		dict_updated: Optional[Record] = None
 		list_rows: list[Record] = []
 		for dict_row in self._read_all():
+			# A separate name rather than rebinding the loop variable: `dict_row` would then
+			# mean two different things in one body — the row as READ and the row as it will
+			# be WRITTEN — and a later edit between the two reads whichever it happens to hit.
+			dict_out = dict_row
 			if str(dict_row.get(self.id_field)) == str(record_id):
-				dict_row = {**dict_row, **updates, self.id_field: record_id}
-				dict_updated = dict_row
-			list_rows.append(dict_row)
+				dict_out = {**dict_row, **updates, self.id_field: record_id}
+				dict_updated = dict_out
+			list_rows.append(dict_out)
 		if dict_updated is not None:
 			self._write_all(list_rows)
 		return dict_updated
