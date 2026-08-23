@@ -561,3 +561,48 @@ def test_a_dotted_deny_spares_the_sibling_subpackage(tmp_path: Path) -> None:
 	int_code, str_out = _sublayer_case(tmp_path, "from chassis.typing import Meta\n")
 
 	assert int_code == 0, str_out
+
+
+def test_a_glob_governs_packages_NESTED_below_the_sublayer(tmp_path: Path) -> None:
+	"""⚠️ ``fnmatch`` matches the WHOLE string, so a deeper module needs ancestor matching.
+
+	``capabilities/*/domain`` matches ``capabilities/notes/domain`` and NOT
+	``capabilities/notes/domain/entities`` — the ``*`` does not stop at ``/``, but the pattern
+	still has to consume the entire path. A module one package deeper therefore fell back to
+	the broad ``capabilities`` key and lost the sublayer rules, which is a rule that silently
+	stops applying the moment someone adds a subpackage.
+	"""
+	path_deep = tmp_path / "src" / "capabilities" / "notes" / "domain" / "entities"
+	path_deep.mkdir(parents=True)
+	(path_deep / "note.py").write_text("from chassis.db_schema import Repo\n", encoding="utf-8")
+	(tmp_path / "src" / "chassis").mkdir(parents=True, exist_ok=True)
+	(tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 1, str_out
+	assert "capabilities/*/domain" in str_out
+
+
+def test_a_dotted_deny_also_catches_the_RELATIVE_form(tmp_path: Path) -> None:
+	"""⚠️ The relative twin of a rejected import must be rejected too.
+
+	Resolving a relative import to its first component only made every DOTTED deny key miss:
+	``from ....chassis.db_schema import Repo`` reduced to ``chassis``, which no
+	``chassis.db_schema`` rule matches. The absolute form was rejected while its relative twin
+	passed — an inconsistency worse than not having the rule, because the gate looks enforced.
+	"""
+	path_dom = tmp_path / "src" / "capabilities" / "notes" / "domain"
+	path_dom.mkdir(parents=True)
+	(path_dom / "ports.py").write_text(
+		"from ....chassis.db_schema import Repo\n", encoding="utf-8"
+	)
+	(tmp_path / "src" / "chassis").mkdir(parents=True, exist_ok=True)
+	(tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 1, str_out
+	assert "chassis.db_schema" in str_out

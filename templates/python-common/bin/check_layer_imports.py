@@ -244,14 +244,22 @@ def resolve_layer(tuple_rel: tuple, dict_policy: dict) -> str:
 		The policy key to apply.
 	"""
 	str_broad = tuple_rel[0] if len(tuple_rel) > 1 else _ROOT_LAYER
-	str_dir = "/".join(tuple_rel[:-1])
-	list_globs = [
-		str_key
-		for str_key in (dict_policy.get("layers") or {})
-		if "*" in str_key and fnmatch.fnmatch(str_dir, str_key)
-	]
-	# Longest first: `capabilities/*/domain` must beat a broader `capabilities/*`.
-	return max(list_globs, key=len) if list_globs else str_broad
+	tuple_dirs = tuple_rel[:-1]
+	list_keys = [str_key for str_key in (dict_policy.get("layers") or {}) if "*" in str_key]
+
+	# ⚠️ Matched against every ANCESTOR of the file's directory, deepest first — not the
+	# directory alone. fnmatch's `*` does not stop at `/`, but the pattern must still match
+	# the WHOLE string, so `capabilities/*/domain` matches `capabilities/notes/domain` and
+	# NOT `capabilities/notes/domain/entities`. A module one package deeper would fall back
+	# to the broad `capabilities` key and lose the sublayer rules — the same quiet loss of
+	# enforcement this gate exists to prevent.
+	for int_depth in range(len(tuple_dirs), 0, -1):
+		str_prefix = "/".join(tuple_dirs[:int_depth])
+		list_hits = [str_key for str_key in list_keys if fnmatch.fnmatch(str_prefix, str_key)]
+		if list_hits:
+			# Longest first: `capabilities/*/domain` beats a broader `capabilities/*`.
+			return max(list_hits, key=len)
+	return str_broad
 
 
 def resolve_layer_policy(dict_policy: dict, str_layer: str) -> tuple[dict, dict]:
@@ -495,7 +503,7 @@ def find_file_problems(
 	)
 
 
-def relative_import_layer(tuple_pkg_parts: tuple, cls_node: ast.ImportFrom) -> str | None:
+def relative_import_target(tuple_pkg_parts: tuple, cls_node: ast.ImportFrom) -> str | None:
 	"""Resolve a RELATIVE import to the layer it actually targets.
 
 	⚠️ ``imported_names`` deliberately yields nothing for a relative import, because for the
@@ -519,7 +527,12 @@ def relative_import_layer(tuple_pkg_parts: tuple, cls_node: ast.ImportFrom) -> s
 	Returns
 	-------
 	str or None
-		The target's top-level layer, or ``None`` when it cannot be resolved.
+		The target's FULL dotted path, or ``None`` when it cannot be resolved.
+
+		⚠️ Dotted, not just the first component. ``_matching_deny_key`` accepts a dotted key
+		(``chassis.db_schema``), and returning only ``chassis`` made every such rule miss —
+		so the ABSOLUTE form of an import was rejected while its relative twin passed, which
+		is worse than not having the rule at all.
 	"""
 	if not tuple_pkg_parts:
 		return None
@@ -529,10 +542,8 @@ def relative_import_layer(tuple_pkg_parts: tuple, cls_node: ast.ImportFrom) -> s
 	)
 	if int_climb and len(tuple_pkg_parts) < int_climb:
 		return None
-	tuple_full = (
-		tuple_base + tuple((cls_node.module or "").split(".")) if cls_node.module else tuple_base
-	)
-	return tuple_full[0] if tuple_full else None
+	tuple_full = tuple_base + tuple(cls_node.module.split(".")) if cls_node.module else tuple_base
+	return ".".join(tuple_full) if tuple_full else None
 
 
 def direction_problems(
@@ -599,7 +610,7 @@ def direction_problems(
 		(cls_node, str_target)
 		for cls_node in ast.walk(cls_tree)
 		if isinstance(cls_node, ast.ImportFrom) and cls_node.level
-		for str_target in [relative_import_layer(tuple_pkg_parts, cls_node)]
+		for str_target in [relative_import_target(tuple_pkg_parts, cls_node)]
 		if str_target is not None
 	]
 	return [
