@@ -124,6 +124,46 @@ def _decorator_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
 	return names
 
 
+_MARKER = "type-checker-ok:"
+
+
+def _escape_reason(
+	node: ast.FunctionDef | ast.AsyncFunctionDef, list_lines: list[str]
+) -> str | None:
+	"""Return the written reason for skipping the checker, or ``None`` when there is none.
+
+	Scans the contiguous comment block immediately above the function **and** its signature
+	lines, because ``ruff format`` re-wraps a long signature and pushes a trailing comment onto
+	the closing-paren line — the same widening ``check_complexity.sh`` needed after a correctly
+	written escape was silently voided.
+
+	⚠️ A bare ``# type-checker-ok`` is NOT accepted. The reason is the whole point: an
+	unexplained marker is a rule the next reader widens.
+
+	Parameters
+	----------
+	node : ast.FunctionDef or ast.AsyncFunctionDef
+		The function that lacks ``@type_checker``.
+	list_lines : list of str
+		The file's source lines, 0-indexed.
+
+	Returns
+	-------
+	str or None
+		The reason text, or ``None`` when no reason-carrying marker is present.
+	"""
+	int_first = min([node.lineno, *[d.lineno for d in node.decorator_list]]) - 1
+	int_last = node.body[0].lineno - 1 if node.body else node.lineno
+	int_top = int_first
+	while int_top > 0 and list_lines[int_top - 1].lstrip().startswith("#"):
+		int_top -= 1
+	for str_line in list_lines[int_top:int_last]:
+		if _MARKER in str_line:
+			str_reason = str_line.split(_MARKER, 1)[1].strip()
+			return str_reason or None
+	return None
+
+
 def _check_class(node: ast.ClassDef, filepath: str) -> int:
 	"""Check one public class for correct runtime-checker application.
 
@@ -177,7 +217,9 @@ def check_file(filepath: str) -> int:
 	"""
 	errors = 0
 	with open(filepath, encoding="utf-8") as fh:
-		tree = ast.parse(fh.read(), filename=filepath)
+		str_source = fh.read()
+	list_lines = str_source.splitlines()
+	tree = ast.parse(str_source, filename=filepath)
 	for node in tree.body:
 		if isinstance(node, ast.ClassDef) and not _is_dunder(node.name):
 			errors += _check_class(node, filepath)
@@ -185,6 +227,7 @@ def check_file(filepath: str) -> int:
 			isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
 			and not _is_dunder(node.name)
 			and "type_checker" not in _decorator_names(node)
+			and _escape_reason(node, list_lines) is None
 		):
 			print(
 				f"❌ {node.name}() at line {node.lineno} ({filepath}): a standalone function must "

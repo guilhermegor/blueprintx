@@ -136,9 +136,9 @@ def build_pipeline(  # noqa: PLR0913
 	)
 
 
-# Undecorated on purpose: the bare `-> NoReturn` annotation must stay visible to mypy so it
-# narrows the callers' Optional values after the `if x is None: _abort(...)` guard. The runtime
-# checker adds nothing to a one-arg string abort.
+# type-checker-ok: the bare `-> NoReturn` must stay visible to mypy so it narrows the callers'
+# Optional values after the `if x is None: _abort(...)` guard; wrapping it would erase that, and
+# the runtime checker adds nothing to a one-arg string abort.
 def _abort(str_reason: str) -> NoReturn:
 	"""Print a startup error to stderr and abort the process (``SystemExit`` code 2).
 
