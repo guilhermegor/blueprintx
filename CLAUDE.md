@@ -73,7 +73,7 @@ finds here.
 The **function-length gate** is wired on both sides but has only ONE implementation:
 `templates/python-common/bin/check_function_length.py`, which BlueprintX runs over its own
 tree via `--root .` (pre-commit hook `function-length`, the `function-length` CI job,
-`make check_function_length`, `./tasks.sh check_function_length`) and which every generated
+`make check_function_length` here; `poe check_function_length` in a generated project) and which every generated
 project runs on itself. A second copy was the obvious shape and is exactly what
 `check_codespell_sync.sh` exists to police, so there is not one.
 

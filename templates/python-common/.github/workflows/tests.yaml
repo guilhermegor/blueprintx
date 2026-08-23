@@ -232,7 +232,7 @@ jobs:
         # "found twice" error on the deeper DDD tree).
         run: cd src && poetry run mypy --config-file ../mypy.ini .
 
-      - name: Run Non-Python Lint Gates (shell, sql, yaml, actions)
+      - name: Run Non-Python Lint Gates (shell, sql, yaml, actions, filenames, docker)
         if: runner.os == 'Linux'
         # Mirrors `poe lint` and the pre-commit lint-* hooks (one home, zero drift).
         # shellcheck/shfmt are system tools; install them so the shell gate actually runs
@@ -258,6 +258,8 @@ jobs:
           bash bin/lint_sql.sh
           bash bin/lint_yaml.sh
           LINT_ACTIONS_REQUIRED=1 bash bin/lint_actions.sh
+          bash bin/check_unix_filenames.sh
+          LINT_DOCKER_REQUIRED=1 bash bin/lint_docker.sh
 
       - name: Run Integration Tests
         # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a
