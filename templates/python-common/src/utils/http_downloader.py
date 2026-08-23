@@ -132,30 +132,84 @@ def download_file(str_url: str, path_dest: Path, int_timeout_s: int = _TIMEOUT_S
 	OSError
 		If the download fails (network error, non-2xx status, redirect, timeout, write).
 	"""
+	# Three jobs, three functions. Validate the URL, fetch the bytes, write them down. They
+	# used to be one body, so a reader could not tell which failure belonged to which stage.
+	_assert_url_allowed(str_url)
+	path_dest.parent.mkdir(parents=True, exist_ok=True)
+	path_dest.write_bytes(_fetch_bytes(str_url, int_timeout_s))
+	return path_dest
+
+
+def _assert_url_allowed(
+	str_url: str,
+) -> None:  # complexity-ok: input validation, one branch per rejection rule
+	"""Reject a blank URL or a non-http/https scheme, then validate the host.
+
+	Parameters
+	----------
+	str_url : str
+		The URL to validate.
+
+	Returns
+	-------
+	None
+
+	Raises
+	------
+	ValueError
+		If the URL is blank, its scheme is not allowed, or its host is not public.
+	OSError
+		If the host cannot be resolved.
+	"""
 	if not str_url.strip():
 		raise ValueError("empty download URL")
 	str_scheme = str_url.split("://", 1)[0].lower() if "://" in str_url else ""
 	if str_scheme not in _ALLOWED_SCHEMES:
 		raise ValueError(f"unsupported URL scheme (expected http/https): {str_url!r}")
 	_assert_public_host(str_url)
-	path_dest.parent.mkdir(parents=True, exist_ok=True)
-	# Scheme is validated and redirects are blocked by _OPENER, so the S310 arbitrary-scheme
-	# / auto-redirect concerns do not apply here.
+
+
+def _fetch_bytes(
+	str_url: str, int_timeout_s: int
+) -> bytes:  # complexity-ok: transport error handling
+	"""Fetch a validated URL and return its body, mapping transport failures to ``OSError``.
+
+	⚠️ Call only AFTER :func:`_assert_url_allowed`. The S310 suppressions below are sound
+	precisely because the scheme is already validated and the opener blocks redirects; reached
+	without that validation they would be a bare arbitrary-scheme open.
+
+	Parameters
+	----------
+	str_url : str
+		An already-validated URL.
+	int_timeout_s : int
+		Socket timeout in seconds.
+
+	Returns
+	-------
+	bytes
+		The response body.
+
+	Raises
+	------
+	OSError
+		On a non-2xx status or any transport failure.
+	"""
 	cls_request = request.Request(str_url, method="GET")  # noqa: S310
 	try:
 		with _OPENER.open(cls_request, timeout=int_timeout_s) as cls_response:  # noqa: S310
 			int_status = cls_response.status
 			if not _HTTP_OK_MIN <= int_status <= _HTTP_OK_MAX:
 				raise OSError(f"Download returned status {int_status} for {str_url!r}")
-			bytes_body = cls_response.read()
+			return cls_response.read()
 	except error.URLError as cls_err:
 		raise OSError(f"Failed to download {str_url!r}: {cls_err}") from cls_err
-	path_dest.write_bytes(bytes_body)
-	return path_dest
 
 
 @type_checker
-def _assert_public_host(str_url: str) -> None:
+def _assert_public_host(
+	str_url: str,
+) -> None:  # complexity-ok: SSRF guard, one branch per rejection rule
 	"""Reject a URL whose host resolves to a non-public address (SSRF guard).
 
 	Resolves every address the host maps to and rejects the request if any is private,

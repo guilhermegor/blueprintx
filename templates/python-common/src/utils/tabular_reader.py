@@ -315,39 +315,61 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 	list of str
 		Missing required columns and CNPJ columns holding no valid CNPJ.
 	"""
-	list_problems: list[str] = []
-	for str_col in cls_contract.tuple_required:
-		if str_col not in df_input.columns:
-			list_problems.append(
-				f"Required column missing in '{cls_contract.str_name}': '{str_col}'"
-			)
-	for str_col in cls_contract.tuple_cnpj_cols:
-		if str_col not in df_input.columns:
-			continue
-		series_col = df_input[str_col]
-		# An EMPTY column is not a broken column. Over an empty series the any-reducer
-		# answers False, the exact answer a column of garbage gives, so without this guard
-		# a source reporting "nothing today" by shipping its header alone is reproved as
-		# holding no valid CNPJ and the run dies on a perfectly well-formed file. A column
-		# that HAS values and none valid must still fail, so the guard is emptiness only.
-		if series_col.empty:
-			continue
-		# Coerce with the NA-safe string helper rather than astype-to-str. Below pandas 3 the
-		# latter renders a missing value as the literal nan, and that string then fails
-		# validation for entirely the wrong reason.
-		series_valid = series_col.map(
-			lambda obj_cell: is_valid_cnpj(unmask_cnpj(safe_str(obj_cell)))
-		)
-		if not bool(series_valid.any()):
-			list_problems.append(
-				f"Column '{str_col}' in '{cls_contract.str_name}' holds no valid CNPJ "
-				f"(unexpected data type)"
-			)
-	return list_problems
+	list_missing = [
+		f"Required column missing in '{cls_contract.str_name}': '{str_col}'"
+		for str_col in cls_contract.tuple_required
+		if str_col not in df_input.columns
+	]
+	list_cnpj = [
+		str_problem
+		for str_col in cls_contract.tuple_cnpj_cols
+		if str_col in df_input.columns
+		for str_problem in [
+			_cnpj_column_problem(df_input[str_col], str_col, cls_contract.str_name)
+		]
+		if str_problem is not None
+	]
+	return list_missing + list_cnpj
+
+
+def _cnpj_column_problem(  # complexity-ok: two acceptance rules, empty-column one load-bearing
+	series_col: pd.Series, str_col: str, str_contract: str
+) -> str | None:
+	"""Return the problem with a CNPJ column, or ``None`` when it is acceptable.
+
+	⚠️ An EMPTY column is not a broken column. Over an empty series the any-reducer answers
+	False — the exact answer a column of garbage gives — so without this guard a source
+	reporting "nothing today" by shipping its header alone is reproved as holding no valid
+	CNPJ, and the run dies on a perfectly well-formed file. A column that HAS values and none
+	valid must still fail, so the guard is emptiness only.
+
+	Parameters
+	----------
+	series_col : pd.Series
+		The column to validate.
+	str_col : str
+		Its name, for the message.
+	str_contract : str
+		The contract's name, for the message.
+
+	Returns
+	-------
+	str or None
+		The problem description, or ``None``.
+	"""
+	if series_col.empty:
+		return None
+	# Coerce with the NA-safe string helper rather than astype-to-str. Below pandas 3 the
+	# latter renders a missing value as the literal nan, and that string then fails
+	# validation for entirely the wrong reason.
+	series_valid = series_col.map(lambda obj_cell: is_valid_cnpj(unmask_cnpj(safe_str(obj_cell))))
+	if bool(series_valid.any()):
+		return None
+	return f"Column '{str_col}' in '{str_contract}' holds no valid CNPJ (unexpected data type)"
 
 
 @type_checker
-def decode_positional_payload(
+def decode_positional_payload(  # complexity-ok: two rejection rules, never invent or drop data
 	list_columns: Sequence[str], list_rows: Sequence[Sequence[Any]]
 ) -> pd.DataFrame:
 	"""Decode an API payload whose rows are positional arrays beside a separate header.
@@ -392,15 +414,23 @@ def decode_positional_payload(
 		)
 
 	int_widest = max((len(seq_row) for seq_row in list_rows), default=int_declared)
-	for int_pos in range(int_declared, int_widest):
-		list_surplus = [seq_row[int_pos] for seq_row in list_rows if len(seq_row) > int_pos]
-		if any(obj_value not in (None, "") for obj_value in list_surplus):
-			raise ContractError(
-				[
-					f"Positional payload row is wider than its header and surplus position "
-					f"{int_pos} holds a value — it cannot be named, so it must not be dropped"
-				]
-			)
+	# The first surplus position holding a real value, if any. A comprehension rather than a
+	# loop with a raise inside it, so the search and the rejection read as separate steps.
+	list_populated_surplus = [
+		int_pos
+		for int_pos in range(int_declared, int_widest)
+		if any(
+			seq_row[int_pos] not in (None, "") for seq_row in list_rows if len(seq_row) > int_pos
+		)
+	]
+	if list_populated_surplus:
+		raise ContractError(
+			[
+				f"Positional payload row is wider than its header and surplus position "
+				f"{list_populated_surplus[0]} holds a value — it cannot be named, so it "
+				f"must not be dropped"
+			]
+		)
 
 	return pd.DataFrame(
 		[list(seq_row)[:int_declared] for seq_row in list_rows], columns=list(list_columns)
@@ -408,7 +438,9 @@ def decode_positional_payload(
 
 
 @type_checker
-def resolve_sheet_name(path_file: Path, tuple_known_names: tuple[str, ...]) -> str:
+def resolve_sheet_name(  # complexity-ok: three documented resolution outcomes, one branch each
+	path_file: Path, tuple_known_names: tuple[str, ...]
+) -> str:
 	"""Resolve which worksheet to read from a workbook whose sheet name varies by source.
 
 	A **single-sheet** workbook uses that one sheet (whatever its name); a **multi-sheet**
@@ -441,10 +473,18 @@ def resolve_sheet_name(path_file: Path, tuple_known_names: tuple[str, ...]) -> s
 	if len(list_sheets) == 1:
 		return list_sheets[0]
 	dict_by_lower = {s.casefold(): s for s in list_sheets}
-	for str_known in tuple_known_names:
-		str_match = dict_by_lower.get(str_known.casefold())
-		if str_match is not None:
-			return str_match
+	# First known name present, in the caller's priority order — stated as a search rather
+	# than a loop that exits from the middle.
+	str_match = next(
+		(
+			dict_by_lower[str_known.casefold()]
+			for str_known in tuple_known_names
+			if str_known.casefold() in dict_by_lower
+		),
+		None,
+	)
+	if str_match is not None:
+		return str_match
 	raise ContractError(
 		[
 			f"{path_file.name}: multiple sheets {list_sheets} and none with a known name "
@@ -599,44 +639,147 @@ def _read_raw_dispatch(
 	"""
 	if not path_file.exists():
 		raise FileNotFoundError(f"File not found: {path_file}")
-	str_suffix = path_file.suffix.lower()
-	if str_suffix == ".csv":
-		if list_columns is not None:
-			return pd.read_csv(
-				path_file,
-				dtype=str_dtype,
-				sep=str_csv_sep,
-				header=None,
-				names=list(list_columns),
-				encoding=str_encoding,
-				quoting=int_csv_quoting,
-			)
-		return pd.read_csv(
-			path_file,
-			dtype=str_dtype,
-			sep=str_csv_sep,
-			encoding=str_encoding,
-			quoting=int_csv_quoting,
-		)
-	if str_suffix == ".json":
-		# Never use pandas' own JSON reader here. It infers types before anything can ask it
-		# not to, and the later astype cannot undo that. It coerces even values the document
-		# QUOTES as strings — measured, "1000.50" comes back as 1000.5 and "007" as 7 — so
-		# the "always read as text" guarantee read_table documents was false on this branch
-		# alone while the CSV branch honoured it. Parsing floats and ints as str keeps the
-		# exact source token, which is what a Decimal column is later built from.
-		obj_json = json.loads(
-			path_file.read_text(encoding=str_encoding), parse_float=str, parse_int=str
-		)
-		# A payload carrying BOTH a header and positional rows is unambiguous, so decode it
-		# rather than handing pandas a dict it would read as two unrelated columns.
-		if isinstance(obj_json, dict) and {"columns", "rows"} <= set(obj_json):
-			df_json = decode_positional_payload(obj_json["columns"], obj_json["rows"])
-		else:
-			df_json = pd.DataFrame(obj_json)
-		return df_json.astype(str_dtype) if str_dtype is not None else df_json
-	# An empty sheet name means "the first worksheet, whatever it is named" — external files
-	# arrive with locale-dependent default sheet names such as Planilha1 or Sheet1, so read the
-	# first sheet by position rather than guessing its name.
+	# Dict dispatch on the extension rather than an if-chain, which is the house rule for
+	# branching on a VALUE. Adding a format is adding a key, and each format's reader is a
+	# named function that can be read, tested and changed on its own. Excel is the DEFAULT
+	# rather than a key, because it covers several extensions.
+	fn_reader = _DICT_RAW_READERS.get(path_file.suffix.lower(), _read_excel_raw)
+	return fn_reader(
+		path_file,
+		str_sheet=str_sheet,
+		str_dtype=str_dtype,
+		str_csv_sep=str_csv_sep,
+		list_columns=list_columns,
+		str_encoding=str_encoding,
+		int_header_row=int_header_row,
+		int_csv_quoting=int_csv_quoting,
+	)
+
+
+def _read_csv_raw(
+	path_file: Path,
+	str_dtype: str | None = None,
+	str_csv_sep: str = ",",
+	list_columns: Sequence[str] | None = None,
+	str_encoding: str = "utf-8-sig",
+	int_csv_quoting: int = csv.QUOTE_MINIMAL,
+	**_kwargs: object,
+) -> pd.DataFrame:
+	"""Read a CSV, naming the columns positionally when the file carries no header.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The file to read.
+	str_dtype : str or None, optional
+		Dtype passed through to pandas.
+	str_csv_sep : str, optional
+		Field separator.
+	list_columns : sequence of str or None, optional
+		When given, the file is treated as headerless and these names are applied.
+	str_encoding : str, optional
+		Text encoding.
+	int_csv_quoting : int, optional
+		``csv`` quoting constant.
+	**_kwargs : object
+		Ignored; present so every reader shares one dispatch signature.
+
+	Returns
+	-------
+	pd.DataFrame
+		The raw frame.
+	"""
+	dict_header = {"header": None, "names": list(list_columns)} if list_columns is not None else {}
+	return pd.read_csv(
+		path_file,
+		dtype=str_dtype,
+		sep=str_csv_sep,
+		encoding=str_encoding,
+		quoting=int_csv_quoting,
+		**dict_header,
+	)
+
+
+def _read_json_raw(
+	path_file: Path,
+	str_dtype: str | None = None,
+	str_encoding: str = "utf-8-sig",
+	**_kwargs: object,
+) -> pd.DataFrame:
+	"""Read a JSON document as TEXT, decoding a header-plus-positional-rows payload.
+
+	⚠️ Never use pandas' own JSON reader here. It infers types before anything can ask it not
+	to, and the later astype cannot undo that. It coerces even values the document QUOTES as
+	strings — measured, ``"1000.50"`` comes back as ``1000.5`` and ``"007"`` as ``7`` — so the
+	"always read as text" guarantee ``read_table`` documents was false on this branch alone
+	while the CSV branch honoured it. Parsing floats and ints as ``str`` keeps the exact source
+	token, which is what a Decimal column is later built from.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The file to read.
+	str_dtype : str or None, optional
+		Dtype applied after decoding.
+	str_encoding : str, optional
+		Text encoding.
+	**_kwargs : object
+		Ignored; present so every reader shares one dispatch signature.
+
+	Returns
+	-------
+	pd.DataFrame
+		The raw frame.
+	"""
+	obj_json = json.loads(
+		path_file.read_text(encoding=str_encoding), parse_float=str, parse_int=str
+	)
+	# A payload carrying BOTH a header and positional rows is unambiguous, so decode it
+	# rather than handing pandas a dict it would read as two unrelated columns.
+	bool_positional = isinstance(obj_json, dict) and {"columns", "rows"} <= set(obj_json)
+	df_json = (
+		decode_positional_payload(obj_json["columns"], obj_json["rows"])
+		if bool_positional
+		else pd.DataFrame(obj_json)
+	)
+	return df_json.astype(str_dtype) if str_dtype is not None else df_json
+
+
+def _read_excel_raw(
+	path_file: Path,
+	str_sheet: str = "",
+	str_dtype: str | None = None,
+	int_header_row: int = 0,
+	**_kwargs: object,
+) -> pd.DataFrame:
+	"""Read a worksheet, defaulting to the first sheet whatever it is named.
+
+	An empty sheet name means "the first worksheet, whatever it is named" — external files
+	arrive with locale-dependent default sheet names such as ``Planilha1`` or ``Sheet1``, so
+	the first sheet is read by POSITION rather than by guessing its name.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The workbook to read.
+	str_sheet : str, optional
+		Worksheet name; empty means the first sheet by position.
+	str_dtype : str or None, optional
+		Dtype passed through to pandas.
+	int_header_row : int, optional
+		Zero-based header row index.
+	**_kwargs : object
+		Ignored; present so every reader shares one dispatch signature.
+
+	Returns
+	-------
+	pd.DataFrame
+		The raw frame.
+	"""
 	sheet_excel: str | int = 0 if str_sheet == "" else str_sheet
 	return pd.read_excel(path_file, sheet_name=sheet_excel, dtype=str_dtype, header=int_header_row)
+
+
+# The dispatch table IS the format policy: one entry per extension with a dedicated reader.
+# Anything not listed is read as Excel, which covers .xlsx/.xls/.xlsm without repeating them.
+_DICT_RAW_READERS = {".csv": _read_csv_raw, ".json": _read_json_raw}
