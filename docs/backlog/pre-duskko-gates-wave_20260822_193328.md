@@ -172,9 +172,69 @@ nasceria fora do lint.
       aplica teto diferente por árvore, e **recusa reportar sucesso com zero arquivos**.
 - [x] **`tests/` — 39 de 39 refatorados, ZERO hatches** (decisão do dono: stub vai para
       módulo/fixture, não para escape hatch).
-- [ ] `src/` — 39 restantes.
-- [ ] `bin/` — 2 restantes.
-- [ ] Docs + README.
+- [x] **`src/` — 39 de 39.** 28 refatorados de verdade, 11 com hatch justificado.
+- [x] **`bin/` — 2 de 2**, ambos refatorados (nenhum hatch).
+- [x] Docs: `templates/python-common/CLAUDE.md` (linha do gate) + `CLAUDE.md` da raiz
+      (parágrafo de paridade, ao lado do gate de tamanho de função).
+- [x] Wire também **do lado da BlueprintX** via `--root .` (pre-commit `check-complexity` +
+      job `complexity`), a mesma disciplina de uma-implementação-só que a #189 estabeleceu.
+      ⚠️ A árvore da própria BlueprintX não tem `src/` nem `tests/`, então aqui ele checa só
+      `bin/` (2 arquivos): ele vale por viajar junto com o template que policia, não pelo
+      tamanho do que encontra deste lado.
+
+### Onde o hatch foi usado em `src/` (11), e por quê
+
+| função | motivo |
+|---|---|
+| `env_config.resolve_config_path` | cada ramo é uma falha de config documentada, com mensagem própria |
+| `queries.load_query` | cada ramo é uma falha de lookup com o próprio remédio |
+| `logs.CreateLog._validate_path` | duas faltas de validação distintas, cada uma com sua mensagem |
+| `logs.CreateLog._caller_context` | andar a pilha **é** o trabalho |
+| `logs.CreateLog._emit` | dois destinos e um nível rejeitado |
+| `dtypes._validate_referenced_columns` | duas faltas de validação distintas |
+| `http_downloader._assert_public_host` | **guarda de SSRF** — trocar checagem auditável por uma mais curta não é troca que este gate deva ganhar |
+| `http_downloader._assert_url_allowed` / `_fetch_bytes` | validação de entrada / erro de transporte |
+| `tabular_reader._cnpj_column_problem` / `decode_positional_payload` / `resolve_sheet_name` | regras de rejeição que não podem ser colapsadas |
+| `retry` (3 funções) | ver abaixo |
+| `outlook_gateway` (5 funções) | COM do Windows com degradação **não-fatal** |
+
+### ⚠️ Dois achados sobre o limiar que vale registrar
+
+1. **`src=2` é inatingível para um decorator factory, sempre.** Ele é três escopos aninhados
+   por construção e o mccabe **dobra o corpo aninhado no score do envolvente** — a factory é
+   cobrada pelo laço de retry do wrapper sem conter ramo nenhum. Nenhum arranjo desce de 3.
+   É a métrica encontrando o idioma, não um defeito do código.
+2. **O hatch quebrava quando o formatter mexia no arquivo.** O ruff ancora o C901 no `def`,
+   mas o `ruff format` re-quebra assinatura longa e empurra o comentário para a linha do `)`.
+   Um hatch escrito certo parava de valer. Medido no `_validate_path`. O gate agora varre a
+   **assinatura inteira**, com limite, e para no fim dela — com dois controles negativos
+   (assinatura quebrada é honrada; marcador no **corpo** não é).
+
+### Refactors que seguiram regra da casa (não foram contorção para um número)
+
+- `decimals._parse` (8) e `dtypes._to_decimal` (7): cadeias de `isinstance` → `singledispatch`,
+  que é literalmente o que `rules/python.md` manda. A ordem `bool` antes de `int`, que a cadeia
+  codificava em comentário + posição, agora sai de graça do MRO.
+- `tabular_reader._read_raw_dispatch` (6): if-chain por extensão → **dict dispatch**, a regra do
+  `common.md` para ramificar em **valor**. Adicionar formato virou adicionar chave.
+- `dtypes.apply_dtypes` (9): validação separada da coerção; três laços mutantes → um `.assign()`.
+- `logs.initiate_logging` e `outlook_gateway._parse_env_bool`: tri-estado e dois conjuntos de
+  tokens viraram **tabela**, que também passa a ser a fonte única dos valores válidos.
+
+### 🐛 Defeitos reais encontrados de carona (não eram complexidade)
+
+- `logs.CreateLog._validate_path`: guardas na **ordem errada** — `not path` vinha primeiro,
+  então um valor falsy não-string (`0`, `[]`, `None`) era reportado como "cannot be empty",
+  mandando o leitor procurar uma string vazia que nunca existiu. Tipo antes de vazio.
+- `decode_positional_payload`: agora nomeia a **primeira** posição excedente populada, em vez
+  daquela em que o laço por acaso levantou.
+
+### ⚠️ ERA001 — sexta medição da sessão
+
+Os comentários que escrevi para explicar os refactors dispararam `ERA001` repetidamente; o
+gatilho isolado inclui a própria palavra `returns` no início de uma frase. `src/` e `tests/`
+**mantêm** a regra (o ignore ficou escopado a `bin/`), então o custo é recorrente e real —
+mais dado para a decisão da **#169**.
 
 ### ⚠️ Dois defeitos que o próprio gate teve, e os dois eram CEGUEIRA
 

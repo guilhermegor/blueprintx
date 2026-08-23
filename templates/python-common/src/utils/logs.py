@@ -163,6 +163,22 @@ class CreateLog(metaclass=TypeChecker):
 		if not log_level:
 			raise ValueError("log_level cannot be empty")
 
+		str_class_name, str_method_name = self._caller_context()
+		self._emit(logger, log_level, message, str_class_name, str_method_name)
+
+	def _caller_context(self) -> tuple[str, str]:  # complexity-ok: a stack walk IS the work here
+		"""Walk back up the stack to the first frame outside this logging machinery.
+
+		Its own method because it is a separate job from formatting and emitting: this one
+		asks "who called us?", and answering it means inspecting frames, which is inherently
+		a search with several exit conditions.
+
+		Returns
+		-------
+		tuple of (str, str)
+			The caller's class name and method name, with placeholder values when the walk
+			finds no attributable frame.
+		"""
 		frame = inspect.currentframe()
 		str_class_name = "UnknownClass"
 		str_method_name = "unknown_method"
@@ -186,22 +202,54 @@ class CreateLog(metaclass=TypeChecker):
 				break
 			str_method_name = frame.f_code.co_name
 
-		str_formatted = f"[{str_class_name}.{str_method_name}] {message}"
+		return str_class_name, str_method_name
 
-		if logger is not None:
-			fn_log = getattr(logger, log_level, None)
-			if fn_log is None:
-				raise ValueError(f"Invalid log level: {log_level}")
-			fn_log(str_formatted)
-		else:
-			str_level = log_level.upper()
+	def _emit(  # complexity-ok: two sinks and one rejected level, one branch each
+		self,
+		logger: logging.Logger | None,
+		log_level: LogLevel,
+		message: str,
+		str_class_name: str,
+		str_method_name: str,
+	) -> None:
+		"""Send one already-attributed message to the logger, or to stdout when there is none.
+
+		Parameters
+		----------
+		logger : logging.Logger or None
+			The sink; ``None`` prints a formatted line instead.
+		log_level : LogLevel
+			The level name, which must name a logger method.
+		message : str
+			The message body.
+		str_class_name : str
+			The caller's class, from :meth:`_caller_context`.
+		str_method_name : str
+			The caller's method, from :meth:`_caller_context`.
+
+		Returns
+		-------
+		None
+
+		Raises
+		------
+		ValueError
+			If ``log_level`` does not name a method on ``logger``.
+		"""
+		if logger is None:
 			str_timestamp = (
 				f"{time.strftime('%Y-%m-%d,%H:%M:%S')}.{int(time.time() * 1000) % 1000:03d}"
 			)
-			str_line = (
-				f"{str_timestamp} {str_level} {{{str_class_name}}} [{str_method_name}] {message}"
+			print(
+				f"{str_timestamp} {log_level.upper()} {{{str_class_name}}} "
+				f"[{str_method_name}] {message}"
 			)
-			print(str_line)
+			return
+
+		fn_log = getattr(logger, log_level, None)
+		if fn_log is None:
+			raise ValueError(f"Invalid log level: {log_level}")
+		fn_log(f"[{str_class_name}.{str_method_name}] {message}")
 
 
 _CLS_LOG = CreateLog()
@@ -223,6 +271,47 @@ def log_message(
 		One of ``"info"``, ``"warning"``, ``"error"``, ``"critical"``; default ``"info"``.
 	"""
 	_CLS_LOG.log_message(logger, str_message, str_level)
+
+
+# What each outcome of the parent-folder attempt means, expressed as data. Anything absent
+# from this table is an unexpected value and is rejected rather than silently ignored.
+_DICT_PARENT_FOLDER_OUTCOME = {
+	True: "Logs parent directory created successfully.",
+	False: "Logs parent directory could not be created.",
+}
+
+
+def _report_parent_folder(
+	cls_create_log: CreateLog, logger: logging.Logger | None, path_log: str
+) -> None:
+	"""Create the log file's parent directory and report the outcome.
+
+	Parameters
+	----------
+	cls_create_log : CreateLog
+		The logging helper doing the work and the reporting.
+	logger : logging.Logger or None
+		Destination for the report.
+	path_log : str
+		The log-file directory to create.
+
+	Returns
+	-------
+	None
+
+	Raises
+	------
+	RuntimeError
+		If the attempt reports an outcome this module does not recognise.
+	"""
+	bool_dispatch = cls_create_log.creating_parent_folder(path_log)
+	cls_create_log.log_message(logger, f"Logs parent directory: {path_log}", "info")
+	# The outcome names a message, so it is a lookup rather than a branch chain — and the
+	# table doubles as the set of values considered valid, one source instead of two.
+	str_outcome = _DICT_PARENT_FOLDER_OUTCOME.get(bool_dispatch)
+	if str_outcome is None:
+		raise RuntimeError(f"Unexpected dispatch value: {bool_dispatch}") from None
+	cls_create_log.log_message(logger, str_outcome, "info")
 
 
 @type_checker
@@ -264,18 +353,7 @@ def initiate_logging(logger: logging.Logger, path_log: str | None = None) -> Non
 	cls_create_log = CreateLog()
 
 	if path_log is not None:
-		bool_dispatch = cls_create_log.creating_parent_folder(path_log)
-		cls_create_log.log_message(logger, f"Logs parent directory: {path_log}", "info")
-		if bool_dispatch is True:
-			cls_create_log.log_message(
-				logger, "Logs parent directory created successfully.", "info"
-			)
-		elif bool_dispatch is False:
-			cls_create_log.log_message(
-				logger, "Logs parent directory could not be created.", "info"
-			)
-		else:
-			raise RuntimeError(f"Unexpected dispatch value: {bool_dispatch}") from None
+		_report_parent_folder(cls_create_log, logger, path_log)
 
 	dt_now = datetime.now(tz=ZoneInfo("UTC"))
 	cls_create_log.log_message(logger, f"Routine started at {dt_now}", "info")

@@ -339,7 +339,30 @@ def python_comments(str_source: str) -> list:
 		does not parse yields nothing — a syntax error is ruff's finding to report, not this
 		gate's.
 	"""
-	list_out = []
+	# Two independent extractions, each with its own parser and its own failure mode: `#`
+	# comments come from tokenize, docstrings from the AST. They were one body, so a tokenize
+	# failure returned early and silently skipped the docstrings as well.
+	return _comment_blocks(str_source) + _docstring_blocks(str_source)
+
+
+def _comment_blocks(str_source: str) -> list:
+	"""Group consecutive ``#`` comment lines into blocks, keyed by the block's first line.
+
+	⚠️ BLOCKS, not lines. A quotation or an example spanning several comment lines otherwise
+	has its language charged to whichever line it lands on, which was measured as a large
+	share of this gate's first-draft false positives.
+
+	Parameters
+	----------
+	str_source : str
+		Python source text.
+
+	Returns
+	-------
+	list
+		``(first_line, block_text)`` pairs; empty when the source cannot be tokenised.
+	"""
+	list_out: list = []
 	list_block: list = []
 	int_start = 0
 	int_previous = -2
@@ -359,18 +382,32 @@ def python_comments(str_source: str) -> list:
 		return []
 	if list_block:
 		list_out.append((int_start, "\n".join(list_block)))
+	return list_out
+
+
+def _docstring_blocks(str_source: str) -> list:
+	"""Collect every module, class and function docstring, keyed by its own first line.
+
+	Parameters
+	----------
+	str_source : str
+		Python source text.
+
+	Returns
+	-------
+	list
+		``(line, docstring)`` pairs; empty when the source cannot be parsed.
+	"""
 	try:
 		cls_tree = ast.parse(str_source)
 	except SyntaxError:
-		return list_out
+		return []
 	tuple_holders = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
-	for cls_node in ast.walk(cls_tree):
-		if not isinstance(cls_node, tuple_holders):
-			continue
-		str_doc = ast.get_docstring(cls_node, clean=False)
-		if str_doc:
-			list_out.append((cls_node.body[0].lineno, str_doc))
-	return list_out
+	return [
+		(cls_node.body[0].lineno, ast.get_docstring(cls_node, clean=False))
+		for cls_node in ast.walk(cls_tree)
+		if isinstance(cls_node, tuple_holders) and ast.get_docstring(cls_node, clean=False)
+	]
 
 
 def _line_offset(str_text: str, str_word: str) -> int:

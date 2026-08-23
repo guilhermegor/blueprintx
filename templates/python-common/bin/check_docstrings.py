@@ -160,31 +160,71 @@ def parse_raises_section(docstring: str) -> dict[str, str]:
 	dict[str, str]
 		Mapping of exception name to description.
 	"""
-	raises: dict[str, str] = {}
+	# Two jobs, kept apart: WHICH lines belong to the Raises section, and WHAT one entry in
+	# it means. They were one loop, so a change to either had to be made inside the other.
+	dict_raises: dict[str, str] = {}
+	for str_line in _raises_section_lines(docstring):
+		tuple_entry = _parse_raises_entry(str_line)
+		if tuple_entry is not None:
+			dict_raises[tuple_entry[0]] = tuple_entry[1]
+	return dict_raises
+
+
+def _raises_section_lines(docstring: str) -> list[str]:
+	"""Return the non-blank lines that sit inside the docstring's ``Raises`` section.
+
+	A small state machine over the lines: it opens on the ``Raises`` heading and closes on
+	the next section heading. Blank lines inside are skipped rather than ending the section.
+
+	Parameters
+	----------
+	docstring : str
+		The docstring to scan; may be empty.
+
+	Returns
+	-------
+	list of str
+		The stripped content lines of the section, in order.
+	"""
 	if not docstring:
-		return raises
-	lines = [line.rstrip() for line in docstring.splitlines()]
-	in_raises = False
-	for line in lines:
-		stripped = line.strip()
-		if re.match(r"^(Raises|Raises:)$", stripped, re.IGNORECASE):
-			in_raises = True
+		return []
+	list_section: list[str] = []
+	bool_in_raises = False
+	for str_raw in docstring.splitlines():
+		str_line = str_raw.strip()
+		if re.match(r"^(Raises|Raises:)$", str_line, re.IGNORECASE):
+			bool_in_raises = True
 			continue
-		if not in_raises:
+		if not bool_in_raises or not str_line:
 			continue
-		if not stripped:
-			continue
-		if _NON_RAISES_SECTIONS_RE.match(stripped):
+		if _NON_RAISES_SECTIONS_RE.match(str_line):
 			break
-		match = re.match(r"^([\w.]+)\s*:\s*(.*)", stripped)
-		if match:
-			exc, desc = match.groups()
-			raises[exc.strip()] = desc.strip()
-		else:
-			name_match = re.match(r"^([\w.]+)$", stripped)
-			if name_match:
-				raises[name_match.group(1)] = ""
-	return raises
+		list_section.append(str_line)
+	return list_section
+
+
+def _parse_raises_entry(str_line: str) -> tuple[str, str] | None:
+	"""Parse one ``Raises`` line into ``(exception, description)``, or ``None`` if it is neither.
+
+	Both NumPy forms are accepted: ``ValueError : reason`` and a bare ``ValueError`` on its
+	own line, whose description is the (indented) prose that follows and is not read here.
+
+	Parameters
+	----------
+	str_line : str
+		One stripped line from the section.
+
+	Returns
+	-------
+	tuple of (str, str) or None
+		The exception name and its inline description, or ``None`` for a continuation line.
+	"""
+	cls_match = re.match(r"^([\w.]+)\s*:\s*(.*)", str_line)
+	if cls_match is not None:
+		str_exc, str_desc = cls_match.groups()
+		return str_exc.strip(), str_desc.strip()
+	cls_name_only = re.match(r"^([\w.]+)$", str_line)
+	return (cls_name_only.group(1), "") if cls_name_only is not None else None
 
 
 def get_actual_raises(node: ast.AST) -> set[str]:

@@ -119,7 +119,7 @@ class OutlookGateway(metaclass=TypeChecker):
 		log_message(self.logger, f"[email] sent. subject='{str_subject}' to={list_to}")
 		return True
 
-	def download_attachment(
+	def download_attachment(  # complexity-ok: COM interop, non-fatal degradation
 		self,
 		str_email_account: str,
 		str_folder: str,
@@ -203,7 +203,13 @@ class OutlookGateway(metaclass=TypeChecker):
 		)
 		return None
 
-	def get_body_content(
+	# ⚠️ The COM helpers below carry the complexity hatch, for one reason stated once here.
+	# They are Windows COM interop with NON-FATAL degradation. Every branch is a platform
+	# guard, an optional field the COM object may or may not expose, or a failure that has to
+	# be logged and survived rather than raised. That last property is the whole contract of
+	# this gateway, since a mail integration that dies takes the routine down with it, so
+	# collapsing those branches would trade a documented, survivable path for a shorter one.
+	def get_body_content(  # complexity-ok: COM interop, non-fatal degradation
 		self,
 		str_email_account: str,
 		str_folder: str,
@@ -289,8 +295,15 @@ def to_html_body(str_body: str) -> str:
 # per-block variable falls back to EMAIL_SEND__DEFAULTS / EMAIL_AUTO_SEND__DEFAULTS, then to
 # the hard default (send on, auto-send off).
 _DISPATCH_DEFAULT_SUFFIX: str = "DEFAULTS"
-_TRUE_TOKENS: frozenset[str] = frozenset({"1", "true", "yes", "on", "y", "t"})
-_FALSE_TOKENS: frozenset[str] = frozenset({"0", "false", "no", "off", "n", "f"})
+# One table mapping every recognised token to its value, rather than two sets consulted in
+# turn. A token can no longer appear in both by accident, and adding a spelling is adding an
+# entry. The frozensets remain as derived views for any caller that wants to ask membership.
+_DICT_ENV_BOOL: dict[str, bool] = {
+	**dict.fromkeys(("1", "true", "yes", "on", "y", "t"), True),
+	**dict.fromkeys(("0", "false", "no", "off", "n", "f"), False),
+}
+_TRUE_TOKENS: frozenset[str] = frozenset(k for k, v in _DICT_ENV_BOOL.items() if v)
+_FALSE_TOKENS: frozenset[str] = frozenset(k for k, v in _DICT_ENV_BOOL.items() if not v)
 
 
 @type_checker
@@ -309,14 +322,10 @@ def _parse_env_bool(str_raw: str | None, bool_default: bool) -> bool:
 	bool
 		The parsed flag, or ``bool_default``.
 	"""
-	if str_raw is None:
-		return bool_default
-	str_norm = str_raw.strip().casefold()
-	if str_norm in _TRUE_TOKENS:
-		return True
-	if str_norm in _FALSE_TOKENS:
-		return False
-	return bool_default
+	# An unset value and an unrecognised one mean the same thing here — fall back to the
+	# default — so both are one lookup with a default rather than three branches.
+	str_norm = (str_raw or "").strip().casefold()
+	return _DICT_ENV_BOOL.get(str_norm, bool_default)
 
 
 @type_checker
@@ -381,7 +390,7 @@ def running_on_windows() -> bool:
 
 
 @type_checker
-def _com_send_email(
+def _com_send_email(  # complexity-ok: COM interop, optional fields and non-fatal failures
 	str_subject: str,
 	str_to: str,
 	str_cc: str,
@@ -449,7 +458,7 @@ def _com_send_email(
 
 
 @type_checker
-def _com_download_attch(
+def _com_download_attch(  # complexity-ok: COM interop, non-fatal degradation
 	str_email_account: str,
 	str_folder: str,
 	str_subject_substring: str,
@@ -505,7 +514,7 @@ def _com_download_attch(
 
 
 @type_checker
-def _com_get_body_content(
+def _com_get_body_content(  # complexity-ok: COM interop, non-fatal degradation
 	str_email_account: str,
 	str_folder: str,
 	str_subject_substring: str,

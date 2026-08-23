@@ -293,7 +293,9 @@ def apply_dtypes(
 	return df_typed.assign(**dict_derived)
 
 
-def _validate_referenced_columns(df_input: pd.DataFrame, list_referenced: list[str]) -> None:
+def _validate_referenced_columns(  # complexity-ok: two distinct validation faults
+	df_input: pd.DataFrame, list_referenced: list[str]
+) -> None:
 	"""Fail fast when a referenced column is absent or claimed by more than one target type.
 
 	Validation is separated from the coercion it guards so each reads as one job.
