@@ -149,20 +149,35 @@ def is_valid_cnpj(str_value: str) -> bool:
 		zeros) are rejected.
 	"""
 	str_clean = unmask_cnpj(str_value)
-	if len(str_clean) != _LEN_CNPJ:
-		return False
+	# One conjunction rather than a stack of early exits. For a pure predicate this states
+	# the whole definition in one place — right length, numeric check digits, not a repeated
+	# character filler, correct digits — where the guard form scattered it over four exits.
+	# Conjunction short-circuits, so the check digits are still computed only on a well shaped
+	# value, and an expression costs nothing against the ceiling that branching does.
+	return (
+		len(str_clean) == _LEN_CNPJ
+		and str_clean[12:].isdigit()
+		and not (str_clean.isdigit() and len(set(str_clean)) == 1)
+		and str_clean[12:] == _cnpj_check_digits(str_clean[:12])
+	)
 
-	str_check = str_clean[12:]
-	if not str_check.isdigit():
-		return False
 
-	if str_clean.isdigit() and len(set(str_clean)) == 1:
-		return False
+def _cnpj_check_digits(str_base: str) -> str:
+	"""Return the two check digits for a 12-character CNPJ base.
 
-	str_base = str_clean[:12]
+	Parameters
+	----------
+	str_base : str
+		The first 12 characters of an unmasked CNPJ.
+
+	Returns
+	-------
+	str
+		The two check digits, concatenated.
+	"""
 	int_dv1 = _cnpj_check_digit(str_base, _CNPJ_WEIGHTS_DV1)
 	int_dv2 = _cnpj_check_digit(f"{str_base}{int_dv1}", _CNPJ_WEIGHTS_DV2)
-	return str_check == f"{int_dv1}{int_dv2}"
+	return f"{int_dv1}{int_dv2}"
 
 
 @type_checker
@@ -246,12 +261,28 @@ def is_valid_cpf(str_value: str) -> bool:
 		check digits. Repeated-digit values (e.g. all ones) are rejected.
 	"""
 	str_clean = unmask_cpf(str_value)
-	if len(str_clean) != _LEN_CPF or not str_clean.isdigit():
-		return False
+	# One conjunction rather than a stack of early exits; see the CNPJ validator for why.
+	return (
+		len(str_clean) == _LEN_CPF
+		and str_clean.isdigit()
+		and len(set(str_clean)) > 1
+		and str_clean[9:] == _cpf_check_digits(str_clean)
+	)
 
-	if len(set(str_clean)) == 1:
-		return False
 
+def _cpf_check_digits(str_clean: str) -> str:
+	"""Return the two check digits for an 11-digit CPF.
+
+	Parameters
+	----------
+	str_clean : str
+		An unmasked, 11-digit CPF.
+
+	Returns
+	-------
+	str
+		The two check digits, concatenated.
+	"""
 	int_dv1 = _cpf_check_digit(str_clean[:9], 10)
 	int_dv2 = _cpf_check_digit(str_clean[:10], 11)
-	return str_clean[9:] == f"{int_dv1}{int_dv2}"
+	return f"{int_dv1}{int_dv2}"

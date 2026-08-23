@@ -30,6 +30,30 @@ else:
 
 
 @type_checker
+def _require_zip(path_zip: Path) -> None:
+	"""Raise when the archive is absent, so every entry point fails the same way.
+
+	The guard was written five times, which is five chances for the message or the exception
+	type to drift while each caller keeps passing its own test.
+
+	Parameters
+	----------
+	path_zip : pathlib.Path
+		The archive that must exist.
+
+	Returns
+	-------
+	None
+
+	Raises
+	------
+	FileNotFoundError
+		When ``path_zip`` does not exist.
+	"""
+	if not path_zip.exists():
+		raise FileNotFoundError(f"Zip not found: {path_zip}")
+
+
 def unzip_if_needed(
 	path_zip: Path,
 	path_target: Path,
@@ -60,9 +84,10 @@ def unzip_if_needed(
 		``True`` when extraction was performed, ``False`` when skipped (target already
 		present, extraction disabled, or the zip is absent).
 	"""
-	if path_target.exists():
-		return False
-	if not bool_enabled or not path_zip.exists():
+	# The three skip conditions are one question — "is there anything to do?" — so they read
+	# as one predicate instead of two exits placed apart.
+	bool_should_extract = bool_enabled and not path_target.exists() and path_zip.exists()
+	if not bool_should_extract:
 		return False
 	extract_all(path_zip, path_target.parent, str_password)
 	return True
@@ -94,17 +119,18 @@ def extract_members(path_zip: Path, path_dest_dir: Path, list_members: list[str]
 	FileNotFoundError
 		If ``path_zip`` does not exist.
 	"""
-	if not path_zip.exists():
-		raise FileNotFoundError(f"Zip not found: {path_zip}")
+	_require_zip(path_zip)
 	path_dest_dir.mkdir(parents=True, exist_ok=True)
-	list_out: list[Path] = []
 	with zipfile.ZipFile(path_zip) as cls_zip:
 		set_names = set(cls_zip.namelist())
-		for str_member in list_members:
-			if str_member in set_names:
-				cls_zip.extract(str_member, path_dest_dir)
-				list_out.append(path_dest_dir / str_member)
-	return list_out
+		# Extraction hands back the path it created, so one comprehension both does the work
+		# and collects the result. No accumulator, and deliberately not the extract-all form,
+		# which would widen this from the named members to whatever the archive contains.
+		return [
+			Path(cls_zip.extract(str_member, path_dest_dir))
+			for str_member in list_members
+			if str_member in set_names
+		]
 
 
 @type_checker
@@ -132,8 +158,7 @@ def extract_all(
 	FileNotFoundError
 		If ``path_zip`` does not exist.
 	"""
-	if not path_zip.exists():
-		raise FileNotFoundError(f"Zip not found: {path_zip}")
+	_require_zip(path_zip)
 	path_dest_dir.mkdir(parents=True, exist_ok=True)
 	bytes_pwd = str_password.encode() if str_password else None
 	with zipfile.ZipFile(path_zip) as cls_zip:
@@ -206,8 +231,7 @@ def extract_all_to_memory(path_zip: Path, str_password: str | None = None) -> di
 	FileNotFoundError
 		If ``path_zip`` does not exist.
 	"""
-	if not path_zip.exists():
-		raise FileNotFoundError(f"Zip not found: {path_zip}")
+	_require_zip(path_zip)
 	bytes_pwd = str_password.encode() if str_password else None
 	with zipfile.ZipFile(path_zip) as cls_zip:
 		return {
@@ -246,16 +270,15 @@ def extract_members_to_memory(
 	FileNotFoundError
 		If ``path_zip`` does not exist.
 	"""
-	if not path_zip.exists():
-		raise FileNotFoundError(f"Zip not found: {path_zip}")
+	_require_zip(path_zip)
 	bytes_pwd = str_password.encode() if str_password else None
-	dict_out: dict[str, bytes] = {}
 	with zipfile.ZipFile(path_zip) as cls_zip:
 		set_names = set(cls_zip.namelist())
-		for str_member in list_members:
-			if str_member in set_names:
-				dict_out[str_member] = cls_zip.read(str_member, pwd=bytes_pwd)
-	return dict_out
+		return {
+			str_member: cls_zip.read(str_member, pwd=bytes_pwd)
+			for str_member in list_members
+			if str_member in set_names
+		}
 
 
 @type_checker
@@ -288,8 +311,7 @@ def extract_member_to_memory(
 	KeyError
 		If ``str_member`` is not present in the archive.
 	"""
-	if not path_zip.exists():
-		raise FileNotFoundError(f"Zip not found: {path_zip}")
+	_require_zip(path_zip)
 	bytes_pwd = str_password.encode() if str_password else None
 	with zipfile.ZipFile(path_zip) as cls_zip:
 		if str_member not in set(cls_zip.namelist()):

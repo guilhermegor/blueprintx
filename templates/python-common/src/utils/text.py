@@ -72,8 +72,7 @@ def safe_str(value: object, default: str = "") -> str:
 	str
 		``str(value).strip()``, or ``default`` when ``value`` is ``None``/NaN.
 	"""
-	if value is None:
-		return default
-	if isinstance(value, float) and value != value:  # NaN is the only value != itself
-		return default
-	return str(value).strip()
+	# Both guards ask one question — "is this a missing-value sentinel?" — so they are one
+	# predicate and one conditional expression rather than two exits.
+	bool_missing = value is None or (isinstance(value, float) and value != value)
+	return default if bool_missing else str(value).strip()  # NaN is the only value != itself
