@@ -78,6 +78,9 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$str_project_path/tasks.sh"
 	cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$str_project_path/.gitlint"
 	cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$str_project_path/.coveragerc"
+	# Commitizen config, out of pyproject.toml since blueprintx#233. Losing this copy does
+	# NOT error — cz falls back to defaults and exits 0 — so scaffold_lint_test.sh asserts it.
+	cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$str_project_path/.cz.toml"
 }
 
 scaffold_copy_shared_tests() {
@@ -116,6 +119,10 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_comment_language_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
 		"$str_project_path/tests/unit/test_function_length_gate.py"
+	# Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
+	# selector could be wrong without any tier noticing (blueprintx#211).
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
+		"$str_project_path/tests/unit/test_pip_requirements.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \
 		"$str_project_path/tests/unit/test_startup_fragility_order.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \

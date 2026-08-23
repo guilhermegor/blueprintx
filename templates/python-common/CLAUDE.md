@@ -34,7 +34,8 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 | `.pydocstyle` | pydocstyle config (NumPy convention, DAR checks) |
 | `.coveragerc` | Coverage.py configuration (omits chassis, example_feature, app, config) |
 | `mypy.ini` | Standalone mypy config, invoked from `src/` as the single package base. Excludes **only** the runtime type-checking engine (intrinsic metaprogramming). ⚠️ `exclude` filters file DISCOVERY and does NOT apply to a module reached through an `import`, so anything that must stay unchecked needs a `[mypy-<tree>.*] ignore_errors` section, not a path — and `ignore_errors` is a holding position, not a destination. `^chassis/` and `^capabilities/example_feature/` were both removed in blueprintx#190: the first was genuinely unchecked and had accumulated 20 errors, the second was excluded and checked anyway because `main.py` imports it. Ruff still excludes both — deliberate divergence, tracked in blueprintx#203 |
-| `poetry.toml` | Poetry local config — forces `virtualenvs.in-project = true` |
+| `poetry.toml` | Poetry local config — forces `virtualenvs.in-project = true`. ⚠️ **Not** a second home for `[tool.poetry]` — see "What can leave `pyproject.toml`" below |
+| `.cz.toml` | Commitizen config, moved out of `pyproject.toml` (blueprintx#233). ONE file copied to all five tiers — the keys were byte-identical, so five copies would have been the drift `check_codespell_sync.sh` exists to police. ⚠️ **Its loss is silent**: cz tries `pyproject.toml` first, skips it when there is no `[tool.commitizen]`, falls through to here — and when this file is absent too it does **not** error. Measured: `cz version --project` prints `No project information in this project.` and exits **0**, so the symptom is an unprefixed tag and a differently formatted changelog months later, never a red check. That is why `bin/ci/scaffold_lint_test.sh` asserts cz can still answer in a generated project, rather than asserting the file was copied |
 | `README.md` | Template README with `${VARIABLE}` placeholders for `envsubst` |
 | `.github/workflows/tests.yaml` | CI workflow — copied into the project **only** when a GitHub remote is set up (see `copy_github_assets` in the scaffolds) |
 | _(CODEOWNERS, PR template)_ | Language-agnostic; live in `templates/common/.github/`; also GitHub-remote-only |
@@ -103,6 +104,33 @@ Most of this directory is *tooling* (ruff, pytest, Makefile, bin scripts). Two s
 | `bin/test_urls_docstrings.sh` | Pre-commit hook: validate URLs in docstrings (1-week cache) |
 | `assets/logo_lorem_ipsum.png` | Placeholder logo copied into new projects |
 | `CONTRIBUTING.md` | Contribution guide template |
+
+## What can leave `pyproject.toml` — and what cannot
+
+Audited in blueprintx#233 across all five Python tiers. **The answer is: nothing else.** This
+table is here so the question is answered in the repo rather than re-derived by the next person
+who looks at a manifest and assumes it must be trimmable.
+
+| Section | Can it move? |
+|---|---|
+| `[tool.poetry]` | **No** — package identity (name, version, authors, readme, packages) |
+| `[tool.poetry.urls]` | **No** — part of the published metadata |
+| `[tool.commitizen]` | ~~Yes~~ **Done** — now `.cz.toml`, the only candidate there was |
+| `[tool.poetry.dependencies]` | **No** — the resolver's input |
+| `[tool.poetry.group.*.dependencies]` | **No** — same |
+| `[build-system]` | **No** — required by PEP 518; without it there is no build backend |
+
+⚠️ **`poetry.toml` is not a second home for `[tool.poetry]`.** The two files sound like a pair
+and are not: `poetry.toml` holds **local installer** configuration — `virtualenvs.in-project`,
+repository URLs, `http-basic` credentials — and is machine-scoped, which is why this repo's copy
+contains only `[virtualenvs] in-project = true`. Project metadata and dependencies must stay in
+`pyproject.toml`: that is what PEP 518/621 and Poetry's build backend read. Moving `[tool.poetry]`
+there does not slim the manifest, it produces a project that cannot build or resolve.
+
+The manifests are 71–79 lines rather than 300 because the dehydration already happened —
+`ruff.toml` · `mypy.ini` · `pytest.ini` · `.coveragerc` · `.codespellrc` · `.pydocstyle` ·
+`.gitlint` · `.sqlfluff` · `.hadolint.yaml` · `.yamllint` · `.shellcheckrc` ·
+`.layer-policy.yaml` · `.cz.toml` are all already out.
 
 ## Editing rules
 

@@ -139,6 +139,41 @@ echo "::endgroup::"
 git add -A
 git commit -q --no-verify -m "ci: scaffold baseline" || true
 
+# The lockfile is what makes a generated project reproducible for the second developer who
+# clones it, and the only thing keeping it that way is an ABSENCE — `poetry.lock` is not
+# listed in the shipped .gitignore. An absence is exactly what an unrelated edit
+# reintroduces: someone adds a `*.lock` pattern, copies a .gitignore from elsewhere, and
+# nothing anywhere fails. `git add -A` above would then silently skip the file, so this is
+# the one line that can tell the difference (#235).
+if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
+    echo "ERROR: [$SKELETON] the generated project does not TRACK poetry.lock." >&2
+    echo "       It exists on disk but git is ignoring it — check .gitignore for a" >&2
+    echo "       lock pattern. An untracked lockfile makes the project unreproducible" >&2
+    echo "       for anyone who clones it." >&2
+    git check-ignore -v poetry.lock >&2 || true
+    exit 1
+fi
+echo "The generated project tracks poetry.lock."
+
+# Commitizen's config lives in .cz.toml rather than pyproject.toml (#233), and losing it is
+# the quietest failure in this tree: cz tries pyproject.toml first, finds no [tool.commitizen],
+# falls through to .cz.toml, and when that is absent too it does NOT error — measured, it
+# prints "No project information in this project." and exits **0**. The symptom would be a
+# differently formatted changelog and an unprefixed tag at release time, months later. So the
+# assertion is not "the file was copied" but "cz can still answer", which is the thing that
+# actually breaks.
+str_cz_version="$(poetry run cz version --project 2>/dev/null || true)"
+case "$str_cz_version" in
+    [0-9]*.[0-9]*.[0-9]*) echo "commitizen resolves its config ($str_cz_version)." ;;
+    *)
+        echo "ERROR: [$SKELETON] commitizen cannot resolve the project version." >&2
+        echo "       Got: '${str_cz_version:-<empty>}'" >&2
+        echo "       .cz.toml is probably missing from this tier's scaffold copy list —" >&2
+        echo "       cz falls back to defaults silently (exit 0), so nothing else notices." >&2
+        exit 1
+        ;;
+esac
+
 echo "::group::make lint (must leave the tree unchanged)"
 make lint
 # `make lint` auto-fixes (ruff --fix / format). On a clean scaffold it must change

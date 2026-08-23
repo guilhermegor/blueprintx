@@ -401,6 +401,9 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
+    # Commitizen config, out of pyproject.toml since blueprintx#233. Losing this copy does
+    # NOT error — cz falls back to defaults and exits 0 — so scaffold_lint_test.sh asserts it.
+    cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$project_path/.cz.toml"
 }
 
 # GitHub-platform assets only. apply_offline_mode drops all of .github/, so everything
@@ -482,6 +485,10 @@ lib_minimal_copy_project_scaffolding() {
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
         "$project_path/tests/unit/test_function_length_gate.py"
+    # Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
+    # selector could be wrong without any tier noticing (blueprintx#211).
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
+        "$project_path/tests/unit/test_pip_requirements.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
         "$project_path/tests/unit/test_review_threads_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
