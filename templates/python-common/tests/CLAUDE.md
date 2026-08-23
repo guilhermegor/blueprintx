@@ -76,6 +76,12 @@ def load_gate(str_name: str) -> object:
 	"""Load a bin/ gate by file path so tests import the shipped file itself."""
 	path_gate = Path(__file__).parents[2] / "bin" / f"{str_name}.py"
 	cls_spec = importlib.util.spec_from_file_location(str_name, path_gate)
+	# Both can be None — a missing file, or a loader-less spec. Without this guard the
+	# failure is `AttributeError: 'NoneType' has no attribute 'exec_module'`, which names
+	# neither the gate nor the path and reads like a bug in the test rather than a renamed
+	# or deleted file.
+	if cls_spec is None or cls_spec.loader is None:
+		raise ImportError(f"cannot load gate from {path_gate}")
 	cls_module = importlib.util.module_from_spec(cls_spec)
 	cls_spec.loader.exec_module(cls_module)
 	return cls_module

@@ -215,3 +215,34 @@ def test_call_with_backoff_label_names_the_caller_not_the_lambda() -> None:
 	call_with_backoff(cls_call, cls_policy, cls_emitter, "download_file")
 
 	assert "download_file failed" in cls_emitter.list_messages[0]
+
+
+@pytest.mark.parametrize(
+	"dict_kwargs",
+	[
+		{"float_base_wait_s": -1.0},
+		{"float_factor": -2.0},
+		{"float_max_wait_s": -0.5},
+		{"float_base_wait_s": float("inf")},
+		{"float_base_wait_s": float("nan")},
+	],
+)
+def test_policy_rejects_a_wait_time_sleep_cannot_accept(dict_kwargs: dict) -> None:
+	"""A wait that would crash the retry loop is refused at construction instead.
+
+	``time.sleep`` raises ``ValueError`` on a negative and ``OverflowError`` on an infinity,
+	so an unvalidated policy replaces the transient error being retried with a different one,
+	raised from inside the recovery path.
+
+	Parameters
+	----------
+	dict_kwargs : dict
+		One invalid wait value to construct the policy with.
+	"""
+	with pytest.raises(ValueError, match="finite and >= 0"):
+		RetryPolicy(**dict_kwargs)
+
+
+def test_policy_accepts_an_unset_max_wait() -> None:
+	"""``float_max_wait_s=None`` means uncapped and must survive the finite check."""
+	assert RetryPolicy(float_max_wait_s=None).float_max_wait_s is None

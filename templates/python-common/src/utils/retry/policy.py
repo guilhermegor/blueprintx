@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import TYPE_CHECKING
 
 from utils.retry._schedule import (
@@ -78,3 +79,32 @@ class RetryPolicy(metaclass=TypeChecker):
 			raise ValueError(
 				f"str_strategy must be one of {sorted(_STRATEGIES)}, got {self.str_strategy!r}"
 			)
+		self._validate_waits()
+
+	def _validate_waits(self) -> None:
+		"""Reject wait values ``time.sleep`` cannot accept.
+
+		Split from ``__post_init__`` so each stays inside the complexity ceiling, and because
+		these three share one reason: the retry loop hands the computed wait straight to
+		``time.sleep``, which raises ``ValueError`` on a negative and ``OverflowError`` on an
+		infinity. Either would surface as a crash **during** the retry — replacing the
+		transient error being retried with a different one, from inside the recovery path.
+		The class docstring already claims construction-time validation; this makes that true.
+
+		Raises
+		------
+		ValueError
+			If any wait is negative or non-finite.
+		"""
+		dict_waits = {
+			"float_base_wait_s": self.float_base_wait_s,
+			"float_factor": self.float_factor,
+			"float_max_wait_s": self.float_max_wait_s,
+		}
+		list_bad = [
+			str_name
+			for str_name, float_value in dict_waits.items()
+			if float_value is not None and not (math.isfinite(float_value) and float_value >= 0)
+		]
+		if list_bad:
+			raise ValueError(f"must be finite and >= 0: {', '.join(sorted(list_bad))}")
