@@ -84,7 +84,7 @@ bash bin/check_complexity.sh
 # is template source in three tiers, not gate wiring, and it is tracked rather than folded into
 # a commit about gate parity.
 #
-# ⚠️ Do not re-add this line before #245 closes: `poe lint` would be red on three of five tiers.
+# ⚠️ Do not re-add this line before #246 closes: `poe lint` would be red on three of five tiers.
 
 print_status info "numeric dtype policy"
 $POETRY run python bin/check_dtypes.py
