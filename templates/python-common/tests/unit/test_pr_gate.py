@@ -176,4 +176,5 @@ def test_render_comment_carries_the_sticky_marker_and_the_failing_names() -> Non
 	)
 	assert gate.COMMENT_MARKER in str_body
 	assert "Run Automated Tests (ubuntu)" in str_body
-	assert "risk:" in str_body and "deps" in str_body
+	assert "risk:" in str_body
+	assert "deps" in str_body

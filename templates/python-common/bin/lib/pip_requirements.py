@@ -47,6 +47,10 @@ TUPLE_PIP_NATIVE_PREFIXES = (">=", "<=", "==", "!=", ">", "<", "~=")
 TUPLE_UNSUPPORTED_KEYS = ("path", "git", "url")
 
 
+# major.minor.patch — a version is padded to three components before comparison.
+_INT_SEMVER_PARTS = 3
+
+
 def version_parts(str_raw: str) -> list[int]:
 	"""Split a version string into its leading integer components.
 
@@ -93,7 +97,7 @@ def caret_to_range(str_raw: str) -> str:
 	"""
 	str_base = str_raw[1:].strip()
 	list_parts = version_parts(str_base)
-	while len(list_parts) < 3:
+	while len(list_parts) < _INT_SEMVER_PARTS:
 		list_parts.append(0)
 	int_major, int_minor, int_patch = list_parts[:3]
 
@@ -126,7 +130,7 @@ def tilde_to_range(str_raw: str) -> str:
 	str_base = str_raw[1:].strip()
 	int_written = len(str_base.split("."))
 	list_parts = version_parts(str_base)
-	while len(list_parts) < 3:
+	while len(list_parts) < _INT_SEMVER_PARTS:
 		list_parts.append(0)
 	int_major, int_minor = list_parts[:2]
 

@@ -271,6 +271,10 @@ def audit_paths() -> list:
 	return sorted(list_paths)
 
 
+# `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
+_INT_FLAG_WITH_VALUE = 2
+
+
 def main(list_argv: list) -> int:
 	"""Check every named file for a function longer than the ceiling.
 
@@ -284,9 +288,15 @@ def main(list_argv: list) -> int:
 	int
 		0 when every function fits, 1 on a violation.
 	"""
-	global PATH_ROOT
+	# ⚠️ PLW0603 is real and accepted here with its upgrade path written down. `--root` exists
+	# so BlueprintX can run THIS file over its own tree instead of keeping a second copy, and
+	# the root it sets is read by helpers throughout the module for relative-path display.
+	# Threading it through every signature is the proper fix; it is a wider change than this
+	# one, and a module-level default set once by the entrypoint is the honest shape until
+	# then.
+	global PATH_ROOT  # noqa: PLW0603
 	if list_argv[:1] == ["--root"]:
-		if len(list_argv) < 2:
+		if len(list_argv) < _INT_FLAG_WITH_VALUE:
 			print("❌ --root needs a directory")
 			return 1
 		PATH_ROOT = pathlib.Path(list_argv[1]).resolve()

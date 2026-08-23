@@ -136,7 +136,7 @@ class ContractError(Exception, metaclass=TypeChecker):
 
 
 @type_checker
-def read_table(
+def read_table(  # noqa: PLR0913 — the public reader API; each argument is a real read option
 	path_file: Path,
 	str_sheet: str,
 	dict_dtypes: dict[str, str],

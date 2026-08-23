@@ -29,6 +29,12 @@ else:
 		from chassis.typing import type_checker
 
 
+# The check-digit arithmetic both identifiers share: the weighted sum is taken modulo 11, and
+# a remainder below 2 yields a digit of 0 rather than a negative one. Named because these two
+# numbers ARE the rule — a reader meeting a bare 11 cannot tell it from an array bound.
+_INT_MODULUS = 11
+_INT_MIN_REMAINDER = 2
+
 _LEN_CNPJ: int = 14
 _LEN_CPF: int = 11
 _ASCII_ZERO: int = ord("0")
@@ -129,7 +135,7 @@ def _cnpj_check_digit(str_base: str, tuple_weights: tuple[int, ...]) -> int:
 		for str_char, int_weight in zip(str_base, tuple_weights, strict=True)
 	)
 	int_rest = int_sum % 11
-	return 0 if int_rest < 2 else 11 - int_rest
+	return 0 if int_rest < _INT_MIN_REMAINDER else _INT_MODULUS - int_rest
 
 
 @type_checker
@@ -242,7 +248,7 @@ def _cpf_check_digit(str_base: str, int_start_weight: int) -> int:
 		int(str_char) * (int_start_weight - int_idx) for int_idx, str_char in enumerate(str_base)
 	)
 	int_rest = int_sum % 11
-	return 0 if int_rest < 2 else 11 - int_rest
+	return 0 if int_rest < _INT_MIN_REMAINDER else _INT_MODULUS - int_rest
 
 
 @type_checker

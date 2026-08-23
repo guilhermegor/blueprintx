@@ -200,7 +200,7 @@ def _decimal_from_float(value: float) -> object:
 	ValueError
 		For any non-NaN float — precision was already lost upstream.
 	"""
-	if value != value:  # NaN is the only value != itself
+	if value != value:  # noqa: PLR0124 — NaN is the only value not equal to itself
 		return pd.NA
 	raise ValueError(
 		f"Refusing to convert float {value!r} to Decimal: the source's exact value is "

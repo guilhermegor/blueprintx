@@ -74,5 +74,7 @@ def safe_str(value: object, default: str = "") -> str:
 	"""
 	# Both guards ask one question — "is this a missing-value sentinel?" — so they are one
 	# predicate and one conditional expression rather than two exits.
-	bool_missing = value is None or (isinstance(value, float) and value != value)
-	return default if bool_missing else str(value).strip()  # NaN is the only value != itself
+	# Comparing a value with itself is the canonical NaN test, since NaN is the only value
+	# that is not equal to itself.
+	bool_missing = value is None or (isinstance(value, float) and value != value)  # noqa: PLR0124
+	return default if bool_missing else str(value).strip()

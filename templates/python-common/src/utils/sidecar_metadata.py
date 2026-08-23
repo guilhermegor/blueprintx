@@ -44,6 +44,11 @@ else:
 		from chassis.typing import type_checker
 
 
+# A descriptor needs a header line plus at least one field line to carry anything. Named so
+# the guard states that, rather than testing a bare 2.
+_INT_MIN_DESCRIPTOR_LINES = 2
+
+
 @type_checker
 def cvm_meta_url(str_base_url: str, str_dataset_key: str) -> str:
 	"""Build a CVM sidecar-descriptor URL from a dataset's base URL (the reference locator).
@@ -139,7 +144,7 @@ def parse_sidecar_metadata(str_text: str, str_sep: str = ";") -> dict[str, dict[
 		Field key -> {remaining header -> cell value}. Empty when the text has no data rows.
 	"""
 	list_lines = [line for line in str_text.splitlines() if line.strip()]
-	if len(list_lines) < 2:
+	if len(list_lines) < _INT_MIN_DESCRIPTOR_LINES:
 		return {}
 	list_headers = [cell.strip() for cell in list_lines[0].split(str_sep)]
 	list_rows = [[cell.strip() for cell in str_line.split(str_sep)] for str_line in list_lines[1:]]

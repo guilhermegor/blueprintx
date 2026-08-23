@@ -33,7 +33,11 @@ def _load_gate() -> ModuleType:
 	"""
 	path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_layer_imports.py"
 	cls_spec = importlib.util.spec_from_file_location("_check_layer_imports", path_gate)
-	assert cls_spec is not None and cls_spec.loader is not None
+	# Split rather than combined. A conjunction in one assertion reports only that the
+	# whole thing was false, so a failure cannot say WHICH half broke — an absent loader
+	# and an absent spec are different faults with different causes.
+	assert cls_spec is not None
+	assert cls_spec.loader is not None
 	cls_module = importlib.util.module_from_spec(cls_spec)
 	cls_spec.loader.exec_module(cls_module)
 	return cls_module

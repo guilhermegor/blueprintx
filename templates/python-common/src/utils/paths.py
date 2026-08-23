@@ -66,6 +66,11 @@ _MONTHS_PT_ABBR: tuple[str, ...] = (
 )
 
 
+# A drive-letter prefix is exactly two characters, such as C-colon. Named so the length test
+# reads as "is there room for a drive letter?" rather than as an arbitrary bound.
+_INT_DRIVE_PREFIX_LEN = 2
+
+
 @type_checker
 def is_windows_path(str_path: str) -> bool:
 	r"""Return whether ``str_path`` looks like a Windows drive or UNC path.
@@ -81,7 +86,11 @@ def is_windows_path(str_path: str) -> bool:
 		``True`` for ``X:\...`` drive paths or ``\\server\share`` UNC paths.
 	"""
 	str_stripped = str_path.strip()
-	if len(str_stripped) >= 2 and str_stripped[1] == ":" and str_stripped[0].isalpha():
+	if (
+		len(str_stripped) >= _INT_DRIVE_PREFIX_LEN
+		and str_stripped[1] == ":"
+		and str_stripped[0].isalpha()
+	):
 		return True
 	return str_stripped.startswith("\\\\")
 
