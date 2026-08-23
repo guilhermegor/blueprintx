@@ -4,7 +4,7 @@ Script-style and intentionally thin (multi-intent mode): it reads ``PIPELINE_INT
 resolves it to a canonical intent, builds the matching orchestrator via
 ``controller.pipeline_dispatch``, and calls ``run``. It defines no functions — business logic
 lives in the model, phase sequencing in each ``controller/pipeline_<intent>.py``, and the shared
-phases in ``controller/pipeline_common.py``. Run it with ``make run`` (set ``PIPELINE_INTENT`` in
+phases in ``controller/pipeline_common.py``. Run it with ``poe run`` (set ``PIPELINE_INTENT`` in
 ``.env``) or ``PIPELINE_INTENT=reconcile python src/controller/main.py``.
 """
 

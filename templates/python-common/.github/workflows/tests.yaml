@@ -67,7 +67,7 @@ jobs:
       # longer matches pyproject.toml means dependencies changed without re-locking;
       # regenerating here would re-resolve and upgrade every dependency to the latest
       # in-range version — a non-reproducible build that can silently pull a breaking
-      # release. (A version bump does NOT invalidate the lock, so `make bump_version` never
+      # release. (A version bump does NOT invalidate the lock, so `poe bump_version` never
       # trips this.)
       - name: Check lockfile is in sync
         run: |
@@ -234,7 +234,7 @@ jobs:
 
       - name: Run Non-Python Lint Gates (shell, sql, yaml, actions)
         if: runner.os == 'Linux'
-        # Mirrors `make lint` and the pre-commit lint-* hooks (one home, zero drift).
+        # Mirrors `poe lint` and the pre-commit lint-* hooks (one home, zero drift).
         # shellcheck/shfmt are system tools; install them so the shell gate actually runs
         # in CI (the wrappers skip gracefully on a box without them).
         #

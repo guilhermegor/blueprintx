@@ -68,16 +68,19 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/.yamllint" "$str_project_path/.yamllint"
 	cp "$COMMON_TEMPLATE_ROOT/.shellcheckrc" "$str_project_path/.shellcheckrc"
 	cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$str_project_path/CONTRIBUTING.md"
-	cp "$COMMON_TEMPLATE_ROOT/Makefile" "$str_project_path/Makefile"
+	# The command interface: poe_tasks.toml replaces the Makefile + tasks.sh pair.
+	cp "$COMMON_TEMPLATE_ROOT/poe_tasks.toml" "$str_project_path/poe_tasks.toml"
 	cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$str_project_path/pytest.ini"
 	cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$str_project_path/ruff.toml"
 	# Seed CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
 	# release; cz changelog regenerates it from tags at release/docs-build time.
 	cp "$COMMON_TEMPLATE_ROOT/CHANGELOG.md" "$str_project_path/CHANGELOG.md"
 	cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$str_project_path/poetry.toml"
-	cp "$COMMON_TEMPLATE_ROOT/tasks.sh" "$str_project_path/tasks.sh"
 	cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$str_project_path/.gitlint"
 	cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$str_project_path/.coveragerc"
+	# Commitizen config, out of pyproject.toml since blueprintx#233. Losing this copy does
+	# NOT error — cz falls back to defaults and exits 0 — so scaffold_lint_test.sh asserts it.
+	cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$str_project_path/.cz.toml"
 }
 
 scaffold_copy_shared_tests() {
@@ -116,6 +119,10 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_comment_language_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
 		"$str_project_path/tests/unit/test_function_length_gate.py"
+	# Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
+	# selector could be wrong without any tier noticing (blueprintx#211).
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
+		"$str_project_path/tests/unit/test_pip_requirements.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \
 		"$str_project_path/tests/unit/test_startup_fragility_order.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
@@ -154,7 +161,11 @@ scaffold_copy_executables_and_vscode() {
 	cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$str_project_path/.vscode/settings.json"
 	cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.json" \
 		"$str_project_path/.vscode/extensions.json"
-	cp "$BLUEPRINTX_ROOT/templates/$str_tier/.vscode/tasks.json" \
+	# Single source for the four service tiers. They each carried their own copy until the
+	# poe migration and all four were byte-identical (md5 09515a32) — four copies of one
+	# file, which is the drift check_codespell_sync.sh exists to police. lib-minimal keeps
+	# its own (its task set genuinely differs) and copies it in its own scaffold.
+	cp "$COMMON_TEMPLATE_ROOT/.vscode/tasks.json" \
 		"$str_project_path/.vscode/tasks.json"
 }
 

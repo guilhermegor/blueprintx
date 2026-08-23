@@ -2,8 +2,8 @@
 #
 # lint_shell.sh — shellcheck + shfmt over the project's shell scripts.
 #
-# Single source of truth for shell linting: called by both `make lint` /
-# `./tasks.sh lint` and the pre-commit `lint-shell` hook.
+# Single source of truth for shell linting: called by both `poe lint` /
+# `poe lint` and the pre-commit `lint-shell` hook.
 #
 # Both tools are pip-installable dev-deps (shellcheck-py / shfmt-py vendor their
 # binaries, incl. win_amd64 wheels), so each is resolved PREFERABLY through the Poetry
@@ -18,7 +18,7 @@
 # install (matches lint_yaml.sh / lint_sql.sh).
 #
 # Modes:
-#   (default)  shfmt -w  — format in place (matches `ruff format` in `make lint`).
+#   (default)  shfmt -w  — format in place (matches `ruff format` in `poe lint`).
 #   --check    shfmt -d  — diff only, non-mutating (used by the pre-commit gate).
 
 set -euo pipefail
@@ -105,11 +105,11 @@ main() {
 		bool_poetry_ok=true
 	fi
 
-	# The shell files to lint: the task runner, the bin scripts and the shared libs.
-	mapfile -t list_files < <(
-		printf '%s\n' tasks.sh
-		find bin -name '*.sh' -type f
-	)
+	# The shell files to lint: every bin script and shared lib. `tasks.sh` used to be listed
+	# here as a literal beside the find; the poe migration deleted it, and an unconditional
+	# literal is a path that shellcheck reports as "does not exist" rather than skipping — so
+	# the whole gate failed instead of linting one file fewer. Discovery is now find-only.
+	mapfile -t list_files < <(find bin -name '*.sh' -type f)
 
 	run_shellcheck
 	run_shfmt

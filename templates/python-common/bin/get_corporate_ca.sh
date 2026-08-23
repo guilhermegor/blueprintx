@@ -7,7 +7,7 @@
 # corporate CA was installed there by IT, and Python ships its own bundle (certifi) that
 # never sees it.
 #
-# The generated pem is git-ignored and picked up automatically by `make venv` / `make run`
+# The generated pem is git-ignored and picked up automatically by `poe venv` / `poe run`
 # (see lib/bootstrap.sh), which merges it into a UNION bundle at bin/ca_bundle.pem.
 
 set -euo pipefail
@@ -66,7 +66,7 @@ explain_manual_route() {
 	print_status "info" "    Debian/Ubuntu  /etc/ssl/certs/ca-certificates.crt"
 	print_status "info" "    RHEL/Fedora    /etc/pki/tls/certs/ca-bundle.crt"
 	print_status "info" "    macOS          security find-certificate -a -p /Library/Keychains/System.keychain"
-	print_status "info" "Then re-run 'make venv'."
+	print_status "info" "Then re-run 'poe venv'."
 }
 
 main() {
@@ -87,7 +87,7 @@ main() {
 	print_status "success" "Trust store exported ($str_count certs): $CORPORATE_CA_PEM"
 
 	wire_corporate_ca
-	print_status "info" "Re-run 'make venv' to install dependencies through the proxy."
+	print_status "info" "Re-run 'poe venv' to install dependencies through the proxy."
 }
 
 main "$@"

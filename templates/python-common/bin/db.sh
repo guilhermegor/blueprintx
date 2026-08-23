@@ -132,7 +132,7 @@ restore() {
 	local str_dump_file="${DUMP:-}"
 
 	if [[ -z "$str_dump_file" ]]; then
-		print_status "error" "Specify the dump file: DUMP=<path> make db_restore"
+		print_status "error" "Specify the dump file: DUMP=<path> poe db_restore"
 		exit 1
 	fi
 

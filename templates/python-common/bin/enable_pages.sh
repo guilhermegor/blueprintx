@@ -3,7 +3,7 @@
 #
 # WHY THIS EXISTS: a workflow's GITHUB_TOKEN is a GitHub App installation token that CANNOT
 # create a Pages site or change its source ("Resource not accessible by integration"). That
-# needs repo-admin rights, which a maintainer running `make init` has (via `gh auth`) but CI
+# needs repo-admin rights, which a maintainer running `poe init` has (via `gh auth`) but CI
 # does not. This script makes that one-time API call.
 #
 # TWO MODELS, auto-detected from mkdocs.yml:
@@ -34,7 +34,7 @@ require_gh() {
 		return 1
 	fi
 	if ! gh auth status >/dev/null 2>&1; then
-		print_status "warning" "gh not authenticated — skipping Pages enablement (run 'gh auth login', then 'make enable_pages')"
+		print_status "warning" "gh not authenticated — skipping Pages enablement (run 'gh auth login', then 'poe enable_pages')"
 		return 1
 	fi
 	return 0
@@ -65,7 +65,7 @@ set_pages_source() {
 	if uses_mike; then
 		# Versioned (mike) model: serve from the gh-pages branch — but only once it exists.
 		if ! remote_branch_exists "$str_repo" "$PAGES_BRANCH"; then
-			print_status "info" "No '$PAGES_BRANCH' branch yet — leaving Pages untouched (the first 'mike deploy' in the release workflow creates it, then re-run 'make enable_pages')"
+			print_status "info" "No '$PAGES_BRANCH' branch yet — leaving Pages untouched (the first 'mike deploy' in the release workflow creates it, then re-run 'poe enable_pages')"
 			return 0
 		fi
 		print_status "info" "Setting GitHub Pages source to branch '$PAGES_BRANCH' for $str_repo (mike versioned docs)..."
@@ -84,7 +84,7 @@ set_pages_source() {
 	fi
 
 	# Most common cause: the caller is not a repo admin (a fork/contributor). Non-fatal.
-	print_status "warning" "Could not set Pages source for $str_repo (needs repo-admin rights) — a maintainer must run 'make enable_pages' or set it in Settings → Pages"
+	print_status "warning" "Could not set Pages source for $str_repo (needs repo-admin rights) — a maintainer must run 'poe enable_pages' or set it in Settings → Pages"
 	return 0
 }
 

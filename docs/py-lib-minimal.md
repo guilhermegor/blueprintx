@@ -86,9 +86,9 @@ class TestMain(unittest.TestCase):
 |------|------|------------|
 | **Ruff** | Linter + formatter | `ruff.toml` — line-length 99, tab indent, double quotes, NumPy docstrings |
 | **pre-commit** | Git hooks | `.pre-commit-config.yaml` — ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge |
-| **pytest** | Test runner | `pytest.ini` — `make unit_tests` runs `poetry run pytest tests/unit/`; tests are pytest-style functions with fixtures |
+| **pytest** | Test runner | `pytest.ini` — `poe unit_tests` runs `pytest tests/unit/`; tests are pytest-style functions with fixtures |
 | **GitHub Actions** | CI | `.github/workflows/tests.yaml` — runs linting and tests on every push |
-| **Makefile + `bin/`** | Dev automation | `make init_venv`, `make update_venv`, `make start`, linting and test recipes |
+| **`poe_tasks.toml` + `bin/`** | Dev automation | `poe venv`, `poe update_venv`, `poe run`, plus the linting and test tasks. Bare `poe` lists them all. Bootstrap is `bash bin/venv.sh` — poe is a dev dependency, so it lives inside the venv it would have to create |
 
 ---
 
@@ -96,9 +96,9 @@ class TestMain(unittest.TestCase):
 
 1. Add library functions and classes under `src/<project_name>/`.
 2. Mirror the source structure under `tests/unit/` — one test module per source module.
-3. Run tests: `make unit_tests` (or `poetry run pytest tests/unit/ -v`)
+3. Run tests: `poe unit_tests` (or `pytest tests/unit/ -v`)
 4. Add integration tests in `tests/integration/` for any I/O-dependent code.
-5. Keep `docs/` in sync with the public API; host locally with `make mkdocs_server`.
+5. Keep `docs/` in sync with the public API; host locally with `poe docs_server`.
 
 ---
 

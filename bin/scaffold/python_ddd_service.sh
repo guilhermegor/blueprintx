@@ -672,7 +672,10 @@ apply_offline_mode() {
         "$project_path/bin/git_merge_to_main.sh" \
         "$project_path/bin/protect_branch.sh"
     mkdir -p "$project_path/make"
-    cp "$SHARED_TEMPLATE_ROOT/make/offline.mk" "$project_path/make/offline.mk"
+    # Offline-only tasks. add_poe_include wires the fragment in only when it is copied:
+    # poe warns on every invocation for a missing include, unlike make's silent -include.
+    cp "$SHARED_TEMPLATE_ROOT/poe_tasks.offline.toml" "$project_path/poe_tasks.offline.toml"
+    add_poe_include "$project_path" "poe_tasks.offline.toml"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
     # Swap the stock no-commit-to-branch hook for the friendly local protect-branch

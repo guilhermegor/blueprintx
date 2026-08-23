@@ -10,13 +10,12 @@ Everything you need to develop, test, and release this library.
 ## Setting up for development
 
 The project ships both a `Makefile` and a parallel `tasks.sh`, so use whichever suits your
-machine — **`make init`**, or **`bash tasks.sh init`** when `make` is unavailable (e.g. a stock
-Windows shell).
+machine — **`bash bin/venv.sh`**.
 
 ```bash
-make init        # seed .env, create the Poetry venv + install deps, install pre-commit hooks
-# or, without make:
-bash tasks.sh init
+bash bin/venv.sh        # create the Poetry venv + install deps
+bash bin/ensure_env.sh  # seed .env from .env.example
+bash bin/precommit.sh   # install the git hooks
 ```
 
 `init` composes `ensure_env` (seed `.env`), `venv` (create the Poetry virtualenv, install **all**
@@ -26,9 +25,9 @@ auto-installed if missing.
 ## Tests and linting
 
 ```bash
-make unit_tests          # poetry run pytest tests/unit/
-make integration_tests   # poetry run pytest tests/integration/
-make lint                # ruff + mypy + codespell + pydocstyle + shell/sql/yaml gates
+poe unit_tests          # poetry run pytest tests/unit/
+poe integration_tests   # poetry run pytest tests/integration/
+poe lint                # ruff + mypy + codespell + pydocstyle + shell/sql/yaml gates
 ```
 
 CI runs the same gates on every pull request; keep them green locally before pushing.
@@ -40,7 +39,7 @@ packaging mistakes (a missing `__init__`, an unshipped `_internal/` subpackage) 
 tests never surface:
 
 ```bash
-make install_dist_locally    # python -m build → install → smoke-import → report the built wheel
+poe install_dist_locally    # python -m build → install → smoke-import → report the built wheel
 ```
 
 ## Publishing the documentation (versioned, via mike)
@@ -71,17 +70,17 @@ gh-pages*. The workflow's `GITHUB_TOKEN` cannot change that (it is a GitHub App 
 repo-admin rights), so do it with your own `gh` auth:
 
 ```bash
-make enable_pages          # or: bash tasks.sh enable_pages
+poe enable_pages
 ```
 
-This already runs inside `make init` / `bash tasks.sh init`, and is **idempotent and
+This already runs inside `poe init` (after bootstrap), and is **idempotent and
 non-blocking** — it warns and continues if `gh` is absent/unauthenticated, no remote resolves,
 or you are not a repo admin (a fork), so it never breaks `init`.
 
 **Ordering matters:** the `gh-pages` branch does not exist until the first release deploy
 creates it. Until then `enable_pages` deliberately leaves Pages untouched (so the site is never
 pointed at an empty branch) and tells you to re-run it. So: cut the first release, then run
-`make enable_pages` once. Manual alternative: *Settings → Pages → Build and deployment →
+`poe enable_pages` once. Manual alternative: *Settings → Pages → Build and deployment →
 Source: Deploy from a branch → `gh-pages` / `/`*.
 
 ## Pull requests
@@ -101,7 +100,7 @@ Releases are **tag-driven and secret-free** when the project is connected to a G
 - The release workflow runs the **full test suite** as a hard gate, builds with `python -m build`,
   and publishes via **OIDC trusted publishing** (`pypa/gh-action-pypi-publish`) — no stored
   `PYPI_TOKEN`.
-- The changelog is regenerated from tags at release/build time (`make changelog` locally); CI never
+- The changelog is regenerated from tags at release/build time (`poe changelog` locally); CI never
   commits `CHANGELOG.md` back to the protected default branch.
 
 ### Maintainer setup — trusted publisher (one time, before the first release)
@@ -143,15 +142,15 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
 
 ## Repository protection & security (one-time, scripted)
 
-`make init` runs three admin-gated helpers. They are **idempotent and non-blocking**: without
+`poe init` runs three admin-gated helpers. They are **idempotent and non-blocking**: without
 `gh`, without auth, without a GitHub remote, or without repo-admin rights they warn and skip, so
 `init` still completes for contributors and offline scaffolds. Re-run any of them alone later:
 
 | Target | What it provisions |
 |--------|--------------------|
-| `make enable_pages` | GitHub Pages source (gh-pages branch for versioned docs, else Actions) |
-| `make enable_repo_rules` | The `pr-quality-gate` branch ruleset + the merge settings the PR gate needs |
-| `make enable_security` | Private vulnerability reporting, Dependabot alerts, Dependabot security updates |
+| `poe enable_pages` | GitHub Pages source (gh-pages branch for versioned docs, else Actions) |
+| `poe enable_repo_rules` | The `pr-quality-gate` branch ruleset + the merge settings the PR gate needs |
+| `poe enable_security` | Private vulnerability reporting, Dependabot alerts, Dependabot security updates |
 
 ### The `pr-quality-gate` ruleset
 
@@ -189,7 +188,7 @@ teachers and popular-OSS maintainers.
 ### Security
 
 `SECURITY.md` at the repo root is auto-detected by GitHub (no API call) and flips *Security
-policy* to Enabled; `make enable_security` turns on the matching private-reporting intake plus
+policy* to Enabled; `poe enable_security` turns on the matching private-reporting intake plus
 Dependabot alerts and security updates. Ordinary version bumps are separate — see
 `.github/dependabot.yml`, which uses `versioning-strategy: lockfile-only` so it refreshes
 `poetry.lock` (keeping CI honest about what consumers install) without ever rewriting your

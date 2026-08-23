@@ -1,7 +1,7 @@
 # Dependabot — ordinary VERSION updates.
 #
 # Distinct from Dependabot SECURITY updates (auto-PRs for known vulnerabilities), which are a repo
-# toggle enabled by `make enable_security`, not config. This file handles routine bumps.
+# toggle enabled by `poe enable_security`, not config. This file handles routine bumps.
 #
 # WHY lockfile-only: poetry.lock is committed and CI installs from it and refuses to re-lock (a
 # stale lock fails loud rather than silently re-resolving). That means CI tests the FROZEN locked

@@ -16,9 +16,9 @@ A minimal Python library with packaging, tests, CI, and linting pre-configured.
 ## Quick start
 
 ```bash
-make init          # bootstrap virtual environment and install pre-commit hooks
-make unit_tests    # run the test suite
-make docs_server   # serve this documentation at http://0.0.0.0:8000
+bash bin/venv.sh   # bootstrap the venv (poe lives inside it, so bootstrap is shell)
+poe unit_tests    # run the test suite
+poe docs_server   # serve this documentation at http://0.0.0.0:8000
 ```
 
 ---

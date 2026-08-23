@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Real (non-dry-run) scaffold of a Python skeleton, then run the generated
-# project's own quality gate end-to-end: `make lint` (and assert it changed
-# nothing) followed by `make unit_tests`.
+# project's own quality gate end-to-end: `poe lint` (and assert it changed
+# nothing) followed by `poe unit_tests` and `poe integration_tests`.
 #
 # This complements bin/ci/smoke_test.sh, which only does `--dry-run` (prints the
 # structure, writes no files). Here we actually generate the project and prove a
@@ -135,25 +135,62 @@ echo "::endgroup::"
 # Commit anything left in the tree as the baseline, AFTER poetry install (the
 # scaffold already commits its own output, including offline artifacts; this
 # mainly captures the generated poetry.lock). With a clean baseline, the
-# post-lint check below reflects only what `make lint` itself changes.
+# post-lint check below reflects only what `poe lint` itself changes.
 git add -A
 git commit -q --no-verify -m "ci: scaffold baseline" || true
 
-echo "::group::make lint (must leave the tree unchanged)"
-make lint
-# `make lint` auto-fixes (ruff --fix / format). On a clean scaffold it must change
+# The lockfile is what makes a generated project reproducible for the second developer who
+# clones it, and the only thing keeping it that way is an ABSENCE — `poetry.lock` is not
+# listed in the shipped .gitignore. An absence is exactly what an unrelated edit
+# reintroduces: someone adds a `*.lock` pattern, copies a .gitignore from elsewhere, and
+# nothing anywhere fails. `git add -A` above would then silently skip the file, so this is
+# the one line that can tell the difference (#235).
+if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
+    echo "ERROR: [$SKELETON] the generated project does not TRACK poetry.lock." >&2
+    echo "       It exists on disk but git is ignoring it — check .gitignore for a" >&2
+    echo "       lock pattern. An untracked lockfile makes the project unreproducible" >&2
+    echo "       for anyone who clones it." >&2
+    git check-ignore -v poetry.lock >&2 || true
+    exit 1
+fi
+echo "The generated project tracks poetry.lock."
+
+# Commitizen's config lives in .cz.toml rather than pyproject.toml (#233), and losing it is
+# the quietest failure in this tree: cz tries pyproject.toml first, finds no [tool.commitizen],
+# falls through to .cz.toml, and when that is absent too it does NOT error — measured, it
+# prints "No project information in this project." and exits **0**. The symptom would be a
+# differently formatted changelog and an unprefixed tag at release time, months later. So the
+# assertion is not "the file was copied" but "cz can still answer", which is the thing that
+# actually breaks.
+str_cz_version="$(poetry run cz version --project 2>/dev/null || true)"
+case "$str_cz_version" in
+    [0-9]*.[0-9]*.[0-9]*) echo "commitizen resolves its config ($str_cz_version)." ;;
+    *)
+        echo "ERROR: [$SKELETON] commitizen cannot resolve the project version." >&2
+        echo "       Got: '${str_cz_version:-<empty>}'" >&2
+        echo "       .cz.toml is probably missing from this tier's scaffold copy list —" >&2
+        echo "       cz falls back to defaults silently (exit 0), so nothing else notices." >&2
+        exit 1
+        ;;
+esac
+
+echo "::group::poe lint (must leave the tree unchanged)"
+# Through the resolver, never a bare `poe`: `poetry install` puts poe in the in-project
+# .venv but NOT on PATH, which is precisely the case poe_exec.sh's first branch exists for.
+bash bin/poe_exec.sh lint
+# `poe lint` auto-fixes (ruff --fix / format). On a clean scaffold it must change
 # nothing — any diff or new file means the template shipped non-compliant code.
 if [ -n "$(git status --porcelain)" ]; then
-    echo "ERROR: 'make lint' modified the freshly scaffolded tree:" >&2
+    echo "ERROR: 'poe lint' modified the freshly scaffolded tree:" >&2
     git status --short >&2
     git --no-pager diff >&2
     exit 1
 fi
-echo "make lint left the tree clean."
+echo "poe lint left the tree clean."
 echo "::endgroup::"
 
-echo "::group::make unit_tests"
-make unit_tests
+echo "::group::poe unit_tests"
+bash bin/poe_exec.sh unit_tests
 echo "::endgroup::"
 
 # The integration suite is where every bin/*.sh seam is actually EXECUTED — the unit suite
@@ -161,8 +198,8 @@ echo "::endgroup::"
 # tier, and never run by the one harness that proves a tier works, so a broken shell seam
 # looked exactly like a working one. `|| [ $? -eq 5 ]` tolerates pytest's "no tests collected"
 # for a tier that ships none; a real failure (exit 1) still fails the run.
-echo "::group::make integration_tests"
-make integration_tests || [ $? -eq 5 ]
+echo "::group::poe integration_tests"
+bash bin/poe_exec.sh integration_tests || [ $? -eq 5 ]
 echo "::endgroup::"
 
 echo "OK: $SKELETON scaffolds clean, lints clean, and unit + integration tests pass."

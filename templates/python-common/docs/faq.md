@@ -9,7 +9,7 @@ entries as they come up.
 
 ## How do I run it locally?
 
-`make init` then `make run` (or `bash tasks.sh init` / `bash tasks.sh run`). See [Usage](usage.md).
+`poe init` then `poe run` (or `poe init` / `poe run`). See [Usage](usage.md).
 
 ## How do I add or update a dependency?
 

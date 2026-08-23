@@ -57,7 +57,7 @@ of your public `__all__`. The internal imports are package-qualified
 - **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings.
 - **Pre-commit**: ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration
   tests, coverage badge.
-- **Tests**: `pytest` — `make unit_tests` (`poetry run pytest tests/unit/`). Write
+- **Tests**: `pytest` — `poe unit_tests`. Write
   pytest-style functions with fixtures, not `unittest.TestCase`.
 - **Explicit column typing & Brazilian identifiers** — if the library touches pandas, type
   every DataFrame on load via `apply_dtypes` (`_internal.utils.dtypes`, never pandas'
@@ -163,7 +163,7 @@ Two workflows ship under `.github/workflows/` (present only when a GitHub remote
 
 **Docs are versioned via [mike](https://github.com/jimporter/mike)** and served from the
 `gh-pages` branch — `docs.yaml` is a strict *build check only* and never deploys. Pages must be
-set to "Deploy from a branch → gh-pages" via `make enable_pages`, which waits until the first
+set to "Deploy from a branch → gh-pages" via `poe enable_pages`, which waits until the first
 release creates that branch. See `docs/contributing.md`.
 
 Both gate on the version being greater than what is already published, build with Poetry,

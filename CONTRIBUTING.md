@@ -73,7 +73,7 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
    - Maintain the standard file structure:
      - Implementation: `src/<feat_name>.py`
      - Tests: `tests/test_<feat_name>.py`
-   - Run comprehensive validation with: `make test_feat MODULE=<feat_name>`
+   - Run comprehensive validation with: `poe unit_tests -k <keyword>`
         - This command executes:
             - **Ruff**: Linting, formatting, and flagging deprecated Python features
             - **Codespell**: Spelling verification in comments and docstrings
@@ -90,7 +90,7 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 ## Pull Request Process
 
 1. **Create an Issue First**:
-   - Check existing issues at [GitHub Issues](https://github.com/guilhermegor/stpstone/issues)
+   - Check existing issues at [GitHub Issues](https://github.com/guilhermegor/blueprintx/issues)
    - Open a new issue if none exists for your work
 
 2. **Opening a PR**:

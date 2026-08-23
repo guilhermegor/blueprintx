@@ -6,7 +6,7 @@ name: Docs - Strict Build Check
 # Deployment is owned by the release workflow (release.yaml): after it creates the vX.Y.Z tag
 # it runs `mike deploy <X.Y> latest` to the gh-pages branch, so the published site is versioned
 # and only ever reflects versions that actually shipped. GitHub Pages must be set to
-# "Deploy from a branch → gh-pages" — do that once via `make enable_pages` (wired into `init`)
+# "Deploy from a branch → gh-pages" — do that once via `poe enable_pages` (wired into `init`)
 # or Settings → Pages. mike creates the gh-pages branch on its first deploy.
 on:
   push:

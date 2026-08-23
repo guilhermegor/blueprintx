@@ -282,7 +282,7 @@ pip_fallback_install_requirements_file_into_venv() {
 		echo "${arr_failed[*]}"
 	)"
 	print_status "error" "The package index refused: $str_failed"
-	print_status "error" "An HTTP 403 here means the index ALLOWLIST rejected the package, not that the network is down — the remedies are opposite. Ask for it to be allowlisted, or vendor it (see 'make wheelhouse')."
+	print_status "error" "An HTTP 403 here means the index ALLOWLIST rejected the package, not that the network is down — the remedies are opposite. Ask for it to be allowlisted, or vendor it (an offline wheelhouse is tracked in blueprintx#127)."
 	return 1
 }
 

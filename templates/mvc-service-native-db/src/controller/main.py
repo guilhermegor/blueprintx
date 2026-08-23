@@ -3,7 +3,7 @@
 Script-style and intentionally thin: it wires the ``config.startup`` singletons + config
 into :class:`controller._pipeline.PipelineOrchestrator` and calls ``run``. It defines no
 functions — business logic lives in the model and all phase sequencing in the orchestrator.
-Run it with ``make run`` or ``python src/controller/main.py``.
+Run it with ``poe run`` or ``python src/controller/main.py``.
 """
 
 import os

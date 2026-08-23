@@ -193,7 +193,8 @@ prompt_env_wise_config() {
 }
 
 # ============================================================================
-# strip_bump_version — remove the hand-bump Makefile/tasks.sh target
+# ============================================================================
+# strip_bump_version — remove the hand-bump task from the copied poe_tasks.toml
 # ============================================================================
 #
 # Usage:
@@ -201,50 +202,92 @@ prompt_env_wise_config() {
 #
 # Meaningless once versioning is tag-driven (lib: poetry-dynamic-versioning;
 # services: the release.yaml workflow) — it would bump a frozen "0.0.0" stub.
-# Strips it from the copied Makefile (.PHONY, recipe, help) + tasks.sh
-# (function, case branch, help). Call only on the online path; offline
-# scaffolds keep the recipe (cz bump). Shared by every Python scaffold
-# (lib-minimal + the four service tiers) so the regex lives in one place.
+# Call only on the ONLINE path; offline scaffolds keep the task (cz bump).
+# Shared by every Python scaffold so the regex lives in one place.
+#
+# Before the poe migration this edited BOTH the Makefile and tasks.sh, in three
+# places each (.PHONY / recipe / help, then function / case branch / help) — six
+# regexes for one removal, which is what two implementations of one command list
+# costs even at deletion time. One TOML table replaces all six.
 
 strip_bump_version() {
     local project_path="$1"
-    python3 - "$project_path/Makefile" "$project_path/tasks.sh" <<'PY'
+    python3 - "$project_path/poe_tasks.toml" <<'PY'
 import re
 import sys
 
-makefile, tasks = sys.argv[1], sys.argv[2]
+path_tasks = sys.argv[1]
 
-with open(makefile, encoding="utf-8") as fh:
+with open(path_tasks, encoding="utf-8") as fh:
     text = fh.read()
-# Drop bump_version from the .PHONY line only (not the help text).
-text = re.sub(r"(\.PHONY:[^\n]*) bump_version", r"\1", text, count=1)
-# Remove the recipe: its preceding comment block + the target line + the tab-indented body.
-# Anchored on the `bump_version:` target (NOT the comment wording, which varies between tiers
-# and edits) — `(?:#[^\n]*\n)+` grabs the contiguous comment run only because `bump_version:\n`
-# pins its end, and `(?:\t[^\n]*\n)+` grabs the recipe body. Structural anchors only, so a
-# reworded recipe comment can never silently defeat the strip.
+
+# Remove the task's leading comment run, its table header, and its key lines.
+#
+# Anchored on STRUCTURE, never on comment wording, for the same reason the Makefile
+# version was: a reworded comment must not silently defeat the strip. The comment run
+# `(?:#[^\n]*\n)*` is bounded by the header line that follows it, and the body runs to
+# the next top-level `[` table (or end of file). A blank line inside the body would end
+# it early, so the body pattern accepts blank lines but not a new table header.
 text = re.sub(
-    r"\n(?:#[^\n]*\n)+bump_version:\n(?:\t[^\n]*\n)+",
+    r"\n(?:#[^\n]*\n)*\[tool\.poe\.tasks\.bump_version\]\n(?:(?!\[)[^\n]*\n)*",
     "\n",
     text,
     count=1,
 )
-# Remove the help line.
-text = re.sub(r'\t@echo "  bump_version[^\n]*\n', "", text, count=1)
-with open(makefile, "w", encoding="utf-8") as fh:
-    fh.write(text)
 
-with open(tasks, encoding="utf-8") as fh:
-    text = fh.read()
-# Remove the bump_version() function.
-text = re.sub(r"\nbump_version\(\) \{\n.*?\n\}\n", "\n", text, count=1, flags=re.S)
-# Remove the case branch.
-text = re.sub(r"\nbump_version\) bump_version [^\n]*\n", "\n", text, count=1)
-# Remove the help line.
-text = re.sub(r"\n  bump_version[^\n]*", "", text, count=1)
-with open(tasks, "w", encoding="utf-8") as fh:
+if "bump_version" in text:
+    raise SystemExit(f"strip_bump_version: bump_version still present in {path_tasks}")
+
+with open(path_tasks, "w", encoding="utf-8") as fh:
     fh.write(text)
 PY
+}
+
+# ============================================================================
+# add_poe_include — wire a conditional poe task file into poe_tasks.toml
+# ============================================================================
+#
+# Usage:
+#   add_poe_include "$project_path" "poe_tasks.offline.toml"
+#
+# The Makefile declared both conditional fragments unconditionally as
+# `-include make/*.mk`, whose leading '-' made a missing file silent. Poe's
+# `include` is NOT equivalent: a missing path does not fail the run, but it
+# DOES print `Warning: Poe could not include file from invalid path …` on every
+# invocation — measured. An online, non-library project would print two warnings
+# before every `poe lint`, which is how a team learns to read past warnings.
+#
+# So the include list names only the fragments actually copied, appended here at
+# scaffold time. Idempotent: re-adding the same file is a no-op, and a second
+# distinct file extends the existing list rather than opening a second
+# `[tool.poe]` table (which would be invalid TOML).
+
+add_poe_include() {
+    local project_path="$1"
+    local include_file="$2"
+    python3 - "$project_path/poe_tasks.toml" "$include_file" <<'PY_INNER'
+import re
+import sys
+
+path_tasks, str_include = sys.argv[1], sys.argv[2]
+
+with open(path_tasks, encoding="utf-8") as fh:
+    text = fh.read()
+
+if f'"{str_include}"' in text:
+    sys.exit(0)
+
+cls_match = re.search(r"\n\[tool\.poe\]\ninclude = \[([^\]]*)\]\n", text)
+if cls_match:
+    str_existing = cls_match.group(1).strip()
+    str_entries = f'{str_existing}, "{str_include}"' if str_existing else f'"{str_include}"'
+    text = text[: cls_match.start()] + f"\n[tool.poe]\ninclude = [{str_entries}]\n" + text[cls_match.end() :]
+else:
+    text = text.rstrip("\n") + f'\n\n[tool.poe]\ninclude = ["{str_include}"]\n'
+
+with open(path_tasks, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY_INNER
 }
 
 apply_env_wise_config() {

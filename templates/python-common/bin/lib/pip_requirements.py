@@ -230,7 +230,7 @@ def pep621_requirements(dict_project: dict, list_groups: list) -> list:
 	list of str
 		Requirement lines, already pip-shaped.
 	"""
-	list_requirements = list(dict_project.get("dependencies", []))
+	list_requirements = list(dict_project.get("dependencies", [])) if "main" in list_groups else []
 	dict_optional = dict_project.get("optional-dependencies", {})
 	for str_group in (str_group for str_group in list_groups if str_group != "main"):
 		list_requirements.extend(dict_optional.get(str_group, []))
@@ -269,6 +269,34 @@ def poetry_requirements(dict_poetry: dict, list_groups: list) -> list:
 	return list_requirements
 
 
+def select_requirements(dict_pyproject: dict, list_groups: list) -> list:
+	"""Choose the declaration layout and collect the requested groups from it.
+
+	The question this answers is "does this project use the PEP 621 layout at all?", not
+	"does it declare main dependencies?". Those come apart for a project carrying only
+	``[project.optional-dependencies]``: asking the narrower question sent it down the Poetry
+	path, where an empty ``[tool.poetry]`` yielded nothing at all (blueprintx#211). A project
+	with an EMPTY standard table alongside a populated Poetry one must still resolve, which is
+	why the test is on content rather than on the table's presence.
+
+	Parameters
+	----------
+	dict_pyproject : dict
+		The parsed ``pyproject.toml``.
+	list_groups : list of str
+		Requested groups, ``"main"`` included when the runtime set is wanted.
+
+	Returns
+	-------
+	list of str
+		Requirement lines from whichever layout the project actually uses.
+	"""
+	dict_project = dict_pyproject.get("project") or {}
+	if dict_project.get("dependencies") or dict_project.get("optional-dependencies"):
+		return pep621_requirements(dict_project, list_groups)
+	return poetry_requirements(dict_pyproject.get("tool", {}).get("poetry", {}), list_groups)
+
+
 def main() -> int:
 	"""Print one pip requirement per line for the requested dependency groups.
 
@@ -285,14 +313,17 @@ def main() -> int:
 		path_root.joinpath("pyproject.toml").read_text(encoding="utf-8")
 	)
 
-	# PEP 621 wins only when it actually declares dependencies. A project carrying an
-	# empty standard table alongside a populated Poetry one must still resolve.
-	dict_project = dict_pyproject.get("project") or {}
-	if "main" in list_groups and dict_project.get("dependencies"):
-		list_requirements = pep621_requirements(dict_project, list_groups)
-	else:
-		list_requirements = poetry_requirements(
-			dict_pyproject.get("tool", {}).get("poetry", {}), list_groups
+	list_requirements = select_requirements(dict_pyproject, list_groups)
+
+	# Zero requirements for a non-empty group request is not an answer, it is a symptom: the
+	# caller writes them to requirements-lock.txt, and an empty file reads as "this project
+	# has no dependencies" rather than as a failure. The hosts that reach this code are the
+	# constrained boxes where nobody is watching closely, so it has to say so out loud.
+	if list_groups and not list_requirements:
+		raise SystemExit(
+			f"No requirements resolved for group(s) {','.join(list_groups)} in "
+			f"{path_root / 'pyproject.toml'}. Check that the groups exist and that the "
+			f"project declares them under [project] or [tool.poetry]."
 		)
 
 	set_seen: set[str] = set()
