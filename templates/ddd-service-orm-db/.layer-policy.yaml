@@ -1,0 +1,95 @@
+# Per-layer import policy for the DDD tier (SQLAlchemy ORM), read by
+# bin/check_layer_imports.py (pre-commit + CI).
+#
+# The rule: a third-party dependency is reached through a seam in utils/, never imported by
+# model/, view/ or controller/. The layer then depends on OUR function, not on a vendor API,
+# so a vendor change is confined to one adapter.
+#
+# Deferring an import into a function does NOT buy an exemption — the layer still knows the
+# vendor. The gate judges every scope identically.
+#
+# Every `allow` entry carries a written reason. An allowlist entry without one is a rule that
+# the first person who finds it inconvenient will widen.
+
+# Package roots that are first-party but do NOT exist in THIS layout. The shared utils/
+# helpers ship to both tiers and reach their typing engine through a layout shim
+# (`try: from utils.typing … except ModuleNotFoundError: from chassis.typing …`), so
+# `chassis` is our own code — just the DDD layout's name for it.
+first_party_extra:
+  - chassis
+
+# Vendors usable as a TYPE ANNOTATION in any layer, and as nothing else.
+# This is the pandas compromise, and the distinction is load-bearing: `-> pd.DataFrame` in a
+# signature is the vocabulary the layers agree on and couples nothing, while `pd.read_sql(...)`
+# is a vendor API call that every copied file inherits.
+annotation_only:
+  pandas: >-
+    Annotation only. Build a frame with utils.frames.from_cursor; read one with
+    utils.tabular_reader.read_table / read_query (they enforce a FileContract + dtypes).
+
+layers:
+  # Modules sitting directly under src/ (the entrypoint, main.py). It has no directory to
+  # name its layer, and it is precisely where a bypass would be easiest.
+  __root__:
+    allow: {}
+
+  # The composition root's wiring half: builds the container and hands collaborators to the
+  # capabilities. It knows WHICH implementation, never the domain rules.
+  app:
+    allow:
+      dotenv: "reads .env while assembling the container; environment resolution is its job"
+
+  # domain/ is pure Python by contract, application/ depends on domain interfaces only, and
+  # infrastructure/ is where an adapter may reach a vendor. The gate cannot yet tell those
+  # three apart (they are directories UNDER the capability), so the allowlist here is empty:
+  # a capability that needs a vendor puts the adapter in chassis/ or reaches a utils/ seam.
+  capabilities:
+    allow: {}
+
+  # Cross-cutting providers — the DDD layout's seam layer, the counterpart of utils/. DB
+  # drivers live here because a handler IS the adapter over one; they are imported lazily by
+  # the configured DB_BACKEND, so an unused driver need not be installed.
+  chassis:
+    allow:
+      dotenv: "reads .env when a provider resolves its own configuration"
+      psycopg: "PostgreSQL driver behind chassis/db_schema"
+      pyodbc: "SQL Server driver behind chassis/db_schema"
+      oracledb: "Oracle driver behind chassis/db_schema"
+      mysql: "MySQL/MariaDB driver behind chassis/db_schema"
+      beartype: "runtime type-checking engine behind chassis.typing"
+      numpy: >-
+        Optional widening for the runtime type-checker (chassis/typing/policy.py), probed
+        with a guarded import so a tier without numpy still loads.
+      pandas: "the chassis seam layer owns the pandas surface, as utils/ does in the MVC tiers"
+      sqlalchemy: >-
+        The ORM IS this tier's persistence contract, not a peripheral dependency: Base,
+        Session and the Repository ABC are written in it, and chassis/db_schema is the
+        adapter. Swapping it is a rewrite, not a swap — the criterion in CLAUDE.md.
+
+  utils:
+    # utils/ IS the seam layer — this is where vendors are supposed to live. Listed
+    # explicitly rather than left unchecked, so a new vendor still gets a conscious decision.
+    allow:
+      pandas: "the seam layer owns the pandas surface (frames, dtypes, tabular_reader)"
+      wwdates: "BR business-day calendar, wrapped by utils.dates"
+      win32com: "Outlook COM automation, wrapped by utils.outlook_gateway (Windows only)"
+      requests: "HTTP transport, wrapped by utils.http_downloader"
+      urllib3: "retry/backoff policy used by the download seam"
+      defusedxml: "hardened XML parsing at the ingestion trust boundary"
+      beartype: "runtime type-checking engine behind utils.typing"
+      numpy: >-
+        Optional widening for the runtime type-checker: utils/typing/policy.py accepts
+        numpy integers where int is annotated when WIDEN_INT_TO_NUMPY is on, probed with a
+        guarded import so a tier without numpy still loads. Legitimate here precisely
+        because utils/ IS the seam layer.
+
+  config:
+    # The composition root: the one layer whose job IS to know concrete implementations.
+    # What it must NOT know is the DOMAIN — a vendor SDK for the business belongs in a seam.
+    allow:
+      dotenv: "loads .env at startup; this is the layer that owns environment resolution"
+      yaml: "parses inputs.yaml / outputs.yaml"
+      psycopg: "PostgreSQL driver, imported lazily by the configured DB_BACKEND"
+      pyodbc: "SQL Server driver, imported lazily by the configured DB_BACKEND"
+      oracledb: "Oracle driver, imported lazily by the configured DB_BACKEND"
+      mysql: "MySQL/MariaDB driver, imported lazily by the configured DB_BACKEND"

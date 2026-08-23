@@ -142,6 +142,12 @@ copy_templates() {
     # without its plugin in every service tier while lib-minimal alone had it (blueprintx#116
     # family: each scaffold hand-maintains its own cp list, so a shared file drifts silently).
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
+    # Per-layer import policy read by bin/check_layer_imports.py (pre-commit + CI).
+    # ⚠️ Per-tier, never shared: the layer NAMES differ, and lib-minimal nests them
+    # inside the distributable package (hence its src_prefix_depth). Without this file
+    # the gate used to self-skip in silence, so this tier shipped with no import
+    # boundary while its CI stayed green; it now FAILS instead.
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"

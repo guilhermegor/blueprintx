@@ -1,0 +1,69 @@
+# Per-layer import policy for the lib-minimal tier, read by bin/check_layer_imports.py
+# (pre-commit + CI).
+#
+# The rule: a third-party dependency is reached through a seam in utils/, never imported by
+# model/, view/ or controller/. The layer then depends on OUR function, not on a vendor API,
+# so a vendor change is confined to one adapter.
+#
+# Deferring an import into a function does NOT buy an exemption — the layer still knows the
+# vendor. The gate judges every scope identically.
+#
+# Every `allow` entry carries a written reason. An allowlist entry without one is a rule that
+# the first person who finds it inconvenient will widen.
+
+# Package roots that are first-party but do NOT exist in THIS layout. The shared utils/
+# helpers ship to both tiers and reach their typing engine through a layout shim
+# (`try: from utils.typing … except ModuleNotFoundError: from chassis.typing …`), so
+# `chassis` is our own code — just the DDD layout's name for it.
+first_party_extra:
+  - chassis
+
+# Vendors usable as a TYPE ANNOTATION in any layer, and as nothing else.
+# This is the pandas compromise, and the distinction is load-bearing: `-> pd.DataFrame` in a
+# signature is the vocabulary the layers agree on and couples nothing, while `pd.read_sql(...)`
+# is a vendor API call that every copied file inherits.
+annotation_only:
+  pandas: >-
+    Annotation only. Build a frame with utils.frames.from_cursor; read one with
+    utils.tabular_reader.read_table / read_query (they enforce a FileContract + dtypes).
+
+# ⚠️ The layers are nested INSIDE the distributable package, not directly under src/:
+#     src/<package>/_internal/<layer>/…
+# so the first two path components are the package name (which varies per project)
+# and the `_internal` marker. Without this the layer resolves to the PACKAGE NAME,
+# matches no entry, and deny-by-default rejects the whole tree for the wrong reason.
+src_prefix_depth: 2
+
+layers:
+  # A module directly under the private package root. There is no entrypoint to speak of
+  # in a library, but the layer is named so a stray module cannot bypass the policy.
+  __root__:
+    allow: {}
+
+  utils:
+    # utils/ IS the seam layer — this is where vendors are supposed to live. Listed
+    # explicitly rather than left unchecked, so a new vendor still gets a conscious decision.
+    allow:
+      pandas: "the seam layer owns the pandas surface (frames, dtypes, tabular_reader)"
+      wwdates: "BR business-day calendar, wrapped by utils.dates"
+      win32com: "Outlook COM automation, wrapped by utils.outlook_gateway (Windows only)"
+      requests: "HTTP transport, wrapped by utils.http_downloader"
+      urllib3: "retry/backoff policy used by the download seam"
+      defusedxml: "hardened XML parsing at the ingestion trust boundary"
+      beartype: "runtime type-checking engine behind utils.typing"
+      numpy: >-
+        Optional widening for the runtime type-checker: utils/typing/policy.py accepts
+        numpy integers where int is annotated when WIDEN_INT_TO_NUMPY is on, probed with a
+        guarded import so a tier without numpy still loads. Legitimate here precisely
+        because utils/ IS the seam layer.
+
+  config:
+    # The composition root: the one layer whose job IS to know concrete implementations.
+    # What it must NOT know is the DOMAIN — a vendor SDK for the business belongs in a seam.
+    allow:
+      dotenv: "loads .env at startup; this is the layer that owns environment resolution"
+      yaml: "parses inputs.yaml / outputs.yaml"
+      psycopg: "PostgreSQL driver, imported lazily by the configured DB_BACKEND"
+      pyodbc: "SQL Server driver, imported lazily by the configured DB_BACKEND"
+      oracledb: "Oracle driver, imported lazily by the configured DB_BACKEND"
+      mysql: "MySQL/MariaDB driver, imported lazily by the configured DB_BACKEND"

@@ -11,6 +11,8 @@ distinction (annotation vs API) that a blunter rule would flatten.
 
 import importlib.util
 from pathlib import Path
+import subprocess
+import sys
 from types import ModuleType
 
 import pytest
@@ -209,3 +211,132 @@ def test_a_module_directly_under_src_is_not_skipped(tmp_path: Path) -> None:
 	)
 	assert len(list_problems) == 1
 	assert "filings_cvm" in list_problems[0]
+
+
+# --------------------------
+# main() — the gate must never pass by not looking (blueprintx#139)
+# --------------------------
+
+
+def _run_main(path_root: Path) -> tuple[int, str]:
+	"""Run the gate's ``main()`` with ``path_root`` as the working directory.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to treat as the project root.
+
+	Returns
+	-------
+	tuple of (int, str)
+		The exit code and everything printed.
+	"""
+	# Constant, trusted argv. Invoked as a subprocess so the working directory and the
+	# printed output are the real ones main sees.
+	cls_run = subprocess.run(  # noqa: S603
+		[
+			sys.executable,
+			str(Path(__file__).resolve().parents[2] / "bin" / "check_layer_imports.py"),
+		],
+		cwd=path_root,
+		capture_output=True,
+		text=True,
+		check=False,
+	)
+	return cls_run.returncode, cls_run.stdout + cls_run.stderr
+
+
+def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
+	"""Build a minimal project tree holding one module under ``src/model/``.
+
+	Writing the policy is left to the caller: whether one exists is the very thing several of
+	these tests vary, so making it a parameter would hide the difference inside a helper.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to build in.
+	str_module : str, optional
+		Source of the single module placed under ``src/model/``.
+
+	Returns
+	-------
+	None
+	"""
+	(path_root / "src" / "model").mkdir(parents=True, exist_ok=True)
+	(path_root / "src" / "model" / "probe.py").write_text(str_module, encoding="utf-8")
+
+
+_MINIMAL_POLICY = "layers:\n  model:\n    allow: {}\n"
+
+
+def test_modules_with_no_policy_file_FAIL_rather_than_pass_silently(tmp_path: Path) -> None:
+	"""⚠️ The negative control for the defect this fixed.
+
+	The gate used to ``return 0`` in silence when no policy was present, so three of the five
+	Python tiers shipped with NO import boundary at all while their CI stayed green. A gate
+	reporting its own blindness as OK is the failure mode this repo writes gates to prevent.
+	"""
+	_seed_project(tmp_path)
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 1
+	assert ".layer-policy.yaml" in str_out
+	assert "no import boundary" in str_out
+
+
+def test_a_tree_with_no_modules_and_no_policy_is_not_a_failure(tmp_path: Path) -> None:
+	"""The positive control: nothing to check is not the same as failing to check."""
+	(tmp_path / "src").mkdir()
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 0
+	assert "nothing to do" in str_out
+
+
+def test_a_clean_tree_prints_what_it_checked(tmp_path: Path) -> None:
+	"""A silent gate cannot be told from an absent one, so success names the count."""
+	_seed_project(tmp_path)
+	(tmp_path / ".layer-policy.yaml").write_text(_MINIMAL_POLICY, encoding="utf-8")
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 0
+	assert "module(s) checked" in str_out
+
+
+def test_layers_nested_inside_a_package_resolve_via_src_prefix_depth(tmp_path: Path) -> None:
+	"""lib-minimal nests its layers as ``src/<pkg>/_internal/<layer>/``.
+
+	Without the prefix the layer resolves to the PACKAGE NAME, matches no policy entry, and
+	deny-by-default rejects the whole tree for the wrong reason — which is how one engine
+	serving five layouts quietly stops serving one of them.
+	"""
+	path_deep = tmp_path / "src" / "mypkg" / "_internal" / "model"
+	path_deep.mkdir(parents=True)
+	(path_deep / "probe.py").write_text("import os\n", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(
+		"src_prefix_depth: 2\n" + _MINIMAL_POLICY, encoding="utf-8"
+	)
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 0, str_out
+	assert "module(s) checked" in str_out
+
+
+def test_the_same_nested_tree_without_the_prefix_is_rejected(tmp_path: Path) -> None:
+	"""The paired control: drop the prefix and the layer no longer resolves.
+
+	Without this, the test above would pass against an engine that ignores the setting.
+	"""
+	path_deep = tmp_path / "src" / "mypkg" / "_internal" / "model"
+	path_deep.mkdir(parents=True)
+	(path_deep / "probe.py").write_text("import pandas\n", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_MINIMAL_POLICY, encoding="utf-8")
+
+	int_code, _ = _run_main(tmp_path)
+
+	assert int_code == 1

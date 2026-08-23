@@ -346,6 +346,46 @@ def find_file_problems(
 	)
 
 
+def _report_absent_policy(int_modules: int) -> int:
+	"""Explain a missing policy and return the exit code it deserves.
+
+	⚠️ A tree WITH modules and NO policy is a FAILURE, not a skip. The gate used to return 0
+	in silence here, so three of the five Python tiers shipped with no import boundary at all
+	while their CI stayed green — a gate reporting its own blindness as OK, which is the exact
+	failure mode this repo writes gates to prevent. A tree with nothing in it is different:
+	nothing to check is not the same as failing to check.
+
+	The two causes of "no policy" are told apart because the remedies differ — an unimportable
+	parser is a broken environment, an absent file is a tier nobody wrote one for.
+
+	Parameters
+	----------
+	int_modules : int
+		How many modules were discovered under the source root.
+
+	Returns
+	-------
+	int
+		``1`` when there was code to check, ``0`` when there was not.
+	"""
+	if int_modules == 0:
+		print(f"No {_POLICY_FILE} and no modules to check — nothing to do.")
+		return 0
+	if yaml is None:
+		print(
+			"❌ PyYAML is not importable, so the layer policy cannot be read. The gate "
+			"checked NOTHING. Install it (it is a declared dependency) rather than letting "
+			"an unreadable policy pass for a satisfied one."
+		)
+	else:
+		print(
+			f"❌ {int_modules} module(s) under {_SRC_ROOT}/ and no {_POLICY_FILE}. "
+			f"Deny-by-default cannot deny anything without a policy, so this tree has no "
+			f"import boundary. Add {_POLICY_FILE} at the project root."
+		)
+	return 1
+
+
 def main() -> int:
 	"""Check every module under ``src/`` against the layer policy.
 
@@ -355,24 +395,34 @@ def main() -> int:
 		``0`` when the tree complies (or no policy is present), ``1`` otherwise.
 	"""
 	path_root = pathlib.Path.cwd()
-	dict_policy = load_policy(path_root)
-	if dict_policy is None:
-		return 0
-
 	path_src = path_root / _SRC_ROOT
 	if not path_src.is_dir():
+		print(f"No {_SRC_ROOT}/ directory — skipping the layer-import check.")
 		return 0
+
+	list_modules = [
+		path_file
+		for path_file in sorted(path_src.rglob("*.py"))
+		if "__pycache__" not in path_file.parts
+	]
+	dict_policy = load_policy(path_root)
+	if dict_policy is None:
+		return _report_absent_policy(len(list_modules))
+
+	# How many leading path components to strip before the layer is named. 0 for a flat
+	# layout (src/<layer>/…); lib-minimal nests its layers inside the distributable package
+	# (src/<pkg>/_internal/<layer>/…) and sets 2, so one engine serves both shapes instead
+	# of the layer silently resolving to the package name and matching no policy entry.
+	int_prefix = int(dict_policy.get("src_prefix_depth", 0))
 
 	set_first_party = first_party_roots(path_src, dict_policy)
 	list_all: list[str] = []
-	for path_file in sorted(path_src.rglob("*.py")):
-		if "__pycache__" in path_file.parts:
-			continue
-		tuple_rel = path_file.relative_to(path_src).parts
-		# A module sitting directly under src/ has no directory to name its layer, but it is
-		# exactly where an entrypoint lives — skipping it would let src/main.py import any
-		# vendor and bypass the policy entirely. It gets its own layer name so the policy can
-		# speak about it; deny-by-default then applies as everywhere else.
+	for path_file in list_modules:
+		tuple_rel = path_file.relative_to(path_src).parts[int_prefix:]
+		# A module sitting directly under the layer root has no directory to name its layer,
+		# but it is exactly where an entrypoint lives — skipping it would let src/main.py
+		# import any vendor and bypass the policy entirely. It gets its own layer name so the
+		# policy can speak about it; deny-by-default then applies as everywhere else.
 		str_layer = tuple_rel[0] if len(tuple_rel) > 1 else _ROOT_LAYER
 		list_all.extend(find_file_problems(path_file, str_layer, dict_policy, set_first_party))
 
@@ -381,6 +431,8 @@ def main() -> int:
 	if list_all:
 		print(f"\n{len(list_all)} layer-import violation(s).")
 		return 1
+	# Print WHAT was checked: a silent gate cannot be told from an absent one.
+	print(f"✅ layer-import policy OK ({len(list_modules)} module(s) checked).")
 	return 0
 
 
