@@ -27,6 +27,7 @@ exits 0, so a tier that has not adopted it is not blocked.
 from __future__ import annotations
 
 import ast
+import fnmatch
 import pathlib
 import sys
 
@@ -41,6 +42,46 @@ _POLICY_FILE = ".layer-policy.yaml"
 _SRC_ROOT = "src"
 # Layer name for modules sitting directly under src/ (an entrypoint such as src/main.py).
 _ROOT_LAYER = "__root__"
+
+
+class _StrictLoader(yaml.SafeLoader if yaml is not None else object):  # type: ignore[misc]
+	"""SafeLoader that REFUSES a duplicate mapping key instead of silently keeping the last.
+
+	⚠️ This is a security-relevant file: a repeated ``deny_layers:`` under one layer makes YAML
+	keep only the last map, so every rule in the earlier one disappears — no error, no warning,
+	and a policy that still parses and still reports success while enforcing less than it says.
+	Hit for real while writing this very policy: a second ``deny_layers`` block silently erased
+	three layer denials, and the file looked correct in the diff.
+	"""
+
+	def construct_mapping(self, node: object, deep: bool = False) -> dict:
+		"""Build a mapping, raising on any key that appears twice.
+
+		Parameters
+		----------
+		node : object
+			The YAML mapping node.
+		deep : bool, optional
+			Passed through to the base loader.
+
+		Returns
+		-------
+		dict
+			The constructed mapping.
+
+		Raises
+		------
+		ValueError
+			When a key appears more than once in the same mapping.
+		"""
+		list_keys = [self.construct_object(cls_key, deep=deep) for cls_key, _ in node.value]
+		set_dupes = {str_key for str_key in list_keys if list_keys.count(str_key) > 1}
+		if set_dupes:
+			raise ValueError(
+				f"{_POLICY_FILE}: duplicate key(s) {sorted(set_dupes)} — YAML keeps only the "
+				f"last, so the earlier rules would be dropped in silence."
+			)
+		return super().construct_mapping(node, deep=deep)
 
 
 def load_policy(path_root: pathlib.Path) -> dict | None:
@@ -59,7 +100,12 @@ def load_policy(path_root: pathlib.Path) -> dict | None:
 	path_policy = path_root / _POLICY_FILE
 	if yaml is None or not path_policy.is_file():
 		return None
-	return yaml.safe_load(path_policy.read_text(encoding="utf-8")) or None
+	return (
+		yaml.load(  # noqa: S506 — SafeLoader-derived; it only ADDS a duplicate-key check
+			path_policy.read_text(encoding="utf-8"), Loader=_StrictLoader
+		)
+		or None
+	)
 
 
 def first_party_roots(path_src: pathlib.Path, dict_policy: dict) -> set[str]:
@@ -116,12 +162,33 @@ def annotation_node_ids(cls_tree: ast.Module) -> set[int]:
 	for cls_node in ast.walk(cls_tree):
 		_mark(getattr(cls_node, "annotation", None))
 		_mark(getattr(cls_node, "returns", None))
-		if isinstance(cls_node, ast.If):
-			str_test = ast.dump(cls_node.test)
-			if "TYPE_CHECKING" in str_test:
-				for cls_stmt in cls_node.body:
-					_mark(cls_stmt)
+		if isinstance(cls_node, ast.If) and _is_type_checking_test(cls_node.test):
+			for cls_stmt in cls_node.body:
+				_mark(cls_stmt)
 	return set_ids
+
+
+def _is_type_checking_test(cls_test: ast.expr) -> bool:
+	"""Return whether an ``if`` test is exactly the TYPE_CHECKING guard.
+
+	⚠️ Matched STRUCTURALLY, never as a substring of ``ast.dump``. The substring form also
+	matched ``if not TYPE_CHECKING:`` — whose body runs at RUNTIME — and any unrelated name
+	containing the word, so a vendor imported under either would have been treated as
+	annotation-only and escaped the check entirely.
+
+	Parameters
+	----------
+	cls_test : ast.expr
+		The ``if`` statement's test expression.
+
+	Returns
+	-------
+	bool
+		``True`` only for bare ``TYPE_CHECKING`` or ``<module>.TYPE_CHECKING``.
+	"""
+	if isinstance(cls_test, ast.Name):
+		return cls_test.id == "TYPE_CHECKING"
+	return isinstance(cls_test, ast.Attribute) and cls_test.attr == "TYPE_CHECKING"
 
 
 def imported_names(cls_node: ast.Import | ast.ImportFrom) -> list[tuple[str, str]]:
@@ -149,6 +216,42 @@ def imported_names(cls_node: ast.Import | ast.ImportFrom) -> list[tuple[str, str
 	for cls_alias in cls_node.names:
 		list_out.append((str_root, cls_alias.asname or cls_alias.name))
 	return list_out
+
+
+def resolve_layer(tuple_rel: tuple, dict_policy: dict) -> str:
+	"""Return the policy key governing a file, preferring the most SPECIFIC match.
+
+	A layer is normally the first path component, but a nested architecture needs finer keys:
+	the DDD tiers put ``domain/``, ``application/`` and ``infrastructure/`` inside each
+	capability, and those three have genuinely different rules — the tier's own CLAUDE.md says
+	domain depends on *nothing*, application on the domain only, and infrastructure on domain
+	ports plus external libs. Collapsed to one ``capabilities`` key, that table is unenforceable.
+
+	A policy may therefore declare a **glob** key (``capabilities/*/domain``), matched against
+	the file's directory path. The longest matching glob wins, so a specific rule overrides the
+	broad one; with no glob key the behaviour is exactly the first-component one.
+
+	Parameters
+	----------
+	tuple_rel : tuple of str
+		The file's path components below the source root, filename last.
+	dict_policy : dict
+		The parsed policy.
+
+	Returns
+	-------
+	str
+		The policy key to apply.
+	"""
+	str_broad = tuple_rel[0] if len(tuple_rel) > 1 else _ROOT_LAYER
+	str_dir = "/".join(tuple_rel[:-1])
+	list_globs = [
+		str_key
+		for str_key in (dict_policy.get("layers") or {})
+		if "*" in str_key and fnmatch.fnmatch(str_dir, str_key)
+	]
+	# Longest first: `capabilities/*/domain` must beat a broader `capabilities/*`.
+	return max(list_globs, key=len) if list_globs else str_broad
 
 
 def resolve_layer_policy(dict_policy: dict, str_layer: str) -> tuple[dict, dict]:
@@ -201,6 +304,30 @@ def function_line_spans(cls_tree: ast.AST) -> list:
 	]
 
 
+def _star_import_problem(path_file: pathlib.Path, int_line: int, str_root: str) -> str:
+	"""Return the message for a star import of an annotation-only vendor.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The offending module.
+	int_line : int
+		The import's line number.
+	str_root : str
+		The vendor's top-level module name.
+
+	Returns
+	-------
+	str
+		A message naming why the star form cannot be annotation-only.
+	"""
+	return (
+		f"{path_file}:{int_line}: 'from {str_root} import *' cannot be annotation-only — the "
+		f"names it binds are unknowable, so every use of {str_root!r} would pass unchecked. "
+		f"Import the names you annotate with."
+	)
+
+
 def disallowed_import_problems(
 	cls_tree: ast.AST,
 	path_file: pathlib.Path,
@@ -241,11 +368,20 @@ def disallowed_import_problems(
 		if not isinstance(cls_node, ast.Import | ast.ImportFrom):
 			continue
 		for str_root, str_alias in imported_names(cls_node):
-			if str_root in sys.stdlib_module_names or str_root in set_first_party:
+			# One guard, three ways a module is simply not this gate's business: the stdlib
+			# carries no coupling, first-party code is ours, and an allowed vendor already
+			# has its written reason in the policy.
+			if (
+				str_root in sys.stdlib_module_names
+				or str_root in set_first_party
+				or str_root in dict_allow
+			):
 				continue
-			if str_root in dict_allow:
-				continue
-			if str_root in dict_annotation_only:
+			# ⚠️ A star import cannot be annotation-only. The alias recorded would be the
+			# literal `*`, so nothing in the body ever matches it and every use of the
+			# vendor — `DataFrame(...)` included — passes unexamined. The names it binds are
+			# not knowable without importing the vendor, so the honest verdict is to refuse.
+			if str_root in dict_annotation_only and str_alias != "*":
 				dict_annotation_aliases[str_alias] = str_root
 				continue
 			# One statement binding several names is ONE violation, not one per name.
@@ -255,6 +391,9 @@ def disallowed_import_problems(
 
 			bool_in_function = any(a < cls_node.lineno <= b for a, b in list_functions)
 			str_where = " (inside a function — deferring the import does not change the verdict)"
+			if str_alias == "*" and str_root in dict_annotation_only:
+				list_problems.append(_star_import_problem(path_file, cls_node.lineno, str_root))
+				continue
 			list_problems.append(
 				f"{path_file}:{cls_node.lineno}: '{str_root}' is not allowed in layer "
 				f"'{str_layer}'{str_where if bool_in_function else ''}. "
@@ -312,7 +451,11 @@ def annotation_only_misuse_problems(
 
 
 def find_file_problems(
-	path_file: pathlib.Path, str_layer: str, dict_policy: dict, set_first_party: set[str]
+	path_file: pathlib.Path,
+	str_layer: str,
+	dict_policy: dict,
+	set_first_party: set[str],
+	tuple_pkg_parts: tuple = (),
 ) -> list[str]:
 	"""Return every import-policy violation in one file (never raises).
 
@@ -326,6 +469,9 @@ def find_file_problems(
 		The parsed ``.layer-policy.yaml``.
 	set_first_party : set of str
 		Top-level package names that belong to this project.
+	tuple_pkg_parts : tuple of str, optional
+		The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
+		to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
 
 	Returns
 	-------
@@ -344,11 +490,57 @@ def find_file_problems(
 	list_problems += annotation_only_misuse_problems(
 		cls_tree, path_file, str_layer, dict_annotation_aliases, dict_annotation_only
 	)
-	return list_problems + direction_problems(cls_tree, path_file, str_layer, dict_policy)
+	return list_problems + direction_problems(
+		cls_tree, path_file, str_layer, dict_policy, tuple_pkg_parts
+	)
+
+
+def relative_import_layer(tuple_pkg_parts: tuple, cls_node: ast.ImportFrom) -> str | None:
+	"""Resolve a RELATIVE import to the layer it actually targets.
+
+	⚠️ ``imported_names`` deliberately yields nothing for a relative import, because for the
+	VENDOR half that is correct: a relative import is first-party by construction. For
+	DIRECTION it is the opposite — ``from ..model import Entity`` inside ``utils/`` is exactly
+	the coupling ``deny_layers`` exists to forbid, and it was passing unseen.
+
+	Resolution follows Python's own rule: level 1 is the module's own package, and each extra
+	level climbs one more, then ``module`` is appended. So the answer depends on how DEEP the
+	file sits, not only on the dot count — from ``utils/mod.py`` a two-dot import reaches a
+	sibling layer, while from ``utils/sub/mod.py`` the same statement stays inside ``utils``.
+
+	Parameters
+	----------
+	tuple_pkg_parts : tuple of str
+		The file's package path below the layer root, e.g. ``("utils", "sub")``. Empty when
+		the caller cannot supply it, in which case no relative import is resolved.
+	cls_node : ast.ImportFrom
+		The relative import statement (``level`` >= 1).
+
+	Returns
+	-------
+	str or None
+		The target's top-level layer, or ``None`` when it cannot be resolved.
+	"""
+	if not tuple_pkg_parts:
+		return None
+	int_climb = cls_node.level - 1
+	tuple_base = (
+		tuple_pkg_parts[: len(tuple_pkg_parts) - int_climb] if int_climb else tuple_pkg_parts
+	)
+	if int_climb and len(tuple_pkg_parts) < int_climb:
+		return None
+	tuple_full = (
+		tuple_base + tuple((cls_node.module or "").split(".")) if cls_node.module else tuple_base
+	)
+	return tuple_full[0] if tuple_full else None
 
 
 def direction_problems(
-	cls_tree: ast.Module, path_file: pathlib.Path, str_layer: str, dict_policy: dict
+	cls_tree: ast.Module,
+	path_file: pathlib.Path,
+	str_layer: str,
+	dict_policy: dict,
+	tuple_pkg_parts: tuple = (),
 ) -> list[str]:
 	"""Return every import that points the WRONG WAY between first-party layers.
 
@@ -375,6 +567,9 @@ def direction_problems(
 		The layer the file belongs to.
 	dict_policy : dict
 		The parsed ``.layer-policy.yaml``.
+	tuple_pkg_parts : tuple of str, optional
+		The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
+		to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
 
 	Returns
 	-------
@@ -388,14 +583,83 @@ def direction_problems(
 
 	# Scope does not change the verdict here either: an import deferred into a function still
 	# couples the layers, exactly as it does for a vendor.
+	# FULL dotted paths, not just the root. A deny entry may name a subpackage
+	# (`chassis.db_schema`), which is the difference between forbidding the DB providers and
+	# forbidding the runtime type-checking engine that lives beside them and is mandated on
+	# every class in the project — a root-level deny cannot tell those apart, and a rule that
+	# fires on correct code is a rule someone deletes.
+	list_targets = [
+		(cls_node, str_module)
+		for cls_node in ast.walk(cls_tree)
+		for str_module in imported_modules(cls_node)
+	]
+	# Relative imports produce no bindings above, so they are resolved separately from the
+	# file's own position — see relative_import_layer for why the dot count alone is not it.
+	list_targets += [
+		(cls_node, str_target)
+		for cls_node in ast.walk(cls_tree)
+		if isinstance(cls_node, ast.ImportFrom) and cls_node.level
+		for str_target in [relative_import_layer(tuple_pkg_parts, cls_node)]
+		if str_target is not None
+	]
 	return [
 		f"{path_file}:{cls_node.lineno}: layer '{str_layer}' must not import "
-		f"'{str_root}'. {dict_deny[str_root]}"
-		for cls_node in ast.walk(cls_tree)
-		if isinstance(cls_node, ast.Import | ast.ImportFrom)
-		for str_root, _ in imported_names(cls_node)
-		if str_root in dict_deny
+		f"'{str_target}'. {dict_deny[str_key]}"
+		for cls_node, str_target in list_targets
+		for str_key in [_matching_deny_key(str_target, dict_deny)]
+		if str_key is not None
 	]
+
+
+def imported_modules(cls_node: ast.AST) -> list[str]:
+	"""Return the full dotted module path of every absolute import in one statement.
+
+	Relative imports are excluded — they are resolved separately, from the file's own position.
+
+	Parameters
+	----------
+	cls_node : ast.AST
+		Any AST node; non-import nodes yield nothing.
+
+	Returns
+	-------
+	list of str
+		Dotted module paths, e.g. ``["chassis.typing"]``.
+	"""
+	if isinstance(cls_node, ast.Import):
+		return [cls_alias.name for cls_alias in cls_node.names]
+	if isinstance(cls_node, ast.ImportFrom) and not cls_node.level:
+		return [cls_node.module] if cls_node.module else []
+	return []
+
+
+def _matching_deny_key(str_target: str, dict_deny: dict) -> str | None:
+	"""Return the deny entry a module matches, or ``None``.
+
+	A key without a dot matches the module's top-level package; a dotted key must match the
+	module itself or be a prefix of it, so ``chassis.db_schema`` forbids the providers while
+	leaving ``chassis.typing`` alone.
+
+	Parameters
+	----------
+	str_target : str
+		The imported module's dotted path.
+	dict_deny : dict
+		The layer's ``deny_layers`` map.
+
+	Returns
+	-------
+	str or None
+		The matching key, or ``None`` when the import is allowed.
+	"""
+	list_hits = [
+		str_key
+		for str_key in dict_deny
+		if (str_target == str_key or str_target.startswith(f"{str_key}."))
+		if "." in str_key or str_target.split(".")[0] == str_key
+	]
+	# Longest first: a specific `chassis.db_schema` beats a broad `chassis`.
+	return max(list_hits, key=len) if list_hits else None
 
 
 def _report_absent_policy(int_modules: int) -> int:
@@ -457,7 +721,13 @@ def main() -> int:
 		for path_file in sorted(path_src.rglob("*.py"))
 		if "__pycache__" not in path_file.parts
 	]
-	dict_policy = load_policy(path_root)
+	try:
+		dict_policy = load_policy(path_root)
+	except ValueError as cls_err:
+		# A malformed policy is a FAILURE with a readable message, not a traceback: the
+		# person who has to fix it is reading CI output, not a Python stack.
+		print(f"❌ {cls_err}")
+		return 1
 	if dict_policy is None:
 		return _report_absent_policy(len(list_modules))
 
@@ -475,8 +745,11 @@ def main() -> int:
 		# but it is exactly where an entrypoint lives — skipping it would let src/main.py
 		# import any vendor and bypass the policy entirely. It gets its own layer name so the
 		# policy can speak about it; deny-by-default then applies as everywhere else.
-		str_layer = tuple_rel[0] if len(tuple_rel) > 1 else _ROOT_LAYER
-		list_all.extend(find_file_problems(path_file, str_layer, dict_policy, set_first_party))
+		str_layer = resolve_layer(tuple_rel, dict_policy)
+		# Everything above the filename: the package a relative import climbs out of.
+		list_all.extend(
+			find_file_problems(path_file, str_layer, dict_policy, set_first_party, tuple_rel[:-1])
+		)
 
 	for str_problem in list_all:
 		print(f"❌ {str_problem}")

@@ -179,8 +179,15 @@ def load_roster(path_root: pathlib.Path) -> set[str]:
 	Returns
 	-------
 	set of str
-		Logins treated as reviewers rather than as answers. Empty when the file is absent,
-		which makes the gate a no-op rather than a source of false failures.
+		Logins treated as reviewers rather than as answers. Empty when the file was NEVER
+		there, which makes the gate a no-op rather than a source of false failures.
+
+	Raises
+	------
+	RuntimeError
+		When the roster is absent HERE but present on the default branch — that is a
+		deletion, and since an empty roster makes this gate a no-op, it would switch the
+		gate off inside the very PR it is meant to police.
 	"""
 	path_roster = path_root / _ROSTER_FILE
 	if yaml is None:
@@ -356,7 +363,7 @@ def find_thread_problems(
 	Parameters
 	----------
 	list_threads : list of dict
-		Review threads as returned by :func:`fetch_threads`.
+		Review threads as returned by :func:`fetch_pull_request` (its ``reviewThreads``).
 	set_roster : set of str
 		Logins that count as reviewers rather than as answers.
 	int_min_chars : int, optional
@@ -368,7 +375,9 @@ def find_thread_problems(
 	Returns
 	-------
 	list of str
-		Human-readable problems; empty when every thread carries an answer.
+		Human-readable problems; empty when every thread carries an answer — and, when
+		``bool_require_resolved`` is set, is resolved as well. Both halves are the contract:
+		the reply records the reasoning, the resolution records that the exchange is over.
 	"""
 	# Normalise the roster here too, so the predicate is correct however the caller built the
 	# set — `load_roster` already normalises, but a hand-built set (a test, another caller)
@@ -508,7 +517,9 @@ def main() -> int:
 	# A check that is red-by-design after you did the right thing is the fastest way to teach
 	# people that red does not mean anything. So CI asserts only the REPLY half, which a review
 	# comment genuinely does re-trigger. The resolve half is enforced where it CAN be evaluated
-	# live: the `required_conversation_resolution` ruleset at the merge button, and the local
+	# live: the server-side setting at the merge button — `required_conversation_resolution`
+	# on classic branch protection, `required_review_thread_resolution` on a ruleset (the form
+	# bin/enable_repo_rules.sh provisions) — and the local
 	# pre-merge / Stop hooks. Set REVIEW_THREADS_REQUIRE_RESOLVED=1 to assert both (the local
 	# default, since a local run is always current).
 	bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"

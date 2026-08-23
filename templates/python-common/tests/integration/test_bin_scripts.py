@@ -831,6 +831,11 @@ DICT_DOCSTRING_SHAPES = {
 	"opening_line": f'"""Summary carrying {_URL_404}.\n\n\tMore prose.\n\t"""\n',
 	"closing_line": f'"""Summary.\n\n\tMore prose, then the link {_URL_404}"""\n',
 	"body_line": f'"""Summary.\n\n\tThe link sits on its own line: {_URL_404}\n\t"""\n',
+	# ⚠️ The third shape, deferred when the two blind ones were fixed and closed on review
+	# (blueprintx#224): a closing delimiter sharing a line with text. It was never blind —
+	# the URL was scanned as body text — but the state never flipped back, so every LATER
+	# line was read as still inside the docstring and its URLs were fetched too.
+	"closing_shares_the_line": f'"""Summary.\n\n\tProse, then the link {_URL_404}"""\n',
 }
 
 
@@ -1145,3 +1150,26 @@ def test_complexity_hatch_is_not_read_from_the_function_body(tmp_path: Path) -> 
 
 	assert cls_result.returncode != 0
 	assert "branchy" in cls_result.stdout + cls_result.stderr
+
+
+def test_check_urls_stops_scanning_after_a_closing_delimiter(tmp_path: Path) -> None:
+	"""⚠️ A URL in ORDINARY CODE after a docstring must not be fetched.
+
+	The closing delimiter used to be recognised only at the start of a line, so a docstring
+	that closed as ``text \"\"\"`` never flipped the state back — and every later line of the
+	module was scanned as if it were still docstring. That is the over-scan direction: it
+	fails a gate on a URL that was never in a docstring at all.
+	"""
+	# ⚠️ The docstring must be MULTI-line and close on a line that STARTS WITH TEXT. A
+	# one-line docstring matched the old start-anchored guard perfectly well, so a fixture
+	# using one passes against the bug and proves nothing.
+	(tmp_path / "module_under_test.py").write_text(
+		'"""Summary.\n\n\tProse, and the docstring closes right here."""\n\n'
+		f'STR_ENDPOINT = "{_URL_404}"  # ordinary code, never a docstring\n',
+		encoding="utf-8",
+	)
+	_seed_url_cache(tmp_path, _URL_404, "404")
+
+	cls_result = _run_url_hook(tmp_path)
+
+	assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr

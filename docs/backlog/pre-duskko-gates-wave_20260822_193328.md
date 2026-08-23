@@ -206,7 +206,7 @@ nasceria fora do lint.
       `holidays()`) — "buscado preguiçosamente", "network on first use, cached thereafter".
       Um doc rastreado vale mais que memória na próxima sessão.
 
-## Slice 4 — #167: gate de complexidade 🔄 EM ANDAMENTO
+## Slice 4 — #167: gate de complexidade ✅ ENTREGUE
 
 - [x] `bin/check_complexity.sh` — duas invocações do ruff, mccabe não reimplementado.
 - [x] Escape hatch `# complexity-ok: <reason>`, com motivo **obrigatório** (marcador pelado

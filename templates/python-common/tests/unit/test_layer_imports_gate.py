@@ -271,7 +271,7 @@ def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
 	(path_root / "src" / "model" / "probe.py").write_text(str_module, encoding="utf-8")
 
 
-_MINIMAL_POLICY = "layers:\n  model:\n    allow: {}\n"
+_STR_MINIMAL_POLICY = "layers:\n  model:\n    allow: {}\n"
 
 
 def test_modules_with_no_policy_file_FAIL_rather_than_pass_silently(tmp_path: Path) -> None:
@@ -303,7 +303,7 @@ def test_a_tree_with_no_modules_and_no_policy_is_not_a_failure(tmp_path: Path) -
 def test_a_clean_tree_prints_what_it_checked(tmp_path: Path) -> None:
 	"""A silent gate cannot be told from an absent one, so success names the count."""
 	_seed_project(tmp_path)
-	(tmp_path / ".layer-policy.yaml").write_text(_MINIMAL_POLICY, encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_MINIMAL_POLICY, encoding="utf-8")
 
 	int_code, str_out = _run_main(tmp_path)
 
@@ -322,7 +322,7 @@ def test_layers_nested_inside_a_package_resolve_via_src_prefix_depth(tmp_path: P
 	path_deep.mkdir(parents=True)
 	(path_deep / "probe.py").write_text("import os\n", encoding="utf-8")
 	(tmp_path / ".layer-policy.yaml").write_text(
-		"src_prefix_depth: 2\n" + _MINIMAL_POLICY, encoding="utf-8"
+		"src_prefix_depth: 2\n" + _STR_MINIMAL_POLICY, encoding="utf-8"
 	)
 
 	int_code, str_out = _run_main(tmp_path)
@@ -339,7 +339,7 @@ def test_the_same_nested_tree_without_the_prefix_is_rejected(tmp_path: Path) -> 
 	path_deep = tmp_path / "src" / "mypkg" / "_internal" / "model"
 	path_deep.mkdir(parents=True)
 	(path_deep / "probe.py").write_text("import pandas\n", encoding="utf-8")
-	(tmp_path / ".layer-policy.yaml").write_text(_MINIMAL_POLICY, encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_MINIMAL_POLICY, encoding="utf-8")
 
 	int_code, _ = _run_main(tmp_path)
 
@@ -350,7 +350,7 @@ def test_the_same_nested_tree_without_the_prefix_is_rejected(tmp_path: Path) -> 
 # direction — the OTHER question this gate answers (blueprintx#140)
 # --------------------------
 
-_DIRECTION_POLICY = (
+_STR_DIRECTION_POLICY = (
 	"layers:\n"
 	"  utils:\n"
 	"    allow: {}\n"
@@ -419,7 +419,7 @@ def _direction_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
 	"""
 	_seed_layers(tmp_path)
 	(tmp_path / "src" / "utils" / "probe.py").write_text(str_source, encoding="utf-8")
-	(tmp_path / ".layer-policy.yaml").write_text(_DIRECTION_POLICY, encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_DIRECTION_POLICY, encoding="utf-8")
 	return _run_main(tmp_path)
 
 
@@ -466,8 +466,98 @@ def test_a_layer_declaring_no_direction_is_unrestricted(tmp_path: Path) -> None:
 	(tmp_path / "src" / "model" / "probe.py").write_text(
 		"from utils import thing\n", encoding="utf-8"
 	)
-	(tmp_path / ".layer-policy.yaml").write_text(_DIRECTION_POLICY, encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_DIRECTION_POLICY, encoding="utf-8")
 
 	int_code, _ = _run_main(tmp_path)
 
 	assert int_code == 0
+
+
+def test_a_duplicate_policy_key_is_rejected(tmp_path: Path) -> None:
+	"""⚠️ A repeated mapping key must FAIL, because YAML keeps only the last one.
+
+	Hit for real while writing this repo's own policies: a second ``deny_layers:`` under one
+	layer silently erased three denials. Nothing errored, the file still parsed, and the gate
+	still reported success — while enforcing less than the file appeared to say. A policy is
+	security-relevant config; losing rules in silence is the one failure it must not have.
+	"""
+	_seed_project(tmp_path)
+	(tmp_path / ".layer-policy.yaml").write_text(
+		'layers:\n  model:\n    allow: {}\n    deny_layers:\n      view: "a"\n'
+		'    deny_layers:\n      utils: "b"\n',
+		encoding="utf-8",
+	)
+
+	int_code, str_out = _run_main(tmp_path)
+
+	assert int_code == 1
+	assert "duplicate key" in str_out
+	assert "Traceback" not in str_out, "the message must be readable in CI output"
+
+
+# --------------------------
+# sublayers and dotted deny targets (blueprintx#224 review)
+# --------------------------
+
+_STR_SUBLAYER_POLICY = (
+	"layers:\n"
+	"  capabilities:\n"
+	"    allow: {}\n"
+	"  capabilities/*/domain:\n"
+	"    allow: {}\n"
+	"    deny_layers:\n"
+	'      chassis.db_schema: "the domain names ports, not providers."\n'
+	"  chassis:\n"
+	"    allow: {}\n"
+)
+
+
+def _sublayer_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
+	"""Run the gate over one module inside a capability's ``domain/``.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway directory.
+	str_source : str
+		The module source to check.
+
+	Returns
+	-------
+	tuple of (int, str)
+		The gate's exit code and output.
+	"""
+	path_dom = tmp_path / "src" / "capabilities" / "notes" / "domain"
+	path_dom.mkdir(parents=True)
+	(path_dom / "ports.py").write_text(str_source, encoding="utf-8")
+	(tmp_path / "src" / "chassis").mkdir(parents=True, exist_ok=True)
+	(tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
+	(tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
+	return _run_main(tmp_path)
+
+
+def test_a_glob_layer_key_governs_a_capability_sublayer(tmp_path: Path) -> None:
+	"""⚠️ The three DDD sublayers have DIFFERENT rules, and one key cannot hold them.
+
+	The tier's own CLAUDE.md says domain depends on nothing, application on the domain only,
+	and infrastructure on domain ports plus external libs. Collapsed into one `capabilities`
+	entry — which is what the first-path-component rule does — that table is documentation
+	nobody can enforce.
+	"""
+	int_code, str_out = _sublayer_case(tmp_path, "from chassis.db_schema import Repo\n")
+
+	assert int_code == 1
+	assert "capabilities/*/domain" in str_out
+	assert "names ports, not providers" in str_out
+
+
+def test_a_dotted_deny_spares_the_sibling_subpackage(tmp_path: Path) -> None:
+	"""⚠️ The paired control, and the reason the deny is dotted rather than a bare root.
+
+	``chassis`` holds BOTH the DB providers and the runtime type-checking engine that this
+	project mandates on every class, the domain included. A root-level `chassis:` deny would
+	therefore fire on correct code — and a rule that cries wolf is a rule someone deletes.
+	"""
+	int_code, str_out = _sublayer_case(tmp_path, "from chassis.typing import Meta\n")
+
+	assert int_code == 0, str_out

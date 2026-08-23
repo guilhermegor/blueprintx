@@ -104,13 +104,18 @@ run_ruff_c901() {
 		--no-cache
 	)
 
+	# ⚠️ `|| int_status=$?` on the invocation itself, not a bare call followed by `$?`. Under
+	# `set -e` a bare call would be exempt only because a caller three levels up happens to
+	# use `report_tree … || int_errors=1`, which suspends errexit for this whole call tree.
+	# That is true today and is not a property anyone should have to know: capture the status
+	# where it is produced, and the correctness stops depending on a distant caller.
 	str_stderr="$(mktemp)"
+	int_status=0
 	if [[ "$STR_RUFF_MODE" == "poetry" ]]; then
-		run_poetry run ruff "${list_args[@]}" 2>"$str_stderr"
+		run_poetry run ruff "${list_args[@]}" 2>"$str_stderr" || int_status=$?
 	else
-		ruff "${list_args[@]}" 2>"$str_stderr"
+		ruff "${list_args[@]}" 2>"$str_stderr" || int_status=$?
 	fi
-	int_status=$?
 
 	# ruff exits 0 (clean) or 1 (violations found) — 1 is DATA here, not failure. Anything
 	# else means ruff could not run, and that must never look like a clean tree: re-print

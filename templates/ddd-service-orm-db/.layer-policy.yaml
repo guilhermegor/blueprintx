@@ -46,6 +46,43 @@ layers:
   capabilities:
     allow: {}
 
+  # ⚠️ The three capability sublayers, declared as GLOBS because the tier's own CLAUDE.md
+  # gives them different rules and the broad `capabilities` key cannot express that:
+  # domain depends on NOTHING, application on the domain only, infrastructure on domain
+  # ports plus external libs. The longest matching glob wins, so these override the broad
+  # entry above; without them all three collapse into one verdict and the table in the
+  # tier's CLAUDE.md is documentation nobody can enforce.
+  capabilities/*/domain:
+    allow: {}  # pure Python by contract — no I/O, no ORM, no vendor at all
+    deny_layers:
+      app: "the domain must not know the container that wires it."
+      chassis.db_schema: "a DB provider is infrastructure; the domain names ports, not providers."
+      chassis.db_wschema: "a storage provider is infrastructure; the domain names ports, not providers."
+      chassis.webhook: "a notifier is infrastructure; the domain names ports, not providers."
+      config: "the domain must not read configuration; it is handed what it needs."
+      # ⚠️ NOT a blanket `chassis:` deny, and the exception is the point: `chassis.typing` is
+      # the runtime type-checking engine this project mandates on EVERY class, domain
+      # included, so a root-level deny would fire on correct code — and a rule that cries
+      # wolf is a rule someone deletes. Only the PROVIDER subpackages are named.
+      utils: "a seam is still an outside dependency for a layer whose contract is pure Python."
+
+  capabilities/*/application:
+    allow: {}  # orchestration over domain interfaces; vendors belong in infrastructure
+    deny_layers:
+      app: "the use case must not know the container that constructs it."
+      chassis.db_schema: "depend on the domain PORT, never on the provider that implements it."
+      chassis.db_wschema: "depend on the domain PORT, never on the provider that implements it."
+      chassis.webhook: "depend on the domain PORT, never on the provider that implements it."
+      config: "configuration is resolved at the composition root and injected."
+
+  capabilities/*/infrastructure:
+    # The adapter layer of a capability: it implements domain ports, so it is where a vendor
+    # legitimately appears. Vendors stay listed at the tier level (chassis/utils) rather than
+    # duplicated here; what this entry adds is the DIRECTION.
+    allow: {}
+    deny_layers:
+      app: "an adapter must not know the container that selects it."
+
   # Cross-cutting providers — the DDD layout's seam layer, the counterpart of utils/. DB
   # drivers live here because a handler IS the adapter over one; they are imported lazily by
   # the configured DB_BACKEND, so an unused driver need not be installed.
@@ -86,6 +123,10 @@ layers:
     # Direction. utils/ is imported BY the layers, never the reverse — a cycle here is a
     # design error, and it was prose only (src/utils/CLAUDE.md) until this entry existed.
     deny_layers:
+      config: >-
+        The seam layer must not depend on the composition root that configures it. The other
+        direction already exists (config/startup.py imports utils), so this one would close a
+        real cycle rather than a hypothetical one.
       capabilities: "utils/ is a seam for the capabilities, not a consumer of them."
       app: "utils/ must not depend on the container that wires it."
 

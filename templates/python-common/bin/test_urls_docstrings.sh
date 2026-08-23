@@ -212,20 +212,20 @@ scan_file_for_urls() {
 		# cached and nothing in the output hints a line was skipped — the count printed is of
 		# files scanned, not URLs checked.
 		#
-		# ⚠️ A closing `"""` that shares a line with text (`… https://…"""`) was NOT among
-		# them, and the reason is a SEPARATE defect worth knowing about: the guard below
-		# anchors on `^[[:space:]]*"""`, so such a line is not recognised as a delimiter at
-		# all. Its URL was therefore scanned as ordinary body text — right answer, wrong
-		# mechanism — and the state never flips back to false, so every line after it is read
-		# as still inside the docstring. That over-scans (false positives) rather than blinding
-		# (false negatives), and NumPy convention closes on its own line, so it is left alone
-		# here rather than folded into a fix for the opposite failure mode.
-		if [[ "$str_line" =~ ^[[:space:]]*\"\"\" ]]; then
+		# ⚠️ A THIRD shape, deferred when the two above were fixed and closed on review: a
+		# closing delimiter sharing a line with text (`… https://…"""`). The guard used to
+		# anchor on `^[[:space:]]*"""`, so such a line was not recognised as a delimiter at
+		# all — its URL was scanned as ordinary body text (right answer, wrong mechanism) and,
+		# worse, the state never flipped back, so every LATER line was read as still inside the
+		# docstring and its URLs were fetched too. That over-scans rather than blinds, which is
+		# why it was not urgent; it is also two characters to fix. Both delimiters are now
+		# matched WHEREVER they sit on the line.
+		if [[ "$str_line" == *'"""'* ]]; then
 			check_urls_in_line "$str_file" "$int_line_num" "$str_line"
 			bool_in_docstring="$(toggle_docstring_state "$str_line" '"""' "$bool_in_docstring")"
 			continue
 		fi
-		if [[ "$str_line" =~ ^[[:space:]]*\'\'\' ]]; then
+		if [[ "$str_line" == *"'''"* ]]; then
 			check_urls_in_line "$str_file" "$int_line_num" "$str_line"
 			bool_in_docstring="$(toggle_docstring_state "$str_line" "'''" "$bool_in_docstring")"
 			continue

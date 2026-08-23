@@ -110,13 +110,13 @@ What actually makes a vendor swappable is narrower: **the seam imports and TYPES
 the callers import the seam.**
 
 ```python
-# utils/http_downloader.py — the seam. It names the vendor, and it types it.
+# chassis/http/http_downloader.py — the seam. It names the vendor, and it types it.
 import requests
 
 def download_file(str_url: str, path_dest: Path) -> Path: ...
 
-# model/whatever.py — the caller. It names the SEAM, and nothing else.
-from utils.http_downloader import download_file
+# capabilities/<feature>/infrastructure/adapter.py — the caller. It names the SEAM only.
+from chassis.http.http_downloader import download_file
 ```
 
 > **The test.** On the day the vendor is replaced, how many files change?

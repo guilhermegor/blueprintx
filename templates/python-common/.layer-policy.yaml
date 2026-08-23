@@ -54,6 +54,11 @@ layers:
         numpy integers where int is annotated when WIDEN_INT_TO_NUMPY is on, probed with a
         guarded import so a tier without numpy still loads. Legitimate here precisely
         because utils/ IS the seam layer.
+    deny_layers:
+      config: >-
+        The seam layer must not depend on the composition root that configures it. The other
+        direction already exists (config/startup.py imports utils), so this one would close a
+        real cycle rather than a hypothetical one.
 
   config:
     # The composition root: the one layer whose job IS to know concrete implementations.

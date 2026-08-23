@@ -75,6 +75,10 @@ layers:
     # Direction. utils/ is imported BY the layers, never the reverse — a cycle here is a
     # design error, and it was prose only (src/utils/CLAUDE.md) until this entry existed.
     deny_layers:
+      config: >-
+        The seam layer must not depend on the composition root that configures it. The other
+        direction already exists (config/startup.py imports utils), so this one would close a
+        real cycle rather than a hypothetical one.
       model: "utils/ is a seam for the layers, not a consumer of them."
       view: "utils/ is a seam for the layers, not a consumer of them."
       controller: "utils/ is a seam for the layers, not a consumer of them."
