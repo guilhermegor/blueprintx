@@ -90,10 +90,7 @@ integration_tests:
 	@$(POETRY) run pytest tests/integration/
 
 test_cov:
-	@$(POETRY) run pytest tests/unit/ --cov=src
-	@$(POETRY) run coverage report -m
-	@$(POETRY) run coverage xml -o coverage.xml
-	@$(POETRY) run genbadge coverage --local -i coverage.xml -o coverage.svg  # --local: render offline, never fetch shields.io
+	@bash bin/test_cov.sh
 
 # Whole-tree HTML coverage for drill-down (never narrow --cov=<module>, which
 # reports "no data" on the full suite). Open htmlcov/index.html or `make test_cov_serve`.
@@ -129,20 +126,7 @@ install_shell_linters:
 	@bash bin/install_shell_linters.sh
 
 lint:
-	@$(POETRY) run ruff check --fix .
-	@$(POETRY) run ruff format .
-	@cd src && bash ../bin/poetry_exec.sh run mypy --config-file ../mypy.ini .
-	@$(POETRY) run codespell .
-	@$(POETRY) run pydocstyle .
-	@$(POETRY) run python bin/check_docstrings.py
-	@$(POETRY) run python bin/check_layer_imports.py
-	@$(POETRY) run python bin/check_comment_language.py
-	@$(POETRY) run python bin/check_function_length.py
-	@bash bin/check_complexity.sh
-	@bash bin/lint_shell.sh
-	@bash bin/lint_sql.sh
-	@bash bin/lint_yaml.sh
-	@bash bin/lint_actions.sh
+	@bash bin/lint.sh
 
 check_docstrings:
 	@$(POETRY) run python bin/check_docstrings.py

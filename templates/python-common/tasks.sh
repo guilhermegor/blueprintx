@@ -119,10 +119,7 @@ integration_tests() {
 }
 
 test_cov() {
-	poetry_exec run pytest tests/unit/ --cov=src
-	poetry_exec run coverage report -m
-	poetry_exec run coverage xml -o coverage.xml
-	poetry_exec run genbadge coverage --local -i coverage.xml -o coverage.svg # --local: render offline, never fetch shields.io
+	bash "$SCRIPT_DIR/bin/test_cov.sh"
 }
 
 test_cov_report() {
@@ -160,20 +157,7 @@ fix_playwright() {
 # -------------------
 
 lint() {
-	poetry_exec run ruff check --fix .
-	poetry_exec run ruff format .
-	(cd src && poetry_exec run mypy --config-file ../mypy.ini .)
-	poetry_exec run codespell .
-	poetry_exec run pydocstyle .
-	poetry_exec run python bin/check_docstrings.py
-	poetry_exec run python bin/check_layer_imports.py
-	poetry_exec run python bin/check_comment_language.py
-	poetry_exec run python bin/check_function_length.py
-	bash "$SCRIPT_DIR/bin/check_complexity.sh"
-	bash "$SCRIPT_DIR/bin/lint_shell.sh"
-	bash "$SCRIPT_DIR/bin/lint_sql.sh"
-	bash "$SCRIPT_DIR/bin/lint_yaml.sh"
-	bash "$SCRIPT_DIR/bin/lint_actions.sh"
+	bash "$SCRIPT_DIR/bin/lint.sh"
 }
 
 check_docstrings() {
