@@ -640,8 +640,10 @@ def find_thread_problems(
 	int_min_chars : int, optional
 		Minimum length for a reply to count as substantive.
 	bool_require_resolved : bool, keyword-only, optional
-		Whether an answered-but-open thread is a problem. ⚠️ CI passes ``False``: see
-		``main`` for why a job that cannot re-evaluate a condition must not assert it.
+		Whether an answered-but-open thread is a problem. ⚠️ CI passes ``True`` — it used to
+		pass ``False`` on the reasoning that a job must not assert what it cannot re-evaluate,
+		which delegated the resolve half to a native setting that DROPS an outdated thread.
+		See the SUPERSEDED block above ``main`` for the measurement and the accepted cost.
 
 	Returns
 	-------

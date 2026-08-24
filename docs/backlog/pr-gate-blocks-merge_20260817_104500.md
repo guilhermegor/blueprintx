@@ -52,6 +52,21 @@ Ou seja: era seguro exigir o tempo todo. A divisão limpa é
 
 Cada metade fica com quem consegue reavaliá-la.
 
+> 🔴 **SUPERSEDIDO em 2026-08-24 (#196, PR #264). NÃO siga a divisão acima.**
+>
+> O job **agora exige as duas metades** — `REVIEW_THREADS_REQUIRE_RESOLVED: "1"`, tanto no
+> workflow deste repo quanto no template. O raciocínio acima continua correto sobre o *trigger*
+> e errado sobre a *delegação*: o `required_conversation_resolution` **descarta um thread
+> `isOutdated`**. Medido na #193 — botão de merge habilitado sobre um thread
+> `resolved=False outdated=True`, 29 de 29 checks verdes e a configuração confirmada `enabled`.
+> Um thread fica outdated quando o **commit do próprio autor** reescreve as linhas comentadas,
+> ou seja, é exatamente o estado que o autor consegue fabricar.
+>
+> Então a metade que ninguém conseguia reavaliar era também a metade que ninguém estava
+> checando. O custo aceito: depois de resolver, o check fica **VERMELHO** até alguém re-rodar o
+> run — e é por isso que a **#263** deixou de ser cosmética (o re-run é a única forma de uma PR
+> pronta ficar verde). Ver `issue-waves_20260823_145527.md`, seção Wave B.
+
 ---
 
 ## Execução
