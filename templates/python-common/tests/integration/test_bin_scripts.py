@@ -37,6 +37,11 @@ import pytest
 _STR_GIT = shutil.which("git")
 _STR_BASH = shutil.which("bash") or "bash"
 
+# An immutable empty default for the env-override parameters below. A mutable `{}` default
+# is a bugbear B006 finding, and a `dict_extra or {}` guard would cost a decision point in a
+# tree capped at cyclomatic complexity 1.
+_MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
+
 
 def _skip_unless(bool_available: bool, str_reason: str) -> None:
 	"""Skip the calling test when a capability discovered AT RUNTIME is missing.
@@ -1272,3 +1277,414 @@ def test_check_urls_stops_scanning_after_a_closing_delimiter(tmp_path: Path) -> 
 	cls_result = _run_url_hook(tmp_path)
 
 	assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+
+
+# --------------------------
+# Every gate needs a should-fail witness (blueprintx#111)
+#
+# ⚠️ A gate with no test that has SEEN IT FAIL is indistinguishable from a gate that is not
+# wired up: both print green. These are the eight that had no such witness. Writing them
+# found three live defects, which is the argument for the rule rather than a coincidence:
+# `check_provenance.py` and `check_docstrings.py` both exited 0 printing NOTHING when their
+# cwd-relative globs matched nothing, and `lint_actions.sh` accepted any file named
+# `actionlint` on PATH as a working one.
+# --------------------------
+
+
+def _run_py_gate(str_gate: str, path_root: Path) -> subprocess.CompletedProcess:
+	"""Run a ``bin/*.py`` gate with its cwd set to a prepared tree.
+
+	These gates take no arguments (``pass_filenames: false``) and discover their own targets
+	relative to the CWD, so the tree under test is selected by ``cwd``, not by argv.
+
+	Parameters
+	----------
+	str_gate : str
+		Gate filename, e.g. ``check_provenance.py``.
+	path_root : pathlib.Path
+		Directory to run the gate in.
+
+	Returns
+	-------
+	subprocess.CompletedProcess
+		The completed run, stdout and stderr captured as text.
+	"""
+	str_python = shutil.which("python3") or shutil.which("python") or "python3"
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	return subprocess.run(  # noqa: S603
+		[str_python, str(_bin_script(str_gate))],
+		cwd=path_root,
+		capture_output=True,
+		encoding="utf-8",
+		errors="replace",
+		check=False,
+	)
+
+
+def _write(path_file: Path, str_text: str) -> Path:
+	"""Write text to a path, creating parents.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		File to write.
+	str_text : str
+		Contents.
+
+	Returns
+	-------
+	pathlib.Path
+		The written file.
+	"""
+	path_file.parent.mkdir(parents=True, exist_ok=True)
+	path_file.write_text(str_text, encoding="utf-8")
+	return path_file
+
+
+# A module that reads a table without stamping provenance — the violation check_provenance
+# exists for. The marker it keys on is the CALL form, so the parentheses matter.
+_STR_UNSTAMPED_READ = (
+	'"""Loader."""\n\n\ndef load():\n\t"""Load."""\n\treturn read_table("x.csv")\n'
+)
+_STR_STAMPED_READ = (
+	'"""Loader."""\n\n\ndef load():\n\t"""Load."""\n'
+	'\treturn stamp_provenance(read_table("x.csv"), url="u")\n'
+)
+
+
+def test_provenance_gate_fires_on_a_read_without_a_stamp(tmp_path: Path) -> None:
+	"""The should-fail control: a read with no stamp must be reported, by filename."""
+	_write(tmp_path / "src" / "loader.py", _STR_UNSTAMPED_READ)
+
+	cls_result = _run_py_gate("check_provenance.py", tmp_path)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 1
+	assert "loader.py" in str_all
+	assert "stamp_provenance" in str_all
+
+
+def test_provenance_gate_passes_a_stamped_read(tmp_path: Path) -> None:
+	"""The positive control — and it must say WHAT it checked, not just stay quiet."""
+	_write(tmp_path / "src" / "loader.py", _STR_STAMPED_READ)
+
+	cls_result = _run_py_gate("check_provenance.py", tmp_path)
+
+	assert cls_result.returncode == 0
+	assert "file(s) checked" in cls_result.stdout
+
+
+def test_provenance_gate_refuses_to_report_success_on_zero_discovery(tmp_path: Path) -> None:
+	"""⚠️ No ``src/`` is a broken invocation, never a clean project.
+
+	Measured before the fix: with no ``src/`` directory the gate printed **nothing** and
+	exited 0 — reporting success for having checked nothing, which is the exact failure it
+	exists to catch in someone else's data.
+	"""
+	cls_result = _run_py_gate("check_provenance.py", tmp_path)
+
+	assert cls_result.returncode == 1
+	assert "refusing to report success" in cls_result.stdout + cls_result.stderr
+
+
+# Annotated `-> int`, documented as `str`. The gate keys on that disagreement, so the two
+# halves must genuinely differ — a fixture where they agree proves nothing.
+_STR_RETURN_TYPE_MISMATCH = (
+	'"""M."""\n\n\ndef f() -> int:\n'
+	'\t"""Do.\n\n\tReturns\n\t-------\n\tstr\n\t\tA thing.\n\t"""\n\treturn 1\n'
+)
+
+
+def test_docstrings_gate_fires_on_a_return_type_mismatch(tmp_path: Path) -> None:
+	"""The should-fail control: the annotation and the docstring must agree."""
+	_write(tmp_path / "src" / "m.py", _STR_RETURN_TYPE_MISMATCH)
+
+	cls_result = _run_py_gate("check_docstrings.py", tmp_path)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 1
+	assert "m.py" in str_all
+	assert "Return type mismatch" in str_all
+
+
+def test_docstrings_gate_refuses_to_report_success_on_zero_discovery(tmp_path: Path) -> None:
+	"""⚠️ Neither ``src/`` nor ``tests/`` present means a wrong cwd, not a clean tree.
+
+	Same measured defect as check_provenance: silent exit 0 over an empty glob.
+	"""
+	cls_result = _run_py_gate("check_docstrings.py", tmp_path)
+
+	assert cls_result.returncode == 1
+	assert "refusing to report success" in cls_result.stdout + cls_result.stderr
+
+
+def test_docs_sections_gate_fires_on_a_missing_canonical_page(tmp_path: Path) -> None:
+	"""The should-fail control: a nav that omits the canonical pages must be reported."""
+	_write(tmp_path / "mkdocs.yml", "site_name: X\nnav:\n  - Home: index.md\n")
+
+	cls_result = _run_py_gate("check_docs_sections.py", tmp_path)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 1
+	assert "usage.md" in str_all
+
+
+def test_docs_sections_gate_announces_its_skip_rather_than_passing_silently(
+	tmp_path: Path,
+) -> None:
+	"""No ``mkdocs.yml`` is a legitimate skip — but it must SAY so.
+
+	This is the property that separates an acceptable skip from the two defects above: a
+	project may genuinely ship no docs site, so exit 0 is right, and the printed sentence is
+	what stops that zero from being mistaken for "the docs skeleton is intact".
+	"""
+	cls_result = _run_py_gate("check_docs_sections.py", tmp_path)
+
+	assert cls_result.returncode == 0
+	assert "skipping" in cls_result.stdout
+
+
+# --------------------------
+# The lint_*.sh wrappers — their failure mode is distinct (blueprintx#111)
+#
+# "the tool was not found" and "the tool ran and passed" are indistinguishable from outside,
+# so these need a witness for BOTH the missing-tool branch and the zero-discovery branch.
+# --------------------------
+
+
+def _materialise_gate_tree(path_root: Path, str_script: str) -> Path:
+	"""Copy ``bin/lib`` plus one wrapper into a throwaway project tree.
+
+	⚠️ Required rather than merely tidy. These wrappers open ``main()`` with
+	``cd "$SCRIPT_DIR/.."``, so they audit the tree that contains the SCRIPT and ignore the
+	caller's cwd entirely. Running the repo's own copy against a ``cwd=tmp_path`` therefore
+	silently audits ``templates/python-common`` — measured while writing these tests, where a
+	one-workflow fixture reported ``7 workflow(s)``. The script has to live in the tree.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Project root to build.
+	str_script : str
+		Wrapper filename, e.g. ``lint_actions.sh``.
+
+	Returns
+	-------
+	pathlib.Path
+		Path to the copied script inside the throwaway tree.
+	"""
+	path_bin = path_root / "bin"
+	path_bin.mkdir(parents=True, exist_ok=True)
+	_materialise_bin_lib(path_bin)
+	path_script = path_bin / str_script
+	shutil.copy(_bin_script(str_script), path_script)
+	return path_script
+
+
+def _shadowed_path(path_root: Path, str_tool: str) -> str:
+	"""Build a ``PATH`` whose first entry shadows ``str_tool`` with a stub that cannot run.
+
+	⚠️ This is how tool-absence is made DETERMINISTIC without uninstalling anything. Skipping
+	the test when the real tool happens to be installed would silently drop coverage exactly
+	on CI, where these tools ARE present and where the required-flag contract matters most.
+	The stub exits non-zero for every invocation, including ``--version`` — which is what a
+	correct presence probe asks.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to create the stub directory under.
+	str_tool : str
+		Executable name to shadow.
+
+	Returns
+	-------
+	str
+		A PATH value with the stub directory first.
+	"""
+	path_stub_dir = path_root / "_stubbin"
+	path_stub_dir.mkdir(parents=True, exist_ok=True)
+	path_stub = path_stub_dir / str_tool
+	path_stub.write_text("#!/bin/sh\nexit 127\n", encoding="utf-8")
+	path_stub.chmod(0o755)
+	return f"{path_stub_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
+def _run_sh_gate(
+	path_script: Path, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV
+) -> subprocess.CompletedProcess:
+	"""Run a wrapper from inside its materialised tree.
+
+	Parameters
+	----------
+	path_script : pathlib.Path
+		The copied script, as returned by ``_materialise_gate_tree``.
+	dict_extra : Mapping[str, str]
+		Environment entries layered over the inherited environment.
+
+	Returns
+	-------
+	subprocess.CompletedProcess
+		The completed run.
+	"""
+	dict_env = dict(os.environ)
+	dict_env.update(dict_extra)
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	return subprocess.run(  # noqa: S603
+		[_STR_BASH, str(path_script)],
+		capture_output=True,
+		text=True,
+		check=False,
+		env=dict_env,
+	)
+
+
+_STR_VALID_WORKFLOW = (
+	"name: x\non: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n"
+	"    timeout-minutes: 5\n    steps:\n      - run: echo hi\n"
+)
+
+
+def test_lint_actions_required_flag_makes_the_skip_impossible(tmp_path: Path) -> None:
+	"""⚠️ The witness for the missing-tool branch: in CI a skip is not an acceptable green.
+
+	A graceful skip is right on a contributor's box and placebo in CI, which is why
+	``LINT_ACTIONS_REQUIRED=1`` exists. Without a test, that flag is a claim nobody checked.
+	"""
+	path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
+	_write(tmp_path / ".github" / "workflows" / "w.yaml", _STR_VALID_WORKFLOW)
+
+	cls_result = _run_sh_gate(
+		path_script,
+		{"PATH": _shadowed_path(tmp_path, "actionlint"), "LINT_ACTIONS_REQUIRED": "1"},
+	)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0
+	assert "required" in str_all
+
+
+def test_lint_actions_skips_gracefully_when_not_required(tmp_path: Path) -> None:
+	"""The same absent tool without the flag is a warning and a zero — the local contract."""
+	path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
+	_write(tmp_path / ".github" / "workflows" / "w.yaml", _STR_VALID_WORKFLOW)
+
+	cls_result = _run_sh_gate(path_script, {"PATH": _shadowed_path(tmp_path, "actionlint")})
+
+	assert cls_result.returncode == 0
+	assert "skip" in cls_result.stdout + cls_result.stderr
+
+
+def test_lint_actions_a_broken_binary_on_path_resolves_as_absent(tmp_path: Path) -> None:
+	"""⚠️ `command -v` answers "is there a file by that name", never "does it run".
+
+	Measured (blueprintx#111): a stub named ``actionlint`` that exits 127 satisfied the bare
+	``command -v`` probe, so the wrapper announced ``actionlint [system]: 7 workflow(s)`` and
+	then propagated the stub's 127 — blaming the workflows for the tool's failure to start.
+	The poetry branch always probed ``--version``; the system branch did not, though the
+	function's own comment claimed both did.
+	"""
+	path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
+	_write(tmp_path / ".github" / "workflows" / "w.yaml", _STR_VALID_WORKFLOW)
+
+	cls_result = _run_sh_gate(path_script, {"PATH": _shadowed_path(tmp_path, "actionlint")})
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 0, f"the stub's exit leaked out: {str_all}"
+	assert "127" not in str_all
+	assert "[system]" not in str_all
+
+
+def test_lint_actions_fails_when_discovery_matches_zero_files(tmp_path: Path) -> None:
+	"""⚠️ The witness for the zero-discovery branch: actionlint exits 0 with no arguments.
+
+	So a wrapper whose glob matched nothing reports success forever — green precisely because
+	it is checking nothing. The count must be asserted, not the exit code. The required flag
+	is set so the run reaches discovery instead of stopping at the absent tool.
+	"""
+	path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
+	(tmp_path / ".github" / "workflows").mkdir(parents=True)
+
+	cls_result = _run_sh_gate(path_script, {"LINT_ACTIONS_REQUIRED": "1"})
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0
+	assert "vacuously" in str_all or "required" in str_all
+
+
+def test_lint_docker_required_flag_makes_the_skip_impossible(tmp_path: Path) -> None:
+	"""The same required-flag contract as lint_actions, for hadolint."""
+	path_script = _materialise_gate_tree(tmp_path, "lint_docker.sh")
+	_write(tmp_path / "Dockerfile", "FROM python:3.12-slim\nRUN echo hi\n")
+
+	cls_result = _run_sh_gate(
+		path_script,
+		{"PATH": _shadowed_path(tmp_path, "hadolint"), "LINT_DOCKER_REQUIRED": "1"},
+	)
+
+	assert cls_result.returncode != 0
+	assert "required" in cls_result.stdout + cls_result.stderr
+
+
+def test_lint_docker_skips_when_the_tier_ships_no_dockerfile(tmp_path: Path) -> None:
+	"""No Dockerfile is a legitimate skip — the tier genuinely ships none — but it must say so."""
+	path_script = _materialise_gate_tree(tmp_path, "lint_docker.sh")
+
+	cls_result = _run_sh_gate(path_script, {"LINT_DOCKER_REQUIRED": "1"})
+
+	assert cls_result.returncode == 0
+	assert "skip" in (cls_result.stdout + cls_result.stderr).lower()
+
+
+def test_lint_sql_skips_when_no_sql_files_exist(tmp_path: Path) -> None:
+	"""A tier with no ``.sql`` is a legitimate skip, and the wrapper must announce it."""
+	path_script = _materialise_gate_tree(tmp_path, "lint_sql.sh")
+
+	cls_result = _run_sh_gate(path_script)
+
+	assert cls_result.returncode == 0
+	assert "skip" in (cls_result.stdout + cls_result.stderr).lower()
+
+
+def test_lint_yaml_reports_which_branch_it_took(tmp_path: Path) -> None:
+	"""The wrapper must never exit 0 in silence — a silent gate reads as an absent one."""
+	path_script = _materialise_gate_tree(tmp_path, "lint_yaml.sh")
+	_write(tmp_path / "conf.yaml", "a: 1\n")
+
+	cls_result = _run_sh_gate(path_script)
+
+	assert (cls_result.stdout + cls_result.stderr).strip(), "exited without saying anything"
+
+
+def test_unix_filenames_gate_fires_on_a_filename_with_a_space(tmp_path: Path) -> None:
+	"""The should-fail control for the argv path — the one pre-commit actually uses."""
+	path_bad = _write(tmp_path / "bad name.py", "x = 1\n")
+
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	cls_result = subprocess.run(  # noqa: S603
+		[_STR_BASH, str(_bin_script("check_unix_filenames.sh")), path_bad.name],
+		cwd=tmp_path,
+		capture_output=True,
+		text=True,
+		check=False,
+	)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0
+	assert "bad name.py" in str_all
+
+
+def test_unix_filenames_gate_accepts_a_conventional_filename(tmp_path: Path) -> None:
+	"""The positive control, so the test above is proving the rule and not a crash."""
+	path_ok = _write(tmp_path / "good_name.py", "x = 1\n")
+
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	cls_result = subprocess.run(  # noqa: S603
+		[_STR_BASH, str(_bin_script("check_unix_filenames.sh")), path_ok.name],
+		cwd=tmp_path,
+		capture_output=True,
+		text=True,
+		check=False,
+	)
+
+	assert cls_result.returncode == 0

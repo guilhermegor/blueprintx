@@ -542,6 +542,17 @@ if __name__ == "__main__":
 		if hasattr(cls_stream, "reconfigure"):
 			cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
+	# ⚠️ Zero discovery is a FAILURE, not a clean tree — see the same guard in
+	# check_provenance.py. Both globs are cwd-relative, so running from the wrong directory
+	# yielded an empty list, a sum of 0 and exit 0: success for having checked nothing
+	# (blueprintx#111). Every tier ships both trees, so zero is always a broken invocation.
 	targets = list(pathlib.Path("src").rglob("*.py")) + list(pathlib.Path("tests").rglob("*.py"))
+	if not targets:
+		print("❌ no Python files found under src/ or tests/ — refusing to report success.")
+		sys.exit(1)
+
 	total_errors = sum(check_file(str(p)) for p in targets)
+	if total_errors == 0:
+		# Print WHAT was checked: a silent gate is indistinguishable from an absent one.
+		print(f"✅ docstring consistency OK ({len(targets)} file(s) checked)")
 	sys.exit(1 if total_errors > 0 else 0)

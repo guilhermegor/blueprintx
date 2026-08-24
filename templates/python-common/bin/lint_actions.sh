@@ -43,7 +43,14 @@ resolve_actionlint_mode() {
 		printf 'poetry'
 		return 0
 	fi
-	if command -v actionlint >/dev/null 2>&1; then
+	# ⚠️ `command -v` ALONE IS NOT A PRESENCE TEST — it answers "is there a file by that name
+	# on PATH", not "does it work". A shadowing stub, a half-installed package or a binary
+	# built for another libc all satisfy it, and the wrapper then treats the tool's startup
+	# failure as a LINT failure: measured, a stub exiting 127 produced
+	# `actionlint [system]: 7 workflow(s)` followed by exit 127, blaming the workflows.
+	# The `--version` probe above (poetry branch) always had this right; this branch did not,
+	# though the comment at the top of the function claimed both did (blueprintx#111).
+	if command -v actionlint >/dev/null 2>&1 && actionlint --version >/dev/null 2>&1; then
 		printf 'system'
 		return 0
 	fi
