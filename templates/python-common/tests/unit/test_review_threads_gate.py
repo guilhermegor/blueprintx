@@ -44,6 +44,11 @@ def _load_gate() -> ModuleType:
 
 
 _ROSTER = {"coderabbitai[bot]", "github-actions[bot]"}
+
+# The same two members as ``_ROSTER``, in the shape ``load_roster`` now returns — normalised
+# login to its ``posts:`` classification. The two are NOT interchangeable: the thread half of
+# the gate takes every member, the missing-review half takes only those that can review.
+_ROSTER_WITH_POSTS = {"coderabbitai": "threads", "github-actions": "status"}
 _LONG = "x" * 150
 
 
@@ -312,7 +317,7 @@ def test_an_absent_roster_makes_the_gate_a_no_op(tmp_path: Path) -> None:
 	Guessing at logins would produce false failures on the repos that never adopted it.
 	"""
 	cls_gate = _load_gate()
-	assert cls_gate.load_roster(tmp_path) == set()
+	assert cls_gate.load_roster(tmp_path) == {}
 
 
 def test_the_roster_is_read_from_the_declared_file(tmp_path: Path) -> None:
@@ -322,15 +327,15 @@ def test_the_roster_is_read_from_the_declared_file(tmp_path: Path) -> None:
 		"reviewers:\n  - login: some-other-reviewer[bot]\n    posts: threads\n",
 		encoding="utf-8",
 	)
-	set_roster = cls_gate.load_roster(tmp_path)
-	assert set_roster == {"some-other-reviewer"}, (
+	dict_roster = cls_gate.load_roster(tmp_path)
+	assert dict_roster == {"some-other-reviewer": "threads"}, (
 		"logins are normalised on load: GraphQL omits the bot-login suffix a declared "
 		"reviewer carries, and comparing those spellings literally made this gate vacuous"
 	)
 
 	# And it behaves the same for that tool as for any other.
 	list_threads = [_thread([("some-other-reviewer[bot]", "**Finding.** " + _LONG)])]
-	assert len(cls_gate.find_thread_problems(list_threads, set_roster)) == 1
+	assert len(cls_gate.find_thread_problems(list_threads, set(dict_roster))) == 1
 
 
 def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr() -> None:
@@ -458,7 +463,7 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
 
 	# Never adopted → still a no-op, which keeps the gate opt-in for other repos.
 	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: False)
-	assert cls_gate.load_roster(tmp_path) == set()
+	assert cls_gate.load_roster(tmp_path) == {}
 
 	# Present upstream, absent here → deletion.
 	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
@@ -499,3 +504,104 @@ def test_ci_mode_asserts_only_the_half_it_can_re_evaluate() -> None:
 		len(cls_gate.find_thread_problems(list_unanswered, _ROSTER, bool_require_resolved=False))
 		== 1
 	)
+
+
+# --------------------------
+# Tests — `posts:` splits the roster in two (#218)
+# --------------------------
+
+
+def test_a_status_only_member_cannot_satisfy_the_missing_review_gate() -> None:
+	"""The negative control: a review by a ``posts: status`` member is not a review.
+
+	``github-actions[bot]`` can submit a review with the ambient ``GITHUB_TOKEN``, so before
+	this split any workflow that posted one satisfied a gate whose entire purpose is "a real
+	reviewer looked at this" — the same class of hole as #208, reached from the other side.
+	"""
+	cls_gate = _load_gate()
+	set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
+	assert cls_gate.find_missing_review_problem([_review("github-actions")], set_reviewers, "h")
+
+
+def test_the_missing_review_message_names_only_members_that_can_review() -> None:
+	"""The gate must not tell people to wait for a member that never submits a review."""
+	cls_gate = _load_gate()
+	set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
+	assert "github-actions" not in cls_gate.find_missing_review_problem([], set_reviewers, "h")
+
+
+def test_a_thread_answer_from_a_status_member_is_still_not_an_answer() -> None:
+	"""The THREAD half keeps the whole roster — a status member's comment is not the author's.
+
+	The two halves take different sets on purpose, and this pins the half that must NOT narrow.
+	"""
+	cls_gate = _load_gate()
+	list_threads = [
+		_thread([("coderabbitai", "**Finding.** " + _LONG), ("github-actions", _LONG)])
+	]
+	assert len(cls_gate.find_thread_problems(list_threads, set(_ROSTER_WITH_POSTS))) == 1
+
+
+def test_reviewer_logins_keeps_only_the_threads_members() -> None:
+	"""The split itself, asserted directly rather than only through its two consumers."""
+	cls_gate = _load_gate()
+	assert cls_gate.reviewer_logins(_ROSTER_WITH_POSTS) == {"coderabbitai"}
+
+
+def test_a_roster_where_nobody_can_review_fails_loudly() -> None:
+	"""A roster of only status members makes the gate unsatisfiable, so it must not load.
+
+	A required check that can never go green is the fastest way to teach people that red
+	means nothing — and the bypass habit that follows swallows the real blocks too.
+	"""
+	cls_gate = _load_gate()
+	with pytest.raises(RuntimeError, match="no member with posts"):
+		cls_gate.reviewer_logins({"github-actions": "status"})
+
+
+def test_a_row_without_posts_is_rejected_rather_than_defaulted(tmp_path: Path) -> None:
+	"""Neither default is safe, so the roster must say. See ``posts_of``.
+
+	Reading a forgotten field as ``status`` makes the gate unsatisfiable; reading it as
+	``threads`` re-opens the exact hole the field exists to close.
+	"""
+	cls_gate = _load_gate()
+	(tmp_path / ".review-bots.yaml").write_text(
+		"reviewers:\n  - login: some-reviewer[bot]\n", encoding="utf-8"
+	)
+	with pytest.raises(RuntimeError, match="some-reviewer"):
+		cls_gate.load_roster(tmp_path)
+
+
+def test_an_unrecognised_posts_value_is_rejected(tmp_path: Path) -> None:
+	"""A typo'd classification must name itself, not fall through to a silent behaviour."""
+	cls_gate = _load_gate()
+	(tmp_path / ".review-bots.yaml").write_text(
+		"reviewers:\n  - login: some-reviewer[bot]\n    posts: reviews\n", encoding="utf-8"
+	)
+	with pytest.raises(RuntimeError, match="reviews"):
+		cls_gate.load_roster(tmp_path)
+
+
+def test_a_status_member_opening_a_pr_is_not_exempt() -> None:
+	"""The exemption is "do not ask X to review X", never "bots are exempt".
+
+	``github-actions[bot]`` opens workflow PRs and cannot review, so a real reviewer can look
+	at its PR and there is nothing unsatisfiable about asking.
+	"""
+	cls_gate = _load_gate()
+	set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
+	assert cls_gate.find_missing_review_problem([], set_reviewers, "github-actions[bot]")
+
+
+def test_an_emptied_roster_is_rejected_like_a_deleted_one(tmp_path: Path) -> None:
+	"""``reviewers: []`` is the deletion guard's hole, reached with different keystrokes.
+
+	The file is present, so the default-branch deletion check never fires, and an empty result
+	reads to ``main`` as "not adopted here" — a gate switched off inside the very PR it polices.
+	Opting out is deleting the file, which self-skips with a message. Raised by review on #262.
+	"""
+	cls_gate = _load_gate()
+	(tmp_path / ".review-bots.yaml").write_text("reviewers: []\n", encoding="utf-8")
+	with pytest.raises(RuntimeError, match="declares no reviewers"):
+		cls_gate.load_roster(tmp_path)

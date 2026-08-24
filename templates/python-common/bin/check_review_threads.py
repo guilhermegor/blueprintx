@@ -59,6 +59,20 @@ except ModuleNotFoundError:  # pragma: no cover - the gate self-skips without it
 
 _ROSTER_FILE = ".review-bots.yaml"
 
+# ⚠️ `posts:` IS NOT DECORATION — IT DECIDES WHO CAN SATISFY THE MISSING-REVIEW GATE.
+#
+# Reviewer shapes differ: some post inline review THREADS, some post only a STATUS CHECK. The
+# thread half of this gate correctly subtracts BOTH (a `status` member posts no answers either),
+# but `find_missing_review_problem` must consider only the members that can actually submit a
+# review. Without that split, `github-actions[bot]` — which CAN submit a review with the ambient
+# GITHUB_TOKEN — silently satisfies a gate whose entire purpose is "a real reviewer looked at
+# this". Same class of hole as #208: a signal that reads as a review without being one.
+_POSTS_THREADS = "threads"
+_POSTS_STATUS = "status"
+# The dict IS the branch and the frozenset IS the validity set, so the two cannot drift.
+_POSTS_CAN_REVIEW = {_POSTS_THREADS: True, _POSTS_STATUS: False}
+_POSTS_VALID = frozenset(_POSTS_CAN_REVIEW)
+
 # ⚠️ GraphQL and REST disagree on a bot's login, and the gate lives or dies on it.
 #
 # REST reports `coderabbitai[bot]`; the GraphQL `author { login }` field returns the Bot
@@ -168,8 +182,45 @@ def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
 	return False
 
 
-def load_roster(path_root: pathlib.Path) -> set[str]:
-	"""Read the declared review-bot logins.
+def posts_of(dict_row: dict) -> str:
+	"""Return the ``posts:`` classification declared by one roster row.
+
+	Parameters
+	----------
+	dict_row : dict
+		One entry of the roster's ``reviewers:`` list.
+
+	Returns
+	-------
+	str
+		One of :data:`_POSTS_VALID` — ``"threads"`` or ``"status"``.
+
+	Raises
+	------
+	RuntimeError
+		When ``posts:`` is missing or is not one of :data:`_POSTS_VALID`. Defaulting is not
+		available here in either direction: silently reading a forgotten field as ``status``
+		makes the gate unsatisfiable (and unsatisfiable gates get bypassed with ``--admin``,
+		taking the real blocks with them), while reading it as ``threads`` re-opens the exact
+		hole this field exists to close. So the roster must say, and a row that does not is a
+		configuration error the message has to name.
+	"""
+	str_login = str(dict_row.get("login") or "").strip()
+	str_posts = str(dict_row.get("posts") or "").strip()
+	if str_posts not in _POSTS_VALID:
+		# Name the row AND the value it declared. A roster error that reports only "invalid
+		# posts" sends the reader back through the file to work out which of N rows it meant.
+		raise RuntimeError(
+			f"{_ROSTER_FILE}: reviewer {str_login or '<no login>'} declares "
+			f"posts: {str_posts or '<missing>'} — expected one of "
+			f"{', '.join(sorted(_POSTS_VALID))}. This field decides who can satisfy the "
+			f"missing-review gate, and neither default is safe, so it cannot be omitted."
+		)
+	return str_posts
+
+
+def load_roster(path_root: pathlib.Path) -> dict[str, str]:
+	"""Read the declared review-bot roster.
 
 	Parameters
 	----------
@@ -178,20 +229,24 @@ def load_roster(path_root: pathlib.Path) -> set[str]:
 
 	Returns
 	-------
-	set of str
-		Logins treated as reviewers rather than as answers. Empty when the file was NEVER
-		there, which makes the gate a no-op rather than a source of false failures.
+	dict of str to str
+		Normalised login mapped to its ``posts:`` classification. Every member counts as a
+		reviewer rather than as an answer for the THREAD half; only the ``threads`` members
+		can satisfy the MISSING-REVIEW half — see :func:`reviewer_logins`. Empty when the
+		file was NEVER there, which makes the gate a no-op rather than a source of false
+		failures.
 
 	Raises
 	------
 	RuntimeError
 		When the roster is absent HERE but present on the default branch — that is a
 		deletion, and since an empty roster makes this gate a no-op, it would switch the
-		gate off inside the very PR it is meant to police.
+		gate off inside the very PR it is meant to police. Also propagated from
+		:func:`posts_of` for a row that does not declare a usable ``posts:``.
 	"""
 	path_roster = path_root / _ROSTER_FILE
 	if yaml is None:
-		return set()
+		return {}
 	if not path_roster.is_file():
 		# ⚠️ ABSENT is only "not adopted here" when it was never there. If the DEFAULT branch
 		# carries the roster and this branch does not, the file was DELETED — and since an
@@ -202,13 +257,59 @@ def load_roster(path_root: pathlib.Path) -> set[str]:
 				f"{_ROSTER_FILE} exists on the default branch but not here — deleting it "
 				f"disables this gate. Restore it, or remove it on the default branch first."
 			)
-		return set()
-	dict_roster = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
-	return {
-		normalise_login(str(d.get("login", "")))
-		for d in (dict_roster.get("reviewers") or [])
+		return {}
+	dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
+	dict_roster = {
+		normalise_login(str(d.get("login", ""))): posts_of(d)
+		for d in (dict_yaml.get("reviewers") or [])
 		if d.get("login")
 	}
+	if not dict_roster:
+		# ⚠️ EMPTYING THE LIST IS THE SAME ONE-LINE SWITCH-OFF AS DELETING THE FILE.
+		#
+		# The guard above rejects a roster deleted inside the PR it polices; `reviewers: []`
+		# walks through the same door with different keystrokes — the file is present, so the
+		# deletion guard never fires, and `main()` reads the empty result as "not adopted here"
+		# and exits 0. Opting out is documented as DELETING the file, which self-skips with a
+		# message; a roster that exists and declares nobody is a disabled gate, not an absent
+		# one. Raised by review on #262.
+		raise RuntimeError(
+			f"{_ROSTER_FILE} exists but declares no reviewers — an empty roster makes this "
+			f"gate a no-op, which is the same as deleting it. Declare a reviewer, or delete "
+			f"the file to opt out (that path self-skips with a message)."
+		)
+	return dict_roster
+
+
+def reviewer_logins(dict_roster: dict[str, str]) -> set[str]:
+	"""Return the roster logins that can actually submit a review.
+
+	Parameters
+	----------
+	dict_roster : dict of str to str
+		Roster as returned by :func:`load_roster`.
+
+	Returns
+	-------
+	set of str
+		The ``posts: threads`` members. A ``posts: status`` member is deliberately absent:
+		it can neither be expected to review nor accepted as having reviewed.
+
+	Raises
+	------
+	RuntimeError
+		When a non-empty roster declares no member that can review. That roster makes the
+		missing-review check unsatisfiable on every PR, and a permanently red required check
+		is the fastest way to teach people that red means nothing.
+	"""
+	set_reviewers = {s for s, p in dict_roster.items() if _POSTS_CAN_REVIEW[p]}
+	if dict_roster and not set_reviewers:
+		raise RuntimeError(
+			f"{_ROSTER_FILE} declares no member with posts: {_POSTS_THREADS}, so no PR can "
+			f"ever satisfy the missing-review check. Declare a reviewer, or delete the "
+			f"roster to opt out of this gate entirely."
+		)
+	return set_reviewers
 
 
 def _fetch_page(
@@ -308,7 +409,7 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
 
 def find_missing_review_problem(
 	list_reviews: list[dict],
-	set_roster: set[str],
+	set_reviewers: set[str],
 	str_pr_author: str = "",
 ) -> str | None:
 	"""Return a problem when no declared reviewer ever reported on this PR.
@@ -317,8 +418,11 @@ def find_missing_review_problem(
 	----------
 	list_reviews : list of dict
 		Submitted reviews, each with an ``author`` node.
-	set_roster : set of str
-		Logins of the declared reviewers.
+	set_reviewers : set of str
+		Logins that can actually submit a review — :func:`reviewer_logins`, NOT the whole
+		roster. ⚠️ Handing this the full roster is the defect it was fixed for: a
+		``posts: status`` member both gets NAMED as expected and SATISFIES the check, and
+		``github-actions[bot]`` can submit a review with the ambient token.
 	str_pr_author : str, optional
 		Login of the PR author; a roster member's own PR is exempt.
 
@@ -327,11 +431,17 @@ def find_missing_review_problem(
 	str or None
 		A human-readable problem, or ``None`` when at least one reviewer reported.
 	"""
-	set_roster = {normalise_login(s) for s in set_roster}
+	set_roster = {normalise_login(s) for s in set_reviewers}
 	if normalise_login(str_pr_author) in set_roster:
 		# A reviewer's own PR (a bot's dependency bump). Requiring it to review itself is a
 		# gate nobody can satisfy, and those get bypassed with --admin, taking the real
 		# blocks with them.
+		#
+		# ⚠️ The exemption narrowed with the parameter, ON PURPOSE. It used to cover every
+		# roster member, so a PR opened by a `posts: status` member (github-actions[bot],
+		# which opens workflow PRs) skipped the check entirely — yet that author cannot
+		# review, so a real reviewer CAN look at its PR and there is nothing unsatisfiable
+		# about asking. The exemption is "do not ask X to review X", not "bots are exempt".
 		return None
 
 	set_reported = {
@@ -483,10 +593,16 @@ def main() -> int:
 		return 0
 
 	path_root = pathlib.Path.cwd()
-	set_roster = load_roster(path_root)
-	if not set_roster:
+	dict_roster = load_roster(path_root)
+	if not dict_roster:
 		print(f"No {_ROSTER_FILE} — the review-thread gate is not adopted here")
 		return 0
+
+	# TWO sets from one roster, and they are not the same set. The thread half subtracts every
+	# member (a status member posts no answers either); the missing-review half considers only
+	# the members that can submit a review.
+	set_roster = set(dict_roster)
+	set_reviewers = reviewer_logins(dict_roster)
 
 	str_owner, _, str_repo = str_repo_full.partition("/")
 	dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
@@ -501,7 +617,7 @@ def main() -> int:
 	# passed and it merged with the reviewer having posted only its refusal notice.
 	str_missing = find_missing_review_problem(
 		dict_pr.get("reviews", {}).get("nodes", []),
-		set_roster,
+		set_reviewers,
 		(dict_pr.get("author") or {}).get("login") or "",
 	)
 	if str_missing:
