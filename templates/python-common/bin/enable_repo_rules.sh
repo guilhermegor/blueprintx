@@ -63,11 +63,17 @@ RULESET_NAME="pr-quality-gate"
 # The seeded entry is NOT a guess: it is the `name:` of the job in the `review_threads.yaml`
 # this same template ships, so it is correct by construction, and it triggers `on: pull_request`,
 # so it reports on EVERY pull request from the moment it opens — the one property a required
-# check must have. It is also safe to require in the other direction: the job asserts only that
-# every thread was REPLIED to (`REVIEW_THREADS_REQUIRE_RESOLVED=0`), and a reply re-triggers it
-# via `pull_request_review_comment`. Requiring RESOLUTION here would deadlock, because resolving
-# a thread fires no workflow trigger — that half is enforced natively by the ruleset's
-# `required_review_thread_resolution`, which evaluates at the merge button and cannot go stale.
+# check must have.
+#
+# ⚠️ SUPERSEDED 2026-08-24 (blueprintx#196). This block used to add that the job was safe to
+# require because it asserted only the REPLY half (`REVIEW_THREADS_REQUIRE_RESOLVED=0`), leaving
+# RESOLUTION to the ruleset's `required_review_thread_resolution` — which evaluates at the merge
+# button and "cannot go stale". The trigger reasoning holds; the delegation does not: that
+# setting DROPS a thread marked `isOutdated`, and a thread outdates when the author's own commit
+# rewrites the commented lines. So the job now runs with `REVIEW_THREADS_REQUIRE_RESOLVED=1` and
+# asserts BOTH halves. The accepted cost is that a resolve leaves the check red until the run is
+# re-run by hand — resolving fires no workflow trigger. The ruleset setting is still provisioned
+# below as the merge-button layer; it is simply no longer the ONLY thing asserting resolution.
 #
 # 🔴 Why this matters more than it looks: an EMPTY list means CI runs on every PR and blocks
 # nothing. Measured blueprintx 2026-08-16: a PR merged with **32 of 47 checks passed** and no
