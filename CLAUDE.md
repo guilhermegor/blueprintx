@@ -77,6 +77,14 @@ tree via `--root .` (pre-commit hook `function-length`, the `function-length` CI
 project runs on itself. A second copy was the obvious shape and is exactly what
 `check_codespell_sync.sh` exists to police, so there is not one.
 
+The **review-thread gate** follows the same rule, reached from the other direction: it *did* have
+two 543-line copies, and `.github/workflows/review_threads.yml` now runs the template's
+`templates/python-common/bin/check_review_threads.py` directly. It needs no `--root` — unlike the
+filesystem gates it takes its subject from `GITHUB_REPOSITORY`/`PR_NUMBER` and reads
+`.review-bots.yaml` from `Path.cwd()`, so invoking the template copy from the repo root already
+audits *this* repo's roster. There is deliberately no third copy of the roster either: the one in
+`templates/python-common/` is the shipped template, the one at the root is this repo's own data.
+
 `bin/ci/scaffold_lint_test.sh <tier>` is the real verification for template work — it scaffolds
 a project and runs **that project's** `make lint`, `make unit_tests` and `make integration_tests`.
 Checking at the template root is a false green: the generated project pins different linter
