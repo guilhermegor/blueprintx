@@ -1503,6 +1503,32 @@ def _shadow(path_dir: Path, str_tool: str) -> Path:
 	return path_dir
 
 
+def _stub_ok(path_dir: Path, str_tool: str) -> Path:
+	"""Place a stub named ``str_tool`` in ``path_dir`` that succeeds at everything.
+
+	The counterpart to ``_shadow``: it makes a tool resolve as PRESENT and healthy, so a test
+	can reach a branch that lies *past* resolution — discovery, for instance — without needing
+	the real tool installed.
+
+	Parameters
+	----------
+	path_dir : pathlib.Path
+		Directory that will go first on ``PATH``.
+	str_tool : str
+		Executable name to provide.
+
+	Returns
+	-------
+	pathlib.Path
+		``path_dir``, so calls chain in a caller without a loop.
+	"""
+	path_dir.mkdir(parents=True, exist_ok=True)
+	path_stub = path_dir / str_tool
+	path_stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+	path_stub.chmod(0o755)
+	return path_dir
+
+
 def _path_with(path_dir: Path) -> str:
 	"""Return a ``PATH`` value with ``path_dir`` first.
 
@@ -1674,11 +1700,23 @@ def test_lint_actions_fails_when_discovery_matches_zero_files(tmp_path: Path) ->
 	path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
 	(tmp_path / ".github" / "workflows").mkdir(parents=True)
 
-	cls_result = _run_sh_gate(path_script, {"LINT_ACTIONS_REQUIRED": "1"})
+	# ⚠️ A HEALTHY actionlint is required for this test to mean anything. With the tool absent
+	# the run stops in the required-tool branch and never reaches discovery — so an assertion
+	# that also accepts "required" passes even with the vacuous-discovery guard deleted, which
+	# is a witness green-lighting without ever reaching the branch it names — the very defect
+	# this file exists to prevent. Poetry is shadowed so resolution cannot take the vendored
+	# path.
+	path_stub_dir = tmp_path / "_stubbin"
+	_stub_ok(path_stub_dir, "actionlint")
+	_shadow(path_stub_dir, "poetry")
+
+	cls_result = _run_sh_gate(
+		path_script, {"PATH": _path_with(path_stub_dir), "LINT_ACTIONS_REQUIRED": "1"}
+	)
 	str_all = cls_result.stdout + cls_result.stderr
 
 	assert cls_result.returncode != 0
-	assert "vacuously" in str_all or "required" in str_all
+	assert "vacuously" in str_all
 
 
 def test_lint_docker_required_flag_makes_the_skip_impossible(tmp_path: Path) -> None:
