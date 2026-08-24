@@ -38,6 +38,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
+# The ONE place this script reports a failure it deliberately does not exit on.
+#
+# ⚠️ The `::warning::` line is a machine-read workflow COMMAND, not human status output — it is
+# what puts the message in the run SUMMARY, where someone looking at a green job would otherwise
+# see nothing. So it is not `print_status`'s job, and it is not a bare-echo status violation
+# either. But the annotation and the status line always travel together here, and three copies of
+# that pair is exactly where one copy eventually loses its annotation and goes quiet. One seam
+# emits both, from one message.
+warn_annotated() {
+	local str_message="$1"
+
+	echo "::warning::$str_message"
+	print_status "warning" "$str_message"
+}
+
 # Refuse to do anything outside a pull-request run rather than guessing at a subject. An empty
 # HEAD_SHA is the ordinary case on a non-PR event, not an error worth colouring red.
 preconditions_met() {
@@ -82,8 +97,7 @@ rerun_one() {
 		return 0
 	fi
 
-	echo "::warning::Could not re-run stale failed run $str_run_id — the PR stays BLOCKED until it is re-run by hand. Check the 'actions: write' permission."
-	print_status "warning" "Could not re-run stale failed run $str_run_id (needs 'actions: write')."
+	warn_annotated "Could not re-run stale failed run $str_run_id (needs 'actions: write') — the PR stays BLOCKED until it is re-run by hand."
 	return 0
 }
 
@@ -101,8 +115,7 @@ clear_stale_runs() {
 	# would announce "the rollup is already clean" over a query that never ran. Same trap
 	# `bin/lint_docker.sh` documents at its own discovery call.
 	if ! str_discovered="$(list_stale_failed_runs "$str_workflow_id")"; then
-		echo "::warning::Could not list this workflow's runs at $HEAD_SHA — no stale run was cleared."
-		print_status "warning" "Could not list runs at $HEAD_SHA — nothing cleared."
+		warn_annotated "Could not list runs at $HEAD_SHA — no stale run was cleared."
 		return 0
 	fi
 
@@ -131,8 +144,7 @@ main() {
 
 	local str_workflow_id
 	if ! str_workflow_id="$(resolve_workflow_id)"; then
-		echo "::warning::Could not resolve this run's workflow id — no stale run was cleared."
-		print_status "warning" "Could not resolve this run's workflow id — nothing cleared."
+		warn_annotated "Could not resolve this run's workflow id — no stale run was cleared."
 		return 0
 	fi
 
