@@ -127,6 +127,8 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_startup_fragility_order.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
 		"$str_project_path/tests/unit/test_review_threads_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
+		"$str_project_path/tests/unit/test_review_retry.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
 		"$str_project_path/tests/unit/test_contract_oracle_example.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \

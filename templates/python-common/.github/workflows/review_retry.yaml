@@ -1,0 +1,66 @@
+name: Review Retry
+
+# Re-ask for a review on any open PR whose reviewer was RATE LIMITED, not absent.
+#
+# ⚠️ WHAT THIS IS NOT: it does not relax the review gate. `review_threads.yaml` stays exactly as
+# strict — a PR with no review on its head commit still fails. What this removes is the part a
+# human was doing by hand: waiting out the reviewer's window, then re-typing the request.
+#
+# The number that chose this design over an escape hatch in the gate (measured upstream over 112
+# PRs, blueprintx#234): **19 PRs hit a rate limit and 18 of them were reviewed in the end.** A
+# rate limit is a DELAY, so automate the asking; an unavailability would have needed the gate to
+# forgive it, and the 19th PR is why it must not — that one merged with zero reviews while a
+# rate-limit notice stood, which is precisely the hole the gate was built to close.
+#
+# Once the review lands, the gate re-runs on `pull_request_review` and the stale red runs are
+# cleared by `bin/rerun_stale_gate_runs.sh`. So the PR goes green unattended, and no verdict was
+# ever weakened to get there.
+#
+# ⚠️ SCHEDULE, NOT AN EVENT — AND THAT IS THE ONLY SHAPE THAT WORKS. The state being repaired is
+# "the reviewer declined a moment ago and will accept later", so the trigger has to be the
+# passage of time. No PR event fires while a PR sits waiting. Measured windows upstream are
+# 10–25 minutes, so `*/10` clears most of them on the first tick after the window.
+#
+# ⚠️ IT NEEDS THE USER PAT, exactly like `coderabbit_trigger.yaml`, and for the measured reason:
+# CodeRabbit IGNORES bot-authored comments (measured upstream — 5 minutes, no reply, silently
+# dropped). The script reads back the comment's author `type` and warns loudly if it posted as a
+# Bot, because a dropped request that reports success is worse than no request at all.
+#
+# ⚠️ A SCHEDULED WORKFLOW IS DISABLED AFTER 60 DAYS OF REPOSITORY INACTIVITY by GitHub, and it
+# does not announce it. If rate-limited PRs stop being re-asked, check that this workflow is
+# still enabled before looking for a bug in the script.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+
+  retry:
+    name: Re-ask a rate-limited reviewer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet pyyaml
+
+      # No secret-shape preflight here, unlike `coderabbit_trigger.yaml`: that workflow must fail
+      # loudly because a missing PAT means a PR is never reviewed at all. This one is a janitor on
+      # a timer — if the PAT is missing the gate still blocks the PR, visibly, and a failing
+      # scheduled job every 10 minutes would be pure noise. The script warns and exits 0.
+      - name: Re-request a review where the reviewer was rate limited
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python bin/retry_rate_limited_review.py

@@ -472,6 +472,12 @@ copy_github_assets() {
     # — ship the gate without the trigger and every PR blocks; ship the trigger without the
     # gate and nothing notices when it stops working. GitHub-only, hence here.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/coderabbit_trigger.yaml" "$project_path/.github/workflows/coderabbit_trigger.yaml"
+    # Its THIRD half, and the reason the pair above is survivable: a rate-limited reviewer
+    # declines the trigger, the gate then correctly blocks, and nothing re-asks. This retries on
+    # a schedule (the only trigger that fires while a PR merely WAITS). It relaxes no verdict —
+    # measured upstream, 19 rate-limited PRs and 18 reviewed in the end, so it is a delay to
+    # automate rather than an unavailability to forgive. GitHub-only.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_retry.yaml" "$project_path/.github/workflows/review_retry.yaml"
     # PR quality gate (classify by path, sticky comment, native auto-merge) + the reconciler
     # that closes linked issues of BOT-merged PRs (a bot merge suppresses both the issue close
     # and delete_branch_on_merge). GitHub-only, like tests.yaml.
