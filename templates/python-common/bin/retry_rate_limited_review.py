@@ -156,10 +156,25 @@ def newest_roster_notice(
 # Walking NEWEST-FIRST and stopping at whichever comes first is what makes a scheduled run
 # idempotent without reading a single timestamp: our marker above the notice means we have
 # already asked since it was posted, so asking again would just be noise every tick.
+#
+# 🔴 THE MARKER IS ONLY OURS WHEN THE AUTHOR IS OURS. A marker is an HTML comment in a PR
+# comment body, so ANYONE who can comment on the PR can post one. Trusting the text alone let
+# any commenter silence the retry for that PR permanently — post the marker once after a
+# rate-limit notice and no tick ever asks again, because the loop stops at the marker before it
+# reaches the notice. The suppression is silent by construction, which is the property that
+# makes it worth guarding rather than noting. Found in review of blueprintx#234.
+#
+# ⚠️ AN UNKNOWN IDENTITY MUST NOT SUPPRESS. When our own login cannot be resolved,
+# `str_self_login` is empty and no marker is trusted, so the worst case is asking twice — noisy
+# and harmless. The opposite default (trust everything when unsure) restores exactly the silent
+# hole above. Fail toward the noise, never toward the silence.
 def already_asked_since_notice(
-	list_comments: list[dict], set_roster: set[str], fn_norm: Callable[[str], str]
+	list_comments: list[dict],
+	set_roster: set[str],
+	fn_norm: Callable[[str], str],
+	str_self_login: str,
 ) -> bool:
-	"""Return whether our request is newer than the reviewer's newest rate-limit notice.
+	"""Return whether OUR OWN request is newer than the reviewer's newest rate-limit notice.
 
 	Parameters
 	----------
@@ -169,22 +184,33 @@ def already_asked_since_notice(
 		Already-normalised reviewer logins.
 	fn_norm : Callable[[str], str]
 		The gate's ``normalise_login``.
+	str_self_login : str
+		The login the retry posts as. A marker from any other author is ignored; an empty
+		value trusts no marker at all.
 
 	Returns
 	-------
 	bool
-		``True`` when a marker comment appears after the newest roster notice.
+		``True`` when a marker comment authored by ``str_self_login`` appears after the newest
+		roster notice.
 	"""
+	str_self = fn_norm(str_self_login)
 	for dict_comment in reversed(list_comments):
 		str_body = dict_comment.get("body") or ""
-		if _STR_MARKER in str_body:
+		str_author = fn_norm((dict_comment.get("author") or {}).get("login") or "")
+		if _STR_MARKER in str_body and str_self and str_author == str_self:
 			return True
-		if fn_norm((dict_comment.get("author") or {}).get("login") or "") in set_roster:
+		if str_author in set_roster:
 			return False
 	return False
 
 
-def pr_needs_retry(dict_pr: dict, set_reviewers: set[str], cls_gate: types.ModuleType) -> bool:
+def pr_needs_retry(
+	dict_pr: dict,
+	set_reviewers: set[str],
+	cls_gate: types.ModuleType,
+	str_self_login: str = "",
+) -> bool:
 	"""Return whether this PR is waiting on a rate-limited reviewer and should be re-asked.
 
 	Parameters
@@ -195,6 +221,10 @@ def pr_needs_retry(dict_pr: dict, set_reviewers: set[str], cls_gate: types.Modul
 		Logins that can actually submit a review.
 	cls_gate : types.ModuleType
 		The imported gate module.
+	str_self_login : str, optional
+		The login the retry posts as, used to tell OUR marker from anyone else's. Defaults to
+		empty, which trusts no marker — see the block above ``already_asked_since_notice``:
+		the safe default is to ask twice, never to fall silent.
 
 	Returns
 	-------
@@ -212,7 +242,9 @@ def pr_needs_retry(dict_pr: dict, set_reviewers: set[str], cls_gate: types.Modul
 	if not _RE_RATE_LIMIT.search(str_notice):
 		return False
 
-	return not already_asked_since_notice(list_comments, set_reviewers, cls_gate.normalise_login)
+	return not already_asked_since_notice(
+		list_comments, set_reviewers, cls_gate.normalise_login, str_self_login
+	)
 
 
 def request_review(str_repo: str, int_number: int) -> bool:
@@ -258,6 +290,53 @@ def request_review(str_repo: str, int_number: int) -> bool:
 	return True
 
 
+# `--slurp` yields a list of PAGES, each a list of PR objects — so the flattening is one level
+# deeper than the obvious `[d["number"] for d in result]`, which would silently iterate PAGES
+# and yield nothing. Kept a pure function so the multi-page shape can be tested without a network.
+def flatten_pr_numbers(list_pages: list) -> list[int]:
+	"""Flatten ``gh api --paginate --slurp`` output into a flat list of PR numbers.
+
+	Parameters
+	----------
+	list_pages : list
+		A list of pages, each a list of pull-request objects.
+
+	Returns
+	-------
+	list of int
+		Every PR number across every page, in order.
+	"""
+	return [
+		dict_pr["number"]
+		for list_page in list_pages
+		if isinstance(list_page, list)
+		for dict_pr in list_page
+		if isinstance(dict_pr, dict) and dict_pr.get("number")
+	]
+
+
+# Whoever the PAT authenticates as is who our request will be authored by, so it is also the
+# only author whose marker may be trusted. Resolving it from the token rather than configuring
+# it means the two can never disagree — a configured login would silently stop matching the day
+# the PAT is reissued on another account.
+def resolve_self_login() -> str:
+	"""Return the login the configured token authenticates as, or ``""`` when unknown.
+
+	Returns
+	-------
+	str
+		The login, or ``""`` when it cannot be resolved — which trusts no marker at all.
+	"""
+	dict_user = _gh_json(["api", "user", "--jq", "{login: .login}"])
+	if not isinstance(dict_user, dict) or not dict_user.get("login"):
+		print(
+			"::warning::could not resolve the token's own login, so no marker is trusted — "
+			"a review may be requested more than once per window."
+		)
+		return ""
+	return str(dict_user["login"])
+
+
 def main() -> int:
 	"""Re-ask for a review on every open PR whose reviewer is rate limited.
 
@@ -283,17 +362,28 @@ def main() -> int:
 		print("no reviewer in the roster can submit a review — nothing to re-ask.")
 		return 0
 
-	list_open = _gh_json(
-		["api", f"repos/{str_repo}/pulls?state=open&per_page=100", "--jq", "[.[].number]"]
+	# ⚠️ `--paginate`, not a bare `per_page=100`: without it only the first page is read, and a
+	# rate-limited PR on page two is never retried — a silent partial pass, which is the exact
+	# failure shape this family of scripts exists to prevent.
+	#
+	# ⚠️ AND NO `--jq` HERE, measured against gh 2.96.0: `--slurp` is REJECTED when combined
+	# with `--jq` ("the `--slurp` option is not supported with `--jq` or `--template`"). Without
+	# `--slurp`, `--paginate` emits one JSON array PER PAGE, which is not parseable as a single
+	# document — so the parse would fail, this function would take its early return, and the
+	# janitor would quietly do nothing on every tick. Slurp into pages and flatten in Python.
+	list_pages = _gh_json(
+		["api", "--paginate", "--slurp", f"repos/{str_repo}/pulls?state=open&per_page=100"]
 	)
-	if not isinstance(list_open, list):
+	if not isinstance(list_pages, list):
 		return 0
+	list_open = flatten_pr_numbers(list_pages)
 
+	str_self_login = resolve_self_login()
 	str_owner, _, str_name = str_repo.partition("/")
 	int_asked = 0
 	for int_number in list_open:
 		dict_pr = cls_gate.fetch_pull_request(str_owner, str_name, int(int_number))
-		if pr_needs_retry(dict_pr, set_reviewers, cls_gate) and request_review(
+		if pr_needs_retry(dict_pr, set_reviewers, cls_gate, str_self_login) and request_review(
 			str_repo, int(int_number)
 		):
 			int_asked += 1

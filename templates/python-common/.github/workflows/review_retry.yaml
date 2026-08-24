@@ -38,6 +38,19 @@ permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  # Two ticks must not both pass the marker check and post duplicate requests. `false`, not
+  # `true`: a queued run should WAIT and then re-read the comments — by which time our marker
+  # exists and it correctly skips — rather than cancel a run that may already have posted.
+  #
+  # ⚠️ THIS DOES NOT CONTRADICT THE "NO CONCURRENCY" RULE IN `review_threads`. That rule exists
+  # because a queued run cancelled before it starts publishes NO check run, leaving a REQUIRED
+  # context stuck on `Expected — Waiting for status`. This workflow is a janitor on a timer and
+  # publishes no verdict anyone waits on, which is the same reason `coderabbit_trigger` may
+  # carry a concurrency group. Class of workflow, not blanket rule.
+  group: review-retry-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
 
   retry:

@@ -156,7 +156,7 @@ def test_a_rate_limited_pr_with_no_review_is_re_asked(
 	"""
 	dict_pr = _pr([_comment("coderabbitai", _STR_RATE_LIMITED)], [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate) is True
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is True
 
 
 def test_a_reviewed_head_is_never_re_asked(cls_retry: ModuleType, cls_gate: ModuleType) -> None:
@@ -174,7 +174,7 @@ def test_a_reviewed_head_is_never_re_asked(cls_retry: ModuleType, cls_gate: Modu
 		[{"author": {"login": "coderabbitai"}, "commit": {"oid": "cafe123"}}],
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate) is False
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
 
 
 def test_a_pr_with_no_notice_at_all_is_not_re_asked(
@@ -196,7 +196,7 @@ def test_a_pr_with_no_notice_at_all_is_not_re_asked(
 	"""
 	dict_pr = _pr([], [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate) is False
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
 
 
 def test_a_successful_trigger_notice_is_not_a_rate_limit(
@@ -217,7 +217,7 @@ def test_a_successful_trigger_notice_is_not_a_rate_limit(
 	"""
 	dict_pr = _pr([_comment("coderabbitai", _STR_PERFORMED)], [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate) is False
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
 
 
 def test_only_the_newest_notice_decides(cls_retry: ModuleType, cls_gate: ModuleType) -> None:
@@ -241,7 +241,7 @@ def test_only_the_newest_notice_decides(cls_retry: ModuleType, cls_gate: ModuleT
 		[],
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate) is False
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
 
 
 def test_the_marker_makes_a_scheduled_run_ask_once_per_window(
@@ -267,7 +267,7 @@ def test_the_marker_makes_a_scheduled_run_ask_once_per_window(
 		[],
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate) is False
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
 
 
 def test_a_newer_rate_limit_after_our_request_is_asked_again(
@@ -295,7 +295,7 @@ def test_a_newer_rate_limit_after_our_request_is_asked_again(
 		[],
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate) is True
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is True
 
 
 def test_a_review_on_older_code_is_not_a_rate_limit_case(
@@ -319,7 +319,7 @@ def test_a_review_on_older_code_is_not_a_rate_limit_case(
 		[{"author": {"login": "coderabbitai"}, "commit": {"oid": "0ldc0de"}}],
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate) is False
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
 
 
 def test_the_request_names_a_full_review_not_a_plain_one(cls_retry: ModuleType) -> None:
@@ -347,3 +347,96 @@ def test_the_request_carries_the_idempotence_marker(cls_retry: ModuleType) -> No
 		The retry module.
 	"""
 	assert cls_retry._STR_MARKER in cls_retry._STR_REQUEST
+
+
+def test_a_marker_from_another_author_does_not_suppress_the_retry(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""🔴 The security case: anyone who can comment can post the marker text.
+
+	A marker is an HTML comment in a comment body, so it is not a capability — it is a string
+	any PR commenter can type. Trusting the text alone let a single comment silence the retry
+	for that PR permanently: the newest-first scan stops at the marker before it ever reaches
+	the reviewer's notice, and nothing says so. Only a marker authored by the identity the
+	retry posts as may count.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	dict_pr = _pr(
+		[
+			_comment("coderabbitai", _STR_RATE_LIMITED),
+			_comment("a-passer-by", cls_retry._STR_REQUEST),
+		],
+		[],
+	)
+
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is True
+
+
+def test_an_unresolvable_identity_trusts_no_marker(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""With no known self-login, even our own marker is ignored — ask twice, never fall silent.
+
+	The failure direction is the point. Trusting every marker when the identity is unknown
+	restores the hole above; trusting none costs a duplicate request. Noise is recoverable,
+	silence is not.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	dict_pr = _pr(
+		[
+			_comment("coderabbitai", _STR_RATE_LIMITED),
+			_comment("guilhermegor", cls_retry._STR_REQUEST),
+		],
+		[],
+	)
+
+	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "") is True
+
+
+def test_every_page_of_open_prs_is_examined(cls_retry: ModuleType) -> None:
+	"""A rate-limited PR on page two must be reachable, not silently dropped.
+
+	``--paginate --slurp`` returns a list of PAGES, so the flattening is one level deeper than
+	it looks. The obvious one-level comprehension iterates pages and yields nothing, and a
+	janitor that examines nothing reports "checked 0" rather than failing — a silent partial
+	pass, which is the failure this family of scripts exists to prevent.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	list_pages = [
+		[{"number": 1}, {"number": 2}],
+		[{"number": 3}],
+	]
+
+	assert cls_retry.flatten_pr_numbers(list_pages) == [1, 2, 3]
+
+
+def test_a_malformed_page_cannot_crash_the_sweep(cls_retry: ModuleType) -> None:
+	"""A page that is not a list, or an entry without a number, is skipped rather than fatal.
+
+	This runs unattended every ten minutes, so one odd payload must not stop the PRs behind it
+	from being examined.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	list_pages = [[{"number": 1}], "not-a-page", [{"no_number": True}, {"number": 4}]]
+
+	assert cls_retry.flatten_pr_numbers(list_pages) == [1, 4]
