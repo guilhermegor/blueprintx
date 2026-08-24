@@ -22,10 +22,16 @@
        Closes #12
        Closes #13
 
-     Two traps, both measured in this repo:
+     Three traps, all measured in this repo:
        * NO colon after the keyword. `Closes: #12` / `Fixes: #12` link but never close.
        * ONE keyword PER issue. `Closes #12, #13` closes only #12 — GitHub reads just the
          first item of a comma-separated list. Repeat it: `Closes #12, Closes #13`.
+       * The PR must target the DEFAULT branch. A stacked PR (base = another feature
+         branch) registers NO closing reference at all, however correct the syntax.
+         Measured 2026-08-23, same repo, same session: PR #248 (base `main`) returned
+         `237`; PR #249 (base a feature branch, one keyword per line) returned an empty
+         list. Retargeting #249 to `main` activated both of its references immediately —
+         but re-run the query after any retarget rather than assuming it.
 
      Verify the EFFECT, not the text, once the PR exists:
 
