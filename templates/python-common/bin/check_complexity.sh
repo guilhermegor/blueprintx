@@ -109,13 +109,33 @@ run_ruff_c901() {
 	# use `report_tree … || int_errors=1`, which suspends errexit for this whole call tree.
 	# That is true today and is not a property anyone should have to know: capture the status
 	# where it is produced, and the correctness stops depending on a distant caller.
+	# ⚠️ THE SUBSHELL IS THE COLOUR FIX, and the vars it unsets are not interchangeable with
+	# the one it sets. ruff renders `path:line:col:` with ANSI escapes around every separator
+	# when colour is on; those escapes then travel with the digits into `cut -d:` and into an
+	# arithmetic expansion, which dies with `[0m101[36m: syntax error: operand expected` — a
+	# message naming neither ruff, nor colour, nor this gate. Measured 2026-08-23: 6 of 6
+	# tiers red on a clean tree, purely because the developer's shell exported FORCE_COLOR.
+	#
+	# ⚠️ `NO_COLOR=1` ALONE DOES NOT FIX IT. Measured against ruff 0.11.13: with FORCE_COLOR=3
+	# also set, ruff still colours — the forcing variable wins, and TERM=dumb does not change
+	# that. So the forcing variables must be UNSET; NO_COLOR is kept only as the standard
+	# belt-and-braces for the case where stdout is a terminal.
+	#
+	# A subshell rather than `env -u …` because the poetry branch calls a shell FUNCTION,
+	# which `env` cannot exec — and rather than `local`, which does not hide an exported
+	# global from a child process (measured; the child still saw FORCE_COLOR=3). The parent's
+	# environment is left untouched, so a caller that wants colour elsewhere still gets it.
 	str_stderr="$(mktemp)"
 	int_status=0
-	if [[ "$STR_RUFF_MODE" == "poetry" ]]; then
-		run_poetry run ruff "${list_args[@]}" 2>"$str_stderr" || int_status=$?
-	else
-		ruff "${list_args[@]}" 2>"$str_stderr" || int_status=$?
-	fi
+	(
+		unset FORCE_COLOR CLICOLOR_FORCE
+		export NO_COLOR=1
+		if [[ "$STR_RUFF_MODE" == "poetry" ]]; then
+			run_poetry run ruff "${list_args[@]}"
+		else
+			ruff "${list_args[@]}"
+		fi
+	) 2>"$str_stderr" || int_status=$?
 
 	# ruff exits 0 (clean) or 1 (violations found) — 1 is DATA here, not failure. Anything
 	# else means ruff could not run, and that must never look like a clean tree: re-print

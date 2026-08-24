@@ -14,10 +14,13 @@ through) and ``bin/precommit.sh`` (hook install that must skip gracefully off a 
 work tree instead of aborting ``init``).
 """
 
+from collections.abc import Mapping
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
+from types import MappingProxyType
 
 import pytest
 
@@ -1010,19 +1013,46 @@ def _complexity_tree(path_root: Path, str_marker: str = "", str_tree: str = "src
 	)
 
 
-def _run_complexity(path_root: Path) -> subprocess.CompletedProcess:
+# The colour-control variables, stripped from every run so a developer's shell cannot decide
+# what this suite measures. Unrolled at three entries for the same reason `_complexity_tree`
+# unrolls its three trees, and a loop here would cost complexity in a tree capped at 1.
+_MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
+
+# Matches an ANSI CSI sequence — the escapes that must never reach the gate's parsing.
+_RE_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+# The reported finding, whole line. A regex rather than a filtered generator because a
+# comprehension `if` is a decision point, and tests/ is capped at complexity 1.
+_RE_C901_LINE = re.compile(r"^.*C901.*$", re.MULTILINE)
+
+
+def _run_complexity(
+	path_root: Path, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV
+) -> subprocess.CompletedProcess:
 	"""Run the complexity gate against a prepared tree.
+
+	⚠️ The inherited colour variables are stripped before ``dict_extra`` is applied, so a
+	run states its own colour environment rather than inheriting the developer's. Without
+	this the tests below are decided by the ambient shell: with ``FORCE_COLOR`` exported,
+	the clean-tree and escape-hatch cases went red against a correct gate (blueprintx#254).
 
 	Parameters
 	----------
 	path_root : pathlib.Path
 		The ``--root`` to scan.
+	dict_extra : Mapping[str, str]
+		Environment entries layered over the stripped environment.
 
 	Returns
 	-------
 	subprocess.CompletedProcess
 		The completed run.
 	"""
+	dict_env = dict(os.environ)
+	dict_env.pop("FORCE_COLOR", None)
+	dict_env.pop("CLICOLOR_FORCE", None)
+	dict_env.pop("NO_COLOR", None)
+	dict_env.update(dict_extra)
+
 	# Constant, trusted argv; no shell involved.
 	return subprocess.run(  # noqa: S603
 		[
@@ -1034,6 +1064,7 @@ def _run_complexity(path_root: Path) -> subprocess.CompletedProcess:
 		capture_output=True,
 		text=True,
 		check=False,
+		env=dict_env,
 	)
 
 
@@ -1098,6 +1129,67 @@ def test_complexity_gate_applies_a_different_ceiling_per_tree(tmp_path: Path) ->
 	(tmp_path / "bin" / "under_test.py").write_text(_STR_SIMPLE, encoding="utf-8")
 
 	assert _run_complexity(tmp_path).returncode != 0
+
+
+# --------------------------
+# check_complexity.sh — a colour-forcing shell must not change the verdict (blueprintx#254)
+# --------------------------
+
+
+@pytest.mark.parametrize("str_var", ["FORCE_COLOR", "CLICOLOR_FORCE"])
+def test_complexity_gate_reaches_a_verdict_under_forced_colour(
+	tmp_path: Path, str_var: str
+) -> None:
+	"""Ruff's coloured output must never reach the gate's parsing.
+
+	The gate reads ruff's rendered ``path:line:col:`` line and feeds the line number into an
+	arithmetic expansion. With colour on, the ANSI escapes travel with the digits and bash
+	dies with ``[0m101[36m: syntax error: operand expected`` — a message naming neither ruff,
+	nor colour, nor this gate. Measured 2026-08-23: six of six tiers red on a clean tree,
+	purely because the developer's shell exported ``FORCE_COLOR``.
+
+	⚠️ Do NOT "fix" a failure here by setting ``NO_COLOR=1`` in the gate. Measured against
+	ruff 0.11.13: ``NO_COLOR`` does not win against ``FORCE_COLOR``, so that change would
+	leave the defect live and this test green. The forcing variable has to be UNSET.
+	"""
+	_complexity_tree(tmp_path)
+
+	cls_result = _run_complexity(tmp_path, {str_var: "3"})
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0, f"no verdict under {str_var}: {str_all}"
+	assert "C901" in str_all
+	assert "syntax error" not in str_all
+
+
+def test_complexity_gate_passes_a_hatched_tree_under_forced_colour(tmp_path: Path) -> None:
+	"""The measured symptom was red on a tree that was actually FINE — pin that direction.
+
+	⚠️ The tree here is *hatched*, not clean, and that is the whole test. A tree with no
+	C901 findings cannot catch this bug: ruff prints nothing, the gate parses nothing, and
+	no escape ever reaches the arithmetic. The crash needs a finding to read, and the tiers
+	that went red all had hatched findings being parsed on their way to being excused.
+	"""
+	_complexity_tree(tmp_path, str_marker="  # complexity-ok: validator, branching IS the work")
+
+	cls_result = _run_complexity(tmp_path, {"FORCE_COLOR": "3"})
+
+	assert cls_result.returncode == 0, f"hatched tree red under colour: {cls_result.stderr}"
+
+
+def test_complexity_finding_carries_no_ansi_escapes(tmp_path: Path) -> None:
+	"""The printed finding must be plain text a human and a log can both read."""
+	_complexity_tree(tmp_path)
+
+	cls_result = _run_complexity(tmp_path, {"FORCE_COLOR": "3"})
+	str_all = cls_result.stdout + cls_result.stderr
+	cls_match = _RE_C901_LINE.search(str_all)
+
+	assert cls_match, f"no C901 line to inspect: {str_all}"
+	# `print_status` adds its own colour around the marker, so only the ruff-derived
+	# remainder after "C901" is asserted clean.
+	str_payload = cls_match.group().split("C901")[-1]
+	assert not _RE_ANSI.search(str_payload), f"escapes leaked into: {cls_match.group()!r}"
 
 
 def test_complexity_gate_refuses_to_report_success_on_an_empty_tree(tmp_path: Path) -> None:

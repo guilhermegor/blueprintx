@@ -317,5 +317,32 @@ A bash script in `bin/` has no conventional unit test, so map the tests-with-eve
   build a constant trusted argv, scope-ignore bandit `S603` with a one-line reason, and self-skip
   when a dependency is unavailable offline.
 
+⚠️ **Construct the child's environment; never inherit it.** A `subprocess` test that passes
+`os.environ` straight through is not testing the script — it is testing the script *plus*
+whatever the operator exported. Strip the variables that change a child tool's **output format**
+(`FORCE_COLOR`, `CLICOLOR_FORCE`, `NO_COLOR`, `LC_ALL`, `COLUMNS`, `TZ`) and give the runner an
+explicit override parameter, so each test states the environment it is testing:
+
+```python
+_MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
+
+
+def _run_gate(path_root: Path, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV) -> ...:
+	dict_env = dict(os.environ)
+	dict_env.pop("FORCE_COLOR", None)      # unrolled: a loop costs complexity, and tests/ is capped at 1
+	dict_env.pop("CLICOLOR_FORCE", None)
+	dict_env.pop("NO_COLOR", None)
+	dict_env.update(dict_extra)
+	return subprocess.run(..., env=dict_env, check=False)
+```
+
+Measured (blueprintx#254): nine green subprocess tests for `check_complexity.sh` went **red on a
+correct gate** the moment the developer's shell exported `FORCE_COLOR`, because the gate parses
+ruff's rendered output and the ANSI escapes reached an arithmetic expansion. The suite's verdict
+was a function of the shell, so it could neither catch the defect nor be believed after it was
+found. ⚠️ And when a child must not colour its output, **unset the forcing variable** — do not
+set the suppressing one: `NO_COLOR=1` does *not* beat `FORCE_COLOR=3` in ruff 0.11.13, so the
+obvious fix leaves the defect live behind a green test.
+
 `tests/integration/test_bin_scripts.py` is the shipped reference example (covers the shared
 `bin/poetry_exec.sh` and `bin/precommit.sh` seams). See also `bin/CLAUDE.md`.
