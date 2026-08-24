@@ -243,6 +243,30 @@ masks a test that asserts nothing at all.
 - ⚠️ **Speed is the tell.** A suite that "fails" in 2 s when the baseline takes 30 s did not
   run the tests. Compare **duration and failure TYPE**, never colour.
 
+### A mutant that SURVIVES is a finding — run the whole set, not until the first red
+
+The section above is about mutations that go red for the wrong reason. The opposite outcome is
+the one people stop on: a mutant that changes nothing red reads as reassuring and is a **gap
+report**. Do not stop at the first mutant that behaves; run one per claim and treat every
+survivor as a defect in the suite.
+
+Two survivors, two distinct causes, both measured in one sitting (blueprintx#264):
+
+- **The claim is asserted in one place and implemented in two.** A remedy sentence was printed by
+  *two* error branches and only one had a test, so downgrading the other changed nothing. If a
+  string, constant or rule appears in N branches, N tests — or hoist it to one constant and test
+  that.
+- 🔴 **The needle appears twice in one haystack, for unrelated reasons.**
+  `assert "full review" in str_problem` passed while the actual command had been downgraded to
+  `review`, because the same message ends "…and a full review does not". The assertion was
+  satisfied by **explanatory prose** sitting beside the thing under test. This is the tautology
+  trap in a form the rule above does not name: not an assertion about the code's own identity,
+  but one whose substring is over-available in the text it searches.
+
+  **Assert the most specific form that can still be typed by a user** — the command
+  (`@coderabbitai full review`), the flag, the exact key — never a bare noun phrase that ordinary
+  surrounding prose could satisfy. When in doubt, mutate and watch it fail before believing it.
+
 ### Prove a cosmetic change with a STABLE hash — never `hash()`
 
 For a change meant to alter only presentation (translating comments, reformatting,
