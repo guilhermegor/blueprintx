@@ -27,6 +27,16 @@ name: Review Threads
 # resolve, and nothing re-runs. The check sits stale-red on a PR that is actually finished.
 # Measured: after resolving, the job had to be re-run by hand before it went green.
 #
+# ⚠️ THE SECOND HALF OF THAT CEILING (blueprintx#263 — the same sentence with the emphasis
+# moved). The stale red does not merely SIT there: it PERSISTS IN THE ROLLUP even once a
+# re-trigger did happen and passed, because every trigger opens a NEW check run and branch
+# protection aggregates them. Measured upstream — one push-time failure plus SEVEN later
+# successes at the same head still read `mergeStateStatus=BLOCKED statusCheckRollup=FAILURE` —
+# and the count SCALES, because each reply re-fires the gate before the last thread is resolved.
+# The `Clear stale failed runs` step below now re-runs exactly those stale failures, which is
+# the manual step that was measured to flip the PR to CLEAN. The hand re-run after a resolve is
+# still needed once — but it now cleans up all the others instead of being repeated per run.
+#
 # ⚠️ SUPERSEDED 2026-08-17 (blueprintx#173). This block used to conclude "that is why this must
 # NOT be a required check". That conclusion was WRONG, and it was load-bearing: while it stood,
 # `REQUIRED_CHECKS` in bin/enable_repo_rules.sh shipped EMPTY, so a generated project ran its CI
@@ -77,6 +87,9 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  # `actions: write` is for the stale-run cleanup step below — re-running a run is an Actions
+  # write. Nothing else in this workflow needs it.
+  actions: write
 
 # ⚠️ NO `concurrency:` BLOCK, DELIBERATELY — DO NOT "TIDY THIS UP".
 #
@@ -132,3 +145,20 @@ jobs:
           # BOTH halves — see the KNOWN CEILING block at the top of the file for the trade.
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python bin/check_review_threads.py
+
+      # ⚠️ THE PUSH-TIME FAILURE OUTLIVES ITS OWN VERDICT (blueprintx#263).
+      # Each trigger above creates a NEW check run; branch protection reads the AGGREGATE. So a
+      # run that failed correctly at push time keeps the PR BLOCKED behind any number of later
+      # passes. Re-running only the stale failures is what flips it to CLEAN — measured upstream
+      # by hand three times before it was automated here, and the count SCALES with how many
+      # threads you answer (1, then 5, then 7 on three consecutive PRs).
+      #
+      # `if: success()` is the loop guard, not decoration: this may only ever run from a run
+      # that PASSED, or it would re-run itself forever. The script skips $GITHUB_RUN_ID too.
+      - name: Clear stale failed runs of this gate at the same head
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash bin/rerun_stale_gate_runs.sh

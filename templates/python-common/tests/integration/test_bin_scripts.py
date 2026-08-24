@@ -1795,3 +1795,193 @@ def test_unix_filenames_gate_accepts_a_conventional_filename(tmp_path: Path) -> 
 	)
 
 	assert cls_result.returncode == 0
+
+
+# --------------------------
+# bin/rerun_stale_gate_runs.sh
+# --------------------------
+
+
+# A scriptable `gh` that records every invocation and answers the three calls the script makes.
+# Shadowing rather than mocking is the same technique the tool-absence tests above use: it makes
+# the behaviour deterministic on any machine, INCLUDING CI, where the real `gh` is installed and
+# a `skipif` would drop the coverage exactly where the contract matters.
+#
+# It deliberately does NOT evaluate the `--jq` filter. Filtering is GitHub's job, not this
+# script's — so the tests assert on the QUERY the script sends, which is the part it owns.
+_STR_FAKE_GH = """#!/bin/bash
+printf '%s\\n' "$*" >>"$GH_CALL_LOG"
+if [[ "$*" == *rerun-failed-jobs* ]]; then
+	exit "${FAKE_RERUN_EXIT:-0}"
+fi
+if [[ "$*" == *--paginate* ]]; then
+	printf '%s\\n' ${FAKE_RUN_IDS:-}
+	exit "${FAKE_LIST_EXIT:-0}"
+fi
+printf '%s\\n' "${FAKE_WORKFLOW_ID:-4242}"
+exit 0
+"""
+
+
+def _fake_gh(path_root: Path) -> tuple[str, Path]:
+	"""Install a scriptable ``gh`` stub first on ``PATH`` and return the PATH and its call log.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to create the stub directory under.
+
+	Returns
+	-------
+	tuple of (str, pathlib.Path)
+		A PATH value with the stub first, and the file every invocation is appended to.
+	"""
+	path_stub_dir = path_root / "_ghbin"
+	path_stub_dir.mkdir(parents=True, exist_ok=True)
+	path_stub = path_stub_dir / "gh"
+	path_stub.write_text(_STR_FAKE_GH, encoding="utf-8")
+	path_stub.chmod(0o755)
+	path_log = path_root / "gh_calls.log"
+	path_log.write_text("", encoding="utf-8")
+	return _path_with(path_stub_dir), path_log
+
+
+def _run_cleanup(
+	path_root: Path,
+	str_run_ids: str,
+	str_head_sha: str = "deadbee",
+	str_rerun_exit: str = "0",
+	str_list_exit: str = "0",
+) -> tuple[subprocess.CompletedProcess[str], str]:
+	"""Run the cleanup script against a scripted ``gh`` and return the result and its call log.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory the stub and log live under.
+	str_run_ids : str
+		Space-separated run ids the listing call should report.
+	str_head_sha : str, optional
+		The head SHA the workflow would pass in.
+	str_rerun_exit : str, optional
+		Exit code the stub returns for a re-run request; ``"1"`` simulates a denied
+		``actions: write``.
+	str_list_exit : str, optional
+		Exit code the stub returns for the listing call; ``"1"`` simulates the query failing.
+
+	Returns
+	-------
+	tuple of (subprocess.CompletedProcess[str], str)
+		The finished process, and the recorded ``gh`` invocations as one string.
+	"""
+	str_path, path_log = _fake_gh(path_root)
+	cls_result = _run(
+		"rerun_stale_gate_runs.sh",
+		dict_env={
+			"PATH": str_path,
+			"GH_CALL_LOG": str(path_log),
+			"GITHUB_REPOSITORY": "acme/widget",
+			"GITHUB_RUN_ID": "999",
+			"HEAD_SHA": str_head_sha,
+			"FAKE_RUN_IDS": str_run_ids,
+			"FAKE_WORKFLOW_ID": "4242",
+			"FAKE_RERUN_EXIT": str_rerun_exit,
+			"FAKE_LIST_EXIT": str_list_exit,
+		},
+	)
+	return cls_result, path_log.read_text(encoding="utf-8")
+
+
+def test_stale_cleanup_reruns_every_stale_failure_but_never_itself(tmp_path: Path) -> None:
+	"""The stale failures are re-run and the CURRENT run is skipped.
+
+	Skipping ``$GITHUB_RUN_ID`` is the loop guard, not tidiness: the step only ever runs from a
+	run that PASSED, so re-running itself would re-run a green run forever.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	cls_result, str_log = _run_cleanup(tmp_path, "111 222 999")
+
+	assert cls_result.returncode == 0
+	assert "runs/111/rerun-failed-jobs" in str_log
+	assert "runs/222/rerun-failed-jobs" in str_log
+	assert "runs/999/rerun-failed-jobs" not in str_log
+	assert "Re-ran 2 stale failed run(s)" in cls_result.stdout
+
+
+def test_stale_cleanup_scopes_its_query_to_this_workflow_and_this_head(tmp_path: Path) -> None:
+	"""The listing call is pinned to this head SHA, to failures, and to this workflow id.
+
+	Scoping by ``head_sha`` is what stops the cleanup reaching back and re-running an older
+	commit's genuine failures; the workflow id comes from the API rather than from a name,
+	because the two shipped copies of this gate disagree on both filename and name.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	_cls_result, str_log = _run_cleanup(tmp_path, "111")
+
+	assert "head_sha=deadbee" in str_log
+	assert "status=failure" in str_log
+	assert "select(.workflow_id == 4242)" in str_log
+
+
+def test_stale_cleanup_does_nothing_off_a_pull_request_event(tmp_path: Path) -> None:
+	"""With no HEAD_SHA there is no subject, so the script must not call ``gh`` at all.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	cls_result, str_log = _run_cleanup(tmp_path, "111", str_head_sha="")
+
+	assert cls_result.returncode == 0
+	assert str_log == ""
+	assert "not a pull-request event" in cls_result.stdout
+
+
+def test_stale_cleanup_stays_green_and_warns_when_it_may_not_rerun(tmp_path: Path) -> None:
+	"""A denied re-run warns loudly and still exits 0 — and that is not failing open.
+
+	This is a janitor, not a guard. Failing the step would fail the job, which would deposit one
+	MORE failed run into the very rollup it came to clean. The PR meanwhile stays BLOCKED behind
+	the stale red, which is the status quo and fully visible — nothing is hidden by exiting 0.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	cls_result, _str_log = _run_cleanup(tmp_path, "111", str_rerun_exit="1")
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 0
+	assert "::warning::" in str_all
+	assert "actions: write" in str_all
+
+
+def test_stale_cleanup_never_reports_clean_over_a_listing_that_failed(tmp_path: Path) -> None:
+	"""A failed listing warns — it must never be reported as "already clean".
+
+	``mapfile -t list < <(producer)`` discards the producer's exit status and reports only
+	mapfile's own, so a failing ``gh api`` yields an EMPTY list that is indistinguishable from a
+	genuinely clean rollup. That is the false all-clear this gate family exists to prevent, and
+	``bin/lint_docker.sh`` documents the same trap at its own discovery call.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	cls_result, _str_log = _run_cleanup(tmp_path, "", str_list_exit="1")
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 0
+	assert "already clean" not in str_all
+	assert "Could not list runs" in str_all
