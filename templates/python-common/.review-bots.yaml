@@ -10,6 +10,15 @@
 # A roster that assumes every reviewer speaks in threads is born broken, which is why a PR
 # with zero threads is not a THREAD failure.
 #
+# ⚠️ `posts:` IS REQUIRED ON EVERY ROW, AND IT DECIDES MORE THAN THREAD AUTHORSHIP (#218).
+# A `posts: status` member is excluded from the MISSING-REVIEW gate as well: it is neither
+# named as an expected reviewer nor accepted as having reviewed. Without that, a workflow
+# submitting a review with the ambient GITHUB_TOKEN satisfies a gate whose entire purpose is
+# "a real reviewer looked at this". Neither default is safe — reading a forgotten field as
+# `status` makes the gate unsatisfiable, reading it as `threads` re-opens that hole — so a row
+# that omits `posts:`, or spells it as anything other than `threads`/`status`, fails loudly.
+# At least one `posts: threads` member is required; a roster of only status members is rejected.
+#
 # ⚠️ SUPERSEDED 2026-08-22 (#208). This block used to end "…is a pass here rather than a
 # failure", and that half was wrong. Zero threads is ALSO what you get when no reviewer ever
 # ran — opposite facts, one number — and the gate reported the second as success: PRs #204
