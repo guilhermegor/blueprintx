@@ -40,7 +40,11 @@ resolve_linter_mode() {
 		printf 'poetry'
 		return 0
 	fi
-	if command -v "$str_tool" >/dev/null 2>&1; then
+	# ⚠️ `command -v` alone answers "is there a file by that name on PATH", never "does it
+	# run" — so a shadowing stub or a half-installed binary resolves as present and its
+	# startup failure is then reported as a lint finding. Same fix as lint_actions.sh
+	# (blueprintx#111); lint_docker.sh already probed both.
+	if command -v "$str_tool" >/dev/null 2>&1 && "$str_tool" --version >/dev/null 2>&1; then
 		printf 'system'
 		return 0
 	fi

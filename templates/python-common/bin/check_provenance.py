@@ -95,5 +95,19 @@ if __name__ == "__main__":
 		if hasattr(cls_stream, "reconfigure"):
 			cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
-	total_errors = sum(check_file(str(p)) for p in _source_files())
+	# ⚠️ Zero discovery is a FAILURE, not a clean tree. `_source_files()` globs `src/`, so a
+	# renamed layout, a wrong cwd, or an exclusion list that grew too broad all make this
+	# gate iterate nothing, sum to 0 and exit 0 — reporting success for having checked
+	# nothing, silently. That is the failure mode this gate exists to prevent in someone
+	# else's data, and it had it (blueprintx#111). Every tier inherits python-common's
+	# `src/utils/` + `src/config/`, so a real project can never legitimately reach zero.
+	list_targets = _source_files()
+	if not list_targets:
+		print("❌ no Python files found under src/ — refusing to report success.")
+		sys.exit(1)
+
+	total_errors = sum(check_file(str(p)) for p in list_targets)
+	if total_errors == 0:
+		# Print WHAT was checked: a silent gate is indistinguishable from an absent one.
+		print(f"✅ provenance stamp OK ({len(list_targets)} file(s) checked)")
 	sys.exit(1 if total_errors > 0 else 0)
