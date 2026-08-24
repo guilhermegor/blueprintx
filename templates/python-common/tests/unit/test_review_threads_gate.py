@@ -51,6 +51,12 @@ _ROSTER = {"coderabbitai[bot]", "github-actions[bot]"}
 _ROSTER_WITH_POSTS = {"coderabbitai": "threads", "github-actions": "status"}
 _LONG = "x" * 150
 
+# The PR head, and a commit it superseded. Two distinct oids because the gate's question is
+# "which commit was this review written against?" — measured on blueprintx#219, where the only
+# review was attributed to a commit pushed five minutes before the head.
+_HEAD = "9ae76ab0000000000000000000000000000000000"
+_SUPERSEDED = "9e7d1fe0000000000000000000000000000000000"
+
 
 def _thread(list_comments: list[tuple[str, str]], *, bool_resolved: bool = True) -> dict:
 	"""Build a review thread from ``(login, body)`` pairs.
@@ -186,9 +192,40 @@ def test_no_threads_is_not_a_THREAD_problem() -> None:
 # --------------------------
 
 
-def _review(str_login: str) -> dict:
-	"""Build a submitted review authored by ``str_login``."""
-	return {"author": {"login": str_login}}
+def _review(str_login: str, str_oid: str = _HEAD) -> dict:
+	"""Build a submitted review authored by ``str_login`` against ``str_oid``.
+
+	Parameters
+	----------
+	str_login : str
+		Review author's login, in either API's spelling.
+	str_oid : str
+		Commit the review is attributed to; defaults to the PR head.
+
+	Returns
+	-------
+	dict
+		A review shaped like the GraphQL response.
+	"""
+	return {"author": {"login": str_login}, "commit": {"oid": str_oid}}
+
+
+def _notice(str_login: str, str_body: str) -> dict:
+	"""Build one of the PR's issue comments.
+
+	Parameters
+	----------
+	str_login : str
+		Comment author's login.
+	str_body : str
+		Comment body.
+
+	Returns
+	-------
+	dict
+		An issue comment shaped like the GraphQL response.
+	"""
+	return {"author": {"login": str_login}, "body": str_body}
 
 
 def test_a_pr_nobody_reviewed_fails() -> None:
@@ -200,7 +237,9 @@ def test_a_pr_nobody_reviewed_fails() -> None:
 	answered.``
 	"""
 	cls_gate = _load_gate()
-	str_problem = cls_gate.find_missing_review_problem([], _ROSTER, "some-human")
+	str_problem = cls_gate.find_missing_review_problem(
+		[], _ROSTER, "some-human", str_head_oid=_HEAD
+	)
 	assert str_problem is not None
 	assert "never ran" in str_problem, "the message must not read like 'found nothing'"
 
@@ -212,7 +251,12 @@ def test_a_reviewer_that_found_nothing_passes() -> None:
 	unsatisfiable on any PR a reviewer genuinely had no findings for.
 	"""
 	cls_gate = _load_gate()
-	assert cls_gate.find_missing_review_problem([_review("coderabbitai")], _ROSTER, "h") is None
+	assert (
+		cls_gate.find_missing_review_problem(
+			[_review("coderabbitai")], _ROSTER, "h", str_head_oid=_HEAD
+		)
+		is None
+	)
 
 
 @pytest.mark.parametrize("str_login", ["coderabbitai", "coderabbitai[bot]"])
@@ -222,13 +266,23 @@ def test_the_review_author_spelling_does_not_matter(str_login: str) -> None:
 	The same mismatch made the thread half of this gate permanently green once already.
 	"""
 	cls_gate = _load_gate()
-	assert cls_gate.find_missing_review_problem([_review(str_login)], _ROSTER, "h") is None
+	assert (
+		cls_gate.find_missing_review_problem(
+			[_review(str_login)], _ROSTER, "h", str_head_oid=_HEAD
+		)
+		is None
+	)
 
 
 def test_a_review_from_outside_the_roster_is_not_the_declared_review() -> None:
 	"""A passing human comment is not the reviewer this gate was told to expect."""
 	cls_gate = _load_gate()
-	assert cls_gate.find_missing_review_problem([_review("some-human")], _ROSTER, "h") is not None
+	assert (
+		cls_gate.find_missing_review_problem(
+			[_review("some-human")], _ROSTER, "h", str_head_oid=_HEAD
+		)
+		is not None
+	)
 
 
 def test_the_query_excludes_unsubmitted_reviews() -> None:
@@ -266,7 +320,7 @@ def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None
 		"author": {"login": "someone"},
 		"reviews": {
 			"pageInfo": {"hasNextPage": True, "endCursor": "R1"},
-			"nodes": [{"author": {"login": "human"}}],
+			"nodes": [_review("human")],
 		},
 		"reviewThreads": {
 			"pageInfo": {"hasNextPage": True, "endCursor": "T1"},
@@ -277,7 +331,7 @@ def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None
 		"author": {"login": "someone"},
 		"reviews": {
 			"pageInfo": {"hasNextPage": False, "endCursor": None},
-			"nodes": [{"author": {"login": "coderabbitai"}}],
+			"nodes": [_review("coderabbitai")],
 		},
 		"reviewThreads": {
 			"pageInfo": {"hasNextPage": False, "endCursor": None},
@@ -295,7 +349,9 @@ def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None
 	assert len(dict_pr["reviewThreads"]["nodes"]) == 2, "page-two threads must be merged in"
 
 	assert (
-		cls_gate.find_missing_review_problem(dict_pr["reviews"]["nodes"], _ROSTER, "someone")
+		cls_gate.find_missing_review_problem(
+			dict_pr["reviews"]["nodes"], _ROSTER, "someone", str_head_oid=_HEAD
+		)
 		is None
 	)
 	assert len(cls_gate.find_thread_problems(dict_pr["reviewThreads"]["nodes"], _ROSTER)) == 2
@@ -308,7 +364,10 @@ def test_a_roster_members_own_pr_is_exempt() -> None:
 	habit swallows the real blocks too.
 	"""
 	cls_gate = _load_gate()
-	assert cls_gate.find_missing_review_problem([], _ROSTER, "coderabbitai[bot]") is None
+	assert (
+		cls_gate.find_missing_review_problem([], _ROSTER, "coderabbitai[bot]", str_head_oid=_HEAD)
+		is None
+	)
 
 
 def test_an_absent_roster_makes_the_gate_a_no_op(tmp_path: Path) -> None:
@@ -471,16 +530,15 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
 		cls_gate.load_roster(tmp_path)
 
 
-def test_ci_mode_asserts_only_the_half_it_can_re_evaluate() -> None:
-	"""A job must not assert a condition nothing can re-trigger it to re-check.
+def test_the_resolve_half_can_still_be_switched_off_by_flag() -> None:
+	"""``bool_require_resolved=False`` must keep asserting the REPLY half and only that.
 
-	Resolving a thread emits `pull_request_review_thread`, which is not a workflow trigger, so
-	nothing re-runs CI after a resolve. Asserting the resolve half there leaves a run red
-	FOREVER on a PR that is finished — measured as 7 stale red runs on a single PR. A check that
-	is red-by-design after you did the right thing is how people learn that red means nothing.
-
-	So CI asserts REPLY only (a comment does re-trigger it), while the resolve half is enforced
-	where it can be evaluated live: the branch ruleset and the local hooks.
+	⚠️ CI no longer passes ``False`` (#196): delegating the resolve half to
+	``required_conversation_resolution`` looked safe because a merge-time setting cannot go
+	stale, but that setting DROPS AN OUTDATED THREAD — measured on blueprintx#193, merge button
+	enabled over an unresolved outdated thread with 29 of 29 checks green. The flag survives for
+	callers that genuinely cannot re-evaluate a resolve, so the reply-only mode must keep
+	working; dropping the resolve check must not quietly disable the job altogether.
 	"""
 	cls_gate = _load_gate()
 	list_open_but_answered = [
@@ -520,14 +578,18 @@ def test_a_status_only_member_cannot_satisfy_the_missing_review_gate() -> None:
 	"""
 	cls_gate = _load_gate()
 	set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
-	assert cls_gate.find_missing_review_problem([_review("github-actions")], set_reviewers, "h")
+	assert cls_gate.find_missing_review_problem(
+		[_review("github-actions")], set_reviewers, "h", str_head_oid=_HEAD
+	)
 
 
 def test_the_missing_review_message_names_only_members_that_can_review() -> None:
 	"""The gate must not tell people to wait for a member that never submits a review."""
 	cls_gate = _load_gate()
 	set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
-	assert "github-actions" not in cls_gate.find_missing_review_problem([], set_reviewers, "h")
+	assert "github-actions" not in cls_gate.find_missing_review_problem(
+		[], set_reviewers, "h", str_head_oid=_HEAD
+	)
 
 
 def test_a_thread_answer_from_a_status_member_is_still_not_an_answer() -> None:
@@ -591,7 +653,9 @@ def test_a_status_member_opening_a_pr_is_not_exempt() -> None:
 	"""
 	cls_gate = _load_gate()
 	set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
-	assert cls_gate.find_missing_review_problem([], set_reviewers, "github-actions[bot]")
+	assert cls_gate.find_missing_review_problem(
+		[], set_reviewers, "github-actions[bot]", str_head_oid=_HEAD
+	)
 
 
 def test_an_emptied_roster_is_rejected_like_a_deleted_one(tmp_path: Path) -> None:
@@ -605,3 +669,285 @@ def test_an_emptied_roster_is_rejected_like_a_deleted_one(tmp_path: Path) -> Non
 	(tmp_path / ".review-bots.yaml").write_text("reviewers: []\n", encoding="utf-8")
 	with pytest.raises(RuntimeError, match="declares no reviewers"):
 		cls_gate.load_roster(tmp_path)
+
+
+# --------------------------
+# Tests — a review is pinned to a COMMIT (#220)
+# --------------------------
+
+
+def test_a_review_of_a_superseded_commit_does_not_satisfy_the_gate() -> None:
+	"""The negative control: this input PASSED before the head check existed.
+
+	Measured on blueprintx#219 while the gate was first being exercised: ``head=9ae76ab`` and the
+	PR's only review attributed to ``9e7d1fe``, a commit superseded five minutes earlier. Both
+	trigger runs had fired and both succeeded — triggering a review is necessary and NOT
+	sufficient, because nothing checked what came back was about the current code.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
+		)
+		is not None
+	)
+
+
+def test_a_review_of_the_head_commit_satisfies_the_gate() -> None:
+	"""The should-PASS half: the check must discriminate, not merely reject.
+
+	Without this, tightening the predicate to "no review ever counts" would also go green.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[_review("coderabbitai", _HEAD)], _ROSTER, "h", str_head_oid=_HEAD
+		)
+		is None
+	)
+
+
+def test_reviewed_older_code_and_never_reviewed_print_different_sentences() -> None:
+	"""Two facts with different remedies must not print identically.
+
+	This is the defect #208 rewrote this message for once already, one level up: "the reviewer
+	ran, on older code" tells you to wait for the push-triggered re-review, while "no reviewer
+	ever ran" tells you to trigger one. A reader given the wrong sentence wastes the trigger.
+	"""
+	cls_gate = _load_gate()
+	str_stale = cls_gate.find_missing_review_problem(
+		[_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
+	)
+	assert "SUPERSEDED" in str_stale, "the stale-review message must not read like 'no review'"
+
+
+def test_the_stale_review_message_names_the_head_commit() -> None:
+	"""A message that cannot be acted on is a message nobody reads.
+
+	Naming the head oid is what lets a reader compare it against the review's own attribution
+	on the PR page, rather than taking the gate's word for it.
+	"""
+	cls_gate = _load_gate()
+	str_stale = cls_gate.find_missing_review_problem(
+		[_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
+	)
+	assert _HEAD[:7] in str_stale
+
+
+def test_the_query_asks_for_the_commit_each_review_was_written_against() -> None:
+	"""The head check is worthless if the field stops being fetched.
+
+	The query is a GraphQL string no unit test can execute, so its content is pinned here —
+	the same technique that guards the ``states:`` filter against a well-meant simplification.
+	"""
+	cls_gate = _load_gate()
+	assert "commit { oid }" in cls_gate._QUERY
+
+
+def test_the_query_asks_for_the_head_commit() -> None:
+	"""Without ``headRefOid`` there is nothing to compare a review's commit against."""
+	cls_gate = _load_gate()
+	assert "headRefOid" in cls_gate._QUERY
+
+
+# --------------------------
+# Tests — a redundant re-review is not an unreviewed PR (#259)
+# --------------------------
+
+
+# The reviewer's ACTUAL boilerplate, copied verbatim from blueprintx#264's own comment stream.
+# It is appended to EVERY outcome — performed, rate-limited and failed alike — which is what
+# defeated the first draft of this check.
+_FOOTNOTE = (
+	"> Note: CodeRabbit is an incremental review system and does not re-review already "
+	"reviewed commits. This command is applicable only when automatic reviews are paused."
+)
+_NOTICE_PERFORMED = (
+	f"<summary>\u2705 Action performed</summary>\n\nReview finished.\n\n{_FOOTNOTE}"
+)
+_NOTICE_LIMITED = (
+	f"<summary>\u26a0\ufe0f Action not completed</summary>\n\nReview rate limited.\n\n{_FOOTNOTE}"
+)
+_NOTICE_FAILED = f"<summary>\u274c Action failed</summary>\n\nReview failed.\n\n{_FOOTNOTE}"
+
+
+@pytest.mark.parametrize(
+	"str_notice",
+	[_NOTICE_PERFORMED, _NOTICE_LIMITED, _NOTICE_FAILED],
+	ids=["performed", "rate_limited", "failed"],
+)
+def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str) -> None:
+	"""The negative control for the defect this check shipped with and review caught.
+
+	"does not re-review already reviewed commits" is a STANDING FOOTNOTE about how the product
+	works, appended to every outcome — not a statement about this PR. Keying a pass on it made a
+	rate-limited and an outright FAILED review read as "declined as redundant". Measured on
+	blueprintx#264 by reading its own comment stream: all three notices carry it verbatim.
+
+	Parameters
+	----------
+	str_notice : str
+		One of the three real notices, copied from the measured stream.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			list_notices=[_notice("coderabbitai", str_notice)],
+		)
+		is not None
+	)
+
+
+def test_the_failure_message_quotes_the_reviewers_latest_notice() -> None:
+	"""The notice is worth SHOWING even though it is not worth trusting.
+
+	`reviews == 0` collapses states with different remedies — never ran, refused, rate-limited,
+	declined. The reader cannot tell which without the reviewer's own words, so they are quoted;
+	the verdict is unaffected.
+	"""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", _NOTICE_LIMITED)],
+	)
+	assert "Review rate limited." in str_problem
+
+
+def test_the_quoted_notice_is_stripped_of_markup() -> None:
+	"""A notice pasted raw drags hidden HTML markers into a CI log nobody can read."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", _NOTICE_FAILED)],
+	)
+	assert "<summary>" not in str_problem
+
+
+def test_only_a_roster_notice_is_quoted() -> None:
+	"""A comment from anyone else is not the reviewer's word about its own run."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("some-human", "these commits were already reviewed on the old PR")],
+	)
+	assert "already reviewed on the old PR" not in str_problem
+
+
+def test_the_newest_roster_notice_is_the_one_quoted() -> None:
+	"""An older notice describes a state the reviewer has since superseded."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[
+			_notice("coderabbitai", _NOTICE_PERFORMED),
+			_notice("coderabbitai", _NOTICE_LIMITED),
+		],
+	)
+	assert "Review rate limited." in str_problem
+
+
+def test_the_remedy_names_a_full_review_not_an_incremental_one() -> None:
+	"""An incremental reviewer answers "already reviewed" on commits seen on another PR.
+
+	#259 argued this gate would be unsatisfiable because the remedy it printed was the command
+	that fails. A different documented command does not: `@coderabbitai full review` "disregards
+	any comments that CodeRabbit has already made on this pull request, and generates a complete
+	review of the entire pull request". Printing the wrong one is what makes a gate look
+	unsatisfiable, and unsatisfiable gates get bypassed with --admin.
+	"""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem([], _ROSTER, "h", str_head_oid=_HEAD)
+	assert "@coderabbitai full review" in str_problem
+
+
+def test_the_superseded_message_also_names_a_full_review() -> None:
+	"""The remedy is printed by TWO messages, and a test on one proves nothing about the other.
+
+	⚠️ Found by a negative control that PASSED: downgrading `full review` to `review` in the
+	superseded-code branch changed nothing red, because the only test asserting the remedy
+	exercised the zero-review branch. Both branches carry the same sentence and it can rot
+	independently in either — which is the "shrink the mutation until only the target test can
+	fail" rule read from the other end: a mutation that fails nothing has found a gap, not a
+	clean bill of health.
+	"""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
+	)
+	assert "@coderabbitai full review" in str_problem
+
+
+def test_the_query_asks_for_the_prs_issue_comments() -> None:
+	"""The notices are ISSUE comments, not review threads — verified on blueprintx#257.
+
+	Reading only ``reviewThreads`` cannot see them, which is why the distinction between
+	"nobody looked" and "already looked" was unavailable to the gate at all.
+	"""
+	cls_gate = _load_gate()
+	assert "comments(last:100)" in cls_gate._QUERY
+
+
+# --------------------------
+# Tests — an outdated thread is the one the merge button drops (#196)
+# --------------------------
+
+
+def test_an_outdated_unresolved_thread_is_reported() -> None:
+	"""GitHub drops it from the blocking set, so this gate is the only thing left asserting it.
+
+	Measured on blueprintx#193: ``required_conversation_resolution: enabled``,
+	``enforce_admins: True``, 29 of 29 checks green — and "Squash and merge" enabled over a
+	thread reading ``resolved=False outdated=True``. Outdating is caused by the author's own
+	commit rewriting the commented lines, so it is exactly the state an author can manufacture.
+	"""
+	cls_gate = _load_gate()
+	dict_outdated = _thread(
+		[("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
+		bool_resolved=False,
+	)
+	dict_outdated["isOutdated"] = True
+	assert len(cls_gate.find_thread_problems([dict_outdated], _ROSTER)) == 1
+
+
+def test_the_outdated_thread_message_says_the_merge_button_will_not_block() -> None:
+	"""A reader who believes the native setting covers this will not act on the finding.
+
+	The field was queried and never read in any predicate — the gate could see the state and
+	said nothing about it, which is how the guarantee came to be described as stronger than it
+	was.
+	"""
+	cls_gate = _load_gate()
+	dict_outdated = _thread(
+		[("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
+		bool_resolved=False,
+	)
+	dict_outdated["isOutdated"] = True
+	assert "OUTDATED" in cls_gate.find_thread_problems([dict_outdated], _ROSTER)[0]
+
+
+def test_a_current_unresolved_thread_does_not_claim_to_be_outdated() -> None:
+	"""The should-PASS half of the message: the warning must discriminate, not always print."""
+	cls_gate = _load_gate()
+	list_current = [
+		_thread(
+			[("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
+			bool_resolved=False,
+		)
+	]
+	assert "OUTDATED" not in cls_gate.find_thread_problems(list_current, _ROSTER)[0]

@@ -157,6 +157,29 @@ main() {
 main "$@"
 ```
 
+### A comment about the FUNCTION goes above the `def`/`name()`, not inside it
+
+`bin/check_function_length.py` caps a function at **60 lines of code** and subtracts the
+**docstring** — and nothing else. Every explanatory comment inside the body counts. In a
+codebase whose house style is a long ⚠️ block explaining why measured reality contradicts
+the obvious reading, that means the better you document a change, the likelier the gate
+rejects it — and the reflex fix is to delete the reasoning, which is the one thing worth
+keeping.
+
+So: anything explaining a **policy**, a **supersede**, a measured **trade-off**, or why a
+whole approach was rejected is a comment about the function — hoist it above the
+signature. Leave a one-line pointer inline (`# … — see the OUTDATED block above the
+function`). A comment about the **next statement** stays where it is.
+
+Measured (blueprintx#264): `find_thread_problems` hit 62 lines and `main` 63 with **no
+logic change** in either — comments alone. Both fell well under after hoisting, and no
+prose was lost.
+
+⚠️ **Do not "fix" this by making the gate subtract comments.** A 200-line function is
+unreadable whether the lines are code or commentary, and a gate that excludes comments is
+defeated by commenting out the body. The ceiling is about what one reader holds in their
+head at once, and a comment is something they read.
+
 ## Status output
 
 Use `print_status <level> <message>` (from `lib/common.sh`) for all
