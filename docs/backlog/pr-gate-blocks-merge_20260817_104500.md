@@ -67,6 +67,22 @@ Cada metade fica com quem consegue reavaliá-la.
 > run — e é por isso que a **#263** deixou de ser cosmética (o re-run é a única forma de uma PR
 > pronta ficar verde). Ver `issue-waves_20260823_145527.md`, seção Wave B.
 
+🔴 **SUPERSEDIDO EM 2026-08-24 — a #263 foi ENTREGUE (PR #266, v0.16.6).** A frase "o re-run é a
+única forma de uma PR pronta ficar verde" **superestima o custo hoje** e não deve ser lida como
+regra vigente. O que mudou e o que não mudou:
+
+- **Mudou:** as falhas VELHAS acumuladas no rollup não exigem mais re-run manual. Um run que passa
+  agora re-roda sozinho as falhas obsoletas do mesmo head
+  (`templates/python-common/bin/rerun_stale_gate_runs.sh`, passo `Clear stale failed runs`).
+  Medido ao vivo na própria PR #266: `Re-ran 4 stale failed run(s)`, e a PR chegou a `CLEAN` com
+  **zero** re-runs manuais — a primeira da onda que não precisou de nenhum.
+- **NÃO mudou:** resolver um thread continua não disparando trigger nenhum. Se nada mais rodar
+  depois do resolve, ainda é preciso **um** re-run manual. O teto do #216/#180 continua real; o
+  que caiu foi o custo ESCALAR (1 → 5 → 7 conforme o número de threads respondidos), não o teto.
+
+Ou seja: o re-run manual deixou de ser a única saída e passou a ser, no pior caso, **um** clique
+em vez de N.
+
 ---
 
 ## Execução
