@@ -26,8 +26,10 @@ Every finding is a hard error (exit 1).
 """
 
 import ast
+import io
 import pathlib
 import sys
+import tokenize
 
 
 # The metaclasses from ``_internal.utils.typing`` that apply runtime checking.
@@ -127,8 +129,38 @@ def _decorator_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
 _MARKER = "type-checker-ok:"
 
 
+def comment_lines(str_source: str) -> dict[int, str]:
+	"""Map line number to comment text, for real ``COMMENT`` tokens only.
+
+	⚠️ **Read tokens, never raw lines.** A substring scan of the source cannot tell a comment
+	from a string literal, so ``def f(x: str = "type-checker-ok: reason") -> str:`` would hand
+	back a reason and wave an undecorated function through — a gate reporting success for a
+	file it never actually exempted. ``check_comment_language.py`` tokenizes for the same
+	reason. A file that will not tokenize yields no exemptions, so a syntax error can never
+	widen the gate.
+
+	Parameters
+	----------
+	str_source : str
+		The file's full source text.
+
+	Returns
+	-------
+	dict of int to str
+		Comment text keyed by 1-based line number.
+	"""
+	dict_comments: dict[int, str] = {}
+	try:
+		for cls_tok in tokenize.generate_tokens(io.StringIO(str_source).readline):
+			if cls_tok.type == tokenize.COMMENT:
+				dict_comments[cls_tok.start[0]] = cls_tok.string
+	except (tokenize.TokenError, IndentationError, SyntaxError):
+		return {}
+	return dict_comments
+
+
 def _escape_reason(
-	node: ast.FunctionDef | ast.AsyncFunctionDef, list_lines: list[str]
+	node: ast.FunctionDef | ast.AsyncFunctionDef, dict_comments: dict[int, str]
 ) -> str | None:
 	"""Return the written reason for skipping the checker, or ``None`` when there is none.
 
@@ -144,23 +176,23 @@ def _escape_reason(
 	----------
 	node : ast.FunctionDef or ast.AsyncFunctionDef
 		The function that lacks ``@type_checker``.
-	list_lines : list of str
-		The file's source lines, 0-indexed.
+	dict_comments : dict of int to str
+		Comment text by line number, from :func:`comment_lines`.
 
 	Returns
 	-------
 	str or None
 		The reason text, or ``None`` when no reason-carrying marker is present.
 	"""
-	int_first = min([node.lineno, *[d.lineno for d in node.decorator_list]]) - 1
-	int_last = node.body[0].lineno - 1 if node.body else node.lineno
+	int_first = min([node.lineno, *[d.lineno for d in node.decorator_list]])
+	int_last = node.body[0].lineno if node.body else node.lineno
 	int_top = int_first
-	while int_top > 0 and list_lines[int_top - 1].lstrip().startswith("#"):
+	while int_top - 1 in dict_comments:
 		int_top -= 1
-	for str_line in list_lines[int_top:int_last]:
-		if _MARKER in str_line:
-			str_reason = str_line.split(_MARKER, 1)[1].strip()
-			return str_reason or None
+	for int_line in range(int_top, int_last):
+		str_comment = dict_comments.get(int_line, "")
+		if _MARKER in str_comment:
+			return str_comment.split(_MARKER, 1)[1].strip() or None
 	return None
 
 
@@ -218,7 +250,7 @@ def check_file(filepath: str) -> int:
 	errors = 0
 	with open(filepath, encoding="utf-8") as fh:
 		str_source = fh.read()
-	list_lines = str_source.splitlines()
+	dict_comments = comment_lines(str_source)
 	tree = ast.parse(str_source, filename=filepath)
 	for node in tree.body:
 		if isinstance(node, ast.ClassDef) and not _is_dunder(node.name):
@@ -227,7 +259,7 @@ def check_file(filepath: str) -> int:
 			isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
 			and not _is_dunder(node.name)
 			and "type_checker" not in _decorator_names(node)
-			and _escape_reason(node, list_lines) is None
+			and _escape_reason(node, dict_comments) is None
 		):
 			print(
 				f"❌ {node.name}() at line {node.lineno} ({filepath}): a standalone function must "
