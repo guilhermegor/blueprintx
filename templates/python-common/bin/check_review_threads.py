@@ -259,11 +259,26 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
 			)
 		return {}
 	dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
-	return {
+	dict_roster = {
 		normalise_login(str(d.get("login", ""))): posts_of(d)
 		for d in (dict_yaml.get("reviewers") or [])
 		if d.get("login")
 	}
+	if not dict_roster:
+		# ⚠️ EMPTYING THE LIST IS THE SAME ONE-LINE SWITCH-OFF AS DELETING THE FILE.
+		#
+		# The guard above rejects a roster deleted inside the PR it polices; `reviewers: []`
+		# walks through the same door with different keystrokes — the file is present, so the
+		# deletion guard never fires, and `main()` reads the empty result as "not adopted here"
+		# and exits 0. Opting out is documented as DELETING the file, which self-skips with a
+		# message; a roster that exists and declares nobody is a disabled gate, not an absent
+		# one. Raised by review on #262.
+		raise RuntimeError(
+			f"{_ROSTER_FILE} exists but declares no reviewers — an empty roster makes this "
+			f"gate a no-op, which is the same as deleting it. Declare a reviewer, or delete "
+			f"the file to opt out (that path self-skips with a message)."
+		)
+	return dict_roster
 
 
 def reviewer_logins(dict_roster: dict[str, str]) -> set[str]:

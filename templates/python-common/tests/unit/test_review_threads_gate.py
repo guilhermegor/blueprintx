@@ -592,3 +592,16 @@ def test_a_status_member_opening_a_pr_is_not_exempt() -> None:
 	cls_gate = _load_gate()
 	set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
 	assert cls_gate.find_missing_review_problem([], set_reviewers, "github-actions[bot]")
+
+
+def test_an_emptied_roster_is_rejected_like_a_deleted_one(tmp_path: Path) -> None:
+	"""``reviewers: []`` is the deletion guard's hole, reached with different keystrokes.
+
+	The file is present, so the default-branch deletion check never fires, and an empty result
+	reads to ``main`` as "not adopted here" — a gate switched off inside the very PR it polices.
+	Opting out is deleting the file, which self-skips with a message. Raised by review on #262.
+	"""
+	cls_gate = _load_gate()
+	(tmp_path / ".review-bots.yaml").write_text("reviewers: []\n", encoding="utf-8")
+	with pytest.raises(RuntimeError, match="declares no reviewers"):
+		cls_gate.load_roster(tmp_path)
