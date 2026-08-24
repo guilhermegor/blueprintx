@@ -1481,21 +1481,63 @@ def _materialise_gate_tree(path_root: Path, str_script: str) -> Path:
 	return path_script
 
 
-def _shadowed_path(path_root: Path, str_tool: str) -> str:
-	"""Build a ``PATH`` whose first entry shadows ``str_tool`` with a stub that cannot run.
+def _shadow(path_dir: Path, str_tool: str) -> Path:
+	"""Place a stub named ``str_tool`` in ``path_dir`` that fails every invocation.
 
-	⚠️ This is how tool-absence is made DETERMINISTIC without uninstalling anything. Skipping
-	the test when the real tool happens to be installed would silently drop coverage exactly
-	on CI, where these tools ARE present and where the required-flag contract matters most.
-	The stub exits non-zero for every invocation, including ``--version`` — which is what a
-	correct presence probe asks.
+	Parameters
+	----------
+	path_dir : pathlib.Path
+		Directory that will go first on ``PATH``.
+	str_tool : str
+		Executable name to shadow.
+
+	Returns
+	-------
+	pathlib.Path
+		``path_dir``, so calls chain in a caller without a loop.
+	"""
+	path_dir.mkdir(parents=True, exist_ok=True)
+	path_stub = path_dir / str_tool
+	path_stub.write_text("#!/bin/sh\nexit 127\n", encoding="utf-8")
+	path_stub.chmod(0o755)
+	return path_dir
+
+
+def _path_with(path_dir: Path) -> str:
+	"""Return a ``PATH`` value with ``path_dir`` first.
+
+	Parameters
+	----------
+	path_dir : pathlib.Path
+		Directory to prepend.
+
+	Returns
+	-------
+	str
+		The composed PATH.
+	"""
+	return f"{path_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
+def _shadow_tool_and_poetry(path_root: Path, str_tool: str) -> str:
+	"""Build a ``PATH`` on which ``str_tool`` is unresolvable by EITHER branch.
+
+	⚠️ Shadowing the tool alone is not enough, and CI is where that shows. These wrappers
+	resolve a vendored copy first (``run_poetry run <tool> --version``) and only then look on
+	``PATH``; on a developer box neither exists so a tool-only stub looks sufficient, while in
+	CI the vendored copy resolves, the gate really runs, and a test asserting the missing-tool
+	contract fails for the opposite of the reason it was written.
+
+	Stubbing ``poetry`` closes the first branch because ``resolve_poetry`` accepts it on a bare
+	``command -v`` and the following ``run_poetry run … --version`` then fails — so both
+	branches report absent, on any machine.
 
 	Parameters
 	----------
 	path_root : pathlib.Path
 		Directory to create the stub directory under.
 	str_tool : str
-		Executable name to shadow.
+		The gate's tool, e.g. ``actionlint``.
 
 	Returns
 	-------
@@ -1503,11 +1545,34 @@ def _shadowed_path(path_root: Path, str_tool: str) -> str:
 		A PATH value with the stub directory first.
 	"""
 	path_stub_dir = path_root / "_stubbin"
-	path_stub_dir.mkdir(parents=True, exist_ok=True)
-	path_stub = path_stub_dir / str_tool
-	path_stub.write_text("#!/bin/sh\nexit 127\n", encoding="utf-8")
-	path_stub.chmod(0o755)
-	return f"{path_stub_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+	_shadow(path_stub_dir, str_tool)
+	_shadow(path_stub_dir, "poetry")
+	return _path_with(path_stub_dir)
+
+
+def _shadow_hadolint_completely(path_root: Path) -> str:
+	"""Build a ``PATH`` on which lint_docker.sh can resolve NO hadolint at all.
+
+	⚠️ Three names, because this wrapper has three ways to find the tool: a vendored copy via
+	poetry, a system ``hadolint``, and — deliberately — the official image run through
+	``docker``. GitHub runners have Docker, so stubbing only ``hadolint`` leaves the image
+	branch live and the gate really lints, which is the opposite of the contract under test.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Directory to create the stub directory under.
+
+	Returns
+	-------
+	str
+		A PATH value with the stub directory first.
+	"""
+	path_stub_dir = path_root / "_stubbin"
+	_shadow(path_stub_dir, "hadolint")
+	_shadow(path_stub_dir, "docker")
+	_shadow(path_stub_dir, "poetry")
+	return _path_with(path_stub_dir)
 
 
 def _run_sh_gate(
@@ -1556,7 +1621,7 @@ def test_lint_actions_required_flag_makes_the_skip_impossible(tmp_path: Path) ->
 
 	cls_result = _run_sh_gate(
 		path_script,
-		{"PATH": _shadowed_path(tmp_path, "actionlint"), "LINT_ACTIONS_REQUIRED": "1"},
+		{"PATH": _shadow_tool_and_poetry(tmp_path, "actionlint"), "LINT_ACTIONS_REQUIRED": "1"},
 	)
 	str_all = cls_result.stdout + cls_result.stderr
 
@@ -1569,7 +1634,9 @@ def test_lint_actions_skips_gracefully_when_not_required(tmp_path: Path) -> None
 	path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
 	_write(tmp_path / ".github" / "workflows" / "w.yaml", _STR_VALID_WORKFLOW)
 
-	cls_result = _run_sh_gate(path_script, {"PATH": _shadowed_path(tmp_path, "actionlint")})
+	cls_result = _run_sh_gate(
+		path_script, {"PATH": _shadow_tool_and_poetry(tmp_path, "actionlint")}
+	)
 
 	assert cls_result.returncode == 0
 	assert "skip" in cls_result.stdout + cls_result.stderr
@@ -1587,7 +1654,9 @@ def test_lint_actions_a_broken_binary_on_path_resolves_as_absent(tmp_path: Path)
 	path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
 	_write(tmp_path / ".github" / "workflows" / "w.yaml", _STR_VALID_WORKFLOW)
 
-	cls_result = _run_sh_gate(path_script, {"PATH": _shadowed_path(tmp_path, "actionlint")})
+	cls_result = _run_sh_gate(
+		path_script, {"PATH": _shadow_tool_and_poetry(tmp_path, "actionlint")}
+	)
 	str_all = cls_result.stdout + cls_result.stderr
 
 	assert cls_result.returncode == 0, f"the stub's exit leaked out: {str_all}"
@@ -1619,7 +1688,7 @@ def test_lint_docker_required_flag_makes_the_skip_impossible(tmp_path: Path) -> 
 
 	cls_result = _run_sh_gate(
 		path_script,
-		{"PATH": _shadowed_path(tmp_path, "hadolint"), "LINT_DOCKER_REQUIRED": "1"},
+		{"PATH": _shadow_hadolint_completely(tmp_path), "LINT_DOCKER_REQUIRED": "1"},
 	)
 
 	assert cls_result.returncode != 0
