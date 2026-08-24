@@ -71,6 +71,7 @@ def _is_usable_cache_entry(path_cached: Path) -> bool:
 	return path_cached.is_file() and path_cached.stat().st_size > 0
 
 
+@type_checker
 def daily_cache_path(
 	path_cache_dir: Path, str_key: str, dt_reference: date, str_suffix: str
 ) -> Path:
@@ -178,6 +179,7 @@ def download_daily(
 	return path_cached
 
 
+@type_checker
 def _require_reference_date(dt_reference: date) -> None:
 	"""Reject a datetime where a reference DATE is required.
 
@@ -206,6 +208,7 @@ def _require_reference_date(dt_reference: date) -> None:
 		)
 
 
+@type_checker
 def _download_and_publish(
 	str_url: str, path_cached: Path, fn_download: Callable[[str, Path], Path]
 ) -> None:

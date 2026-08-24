@@ -168,6 +168,7 @@ def is_valid_cnpj(str_value: str) -> bool:
 	)
 
 
+@type_checker
 def _cnpj_check_digits(str_base: str) -> str:
 	"""Return the two check digits for a 12-character CNPJ base.
 
@@ -276,6 +277,7 @@ def is_valid_cpf(str_value: str) -> bool:
 	)
 
 
+@type_checker
 def _cpf_check_digits(str_clean: str) -> str:
 	"""Return the two check digits for an 11-digit CPF.
 

@@ -109,6 +109,7 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
 # follows the MRO, so the bool handler wins over the int one it would otherwise inherit,
 # which is the subtlety the chain had to encode as comment-plus-ordering.
 @functools.singledispatch
+@type_checker
 def _parse_by_type(value: object, default: Decimal) -> Decimal:
 	"""Parse anything not handled by a registered type: normalise as text, else ``default``.
 
@@ -135,6 +136,7 @@ def _parse_by_type(value: object, default: Decimal) -> Decimal:
 
 
 @_parse_by_type.register
+@type_checker
 def _parse_none(value: None, default: Decimal) -> Decimal:
 	"""Map a missing value to ``default``.
 
@@ -154,6 +156,7 @@ def _parse_none(value: None, default: Decimal) -> Decimal:
 
 
 @_parse_by_type.register
+@type_checker
 def _parse_decimal(value: Decimal, default: Decimal) -> Decimal:
 	"""Pass a Decimal through, mapping a non-finite one (NaN/Infinity) to ``default``.
 
@@ -173,6 +176,7 @@ def _parse_decimal(value: Decimal, default: Decimal) -> Decimal:
 
 
 @_parse_by_type.register
+@type_checker
 def _parse_bool(value: bool, default: Decimal) -> Decimal:
 	"""Reject a bool so ``True``/``False`` never become 1/0.
 
@@ -194,6 +198,7 @@ def _parse_bool(value: bool, default: Decimal) -> Decimal:
 
 
 @_parse_by_type.register
+@type_checker
 def _parse_int(value: int, default: Decimal) -> Decimal:
 	"""Convert an int, which is always finite — no guard needed.
 
@@ -213,6 +218,7 @@ def _parse_int(value: int, default: Decimal) -> Decimal:
 
 
 @_parse_by_type.register
+@type_checker
 def _parse_float(value: float, default: Decimal) -> Decimal:
 	"""Convert a float via ``repr`` so the shortest round-tripping decimal is used.
 

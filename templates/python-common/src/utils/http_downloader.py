@@ -140,6 +140,7 @@ def download_file(str_url: str, path_dest: Path, int_timeout_s: int = _TIMEOUT_S
 	return path_dest
 
 
+@type_checker
 def _assert_url_allowed(
 	str_url: str,
 ) -> None:  # complexity-ok: input validation, one branch per rejection rule
@@ -169,6 +170,7 @@ def _assert_url_allowed(
 	_assert_public_host(str_url)
 
 
+@type_checker
 def _fetch_bytes(
 	str_url: str, int_timeout_s: int
 ) -> bytes:  # complexity-ok: transport error handling

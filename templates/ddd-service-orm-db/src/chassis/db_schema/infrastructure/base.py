@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Generator, Optional, TypeVar
+from typing import Any, Generator, Optional
 import uuid
 
 from chassis.typing import ABCTypeCheckerMeta
@@ -15,9 +15,6 @@ from sqlalchemy.orm import Session, sessionmaker, DeclarativeBase
 class Base(DeclarativeBase):
     """SQLAlchemy declarative base for all ORM models."""
     pass
-
-
-T = TypeVar("T", bound=Base)
 
 
 def generate_uuid() -> str:

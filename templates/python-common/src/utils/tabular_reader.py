@@ -332,6 +332,7 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 	return list_missing + list_cnpj
 
 
+@type_checker
 def _cnpj_column_problem(  # complexity-ok: two acceptance rules, empty-column one load-bearing
 	series_col: pd.Series, str_col: str, str_contract: str
 ) -> str | None:
@@ -656,6 +657,7 @@ def _read_raw_dispatch(
 	)
 
 
+@type_checker
 def _read_csv_raw(
 	path_file: Path,
 	str_dtype: str | None = None,
@@ -700,6 +702,7 @@ def _read_csv_raw(
 	)
 
 
+@type_checker
 def _read_json_raw(
 	path_file: Path,
 	str_dtype: str | None = None,
@@ -745,6 +748,7 @@ def _read_json_raw(
 	return df_json.astype(str_dtype) if str_dtype is not None else df_json
 
 
+@type_checker
 def _read_excel_raw(
 	path_file: Path,
 	str_sheet: str = "",
