@@ -40,6 +40,18 @@ facts, one number. Reading threads alone the gate reported the second as success
 and #213 merged unreviewed with every check green. :func:`find_missing_review_problem` owns that
 question separately, keyed on a SUBMITTED REVIEW rather than on threads, so the two outcomes can
 print different sentences.
+
+⚠️ A SUBMITTED REVIEW IS NOT ENOUGH EITHER — IT MUST BE A REVIEW OF **THIS** CODE.
+
+A review is pinned to the commit it was written against and nothing re-pins it when the branch
+moves, so "a roster member submitted a review" is satisfiable by code nobody looked at (#220,
+measured on #219). ``find_missing_review_problem`` therefore requires a review attributed to
+``headRefOid``, and prints a DIFFERENT sentence for "reviewed older code" than for "never
+reviewed" — those two used to be indistinguishable, and they call for different actions.
+
+The one exception is a reviewer that declined a **redundant** re-review because the commits
+already carry one (#259). That state also shows ``reviews == 0`` while being the opposite of
+unreviewed, and it is read from the PR's issue comments — see :data:`_ALREADY_REVIEWED_MARKERS`.
 """
 
 from __future__ import annotations
@@ -109,6 +121,27 @@ def normalise_login(str_login: str) -> str:
 # "fixed" without ever arguing with a real answer.
 _MIN_REPLY_CHARS = 100
 
+# ⚠️ THE ONLY ZERO-REVIEW STATE THAT IS NOT A FAILURE, AND WHY IT NEEDS A PHRASE.
+#
+# `reviews == 0` collapses states with OPPOSITE correct verdicts. A reviewer that never ran, one
+# that refused, one that was rate-limited and one that DECLINED AS REDUNDANT all submit no review
+# and produce the same number. Only the last is a pass: a submitted review is a per-PULL-REQUEST
+# record while an incremental reviewer's memory is per-COMMIT, so a reopened PR, a fresh PR over
+# already-reviewed commits, or a rebase-and-re-PR reaches a state where the commits ARE reviewed
+# and the PR carries no review (#259). Failing there makes the gate UNSATISFIABLE — the remedy it
+# prints is the very command that answers "already reviewed" — and unsatisfiable gates get
+# bypassed with `--admin`, taking the real blocks with them.
+#
+# These are ENGLISH PHRASES, not a vendor protocol: no tool is named, so the file stays
+# provider-agnostic. Add a phrase when a reviewer words it differently; do not add a tool.
+#
+# ⚠️ KNOWN CEILING — A NOTICE CARRIES NO COMMIT IDENTITY. An issue comment says "these commits
+# are already reviewed" without saying WHICH, so this path cannot be pinned to `headRefOid` the
+# way a submitted review can (#220). Consulting only the reviewer's NEWEST notice is the
+# mitigation, not a fix: a notice posted before the last push still reads as current. Closing it
+# properly needs the reviewer to name the commits, which no roster member does today.
+_ALREADY_REVIEWED_MARKERS = ("already reviewed", "does not re-review")
+
 # ⚠️ `reviews` is here because THREADS ALONE CANNOT SEE AN ABSENT REVIEWER.
 #
 # A reviewer that ran and found nothing produces zero threads. A reviewer that never ran
@@ -133,17 +166,35 @@ _MIN_REPLY_CHARS = 100
 # `reviewThreads` is worse and nobody flagged it: thread 101 is simply never examined, and the
 # gate prints "All 100 review thread(s) answered" over unfinished conversations — a false PASS,
 # which is the exact shape this file exists to eliminate.
+# ⚠️ `commit { oid }` IS WHY A REVIEW COUNTS, AND IT COSTS NOTHING TO ASK FOR.
+#
+# A submitted review is pinned to the commit it was written against, and nothing re-pins it
+# when the branch moves. Measured on #219: `head=9ae76ab` while the PR's only review was
+# attributed to `9e7d1fe`, a commit superseded five minutes earlier — and the review's own
+# content proved the staleness, arguing a point the newer commit had already falsified. The
+# gate passed, because it asked "did a roster member submit a review?" and never "of which
+# code?". Triggering a review is necessary and NOT sufficient (#220).
+#
+# ⚠️ `comments` HERE IS THE PR'S ISSUE-COMMENT STREAM, NOT A THREAD'S REPLIES.
+#
+# A reviewer that declines to work posts an ISSUE comment, never a review thread — verified on
+# #257. That stream is the only place the difference between "nobody looked at this" and "these
+# commits were already reviewed" is written down (#259). It is fetched `last:` rather than
+# `first:` on purpose: `last` returns the NEWEST, so truncation can only drop OLD notices, and
+# an old notice is the one that must not grant a pass anyway.
 _QUERY = """
 query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
       author { login }
+      headRefOid
+      comments(last:100) { nodes { author { login } body } }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login } }
+        nodes { author { login } commit { oid } }
       }
       reviewThreads(first:100, after:$tc) {
         pageInfo { hasNextPage endCursor }
@@ -407,17 +458,86 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
 	return dict_pr
 
 
-def find_missing_review_problem(
+def reviewers_who_reported(
 	list_reviews: list[dict],
-	set_reviewers: set[str],
-	str_pr_author: str = "",
-) -> str | None:
-	"""Return a problem when no declared reviewer ever reported on this PR.
+	set_roster: set[str],
+	str_commit_oid: str = "",
+) -> set[str]:
+	"""Return the roster logins that submitted a review, optionally pinned to one commit.
 
 	Parameters
 	----------
 	list_reviews : list of dict
-		Submitted reviews, each with an ``author`` node.
+		Submitted reviews, each with an ``author`` node and a ``commit`` node.
+	set_roster : set of str
+		Already-normalised logins that can submit a review.
+	str_commit_oid : str, optional
+		When given, only a review written against exactly this commit counts. When empty,
+		every review counts regardless of commit — used to tell "reviewed OLDER code" apart
+		from "never reviewed", which must not print the same sentence.
+
+	Returns
+	-------
+	set of str
+		The subset of ``set_roster`` that reported under the requested pinning.
+	"""
+	return {
+		normalise_login((d.get("author") or {}).get("login") or "")
+		for d in list_reviews
+		if not str_commit_oid or ((d.get("commit") or {}).get("oid") or "") == str_commit_oid
+	} & set_roster
+
+
+def find_already_reviewed_notice(list_notices: list[dict], set_roster: set[str]) -> str | None:
+	"""Return the roster's newest notice when it declares the commits already reviewed.
+
+	Parameters
+	----------
+	list_notices : list of dict
+		The PR's issue comments, oldest first — the stream a declining reviewer posts to.
+	set_roster : set of str
+		Already-normalised logins that can submit a review.
+
+	Returns
+	-------
+	str or None
+		The notice body (truncated) when the roster's most recent notice says the commits
+		were already reviewed, otherwise ``None``.
+	"""
+	# ⚠️ ONLY THE NEWEST ROSTER NOTICE IS CONSULTED, AND THAT IS THE POINT.
+	#
+	# Scanning for ANY matching notice would let a stale "already reviewed" from an earlier
+	# push outrank a later "rate limited" — granting a pass on the strength of a sentence the
+	# reviewer has since superseded. Newest-first means the reviewer's latest word wins.
+	for dict_comment in reversed(list_notices):
+		if (
+			normalise_login((dict_comment.get("author") or {}).get("login") or "")
+			not in set_roster
+		):
+			continue
+		str_body = (dict_comment.get("body") or "").strip()
+		if any(s in str_body.lower() for s in _ALREADY_REVIEWED_MARKERS):
+			return str_body[:200]
+		# A roster notice that says something ELSE (a refusal, a rate limit) is the reviewer's
+		# current word, and it is not a pass. Stop rather than keep digging for an older one.
+		return None
+	return None
+
+
+def find_missing_review_problem(
+	list_reviews: list[dict],
+	set_reviewers: set[str],
+	str_pr_author: str = "",
+	*,
+	str_head_oid: str,
+	list_notices: list[dict] | None = None,
+) -> str | None:
+	"""Return a problem when no declared reviewer ever reported on this PR's HEAD.
+
+	Parameters
+	----------
+	list_reviews : list of dict
+		Submitted reviews, each with an ``author`` node and a ``commit`` node.
 	set_reviewers : set of str
 		Logins that can actually submit a review — :func:`reviewer_logins`, NOT the whole
 		roster. ⚠️ Handing this the full roster is the defect it was fixed for: a
@@ -425,11 +545,18 @@ def find_missing_review_problem(
 		``github-actions[bot]`` can submit a review with the ambient token.
 	str_pr_author : str, optional
 		Login of the PR author; a roster member's own PR is exempt.
+	str_head_oid : str, keyword-only
+		The PR's ``headRefOid``. ⚠️ Deliberately has NO default, like ``posts:`` on a roster
+		row: an empty value silently counts every review whatever code it was written
+		against, which is the vacuous pass this parameter exists to remove.
+	list_notices : list of dict, optional
+		The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
 
 	Returns
 	-------
 	str or None
-		A human-readable problem, or ``None`` when at least one reviewer reported.
+		A human-readable problem, or ``None`` when a reviewer reported on the head commit
+		(or declared those commits already reviewed).
 	"""
 	set_roster = {normalise_login(s) for s in set_reviewers}
 	if normalise_login(str_pr_author) in set_roster:
@@ -444,11 +571,33 @@ def find_missing_review_problem(
 		# about asking. The exemption is "do not ask X to review X", not "bots are exempt".
 		return None
 
-	set_reported = {
-		normalise_login((d.get("author") or {}).get("login") or "") for d in list_reviews
-	} & set_roster
-	if set_reported:
+	if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
 		return None
+
+	str_notice = find_already_reviewed_notice(list_notices or [], set_roster)
+	if str_notice:
+		# Printing from a predicate is deliberate: this pass and an ordinary pass are the same
+		# exit code, and an unexplained green on a PR carrying ZERO reviews is precisely the
+		# "two opposite facts, one signal" shape the rest of this file exists to eliminate.
+		print(
+			"A declared reviewer declined a REDUNDANT re-review — these commits carry a review "
+			f"already, so this is not an unreviewed PR:\n{str_notice}"
+		)
+		return None
+
+	# ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
+	# #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
+	# ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
+	if reviewers_who_reported(list_reviews, set_roster):
+		return (
+			f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "
+			f"is attributed to the head commit {str_head_oid[:7] or '?'}. A review is pinned to "
+			"the commit it was written against and nothing re-pins it when the branch moves, so "
+			"the code that would merge has not been looked at. This is NOT 'no review "
+			"happened'.\n"
+			"Push-triggered re-review is automatic; if it did not fire, ask for one (a comment "
+			"such as '@coderabbitai review' from a user account) and re-run this check."
+		)
 
 	return (
 		f"no declared reviewer ever reported on this PR — expected one of "
@@ -461,6 +610,16 @@ def find_missing_review_problem(
 	)
 
 
+# ⚠️ THE SERVER-SIDE SETTING DOES NOT COVER AN OUTDATED THREAD, SO THE RESOLVE HALF ASSERTED
+# BELOW IS NOT A BELT-AND-BRACES COPY OF IT.
+#
+# `required_conversation_resolution` (and its ruleset spelling `required_review_thread_resolution`)
+# drops a thread whose lines no longer exist in the diff. Measured on #193: the merge button was
+# ENABLED over a thread reading `resolved=False outdated=True`, with every one of 29 checks green
+# and the setting confirmed `enabled`. Outdating is caused by the AUTHOR'S OWN COMMIT, so it is
+# precisely the state an author can manufacture — reply thinly, rewrite the commented lines,
+# merge. This gate is the only layer that can assert it, which is why the message NAMES the flag
+# instead of failing silently on it (#196).
 def find_thread_problems(
 	list_threads: list[dict],
 	set_roster: set[str],
@@ -520,15 +679,17 @@ def find_thread_problems(
 			)
 			continue
 
-		# ANSWERED but still OPEN. Both halves are required: the reply records the reasoning,
-		# and resolving records that the exchange is finished. The ruleset provisioned by
-		# bin/enable_repo_rules.sh already enforces resolution server-side
-		# (required_review_thread_resolution), so this is the LOCAL half of the same rule — it
-		# fails in CI and on pre-push instead of only at the merge button.
+		# ANSWERED but still OPEN — see the OUTDATED block above the function.
 		if bool_require_resolved and not dict_thread.get("isResolved"):
+			str_why = (
+				" — this thread is OUTDATED, so the merge button will NOT block on it and "
+				"this check is the only thing asserting it"
+				if dict_thread.get("isOutdated")
+				else ""
+			)
 			list_problems.append(
 				f"{str_path}: thread is answered but NOT resolved — resolve the conversation "
-				f"once the reply is posted — {str_title}"
+				f"once the reply is posted{str_why} — {str_title}"
 			)
 	return list_problems
 
@@ -578,6 +739,21 @@ def report_verdict(
 	return 0
 
 
+# ⚠️ SUPERSEDED 2026-08-24 (#196). CI NOW ASSERTS BOTH HALVES, AND THE COST IS ACCEPTED.
+#
+# `main` used to run under REVIEW_THREADS_REQUIRE_RESOLVED=0 in CI, on the reasoning that a job
+# must not assert what it cannot re-evaluate: resolving a thread emits
+# `pull_request_review_thread`, which is NOT a workflow trigger, so nothing re-runs this after a
+# resolve and the run sits red on a PR that is actually finished (measured: 7 stale red runs on
+# one PR). That reasoning was sound; the DELEGATION it justified was not. It handed the resolve
+# half to `required_conversation_resolution`, which DROPS AN OUTDATED THREAD — so the half nobody
+# could re-evaluate was also the half nobody was checking, and the guarantee this file described
+# was partial. A guarantee people believe in is worse than one they know is partial.
+#
+# The trade is therefore explicit: a resolve leaves this check RED until the run is re-run by
+# hand. ⚠️ That makes the stale-run accumulation in the merge rollup (#263) load-bearing rather
+# than cosmetic — the re-run is the ONLY way a finished PR goes green, so #263 must land for that
+# re-run to actually clear the block.
 def main() -> int:
 	"""Check the current PR's review threads.
 
@@ -619,25 +795,14 @@ def main() -> int:
 		dict_pr.get("reviews", {}).get("nodes", []),
 		set_reviewers,
 		(dict_pr.get("author") or {}).get("login") or "",
+		str_head_oid=dict_pr.get("headRefOid") or "",
+		list_notices=dict_pr.get("comments", {}).get("nodes", []),
 	)
 	if str_missing:
 		print(f"❌ {str_missing}")
 		return 1
-	# ⚠️ A JOB MUST NOT ASSERT WHAT IT CANNOT RE-EVALUATE.
-	#
-	# Resolving a thread emits `pull_request_review_thread`, which is NOT a workflow trigger,
-	# so nothing re-runs this after a resolve. Asserting the resolve half here produces a run
-	# that is red FOREVER on a PR that is actually finished — measured: 7 stale red runs on one
-	# PR, every one of them from a moment that had already passed.
-	#
-	# A check that is red-by-design after you did the right thing is the fastest way to teach
-	# people that red does not mean anything. So CI asserts only the REPLY half, which a review
-	# comment genuinely does re-trigger. The resolve half is enforced where it CAN be evaluated
-	# live: the server-side setting at the merge button — `required_conversation_resolution`
-	# on classic branch protection, `required_review_thread_resolution` on a ruleset (the form
-	# bin/enable_repo_rules.sh provisions) — and the local
-	# pre-merge / Stop hooks. Set REVIEW_THREADS_REQUIRE_RESOLVED=1 to assert both (the local
-	# default, since a local run is always current).
+	# Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
+	# See the SUPERSEDED block above `main` for why CI stopped passing 0.
 	bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
 	list_problems = find_thread_problems(
 		list_threads, set_roster, bool_require_resolved=bool_require_resolved

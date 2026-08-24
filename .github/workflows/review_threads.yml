@@ -34,16 +34,30 @@ name: Review Threads
 # nothing.
 #
 # The reasoning was only half right. The ceiling above is real — resolution cannot re-trigger a
-# workflow — but this job does not ASSERT resolution: it runs with
-# `REVIEW_THREADS_REQUIRE_RESOLVED=0` and asserts only that every thread got a REPLY, and a reply
+# workflow — but this job did not ASSERT resolution: it ran with
+# `REVIEW_THREADS_REQUIRE_RESOLVED=0` and asserted only that every thread got a REPLY, and a reply
 # DOES re-trigger it via `pull_request_review_comment`. So it is safe to require, and it is
 # required now.
 #
-# The split that makes it sound — give each half to whoever can re-evaluate it:
+# ⚠️ SUPERSEDED 2026-08-24 (#196). `REVIEW_THREADS_REQUIRE_RESOLVED` IS NOW `1` HERE.
+#
+# The split below gave the RESOLVE half to `required_conversation_resolution` on the reasoning
+# that a merge-time setting cannot go stale. True, and it does not check what it was given:
+# GitHub DROPS AN OUTDATED THREAD from the blocking set. Measured on #193 — merge button enabled,
+# thread `resolved=False outdated=True`, 29 of 29 checks green, the setting confirmed `enabled`.
+# A thread outdates when the author's own commit rewrites the lines it points at, so the reachable
+# sequence is: reply thinly, rewrite those lines, merge. The half nobody could re-evaluate was
+# also the half nobody was checking.
+#
+# So this job now asserts BOTH halves and pays the ceiling above in full: after you resolve, this
+# check stays RED until the run is re-run by hand. That is a deliberate trade, not an oversight —
+# and it makes the stale-run accumulation in the merge rollup (#263) load-bearing, because the
+# re-run is the ONLY way a finished PR goes green.
+#
+# The split as it stood (kept for the reasoning, no longer the configuration):
 #   - THIS job (REQUIRED): catches a missing REPLY, live, because a comment re-triggers it.
 #   - `required_conversation_resolution` (native, `enforce_admins: true`): catches a missing
-#     RESOLVE at the merge button — exactly the half this job cannot refresh, and it cannot go
-#     stale because it is evaluated at merge time rather than published as a check run.
+#     RESOLVE at the merge button — for every thread EXCEPT an outdated one.
 #   - the local `pr_merge_threads_guard.sh` PreToolUse hook: both halves, queried live at the
 #     moment of `gh pr merge`.
 #
@@ -115,6 +129,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          # Only the half this job can re-evaluate — see the ceiling note at the top of the file.
-          REVIEW_THREADS_REQUIRE_RESOLVED: "0"
+          # BOTH halves — see the KNOWN CEILING block at the top of the file for the trade.
+          REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python3 templates/python-common/bin/check_review_threads.py

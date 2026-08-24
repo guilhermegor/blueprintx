@@ -33,17 +33,31 @@ name: Review Threads
 # and blocked nothing. Measured upstream: a PR merged with 32 of 47 checks passed.
 #
 # The reasoning was only half right. The ceiling above is real — resolution cannot re-trigger a
-# workflow — but this job does not ASSERT resolution: it runs with
-# `REVIEW_THREADS_REQUIRE_RESOLVED=0` and asserts only that every thread got a REPLY, and a reply
+# workflow — but this job did not ASSERT resolution: it ran with
+# `REVIEW_THREADS_REQUIRE_RESOLVED=0` and asserted only that every thread got a REPLY, and a reply
 # DOES re-trigger it via `pull_request_review_comment`. It also runs `on: pull_request`, so it
 # reports on every PR from the moment it opens — the property a required check must have. That is
 # why `bin/enable_repo_rules.sh` now seeds REQUIRED_CHECKS with this job's `name:`.
 #
-# The split that makes it sound — give each half to whoever can re-evaluate it:
+# ⚠️ SUPERSEDED 2026-08-24 (blueprintx#196). `REVIEW_THREADS_REQUIRE_RESOLVED` IS NOW `1`.
+#
+# The split below handed the RESOLVE half to the ruleset's `required_review_thread_resolution`
+# (`required_conversation_resolution` on classic branch protection) on the reasoning that a
+# merge-time setting cannot go stale. True — and it does not check what it was given: GitHub
+# DROPS AN OUTDATED THREAD from the blocking set. Measured upstream: the merge button was ENABLED
+# over a thread reading `resolved=False outdated=True`, with 29 of 29 checks green and the
+# setting confirmed `enabled`. A thread outdates when the author's own commit rewrites the lines
+# it points at, so the reachable sequence is: reply thinly, rewrite those lines, merge. The half
+# nobody could re-evaluate was also the half nobody was checking.
+#
+# So this job now asserts BOTH halves and pays the ceiling above in full: after you resolve, this
+# check stays RED until the run is re-run by hand. That is a deliberate trade, not an oversight.
+# Set the value back to "0" below if your project prefers the reply-only contract.
+#
+# The split as it stood (kept for the reasoning, no longer the configuration):
 #   - THIS job (REQUIRED): catches a missing REPLY, live, because a comment re-triggers it.
 #   - the ruleset's `required_review_thread_resolution`: catches a missing RESOLVE at the merge
-#     button — the half this job cannot refresh, and it cannot go stale because it is evaluated
-#     at merge time rather than published as a check run.
+#     button — for every thread EXCEPT an outdated one.
 #   - the local `pr_merge_threads_guard.sh` PreToolUse hook: both halves, queried live at the
 #     moment of `gh pr merge`.
 #
@@ -115,6 +129,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          # Only the half this job can re-evaluate — see the ceiling note at the top of the file.
-          REVIEW_THREADS_REQUIRE_RESOLVED: "0"
+          # BOTH halves — see the KNOWN CEILING block at the top of the file for the trade.
+          REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python bin/check_review_threads.py
