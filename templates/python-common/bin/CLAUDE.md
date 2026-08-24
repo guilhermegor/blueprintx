@@ -143,6 +143,34 @@ A bash script has no conventional unit test, so map the tests-with-every-change 
   self-skip when a dependency is unavailable offline. See
   `tests/integration/test_bin_scripts.py` for the reference example.
 
+## A GATE fails closed. A JANITOR must not — and that is not failing open
+
+Most scripts in `bin/` are **gates**: they answer "may this proceed?", so an error must exit
+non-zero. A few are **janitors** — they clean up after a verdict someone else reached
+(`rerun_stale_gate_runs.sh` re-runs the stale failed runs that still block a PR). A janitor
+that fails the step **manufactures the very artifact it came to remove**: a failed CI job is
+one more red run in the rollup the cleanup exists to clear.
+
+So a janitor reports loudly and returns 0 — via `print_status "warning"` plus a
+`::warning::` annotation so it surfaces in the run summary.
+
+⚠️ **This is the one place the repo's fail-closed default is deliberately inverted, so state
+the test rather than the exception.** Ask: *when this exits 0 having done nothing, is anything
+hidden?* For a gate the answer is yes — an unchecked condition passes silently, which is the
+failure this whole directory exists to prevent. For a janitor the answer is no: the block it
+failed to clear is still there, still red, still blocking, fully visible. **Exiting 0 is only
+acceptable when the untouched status quo is itself the visible signal.** If a janitor's
+failure would leave the tree *looking* clean, it is a gate wearing a janitor's coat — fail it.
+
+⚠️ **A janitor is exactly where a false all-clear hides**, because nobody reads a cleanup
+step's log. Measured (blueprintx#263): the first draft used
+`mapfile -t list < <(list_stale_failed_runs …)`, which **discards the producer's exit status**
+and reports only mapfile's own — so a failing `gh api` yielded an EMPTY list and the script
+announced *"the rollup is already clean"* over a query that never ran. Capture to a string
+with an explicit status check instead, and never let "found nothing" and "could not look"
+print the same sentence. `bin/lint_docker.sh` documents the same trap at its own discovery
+call — read the siblings before writing a new discovery.
+
 ## Structure
 
 All logic goes in named functions. A `main()` function wires them together
