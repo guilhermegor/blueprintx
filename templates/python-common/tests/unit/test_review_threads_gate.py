@@ -755,90 +755,142 @@ def test_the_query_asks_for_the_head_commit() -> None:
 # --------------------------
 
 
-def test_a_declined_redundant_re_review_passes() -> None:
-	"""Zero reviews plus "already reviewed these commits" is the opposite of unreviewed.
+# The reviewer's ACTUAL boilerplate, copied verbatim from blueprintx#264's own comment stream.
+# It is appended to EVERY outcome — performed, rate-limited and failed alike — which is what
+# defeated the first draft of this check.
+_FOOTNOTE = (
+	"> Note: CodeRabbit is an incremental review system and does not re-review already "
+	"reviewed commits. This command is applicable only when automatic reviews are paused."
+)
+_NOTICE_PERFORMED = (
+	f"<summary>\u2705 Action performed</summary>\n\nReview finished.\n\n{_FOOTNOTE}"
+)
+_NOTICE_LIMITED = (
+	f"<summary>\u26a0\ufe0f Action not completed</summary>\n\nReview rate limited.\n\n{_FOOTNOTE}"
+)
+_NOTICE_FAILED = f"<summary>\u274c Action failed</summary>\n\nReview failed.\n\n{_FOOTNOTE}"
 
-	A submitted review is a per-PULL-REQUEST record while an incremental reviewer's memory is
-	per-COMMIT, so a reopened PR, a fresh PR over reviewed commits, or a rebase-and-re-PR
-	reaches a state where the commits ARE reviewed and the PR carries no review. Failing there
-	makes the gate unsatisfiable — the remedy it prints is the very command that answers
-	"already reviewed" — and unsatisfiable gates get bypassed with ``--admin``.
+
+@pytest.mark.parametrize(
+	"str_notice",
+	[_NOTICE_PERFORMED, _NOTICE_LIMITED, _NOTICE_FAILED],
+	ids=["performed", "rate_limited", "failed"],
+)
+def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str) -> None:
+	"""The negative control for the defect this check shipped with and review caught.
+
+	"does not re-review already reviewed commits" is a STANDING FOOTNOTE about how the product
+	works, appended to every outcome — not a statement about this PR. Keying a pass on it made a
+	rate-limited and an outright FAILED review read as "declined as redundant". Measured on
+	blueprintx#264 by reading its own comment stream: all three notices carry it verbatim.
+
+	Parameters
+	----------
+	str_notice : str
+		One of the three real notices, copied from the measured stream.
 	"""
 	cls_gate = _load_gate()
-	list_notices = [
-		_notice("coderabbitai", "Note: CodeRabbit does not re-review already reviewed commits.")
-	]
 	assert (
 		cls_gate.find_missing_review_problem(
-			[], _ROSTER, "h", str_head_oid=_HEAD, list_notices=list_notices
-		)
-		is None
-	)
-
-
-def test_a_refusal_notice_is_still_an_unreviewed_pr() -> None:
-	"""The negative control that keeps the pass path narrow.
-
-	Measured on blueprintx#204 and #213: the roster posted an issue comment — its star-gate
-	refusal notice — and both PRs merged unreviewed with every check green. "The roster said
-	something" must never be the predicate; only "these commits already carry a review" is.
-	"""
-	cls_gate = _load_gate()
-	list_notices = [_notice("coderabbitai", "Action failed — this repository is not starred.")]
-	assert (
-		cls_gate.find_missing_review_problem(
-			[], _ROSTER, "h", str_head_oid=_HEAD, list_notices=list_notices
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			list_notices=[_notice("coderabbitai", str_notice)],
 		)
 		is not None
 	)
 
 
-def test_a_rate_limited_notice_is_still_an_unreviewed_pr() -> None:
-	"""Throttling means the code has not been looked at yet — wait, never merge."""
-	cls_gate = _load_gate()
-	list_notices = [_notice("coderabbitai", "Action not completed — Review rate limited.")]
-	assert (
-		cls_gate.find_missing_review_problem(
-			[], _ROSTER, "h", str_head_oid=_HEAD, list_notices=list_notices
-		)
-		is not None
-	)
+def test_the_failure_message_quotes_the_reviewers_latest_notice() -> None:
+	"""The notice is worth SHOWING even though it is not worth trusting.
 
-
-def test_the_already_reviewed_phrase_must_come_from_the_roster() -> None:
-	"""Anyone can type the phrase; only the reviewer can mean it.
-
-	Without this, a PR author writes "already reviewed" in a comment and the gate stands down —
-	a self-service bypass of the one check that asserts a reviewer ran at all.
+	`reviews == 0` collapses states with different remedies — never ran, refused, rate-limited,
+	declined. The reader cannot tell which without the reviewer's own words, so they are quoted;
+	the verdict is unaffected.
 	"""
 	cls_gate = _load_gate()
-	list_notices = [_notice("some-human", "these commits were already reviewed on the old PR")]
-	assert (
-		cls_gate.find_missing_review_problem(
-			[], _ROSTER, "h", str_head_oid=_HEAD, list_notices=list_notices
-		)
-		is not None
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", _NOTICE_LIMITED)],
 	)
+	assert "Review rate limited." in str_problem
 
 
-def test_a_newer_notice_outranks_an_older_already_reviewed_one() -> None:
-	"""The reviewer's LATEST word wins, so a superseded pass cannot be resurrected.
+def test_the_quoted_notice_is_stripped_of_markup() -> None:
+	"""A notice pasted raw drags hidden HTML markers into a CI log nobody can read."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", _NOTICE_FAILED)],
+	)
+	assert "<summary>" not in str_problem
 
-	Scanning for any matching notice would let an "already reviewed" from an earlier push
-	outrank a later "rate limited" — granting a pass on a sentence the reviewer has since
-	replaced. The comments arrive oldest-first, so the scan runs backwards.
+
+def test_only_a_roster_notice_is_quoted() -> None:
+	"""A comment from anyone else is not the reviewer's word about its own run."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("some-human", "these commits were already reviewed on the old PR")],
+	)
+	assert "already reviewed on the old PR" not in str_problem
+
+
+def test_the_newest_roster_notice_is_the_one_quoted() -> None:
+	"""An older notice describes a state the reviewer has since superseded."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[
+			_notice("coderabbitai", _NOTICE_PERFORMED),
+			_notice("coderabbitai", _NOTICE_LIMITED),
+		],
+	)
+	assert "Review rate limited." in str_problem
+
+
+def test_the_remedy_names_a_full_review_not_an_incremental_one() -> None:
+	"""An incremental reviewer answers "already reviewed" on commits seen on another PR.
+
+	#259 argued this gate would be unsatisfiable because the remedy it printed was the command
+	that fails. A different documented command does not: `@coderabbitai full review` "disregards
+	any comments that CodeRabbit has already made on this pull request, and generates a complete
+	review of the entire pull request". Printing the wrong one is what makes a gate look
+	unsatisfiable, and unsatisfiable gates get bypassed with --admin.
 	"""
 	cls_gate = _load_gate()
-	list_notices = [
-		_notice("coderabbitai", "does not re-review already reviewed commits"),
-		_notice("coderabbitai", "Action not completed — Review rate limited."),
-	]
-	assert (
-		cls_gate.find_missing_review_problem(
-			[], _ROSTER, "h", str_head_oid=_HEAD, list_notices=list_notices
-		)
-		is not None
+	str_problem = cls_gate.find_missing_review_problem([], _ROSTER, "h", str_head_oid=_HEAD)
+	assert "@coderabbitai full review" in str_problem
+
+
+def test_the_superseded_message_also_names_a_full_review() -> None:
+	"""The remedy is printed by TWO messages, and a test on one proves nothing about the other.
+
+	⚠️ Found by a negative control that PASSED: downgrading `full review` to `review` in the
+	superseded-code branch changed nothing red, because the only test asserting the remedy
+	exercised the zero-review branch. Both branches carry the same sentence and it can rot
+	independently in either — which is the "shrink the mutation until only the target test can
+	fail" rule read from the other end: a mutation that fails nothing has found a gap, not a
+	clean bill of health.
+	"""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
 	)
+	assert "@coderabbitai full review" in str_problem
 
 
 def test_the_query_asks_for_the_prs_issue_comments() -> None:

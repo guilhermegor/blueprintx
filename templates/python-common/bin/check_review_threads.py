@@ -49,9 +49,15 @@ measured on #219). ``find_missing_review_problem`` therefore requires a review a
 ``headRefOid``, and prints a DIFFERENT sentence for "reviewed older code" than for "never
 reviewed" — those two used to be indistinguishable, and they call for different actions.
 
-The one exception is a reviewer that declined a **redundant** re-review because the commits
-already carry one (#259). That state also shows ``reviews == 0`` while being the opposite of
-unreviewed, and it is read from the PR's issue comments — see :data:`_ALREADY_REVIEWED_MARKERS`.
+⚠️ ``reviews == 0`` HAS SEVERAL CAUSES AND EXACTLY ONE VERDICT.
+
+Nobody ran, the reviewer refused, it was rate-limited, or it declined as redundant — different
+remedies, and the reviewer's notice is quoted so the reader can tell which. It is quoted and
+never counted: every one of those outcomes carries the same "does not re-review already reviewed
+commits" footnote, so the text cannot discriminate between them (#259, measured on #264 — the PR
+that first tried to trust it). The failure stands in all four cases, and the message names
+``@coderabbitai full review``, which unlike a plain ``review`` does not answer "already
+reviewed".
 """
 
 from __future__ import annotations
@@ -59,6 +65,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -121,26 +128,29 @@ def normalise_login(str_login: str) -> str:
 # "fixed" without ever arguing with a real answer.
 _MIN_REPLY_CHARS = 100
 
-# ⚠️ THE ONLY ZERO-REVIEW STATE THAT IS NOT A FAILURE, AND WHY IT NEEDS A PHRASE.
+# ⚠️ A REVIEWER NOTICE IS QUOTED IN THE MESSAGE AND NEVER COUNTED AS A VERDICT (#259).
 #
-# `reviews == 0` collapses states with OPPOSITE correct verdicts. A reviewer that never ran, one
-# that refused, one that was rate-limited and one that DECLINED AS REDUNDANT all submit no review
-# and produce the same number. Only the last is a pass: a submitted review is a per-PULL-REQUEST
-# record while an incremental reviewer's memory is per-COMMIT, so a reopened PR, a fresh PR over
-# already-reviewed commits, or a rebase-and-re-PR reaches a state where the commits ARE reviewed
-# and the PR carries no review (#259). Failing there makes the gate UNSATISFIABLE — the remedy it
-# prints is the very command that answers "already reviewed" — and unsatisfiable gates get
-# bypassed with `--admin`, taking the real blocks with them.
+# `reviews == 0` collapses states with different remedies — nobody ran, refused, rate-limited,
+# or declined as redundant — so the notice is worth SHOWING. It is not worth trusting, and the
+# first draft of this file trusted it. Measured on #264, the PR that introduced it:
 #
-# These are ENGLISH PHRASES, not a vendor protocol: no tool is named, so the file stays
-# provider-agnostic. Add a phrase when a reviewer words it differently; do not add a tool.
+#   ✅ Action performed     "Review finished."      + the "already reviewed" footnote
+#   ⚠️ Action not completed "Review rate limited."  + the "already reviewed" footnote
+#   ❌ Action failed        "Review failed."        + the "already reviewed" footnote
 #
-# ⚠️ KNOWN CEILING — A NOTICE CARRIES NO COMMIT IDENTITY. An issue comment says "these commits
-# are already reviewed" without saying WHICH, so this path cannot be pinned to `headRefOid` the
-# way a submitted review can (#220). Consulting only the reviewer's NEWEST notice is the
-# mitigation, not a fix: a notice posted before the last push still reads as current. Closing it
-# properly needs the reviewer to name the commits, which no roster member does today.
-_ALREADY_REVIEWED_MARKERS = ("already reviewed", "does not re-review")
+# That sentence is a STANDING FOOTNOTE about how the product works, appended to every outcome —
+# not a statement about this PR. Keying a pass on it made a rate-limited and an outright FAILED
+# review read as "declined as redundant", which is the exact defect shape this file exists to
+# remove: prose that is always true, mistaken for evidence. Caught by review on #264, which asked
+# for evidence the commits were reviewed; there is none in the text, so there is no pass.
+#
+# ⚠️ AND THE UNSATISFIABILITY THAT JUSTIFIED THE PASS DOES NOT EXIST. #259 argued the gate would
+# be unsatisfiable because the remedy it prints (`@coderabbitai review`) is the command that
+# answers "already reviewed". A DIFFERENT documented command does not: `@coderabbitai full
+# review` "disregards any comments that CodeRabbit has already made on this pull request, and
+# generates a complete review of the entire pull request" (CodeRabbit's own docs). So the failure
+# stands and the message names the command that actually clears it.
+_RE_MARKUP = re.compile(r"<!--.*?-->|<[^>]+>", re.DOTALL)
 
 # ⚠️ `reviews` is here because THREADS ALONE CANNOT SEE AN ABSENT REVIEWER.
 #
@@ -488,8 +498,8 @@ def reviewers_who_reported(
 	} & set_roster
 
 
-def find_already_reviewed_notice(list_notices: list[dict], set_roster: set[str]) -> str | None:
-	"""Return the roster's newest notice when it declares the commits already reviewed.
+def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) -> str:
+	"""Return the roster's most recent notice, flattened, to quote in a failure message.
 
 	Parameters
 	----------
@@ -500,28 +510,22 @@ def find_already_reviewed_notice(list_notices: list[dict], set_roster: set[str])
 
 	Returns
 	-------
-	str or None
-		The notice body (truncated) when the roster's most recent notice says the commits
-		were already reviewed, otherwise ``None``.
+	str
+		The newest roster comment with markup stripped and truncated, or ``""`` when the
+		roster has said nothing. ⚠️ DISPLAY ONLY, never a verdict — see the notice block
+		above: every outcome carries the same "already reviewed" footnote, so the text
+		cannot discriminate between them.
 	"""
-	# ⚠️ ONLY THE NEWEST ROSTER NOTICE IS CONSULTED, AND THAT IS THE POINT.
-	#
-	# Scanning for ANY matching notice would let a stale "already reviewed" from an earlier
-	# push outrank a later "rate limited" — granting a pass on the strength of a sentence the
-	# reviewer has since superseded. Newest-first means the reviewer's latest word wins.
+	# Only the NEWEST roster notice. An older one is a sentence the reviewer has since
+	# superseded, so quoting it would describe a state that no longer holds.
 	for dict_comment in reversed(list_notices):
 		if (
 			normalise_login((dict_comment.get("author") or {}).get("login") or "")
 			not in set_roster
 		):
 			continue
-		str_body = (dict_comment.get("body") or "").strip()
-		if any(s in str_body.lower() for s in _ALREADY_REVIEWED_MARKERS):
-			return str_body[:200]
-		# A roster notice that says something ELSE (a refusal, a rate limit) is the reviewer's
-		# current word, and it is not a pass. Stop rather than keep digging for an older one.
-		return None
-	return None
+		return " ".join(_RE_MARKUP.sub(" ", dict_comment.get("body") or "").split())[:200]
+	return ""
 
 
 def find_missing_review_problem(
@@ -574,16 +578,13 @@ def find_missing_review_problem(
 	if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
 		return None
 
-	str_notice = find_already_reviewed_notice(list_notices or [], set_roster)
-	if str_notice:
-		# Printing from a predicate is deliberate: this pass and an ordinary pass are the same
-		# exit code, and an unexplained green on a PR carrying ZERO reviews is precisely the
-		# "two opposite facts, one signal" shape the rest of this file exists to eliminate.
-		print(
-			"A declared reviewer declined a REDUNDANT re-review — these commits carry a review "
-			f"already, so this is not an unreviewed PR:\n{str_notice}"
-		)
-		return None
+	# The reviewer's own latest word, quoted so the reader can see WHICH zero-review state
+	# this is (never ran / refused / rate-limited / declined). It changes the message and
+	# never the verdict — see the notice block above for the measurement that settled that.
+	str_seen = summarise_reviewer_notice(list_notices or [], set_roster)
+	str_quote = (
+		f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
+	)
 
 	# ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
 	# #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
@@ -595,8 +596,10 @@ def find_missing_review_problem(
 			"the commit it was written against and nothing re-pins it when the branch moves, so "
 			"the code that would merge has not been looked at. This is NOT 'no review "
 			"happened'.\n"
-			"Push-triggered re-review is automatic; if it did not fire, ask for one (a comment "
-			"such as '@coderabbitai review' from a user account) and re-run this check."
+			"Push-triggered re-review is automatic; if it did not fire, ask for a FULL re-review "
+			"(a comment such as '@coderabbitai full review' from a user account, which unlike a "
+			"plain 'review' disregards what was already reviewed) and re-run this check."
+			+ str_quote
 		)
 
 	return (
@@ -605,13 +608,12 @@ def find_missing_review_problem(
 		"This is NOT 'the reviewer found nothing': a reviewer that ran and found nothing "
 		"still submits a review, so zero threads would be fine. Zero REVIEWS means the "
 		"reviewer never ran, and nothing on this PR has been looked at.\n"
-		"Trigger it (a comment such as '@coderabbitai review' from a user account, which "
-		"is what .github/workflows/coderabbit_trigger.yml automates) and re-run this check."
+		"Trigger it with '@coderabbitai full review' from a user account. ⚠️ Prefer FULL over "
+		"a plain 'review': an incremental reviewer answers 'already reviewed' on commits it has "
+		"seen on another PR (a reopen, a rebase, a re-PR), and a full review does not." + str_quote
 	)
 
 
-# ⚠️ THE SERVER-SIDE SETTING DOES NOT COVER AN OUTDATED THREAD, SO THE RESOLVE HALF ASSERTED
-# BELOW IS NOT A BELT-AND-BRACES COPY OF IT.
 #
 # `required_conversation_resolution` (and its ruleset spelling `required_review_thread_resolution`)
 # drops a thread whose lines no longer exist in the diff. Measured on #193: the merge button was
