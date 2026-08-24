@@ -67,6 +67,32 @@ Cada metade fica com quem consegue reavaliá-la.
 > run — e é por isso que a **#263** deixou de ser cosmética (o re-run é a única forma de uma PR
 > pronta ficar verde). Ver `issue-waves_20260823_145527.md`, seção Wave B.
 
+🔴 **SUPERSEDIDO EM 2026-08-24 — a #263 foi ENTREGUE (PR #266, v0.16.6).** A frase "o re-run é a
+única forma de uma PR pronta ficar verde" **superestima o custo hoje** e não deve ser lida como
+regra vigente. O que mudou e o que não mudou:
+
+- **Mudou — desde que o token tenha `actions: write`:** as falhas VELHAS acumuladas no rollup não
+  exigem mais re-run manual. Um run que passa re-roda sozinho as falhas obsoletas do mesmo head
+  (`templates/python-common/bin/rerun_stale_gate_runs.sh`, passo `Clear stale failed runs`).
+  Medido ao vivo na própria PR #266: `Re-ran 4 stale failed run(s)`, e a PR chegou a `CLEAN` com
+  **zero** re-runs manuais — a primeira da onda que não precisou de nenhum.
+
+  ⚠️ **A permissão não é detalhe de implementação, é a condição da frase acima** — e neste repo ela
+  é comprovadamente load-bearing: medido em 2026-08-24,
+  `GET /actions/permissions/workflow` responde `default_workflow_permissions: "read"`. Ou seja, é o
+  bloco `permissions: actions: write` **declarado no workflow** que habilita a limpeza; quem
+  remover a linha achando que é redundante volta ao comportamento antigo **em silêncio** (o janitor
+  avisa e sai 0 de propósito).
+  O caso que nenhuma declaração cobre é **PR vinda de fork**, onde o `GITHUB_TOKEN` é read-only por
+  definição. Ali os re-runs manuais continuam sendo N, não um. Então "um clique em vez de N" vale
+  para PR do próprio repo — o caso deste projeto de um mantenedor — e **não** universalmente.
+- **NÃO mudou:** resolver um thread continua não disparando trigger nenhum. Se nada mais rodar
+  depois do resolve, ainda é preciso **um** re-run manual. O teto do #216/#180 continua real; o
+  que caiu foi o custo ESCALAR (1 → 5 → 7 conforme o número de threads respondidos), não o teto.
+
+Ou seja: o re-run manual deixou de ser a única saída e passou a ser, no pior caso, **um** clique
+em vez de N.
+
 ---
 
 ## Execução
