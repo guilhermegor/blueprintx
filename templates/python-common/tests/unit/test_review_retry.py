@@ -16,6 +16,7 @@ must not be re-asked into looking healthy, and one whose reviewer merely *review
 is not a rate-limit case either.
 """
 
+from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
 from types import ModuleType
@@ -47,8 +48,11 @@ def _load_retry() -> ModuleType:
 	return cls_module
 
 
-def _comment(str_login: str, str_body: str) -> dict:
-	"""Build one issue-comment node in the shape the gate's GraphQL query returns.
+_DT_NOW = datetime(2026, 8, 24, 23, 55, 0, tzinfo=timezone.utc)
+
+
+def _comment(str_login: str, str_body: str, int_min_ago: int = 0) -> dict:
+	"""Build one normalised issue comment.
 
 	Parameters
 	----------
@@ -56,13 +60,20 @@ def _comment(str_login: str, str_body: str) -> dict:
 		The comment author's login.
 	str_body : str
 		The comment body.
+	int_min_ago : int
+		How many minutes before ``_DT_NOW`` it was posted.
 
 	Returns
 	-------
 	dict
-		A comment node.
+		A comment with ``login``, ``body`` and ``created_at``.
 	"""
-	return {"author": {"login": str_login}, "body": str_body}
+	dt_at = _DT_NOW - timedelta(minutes=int_min_ago)
+	return {
+		"login": str_login,
+		"body": str_body,
+		"created_at": dt_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+	}
 
 
 def _pr(list_comments: list, list_reviews: list, str_head: str = "cafe123") -> dict:
@@ -71,7 +82,7 @@ def _pr(list_comments: list, list_reviews: list, str_head: str = "cafe123") -> d
 	Parameters
 	----------
 	list_comments : list
-		Issue-comment nodes, oldest first.
+		Accepted for call-site symmetry; comments are passed to the predicate separately.
 	list_reviews : list
 		Submitted-review nodes.
 	str_head : str
@@ -82,11 +93,7 @@ def _pr(list_comments: list, list_reviews: list, str_head: str = "cafe123") -> d
 	dict
 		A pull-request node.
 	"""
-	return {
-		"headRefOid": str_head,
-		"comments": {"nodes": list_comments},
-		"reviews": {"nodes": list_reviews},
-	}
+	return {"headRefOid": str_head, "reviews": {"nodes": list_reviews}}
 
 
 # The real reviewer wording, kept verbatim rather than paraphrased: the phrase IS the interface,
@@ -154,9 +161,15 @@ def test_a_rate_limited_pr_with_no_review_is_re_asked(
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
-	dict_pr = _pr([_comment("coderabbitai", _STR_RATE_LIMITED)], [])
+	list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
+	dict_pr = _pr(list_comments, [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is True
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is True
+	)
 
 
 def test_a_reviewed_head_is_never_re_asked(cls_retry: ModuleType, cls_gate: ModuleType) -> None:
@@ -169,12 +182,17 @@ def test_a_reviewed_head_is_never_re_asked(cls_retry: ModuleType, cls_gate: Modu
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
+	list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
 	dict_pr = _pr(
-		[_comment("coderabbitai", _STR_RATE_LIMITED)],
-		[{"author": {"login": "coderabbitai"}, "commit": {"oid": "cafe123"}}],
+		list_comments, [{"author": {"login": "coderabbitai"}, "commit": {"oid": "cafe123"}}]
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is False
+	)
 
 
 def test_a_pr_with_no_notice_at_all_is_not_re_asked(
@@ -194,9 +212,15 @@ def test_a_pr_with_no_notice_at_all_is_not_re_asked(
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
-	dict_pr = _pr([], [])
+	list_comments = []
+	dict_pr = _pr(list_comments, [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is False
+	)
 
 
 def test_a_successful_trigger_notice_is_not_a_rate_limit(
@@ -215,9 +239,15 @@ def test_a_successful_trigger_notice_is_not_a_rate_limit(
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
-	dict_pr = _pr([_comment("coderabbitai", _STR_PERFORMED)], [])
+	list_comments = [_comment("coderabbitai", _STR_PERFORMED)]
+	dict_pr = _pr(list_comments, [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is False
+	)
 
 
 def test_only_the_newest_notice_decides(cls_retry: ModuleType, cls_gate: ModuleType) -> None:
@@ -233,15 +263,18 @@ def test_only_the_newest_notice_decides(cls_retry: ModuleType, cls_gate: ModuleT
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
-	dict_pr = _pr(
-		[
-			_comment("coderabbitai", _STR_RATE_LIMITED),
-			_comment("coderabbitai", _STR_PERFORMED),
-		],
-		[],
-	)
+	list_comments = [
+		_comment("coderabbitai", _STR_RATE_LIMITED),
+		_comment("coderabbitai", _STR_PERFORMED),
+	]
+	dict_pr = _pr(list_comments, [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is False
+	)
 
 
 def test_the_marker_makes_a_scheduled_run_ask_once_per_window(
@@ -259,25 +292,34 @@ def test_the_marker_makes_a_scheduled_run_ask_once_per_window(
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
-	dict_pr = _pr(
-		[
-			_comment("coderabbitai", _STR_RATE_LIMITED),
-			_comment("guilhermegor", cls_retry._STR_REQUEST),
-		],
-		[],
+	list_comments = [
+		_comment("coderabbitai", _STR_RATE_LIMITED),
+		_comment("guilhermegor", cls_retry._STR_REQUEST),
+	]
+	dict_pr = _pr(list_comments, [])
+
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is False
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
 
-
-def test_a_newer_rate_limit_after_our_request_is_asked_again(
+def test_the_reviewers_own_acknowledgement_does_not_trigger_another_ask(
 	cls_retry: ModuleType, cls_gate: ModuleType
 ) -> None:
-	"""A second throttle AFTER our request is a new window, so ask again.
+	"""🔴 The loop this file shipped once: the ack to our request is NOT a new window.
 
-	The mirror of the test above, and the reason the scan stops at the FIRST of the two
-	rather than merely looking for a marker anywhere: a marker that silences every later
-	notice would make the retry fire exactly once per PR, for ever.
+	Measured live on blueprintx#270 — the reviewer acknowledges a request within ~13 seconds,
+	and that acknowledgement is a roster comment NEWER than our marker, carrying the
+	rate-limit wording. The first implementation asked "is our marker newer than the newest
+	roster notice?", so it met the ack, concluded "not asked yet", and asked again every tick,
+	for ever.
+
+	⚠️ The test that replaced here asserted the DEFECT — it was written from the same mental
+	model as the code, so it agreed with it. A cooldown cannot be fooled this way: we asked
+	recently or we did not.
 
 	Parameters
 	----------
@@ -286,16 +328,48 @@ def test_a_newer_rate_limit_after_our_request_is_asked_again(
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
-	dict_pr = _pr(
-		[
-			_comment("coderabbitai", _STR_RATE_LIMITED),
-			_comment("guilhermegor", cls_retry._STR_REQUEST),
-			_comment("coderabbitai", _STR_RATE_LIMITED),
-		],
-		[],
+	list_comments = [
+		_comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=6),
+		_comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=5),
+		_comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=4),
+	]
+	dict_pr = _pr(list_comments, [])
+
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is False
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is True
+
+def test_the_cooldown_expires_so_a_stuck_pr_is_asked_again(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""The other half: once the window has genuinely passed, ask again.
+
+	Without this the cooldown would be a permanent silence after one request — the failure
+	mode the marker-authorship guard exists to prevent, reintroduced by its replacement.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	list_comments = [
+		_comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=45),
+		_comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=44),
+	]
+	dict_pr = _pr(list_comments, [])
+
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is True
+	)
 
 
 def test_a_review_on_older_code_is_not_a_rate_limit_case(
@@ -314,12 +388,17 @@ def test_a_review_on_older_code_is_not_a_rate_limit_case(
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
+	list_comments = [_comment("coderabbitai", _STR_PERFORMED)]
 	dict_pr = _pr(
-		[_comment("coderabbitai", _STR_PERFORMED)],
-		[{"author": {"login": "coderabbitai"}, "commit": {"oid": "0ldc0de"}}],
+		list_comments, [{"author": {"login": "coderabbitai"}, "commit": {"oid": "0ldc0de"}}]
 	)
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is False
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is False
+	)
 
 
 def test_the_request_names_a_full_review_not_a_plain_one(cls_retry: ModuleType) -> None:
@@ -367,15 +446,18 @@ def test_a_marker_from_another_author_does_not_suppress_the_retry(
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
-	dict_pr = _pr(
-		[
-			_comment("coderabbitai", _STR_RATE_LIMITED),
-			_comment("a-passer-by", cls_retry._STR_REQUEST),
-		],
-		[],
-	)
+	list_comments = [
+		_comment("coderabbitai", _STR_RATE_LIMITED),
+		_comment("a-passer-by", cls_retry._STR_REQUEST),
+	]
+	dict_pr = _pr(list_comments, [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "guilhermegor") is True
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is True
+	)
 
 
 def test_an_unresolvable_identity_trusts_no_marker(
@@ -394,15 +476,16 @@ def test_an_unresolvable_identity_trusts_no_marker(
 	cls_gate : types.ModuleType
 		The gate module.
 	"""
-	dict_pr = _pr(
-		[
-			_comment("coderabbitai", _STR_RATE_LIMITED),
-			_comment("guilhermegor", cls_retry._STR_REQUEST),
-		],
-		[],
-	)
+	list_comments = [
+		_comment("coderabbitai", _STR_RATE_LIMITED),
+		_comment("guilhermegor", cls_retry._STR_REQUEST),
+	]
+	dict_pr = _pr(list_comments, [])
 
-	assert cls_retry.pr_needs_retry(dict_pr, {"coderabbitai"}, cls_gate, "") is True
+	assert (
+		cls_retry.pr_needs_retry(dict_pr, list_comments, {"coderabbitai"}, cls_gate, "", _DT_NOW)
+		is True
+	)
 
 
 def test_every_page_of_open_prs_is_examined(cls_retry: ModuleType) -> None:
@@ -440,3 +523,36 @@ def test_a_malformed_page_cannot_crash_the_sweep(cls_retry: ModuleType) -> None:
 	list_pages = [[{"number": 1}], "not-a-page", [{"no_number": True}, {"number": 4}]]
 
 	assert cls_retry.flatten_pr_numbers(list_pages) == [1, 4]
+
+
+def test_an_author_less_marker_cannot_match_an_unknown_identity(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""An empty author must not equal an empty self-login — found by a SURVIVING mutant.
+
+	Deleting the ``if not str_self`` guard changed nothing red, which is a gap report rather
+	than proof the guard is redundant. Probing it showed the guard is load-bearing in exactly
+	one shape: when our identity is unknown (``""``) and a comment carries an empty author
+	(``""``), the author comparison MATCHES and an author-less marker suppresses the retry —
+	the silent failure this file has now hit twice, in a third disguise.
+
+	Two empty strings comparing equal is the kind of accident no reading catches and every
+	mutation does, provided the suite contains the shape.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	list_comments = [
+		_comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=6),
+		_comment("", cls_retry._STR_REQUEST, int_min_ago=1),
+	]
+	dict_pr = _pr(list_comments, [])
+
+	assert (
+		cls_retry.pr_needs_retry(dict_pr, list_comments, {"coderabbitai"}, cls_gate, "", _DT_NOW)
+		is True
+	)
