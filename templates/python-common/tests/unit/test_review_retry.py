@@ -281,10 +281,13 @@ def test_only_the_newest_notice_decides(cls_retry: ModuleType, cls_gate: ModuleT
 def test_the_marker_makes_a_scheduled_run_ask_once_per_window(
 	cls_retry: ModuleType, cls_gate: ModuleType
 ) -> None:
-	"""Our own request, posted after the notice, stops the next tick asking again.
+	"""Our own recent request stops the next tick asking again.
 
-	Without this the workflow would comment every 10 minutes for the whole window. The check
-	is ordering, not timestamps: the marker sitting above the notice IS "already asked".
+	Without this the workflow would comment every 10 minutes for the whole window. The check is
+	the marker's AGE, not its position: ``_comment`` defaults to ``int_min_ago=0``, so the
+	marker here sits inside the 30-minute cooldown. Position was the first implementation and
+	it shipped a loop — see the block above ``asked_recently`` and the acknowledgement test
+	below.
 
 	Parameters
 	----------
@@ -318,9 +321,9 @@ def test_the_reviewers_own_acknowledgement_does_not_trigger_another_ask(
 	roster notice?", so it met the ack, concluded "not asked yet", and asked again every tick,
 	for ever.
 
-	⚠️ The test that replaced here asserted the DEFECT — it was written from the same mental
-	model as the code, so it agreed with it. A cooldown cannot be fooled this way: we asked
-	recently or we did not.
+	⚠️ The test this one replaced asserted the DEFECT — it was written from the same mental
+	model as the code, so it agreed with it rather than checking it. A cooldown cannot be
+	fooled this way: we asked recently or we did not.
 
 	Parameters
 	----------

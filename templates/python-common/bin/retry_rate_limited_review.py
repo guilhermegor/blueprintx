@@ -127,7 +127,13 @@ def load_gate(path_bin: pathlib.Path) -> types.ModuleType | None:
 		print(f"::warning::cannot load the review gate from {path_gate}")
 		return None
 	cls_module = importlib.util.module_from_spec(cls_spec)
-	cls_spec.loader.exec_module(cls_module)
+	try:
+		cls_spec.loader.exec_module(cls_module)
+	except Exception as cls_error:  # noqa: BLE001 - an unimportable gate is not this job's crash
+		print(
+			f"::warning::the review gate at {path_gate} failed to import: {str(cls_error)[:200]}"
+		)
+		return None
 	return cls_module
 
 
@@ -477,6 +483,46 @@ def examine_pr(
 	return request_review(str_repo, int_number)
 
 
+# ⚠️ THE SETUP STEP RAISES TOO, AND IT IS EASY TO MISS BECAUSE IT LOOKS LIKE CONFIGURATION.
+# `exec_module` propagates any import-time error from the gate, and `load_roster` raises on a
+# roster that exists but is malformed (an unknown `posts:`, a missing one, a roster of only
+# status members). An ABSENT roster is fine — the gate self-skips by design — but a BROKEN one
+# would end this scheduled job with a traceback instead of a warning, on every tick, for ever.
+#
+# Same property as `examine_pr` one level up: degrade and report, never die. The catch is broad
+# for the same reason — to this caller an import error, a malformed roster and an ineligible
+# roster all mean "there is nothing I can safely do this tick".
+def resolve_setup(path_bin: pathlib.Path) -> tuple[types.ModuleType, set[str]] | None:
+	"""Load the gate and the roster, or report why nothing can be done.
+
+	Parameters
+	----------
+	path_bin : pathlib.Path
+		The ``bin/`` directory holding the gate.
+
+	Returns
+	-------
+	tuple of (types.ModuleType, set of str), or None
+		The gate module and the logins that can submit a review, or ``None`` when either
+		cannot be resolved.
+	"""
+	cls_gate = load_gate(path_bin)
+	if cls_gate is None:
+		return None
+
+	try:
+		dict_roster = cls_gate.load_roster(pathlib.Path.cwd())
+		set_reviewers = cls_gate.reviewer_logins(dict_roster)
+	except Exception as cls_error:  # noqa: BLE001 - see the block above: report, never die
+		print(f"::warning::could not read the reviewer roster: {str(cls_error)[:200]}")
+		return None
+
+	if not set_reviewers:
+		print("no reviewer in the roster can submit a review — nothing to re-ask.")
+		return None
+	return cls_gate, set_reviewers
+
+
 def main() -> int:
 	"""Re-ask for a review on every open PR whose reviewer is rate limited.
 
@@ -491,16 +537,10 @@ def main() -> int:
 		print("::warning::GITHUB_REPOSITORY is unset — nothing to do.")
 		return 0
 
-	path_bin = pathlib.Path(__file__).resolve().parent
-	cls_gate = load_gate(path_bin)
-	if cls_gate is None:
+	tuple_setup = resolve_setup(pathlib.Path(__file__).resolve().parent)
+	if tuple_setup is None:
 		return 0
-
-	dict_roster = cls_gate.load_roster(pathlib.Path.cwd())
-	set_reviewers = cls_gate.reviewer_logins(dict_roster)
-	if not set_reviewers:
-		print("no reviewer in the roster can submit a review — nothing to re-ask.")
-		return 0
+	cls_gate, set_reviewers = tuple_setup
 
 	# ⚠️ `--paginate`, not a bare `per_page=100`: without it only the first page is read, and a
 	# rate-limited PR on page two is never retried — a silent partial pass, which is the exact
