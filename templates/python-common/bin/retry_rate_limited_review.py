@@ -428,6 +428,55 @@ def resolve_self_login() -> str:
 	return str(dict_user["login"])
 
 
+# ⚠️ ONE PR'S FAILURE MUST NOT END THE SWEEP. `fetch_pull_request` RAISES on an API failure
+# (four `raise RuntimeError` sites) and indexes a `pullRequest` node that can come back null, so
+# a single deleted, transferred or transiently-500ing PR would abort the loop and leave every PR
+# BEHIND IT unexamined — silently, because the run would just end. That is the same
+# silent-partial-pass shape as reading only the first page of results, one level up. This runs
+# unattended every ten minutes, so it must degrade per PR, never per sweep.
+#
+# The catch is deliberately broad: to this caller a network error, a null node and a malformed
+# payload all mean the same thing — this PR cannot be judged now, try the next one.
+def examine_pr(
+	str_repo: str,
+	int_number: int,
+	set_reviewers: set[str],
+	cls_gate: types.ModuleType,
+	str_self_login: str,
+) -> bool:
+	"""Examine one PR and re-ask for its review when it is waiting on a rate limit.
+
+	Parameters
+	----------
+	str_repo : str
+		``owner/repo``.
+	int_number : int
+		The PR number.
+	set_reviewers : set of str
+		Logins that can actually submit a review.
+	cls_gate : types.ModuleType
+		The imported gate module.
+	str_self_login : str
+		The login the retry posts as.
+
+	Returns
+	-------
+	bool
+		``True`` when a review was requested for this PR.
+	"""
+	str_owner, _, str_name = str_repo.partition("/")
+	try:
+		dict_pr = cls_gate.fetch_pull_request(str_owner, str_name, int_number)
+		list_comments = fetch_comments(str_repo, int_number)
+	except Exception as cls_error:  # noqa: BLE001 - see the block above: degrade per PR
+		print(f"::warning::could not read #{int_number}, skipping it: {str(cls_error)[:200]}")
+		return False
+
+	if not pr_needs_retry(dict_pr, list_comments, set_reviewers, cls_gate, str_self_login):
+		return False
+	return request_review(str_repo, int_number)
+
+
 def main() -> int:
 	"""Re-ask for a review on every open PR whose reviewer is rate limited.
 
@@ -470,15 +519,10 @@ def main() -> int:
 	list_open = flatten_pr_numbers(list_pages)
 
 	str_self_login = resolve_self_login()
-	str_owner, _, str_name = str_repo.partition("/")
-	int_asked = 0
-	for int_number in list_open:
-		dict_pr = cls_gate.fetch_pull_request(str_owner, str_name, int(int_number))
-		list_comments = fetch_comments(str_repo, int(int_number))
-		if pr_needs_retry(
-			dict_pr, list_comments, set_reviewers, cls_gate, str_self_login
-		) and request_review(str_repo, int(int_number)):
-			int_asked += 1
+	int_asked = sum(
+		examine_pr(str_repo, int(int_number), set_reviewers, cls_gate, str_self_login)
+		for int_number in list_open
+	)
 
 	print(f"open PRs checked: {len(list_open)}; review re-requested on {int_asked}.")
 	return 0

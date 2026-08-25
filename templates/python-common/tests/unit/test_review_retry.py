@@ -556,3 +556,33 @@ def test_an_author_less_marker_cannot_match_an_unknown_identity(
 		cls_retry.pr_needs_retry(dict_pr, list_comments, {"coderabbitai"}, cls_gate, "", _DT_NOW)
 		is True
 	)
+
+
+def test_one_unreadable_pr_does_not_end_the_sweep(
+	cls_retry: ModuleType, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""A PR whose fetch raises is skipped with a warning; the sweep continues.
+
+	``fetch_pull_request`` raises on an API failure and indexes a node that can be null, so a
+	single deleted, transferred or transiently-failing PR would abort the loop and leave every
+	PR behind it unexamined — silently, because the run would simply end. This job runs
+	unattended every ten minutes, so it must degrade per PR, never per sweep.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	monkeypatch : pytest.MonkeyPatch
+		Fixture used to make the fetch raise.
+	"""
+
+	def _raise(*args: object, **kwargs: object) -> dict:
+		raise RuntimeError("GraphQL query failed: boom")
+
+	monkeypatch.setattr(cls_gate, "fetch_pull_request", _raise)
+
+	assert (
+		cls_retry.examine_pr("acme/widget", 7, {"coderabbitai"}, cls_gate, "guilhermegor") is False
+	)
