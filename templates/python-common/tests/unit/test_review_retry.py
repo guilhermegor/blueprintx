@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import Mock
 
 import pytest
 
@@ -558,6 +559,10 @@ def test_an_author_less_marker_cannot_match_an_unknown_identity(
 	)
 
 
+# ⚠️ A `Mock(side_effect=...)` rather than an inner function that raises. An inner function is a
+# decision point, and `bin/check_complexity.sh` caps tests/ at cyclomatic complexity 1 — measured
+# the hard way here, since BlueprintX's own tree has no tests/ so only the GENERATED project
+# exercises that ceiling.
 def test_one_unreadable_pr_does_not_end_the_sweep(
 	cls_retry: ModuleType, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -577,11 +582,11 @@ def test_one_unreadable_pr_does_not_end_the_sweep(
 	monkeypatch : pytest.MonkeyPatch
 		Fixture used to make the fetch raise.
 	"""
-
-	def _raise(*args: object, **kwargs: object) -> dict:
-		raise RuntimeError("GraphQL query failed: boom")
-
-	monkeypatch.setattr(cls_gate, "fetch_pull_request", _raise)
+	monkeypatch.setattr(
+		cls_gate,
+		"fetch_pull_request",
+		Mock(side_effect=RuntimeError("GraphQL query failed: boom")),
+	)
 
 	assert (
 		cls_retry.examine_pr("acme/widget", 7, {"coderabbitai"}, cls_gate, "guilhermegor") is False
