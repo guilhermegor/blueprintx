@@ -23,7 +23,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.gitignore` | Node + dist + env patterns |
 | `.vscode/settings.json` | Format-on-save (Prettier), ESLint fix-on-save, workspace TypeScript SDK |
 | `CONTRIBUTING.md` | Branch naming, commit style, and code-style guide template |
-| `.github/workflows/` | GitHub Actions CI — split per-job workflows: `build.yml`, `lint.yml`, `test.yml`, `type-check.yml` on push/PR to `main` |
+| `.github/workflows/` | GitHub Actions CI — split per-job workflows: `build.yml`, `lint.yml`, `test.yml`, `type-check.yml` on push/PR to `main`, plus `review-threads.yml` (below) |
+| `.github/workflows/review-threads.yml` | The answered-review-thread gate (blueprintx#175), on `pull_request` / `pull_request_review` / `pull_request_review_comment`. ⚠️ **Does not carry its own copy of the predicate.** It fetches `templates/python-common/bin/check_review_threads.py` from BlueprintX at run time and runs that — the same file the Python tiers run, single-sourced by construction. Rejected alternatives (vendoring here, or moving the shared script into `templates/common/`) are recorded in the workflow's own header comment, along with the network-dependency cost this choice accepts |
+| `.github/.review-bots.yaml` | This ecosystem's OWN reviewer roster for `review-threads.yml` — data, not logic, so it is genuinely per-ecosystem (unlike the gate script). Staged to the checkout root by the workflow before the script runs, because `.github/` is the only ts-common tree every `ts_*.sh` scaffold copies wholesale; there is no scaffold-time `cp` of an arbitrary root-level file the way `python_lib_minimal.sh` copies `python-common/.review-bots.yaml` |
 | _(CODEOWNERS, PR template)_ | Sourced from language-agnostic `templates/common/.github/` — copied into every scaffolded project |
 
 ## Editing rules
