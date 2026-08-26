@@ -230,7 +230,20 @@ def parse_declared_wait(str_notice: str) -> int | None:
 	cls_match = _RE_DECLARED_WAIT.search(str_notice)
 	if cls_match is None:
 		return None
-	return int(cls_match.group(1))
+	int_wait = int(cls_match.group(1))
+	# ⚠️ `\d+` is unbounded, and this text comes from an EXTERNAL service — so the parsed value is
+	# untrusted input, not a number we chose. `timedelta(minutes=10**100)` raises OverflowError
+	# ("Python int too large to convert to C int"), and the only caller sits OUTSIDE examine_pr's
+	# try/except, which wraps just the fetch. So one absurd number would abort the whole unattended
+	# sweep and leave every later PR unexamined — the exact per-PR degradation rule this file
+	# already states for a deleted or transferred PR. A wait we cannot represent is not a wait:
+	# return None and let the marker cooldown decide, which is what happens for any refusal that
+	# declares no number at all. Raised by review on blueprintx#278.
+	try:
+		timedelta(minutes=int_wait)
+	except OverflowError:
+		return None
+	return int_wait
 
 
 def declared_wait_still_open(dict_notice: dict | None, dt_now: datetime) -> bool:

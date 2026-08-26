@@ -726,3 +726,25 @@ def test_a_declared_wait_with_an_unreadable_timestamp_defers_to_the_cooldown(
 	}
 
 	assert cls_retry.declared_wait_still_open(dict_notice, _DT_NOW) is False
+
+
+def test_an_oversized_declared_wait_is_rejected_instead_of_crashing(
+	cls_retry: ModuleType,
+) -> None:
+	"""⚠️ The number comes from an EXTERNAL service, so it is untrusted input.
+
+	The digit pattern is unbounded and ``timedelta(minutes=10**100)`` raises
+	``OverflowError``. The only caller sits outside ``examine_pr``'s try/except — which wraps
+	just the fetch — so one absurd
+	value would abort the entire unattended sweep and leave every later PR unexamined. That is
+	the per-PR degradation rule this module already states for a deleted or transferred PR,
+	reached through the parser instead of the network.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	str_absurd = f"Your next included review will be available in {'9' * 100} minutes."
+
+	assert cls_retry.parse_declared_wait(str_absurd) is None
