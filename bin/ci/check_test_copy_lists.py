@@ -95,7 +95,9 @@ DICT_EXPECTED_ABSENT = {
         "test_http_downloader.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_logs.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_logs_emitter.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
-        "test_outlook_gateway.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
+        "test_ms_office_outlook_gateway.py": (
+            "lib-minimal vendors utils under _internal/ (import rewrite)"
+        ),
         "test_paths.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_provenance.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_daily_cache.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
@@ -104,8 +106,16 @@ DICT_EXPECTED_ABSENT = {
         "test_sidecar_metadata.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_signatures.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_tabular_reader.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
+        "test_xml_reader.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_text.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_zip_extractor.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
+        # ms_office/ (Outlook automation, Excel sheet-name rules) and email/ (dispatch
+        # orchestration) are service-tier concerns (blueprintx#118/#121) — lib-minimal ships
+        # neither package, so their tests have no module here to cover.
+        "test_ms_office_excel_sheet_names.py": "lib-minimal does not ship ms_office/",
+        "test_email_dispatch.py": "lib-minimal does not ship email/",
+        "test_email_sender.py": "lib-minimal does not ship email/",
+        "test_email_html_body.py": "lib-minimal does not ship email/",
     },
 }
 
