@@ -191,6 +191,10 @@ copy_mkdocs_templates() {
         > "$project_path/docs/index.md"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/docs/architecture.md" \
         "$project_path/docs/architecture.md"
+    # Gates architecture.md into check_docs_sections.py's required set (blueprintx#130) —
+    # the shared default does not name it, so an ungated page would ship without it.
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/docs/.docs-skeleton.yaml" \
+        "$project_path/docs/.docs-skeleton.yaml"
     # API reference is a directory (index + one page) from day one, never a single
     # api.md — splitting it later rots published deep links (see docs/api/index.md).
     mkdir -p "$project_path/docs/api"

@@ -1,0 +1,12 @@
+# Overrides bin/check_docs_sections.py's default required-pages set (see that file's
+# _DEFAULT_REQUIRED_PAGES) to also require architecture.md, which this tier ships but the
+# shared default does not name — blueprintx#130.
+required_pages:
+  - index.md
+  - usage.md
+  - examples.md
+  - architecture.md
+  - api/index.md
+  - faq.md
+  - contributing.md
+  - changelog.md
