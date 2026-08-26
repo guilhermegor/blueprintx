@@ -745,6 +745,26 @@ def test_an_oversized_declared_wait_is_rejected_instead_of_crashing(
 	cls_retry : types.ModuleType
 		The retry module.
 	"""
+	# ⚠️ 5000 digits, not 100. The first version used 100 — below the 4300-digit conversion
+	# limit — so it exercised only the OverflowError path and passed while the ValueError path
+	# was wide open. A fixture has to reach the boundary it claims to test.
+	str_absurd = f"Your next included review will be available in {'9' * 5000} minutes."
+
+	assert cls_retry.parse_declared_wait(str_absurd) is None
+
+
+def test_a_representable_but_oversized_wait_is_also_rejected(cls_retry: ModuleType) -> None:
+	"""The OTHER limit: converts fine, but ``timedelta`` cannot hold it.
+
+	Two different exceptions guard this path at different depths — ``ValueError`` during the
+	conversion, ``OverflowError`` during the ``timedelta``. One test each, because a single
+	fixture cannot reach both and a guard covering only one reads as covering both.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
 	str_absurd = f"Your next included review will be available in {'9' * 100} minutes."
 
 	assert cls_retry.parse_declared_wait(str_absurd) is None
