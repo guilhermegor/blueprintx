@@ -127,6 +127,33 @@ jobs:
           LINT_ACTIONS_REQUIRED: "1"
         run: bash bin/ci/check_actions.sh
 
+  secret-scan:
+    name: GitGuardian — secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # ⚠️ NOT wired into bin/enable_repo_rules.sh's REQUIRED_CHECKS (blueprintx#155). Per
+    # `measure-a-checks-population-before-requiring-it`, GitGuardian's population here is
+    # unmeasured — GITGUARDIAN_API_KEY is not yet set as a repo secret on BlueprintX, so this job
+    # cannot report at all until an admin runs
+    # `gh secret set GITGUARDIAN_API_KEY --repo <owner>/<repo>`. Absent the key, `ggshield` fails
+    # loud on its own (exit 3, "A GitGuardian API key is needed") rather than silently no-op'ing —
+    # same contract as GH_PAT_REVIEW_TRIGGER in coderabbit_trigger.yml: a scanner that never ran
+    # must not print the same thing as a scanner that found nothing.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # ggshield needs the full range to diff, not just the tip.
+          fetch-depth: 0
+
+      - name: Install ggshield
+        run: pipx install ggshield
+
+      - name: Scan for secrets
+        env:
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+        run: ggshield secret scan ci
+
   project-name-identities:
     name: Dist name vs import package
     runs-on: ubuntu-latest
