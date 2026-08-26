@@ -84,7 +84,7 @@ of your public `__all__`. The internal imports are package-qualified
   - **A guarded import is still an import.** `try: import numpy / except ModuleNotFoundError:`
     degrades gracefully at runtime and changes nothing about the declaration — that pattern is
     why `numpy` went undeclared for as long as it did.
-  - **Configuration lives in this file's `[tool.deptry]` block, never in a shared
+  - **Configuration lives in `pyproject.toml`'s `[tool.deptry]` block, never in a shared
     `deptry.toml`.** deptry takes its dependency list from the same file it takes its settings
     from, so `--config <other>` silently re-points it at a manifest that declares nothing.
 
