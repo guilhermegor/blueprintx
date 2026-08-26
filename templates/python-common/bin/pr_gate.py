@@ -323,6 +323,11 @@ def _api(str_method: str, str_url: str, dict_payload: dict | None = None) -> obj
 def _graphql(str_query: str, dict_vars: dict) -> object:
 	"""Call the GraphQL API (native auto-merge has no REST equivalent).
 
+	⚠️ GraphQL answers a REFUSED mutation with HTTP 200 and an ``errors`` array in the
+	**body** — the HTTP-status check inside :func:`_api` never sees it. Discarding the return
+	value here would make a rejected mutation a silent no-op: the log says the action was
+	taken, nothing happened, and there is nothing to investigate.
+
 	Parameters
 	----------
 	str_query : str
@@ -333,9 +338,39 @@ def _graphql(str_query: str, dict_vars: dict) -> object:
 	Returns
 	-------
 	object
-		Parsed JSON, or ``None`` on error.
+		Parsed JSON, or ``None`` on a transport error (from :func:`_api`).
 	"""
-	return _api("POST", f"{API}/graphql", {"query": str_query, "variables": dict_vars})
+	dict_response = _api("POST", f"{API}/graphql", {"query": str_query, "variables": dict_vars})
+	list_errors = dict_response.get("errors") if isinstance(dict_response, dict) else None
+	if list_errors:
+		print(f"::error::GraphQL mutation refused: {list_errors}", file=sys.stderr)
+	return dict_response
+
+
+# ⚠️ Called AFTER the poll in main(), never up front. Arming `enablePullRequestAutoMerge` on a
+# PR fresh from `opened` finds nothing pending yet — sibling workflows have not registered their
+# check-runs — so GitHub either merges too early or refuses the mutation outright (measured). By
+# the time the poll has run, those check-runs exist, so native auto-merge has a real blocker to
+# wait on: checks AND unresolved review threads alike. A thread resolved LATER needs no extra
+# trigger (`pull_request_review_thread` is a webhook event, not a workflow trigger, and adding it
+# to `on:` makes GitHub reject the whole file) — the already-armed mutation just keeps waiting.
+def _enable_auto_merge(str_node_id: str) -> None:
+	"""Arm GitHub's native auto-merge for one PR (see module docstring, decision 1).
+
+	Parameters
+	----------
+	str_node_id : str
+		The pull request's GraphQL node id.
+
+	Returns
+	-------
+	None
+	"""
+	_graphql(
+		"mutation($id:ID!){enablePullRequestAutoMerge(input:{pullRequestId:$id,"
+		"mergeMethod:SQUASH}){clientMutationId}}",
+		{"id": str_node_id},
+	)
 
 
 def collect_axes(list_check_runs: list, dict_axis_rules: dict) -> tuple:
@@ -520,17 +555,13 @@ def main() -> int:
 	bool_lock_only = is_lockfile_only(list_paths)
 	bool_eligible = is_auto_mergeable(str_risk, str_size, list_labels, bool_lock_only)
 
-	# Arm auto-merge ONCE up front — it is independent of the poll below, because GitHub gates the
-	# real merge on the ruleset's required checks, not on anything this script observes.
-	if bool_eligible:
-		_graphql(
-			"mutation($id:ID!){enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:SQUASH}){clientMutationId}}",
-			{"id": dict_pr.get("node_id")},
-		)
-
 	dict_axes, dict_failing = poll_axes_until_terminal(
 		str_repo, str_head_sha, int_max_polls, int_poll_seconds
 	)
+
+	# Hand the merge over at the END of the run — see the comment above _enable_auto_merge.
+	if bool_eligible:
+		_enable_auto_merge(dict_pr.get("node_id"))
 
 	sync_gate_labels(
 		str_repo,
