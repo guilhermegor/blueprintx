@@ -57,6 +57,12 @@ cmd_check_function_length() {
 	python3 templates/python-common/bin/check_function_length.py --root .
 }
 
+# Mirrors the Makefile's `verify_tiers`. Extra argv is forwarded, so `./tasks.sh verify_tiers
+# --jobs 1` serialises the run the same way `make verify_tiers JOBS=1` does.
+cmd_verify_tiers() {
+	bash "$SCRIPT_DIR/bin/ci/scaffold_lint_test_all.sh" "$@"
+}
+
 main() {
 	local target="${1:-help}"
 	shift || true
@@ -74,6 +80,7 @@ main() {
 		precommit) cmd_precommit ;;
 		lint) cmd_lint ;;
 		check_function_length) cmd_check_function_length ;;
+		verify_tiers) cmd_verify_tiers "$@" ;;
 		update_venv) cmd_update_venv ;;
 		mkdocs_server|mkdocs_serve) cmd_mkdocs_serve ;;
 		changelog) cmd_changelog ;;
