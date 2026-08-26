@@ -594,3 +594,177 @@ def test_one_unreadable_pr_does_not_end_the_sweep(
 	assert (
 		cls_retry.examine_pr("acme/widget", 7, {"coderabbitai"}, cls_gate, "guilhermegor") is False
 	)
+
+
+# --------------------------
+# The reviewer's DECLARED wait (blueprintx#272)
+# --------------------------
+
+
+# Verbatim from the live refusal on blueprintx#275 (2026-08-26). Transcribing the shape by hand
+# would test our idea of the message; this is the sentence the reviewer actually sent, which is
+# the only thing the parser will ever meet.
+_STR_RATE_LIMITED_35 = (
+	"⚠️ Action not completed\n\nReview rate limited.\n\nYour included review limit is currently "
+	"reached under our Fair Usage Limits Policy. This review may still proceed through "
+	"usage-based billing if eligible. Your next included review will be available in 35 minutes."
+)
+
+
+def test_the_declared_wait_is_read_from_the_reviewers_own_words(cls_retry: ModuleType) -> None:
+	"""The number in the refusal is the number used — not a local constant.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	assert cls_retry.parse_declared_wait(_STR_RATE_LIMITED_35) == 35
+
+
+def test_a_refusal_that_declares_no_wait_yields_no_number(cls_retry: ModuleType) -> None:
+	"""No declared number means no opinion, so the marker cooldown decides alone.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	assert cls_retry.parse_declared_wait(_STR_RATE_LIMITED) is None
+
+
+def test_a_pr_inside_the_declared_window_is_not_re_asked(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""⚠️ The defect this issue exists for: asking inside the window burns a request.
+
+	A refused request is not free — it still counts as traffic and pushes the window further
+	out, so a too-early retry makes the very wait it is impatient about longer. Measured three
+	times on this repo (31, 34 and 35 minutes) against a constant of 30, which is below all of
+	them: the guess was wrong in the one direction that costs something.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20)]
+	dict_pr = _pr(list_comments, [])
+
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is False
+	)
+
+
+def test_a_pr_past_the_declared_window_is_re_asked(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""The other half of the pair: once the declared wait elapses, the retry fires.
+
+	Without this, a gate that simply never asks would satisfy the test above — the two together
+	are what pin the behaviour to the declared number rather than to silence.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)]
+	dict_pr = _pr(list_comments, [])
+
+	assert (
+		cls_retry.pr_needs_retry(
+			dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is True
+	)
+
+
+def test_the_declared_window_is_measured_from_the_notice_not_from_our_marker(
+	cls_retry: ModuleType,
+) -> None:
+	"""⚠️ The clock starts when the REVIEWER spoke, never when we last asked.
+
+	Anchoring on our own request would restart the window every time we asked — the same
+	self-referential mistake the ordering-vs-cooldown block documents one layer up, where a
+	predicate read our own traffic as evidence about someone else's state.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	dict_notice = _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)
+
+	assert cls_retry.declared_wait_still_open(dict_notice, _DT_NOW) is False
+
+
+def test_a_declared_wait_with_an_unreadable_timestamp_defers_to_the_cooldown(
+	cls_retry: ModuleType,
+) -> None:
+	"""An undateable refusal must not stall the retry for ever.
+
+	Returning ``True`` on a timestamp we cannot parse would suppress every future request on
+	one malformed field — a permanent silence produced by a formatting accident.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	dict_notice = {
+		"login": "coderabbitai",
+		"body": _STR_RATE_LIMITED_35,
+		"created_at": "not-a-date",
+	}
+
+	assert cls_retry.declared_wait_still_open(dict_notice, _DT_NOW) is False
+
+
+def test_an_oversized_declared_wait_is_rejected_instead_of_crashing(
+	cls_retry: ModuleType,
+) -> None:
+	"""⚠️ The number comes from an EXTERNAL service, so it is untrusted input.
+
+	The digit pattern is unbounded and ``timedelta(minutes=10**100)`` raises
+	``OverflowError``. The only caller sits outside ``examine_pr``'s try/except — which wraps
+	just the fetch — so one absurd
+	value would abort the entire unattended sweep and leave every later PR unexamined. That is
+	the per-PR degradation rule this module already states for a deleted or transferred PR,
+	reached through the parser instead of the network.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	# ⚠️ 5000 digits, not 100. The first version used 100 — below the 4300-digit conversion
+	# limit — so it exercised only the OverflowError path and passed while the ValueError path
+	# was wide open. A fixture has to reach the boundary it claims to test.
+	str_absurd = f"Your next included review will be available in {'9' * 5000} minutes."
+
+	assert cls_retry.parse_declared_wait(str_absurd) is None
+
+
+def test_a_representable_but_oversized_wait_is_also_rejected(cls_retry: ModuleType) -> None:
+	"""The OTHER limit: converts fine, but ``timedelta`` cannot hold it.
+
+	Two different exceptions guard this path at different depths — ``ValueError`` during the
+	conversion, ``OverflowError`` during the ``timedelta``. One test each, because a single
+	fixture cannot reach both and a guard covering only one reads as covering both.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	str_absurd = f"Your next included review will be available in {'9' * 100} minutes."
+
+	assert cls_retry.parse_declared_wait(str_absurd) is None
