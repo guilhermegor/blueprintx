@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    // "node10" (formerly "node") is deprecated as of TS 6 but is still the correct
+    // resolution strategy for a plain CommonJS emit with no bundler involved.
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
+    "outDir": "./dist/cjs",
+    "declaration": false,
+    "noEmit": false
+  },
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+}
