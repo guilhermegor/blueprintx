@@ -161,6 +161,19 @@ jobs:
         # this must be listed here or a hook-skipping contributor bypasses it.
         run: poetry run python bin/check_dtypes.py
 
+      - name: Run Direct-Dependency Gate
+        if: runner.os == 'Linux'
+        # Mirrors the `lint-deps` pre-commit hook: every package src/ imports must be declared
+        # in pyproject.toml, never inherited from another package's tree. CI runs its gates as
+        # explicit steps, not via pre-commit, so this must be listed here or a hook-skipping
+        # contributor bypasses it.
+        #
+        # ⚠️ This step is the one that CANNOT be replaced by a `pipx run deptry`: the gate has
+        # to execute inside the Poetry venv, because deptry maps a module back to its
+        # distribution through the metadata of the environment it runs in. Outside it, the
+        # verdict inverts rather than degrades (bin/lint_deps.sh carries the measurement).
+        run: bash bin/lint_deps.sh
+
       - name: Run Layer Import Policy Enforcement
         if: runner.os == 'Linux'
         # Mirrors the `check-layer-imports` pre-commit hook: a third-party dependency is

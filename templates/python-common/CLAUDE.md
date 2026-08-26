@@ -97,6 +97,7 @@ Most of this directory is *tooling* (ruff, pytest, poe_tasks.toml, bin scripts).
 | `bin/ship.sh` | `poe ship` — packages the committed default-branch tree into `dist/<repo-kebab>_YYYYMMDD_HHMMSS.zip` (sourced from `templates/common/bin/`) |
 | `bin/run.sh` | Run the project entrypoint (auto-resolves `src/main.py` → `src/controller/main.py` → `src/<pkg>/main.py`); skips reinstall when `.venv` is newer than `pyproject.toml`/`poetry.lock`; Poetry→pip→system fallback chain; sources `lib/bootstrap.sh` + `lib/pip_fallback.sh` and wires the corporate CA |
 | `bin/check_unix_filenames.sh` | Pre-commit hook: reject filenames with special characters |
+| `bin/lint_deps.sh` | `poe lint` + `lint-deps` hook + CI — **deptry** over `src/`: every imported package must be a DIRECT dependency, never inherited from another package's tree. The rule was prose in `lib-minimal/CLAUDE.md` with no enforcement until blueprintx#238, and its first run found it already broken in the shipped templates: **both DDD tiers imported pandas in five `utils/` modules while declaring it nowhere**, reaching them only through `wwdates` (a business-day calendar). ⚠️ **No system-binary fallback, deliberately** — unlike `lint_shell.sh`/`lint_actions.sh`, whose tools answer the same question wherever they run. deptry maps a module back to its distribution through the metadata of the environment it runs in, so outside the venv the verdict **inverts** rather than degrades: measured on ddd-service-native-db, an outside-venv run produced 9 findings, all false and two mutually contradictory (`python-dotenv` declared-but-unused AND `dotenv` missing), while both genuine defects vanished. Absence is therefore fatal, not a skip. Fails when discovery matches zero files (deptry exits 0 having scanned nothing). ⚠️ **Config lives in each tier's `pyproject.toml`, never a shared `deptry.toml`** — `--config <file>` re-points deptry at that file as the MANIFEST too, so it stops reading the dependency table and relabels every real dep transitive. `bin/` is out of scope: its imports belong to the dev group, and one run cannot hold both profiles. Should-fail witnesses (fires / stays quiet / zero discovery / hard-fails when absent) in `tests/integration/test_bin_scripts.py` |
 | `bin/lint_shell.sh` | `poe lint` + `lint-shell` hook — shellcheck + shfmt over `bin/**/*.sh`. Resolves each vendored CLI via `poetry run` (shellcheck-py/shfmt-py), then a system binary, then skips. ⚠️ **Both resolution branches probe `--version`, not just `command -v`** — the latter answers "is there a file by that name on PATH", never "does it run", so a shadowing stub or half-installed binary resolved as present and its startup failure was reported as a lint finding (blueprintx#111; `lint_actions.sh` had the same defect, `lint_docker.sh` did not) |
 | `bin/lint_actions.sh` | `poe lint` + `lint-actions` hook + CI — **actionlint** over `.github/workflows/`. `yamllint` validates YAML; `actionlint` validates a *workflow*, and only the second is the question GitHub asks: a workflow GitHub refuses produces **no red check at all** (no label, no comment), so the PR merely looks like it is waiting — a dead gate and a slow gate are indistinguishable from outside. Same resolve-don't-install contract as the other wrappers, with two properties that make it real: it **fails when discovery matches zero files** (actionlint exits 0 with no args, so a broken glob reports success forever) and the `find` expression is **grouped** (`\( -name '*.yaml' -o -name '*.yml' \) -type f`, since `-o` binds looser than the implicit `-a`). CI sets `LINT_ACTIONS_REQUIRED=1` — a graceful skip is right on a contributor's box and placebo in CI. Pins `SHELLCHECK_OPTS` to the house severity so a `run:` block cannot pass one gate and fail the other |
 | `bin/check_clean_index.sh` | `pre-push` hook (`check-clean-index`) — refuses to push while the **index** is non-empty. Staged-but-uncommitted work at push time is the fingerprint of a commit that was REJECTED after `git add` ran: the push then ships the *previous* commit and prints success, so every signal is green while the work stays behind. No other layer can see it — CI only sees what was pushed (a commit that does not exist is not a diff) and pre-commit already did its job by rejecting. Guards the **index**, never the dirty tree: unstaged edits while pushing are routine, and a noisy guard gets disabled. Escape hatch: `git push --no-verify` |
@@ -112,6 +113,23 @@ Audited in blueprintx#233 across all five Python tiers. **The answer is: nothing
 table is here so the question is answered in the repo rather than re-derived by the next person
 who looks at a manifest and assumes it must be trimmable.
 
+🔴 **STANDING RULE — every tool added from now on owes this question an ANSWER BEFORE its config
+is written.** The default is **out**: a dehydrated manifest is the house style, which is why
+`ruff.toml` · `mypy.ini` · `pytest.ini` · `.coveragerc` · `.codespellrc` · `.pydocstyle` ·
+`.gitlint` · `.sqlfluff` · `.hadolint.yaml` · `.yamllint` · `.shellcheckrc` ·
+`.layer-policy.yaml` · `.cz.toml` all already live outside it. Adding a `[tool.<x>]` block is the
+exception and must be justified in this table with the reason it could not move.
+
+⚠️ **And "it cannot move" must be MEASURED, never inferred from the tool's docs or its
+resemblance to a tool that could.** `[tool.deptry]` is the worked example: it looks exactly like
+`[tool.ruff]` did before `ruff.toml`, it *has* a `--config` flag, and moving it out is silently
+catastrophic — the flag re-points the tool at the new file as its **manifest** too. The evidence
+is the row below, and the shape of that evidence is the standard: run the tool BOTH ways against
+a real scaffolded project and compare the finding counts. A config split that "looks fine" because
+the tool still exits 0 is the failure mode — an externalised config that quietly changes what the
+tool reads is worse than an inline one, because the manifest gets cleaner while the gate goes
+blind.
+
 | Section | Can it move? |
 |---|---|
 | `[tool.poetry]` | **No** — package identity (name, version, authors, readme, packages) |
@@ -120,6 +138,7 @@ who looks at a manifest and assumes it must be trimmable.
 | `[tool.poetry.dependencies]` | **No** — the resolver's input |
 | `[tool.poetry.group.*.dependencies]` | **No** — same |
 | `[build-system]` | **No** — required by PEP 518; without it there is no build backend |
+| `[tool.deptry]` | **No — and this one has to be MEASURED, not assumed** (blueprintx#238). It looks exactly like `[tool.ruff]` did before it became `ruff.toml`, and it is not: deptry has **no standalone config format**. `--config PATH` is documented as *"Path to the pyproject.toml file to read configuration from"* — it re-points deptry at that file as the **manifest** as well, so the tool stops reading the real dependency table. Measured on ddd-service-orm-db: **27 findings with the config split out, 0 with it inline**, and the 27 include `pandas`, `wwdates` and `yaml` — all declared in the very manifest deptry stopped reading — reported as transitive |
 
 ⚠️ **`poetry.toml` is not a second home for `[tool.poetry]`.** The two files sound like a pair
 and are not: `poetry.toml` holds **local installer** configuration — `virtualenvs.in-project`,

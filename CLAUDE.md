@@ -77,6 +77,17 @@ tree via `--root .` (pre-commit hook `function-length`, the `function-length` CI
 project runs on itself. A second copy was the obvious shape and is exactly what
 `check_codespell_sync.sh` exists to police, so there is not one.
 
+The **direct-dependency gate** (`templates/python-common/bin/lint_deps.sh`, deptry) is the one
+that deliberately does **not** run on this side. It needs an installed environment to map a
+module back to its distribution, and BlueprintX has no `src/` and no runtime dependencies — so
+here it would have nothing to read and would report success for having checked nothing, the
+exact failure the gate family exists to prevent. Its verification is
+`bin/ci/scaffold_lint_test.sh`, which runs it inside a real generated project. ⚠️ Its config is
+per-tier in each `pyproject.toml` and **cannot** be single-sourced into a shared `deptry.toml`:
+`--config <file>` re-points deptry at that file as the *manifest* as well, so it stops reading
+the tier's dependency table. That is the one-implementation rule losing to a measured
+constraint, which is why the reason is written into all five manifests rather than remembered.
+
 The **review-thread gate** follows the same rule, reached from the other direction: it *did* have
 two 543-line copies, and `.github/workflows/review_threads.yml` now runs the template's
 `templates/python-common/bin/check_review_threads.py` directly. It needs no `--root` — unlike the

@@ -74,6 +74,20 @@ of your public `__all__`. The internal imports are package-qualified
   transitive presence is an accident of another package's tree and breaks silently the day that
   package drops or version-caps it. Run `poetry add <pkg>` for anything you import.
 
+  **This is now enforced, not advised**: `bin/lint_deps.sh` runs `deptry` over `src/` in
+  `poe lint`, the `lint-deps` pre-commit hook and CI. Its first run found the rule already
+  broken in the tiers that ship it, which is the argument for the gate — the DDD tiers imported
+  pandas in five `utils/` modules while declaring it nowhere, reaching them only through a
+  business-day calendar that happens to depend on it. Two things worth knowing before working
+  around it:
+
+  - **A guarded import is still an import.** `try: import numpy / except ModuleNotFoundError:`
+    degrades gracefully at runtime and changes nothing about the declaration — that pattern is
+    why `numpy` went undeclared for as long as it did.
+  - **Configuration lives in `pyproject.toml`'s `[tool.deptry]` block, never in a shared
+    `deptry.toml`.** deptry takes its dependency list from the same file it takes its settings
+    from, so `--config <other>` silently re-points it at a manifest that declares nothing.
+
 ## Three boundary rules, each with the test that applies it
 
 The section above says WHERE a boundary goes. These three say when one is worth drawing at
