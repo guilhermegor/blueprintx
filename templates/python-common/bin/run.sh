@@ -151,22 +151,23 @@ ensure_runtime_env() {
 
 run_entrypoint() {
 	local str_entrypoint="$1"
+	shift
 	local str_venv_python
 
 	str_venv_python="$(pip_fallback_project_venv_python)"
 	print_status "info" "Entrypoint module: $str_entrypoint"
 
 	if [[ -x "$str_venv_python" ]]; then
-		"$str_venv_python" -m "$str_entrypoint"
+		"$str_venv_python" -m "$str_entrypoint" "$@"
 		return 0
 	fi
 
 	if pip_fallback_ensure_project_poetry; then
-		run_poetry run python -m "$str_entrypoint"
+		run_poetry run python -m "$str_entrypoint" "$@"
 		return 0
 	fi
 
-	"$PYTHON" -m "$str_entrypoint"
+	"$PYTHON" -m "$str_entrypoint" "$@"
 }
 
 main() {
@@ -179,7 +180,7 @@ main() {
 
 	str_entrypoint="$(resolve_entrypoint_module)"
 	ensure_runtime_env
-	run_entrypoint "$str_entrypoint"
+	run_entrypoint "$str_entrypoint" "$@"
 }
 
 main "$@"
