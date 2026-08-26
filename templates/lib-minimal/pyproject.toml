@@ -37,6 +37,12 @@ python = ">=3.10,<4.0"
 beartype = ">=0.22"
 # Required by the private _internal helpers (dtypes / tabular_reader / config.contracts).
 pandas = ">=2.1.0"
+# Imported by _internal/utils/typing/policy.py to widen `int` to numpy.integer. It is behind a
+# `try/except ModuleNotFoundError` degrade, which is why it went undeclared until
+# blueprintx#238 — but a guarded import is still an import, and the same rule applies. It
+# matters more here than in the service tiers: this wheel SHIPS, so an undeclared import
+# becomes a consumer's ImportError, not just a contributor's.
+numpy = ">=1.22"
 openpyxl = ">=3.1.0"
 
 [tool.poetry.group.dev.dependencies]
@@ -72,6 +78,8 @@ sqlfluff = ">=3.0.0"
 yamllint = ">=1.35.0"
 shfmt-py = ">=3.7.0"
 shellcheck-py = ">=0.10.0"
+# Direct-dependency gate (bin/lint_deps.sh): every package src/ imports must be declared here.
+deptry = ">=0.20"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = ">=1.6.0"
@@ -80,6 +88,24 @@ pymdown-extensions = ">=10.0"
 # Versioned docs: the release workflow runs `mike deploy <X.Y> latest` after a PyPI publish,
 # so a consumer pinned to an old release still gets that release's docs. Serves from gh-pages.
 mike = ">=2.1.0"
+
+# deptry — the direct-dependency gate (bin/lint_deps.sh, run by `poe lint`, pre-commit and CI).
+# This tier is the reason the gate exists: CLAUDE.md's "every imported package is a direct
+# dependency" was written HERE, and until blueprintx#238 nothing checked it.
+#
+# ⚠️ THIS BLOCK CANNOT MOVE TO A SHARED deptry.toml, however much the one-implementation rule
+# pulls that way. `--config <file>` re-points deptry at that file as the MANIFEST as well as the
+# settings, so it stops reading the dependency table above: measured, it fell back to
+# requirements.txt (which pins only Poetry) and relabelled real dependencies as transitive.
+# Settings and dependency list must come from the same file.
+[tool.deptry.per_rule_ignores]
+# DEP002 = declared but never imported. Every entry carries its reason, exactly as
+# .layer-policy.yaml requires one: an entry without a reason is a rule the next person widens.
+#
+# openpyxl — reached as a pandas ENGINE STRING (`df.to_excel(..., engine="openpyxl")`), never
+# imported by name, so deptry structurally cannot see the use. Permanent entry: no scaffold
+# change would make it visible. It is still a genuine runtime dependency, hence declared.
+DEP002 = ["openpyxl"]
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]

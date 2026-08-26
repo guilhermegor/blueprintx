@@ -99,4 +99,7 @@ bash bin/lint_actions.sh
 print_status info "dockerfiles"
 bash bin/lint_docker.sh
 
+print_status info "direct dependencies"
+bash bin/lint_deps.sh
+
 print_status success "lint OK — every gate passed"

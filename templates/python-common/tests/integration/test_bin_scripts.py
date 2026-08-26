@@ -15,11 +15,13 @@ work tree instead of aborting ``init``).
 """
 
 from collections.abc import Mapping
+import importlib.util
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 from types import MappingProxyType
 
 import pytest
@@ -1985,3 +1987,163 @@ def test_stale_cleanup_never_reports_clean_over_a_listing_that_failed(tmp_path: 
 	assert cls_result.returncode == 0
 	assert "already clean" not in str_all
 	assert "Could not list runs" in str_all
+
+
+# --------------------------
+# lint_deps.sh — every imported package is a DIRECT dependency (blueprintx#238)
+# --------------------------
+
+
+# Resolved ONCE at import time, like _STR_GIT at the top of this module: a `skipif` states a
+# fact about the machine, where the same test with a guard clause in its body reads as a path
+# THROUGH the test — to a reader and to mccabe alike.
+_BOOL_DEPTRY = importlib.util.find_spec("deptry") is not None
+
+# A manifest that declares NOTHING, so any third-party import under src/ is undeclared by
+# construction. PEP 621 rather than [tool.poetry] on purpose: deptry reads either, and this
+# shape does not drift when the tier's Poetry version moves.
+_STR_EMPTY_MANIFEST = '[project]\nname = "probe"\nversion = "0.0.0"\ndependencies = []\n'
+
+# Imports a package every tier declares — so it is INSTALLED in the venv running this test
+# while being absent from the throwaway manifest above. That combination is the defect under
+# test: present at runtime today, undeclared, and therefore gone the day whatever pulled it in
+# stops doing so.
+_STR_UNDECLARED_IMPORT = "import pandas\n\n\ndef go() -> None:\n\tprint(pandas)\n"
+
+
+def _poetry_forwarding_deptry(path_dir: Path) -> str:
+	"""Return a ``PATH`` whose ``poetry`` forwards ``poetry run deptry …`` to this interpreter.
+
+	⚠️ A stub is the only way to exercise this wrapper end-to-end. ``lint_deps.sh`` reaches
+	deptry exclusively through ``poetry run`` — by design, since outside the venv deptry
+	inverts its verdict — and a throwaway ``tmp_path`` tree has no Poetry environment to run.
+	Forwarding to ``sys.executable`` runs the REAL deptry in the REAL venv, so what is stubbed
+	is the launcher, never the tool whose behaviour is being asserted.
+
+	Parameters
+	----------
+	path_dir : pathlib.Path
+		Directory to create the stub in; it is prepended to PATH.
+
+	Returns
+	-------
+	str
+		A PATH value with the stub directory first.
+	"""
+	path_dir.mkdir(parents=True, exist_ok=True)
+	path_stub = path_dir / "poetry"
+	# `shift 2` drops "run" and "deptry", leaving the wrapper's own arguments.
+	path_stub.write_text(
+		f'#!/bin/sh\n[ "$1" = run ] || exit 1\nshift 2\nexec "{sys.executable}" -m deptry "$@"\n',
+		encoding="utf-8",
+	)
+	path_stub.chmod(0o755)
+	return _path_with(path_dir)
+
+
+@pytest.mark.skipif(not _BOOL_DEPTRY, reason="deptry is not installed in this environment")
+def test_deps_gate_fires_on_an_import_that_is_no_declared_dependency(tmp_path: Path) -> None:
+	"""⚠️ The witness the whole gate exists for, and it is not hypothetical.
+
+	The rule ("every imported package is a direct dependency") was prose with no enforcement
+	until blueprintx#238, and the gate's first run found both DDD tiers importing pandas in
+	five ``src/utils`` modules while declaring it nowhere — it arrived only through ``wwdates``,
+	a business-day calendar. This test reproduces that exact shape: a package that IS installed,
+	IS imported, and is NOT declared. Without it, the gate's central claim rests on the day
+	somebody happened to run it.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
+	_write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)
+	_write(tmp_path / "src" / "probe.py", _STR_UNDECLARED_IMPORT)
+
+	cls_result = _run_sh_gate(path_script, {"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")})
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0, f"the undeclared import passed the gate: {str_all}"
+	assert "pandas" in str_all, f"the gate failed without naming the offender: {str_all}"
+
+
+@pytest.mark.skipif(not _BOOL_DEPTRY, reason="deptry is not installed in this environment")
+def test_deps_gate_passes_when_the_same_import_is_declared(tmp_path: Path) -> None:
+	"""The other half of the pair: the gate must be quiet once the rule is satisfied.
+
+	A gate tested only on its failing case can be a function that always fails, and nothing in
+	a red run distinguishes the two. Declaring the import is the ONLY change from the test
+	above.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
+	_write(
+		tmp_path / "pyproject.toml",
+		_STR_EMPTY_MANIFEST.replace("dependencies = []", 'dependencies = ["pandas"]'),
+	)
+	_write(tmp_path / "src" / "probe.py", _STR_UNDECLARED_IMPORT)
+
+	cls_result = _run_sh_gate(path_script, {"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")})
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 0, f"a declared dependency was reported anyway: {str_all}"
+
+
+def test_deps_gate_fails_when_discovery_matches_zero_python_files(tmp_path: Path) -> None:
+	"""⚠️ The witness for the zero-discovery branch: deptry exits 0 when it scans nothing.
+
+	So a gate whose target directory was renamed reports success forever — green precisely
+	because it is checking nothing. This is the same vacuous-success shape ``lint_actions.sh``
+	and ``check_complexity.sh`` each carry a guard for, and the reason the wrapper asserts the
+	file count instead of trusting the exit code.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
+	_write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)
+	(tmp_path / "src").mkdir(parents=True, exist_ok=True)
+
+	cls_result = _run_sh_gate(path_script, {"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")})
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0, f"an empty tree reported success: {str_all}"
+	assert "No Python files found" in str_all
+
+
+def test_deps_gate_hard_fails_when_deptry_is_unresolvable_instead_of_skipping(
+	tmp_path: Path,
+) -> None:
+	"""⚠️ Unlike its sibling wrappers, this gate must NOT skip gracefully when the tool is gone.
+
+	``lint_shell.sh`` / ``lint_actions.sh`` skip on a constrained box because their tools are
+	system binaries whose answer does not depend on the caller. deptry's does: it resolves a
+	module to a distribution through the metadata of the environment it runs in, so a PATH copy
+	outside the venv answers a different question. Measured on ddd-service-native-db, an
+	outside-venv run produced 9 findings, all false and two mutually contradictory
+	('python-dotenv' declared-but-unused AND 'dotenv' missing), while both genuine defects
+	disappeared. A confident wrong answer in both directions is worse than no gate, which is
+	why absence is fatal here — and why that asymmetry needs a test of its own.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest's per-test temporary directory.
+	"""
+	path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
+	_write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)
+	_write(tmp_path / "src" / "probe.py", _STR_UNDECLARED_IMPORT)
+
+	cls_result = _run_sh_gate(path_script, {"PATH": _shadow_tool_and_poetry(tmp_path, "deptry")})
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode != 0, f"an absent gate reported success: {str_all}"
+	assert "not resolvable" in str_all
+	assert "skip" not in str_all.lower()
