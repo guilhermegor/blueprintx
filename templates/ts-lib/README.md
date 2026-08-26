@@ -2,7 +2,7 @@
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/typescript-5.x-3178C6?logo=typescript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/typescript-6.x-3178C6?logo=typescript&logoColor=white)
 [![Linting](https://img.shields.io/badge/linting-eslint_|_prettier-blue)](https://eslint.org)
 ![License](https://img.shields.io/badge/license-${PROJECT_LICENSE}-green.svg)
 ![Open Issues](https://img.shields.io/github/issues/${GITHUB_USERNAME}/${PROJECT_NAME})

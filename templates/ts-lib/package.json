@@ -39,7 +39,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "MIT",
+  "license": "${PROJECT_LICENSE}",
   "dependencies": {},
   "devDependencies": {
     "@babel/core": "^7.29.0",

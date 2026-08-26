@@ -10,8 +10,8 @@ source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 
-PROJECT_ROOT="$1"
-PROJECT_NAME="$2"
+PROJECT_ROOT="${1:-}"
+PROJECT_NAME="${2:-}"
 PROJECT_DESCRIPTION="${3:-}"
 LICENSE_CHOICE="${LICENSE_CHOICE:-MIT}"
 GITHUB_USERNAME="${GITHUB_USERNAME:-}"
@@ -98,6 +98,40 @@ copy_skeleton_files() {
     print_status "success" "Skeleton files copied"
 }
 
+# envsubst does no JSON escaping — a description containing a quote or backslash
+# (e.g. `A "small" library`) would land in package.json as an unescaped string and
+# produce invalid JSON, breaking every npm command. Render it with Python's json
+# module instead, which escapes each value before substitution and then re-parses
+# the result so a bad render fails loudly here rather than shipping broken JSON.
+render_package_json() {
+    local project_path="$1"
+    python3 - "$SKELETON_TEMPLATE_ROOT/package.json" "$project_path/package.json" \
+        "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$PROJECT_LICENSE" <<'PY'
+import json
+import sys
+
+path_template, path_out, str_name, str_description, str_license = sys.argv[1:6]
+
+
+def json_escape(value):
+    """Escape a raw string for safe interpolation inside a JSON string literal."""
+    return json.dumps(value)[1:-1]
+
+
+with open(path_template, encoding="utf-8") as fh:
+    text = fh.read()
+
+text = text.replace("${PROJECT_NAME}", json_escape(str_name))
+text = text.replace("${PROJECT_DESCRIPTION}", json_escape(str_description))
+text = text.replace("${PROJECT_LICENSE}", json_escape(str_license))
+
+json.loads(text)  # fail loudly on any render that produced invalid JSON
+
+with open(path_out, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY
+}
+
 copy_common_templates() {
     local project_path="$1"
 
@@ -105,9 +139,7 @@ copy_common_templates() {
 
     PROJECT_LICENSE="${LICENSE_CHOICE}"
     export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
-        < "$SKELETON_TEMPLATE_ROOT/package.json" \
-        > "$project_path/package.json"
+    render_package_json "$project_path"
     envsubst '${PROJECT_NAME}' \
         < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
         > "$project_path/CLAUDE.md"
@@ -262,6 +294,18 @@ with open('$project_path/package.json', 'w') as f:
     f.write('\n')
 "
     print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
+    commit_offline_artifacts "$project_path"
+}
+
+# initialize_git_repo's first commit runs BEFORE apply_offline_mode, so the offline
+# rewrites (.github removed, bin/git_diff_*.sh added, package.json's scripts patched)
+# are left uncommitted — every offline scaffold would otherwise finish with a dirty
+# working tree. --no-verify bypasses the just-installed hooks (HEAD is main).
+commit_offline_artifacts() {
+    local project_path="$1"
+    git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    git -C "$project_path" add -A
+    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
 }
 
 # ============================================================================

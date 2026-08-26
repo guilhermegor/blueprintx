@@ -35,9 +35,11 @@ next to their subject: `src/example.test.ts` beside `src/example.ts`.
 
 ## Before publishing
 
-`npm run pack:smoke` runs `npm pack`, extracts the tarball, and `require()`/`import()`s the
-result — the only way to catch a broken `exports` map or a file missing from `"files"`
-before it reaches npm. Update its require/import checks if you change the public API.
+`npm run pack:smoke` runs `npm pack`, installs the tarball into a throwaway consumer
+project, then `require()`s and `import()`s the package **by its package name** (not by
+reading `dist/` paths directly) — the only way to catch a broken `exports` map or a file
+missing from `"files"` before it reaches npm. Update its require/import checks if you
+change the public API.
 
 ## Do not
 
