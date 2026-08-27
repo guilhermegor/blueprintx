@@ -5,3 +5,20 @@
 daily_infos_base_path: "logs"
 # Partition output into <base>/<YYYY-MM-DD>/ subdirectories.
 daily_infos_dated: false
+
+# Per-source inputs (add a real one, e.g.):
+#   example_source:
+#     dir: "data/example_source"
+#     pattern: "*.csv"
+#
+# OPTIONAL OVERRIDE — a source's reference ("golden copy") file, e.g. to compare against a
+# schema-check failure. List ONLY the sources whose reference copy lives somewhere OTHER
+# than the real input above; every source NOT listed here falls back to its own real-input
+# spec automatically, via config.startup.resolve_reference_spec(YAML_INPUTS, <source key>).
+# This keeps a {dir, pattern} from ever being declared twice (blueprintx#225): change
+# example_source's real dir/pattern above and its reference follows, with nothing to forget.
+#
+#   reference_files:
+#     example_source:
+#       dir: "data/reference/example_source"
+#       pattern: "*.csv"
