@@ -21,8 +21,11 @@ Three separate `tsc` invocations, one per concern:
 
 - `tsconfig.esm.json` → `dist/esm` (ES modules; `postbuild:esm` drops a `dist/esm/package.json`
   with `"type": "module"` so Node treats those `.js` files as ESM without a bundler).
-- `tsconfig.cjs.json` → `dist/cjs` (CommonJS; no marker needed — the root `package.json` is
-  `"type": "commonjs"`).
+- `tsconfig.cjs.json` → `dist/cjs` (CommonJS; no marker needed — the root `package.json` has
+  no `"type"` field, which Node treats identically to `"type": "commonjs"`. The field is left
+  **absent rather than explicit** on purpose: an explicit `"type": "commonjs"` breaks the
+  Docusaurus 3.x build in `docs/` with an opaque `sourceType: module` webpack parse error —
+  bisected against a vanilla Docusaurus site with only that one field flipped.).
 - `tsconfig.types.json` → `dist/types` (declarations only, `emitDeclarationOnly`).
 
 `tsconfig.json` itself is `noEmit: true` — it exists for `type-check`, ESLint's type-aware

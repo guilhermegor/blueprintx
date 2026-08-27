@@ -84,7 +84,7 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.esm.json" "$project_path/tsconfig.esm.json"
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.cjs.json" "$project_path/tsconfig.cjs.json"
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.types.json" "$project_path/tsconfig.types.json"
-    cp "$SKELETON_TEMPLATE_ROOT/.babelrc" "$project_path/.babelrc"
+    cp "$SKELETON_TEMPLATE_ROOT/babel.config.test.cjs" "$project_path/babel.config.test.cjs"
     cp "$SKELETON_TEMPLATE_ROOT/jest.config.cjs" "$project_path/jest.config.cjs"
     # .mjs (not .js): package.json is "type": "commonjs" (so dist/cjs needs no per-file
     # marker), and these three configs are authored as ESM — the explicit extension makes
@@ -116,11 +116,13 @@ copy_skeleton_files() {
 render_package_json() {
     local project_path="$1"
     python3 - "$SKELETON_TEMPLATE_ROOT/package.json" "$project_path/package.json" \
-        "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$PROJECT_LICENSE" <<'PY'
+        "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$PROJECT_LICENSE" "$GITHUB_USERNAME" <<'PY'
 import json
 import sys
 
-path_template, path_out, str_name, str_description, str_license = sys.argv[1:6]
+path_template, path_out, str_name, str_description, str_license, str_github_username = (
+    sys.argv[1:7]
+)
 
 
 def json_escape(value):
@@ -134,6 +136,9 @@ with open(path_template, encoding="utf-8") as fh:
 text = text.replace("${PROJECT_NAME}", json_escape(str_name))
 text = text.replace("${PROJECT_DESCRIPTION}", json_escape(str_description))
 text = text.replace("${PROJECT_LICENSE}", json_escape(str_license))
+# repository.url must match the GitHub repo exactly, or npm's OIDC trusted-publishing
+# check fails at publish time (#135).
+text = text.replace("${GITHUB_USERNAME}", json_escape(str_github_username))
 
 json.loads(text)  # fail loudly on any render that produced invalid JSON
 
@@ -156,6 +161,22 @@ copy_common_templates() {
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME}' \
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
         > "$project_path/README.md"
+
+    # Docusaurus site (#134): docs/*.md and docusaurus.config.js carry ${PROJECT_NAME} /
+    # ${PROJECT_DESCRIPTION} / ${GITHUB_USERNAME} placeholders, resolved here where they
+    # are already exported (unlike copy_skeleton_files, which runs before this export).
+    for doc_file in index usage examples faq contributing; do
+        envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
+            < "$SKELETON_TEMPLATE_ROOT/docs/$doc_file.md" \
+            > "$project_path/docs/$doc_file.md"
+    done
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${GITHUB_USERNAME}' \
+        < "$SKELETON_TEMPLATE_ROOT/docusaurus.config.js" \
+        > "$project_path/docusaurus.config.js"
+    # npm OIDC release workflow (#135): PACKAGE_NAME env in release-npm.yml.
+    envsubst '${PROJECT_NAME}' \
+        < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release-npm.yml" \
+        > "$project_path/.github/workflows/release-npm.yml"
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.nvmrc" "$project_path/.nvmrc"

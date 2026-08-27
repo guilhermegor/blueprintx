@@ -24,9 +24,9 @@ release workflow refuses to republish a version already on the npm registry.
 
 ## How do I publish a new version?
 
-See [Contributing](contributing.md#releasing) for the full npm OIDC trusted-publishing
-flow, including the one-time bootstrap steps required before the first automated
-publish.
+See [Contributing](contributing.md#releasing-npm-oidc-trusted-publishing) for the full
+npm OIDC trusted-publishing flow, including the one-time bootstrap steps required
+before the first automated publish.
 
 ## Which Node/npm versions are supported?
 
