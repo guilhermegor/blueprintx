@@ -94,6 +94,22 @@ class CreateLog(metaclass=TypeChecker):
 			return True
 		return False
 
+	def _close_handlers(self, logger: logging.Logger) -> None:
+		"""Close and detach every handler currently attached to ``logger``.
+
+		Parameters
+		----------
+		logger : logging.Logger
+			The logger whose handlers are about to be replaced.
+
+		Returns
+		-------
+		None
+		"""
+		for cls_stale_handler in logger.handlers:
+			cls_stale_handler.close()
+		logger.handlers.clear()
+
 	def basic_conf(
 		self, complete_path: str, basic_level: Literal["info", "debug"] = "info"
 	) -> logging.Logger:
@@ -140,9 +156,7 @@ class CreateLog(metaclass=TypeChecker):
 		# settings. A caller that reconfigures the logger, say rotating to a new dated log
 		# file, leaked one open file handle per reconfiguration. Close every existing handler
 		# before detaching it so the descriptor is released immediately, not at GC time.
-		for cls_stale_handler in logger.handlers:
-			cls_stale_handler.close()
-		logger.handlers.clear()
+		self._close_handlers(logger)
 		logger.addHandler(handler)
 		return logger
 
