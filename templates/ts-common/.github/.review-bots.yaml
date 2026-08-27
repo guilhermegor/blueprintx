@@ -1,5 +1,6 @@
-# Reviewers whose comments are FINDINGS, not answers — read by check_review_threads.py
-# (fetched live from templates/python-common/bin/ — see review-threads.yml for why).
+# Reviewers whose comments are FINDINGS, not answers — read by bin/check_review_threads.py
+# (scaffolded from templates/common/bin/ — the single shared copy every language family
+# copies from; see review-threads.yml for why it is not fetched or vendored).
 #
 # This is the ts-* ECOSYSTEM'S OWN roster, not a copy of python-common's. The predicate
 # the gate enforces is language-agnostic, but the set of reviewers that actually run on a
@@ -8,6 +9,10 @@
 # templates/python-common/bin/enable_repo_rules.sh does for the Python tiers, so listing it
 # here would name a reviewer that never reports — the exact "roster says something that
 # never happens" failure this gate exists to catch, aimed at itself.
+#
+# ⚠️ THIS IS A ONE-ENTRY-THREADS ROSTER ON PURPOSE, NOT AN OVERSIGHT. `copilot-pull-request-
+# reviewer[bot]` is deliberately absent for the reason above — state it here, not only in a
+# PR description, so the next reader of a short roster does not "helpfully" add it back.
 #
 # ⚠️ Reviewer shapes genuinely differ, and the difference matters:
 #   - some post inline review THREADS (their findings are what this gate tracks)

@@ -5,33 +5,26 @@ name: Review Threads
 # The predicate ("a thread is answered when it holds a substantive comment from an author
 # OUTSIDE the declared review-bot roster") is a GraphQL query plus a comparison — nothing in
 # it is Python-project-specific, and this repo already paid once to collapse two 543-line
-# copies of it into templates/python-common/bin/check_review_threads.py. A TypeScript port
-# would be a second implementation of the same rule: a second chance to get the bot-that-
-# resolves-its-own-thread case wrong (see that file's own docstring for the measurement).
+# copies of it into one file. A TypeScript port would be a second implementation of the same
+# rule: a second chance to get the bot-that-resolves-its-own-thread case wrong (see the
+# gate's own docstring for the measurement).
 #
-# So a ts-* project does not carry its own copy of the script. It fetches the ONE canonical
-# copy from BlueprintX at run time and runs it — the same file the Python tiers run, kept in
-# sync by construction because there is only ever one of it.
+# ⚠️ THE SCRIPT IS NOT FETCHED OVER THE NETWORK. An earlier revision of this workflow curled
+# it from raw.githubusercontent.com at run time — remote code, from a mutable ref, with no
+# integrity check, executed on a runner holding GITHUB_TOKEN, shipped to every generated
+# ts-* project. Rejected on review: this repo already states the rule that governs exactly
+# this shape (see `templates/python-common/.github/workflows/tests.yaml`'s actionlint step —
+# pin the version AND verify a SHA-256 before executing what arrives). A silently modified
+# copy of a REVIEW gate could simply always exit 0, and nothing downstream would notice — a
+# gate reporting its own blindness as OK, the one failure mode this whole family exists to
+# prevent.
 #
-# ⚠️ THE COST OF THAT CHOICE, STATED PLAINLY: this job depends on
-# raw.githubusercontent.com/guilhermegor/blueprintx staying reachable and on `main` staying a
-# working copy of the script. A vendored copy would not have that runtime dependency, but it
-# would silently drift the moment python-common's version changed — which is precisely the
-# failure mode BlueprintX's own CLAUDE.md documents this gate as having been built to remove.
-# Tracking `main` rather than a pinned tag is deliberate too: pinning would reintroduce a
-# staleness window (the ts gate keeps running an old predicate after the canonical one is
-# fixed) for a reproducibility guarantee this workflow does not otherwise need — it calls the
-# script fresh on every run, never persists its output, and asserts nothing about which
-# version ran.
-#
-# Two other packaging options were on the table and rejected for this PR, not in general:
-#   - vendoring the file under templates/ts-common/ — rejected, it is the "do not copy" this
-#     comment opens with.
-#   - templates/common/ (the one surface both language families already copy from, and the
-#     structurally cleanest home for a truly shared script) — rejected only because it was
-#     out of scope for this PR's surface (concurrent PRs occupy most of the tree); a follow-up
-#     should move BOTH the Python and this workflow's fetch step to read from there once that
-#     surface is free to touch, which would also remove the network dependency above.
+# So the gate lives at `templates/common/bin/check_review_threads.py` — the one shared,
+# language-agnostic surface both the Python and TypeScript families already copy from — and
+# every `ts_*.sh` scaffold copies it into the generated project's own `bin/` at SCAFFOLD
+# TIME, the same way the Python tiers already receive it. This job runs the LOCAL copy that
+# ships with the checkout: no runtime fetch, no mutable ref, nothing to verify because
+# nothing arrives from outside the repo being tested.
 #
 # `pull_request_review` fires when a review is submitted; `pull_request_review_comment` fires
 # on an individual inline comment. Both are required alongside `pull_request` for the same
@@ -66,14 +59,6 @@ jobs:
 
       - run: pip install --quiet pyyaml
 
-      # The gate is Python; the roster is data. Fetching the script keeps this workflow from
-      # ever holding its own (possibly stale) copy of the predicate — see the header above.
-      - name: Fetch the shared review-threads gate from BlueprintX
-        run: |
-          curl -fsSL \
-            -o check_review_threads.py \
-            https://raw.githubusercontent.com/guilhermegor/blueprintx/main/templates/python-common/bin/check_review_threads.py
-
       # The script reads .review-bots.yaml from its own working directory (Path.cwd()), which
       # is the checkout root here — the same contract every Python-tier adopter relies on.
       # This project's roster ships at .github/.review-bots.yaml (the one ts-common tree the
@@ -91,4 +76,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
-        run: python check_review_threads.py
+        run: python bin/check_review_threads.py

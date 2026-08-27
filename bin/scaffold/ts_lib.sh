@@ -169,6 +169,11 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     chmod +x "$project_path/bin/export_repo_content.sh"
 
+    # The review-threads.yml gate's only dependency: the ONE shared implementation of the
+    # answered-review-thread predicate (blueprintx#175), same file the Python tiers ship, so
+    # the CI job above never fetches or vendors a copy of its own.
+    cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+
     print_status "success" "Common templates applied"
 }
 
