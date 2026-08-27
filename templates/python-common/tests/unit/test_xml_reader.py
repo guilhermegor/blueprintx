@@ -78,6 +78,26 @@ def test_read_xml_wildcard_segment_matches_either_subblock_name(tmp_path: Path) 
 	assert list(df_result["isin"]) == ["ISIN123", "ISIN456"]
 
 
+def test_read_xml_wildcard_backtracks_past_a_non_completing_first_child(
+	tmp_path: Path,
+) -> None:
+	"""A `*` tries every matching child, not just the first.
+
+	A leading Meta block that has no FinInstrm must not hide the New block that comes after it.
+	"""
+	path_xml = tmp_path / "backtrack.xml"
+	path_xml.write_text(
+		"<Document><Tx>"
+		"<Meta><Note>irrelevant</Note></Meta>"
+		"<New><FinInstrm><Id>ISIN999</Id></FinInstrm></New>"
+		"</Tx></Document>"
+	)
+	df_result = read_xml(
+		path_xml, "Tx", {"isin": ("*/FinInstrm/Id",)}, {"isin": "str"}, _empty_contract()
+	)
+	assert list(df_result["isin"]) == ["ISIN999"]
+
+
 def test_read_xml_row_filter_keeps_only_records_carrying_the_given_block(
 	tmp_path: Path,
 ) -> None:
@@ -93,6 +113,27 @@ def test_read_xml_row_filter_keeps_only_records_carrying_the_given_block(
 		str_row_filter="New",
 	)
 	assert list(df_result["isin"]) == ["ISIN123"]
+
+
+def test_read_xml_attribute_path_matches_a_namespace_prefixed_attribute(
+	tmp_path: Path,
+) -> None:
+	"""An `@name` path matches by LOCAL NAME, so a namespace-prefixed attribute still resolves.
+
+	`Element.get("Ccy")` requires the exact stored key, which for a prefixed attribute is
+	Clark notation (``{uri}Ccy``) — a naive `.get()` would silently miss it, dropping the
+	currency exactly as a text-only path would.
+	"""
+	path_xml = tmp_path / "namespaced_attr.xml"
+	path_xml.write_text(
+		'<Document xmlns:xsi="urn:example:xsi"><Tx>'
+		'<MntryVal xsi:Ccy="BRL">100.50</MntryVal>'
+		"</Tx></Document>"
+	)
+	df_result = read_xml(
+		path_xml, "Tx", {"ccy": ("MntryVal/@Ccy",)}, {"ccy": "str"}, _empty_contract()
+	)
+	assert list(df_result["ccy"]) == ["BRL"]
 
 
 def test_read_xml_attribute_path_captures_the_currency_a_text_path_cannot(

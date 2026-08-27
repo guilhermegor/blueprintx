@@ -280,6 +280,10 @@ def _find_child(  # complexity-ok: wildcard vs exact-name match is the whole chi
 ) -> Element | None:
 	"""Return the first direct child matching a path segment (single level, not recursive).
 
+	Used only for the FINAL (leaf) segment of a path, where there is nothing further to fail
+	on — the first match is as good as any other. An intermediate segment instead goes through
+	:func:`_matching_children`, which a caller must be able to backtrack across.
+
 	Parameters
 	----------
 	cls_element : xml.etree.ElementTree.Element
@@ -299,40 +303,64 @@ def _find_child(  # complexity-ok: wildcard vs exact-name match is the whole chi
 
 
 @type_checker
-def _walk_to_last(  # complexity-ok: shared traversal for both value-read and existence-check
-	cls_element: Element, list_segments: list[str]
-) -> tuple[Element, str] | None:
-	"""Walk every path segment but the last, returning the reached element and final segment.
+def _matching_children(cls_element: Element, str_segment: str) -> list[Element]:
+	"""Return every direct child matching a path segment, in document order.
 
-	Shared by :func:`_resolve_path` (reads a value) and :func:`_path_exists` (checks presence)
-	so the traversal rule lives in exactly one place.
+	Unlike :func:`_find_child`, this returns ALL candidates — required for an INTERMEDIATE
+	path segment, where the first matching child is not necessarily the one whose subtree
+	completes the rest of the path (a ``*`` wildcard is the common case: the row's first child
+	might be an unrelated ``Meta`` block that has no ``FinInstrm`` under it, while a later
+	sibling does).
 
 	Parameters
 	----------
 	cls_element : xml.etree.ElementTree.Element
-		The starting element (a row, or the document root for a broadcast path).
-	list_segments : list of str
-		The path split on ``/``, with empty segments already removed.
+		The element to search under.
+	str_segment : str
+		Either ``"*"`` (matches any child) or a local name to match exactly.
 
 	Returns
 	-------
-	tuple of (xml.etree.ElementTree.Element, str) | None
-		``(reached_element, last_segment)``, or ``None`` if an intermediate segment has no
-		matching child.
+	list of xml.etree.ElementTree.Element
+		Every matching child, in document order.
 	"""
-	cls_current = cls_element
-	for str_segment in list_segments[:-1]:
-		cls_next = _find_child(cls_current, str_segment)
-		if cls_next is None:
-			return None
-		cls_current = cls_next
-	return cls_current, list_segments[-1]
+	if str_segment == "*":
+		return list(cls_element)
+	return [cls_child for cls_child in cls_element if _local_name(cls_child.tag) == str_segment]
 
 
 @type_checker
-def _resolve_path(  # complexity-ok: 4 distinct outcomes — empty path, broken walk, attr vs text
-	cls_element: Element, str_path: str
+def _get_attribute(  # complexity-ok: linear scan is the whole point of local-name matching
+	cls_element: Element, str_name: str
 ) -> str | None:
+	"""Return an attribute's value, matched by LOCAL NAME (namespace-agnostic).
+
+	``Element.get(key)`` requires the EXACT stored key, which is Clark notation
+	(``{uri}name``) for a namespace-prefixed attribute — so a plain ``.get("Ccy")`` silently
+	misses a source that writes it as, say, ``xsi:Ccy``. Matching by local name here is what
+	makes attribute paths honour the same namespace-agnostic promise element paths already
+	make (see :func:`_local_name`).
+
+	Parameters
+	----------
+	cls_element : xml.etree.ElementTree.Element
+		The element carrying the attribute.
+	str_name : str
+		The attribute's local name (without any ``@`` prefix or namespace).
+
+	Returns
+	-------
+	str | None
+		The attribute's value, or ``None`` when no attribute has that local name.
+	"""
+	for str_key, str_value in cls_element.attrib.items():
+		if _local_name(str_key) == str_name:
+			return str_value
+	return None
+
+
+@type_checker
+def _resolve_path(cls_element: Element, str_path: str) -> str | None:
 	"""Resolve one path to its element text or attribute value.
 
 	Parameters
@@ -348,24 +376,47 @@ def _resolve_path(  # complexity-ok: 4 distinct outcomes — empty path, broken 
 		The stripped text/attribute value, or ``None`` when unresolved or blank.
 	"""
 	list_segments = [str_segment for str_segment in str_path.split("/") if str_segment]
-	if not list_segments:
-		return None
-	cls_walked = _walk_to_last(cls_element, list_segments)
-	if cls_walked is None:
-		return None
-	cls_parent, str_last = cls_walked
-	if str_last.startswith("@"):
-		return cls_parent.get(str_last[1:])
-	cls_target = _find_child(cls_parent, str_last)
-	if cls_target is None:
-		return None
-	return (cls_target.text or "").strip() or None
+	return _resolve_segments(cls_element, list_segments) if list_segments else None
 
 
 @type_checker
-def _path_exists(  # complexity-ok: mirrors _resolve_path's guards, minus the final text read
-	cls_element: Element, str_path: str
-) -> bool:
+def _resolve_segments(  # complexity-ok: leaf (attr vs text) vs intermediate (backtracking loop)
+	cls_element: Element, list_segments: list[str]
+) -> str | None:
+	"""Resolve a path's remaining segments, backtracking across an intermediate ``*``/name.
+
+	Parameters
+	----------
+	cls_element : xml.etree.ElementTree.Element
+		The element the remaining segments are relative to.
+	list_segments : list of str
+		The not-yet-consumed path segments (at least one).
+
+	Returns
+	-------
+	str | None
+		The resolved value, or ``None`` when no candidate at any level completes the path.
+	"""
+	str_segment = list_segments[0]
+	if len(list_segments) == 1:
+		if str_segment.startswith("@"):
+			return _get_attribute(cls_element, str_segment[1:])
+		cls_target = _find_child(cls_element, str_segment)
+		if cls_target is None:
+			return None
+		return (cls_target.text or "").strip() or None
+	# An intermediate segment tries every matching child, not just the first. A wildcard or a
+	# repeated tag name can have several candidates, and only some may complete the rest of the
+	# path. First one that resolves wins, same as the alternative-paths rule.
+	for cls_child in _matching_children(cls_element, str_segment):
+		str_value = _resolve_segments(cls_child, list_segments[1:])
+		if str_value is not None:
+			return str_value
+	return None
+
+
+@type_checker
+def _path_exists(cls_element: Element, str_path: str) -> bool:
 	"""Return whether a path resolves to an element or attribute (presence, not value).
 
 	Parameters
@@ -381,15 +432,38 @@ def _path_exists(  # complexity-ok: mirrors _resolve_path's guards, minus the fi
 		``True`` when the path's target exists, regardless of whether it is blank.
 	"""
 	list_segments = [str_segment for str_segment in str_path.split("/") if str_segment]
-	if not list_segments:
-		return False
-	cls_walked = _walk_to_last(cls_element, list_segments)
-	if cls_walked is None:
-		return False
-	cls_parent, str_last = cls_walked
-	if str_last.startswith("@"):
-		return cls_parent.get(str_last[1:]) is not None
-	return _find_child(cls_parent, str_last) is not None
+	return bool(list_segments) and _segments_exist(cls_element, list_segments)
+
+
+@type_checker
+def _segments_exist(  # complexity-ok: mirrors _resolve_segments' two branches, presence only
+	cls_element: Element, list_segments: list[str]
+) -> bool:
+	"""Return whether a path's remaining segments exist, with the same backtracking.
+
+	The presence-only twin of :func:`_resolve_segments`.
+
+	Parameters
+	----------
+	cls_element : xml.etree.ElementTree.Element
+		The element the remaining segments are relative to.
+	list_segments : list of str
+		The not-yet-consumed path segments (at least one).
+
+	Returns
+	-------
+	bool
+		``True`` when some candidate at every level has the rest of the path.
+	"""
+	str_segment = list_segments[0]
+	if len(list_segments) == 1:
+		if str_segment.startswith("@"):
+			return _get_attribute(cls_element, str_segment[1:]) is not None
+		return _find_child(cls_element, str_segment) is not None
+	return any(
+		_segments_exist(cls_child, list_segments[1:])
+		for cls_child in _matching_children(cls_element, str_segment)
+	)
 
 
 @type_checker

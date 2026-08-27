@@ -41,10 +41,15 @@ def test_find_sheet_name_problems_flags_reserved_name() -> None:
 	assert find_sheet_name_problems("HISTORY") != []
 
 
-def test_find_sheet_name_problems_flags_cell_reference_shaped_name() -> None:
-	"""A short name shaped like a cell reference is rejected — this covers "Q1"/"T1"/"H2"."""
-	assert find_sheet_name_problems("Q1") != []
-	assert find_sheet_name_problems("H2") != []
+def test_find_sheet_name_problems_accepts_cell_reference_shaped_names() -> None:
+	"""A name shaped like a cell reference is a VALID worksheet name in Excel.
+
+	The "cannot look like a cell reference" rule is real, but it governs *defined names*
+	(the Name Manager), not worksheet tabs — a sheet literally named "Q1" is valid and is
+	referenced as ``Q1!A1`` (verified against Microsoft's own worksheet-rename docs).
+	"""
+	assert find_sheet_name_problems("Q1") == []
+	assert find_sheet_name_problems("H2") == []
 
 
 def test_find_sheet_name_problems_flags_invisible_characters() -> None:

@@ -10,14 +10,20 @@ landing in the workbook as something else. It never raises — like
 Every rule is Excel's own, not ``openpyxl``'s: uniqueness is **case-insensitive** (``DADOS`` and
 ``Dados`` collide even though ``len(set(names))`` says they don't), every broken rule is
 reported rather than only the first, and invisible/non-printable characters are named via
-:func:`unicodedata.name` instead of vanishing from the message. The cell-reference rule is
-strict about the grammar Excel itself checks, so it also rejects short, legitimate-looking
-names such as ``Q1``, ``T1``, ``H2`` — that is Excel's rule, not a false positive here.
+:func:`unicodedata.name` instead of vanishing from the message.
+
+⚠️ There is deliberately **no** cell-reference-shape rule (no rejection of ``Q1``/``A1``/etc.).
+An earlier draft carried one on the belief that Excel treats a cell-reference-shaped name the
+same in both places; it does not. Excel's own worksheet-rename documentation lists exactly the
+rules enforced below, and separately confirms a sheet literally named ``Q1`` is valid,
+referenced as ``Q1!A1``. The "cannot look like a cell reference" rule is real, but it applies
+to **defined names** (``Insert > Name > Define`` / the Name Manager) — a name collision with a
+cell address there is genuinely ambiguous in a formula — which is a different namespace with
+different rules than a worksheet tab.
 """
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 import unicodedata
 
@@ -39,16 +45,13 @@ _SET_INVALID_CHARS = frozenset("[]:*?/\\")
 # "History" is a reserved worksheet name in every Excel version; matched case-insensitively,
 # like every other Excel name comparison.
 _SET_RESERVED_NAMES = frozenset({"history"})
-# A cell reference: 1-3 letters (a column, up to "XFD") then 1-7 digits (a row, up to
-# 1,048,576) — Excel's own grammar, which is why it also flags "Q1"/"T1"/"H2".
-_RE_CELL_REFERENCE = re.compile(r"^[A-Za-z]{1,3}[0-9]{1,7}$")
 # Unicode categories that print as nothing or as a control action: Cc (control), Cf (format,
 # e.g. zero-width space). A sheet name built from scraped/OCR text can carry these invisibly.
 _SET_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf"})
 
 
 @type_checker
-def find_sheet_name_problems(  # complexity-ok: eight independent Excel naming rules
+def find_sheet_name_problems(  # complexity-ok: seven independent Excel naming rules
 	str_name: str,
 ) -> list[str]:
 	"""Validate one worksheet name against Excel's naming rules; return problems (never raises).
@@ -81,8 +84,6 @@ def find_sheet_name_problems(  # complexity-ok: eight independent Excel naming r
 		list_problems.append(f"Sheet name {str_name!r} starts or ends with an apostrophe")
 	if str_name.casefold() in _SET_RESERVED_NAMES:
 		list_problems.append(f"Sheet name {str_name!r} is a reserved Excel name")
-	if _RE_CELL_REFERENCE.match(str_name):
-		list_problems.append(f"Sheet name {str_name!r} looks like a cell reference")
 	list_invisible = [
 		unicodedata.name(str_char, f"U+{ord(str_char):04X}")
 		for str_char in str_name
