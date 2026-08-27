@@ -17,6 +17,7 @@ SUBCOMMAND=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEMPLATES_ROOT="$BLUEPRINTX_ROOT/templates"
+# shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
 # =========================================================================
@@ -114,7 +115,7 @@ show_main_menu() {
     printf "  ${GREEN}1) ➜${NC}  Create a project\n"
     printf "  ${YELLOW}2) ?${NC}  Help (what can BlueprintX do?)\n"
     printf "  ${BLUE}3) ▦${NC}  Show scaffolding structures and examples\n"
-    printf "  ${RED}4) ✕${NC}  Cancel\n"
+    printf "  ${CANCEL}4) ✕${NC}  Cancel\n"
     echo
 }
 
@@ -395,7 +396,7 @@ prompt_language() {
         idx=$((idx + 1))
     done
     local cancel_idx="$idx"
-    printf "  ${RED}%d) Cancel${NC}\n" "$cancel_idx" >&2
+    printf "  ${CANCEL}%d) Cancel${NC}\n" "$cancel_idx" >&2
     printf "${CYAN}Choice${NC} [1-%d]: " "$cancel_idx" >&2
     read -r choice
     printf "\n" >&2
