@@ -312,7 +312,7 @@ prompt_project_root() {
             return 0
             ;;
         2)
-            read -r -p "$(printf "${CYAN}Enter target path${NC}: ")" TARGET_DIR
+            read -r -p "$(prompt_sub "Enter target path: ")" TARGET_DIR
             if [ -z "$TARGET_DIR" ]; then
                 exit_error "Target directory cannot be empty."
             fi
@@ -587,7 +587,7 @@ main() {
 
     show_main_menu
 
-    read -r -p "$(printf "    ${CYAN}Choose an option [1-4]: ${NC}")" choice
+    read -r -p "$(prompt_main "Choose an option [1-4]: ")" choice
 
     case "$choice" in
         1)
@@ -600,7 +600,7 @@ main() {
         3)
             bash "$SCRIPT_DIR/preview.sh"
             echo
-            read -r -p "Do you want to proceed to create a project now? [Y/n] " go_create
+            read -r -p "$(prompt_main "Do you want to proceed to create a project now? [Y/n] ")" go_create
             case "$go_create" in
                 n|N|no|NO)
                     print_status "info" "Ok, not creating a project now."
