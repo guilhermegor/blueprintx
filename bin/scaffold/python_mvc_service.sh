@@ -465,6 +465,14 @@ conditional_apply_multi_pipeline() {
     print_status "success" "Multi-intent pipeline dispatch wired (send/reconcile; PIPELINE_INTENT)"
 }
 
+# blueprintx#274: prune a declined opt-in's dependency line from the just-rendered
+# pyproject.toml — pymsteams is imported only by optional/webhook (webhook opt-in).
+conditional_prune_optin_deps() {
+    local project_path="$1"
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
+        '/^# Microsoft Teams incoming-webhook transport/,/^pymsteams = /d'
+}
+
 copy_global_config() {
     local project_path="$1"
     cp "$COMMON_TEMPLATE_ROOT/src/config/startup.py" "$project_path/src/config/startup.py"
@@ -839,6 +847,7 @@ main() {
     copy_tests "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_prune_optin_deps "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"
     apply_env_wise_config "$PROJECT_PATH"

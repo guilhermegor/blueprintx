@@ -30,7 +30,6 @@ pandas = ">=2.0"
 # blueprintx#238 — but a guarded import is still an import, and the same rule applies.
 numpy = ">=1.22"
 openpyxl = ">=3.1"
-joblib = ">=1.3"
 pyodbc = ">=5.0"
 oracledb = ">=2.0"
 psycopg = ">=3.1"
@@ -41,6 +40,10 @@ wwdates = ">=1.0.0"
 # Hardened XML parsing at the ingestion trust boundary (utils/xml_reader.py), blueprintx#117.
 defusedxml = ">=0.7"
 # Microsoft Teams incoming-webhook transport, used by the webhook opt-in (teams adapter).
+# blueprintx#274: the scaffold prunes this line when the webhook opt-in is declined
+# (scaffold_prune_optin_dependency in bin/lib/scaffold_python_templates.sh) -- when it
+# survives scaffolding it IS imported (optional/webhook ships as one package), so it
+# never needs a DEP002 ignore.
 pymsteams = ">=0.2.5"
 # YAML config parsing (inputs/outputs/webhooks .yaml) in src/config.
 pyyaml = ">=6.0"
@@ -105,12 +108,15 @@ pywin32 = ["win32com", "win32api", "pythoncom", "pywintypes"]
 # .layer-policy.yaml requires one: an entry without a reason is a rule the next person widens.
 #
 # openpyxl — reached as a pandas ENGINE STRING (`df.to_excel(..., engine="openpyxl")`), never
-# imported by name, so deptry structurally cannot see the use. Permanent entry.
-# joblib, pymsteams — imported only by an opt-in the scaffold may not have copied
-# (optional/chassis/db_wschema/infrastructure/joblib_handler.py and
-# optional/webhook/infrastructure/teams_notifier.py). ⚠️ OWNED BY blueprintx#274, which closes
-# by DELETING them: the real fix is for a declined opt-in to stop declaring its dependency.
-DEP002 = ["openpyxl", "joblib", "pymsteams"]
+# imported by name, so deptry structurally cannot see the use. Permanent entry: no scaffold
+# change would make it visible. It is still a genuine runtime dependency, hence declared.
+#
+# joblib was declared here unconditionally with no code path in this tier ever importing it
+# (MVC has no schema-less-storage opt-in) — deleted outright rather than ignored (blueprintx#274).
+# pymsteams is no longer ignored either: the scaffold now prunes its declaration when the
+# webhook opt-in is declined (bin/lib/scaffold_python_templates.sh), so when the line survives
+# scaffolding it IS imported, and there is nothing left for DEP002 to flag.
+DEP002 = ["openpyxl"]
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]

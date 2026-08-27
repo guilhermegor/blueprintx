@@ -26,6 +26,13 @@ beartype = ">=0.22"
 python-dotenv = ">=1.0.0"
 sqlalchemy = ">=2.0"
 alembic = ">=1.13.0"
+# Used only by the schema-less-storage opt-in (chassis/db_wschema/infrastructure/
+# joblib_handler.py, shipped together with chassis/db on that prompt). blueprintx#274: the
+# scaffold prunes this line when that opt-in is declined (scaffold_prune_optin_dependency in
+# bin/lib/scaffold_python_templates.sh) -- when it survives scaffolding it IS imported, so it
+# never needs a DEP002 ignore. Previously missing here entirely, which meant accepting the
+# storage opt-in shipped an unimportable joblib_handler.py (no declared dependency at all).
+joblib = ">=1.3"
 # The tabular vocabulary utils/{dtypes,frames,decimals,provenance,tabular_reader}.py speak.
 #
 # ⚠️ DECLARED BECAUSE IT IS IMPORTED — not because it was missing from the install. Until
@@ -44,6 +51,9 @@ wwdates = ">=1.0.0"
 # Hardened XML parsing at the ingestion trust boundary (utils/xml_reader.py), blueprintx#117.
 defusedxml = ">=0.7"
 # Microsoft Teams incoming-webhook transport, used by the webhook opt-in (teams adapter).
+# blueprintx#274: the scaffold prunes this line when the webhook opt-in is declined -- when
+# it survives scaffolding it IS imported (optional/webhook ships as one package), so it
+# never needs a DEP002 ignore.
 pymsteams = ">=0.2.5"
 # YAML config parsing (inputs/outputs/webhooks .yaml) in src/config.
 pyyaml = ">=6.0"
@@ -120,10 +130,11 @@ pywin32 = ["win32com", "win32api", "pythoncom", "pywintypes"]
 #
 # alembic — a migration COMMAND (`alembic upgrade head`), invoked as a CLI and never imported.
 # No scaffold change could make this one visible to deptry, so the entry is permanent.
-# pymsteams — imported only by an opt-in the scaffold may not have copied
-# (optional/webhook/infrastructure/teams_notifier.py). ⚠️ OWNED BY blueprintx#274, which closes
-# by DELETING it: the real fix is for a declined opt-in to stop declaring its dependency.
-DEP002 = ["alembic", "pymsteams"]
+#
+# pymsteams is no longer ignored: the scaffold now prunes its declaration when the webhook
+# opt-in is declined (bin/lib/scaffold_python_templates.sh), so when the line survives
+# scaffolding it IS imported, and there is nothing left for DEP002 to flag (blueprintx#274).
+DEP002 = ["alembic"]
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]

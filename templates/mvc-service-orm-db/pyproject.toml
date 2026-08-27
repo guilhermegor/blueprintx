@@ -36,6 +36,10 @@ wwdates = ">=1.0.0"
 # Hardened XML parsing at the ingestion trust boundary (utils/xml_reader.py), blueprintx#117.
 defusedxml = ">=0.7"
 # Microsoft Teams incoming-webhook transport, used by the webhook opt-in (teams adapter).
+# blueprintx#274: the scaffold prunes this line when the webhook opt-in is declined
+# (scaffold_prune_optin_dependency in bin/lib/scaffold_python_templates.sh) -- when it
+# survives scaffolding it IS imported (optional/webhook ships as one package), so it
+# never needs a DEP002 ignore.
 pymsteams = ">=0.2.5"
 # YAML config parsing (inputs/outputs/webhooks .yaml) in src/config.
 pyyaml = ">=6.0"
@@ -101,11 +105,12 @@ pywin32 = ["win32com", "win32api", "pythoncom", "pywintypes"]
 #
 # openpyxl — reached as a pandas ENGINE STRING by view/report_renderer.py
 # (`df.to_excel(..., engine="openpyxl")`), never imported by name, so deptry structurally
-# cannot see the use. Permanent entry.
-# pymsteams — imported only by an opt-in the scaffold may not have copied
-# (optional/webhook/infrastructure/teams_notifier.py). ⚠️ OWNED BY blueprintx#274, which closes
-# by DELETING it: the real fix is for a declined opt-in to stop declaring its dependency.
-DEP002 = ["openpyxl", "pymsteams"]
+# cannot see the use. Permanent entry: no scaffold change would make it visible.
+#
+# pymsteams is no longer ignored: the scaffold now prunes its declaration when the webhook
+# opt-in is declined (bin/lib/scaffold_python_templates.sh), so when the line survives
+# scaffolding it IS imported, and there is nothing left for DEP002 to flag (blueprintx#274).
+DEP002 = ["openpyxl"]
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]

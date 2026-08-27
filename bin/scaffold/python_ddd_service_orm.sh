@@ -460,6 +460,17 @@ copy_typing_chassis() {
     print_status "success" "Runtime type-checking engine (chassis/typing) + test applied"
 }
 
+# blueprintx#274: prune each declined opt-in's dependency line from the just-rendered
+# pyproject.toml — joblib is imported only by chassis/db_wschema (storage opt-in), pymsteams
+# only by optional/webhook (webhook opt-in).
+conditional_prune_optin_deps() {
+    local project_path="$1"
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_STORAGE" \
+        '/^# Used only by the schema-less-storage opt-in/,/^joblib = /d'
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
+        '/^# Microsoft Teams incoming-webhook transport/,/^pymsteams = /d'
+}
+
 # Schema-less storage opt-in. The ORM db_schema does not use chassis/db, so both
 # chassis/db (the DatabaseHandler ABC db_wschema extends) and chassis/db_wschema
 # are injected together here.
@@ -812,6 +823,7 @@ main() {
     copy_typing_chassis "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_prune_optin_deps "$PROJECT_PATH"
     copy_alembic_templates "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_copy_storage "$PROJECT_PATH"
