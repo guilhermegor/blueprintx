@@ -12,6 +12,7 @@ must not do.
 """
 
 import ast
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -30,6 +31,44 @@ def _startup_tree() -> ast.Module:
 	"""
 	path_startup = Path(__file__).resolve().parents[2] / "src" / "config" / "startup.py"
 	return ast.parse(path_startup.read_text(encoding="utf-8"))
+
+
+def _load_pure_function(cls_tree: ast.Module, str_name: str) -> Callable[[dict, str], dict | None]:
+	"""Extract a module-level function from the parsed ``startup`` module, without importing it.
+
+	Only sound for a function with no reference to a startup.py global — the resolver tested
+	below takes its config as an explicit argument, so lifting out its own AST node and
+	exec'ing it in isolation is safe. The ``@type_checker`` decorator is stripped: the
+	runtime-typing engine has its own test suite (``test_typing.py``), and proving it again
+	here is not this module's job.
+
+	Parameters
+	----------
+	cls_tree : ast.Module
+		The parsed ``startup`` module (see ``_startup_tree``).
+	str_name : str
+		The function name to extract.
+
+	Returns
+	-------
+	Callable[[dict, str], dict or None]
+		The undecorated function, ready to call directly with a plain config mapping.
+	"""
+	list_matches = [
+		cls_node
+		for cls_node in cls_tree.body
+		if isinstance(cls_node, ast.FunctionDef) and cls_node.name == str_name
+	]
+	assert list_matches, f"startup.py no longer defines {str_name}"
+	cls_func = list_matches[0]
+	cls_func.decorator_list = []
+	cls_module = ast.Module(body=[cls_func], type_ignores=[])
+	ast.fix_missing_locations(cls_module)
+	dict_namespace: dict = {}
+	exec(  # noqa: S102 — extracting one pure function's own AST node, not untrusted input
+		compile(cls_module, "<startup-function>", "exec"), dict_namespace
+	)
+	return dict_namespace[str_name]
 
 
 def _logger_lineno(cls_tree: ast.Module) -> int:
@@ -160,3 +199,75 @@ def test_the_failable_block_catches_exception_not_baseexception() -> None:
 	assert set(list_caught) == {"Exception"}, (
 		f"the config read must catch Exception, never BaseException — found {list_caught}"
 	)
+
+
+# --------------------------
+# Tests — resolve_reference_spec (blueprintx#225)
+# --------------------------
+#
+# The reference/golden-copy block in inputs.yaml is an OPTIONAL OVERRIDE: it must never force
+# a project to declare a source's {dir, pattern} twice. These tests pin the fallback chain —
+# override wins when present, the real input's own spec otherwise, None only when neither
+# exists — with the absent-override path asserted explicitly: every existing generated
+# project has no reference_files block, so that is the path a regression would hit first.
+# Placed in this module (rather than a new file) because it exercises the same startup.py and
+# a new tests/unit/*.py file needs its own scaffold copy-list wiring (bin/ci/check_test_copy_
+# lists.py), which is out of scope for this change.
+
+
+def test_reference_override_wins_over_real_spec() -> None:
+	"""A source listed under ``reference_files`` returns that override, not its real spec."""
+	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+	dict_inputs = {
+		"example_source": {"dir": "data/example_source", "pattern": "*.csv"},
+		"reference_files": {"example_source": {"dir": "data/reference", "pattern": "*.csv"}},
+	}
+	assert fn_resolve(dict_inputs, "example_source") == {
+		"dir": "data/reference",
+		"pattern": "*.csv",
+	}
+
+
+def test_absent_override_falls_through_to_real_spec_unchanged() -> None:
+	"""No ``reference_files`` entry: the source's reference IS its real-input spec, untouched.
+
+	This is the regression-risk path: every existing generated project ships with no
+	``reference_files`` block at all, so this behaviour must be identical to a project that
+	never heard of the override.
+	"""
+	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+	dict_inputs = {"example_source": {"dir": "data/example_source", "pattern": "*.csv"}}
+	assert fn_resolve(dict_inputs, "example_source") == {
+		"dir": "data/example_source",
+		"pattern": "*.csv",
+	}
+
+
+def test_missing_reference_files_key_entirely_is_the_same_as_empty() -> None:
+	"""A config with no ``reference_files`` key at all still resolves the real spec.
+
+	Covers the literal shape of every project scaffolded before this issue: the key is not
+	merely empty, it does not exist.
+	"""
+	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+	dict_inputs = {
+		"daily_infos_base_path": "logs",
+		"daily_infos_dated": False,
+		"example_source": {"dir": "data/example_source", "pattern": "*.csv"},
+	}
+	assert fn_resolve(dict_inputs, "example_source") == {
+		"dir": "data/example_source",
+		"pattern": "*.csv",
+	}
+
+
+def test_neither_override_nor_real_spec_returns_none() -> None:
+	"""An unknown source with no override and no real input resolves to ``None``."""
+	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+	assert fn_resolve({}, "unknown_source") is None
+
+
+def test_non_mapping_real_key_without_override_returns_none() -> None:
+	"""A top-level scalar key (like ``daily_infos_base_path``) is never mistaken for a spec."""
+	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+	assert fn_resolve({"daily_infos_base_path": "logs"}, "daily_infos_base_path") is None
