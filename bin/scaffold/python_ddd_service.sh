@@ -407,8 +407,8 @@ copy_shared_utils() {
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
     local -a utils=(
         br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
-        tabular_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
-        outlook_gateway raw_workspace daily_cache queries
+        tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
+        ms_office email raw_workspace daily_cache queries
     )
     for util in "${utils[@]}"; do
         # A util is either a single module or a PACKAGE — retry/ was split into one in
@@ -427,6 +427,20 @@ copy_shared_utils() {
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
+    # ms_office/ and email/ are PACKAGES with more than one test file, one per module inside —
+    # a single "test_${util}.py" above cannot name them, so each rides an explicit cp instead
+    # (blueprintx#117/#118/#121). check_test_copy_lists.py's static scan requires exactly this
+    # form (`cp … tests/unit/test_X.py`) to recognise a shared test as reachable.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_outlook_gateway.py" \
+        "$project_path/tests/unit/test_ms_office_outlook_gateway.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_excel_sheet_names.py" \
+        "$project_path/tests/unit/test_ms_office_excel_sheet_names.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_dispatch.py" \
+        "$project_path/tests/unit/test_email_dispatch.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_sender.py" \
+        "$project_path/tests/unit/test_email_sender.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_html_body.py" \
+        "$project_path/tests/unit/test_email_html_body.py"
     # A COUNT, never an enumeration: the old message listed 15 of the 17 names and had already
     # drifted (lesson `ci-python-gates` — the enumeration is what goes stale). The number still
     # proves the step ran, which silence would not.
@@ -639,7 +653,7 @@ prompt_email() {
 # E-mail handler seam (opt-in): copy optional/email into src/chassis/email (canonical
 # chassis.email prefix — no rewrite, like the webhook seam) and add the EMAIL_BACKEND/SMTP_*
 # keys. DDD has no shared orchestrator, so a capability wires `build_email_handler(...)`
-# where it needs to notify (the Outlook backend injects utils.outlook_gateway by default).
+# where it needs to notify (the Outlook backend injects utils.ms_office.outlook_gateway by default).
 conditional_copy_email() {
     local project_path="$1"
     if [[ "$INCLUDE_EMAIL" != "true" ]]; then return; fi

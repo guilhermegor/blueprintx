@@ -187,8 +187,8 @@ copy_internal_utils() {
     local utils_src="$COMMON_TEMPLATE_ROOT/src/utils"
     local -a modules=(
         __init__.py dtypes.py br_identifiers.py http_downloader.py
-        tabular_reader.py provenance.py sidecar_metadata.py text.py zip_extractor.py
-        raw_workspace.py daily_cache.py
+        tabular_reader.py xml_reader.py provenance.py sidecar_metadata.py text.py
+        zip_extractor.py raw_workspace.py daily_cache.py
     )
     # retry/ is a PACKAGE, not a module (blueprintx#116) — it needs cp -r, and it is listed
     # apart from `modules` so the loop below stays a plain file copy. rewrite_internal_imports
