@@ -42,8 +42,20 @@ npm run pack:smoke  # npm pack -> install from the tarball -> require()/import()
 ## Publishing
 
 Packaged as dual ESM + CommonJS with bundled `.d.ts` declarations (see `exports`
-in `package.json`). No npm publish workflow ships yet — that lands in a follow-up
-slice (OIDC trusted publishing).
+in `package.json`). Releases publish via **npm OIDC trusted publishing** — no
+long-lived `NPM_TOKEN` is stored. See `docs/contributing.md` for the release
+workflow and the one-time bootstrap steps required before the first automated
+publish.
+
+## Documentation
+
+A [Docusaurus](https://docusaurus.io) site lives in `docs/`, with native version
+support (the npm-ecosystem analogue of `mike` on the Python skeletons):
+
+```bash
+npm run docs:start   # serve the docs site locally
+npm run docs:build   # build the static site into docs-build/
+```
 
 ## License
 

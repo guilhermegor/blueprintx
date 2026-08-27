@@ -16,11 +16,15 @@
   "files": [
     "dist"
   ],
-  "engines": {
-    "node": ">=22",
-    "npm": ">=10"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git"
   },
-  "packageManager": "npm@10.9.0",
+  "engines": {
+    "node": ">=22.14.0",
+    "npm": ">=11.5.1"
+  },
+  "packageManager": "npm@11.5.1",
   "scripts": {
     "build": "npm run build:esm && npm run build:cjs && npm run build:types",
     "build:esm": "tsc -p tsconfig.esm.json",
@@ -35,6 +39,9 @@
     "test:watch": "jest --watch",
     "prepublishOnly": "npm run build",
     "pack:smoke": "bash bin/smoke_pack.sh",
+    "docs:start": "docusaurus start",
+    "docs:build": "docusaurus build --out-dir docs-build",
+    "docs:version": "docusaurus docs:version",
     "context:export": "bash bin/export_repo_content.sh"
   },
   "keywords": [],
@@ -45,6 +52,8 @@
     "@babel/core": "^7.29.0",
     "@babel/preset-env": "^7.29.3",
     "@babel/preset-typescript": "^7.28.5",
+    "@docusaurus/core": "^3.6.0",
+    "@docusaurus/preset-classic": "^3.6.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
     "babel-jest": "^30.4.1",
@@ -55,6 +64,8 @@
     "jest": "^30.4.2",
     "jest-environment-node": "^30.4.1",
     "prettier": "^3.8.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.2"
   }

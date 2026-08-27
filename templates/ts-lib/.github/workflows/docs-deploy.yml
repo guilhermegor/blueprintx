@@ -1,0 +1,41 @@
+name: Docs - Deploy (GitHub Pages)
+
+# Deploys the Docusaurus site after a GitHub release publishes — mirrors lib-minimal's
+# deploy_docs job (runs only after the package actually shipped, never advertises a
+# version that failed to publish). A prerelease (rc/beta/alpha) never moves the
+# published site: gated on the release's own `prerelease` flag, not a parsed tag string.
+#
+# One-time setup: Settings -> Pages -> Source: "GitHub Actions" (cannot be scripted
+# from a workflow's own GITHUB_TOKEN, which lacks repo-admin rights).
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run docs:build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-build
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

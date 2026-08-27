@@ -69,6 +69,7 @@ create_directory_structure() {
     mkdir -p "$project_path"/bin
     mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
+    mkdir -p "$project_path"/docs
 
     print_status "success" "Directory structure created"
 }
@@ -94,6 +95,15 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/bin/write_esm_package_json.sh" "$project_path/bin/write_esm_package_json.sh"
     cp "$SKELETON_TEMPLATE_ROOT/bin/smoke_pack.sh" "$project_path/bin/smoke_pack.sh"
     chmod +x "$project_path/bin/write_esm_package_json.sh" "$project_path/bin/smoke_pack.sh"
+    # Docusaurus site (#134) + npm OIDC / Verdaccio CI (#135, #136). sidebars.js and the
+    # three workflow files below carry no ${VAR} placeholders, so a plain cp is enough;
+    # docusaurus.config.js, docs/*.md and release-npm.yml DO carry placeholders and are
+    # rendered later in copy_common_templates, where PROJECT_NAME/GITHUB_USERNAME etc.
+    # are already exported for envsubst.
+    cp "$SKELETON_TEMPLATE_ROOT/sidebars.js" "$project_path/sidebars.js"
+    cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/docs.yml" "$project_path/.github/workflows/docs.yml"
+    cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/docs-deploy.yml" "$project_path/.github/workflows/docs-deploy.yml"
+    cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/pack-smoke.yml" "$project_path/.github/workflows/pack-smoke.yml"
 
     print_status "success" "Skeleton files copied"
 }
