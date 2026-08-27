@@ -119,10 +119,20 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_comment_language_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
 		"$str_project_path/tests/unit/test_function_length_gate.py"
+}
+
+# Split from scaffold_copy_shared_tests (blueprintx#127): the gate/example tests plus
+# fixtures, kept separate so neither half nears the 60-line function-length ceiling.
+scaffold_copy_shared_test_gates() {
+	local str_project_path="$1"
+
 	# Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
 	# selector could be wrong without any tier noticing (blueprintx#211).
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
 		"$str_project_path/tests/unit/test_pip_requirements.py"
+	# The should-fail witness for the pip-fallback import verification (blueprintx#127).
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_verify_venv_imports.py" \
+		"$str_project_path/tests/unit/test_verify_venv_imports.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \
 		"$str_project_path/tests/unit/test_startup_fragility_order.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
@@ -179,6 +189,7 @@ scaffold_copy_common_templates() {
 	scaffold_render_pyproject "$str_tier" "$str_project_path"
 	scaffold_copy_tooling_configs "$str_project_path"
 	scaffold_copy_shared_tests "$str_project_path"
+	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
 	print_status "success" "Common templates applied"
 }
