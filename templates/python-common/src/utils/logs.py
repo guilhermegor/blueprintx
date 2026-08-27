@@ -106,6 +106,12 @@ class CreateLog(metaclass=TypeChecker):
 		-------
 		None
 		"""
+		# Clearing the handler list alone only drops the reference — the stale FileHandler,
+		# and the OS file descriptor it holds open, survives until garbage collection, which
+		# is when Python raises an invisible ResourceWarning that never surfaces under default
+		# settings. A caller that reconfigures the logger, say rotating to a new dated log
+		# file, leaked one open file handle per reconfiguration. Closing first releases the
+		# descriptor immediately, not at GC time.
 		for cls_stale_handler in logger.handlers:
 			cls_stale_handler.close()
 		logger.handlers.clear()
@@ -150,12 +156,7 @@ class CreateLog(metaclass=TypeChecker):
 				datefmt="%Y-%m-%d,%H:%M:%S",
 			)
 		)
-		# Clearing the handler list alone only drops the reference — the stale FileHandler,
-		# and the OS file descriptor it holds open, survives until garbage collection, which
-		# is when Python raises an invisible ResourceWarning that never surfaces under default
-		# settings. A caller that reconfigures the logger, say rotating to a new dated log
-		# file, leaked one open file handle per reconfiguration. Close every existing handler
-		# before detaching it so the descriptor is released immediately, not at GC time.
+		# Reconfiguring must release the previous file descriptor, not just forget it.
 		self._close_handlers(logger)
 		logger.addHandler(handler)
 		return logger
