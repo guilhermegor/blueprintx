@@ -269,6 +269,22 @@ Numeric separators are an **ES2021** feature with universal Node and
 modern-browser support — no transpilation concern, no polyfill needed.
 The separator is purely syntactic; `1_000 === 1000` is `true` at runtime.
 
+### Cyclomatic complexity
+
+`eslint.config.js` wires ESLint's built-in `complexity` rule — no new tool, it
+ships with ESLint. The ceiling differs by tree, same idea as the Python
+skeletons' ruff `C901` gate (`templates/python-common/CLAUDE.md`), but **not
+copied by symmetry**: JSX branching and optional chaining inflate ESLint's
+count in ways mccabe/ruff never see, so the number here was measured against
+this template's own source, not inherited. Currently: **3** for `src/**`
+(measured: 2 already flags ~16% of functions in the scaffolded example
+capability — not a payable number yet), **2** for `**/*.{test,spec}.{ts,tsx}`
+(covers both colocated unit tests and the Playwright `tests/` e2e specs).
+Escape hatch: `// eslint-disable-next-line complexity -- <reason>` on the line
+immediately above the flagged function (ESLint attributes the error there, not
+on the branch) — mirrors python-common's `# complexity-ok: <reason>`, though
+unlike that gate, a missing reason is not (yet) mechanically enforced.
+
 ## State management: ${STATE_MANAGEMENT_VARIANT}
 
 ${STATE_MANAGEMENT_DESC}

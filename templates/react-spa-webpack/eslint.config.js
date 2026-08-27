@@ -99,10 +99,29 @@ export default [
         },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
+      // Cyclomatic-complexity ceiling, ESLint's built-in `complexity` rule —
+      // mirrors templates/python-common's ruff C901 gate (#167), recalibrated
+      // for this tree rather than copied by symmetry: measured against the
+      // scaffolded example capability, 3 is the tightest ceiling with zero
+      // current violations (2 already flags 4/25 functions, ~16%). See #168.
+      complexity: ['error', 3],
     },
   },
 
-  // 6. DDD import boundary rules
+  // 6. Cyclomatic-complexity ceiling for test files — stricter than src/,
+  // because a test with a branch tests two paths and the green run never
+  // says which one. Placed after rule 5 so it wins for *.test.tsx files
+  // that live under src/ (flat config: later entries win on shared keys).
+  // Measured at 2: zero violations across colocated unit tests + Playwright
+  // e2e specs; 1 was not payable yet (1/6 functions, ~17%). See #168.
+  {
+    files: ['**/*.{test,spec}.{ts,tsx,js,jsx}'],
+    rules: {
+      complexity: ['error', 2],
+    },
+  },
+
+  // 7. DDD import boundary rules
   {
     plugins: { boundaries },
     settings: {
@@ -141,7 +160,7 @@ export default [
     },
   },
 
-  // 7. Web worker files - use Worker globals, not DOM
+  // 8. Web worker files - use Worker globals, not DOM
   {
     files: ['src/**/*-worker.js'],
     languageOptions: {
@@ -151,7 +170,7 @@ export default [
     },
   },
 
-  // 8. Import resolution and ordering
+  // 9. Import resolution and ordering
   {
     files: ['src/**/*.{ts,tsx,js,jsx}'],
     plugins: { import: importPlugin },
@@ -181,6 +200,6 @@ export default [
     },
   },
 
-  // 9. Prettier config (must be last)
+  // 10. Prettier config (must be last)
   prettierConfig,
 ];
