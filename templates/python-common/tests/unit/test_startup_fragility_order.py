@@ -271,3 +271,32 @@ def test_non_mapping_real_key_without_override_returns_none() -> None:
 	"""A top-level scalar key (like ``daily_infos_base_path``) is never mistaken for a spec."""
 	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
 	assert fn_resolve({"daily_infos_base_path": "logs"}, "daily_infos_base_path") is None
+
+
+def test_null_reference_files_block_falls_back_to_the_real_spec() -> None:
+	"""``reference_files:`` with an empty body is valid YAML and must not raise.
+
+	PyYAML parses a key with no body as ``None``, and ``.get(key, {})`` returns that ``None``
+	rather than the default — so the naive chained ``.get`` raised ``AttributeError`` on the
+	most natural way to comment the whole block out.
+	"""
+	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+	dict_inputs = {"reference_files": None, "example_source": {"dir": "data", "pattern": "*.csv"}}
+	assert fn_resolve(dict_inputs, "example_source") == {"dir": "data", "pattern": "*.csv"}
+
+
+def test_scalar_reference_files_block_falls_back_to_the_real_spec() -> None:
+	"""A scalar where a mapping belongs is a config error, not a crash."""
+	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+	dict_inputs = {"reference_files": "typo", "example_source": {"dir": "data", "pattern": "*.csv"}}
+	assert fn_resolve(dict_inputs, "example_source") == {"dir": "data", "pattern": "*.csv"}
+
+
+def test_null_override_entry_falls_back_to_the_real_spec() -> None:
+	"""A null ENTRY under ``reference_files`` must fall back, not return ``None``."""
+	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+	dict_inputs = {
+		"reference_files": {"example_source": None},
+		"example_source": {"dir": "data", "pattern": "*.csv"},
+	}
+	assert fn_resolve(dict_inputs, "example_source") == {"dir": "data", "pattern": "*.csv"}

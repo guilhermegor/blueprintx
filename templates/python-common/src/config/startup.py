@@ -195,7 +195,15 @@ def resolve_reference_spec(dict_inputs: dict, str_source: str) -> dict | None:
 	"""
 	dict_source = dict_inputs.get(str_source)
 	dict_real = dict_source if isinstance(dict_source, dict) else None
-	return dict_inputs.get("reference_files", {}).get(str_source, dict_real)
+	# Both levels are normalised by isinstance, never by `.get(k, {})`: a key present with a
+	# null value returns None rather than the default, so `reference_files:` written with an
+	# empty body — valid YAML, and the natural way to comment the block out — would raise
+	# AttributeError instead of falling back. A scalar there does the same.
+	dict_overrides = dict_inputs.get("reference_files")
+	if not isinstance(dict_overrides, dict):
+		return dict_real
+	dict_override = dict_overrides.get(str_source)
+	return dict_override if isinstance(dict_override, dict) else dict_real
 
 
 PATH_LOG: Path = output_path("log_name")
