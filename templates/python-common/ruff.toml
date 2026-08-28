@@ -45,8 +45,6 @@ exclude = [
 
     # project-specific generated / chassis
     "alembic",
-    "src/chassis",
-    "src/capabilities/example_feature",
     # lib-minimal vendors the runtime type-checking engine at a nested private path; its
     # imports are mechanically rewritten to <pkg>._internal.* (can exceed line-length) and it
     # is intrinsic metaprogramming — fully excluded, like src/chassis (mypy excludes it too).
@@ -219,9 +217,22 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
     # Those 2 spaces are the bullet's alignment — a tab there would be 4+ columns and break the
     # continuation. E101 cannot tell prose alignment from indentation, and a `# noqa` is not
     # available inside a docstring (it would render as literal text). 4 lines, one file.
-    # ⚠️ Scoped to `bin/`: `src/` and `tests/` pass E101 clean today and keep the rule.
+    # ⚠️ Scoped to `bin/`: `tests/` passes E101 clean today and keeps the rule. `src/` picked up
+    # its own instance of the identical shape in blueprintx#203 (below) once `src/chassis` lost
+    # its blanket exclude — a numbered-list hanging indent, not the Markdown bullet above, but
+    # the same "prose alignment, not code indentation" cause.
     "E101",
 ]
+
+# Same E101 shape as `bin/*.py` above, one file: a numbered-list item wrapped inside a
+# docstring hangs its continuation lines under "1. "/"2. "/"3. " with a tab + 3 spaces — the
+# spaces are the list marker's alignment, not stray indentation, and (as noted above) a
+# docstring cannot carry a `# noqa` without it becoming literal text. 3 lines.
+"src/chassis/db_wschema/infrastructure/joblib_handler.py" = ["E101"]
+# SanityCheck.validate() is a post-load validator for an arbitrary deserialized artifact
+# (any joblib payload — a model, an array, a dict); `Any` is the honest parameter type, the
+# same argument as `src/config/connection_db.py` above.
+"src/chassis/db_wschema/infrastructure/sanity_check.py" = ["ANN401"]
 
 "tests/**/*.py" = [
     "S101",  # use of assert
@@ -246,9 +257,18 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 # gone and cannot come back silently (blueprintx#172).
 "src/model/example_entity.py" = ["ANN401"]
 # The runtime type-checking engine validates arbitrary annotations, so `Any` is
-# intrinsic to its signatures. DDD ships it under src/chassis (already excluded
-# above); MVC ships it here. Ignore ANN401 rather than excluding it from all lint.
+# intrinsic to its signatures. MVC ships it here; DDD ships the same engine under
+# src/chassis/typing (mirrored below, blueprintx#203 — chassis lost its blanket
+# [exclude] once #190 proved the reference code needs linting like everything else).
+# Ignore ANN401 rather than excluding either tree from all lint.
 "src/utils/typing/**/*.py" = ["ANN401"]
+"src/chassis/typing/**/*.py" = ["ANN401"]
+# Native DB-API 2.0 connections from the optional drivers (psycopg/mysql-connector/
+# pyodbc/oracledb) have no shared type across backends, so `_connect`'s return is
+# `Any` — the same argument as `src/config/connection_db.py` above, one layer down
+# (a handler's `_connect` vs. the MVC-wide factory). sqlite_handler.py needs no
+# entry: stdlib `sqlite3.Connection` is a real shared type, not `Any`.
+"src/chassis/db_schema/infrastructure/*_handler.py" = ["ANN401"]
 # lib-minimal nests the same seams inside a private package (src/<pkg>/_internal/…);
 # mirror the exemptions above for that path (`*` matches the single package segment). The
 # typing engine there is fully excluded (see [exclude]), so it needs no per-file rule.
