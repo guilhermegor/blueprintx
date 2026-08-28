@@ -27,20 +27,22 @@ semantics in `bin/lib/common.sh` and `bin/blueprintx.sh` / `bin/scaffold/*.sh`).
 - [x] #253 — Cancel uses `CANCEL` instead of `RED` (`bin/blueprintx.sh:117`, `:398`)
 - [x] `PROMPT_PRIMARY` / `PROMPT_SUB` / `CANCEL` + `prompt_main`/`prompt_sub` helpers
       added to `bin/lib/common.sh`, shellcheck-clean
-- [ ] Convert `read -r -p` sites to `prompt_main`/`prompt_sub` (~74 sites):
-  - [ ] `bin/blueprintx.sh` (3 sites)
-  - [ ] `bin/scaffold/python_ddd_service.sh`
-  - [ ] `bin/scaffold/python_ddd_service_orm.sh`
-  - [ ] `bin/scaffold/python_mvc_service.sh`
-  - [ ] `bin/scaffold/python_mvc_service_orm.sh`
-  - [ ] `bin/scaffold/python_lib_minimal.sh`
-  - [ ] `bin/scaffold/ts_lib.sh` — ⚠️ collision with in-flight PRs #288/#292;
-        edits kept to the 3 prompt lines only, no reordering
-  - [ ] `bin/scaffold/ts_react_app.sh`
-- [ ] `bash bin/ci/check_shell.sh` clean
-- [ ] `make dry-run` / `make preview` still work
-- [ ] Rendered before/after output pasted into PR body
-- [ ] `NO_COLOR=1` / non-TTY pipe verified readable
+- [x] Convert `read -r -p` sites to `prompt_main`/`prompt_sub` (74 sites, all converted):
+  - [x] `bin/blueprintx.sh` (3 sites)
+  - [x] `bin/scaffold/python_ddd_service.sh` (13 sites)
+  - [x] `bin/scaffold/python_ddd_service_orm.sh` (13 sites)
+  - [x] `bin/scaffold/python_mvc_service.sh` (13 sites)
+  - [x] `bin/scaffold/python_mvc_service_orm.sh` (13 sites)
+  - [x] `bin/scaffold/python_lib_minimal.sh` (9 sites)
+  - [x] `bin/scaffold/ts_lib.sh` (3 sites) — ⚠️ collision with in-flight PRs
+        #288/#292; edits kept to the 3 prompt lines only, no reordering
+  - [x] `bin/scaffold/ts_react_app.sh` (8 sites)
+- [x] `bash bin/ci/check_shell.sh` clean
+- [x] `make dry-run` / `make preview` still work
+- [x] Rendered before/after output pasted into PR body
+- [x] `NO_COLOR=1` / non-TTY pipe verified readable (unchanged from every
+      other `print_status` call — no NO_COLOR handling exists anywhere in
+      this codebase yet; text stays legible with raw escapes around it)
 - [ ] PR opened, `Closes #253` + `Closes #251`, verified via
       `closingIssuesReferences`
 
