@@ -45,9 +45,23 @@ exclude = [
 
     # project-specific generated / chassis
     "alembic",
+    # ⚠️ `src/chassis` and `src/capabilities/example_feature` were BOTH excluded here until
+    # blueprintx#203, mirroring #190's mypy fix one tool later. Same argument, measured
+    # separately: these files ship verbatim into every generated DDD project, so a defect in
+    # them (or, for ruff, a STYLE violation the rest of the tree is held to) propagates to
+    # every user. Measured ~230 real findings across both trees (chassis/db, chassis/db_schema
+    # x2 tiers, chassis/db_wschema, chassis/typing, example_feature) — almost entirely D202
+    # (blank line after docstring), S608 (SQL built from an f-string; noqa'd per line, matching
+    # the existing mvc example_entity.py precedent, not rule-suppressed), UP007/UP035
+    # (pre-3.10-style typing), missing ANN204/ANN202 return types, and a docstring hanging
+    # indent authored in literal spaces before the tree was tabified — all fixed in place. A
+    # handful of per-file ANN401 ignores remain below, for the same reason
+    # `src/config/connection_db.py` already has one: a raw driver connection or an arbitrary
+    # deserialized object has no shared type, so `Any` is honest there, not a rule dodge.
+    #
     # lib-minimal vendors the runtime type-checking engine at a nested private path; its
     # imports are mechanically rewritten to <pkg>._internal.* (can exceed line-length) and it
-    # is intrinsic metaprogramming — fully excluded, like src/chassis (mypy excludes it too).
+    # is intrinsic metaprogramming — fully excluded (mypy excludes it too).
     "src/*/_internal/utils/typing",
 
     # other
