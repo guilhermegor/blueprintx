@@ -47,7 +47,7 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
+    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -62,7 +62,7 @@ prompt_state_management() {
     echo "  1) React Context  (zero deps, default)"
     echo "  2) Zustand        (lightweight store)"
     echo "  3) Redux Toolkit  (enterprise, RTK Query)"
-    read -r -p "Choice [1]: " sm_choice || true
+    read -r -p "$(prompt_main "Choice [1]: ")" sm_choice || true
     STATE_MGMT_CHOICE="${sm_choice:-1}"
     case "$STATE_MGMT_CHOICE" in
         1) print_status "config" "State management: React Context" ;;
@@ -75,7 +75,7 @@ prompt_state_management() {
 
 prompt_module_federation() {
     echo ""
-    read -r -p "Enable Webpack Module Federation? [y/N]: " mf_answer || true
+    read -r -p "$(prompt_main "Enable Webpack Module Federation? [y/N]: ")" mf_answer || true
     case "$mf_answer" in
         y|Y) USE_MODULE_FEDERATION=1
              print_status "config" "Module Federation: enabled" ;;
@@ -86,7 +86,7 @@ prompt_module_federation() {
 
 prompt_docker() {
     echo ""
-    read -r -p "Add a Docker setup (multi-stage build → nginx)? [y/N]: " docker_answer || true
+    read -r -p "$(prompt_main "Add a Docker setup (multi-stage build → nginx)? [y/N]: ")" docker_answer || true
     case "$docker_answer" in
         y|Y) USE_DOCKER=1
              print_status "config" "Docker: enabled (Dockerfile + nginx.conf + .dockerignore)" ;;
@@ -308,7 +308,7 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
+    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review
@@ -316,7 +316,7 @@ apply_branch_protection() {
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
             local reviews_json
-            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -372,7 +372,7 @@ wait_for_gh_pages_branch() {
     gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1 && return 0
 
     print_status "info" "The 'gh-pages' branch doesn't exist yet — the first deploy creates it (~1-3 min)."
-    read -r -p "Wait for the first deploy and enable Pages automatically? [Y/n]: " wait_ans || true
+    read -r -p "$(prompt_main "Wait for the first deploy and enable Pages automatically? [Y/n]: ")" wait_ans || true
     case "$wait_ans" in
     n | N)
         print_status "info" "After the first deploy finishes, enable Pages with:"
@@ -421,7 +421,7 @@ prompt_pages_setup() {
     pages_prerequisites_met "$repo" || return
 
     print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
-    read -r -p "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: " pages_ans || true
+    read -r -p "$(prompt_main "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: ")" pages_ans || true
     case "$pages_ans" in
     y | Y) ;;
     *)
