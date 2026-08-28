@@ -157,3 +157,15 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+      - id: docs-code-refs
+        name: docs code references (symbols + import paths, blueprintx#159)
+        # Same treatment as function-length/check-complexity above: ONE implementation, run
+        # over this repo via --root rather than kept as a second copy. BlueprintX's own root
+        # has no src/, so this always finds 0 in-scope candidates here (see the script's own
+        # module docstring) — it travels with the template it polices rather than earning its
+        # keep from what it finds on this side.
+        entry: python3 templates/python-common/bin/check_docs_code_refs.py --root .
+        language: system
+        pass_filenames: false
+        files: \.(py|md)$

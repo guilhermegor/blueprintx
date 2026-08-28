@@ -36,16 +36,19 @@ for a module that already failed level 1 (no double-counting one defect), for a 
 that fails to parse (a defect for a *different* gate to catch), and for ``from x import *``
 (nothing to check a wildcard against).
 
-TWO DISTINCT "ZERO" STATES, on purpose (the trap #111/#238 both hit: a cwd-relative glob
-silently matching nothing reads as "clean" instead of "broken"). **Raw candidates** — every
-regex-matched ``from <dotted> import <names>`` line in a non-exempt fenced Python block,
-scope filter not yet applied — must be NON-ZERO across a real docs/ tree; zero here means the
-extraction itself broke, not that the docs are clean, and is a hard failure. **In-scope
-(first-party) candidates** — the subset whose top segment names a real ``src/`` directory —
-CAN legitimately be zero (no ``src/`` at this ``--root``, or the docs only ever cite
-third-party/stdlib names); that is a normal, printed state, not a failure, matching the
-``bin/`` complexity ceiling's own precedent: this gate travels with the template it polices
-and does not have to find something at every root it runs from to earn its keep.
+ZERO IS A LEGITIMATE STATE HERE, unlike the sibling gates' zero-discovery guard
+(#111/#238's "a cwd-relative glob silently matching nothing reads as clean instead of
+broken"). Those gates key on something structurally guaranteed to exist (a `.py` file
+under `src/`, a canonical docs slug); this one keys on CONTENT — whether a doc happens to
+show a fenced, first-party, absolute import — and a project can legitimately never do
+that (measured: `lib-minimal`'s shipped docs carry zero fenced ```python blocks at all).
+Forcing a non-zero floor here would fail every such project for a reason unrelated to any
+defect — exactly the "gate nobody can pay" trap. So the printed success line always states
+BOTH counts explicitly (raw import statements found, and the in-scope subset actually
+checked against ``src/``) — a zero is visible, never silent, but it is not an error. Two
+sub-cases of "0 in-scope candidates" are both normal: no ``src/`` exists at this
+``--root`` (this gate travels with the template it polices, same precedent as the ``bin/``
+complexity ceiling), or the docs only ever cite third-party/stdlib names.
 
 Escape hatch, matching ``# complexity-ok: <reason>``: an HTML comment
 ``<!-- docs-refs-ok: <reason> -->`` on its own line, immediately before the opening ```` ```
@@ -191,7 +194,9 @@ def _all_entries(cls_assign: ast.Assign) -> list[str]:
 	list of str
 		The listed export names, or an empty list when this assignment is not ``__all__``.
 	"""
-	bool_is_all = any(isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_assign.targets)
+	bool_is_all = any(
+		isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_assign.targets
+	)
 	if not bool_is_all or not isinstance(cls_assign.value, ast.List | ast.Tuple):
 		return []
 	return [
@@ -227,11 +232,17 @@ def defined_names(path_module: pathlib.Path) -> set[str] | None:
 		if isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
 			set_names.add(cls_node.name)
 		elif isinstance(cls_node, ast.Import):
-			set_names.update(cls_alias.asname or cls_alias.name.split(".")[0] for cls_alias in cls_node.names)
+			set_names.update(
+				cls_alias.asname or cls_alias.name.split(".")[0] for cls_alias in cls_node.names
+			)
 		elif isinstance(cls_node, ast.ImportFrom):
 			set_names.update(cls_alias.asname or cls_alias.name for cls_alias in cls_node.names)
 		elif isinstance(cls_node, ast.Assign):
-			set_names.update(cls_target.id for cls_target in cls_node.targets if isinstance(cls_target, ast.Name))
+			set_names.update(
+				cls_target.id
+				for cls_target in cls_node.targets
+				if isinstance(cls_target, ast.Name)
+			)
 			set_names.update(_all_entries(cls_node))
 		elif isinstance(cls_node, ast.AnnAssign) and isinstance(cls_node.target, ast.Name):
 			set_names.add(cls_node.target.id)
@@ -338,7 +349,9 @@ def import_statements(list_body: list[str], int_first_lineno: int) -> list[tuple
 	return list_found
 
 
-def candidate_problem(path_src: pathlib.Path, str_module: str, list_names: list[str]) -> str | None:
+def candidate_problem(
+	path_src: pathlib.Path, str_module: str, list_names: list[str]
+) -> str | None:
 	"""Return a finding message for one in-scope import candidate, or ``None`` when it is fine.
 
 	Parameters
@@ -444,8 +457,8 @@ def main(list_argv: list) -> int:
 	Returns
 	-------
 	int
-		0 when the docs check out (or the project ships no docs at all), 1 on any finding
-		or on the zero-raw-candidates failure described in the module docstring.
+		0 when the docs check out (or the project ships no docs at all, or no in-scope
+		import statement, both legitimate — see the module docstring), 1 on any finding.
 	"""
 	global PATH_ROOT  # noqa: PLW0603 — same documented seam as check_function_length.py
 	if list_argv[:1] == ["--root"]:
@@ -469,13 +482,6 @@ def main(list_argv: list) -> int:
 		int_raw_total += int_raw
 		int_scoped_total += int_scoped
 		list_problems.extend(list_file_problems)
-
-	if int_raw_total == 0:
-		print(
-			f"❌ found zero `from … import …` statements across {len(list_docs)} doc file(s) — "
-			f"the extraction regex is broken, not the docs (refusing to report success)."
-		)
-		return 1
 
 	for str_problem in list_problems:
 		print(str_problem)
