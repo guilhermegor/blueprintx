@@ -27,6 +27,9 @@ import sys
 
 _RE_LEADING_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
 
+# argv[0] (the script path) plus one requirement-file argument.
+_INT_EXPECTED_ARGC = 2
+
 
 def requirement_name(str_line: str) -> str | None:
 	"""Extract the bare distribution name from one requirement line.
@@ -69,8 +72,8 @@ def top_level_imports(str_name: str) -> list[str]:
 	str_text = cls_dist.read_text("top_level.txt")
 	if str_text:
 		return [str_line.strip() for str_line in str_text.splitlines() if str_line.strip()]
-	# No top_level.txt (some wheel-built dists omit it) — the normalised name is the
-	# best available guess and is right for the common single-module case.
+	# Some wheel-built distributions omit top_level.txt entirely. The normalised
+	# name is the best available guess and is right for the common single-module case.
 	return [str_name.replace("-", "_")]
 
 
@@ -112,7 +115,7 @@ def main() -> int:
 	int
 		0 when every requirement imports (or the file has none); 1 otherwise.
 	"""
-	if len(sys.argv) != 2:
+	if len(sys.argv) != _INT_EXPECTED_ARGC:
 		print("usage: verify_venv_imports.py <requirements-file>", file=sys.stderr)
 		return 2
 
