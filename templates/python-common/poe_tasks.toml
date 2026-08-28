@@ -195,6 +195,10 @@ help = "Cap a function at 60 lines of code (docstring excluded)"
 cmd = "bash bin/check_complexity.sh"
 help = "Cyclomatic-complexity ceiling per tree (tests 1, src 2, bin 8)"
 
+[tool.poe.tasks.check_secrets]
+cmd = "bash bin/check_secrets.sh"
+help = "Secret scan via gitleaks — no API key, no account (blueprintx#305)"
+
 # Pre-flight a commit message BEFORE `git commit -F <file>`.
 #
 # commitizen and gitlint reject at the commit-msg stage — AFTER every pre-commit gate has

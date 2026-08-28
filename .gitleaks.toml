@@ -1,0 +1,38 @@
+# BlueprintX — gitleaks config (repo root)
+#
+# Scans this repo's OWN history (bin/, templates/, docs/) — separate from
+# templates/python-common/.gitleaks.toml, which ships into every generated
+# Python project and has no view of BlueprintX's own commits.
+#
+# Modelled on healthmoney/ditto's .gitleaks.toml: extend the default
+# ruleset (AWS, GCP, Azure, GitHub, Stripe, Slack, JWT, RSA/SSH keys, etc.)
+# and add a narrow, reasoned allowlist for measured false positives only —
+# never a broad path exclusion for a rule that is doing its job.
+#
+# blueprintx#305 (gitleaks slice).
+
+title = "BlueprintX — gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "BlueprintX allowlist — narrow, reasoned entries only"
+
+# gitleaks itself must not flag its own config, whose patterns can otherwise
+# read as high-entropy strings.
+paths = [
+  '''\.gitleaks\.toml''',
+]
+
+# generic-api-key false positive, measured 2026-08-28: `sweagent-capi:claude-opus-4.6` is a
+# GitHub Copilot coding-agent MODEL IDENTIFIER logged from a CI job run, quoted verbatim while
+# documenting a #221 investigation — not a credential. `regexTarget = "match"` compares against
+# the FULL matched text ("sweagent-capi:claude-opus-4.6"), not just the rule's captured secret
+# group ("claude-opus-4.6" alone) — the default target — so the allowlist stays anchored to the
+# exact logged value rather than a bare version-looking string that could recur elsewhere.
+# docs/backlog/pr-gate-blocks-merge_20260817_104500.md:186 (commits f24161c, 1eb23cf).
+regexTarget = "match"
+regexes = [
+  '''sweagent-capi:claude-opus-4\.6''',
+]
