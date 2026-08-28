@@ -44,8 +44,10 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          published_version=$(npm view "$PACKAGE_NAME" version 2>/dev/null || echo "none")
-          echo "Latest published version: $published_version"
+          # Query the specific version, not the "latest" dist-tag — a version published
+          # under another tag (or not tagged "latest") would otherwise be missed.
+          published_version=$(npm view "$PACKAGE_NAME@$INPUT_VERSION" version 2>/dev/null || echo "none")
+          echo "Published version check for $INPUT_VERSION: $published_version"
           if [ "$published_version" = "$INPUT_VERSION" ]; then
             echo "::error::version $INPUT_VERSION is already published to npm"
             exit 1
@@ -62,6 +64,15 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - run: npm ci
+      - name: Verify release version matches package.json
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          manifest_version=$(node -p "require('./package.json').version")
+          if [ "$manifest_version" != "$INPUT_VERSION" ]; then
+            echo "::error::inputs.version ($INPUT_VERSION) does not match package.json version ($manifest_version)"
+            exit 1
+          fi
       - run: npm run lint
       - run: npm run type-check
       - run: npm test
@@ -86,10 +97,11 @@ jobs:
           node-version-file: '.nvmrc'
           cache: false
 
-      # Pin npm explicitly: trusted publishing and `npm stage publish` require
-      # npm >= 11.5.1, which may be newer than what ships with the pinned Node version.
-      - name: Pin npm >= 11.5.1
-        run: npm install -g npm@^11.5.1
+      # Pin npm explicitly: `npm stage publish` (staged publishing) requires npm >=
+      # 11.15.0 — higher than trusted publishing's own 11.5.1 floor — which may be
+      # newer than what ships with the pinned Node version.
+      - name: Pin npm >= 11.15.0
+        run: npm install -g npm@^11.15.0
 
       - run: npm ci
       - run: npm run build
@@ -135,3 +147,15 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+  docs_deploy:
+    name: Deploy docs
+    needs: github_release
+    # This release was just created with github.token, so its `release: types:
+    # [published]` event will NOT start docs-deploy.yml on its own — GitHub does not
+    # trigger workflow runs from GITHUB_TOKEN-authored events. Invoke it explicitly.
+    uses: ./.github/workflows/docs-deploy.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

@@ -37,7 +37,7 @@ const { greet } = require('${PROJECT_NAME}');
 ## Running tests and lint locally
 
 ```bash
-npm ci
+npm install
 npm run build       # emits dist/esm, dist/cjs, dist/types
 npm test
 npm run lint

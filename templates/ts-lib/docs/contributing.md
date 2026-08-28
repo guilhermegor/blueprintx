@@ -8,7 +8,7 @@ Everything you need to develop, test, and release this library.
 ## Setting up for development
 
 ```bash
-npm ci
+npm install
 npm run build
 npm test
 ```
@@ -52,8 +52,10 @@ before a trusted publisher can be configured for it:
 
 ### Pitfalls worth knowing before you touch the workflow
 
-- npm CLI **≥ 11.5.1** and Node **≥ 22.14.0** are required for trusted publishing and
-  `npm stage publish` — pinned in `.nvmrc` and the workflow's `setup-node` step.
+- npm CLI **≥ 11.15.0** and Node **≥ 22.14.0** are required — trusted publishing alone
+  needs npm ≥ 11.5.1, but `npm stage publish` (staged publishing) raises the floor to
+  11.15.0, and this workflow uses both. Pinned in `.nvmrc` and the workflow's
+  `setup-node` step.
 - The release workflow never caches (`cache: false` in `setup-node`) — caching in a
   release build risks publishing from a stale `node_modules`.
 - `package.json`'s `repository.url` must match the GitHub repository **exactly**, or
@@ -74,7 +76,7 @@ npm-ecosystem analogue of `mike` on the Python skeletons.
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `pack-smoke.yml` | every push + PR | `npm run pack:smoke` + Verdaccio publish/install rehearsal |
-| `docs-deploy.yml` | GitHub release published, non-prerelease | `npm run docs:build`, deploys `docs-build/` to GitHub Pages |
+| `docs-deploy.yml` | invoked by `release-npm.yml` after the release is created (non-prerelease); also runs on a manually-published release | `npm run docs:build`, deploys `docs-build/` to GitHub Pages |
 
 To cut a versioned docs snapshot before/after a release, run locally and commit the
 result:
@@ -83,8 +85,8 @@ result:
 npm run docs:version -- <X.Y.Z>
 ```
 
-This creates `versioned_docs/<X.Y.Z>/`, `versioned_sidebars/`, and updates
-`versions.json` — Docusaurus's version dropdown reads from these at build time.
+This creates `versioned_docs/version-<X.Y.Z>/`, `versioned_sidebars/version-<X.Y.Z>-sidebars.json`,
+and updates `versions.json` — Docusaurus's version dropdown reads from these at build time.
 
 ## Pull requests
 

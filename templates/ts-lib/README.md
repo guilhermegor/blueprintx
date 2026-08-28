@@ -31,7 +31,7 @@ else under `src/` is an implementation detail and may change without notice.
 ## Development
 
 ```bash
-npm ci
+npm install
 npm run build       # emits dist/esm, dist/cjs, dist/types
 npm test
 npm run lint

@@ -86,9 +86,11 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.types.json" "$project_path/tsconfig.types.json"
     cp "$SKELETON_TEMPLATE_ROOT/babel.config.test.cjs" "$project_path/babel.config.test.cjs"
     cp "$SKELETON_TEMPLATE_ROOT/jest.config.cjs" "$project_path/jest.config.cjs"
-    # .mjs (not .js): package.json is "type": "commonjs" (so dist/cjs needs no per-file
-    # marker), and these three configs are authored as ESM — the explicit extension makes
-    # each tool load them as ESM regardless of the package's own module type.
+    # .mjs (not .js): package.json's "type" field is left absent (Node treats that
+    # identically to "type": "commonjs", so dist/cjs needs no per-file marker — see
+    # templates/ts-lib/CLAUDE.md), and these three configs are authored as ESM — the
+    # explicit extension makes each tool load them as ESM regardless of the package's
+    # own module type.
     cp "$SKELETON_TEMPLATE_ROOT/eslint.config.mjs" "$project_path/eslint.config.mjs"
     cp "$SKELETON_TEMPLATE_ROOT/.prettierrc.mjs" "$project_path/.prettierrc.mjs"
     cp "$SKELETON_TEMPLATE_ROOT/lint-staged.config.mjs" "$project_path/lint-staged.config.mjs"
@@ -113,6 +115,35 @@ copy_skeleton_files() {
 # produce invalid JSON, breaking every npm command. Render it with Python's json
 # module instead, which escapes each value before substitution and then re-parses
 # the result so a bad render fails loudly here rather than shipping broken JSON.
+# Same hazard as package.json, one syntax over: envsubst does no JavaScript escaping, so a
+# description containing an apostrophe (`Alan's toolkit`) lands inside the single-quoted
+# `tagline:` value and breaks the Docusaurus config parse. json.dumps produces a valid JS
+# string literal for every input, so substitute the ESCAPED form.
+render_docusaurus_config() {
+    local project_path="$1"
+    python3 - "$SKELETON_TEMPLATE_ROOT/docusaurus.config.js" "$project_path/docusaurus.config.js" \
+        "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$GITHUB_USERNAME" <<'PYEOF'
+import json
+import sys
+
+path_src, path_dst, str_name, str_desc, str_user = sys.argv[1:6]
+with open(path_src, encoding="utf-8") as f:
+    str_text = f.read()
+# json.dumps returns a QUOTED literal; the template already supplies the quotes around
+# ${PROJECT_DESCRIPTION}, so strip the outer pair and keep the escaping.
+str_desc_js = json.dumps(str_desc)[1:-1].replace("'", "\\'")
+str_name_js = json.dumps(str_name)[1:-1].replace("'", "\\'")
+for str_key, str_val in (
+    ("${PROJECT_DESCRIPTION}", str_desc_js),
+    ("${PROJECT_NAME}", str_name_js),
+    ("${GITHUB_USERNAME}", str_user),
+):
+    str_text = str_text.replace(str_key, str_val)
+with open(path_dst, "w", encoding="utf-8") as f:
+    f.write(str_text)
+PYEOF
+}
+
 render_package_json() {
     local project_path="$1"
     python3 - "$SKELETON_TEMPLATE_ROOT/package.json" "$project_path/package.json" \
@@ -170,9 +201,7 @@ copy_common_templates() {
             < "$SKELETON_TEMPLATE_ROOT/docs/$doc_file.md" \
             > "$project_path/docs/$doc_file.md"
     done
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${GITHUB_USERNAME}' \
-        < "$SKELETON_TEMPLATE_ROOT/docusaurus.config.js" \
-        > "$project_path/docusaurus.config.js"
+    render_docusaurus_config "$project_path"
     # npm OIDC release workflow (#135): PACKAGE_NAME env in release-npm.yml.
     envsubst '${PROJECT_NAME}' \
         < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release-npm.yml" \

@@ -5,16 +5,28 @@ name: Docs - Deploy (GitHub Pages)
 # version that failed to publish). A prerelease (rc/beta/alpha) never moves the
 # published site: gated on the release's own `prerelease` flag, not a parsed tag string.
 #
+# `on: release` alone is not enough: release-npm.yml's github_release job creates the
+# release with `github.token`, and GitHub does not start `release: types: [published]`
+# workflow runs for events authored by GITHUB_TOKEN (the built-in recursive-run guard —
+# see "Triggering a workflow from a workflow" in GitHub's Actions docs). So this workflow
+# also exposes a `workflow_call` entry point, and release-npm.yml's `docs_deploy` job
+# invokes it directly once the release exists. `on: release` is kept for the case of a
+# release published by a human through the UI, which still fires normally.
+#
 # One-time setup: Settings -> Pages -> Source: "GitHub Actions" (cannot be scripted
 # from a workflow's own GITHUB_TOKEN, which lacks repo-admin rights).
 
 on:
   release:
     types: [published]
+  workflow_call:
 
 jobs:
   deploy:
-    if: ${{ !github.event.release.prerelease }}
+    # workflow_call has no github.event.release context — the caller (release-npm.yml)
+    # already decides whether to invoke this at all, so only the `release` trigger needs
+    # the prerelease guard.
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
