@@ -63,8 +63,17 @@ jobs:
       # is the checkout root here — the same contract every Python-tier adopter relies on.
       # This project's roster ships at .github/.review-bots.yaml (the one ts-common tree the
       # scaffold copies wholesale) rather than the repo root, so it has to be staged first.
+      # Guarded, not a bare `cp`: deleting .review-bots.yaml is the DOCUMENTED way to opt a
+      # project out, and the shared gate treats a missing roster as "not adopted here" (exit 0).
+      # A `run:` step is `bash -e`, so an unguarded cp would fail the job instead — turning the
+      # supported opt-out into broken CI whose only fix is restoring the file you deleted.
       - name: Stage this project's review-bot roster
-        run: cp .github/.review-bots.yaml .review-bots.yaml
+        run: |
+          if [ -f .github/.review-bots.yaml ]; then
+            cp .github/.review-bots.yaml .review-bots.yaml
+          else
+            echo "No .github/.review-bots.yaml — this project has opted out; the gate exits 0."
+          fi
 
       # A finding takes BOTH halves: reply with what changed and why, then resolve the
       # thread. Neither half is optional and neither implies the other — a reviewer bot
