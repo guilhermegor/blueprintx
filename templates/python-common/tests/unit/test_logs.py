@@ -88,14 +88,21 @@ def test_basic_conf_reconfigure_emits_no_resource_warning(tmp_path: Path) -> Non
 	``ResourceWarning`` fires at garbage-collection time, not at the leak, so it is
 	invisible under default settings — this forces collection and records every warning
 	raised while it runs, so a regression here is caught rather than silently swallowed.
+
+	⚠️ Both ``basic_conf`` calls must sit INSIDE the capture block. The second call is what
+	makes the first handler unreachable, so a leaked handler can be collected — and its
+	``ResourceWarning`` emitted — during that call. With the calls outside, the warning
+	fires before the block opens and the test passes over a real leak: measured at 0
+	captured warnings against a deliberately leaking reconfigure, versus 1 with the calls
+	inside.
 	"""
 	path_first = tmp_path / "first.log"
 	path_second = tmp_path / "second.log"
 	cls_log = CreateLog()
-	cls_log.basic_conf(complete_path=str(path_first), basic_level="info")
-	cls_log.basic_conf(complete_path=str(path_second), basic_level="info")
 	with warnings.catch_warnings(record=True) as list_caught:
 		warnings.simplefilter("always")
+		cls_log.basic_conf(complete_path=str(path_first), basic_level="info")
+		cls_log.basic_conf(complete_path=str(path_second), basic_level="info")
 		gc.collect()
 	assert not any(
 		issubclass(cls_warning.category, ResourceWarning) for cls_warning in list_caught
