@@ -172,7 +172,7 @@ permanente, sem titulo nem sumario, mas **nao** bloqueia merge.
 > viu `github-advanced-security` vermelho numa PR nova, a resposta já está medida abaixo — não é
 > preciso isolar de novo.
 
-**Recon 2026-08-28** (PR #298, commit `3567e0c`), quase duas semanas depois da medição original
+**Recon 2026-08-28** (PR #298, commit `3567e0c`), seis dias depois da medição original
 (#173/#219, 2026-08-22): **o mesmo defeito, sem mudança.**
 
 ```text
@@ -186,8 +186,13 @@ autofind.js version: 0.1.117
 com, no ambiente do mesmo job: `COPILOT_AGENT_MODEL: sweagent-capi:claude-opus-4.6`,
 `COPILOT_API_URL: https://api.individual.githubcopilot.com`. `autofind.js` subiu de `0.1.116`
 para `0.1.117` no intervalo — o GitHub segue fazendo deploy do agente — e o 400 sobrevive ao
-deploy. Confirma que não é uma falha transitória: é uma incompatibilidade de entitlement
-persistente entre o Copilot Autofix e a conta Copilot individual deste repo.
+deploy. Confirma que não é uma falha transitória: o 400 persiste após um deploy do agente.
+
+⚠️ **A causa continua não confirmada.** O log prova apenas que `The requested model is not
+supported` sobrevive à atualização do `autofind.js`. Entitlement é *hipótese* — o `COPILOT_API_URL`
+aponta para `api.individual.githubcopilot.com`, o que a sugere, mas a documentação do GitHub diz
+que o Copilot Autofix está disponível em repositórios **públicos** sem assinatura do Copilot. Ou a
+hipótese está errada, ou falta evidência que ligue o erro ao entitlement. Não registrar como fato.
 
 O workflow continua **dinâmico** (`event=dynamic`, `path=dynamic/agents/github-advanced-security`,
 gerado pelo GitHub, não presente em `.github/workflows/`) — não há YAML aqui para editar, então a
@@ -206,10 +211,20 @@ GET /repos/guilhermegor/blueprintx/code-scanning/default-setup → config do Cod
                                                                   campo de Autofix
 ```
 
-Não existe endpoint REST/GraphQL público para o toggle "Copilot Autofix" — ele vive só em
+Não foi encontrado endpoint REST/GraphQL público documentado para o toggle "Copilot Autofix" —
+as consultas acima mostram apenas que os responses não trazem o campo. A documentação do GitHub
+descreve o controle pela UI nos níveis enterprise, organization e repository, sem documentar uma
+operação REST/GraphQL equivalente. Pelo que se apurou, ele vive só em
 **Settings → Code security → Copilot Autofix**, no dashboard, exatamente como o corpo original
 da #221 já apontava (`precisa do painel — nada disso sai da CLI`). Nenhum agente com acesso só a
-`gh`/API consegue apertar esse botão; só o dono, na UI.
+`gh`/API conseguiu apertar esse botão nas tentativas feitas aqui. Quem pode: um **administrador
+com a permissão correspondente** — de repositório, de organização ou de empresa —, não apenas o
+dono.
+
+⚠️ **Efeitos colaterais de desligar, a considerar antes:** o GitHub **fecha automaticamente as
+sugestões abertas** do Autofix. Reativar **não as restaura** — novas sugestões só aparecem em PRs
+novas ou após nova análise. Como aqui o recurso nunca produziu sugestão nenhuma (todo run falha
+com 400), o custo é zero neste repo; mas a regra vale se for aplicada noutro.
 
 ### Decisão: opção 3 — documentar por que fica vermelho
 
