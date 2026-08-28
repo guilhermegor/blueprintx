@@ -1,0 +1,66 @@
+name: Verify Branch Protection
+
+# blueprintx#307: a required check can go green against a base that has since moved — GitHub's
+# "Require branches to be up to date before merging" (`strict`) is the setting that prevents it,
+# and it carries no guard of its own: anyone with admin rights can flip it back in the UI with no
+# review and no red check. This workflow is that guard, wired to run against BlueprintX itself —
+# `enable_repo_rules.sh`'s `verify` mode already asserts this for a repo that runs it via `poe
+# init`/`poe enable_repo_rules`, but BlueprintX has never run its own shipped script against
+# itself (blueprintx#164).
+#
+# ⚠️ GITHUB_TOKEN CANNOT DO THIS READ. Reading branch protection / a ruleset's parameters needs
+# Administration-scoped access, and `administration` is not even a permission the default Actions
+# token can be granted — actionlint rejects it outright as an unknown scope. Same shape as
+# `coderabbit_trigger.yml` / `review_retry.yml`: reuse `GH_PAT_REVIEW_TRIGGER`, the maintainer PAT
+# already stored for exactly this "GITHUB_TOKEN cannot substitute" class of problem, rather than
+# asking for a second admin-scoped secret to hold alongside it.
+#
+# Deliberately NOT wired to `pull_request` — this checks a REPO SETTING, not the PR's own diff,
+# and is not registered as a required check, so putting it on every PR would only add visible
+# noise to the 16 already open while the live setting is still `strict: false` (see #307's PR
+# body for the deferred flip). `push` to main + a weekly drift check + manual dispatch match how
+# `contract_drift.yaml` catches this class of thing without gating unrelated work.
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify_branch_protection-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  strict-required-checks:
+    name: strict required-checks guard (blueprintx#307)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Fail, never skip, when the PAT is absent — a silent no-op here is the same failure
+      # class this workflow exists to catch: the guard reporting nothing when it should be
+      # reporting a violation. See coderabbit_trigger.yml for the fuller version of this check.
+      - name: The verification PAT must exist
+        env:
+          GH_PAT_REVIEW_TRIGGER: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
+        run: |
+          if [ -z "$GH_PAT_REVIEW_TRIGGER" ]; then
+            echo "::error::GH_PAT_REVIEW_TRIGGER is not set, so branch-protection strictness cannot be verified." >&2
+            echo "GITHUB_TOKEN cannot substitute: reading branch protection needs Administration" >&2
+            echo "access, which the default Actions token can never be granted." >&2
+            exit 1
+          fi
+
+      - name: Assert required_status_checks.strict is enforced
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
+        run: bash templates/python-common/bin/enable_repo_rules.sh verify
