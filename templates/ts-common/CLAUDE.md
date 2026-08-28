@@ -23,7 +23,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.gitignore` | Node + dist + env patterns |
 | `.vscode/settings.json` | Format-on-save (Prettier), ESLint fix-on-save, workspace TypeScript SDK |
 | `CONTRIBUTING.md` | Branch naming, commit style, and code-style guide template |
-| `.github/workflows/` | GitHub Actions CI — split per-job workflows: `build.yml`, `lint.yml`, `test.yml`, `type-check.yml` on push/PR to `main` |
+| `.github/workflows/` | GitHub Actions CI — split per-job workflows: `build.yml`, `lint.yml`, `test.yml`, `type-check.yml` on push/PR to `main`, plus `review-threads.yml` (below) |
+| `.github/workflows/review-threads.yml` | The answered-review-thread gate (blueprintx#175), on `pull_request` / `pull_request_review` / `pull_request_review_comment`. ⚠️ **Does not carry its own copy of the predicate, and does not fetch one over the network either.** `check_review_threads.py` lives at `templates/common/bin/` — the one shared, language-agnostic surface both language families already copy from — and every `ts_*.sh` scaffold (`ts_react_app.sh`, `ts_lib.sh`) copies it into the generated project's `bin/` at scaffold time, exactly as the Python tiers already do. This job runs that local copy. An earlier revision fetched the script live from `raw.githubusercontent.com` at CI run time; rejected on review as executing unpinned remote code on a runner holding `GITHUB_TOKEN` (see the workflow's own header for the reasoning) |
+| `.github/.review-bots.yaml` | This ecosystem's OWN reviewer roster for `review-threads.yml` — data, not logic, so it is genuinely per-ecosystem (unlike the gate script, which is shared). Staged to the checkout root by the workflow before the script runs, because `.github/` is the only ts-common tree every `ts_*.sh` scaffold copies wholesale; there is no scaffold-time `cp` of an arbitrary root-level file the way `python_lib_minimal.sh` copies `python-common/.review-bots.yaml` |
 | _(CODEOWNERS, PR template)_ | Sourced from language-agnostic `templates/common/.github/` — copied into every scaffolded project |
 
 ## Editing rules
