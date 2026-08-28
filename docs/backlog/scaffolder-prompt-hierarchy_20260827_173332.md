@@ -43,8 +43,10 @@ semantics in `bin/lib/common.sh` and `bin/blueprintx.sh` / `bin/scaffold/*.sh`).
 - [x] `NO_COLOR=1` / non-TTY pipe verified readable (unchanged from every
       other `print_status` call — no NO_COLOR handling exists anywhere in
       this codebase yet; text stays legible with raw escapes around it)
-- [ ] PR opened, `Closes #253` + `Closes #251`, verified via
-      `closingIssuesReferences`
+- [x] PR opened (#298), `Closes #253` + `Closes #251`, verified via
+      `closingIssuesReferences` — GraphQL returned both `251` and `253`
+
+Completed — kept as a record.
 
 ## Notes
 
