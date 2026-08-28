@@ -124,21 +124,32 @@ render_docusaurus_config() {
     python3 - "$SKELETON_TEMPLATE_ROOT/docusaurus.config.js" "$project_path/docusaurus.config.js" \
         "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$GITHUB_USERNAME" <<'PYEOF'
 import json
+import re
 import sys
 
 path_src, path_dst, str_name, str_desc, str_user = sys.argv[1:6]
 with open(path_src, encoding="utf-8") as f:
     str_text = f.read()
 # json.dumps returns a QUOTED literal; the template already supplies the quotes around
-# ${PROJECT_DESCRIPTION}, so strip the outer pair and keep the escaping.
+# ${PROJECT_DESCRIPTION}, so strip the outer pair and keep the escaping. GITHUB_USERNAME
+# gets the same treatment for consistency, even though GitHub restricts usernames to
+# alphanumerics/hyphens and can never actually carry a quote or backslash.
 str_desc_js = json.dumps(str_desc)[1:-1].replace("'", "\\'")
 str_name_js = json.dumps(str_name)[1:-1].replace("'", "\\'")
-for str_key, str_val in (
-    ("${PROJECT_DESCRIPTION}", str_desc_js),
-    ("${PROJECT_NAME}", str_name_js),
-    ("${GITHUB_USERNAME}", str_user),
-):
-    str_text = str_text.replace(str_key, str_val)
+str_user_js = json.dumps(str_user)[1:-1].replace("'", "\\'")
+str_replacements = {
+    "${PROJECT_DESCRIPTION}": str_desc_js,
+    "${PROJECT_NAME}": str_name_js,
+    "${GITHUB_USERNAME}": str_user_js,
+}
+# Single-pass substitution: sequential .replace() calls would let a literal
+# "${PROJECT_NAME}" or "${GITHUB_USERNAME}" inside the description get replaced again
+# by a later iteration, once it's already sitting in the output text.
+str_text = re.sub(
+    r"\$\{PROJECT_DESCRIPTION\}|\$\{PROJECT_NAME\}|\$\{GITHUB_USERNAME\}",
+    lambda match: str_replacements[match.group(0)],
+    str_text,
+)
 with open(path_dst, "w", encoding="utf-8") as f:
     f.write(str_text)
 PYEOF
