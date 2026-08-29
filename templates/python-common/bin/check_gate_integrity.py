@@ -193,15 +193,33 @@ def show(str_ref: str, str_path: str) -> str | None:
 	Returns
 	-------
 	str or None
-		The blob's content, or ``None`` when the path does not exist at that ref.
+		The blob's content, ``None`` when the path does not exist at that ref, and ``None``
+		when the blob is not valid UTF-8 — a binary cannot define a gate, so there is nothing
+		here to assert about it.
 	"""
+	# ⚠️ BYTES, NOT text=True. `text=True` decodes whatever git emits, so ONE binary path in the
+	# diff raised UnicodeDecodeError and took the whole gate down — not a finding, a crash, and
+	# a crash reports as the check's NAME ("a PR must not weaken a check without saying why"),
+	# accusing a PR that had merely added a logo. Measured on #337: `docs/assets/logo.png`,
+	# 0xff at position 0, a JPEG SOI marker.
+	#
+	# Worse than a wrong message: the traceback stopped collection at the FIRST binary path, so
+	# every later file went unexamined. The gate blocked the PR while having checked almost
+	# nothing — its own blindness reported as a rejection.
+	#
+	# ⚠️ Skipping by EXTENSION is not the fix, and this repo holds the counter-example: that
+	# `.png` contains JPEG bytes. A decode attempt asks the blob itself.
 	cls_proc = subprocess.run(  # noqa: S603
 		["git", "show", f"{str_ref}:{str_path}"],  # noqa: S607
 		capture_output=True,
-		text=True,
 		check=False,
 	)
-	return cls_proc.stdout if cls_proc.returncode == 0 else None
+	if cls_proc.returncode != 0:
+		return None
+	try:
+		return cls_proc.stdout.decode("utf-8")
+	except UnicodeDecodeError:
+		return None
 
 
 def changed_paths(str_base: str) -> list:
