@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import TypedDict
+import uuid
 
 from chassis.db.domain.ports import Record
 from chassis.typing.decorators import type_checker

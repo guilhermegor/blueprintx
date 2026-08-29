@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import hashlib
 import hmac
 import io
+from pathlib import Path
 import shutil
 import uuid
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
 
 import joblib
 
@@ -78,7 +77,6 @@ class JoblibHandler(DatabaseHandler):
 		str
 			Artifact identifier of the form ``{name}_{YYYYMMDD_HHMMSS}_{sha256_prefix8}``.
 		"""
-
 		str_name = str(record.get("_name", uuid.uuid4().hex)).replace("_", "-")
 		str_ts = datetime.utcnow().strftime(_TS_FMT)
 		dict_record = {**record, "_saved_at": str_ts}
@@ -91,7 +89,7 @@ class JoblibHandler(DatabaseHandler):
 			(self._dir / f"{str_record_id}.sig").write_bytes(bytes_sig)
 		return str_record_id
 
-	def read(self, record_id: str) -> Optional[Record]:
+	def read(self, record_id: str) -> Record | None:
 		"""Load and verify an artifact by its identifier.
 
 		Parameters
@@ -109,7 +107,6 @@ class JoblibHandler(DatabaseHandler):
 		ValueError
 			If any integrity factor fails.
 		"""
-
 		path_artifact = self._dir / f"{record_id}.joblib"
 		if not path_artifact.exists():
 			return None
@@ -118,7 +115,7 @@ class JoblibHandler(DatabaseHandler):
 		buf = io.BytesIO(bytes_data)
 		return joblib.load(buf)  # noqa: S301
 
-	def update(self, record_id: str, updates: Record) -> Optional[Record]:
+	def update(self, record_id: str, updates: Record) -> Record | None:
 		"""Not supported — artifacts are immutable.
 
 		Raises
@@ -126,7 +123,6 @@ class JoblibHandler(DatabaseHandler):
 		NotImplementedError
 			Always. Call ``create()`` to save a new version.
 		"""
-
 		raise NotImplementedError(
 			"JoblibHandler stores immutable artifacts — call create() to save a new version"
 		)
@@ -144,7 +140,6 @@ class JoblibHandler(DatabaseHandler):
 		bool
 			``True`` when the artifact existed and was removed.
 		"""
-
 		path_artifact = self._dir / f"{record_id}.joblib"
 		if not path_artifact.exists():
 			return False
@@ -167,14 +162,12 @@ class JoblibHandler(DatabaseHandler):
 		Path
 			Path to the created backup directory.
 		"""
-
 		path_target = Path(target_path)
 		shutil.copytree(str(self._dir), str(path_target), dirs_exist_ok=True)
 		return path_target
 
 	def close(self) -> None:
 		"""No-op for file-based storage."""
-
 		return None
 
 	def list_all(self) -> list[str]:
@@ -185,7 +178,6 @@ class JoblibHandler(DatabaseHandler):
 		list of str
 			Artifact identifiers (filenames without the ``.joblib`` extension).
 		"""
-
 		return [path_f.stem for path_f in sorted(self._dir.glob("*.joblib"))]
 
 	def _to_bytes(self, record: Record) -> bytes:
@@ -201,7 +193,6 @@ class JoblibHandler(DatabaseHandler):
 		bytes
 			Compressed serialized bytes.
 		"""
-
 		buf = io.BytesIO()
 		joblib.dump(record, buf, compress=self._compress)
 		return buf.getvalue()
@@ -222,8 +213,7 @@ class JoblibHandler(DatabaseHandler):
 			If record_id format is invalid, SHA256 prefix mismatches,
 			``_saved_at`` metadata mismatches, or HMAC verification fails.
 		"""
-
-		# ⚠️ The split count and the expected length are ONE fact: a record_id is
+		# ⚠️ The split count and the expected length are ONE fact — a record_id is
 		# `<name>_<date>_<time>_<sha8>`, so it splits into _INT_RECORD_ID_PARTS pieces on the
 		# last _INT_RECORD_ID_PARTS - 1 separators. Written as two bare numbers they can drift
 		# apart, and the failure is a confusing "invalid format" on a valid id.

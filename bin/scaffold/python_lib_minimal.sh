@@ -187,8 +187,8 @@ copy_internal_utils() {
     local utils_src="$COMMON_TEMPLATE_ROOT/src/utils"
     local -a modules=(
         __init__.py dtypes.py br_identifiers.py http_downloader.py
-        tabular_reader.py provenance.py sidecar_metadata.py text.py zip_extractor.py
-        raw_workspace.py daily_cache.py
+        tabular_reader.py xml_reader.py provenance.py sidecar_metadata.py text.py
+        zip_extractor.py raw_workspace.py daily_cache.py
     )
     # retry/ is a PACKAGE, not a module (blueprintx#116) — it needs cp -r, and it is listed
     # apart from `modules` so the loop below stays a plain file copy. rewrite_internal_imports
@@ -507,6 +507,11 @@ lib_minimal_copy_project_scaffolding() {
     cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
     chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh" "$project_path/bin/commit.sh"
+    # check_review_threads.py moved out of python-common/bin/ into the language-agnostic
+    # templates/common/bin/ (blueprintx#175 follow-up) — the wholesale COMMON_TEMPLATE_ROOT
+    # copy above no longer reaches it, so it is copied explicitly, same destination as
+    # before, so review_threads.yaml's `python bin/check_review_threads.py` needs no change.
+    cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).
