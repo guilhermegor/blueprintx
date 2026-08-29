@@ -68,10 +68,31 @@ _STR_REQUEST = f"@coderabbitai full review\n\n{_STR_MARKER}"
 # is the safe direction, because the only consequence is one extra review request.
 _RE_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 
-# Comfortably above the longest window measured on this repo (10-25 minutes), because the
-# costs are asymmetric: asking early buys one declined request and one more ack comment,
-# while asking late only delays a PR that is already waiting. Prefer the quiet error.
-_INT_COOLDOWN_MIN = 30
+# 🔴 THE REVIEWER DECLARES ITS OWN WAIT — READ IT INSTEAD OF GUESSING.
+#
+# The refusal carries the number verbatim: "Your next included review will be available in 35
+# minutes." A hardcoded cooldown is a guess about someone else's quota, and this repo's guess was
+# measured wrong three times — 31, 34 and 35 minutes observed against a constant of 30. Every one
+# of those is a request that gets refused and, because a refused request still counts as traffic,
+# pushes the window further out. Guessing is not merely imprecise here, it is self-defeating.
+_RE_DECLARED_WAIT = re.compile(
+	r"next\s+included\s+review\s+will\s+be\s+available\s+in\s+(\d+)\s+minute", re.IGNORECASE
+)
+
+# ⚠️ TWO DIFFERENT STATES WEAR THE SAME WORDS, AND THEY WANT OPPOSITE BEHAVIOUR.
+#
+# "Review rate limited" covers both a transient throttle (retry soon) and the INCLUDED-QUOTA
+# state under Fair Usage, which is an ACCOUNT-level budget: the same notice adds "This review may
+# still proceed through usage-based billing if eligible". `_RE_RATE_LIMIT` cannot tell them apart,
+# so the declared wait is the only reliable signal about which one we are in. When it is present,
+# it wins over any local constant.
+_RE_INCLUDED_QUOTA = re.compile(r"included\s+review\s+limit|fair\s+usage", re.IGNORECASE)
+
+# Fallback ONLY for a refusal that declares no wait. Above every window measured on this repo
+# (31, 34, 35 minutes), because the costs are asymmetric: asking early buys a declined request,
+# one more ack comment, and a pushed-out window, while asking late only delays a PR that is
+# already waiting. Prefer the quiet error.
+_INT_COOLDOWN_MIN = 40
 
 
 def _gh_json(list_args: list[str]) -> object:
@@ -140,6 +161,34 @@ def load_gate(path_bin: pathlib.Path) -> types.ModuleType | None:
 # ⚠️ NOT `summarise_reviewer_notice` — that helper's own docstring says DISPLAY ONLY, and it
 # truncates to 200 characters after stripping markup, which can cut the very sentence being
 # matched. Deciding anything from a display string is how a truncation becomes a logic bug.
+def newest_roster_comment(
+	list_comments: list[dict], set_roster: set[str], fn_norm: Callable[[str], str]
+) -> dict | None:
+	"""Return the newest roster-authored comment, whole.
+
+	The declared-wait clock starts when the REVIEWER spoke, not when we last asked, so the
+	caller needs that comment's timestamp as well as its body — hence the whole comment.
+
+	Parameters
+	----------
+	list_comments : list of dict
+		Normalised comments (``login``/``body``/``created_at``), oldest first.
+	set_roster : set of str
+		Already-normalised reviewer logins.
+	fn_norm : Callable[[str], str]
+		The gate's ``normalise_login``.
+
+	Returns
+	-------
+	dict or None
+		The newest roster comment, or ``None`` when the roster has said nothing.
+	"""
+	for dict_comment in reversed(list_comments):
+		if fn_norm(dict_comment.get("login") or "") in set_roster:
+			return dict_comment
+	return None
+
+
 def newest_roster_notice(
 	list_comments: list[dict], set_roster: set[str], fn_norm: Callable[[str], str]
 ) -> str:
@@ -159,10 +208,93 @@ def newest_roster_notice(
 	str
 		The newest roster comment's body, or ``""`` when the roster has said nothing.
 	"""
-	for dict_comment in reversed(list_comments):
-		if fn_norm(dict_comment.get("login") or "") in set_roster:
-			return dict_comment.get("body") or ""
-	return ""
+	dict_comment = newest_roster_comment(list_comments, set_roster, fn_norm)
+	if dict_comment is None:
+		return ""
+	return dict_comment.get("body") or ""
+
+
+def parse_declared_wait(str_notice: str) -> int | None:
+	"""Return the wait in minutes the reviewer declared, or ``None`` when it declared none.
+
+	Parameters
+	----------
+	str_notice : str
+		The reviewer's refusal body.
+
+	Returns
+	-------
+	int or None
+		Minutes to wait, or ``None`` when the notice states no number.
+	"""
+	cls_match = _RE_DECLARED_WAIT.search(str_notice)
+	if cls_match is None:
+		return None
+	# ⚠️ `\d+` is unbounded and this text comes from an EXTERNAL service, so the digits are
+	# untrusted input, not a number we chose. The only caller sits OUTSIDE examine_pr's try/except,
+	# which wraps just the fetch — so ANY exception raised here aborts the whole unattended sweep
+	# and leaves every later PR unexamined. That is the per-PR degradation rule this file already
+	# states for a deleted or transferred PR, reached through the parser instead of the network.
+	#
+	# TWO limits sit on this path at DIFFERENT depths, and guarding only the deeper one leaves the
+	# shallower one live:
+	#   - `int()` raises **ValueError** above `sys.get_int_max_str_digits()` (4300 by default — the
+	#     CVE-2020-10735 mitigation). This fires FIRST, during the conversion.
+	#   - `timedelta(minutes=…)` then raises **OverflowError** for a value that converts fine but
+	#     cannot be represented ("Python int too large to convert to C int").
+	#
+	# 🔴 The first version of this guard covered only OverflowError, and its regression test used a
+	# 100-digit value — comfortably under the 4300 threshold, so the suite passed with the
+	# ValueError path wide open. A should-fail test proves the code survives the case you thought
+	# of, never the boundary you did not. Raised by review on blueprintx#278, twice.
+	try:
+		int_wait = int(cls_match.group(1))
+		timedelta(minutes=int_wait)
+	except (ValueError, OverflowError):
+		# Not representable is not a wait: fall through to the marker cooldown, exactly as a
+		# refusal that declares no number at all already does.
+		return None
+	return int_wait
+
+
+def declared_wait_still_open(dict_notice: dict | None, dt_now: datetime) -> bool:
+	"""Return whether the reviewer's own declared wait has yet to elapse.
+
+	⚠️ Measured from the NOTICE, never from our last request. The reviewer says "available in N
+	minutes" at the moment it refuses, so the deadline is *its* timestamp plus N. Anchoring on
+	our marker instead would restart the clock every time we asked — which is the same
+	self-referential mistake the ordering-vs-cooldown block above documents, one layer up.
+
+	⚠️ **No declared number, no opinion.** When the notice states no wait this returns ``False``
+	and the marker cooldown decides alone, exactly as before. Inventing a deadline from a
+	refusal that named none would suppress the retry on evidence the reviewer never gave —
+	changing behaviour nobody asked to change, on the one path that has no measurement behind
+	it. This function speaks only when the reviewer did.
+
+	Parameters
+	----------
+	dict_notice : dict or None
+		The newest roster comment, or ``None``.
+	dt_now : datetime.datetime
+		The current time, timezone-aware.
+
+	Returns
+	-------
+	bool
+		``True`` only while a wait the reviewer actually declared is still open.
+	"""
+	if dict_notice is None:
+		return False
+	int_wait = parse_declared_wait(dict_notice.get("body") or "")
+	if int_wait is None:
+		return False
+	dt_said = parse_timestamp(dict_notice.get("created_at") or "")
+	if dt_said is None:
+		# A declared wait we cannot anchor in time: fall through to the marker cooldown rather
+		# than inventing a deadline. Returning True here would stall the retry for ever on one
+		# unreadable timestamp.
+		return False
+	return (dt_now - dt_said) < timedelta(minutes=int_wait)
 
 
 # 🔴 A COOLDOWN, NOT AN ORDERING TEST — AND THE ORDERING VERSION SHIPPED A LOOP.
@@ -332,15 +464,24 @@ def pr_needs_retry(
 	if cls_gate.reviewers_who_reported(list_reviews, set_reviewers, str_head):
 		return False
 
-	str_notice = newest_roster_notice(list_comments, set_reviewers, cls_gate.normalise_login)
+	dict_notice = newest_roster_comment(list_comments, set_reviewers, cls_gate.normalise_login)
+	str_notice = (dict_notice or {}).get("body") or ""
 	if not _RE_RATE_LIMIT.search(str_notice):
+		return False
+
+	dt_when = dt_now or datetime.now(timezone.utc)
+
+	# The reviewer's own deadline comes first: it is the only statement about the quota made by
+	# the thing that owns the quota. Our marker cooldown stays as the second guard — it answers a
+	# different question (did WE ask recently?) and is what stops the comment loop.
+	if declared_wait_still_open(dict_notice, dt_when):
 		return False
 
 	return not asked_recently(
 		list_comments,
 		str_self_login,
 		cls_gate.normalise_login,
-		dt_now or datetime.now(timezone.utc),
+		dt_when,
 	)
 
 
@@ -492,6 +633,31 @@ def examine_pr(
 # Same property as `examine_pr` one level up: degrade and report, never die. The catch is broad
 # for the same reason — to this caller an import error, a malformed roster and an ineligible
 # roster all mean "there is nothing I can safely do this tick".
+def _resolve_gate_dir(path_own_bin: pathlib.Path) -> pathlib.Path:
+	"""Return the directory holding ``check_review_threads.py``.
+
+	The gate's single source is ``templates/common/bin/`` (blueprintx#175 follow-up), a
+	SIBLING of ``templates/python-common/bin/`` where this script lives — but every scaffold
+	copies the gate into the generated project's own flat ``bin/``, alongside this script.
+	Both layouts have to resolve from the one runtime call site (``main``, below).
+
+	Parameters
+	----------
+	path_own_bin : pathlib.Path
+		This script's own ``bin/`` directory.
+
+	Returns
+	-------
+	pathlib.Path
+		``path_own_bin`` when the gate is co-located there (every generated project);
+		otherwise ``templates/common/bin/``, for when this script runs straight out of the
+		BlueprintX template tree (``templates/python-common/bin/``).
+	"""
+	if (path_own_bin / "check_review_threads.py").is_file():
+		return path_own_bin
+	return path_own_bin.parents[1] / "common" / "bin"
+
+
 def resolve_setup(path_bin: pathlib.Path) -> tuple[types.ModuleType, set[str]] | None:
 	"""Load the gate and the roster, or report why nothing can be done.
 
@@ -537,7 +703,7 @@ def main() -> int:
 		print("::warning::GITHUB_REPOSITORY is unset — nothing to do.")
 		return 0
 
-	tuple_setup = resolve_setup(pathlib.Path(__file__).resolve().parent)
+	tuple_setup = resolve_setup(_resolve_gate_dir(pathlib.Path(__file__).resolve().parent))
 	if tuple_setup is None:
 		return 0
 	cls_gate, set_reviewers = tuple_setup

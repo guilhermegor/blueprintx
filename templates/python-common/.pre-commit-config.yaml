@@ -287,6 +287,18 @@ repos:
         files: ^\.github/workflows/.*\.(yml|yaml)$
         pass_filenames: false
 
+      # deptry: every package src/ imports must be a DIRECT dependency. Both triggers are
+      # needed and neither alone is enough — a new import in src/ and a deleted line in
+      # pyproject.toml break the same rule from opposite sides, and the second one leaves
+      # src/ untouched. pass_filenames is false because the gate reads the whole manifest,
+      # not the staged subset.
+      - id: lint-deps
+        name: deptry (every imported package is a direct dependency)
+        entry: bash bin/lint_deps.sh
+        language: system
+        files: ^(pyproject\.toml|src/.*\.py)$
+        pass_filenames: false
+
       # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a
       # fresh project with an empty suite does not block every commit; real
       # failures (exit 1) still block.

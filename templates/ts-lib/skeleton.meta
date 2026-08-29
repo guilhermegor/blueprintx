@@ -1,0 +1,4 @@
+language=typescript
+display_name=Library (TS, npm-ready)
+description=Publishable TypeScript library — ESM + CJS + .d.ts, Jest, ESLint, npm pack smoke test
+scaffold=bin/scaffold/ts_lib.sh

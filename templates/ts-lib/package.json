@@ -1,0 +1,71 @@
+{
+  "name": "${PROJECT_NAME}",
+  "version": "0.0.1",
+  "description": "${PROJECT_DESCRIPTION}",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git"
+  },
+  "engines": {
+    "node": ">=22.14.0",
+    "npm": ">=11.15.0"
+  },
+  "packageManager": "npm@11.15.0",
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:types",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "postbuild:esm": "bash bin/write_esm_package_json.sh",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.types.json",
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --ext .ts --report-unused-disable-directives",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "lint:css": "echo 'ts-lib ships no CSS — nothing to lint'",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "prepublishOnly": "npm run build",
+    "pack:smoke": "bash bin/smoke_pack.sh",
+    "docs:start": "docusaurus start",
+    "docs:build": "docusaurus build --out-dir docs-build",
+    "docs:version": "docusaurus docs:version",
+    "context:export": "bash bin/export_repo_content.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "${PROJECT_LICENSE}",
+  "dependencies": {},
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-env": "^7.29.3",
+    "@babel/preset-typescript": "^7.28.5",
+    "@docusaurus/core": "^3.6.0",
+    "@docusaurus/preset-classic": "^3.6.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.1",
+    "babel-jest": "^30.4.1",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "jest": "^30.4.2",
+    "jest-environment-node": "^30.4.1",
+    "prettier": "^3.8.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.2"
+  }
+}
