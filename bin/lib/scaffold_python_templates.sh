@@ -178,6 +178,40 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/.vscode/tasks.json"
 }
 
+scaffold_stamp_provenance() {
+	# Records WHICH tier and WHICH BlueprintX commit a project was scaffolded from
+	# (blueprintx#109). Without this, a drift check has no baseline: it cannot tell
+	# "this project was scaffolded before the fix landed" from "this project removed the
+	# file on purpose". Nothing recorded this before — grepped for BLUEPRINTX_VERSION /
+	# scaffold_version / a commit stamp anywhere in bin/ or templates/ and found nothing,
+	# so this file is new, not a rename. Read by
+	# templates/python-common/bin/check_template_drift.py.
+	local str_tier="$1"
+	local str_project_path="$2"
+
+	local str_version
+	str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || echo unknown)"
+	local str_commit
+	str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+	local str_scaffolded_at
+	str_scaffolded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+	# Literal filename, kept in sync by eye with `_PROVENANCE_FILENAME` in
+	# templates/python-common/bin/check_template_drift.py — the two live in different
+	# languages/repos-of-truth (this file ships bin/lib/ itself; the reader ships in every
+	# scaffolded project), so a shared constant isn't reachable from here.
+	cat >"$str_project_path/.blueprintx-provenance.yaml" <<-EOF
+	# Written by BlueprintX at scaffold time — do not edit by hand.
+	# Read by bin/check_template_drift.py (blueprintx#109) to know which template
+	# tier and BlueprintX version this project was generated from, so a later
+	# drift check knows what to compare against.
+	tier: ${str_tier}
+	blueprintx_version: ${str_version#v}
+	blueprintx_commit: ${str_commit}
+	scaffolded_at: ${str_scaffolded_at}
+	EOF
+}
+
 scaffold_copy_common_templates() {
 	local str_tier="$1"
 	local str_project_path="$2"
@@ -187,5 +221,6 @@ scaffold_copy_common_templates() {
 	scaffold_copy_tooling_configs "$str_project_path"
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	scaffold_stamp_provenance "$str_tier" "$str_project_path"
 	print_status "success" "Common templates applied"
 }
