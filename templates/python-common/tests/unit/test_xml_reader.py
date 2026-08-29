@@ -17,7 +17,7 @@ from src.utils.xml_reader import (
 # them from `src.utils.tabular_reader` here would load a SECOND, distinct module instance —
 # a different FileContract class object — and the runtime type-checker would then reject a
 # contract built from one instance when read_xml expects the other.
-from utils.tabular_reader import ContractError, FileContract
+from utils.tabular_reader import ContractError, FileContract, ProblemReport
 
 
 def _fixture_xml() -> str:
@@ -209,14 +209,17 @@ def test_find_xml_row_problems_is_empty_when_rows_are_found(tmp_path: Path) -> N
 	"""A document carrying the expected row tag reports no problems."""
 	path_xml = tmp_path / "fixture.xml"
 	path_xml.write_text(_fixture_xml())
-	assert find_xml_row_problems(path_xml, "Tx", _empty_contract()) == []
+	cls_report = find_xml_row_problems(path_xml, "Tx", _empty_contract())
+	assert cls_report == ProblemReport(list_fatal=[], list_warnings=[])
 
 
 def test_find_xml_row_problems_reports_when_no_row_anchor_is_found(tmp_path: Path) -> None:
-	"""A document with none of the expected row tag reports a problem, never raises."""
+	"""A document with none of the expected row tag reports a FATAL problem, never raises."""
 	path_xml = tmp_path / "empty.xml"
 	path_xml.write_text("<Document></Document>")
-	assert find_xml_row_problems(path_xml, "Tx", _empty_contract()) != []
+	cls_report = find_xml_row_problems(path_xml, "Tx", _empty_contract())
+	assert cls_report.list_fatal != []
+	assert cls_report.list_warnings == []
 
 
 def test_is_attribute_path_detects_a_trailing_attribute_segment() -> None:
