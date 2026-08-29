@@ -11,6 +11,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
+# With no remote, `git log` is the only instrument, and it cannot answer "what
+# was the target branch immediately before this merge?" — an online repo gets
+# that free from its PR list. CHECKPOINTS_FILE is the append-only substitute:
+# timestamp, source tip, target-before hash, and the literal reset command.
+CHECKPOINTS_FILE="docs/checkpoints.md"
+
 ensure_git_repo() {
 	if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		print_status "error" "Current directory is not inside a Git repository."
@@ -72,6 +78,48 @@ has_untracked_files() {
 	done <<<"$str_status"
 
 	return 1
+}
+
+seed_checkpoints_file() {
+	[[ -f "$CHECKPOINTS_FILE" ]] && return 0
+
+	ensure_dir "$(dirname "$CHECKPOINTS_FILE")"
+	cat >"$CHECKPOINTS_FILE" <<-'HEADER'
+		# Offline merge checkpoints
+
+		Append-only log written by `bin/git_merge_to_main.sh` before every merge. Each
+		entry records what the target branch pointed at immediately before that merge —
+		the affordance an online repo gets for free from its PR list. To undo a merge,
+		run that entry's `git reset --hard` line on the target branch.
+	HEADER
+}
+
+record_checkpoint() {
+	local str_source="$1"
+	local str_target="$2"
+	local str_source_tip str_target_before
+
+	seed_checkpoints_file
+
+	str_source_tip="$(git rev-parse "$str_source")"
+	str_target_before="$(git rev-parse "$str_target")"
+
+	{
+		echo ""
+		echo "## $(date '+%Y-%m-%d %H:%M:%S') — merge '$str_source' into '$str_target'"
+		echo ""
+		echo "- source tip: \`$str_source_tip\`"
+		echo "- '$str_target' before merge: \`$str_target_before\`"
+		echo "- undo: \`git reset --hard $str_target_before\`"
+	} >>"$CHECKPOINTS_FILE"
+
+	print_status "info" "Recording checkpoint on '$str_source' — this commit runs the FULL pre-commit gate (lint + unit + integration + coverage) and can take several minutes; give it a timeout of at least 7 minutes."
+	git add "$CHECKPOINTS_FILE"
+	if ! git commit -m "chore: record merge checkpoint for '$str_source' -> '$str_target'"; then
+		print_status "error" "Checkpoint commit failed — resolve the hook failure, then re-run."
+		exit 1
+	fi
+	print_status "success" "Checkpoint recorded in $CHECKPOINTS_FILE."
 }
 
 checkout_branch() {
@@ -143,6 +191,8 @@ main() {
 	fi
 
 	print_status "success" "Working tree is clean on branch '$str_current_branch'."
+
+	record_checkpoint "$str_current_branch" "$str_target_branch"
 
 	checkout_branch "$str_target_branch"
 	merge_into_target "$str_current_branch" "$str_target_branch"
