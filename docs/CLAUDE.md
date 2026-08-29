@@ -137,7 +137,7 @@ Required sections in order:
 
 ### Type C: Utility page
 
-Files: `index.md`, `get-started.md`
+Files: `index.md`, `get-started.md`, `troubleshooting.md`
 
 No fixed section template — these pages serve different purposes. Preserve the intent of each:
 
