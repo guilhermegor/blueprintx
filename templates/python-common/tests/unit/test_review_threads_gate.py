@@ -23,15 +23,43 @@ import pytest
 # --------------------------
 
 
+def _find_gate_path() -> Path:
+	"""Locate ``check_review_threads.py``, whether run from the template tree or a scaffold.
+
+	The gate's single source is ``templates/common/bin/`` (blueprintx#175 follow-up), a
+	SIBLING of ``templates/python-common/`` — but every scaffold copies it into the
+	generated project's own flat ``bin/``, alongside this test file's own copy at
+	``tests/unit/``. Both layouts have to resolve from the same test source.
+
+	Returns
+	-------
+	Path
+		Whichever candidate exists. ⚠️ No branch here on purpose — ``tests/`` is capped at
+		cyclomatic complexity 1 (`` bin/check_complexity.sh``); an ``if``/``raise`` pair
+		would violate that ceiling for a path lookup that is not itself a test. Defaulting
+		to the template-tree candidate when neither exists lets a genuinely missing gate
+		fail naturally in the loader below, which already reports an absent file clearly.
+	"""
+	path_here = Path(__file__).resolve()
+	tuple_candidates = (
+		path_here.parents[2] / "bin" / "check_review_threads.py",  # generated project
+		path_here.parents[3] / "common" / "bin" / "check_review_threads.py",  # template tree
+	)
+	return next(
+		(path_candidate for path_candidate in tuple_candidates if path_candidate.is_file()),
+		tuple_candidates[-1],
+	)
+
+
 def _load_gate() -> ModuleType:
-	"""Import ``bin/check_review_threads.py`` as a module.
+	"""Import ``check_review_threads.py`` as a module.
 
 	Returns
 	-------
 	ModuleType
 		The loaded gate module.
 	"""
-	path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_review_threads.py"
+	path_gate = _find_gate_path()
 	cls_spec = importlib.util.spec_from_file_location("_check_review_threads", path_gate)
 	# Split rather than combined. A conjunction in one assertion reports only that the
 	# whole thing was false, so a failure cannot say WHICH half broke — an absent loader
