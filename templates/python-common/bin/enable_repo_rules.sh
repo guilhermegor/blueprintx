@@ -192,26 +192,32 @@ apply_ruleset() {
 	return 0
 }
 
+# Read the SERVER back instead of echoing what we meant to send. `apply_ruleset` returns 0
+# even when the API refused it (deliberately — this step must never abort `init`), so a
+# summary built from REQUIRED_CHECKS would announce a gate that may not exist. A
+# provisioning step that reports its own INPUT has verified nothing; that is the same
+# failure this ruleset exists to remove, one level up.
+#
+# blueprintx#307: also assert `strict_required_status_checks_policy` is true, not merely
+# that checks exist — an unstrict required check still lets a PR merge on a run that never
+# saw its base.
+#
+# blueprintx#311 review (thread 3884918238): a READ FAILURE and an ABSENT ruleset used to
+# both `return 0` — indistinguishable from CONFIRMED strict. That let `verify` exit 0
+# without ever having proven anything: "could not check" and "checked and it is fine"
+# collapsed to the same exit code, which is the exact "gate reporting its own blindness as
+# OK" this guard exists to prevent. Three states now share one exit-code contract with
+# assert_branch_protection_strict below: 0 = CONFIRMED strict, 1 = CONFIRMED not strict
+# (a real violation), 2 = absent or unreadable (proves nothing either way). `main`'s init
+# flow still swallows any non-zero with `|| true` (must never fail `poe init`); `verify`
+# is the caller that treats 2 as failure too — see verify_strict_required_checks.
+#
+# blueprintx#311 review (thread 3886360534): an ABSENT `strict_required_status_checks_policy`
+# reads back as jq `null` — neither "false" nor "true", just no rule mentioning it. Folding
+# that into the `!= true` check below used to report CONFIRMED violating (1) for a ruleset
+# that never mentions the policy, so a repo whose CLASSIC protection is correctly strict
+# could still fail verification on the ruleset half alone. See the null/absent check below.
 report_blocking_checks() {
-	# Read the SERVER back instead of echoing what we meant to send. `apply_ruleset` returns 0
-	# even when the API refused it (deliberately — this step must never abort `init`), so a
-	# summary built from REQUIRED_CHECKS would announce a gate that may not exist. A
-	# provisioning step that reports its own INPUT has verified nothing; that is the same
-	# failure this ruleset exists to remove, one level up. $1 = owner/repo.
-	#
-	# blueprintx#307: also assert `strict_required_status_checks_policy` is true, not merely
-	# that checks exist — an unstrict required check still lets a PR merge on a run that never
-	# saw its base.
-	#
-	# blueprintx#311 review (thread 3884918238): a READ FAILURE and an ABSENT ruleset used to
-	# both `return 0` — indistinguishable from CONFIRMED strict. That let `verify` exit 0
-	# without ever having proven anything: "could not check" and "checked and it is fine"
-	# collapsed to the same exit code, which is the exact "gate reporting its own blindness as
-	# OK" this guard exists to prevent. Three states now share one exit-code contract with
-	# assert_branch_protection_strict below: 0 = CONFIRMED strict, 1 = CONFIRMED not strict
-	# (a real violation), 2 = absent or unreadable (proves nothing either way). `main`'s init
-	# flow still swallows any non-zero with `|| true` (must never fail `poe init`); `verify`
-	# is the caller that treats 2 as failure too — see verify_strict_required_checks.
 	local str_repo="$1"
 	local str_id str_live str_strict
 	# ⚠️ A failed READ must never be reported as an empty ANSWER. Swallowing the error turns a
@@ -244,6 +250,11 @@ report_blocking_checks() {
 		'[.rules[]? | select(.type == "required_status_checks")
 		  | .parameters.strict_required_status_checks_policy] | first' 2>&1)"; then
 		print_status "warning" "Could not READ the strict policy on $str_repo (so it is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
+		return 2
+	fi
+	# Absent/null (thread 3886360534, see the header note above) is UNKNOWN, not a violation.
+	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
+		print_status "warning" "strict_required_status_checks_policy is absent on $str_repo (ruleset '$RULESET_NAME') — UNKNOWN, not enforced"
 		return 2
 	fi
 	if [ "$str_strict" != "true" ]; then
@@ -297,7 +308,15 @@ verify_strict_required_checks() {
 		print_status "error" "No GitHub remote resolved — cannot verify branch protection"
 		return 1
 	fi
-	str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>/dev/null || echo main)"
+	# blueprintx#311 review (thread 3886360538, CWE-693): `|| echo main` used to replace a
+	# FAILED read with the literal "main" — verification then silently inspected whatever
+	# branch that guess named instead of the repo's real default and could report success on
+	# it. `verify` is the fail-closed path (see the file header), so a read failure here must
+	# abort loud rather than substitute an answer nobody confirmed.
+	if ! str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>&1)"; then
+		print_status "error" "Could not resolve the default branch for $str_repo (so it is UNKNOWN, not 'main'): ${str_branch:-no output from gh}"
+		return 1
+	fi
 
 	# blueprintx#311 review (thread 3884918238): require at least one mechanism to return
 	# CONFIRMED strict (0) — absence/unreadable (2) on both is NOT success, only the absence
