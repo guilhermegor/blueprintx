@@ -397,7 +397,13 @@ prompt_pipeline_intent() {
 conditional_copy_email() {
     local project_path="$1"
     if [[ "$INCLUDE_EMAIL" != "true" ]]; then return; fi
-    cp -r "$COMMON_TEMPLATE_ROOT/optional/email" "$project_path/src/utils/email"
+    # ⚠️ MERGE, never a bare `cp -r … dst` (blueprintx#118/#121): src/utils/email/ already
+    # exists at this point (dispatch.py/sender.py/html_body.py ship unconditionally via
+    # copy_common_templates, which runs before this). A bare `cp -r optional/email dst` on an
+    # EXISTING dst nests the copy one level deeper (src/utils/email/email/…), and every path
+    # below assumes it did not. The trailing `/.` copies CONTENTS into dst instead.
+    mkdir -p "$project_path/src/utils/email"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/email/." "$project_path/src/utils/email/"
     # The seam ships its unit test co-located; relocate it to the project's tests/unit and drop
     # the now-empty package tests dir so the test is discovered and the package stays clean.
     mv "$project_path/src/utils/email/tests/unit/test_email_handlers.py" \
@@ -440,6 +446,9 @@ conditional_copy_email() {
 # main.py is intentionally discarded (their .env keys + packages remain — wire them into the
 # intent pipelines manually per controller/CLAUDE.md). Copies the dispatch trio, drops the
 # single _pipeline.py, seeds PIPELINE_INTENT, and flips the controller/CLAUDE.md mode marker.
+# Also overwrites tests/unit/test_pipeline.py: the shipped one imports controller._pipeline,
+# which this function just deleted (blueprintx#289) — the multi-intent replacement covers
+# pipeline_dispatch's resolve_intent/build_pipeline instead, so dispatch isn't left untested.
 conditional_apply_multi_pipeline() {
     local project_path="$1"
     if [[ "$INCLUDE_MULTI_PIPELINE" != "true" ]]; then return; fi
@@ -450,6 +459,7 @@ conditional_apply_multi_pipeline() {
     cp "$mp_root/pipeline_reconcile.py" "$controller_dir/pipeline_reconcile.py"
     cp "$mp_root/pipeline_dispatch.py" "$controller_dir/pipeline_dispatch.py"
     cp "$mp_root/main.py" "$controller_dir/main.py"
+    cp "$mp_root/test_pipeline.py" "$project_path/tests/unit/test_pipeline.py"
     rm -f "$controller_dir/_pipeline.py"
     sed -i 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
     local intent_env
@@ -484,8 +494,8 @@ copy_shared_utils() {
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
     local -a utils=(
         br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
-        tabular_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
-        outlook_gateway raw_workspace daily_cache queries
+        tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
+        ms_office email raw_workspace daily_cache queries
     )
     for util in "${utils[@]}"; do
         # A util is either a single module or a PACKAGE — retry/ was split into one in
@@ -504,6 +514,20 @@ copy_shared_utils() {
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
+    # ms_office/ and email/ are PACKAGES with more than one test file, one per module inside —
+    # a single "test_${util}.py" above cannot name them, so each rides an explicit cp instead
+    # (blueprintx#117/#118/#121). check_test_copy_lists.py's static scan requires exactly this
+    # form (`cp … tests/unit/test_X.py`) to recognise a shared test as reachable.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_outlook_gateway.py" \
+        "$project_path/tests/unit/test_ms_office_outlook_gateway.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_excel_sheet_names.py" \
+        "$project_path/tests/unit/test_ms_office_excel_sheet_names.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_dispatch.py" \
+        "$project_path/tests/unit/test_email_dispatch.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_sender.py" \
+        "$project_path/tests/unit/test_email_sender.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_html_body.py" \
+        "$project_path/tests/unit/test_email_html_body.py"
     # A COUNT, never an enumeration: the old message listed 15 of the 17 names and had already
     # drifted (lesson `ci-python-gates` — the enumeration is what goes stale). The number still
     # proves the step ran, which silence would not.

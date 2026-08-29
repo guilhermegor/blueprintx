@@ -5,6 +5,13 @@ live here as private ``_com_*`` functions that **lazy-import** ``win32com`` insi
 the module stays importable on Linux/CI even though ``win32com`` is Windows-only. Off Windows the
 gateway logs what it *would* do and returns ``False``/``None`` instead of failing — the run
 continues.
+
+Lives in ``utils/ms_office/`` — a vendor-app-scoped subpackage (blueprintx#118) — because this
+is *Outlook* behaviour: a Windows COM client automated to send and read mail. Dispatch policy
+(:func:`utils.email.dispatch.resolve_dispatch`) and body HTML-ization
+(:func:`utils.email.html_body.to_html_body`) are capabilities *any* e-mail backend needs (SMTP
+included), so they live in ``utils/email/`` instead — a port must not carry logic one adapter
+happens to implement.
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ from pathlib import Path
 import platform
 from typing import TYPE_CHECKING
 
+from utils.email.html_body import to_html_body
 from utils.logs import log_message
 from utils.paths import to_absolute
 from utils.signatures import resolve_signature
@@ -262,119 +270,6 @@ class OutlookGateway(metaclass=TypeChecker):
 				"warning",
 			)
 			return []
-
-
-@type_checker
-def to_html_body(str_body: str) -> str:
-	r"""Convert a plain-text e-mail body to HTML so its line breaks survive.
-
-	The Outlook client assigns the body to ``mail.HTMLBody``, where bare newlines collapse and
-	the message renders on a single line. Each newline is turned into a ``<br>``
-	so paragraph breaks are preserved. A body that already looks like HTML (contains a ``<br``
-	or ``<p>`` tag) is left untouched.
-
-	Parameters
-	----------
-	str_body : str
-		The plain-text body (possibly with ``\n`` / ``\r\n`` line breaks).
-
-	Returns
-	-------
-	str
-		The body with newlines rendered as ``<br>`` (unchanged when already HTML).
-	"""
-	str_low = str_body.casefold()
-	if "<br" in str_low or "<p>" in str_low:
-		return str_body
-	return str_body.replace("\r\n", "\n").replace("\n", "<br>\n")
-
-
-# E-mail dispatch flags live in the environment (.env), one pair per e-mail block, so ops
-# toggles a notification without editing config. Per-block variables are
-# EMAIL_SEND__<BLOCK> / EMAIL_AUTO_SEND__<BLOCK> (the block key upper-cased); an unset
-# per-block variable falls back to EMAIL_SEND__DEFAULTS / EMAIL_AUTO_SEND__DEFAULTS, then to
-# the hard default (send on, auto-send off).
-_DISPATCH_DEFAULT_SUFFIX: str = "DEFAULTS"
-# One table mapping every recognised token to its value, rather than two sets consulted in
-# turn. A token can no longer appear in both by accident, and adding a spelling is adding an
-# entry. The frozensets remain as derived views for any caller that wants to ask membership.
-_DICT_ENV_BOOL: dict[str, bool] = {
-	**dict.fromkeys(("1", "true", "yes", "on", "y", "t"), True),
-	**dict.fromkeys(("0", "false", "no", "off", "n", "f"), False),
-}
-_TRUE_TOKENS: frozenset[str] = frozenset(k for k, v in _DICT_ENV_BOOL.items() if v)
-_FALSE_TOKENS: frozenset[str] = frozenset(k for k, v in _DICT_ENV_BOOL.items() if not v)
-
-
-@type_checker
-def _parse_env_bool(str_raw: str | None, bool_default: bool) -> bool:
-	"""Parse an environment flag to ``bool``, returning ``bool_default`` when absent/unknown.
-
-	Parameters
-	----------
-	str_raw : str | None
-		The raw environment value (``None`` when the variable is unset).
-	bool_default : bool
-		The value returned when ``str_raw`` is ``None``, blank, or not a known token.
-
-	Returns
-	-------
-	bool
-		The parsed flag, or ``bool_default``.
-	"""
-	# An unset value and an unrecognised one mean the same thing here — fall back to the
-	# default — so both are one lookup with a default rather than three branches.
-	str_norm = (str_raw or "").strip().casefold()
-	return _DICT_ENV_BOOL.get(str_norm, bool_default)
-
-
-@type_checker
-def _dispatch_flag(str_prefix: str, str_block_key: str, bool_default: bool) -> bool:
-	"""Resolve one dispatch flag from the per-block then the default environment variable.
-
-	Parameters
-	----------
-	str_prefix : str
-		The variable prefix (``"EMAIL_SEND"`` or ``"EMAIL_AUTO_SEND"``).
-	str_block_key : str
-		The ``emails.yaml`` block key (e.g. ``"schema_failure"``); upper-cased for the var.
-	bool_default : bool
-		The hard default when neither the per-block nor the ``__DEFAULTS`` variable is set.
-
-	Returns
-	-------
-	bool
-		The resolved flag.
-	"""
-	str_block_var = os.getenv(f"{str_prefix}__{str_block_key.upper()}")
-	if str_block_var is not None and str_block_var.strip():
-		return _parse_env_bool(str_block_var, bool_default)
-	str_default_var = os.getenv(f"{str_prefix}__{_DISPATCH_DEFAULT_SUFFIX}")
-	return _parse_env_bool(str_default_var, bool_default)
-
-
-@type_checker
-def resolve_dispatch(str_block_key: str) -> tuple[bool, bool]:
-	"""Resolve an e-mail block's ``(send, auto_send)`` flags from the environment.
-
-	The flags are sourced from ``.env`` (loaded at startup), never from ``emails.yaml``: per
-	block ``EMAIL_SEND__<BLOCK>`` / ``EMAIL_AUTO_SEND__<BLOCK>`` (block key upper-cased), with
-	``EMAIL_SEND__DEFAULTS`` / ``EMAIL_AUTO_SEND__DEFAULTS`` as the fallback and a hard default
-	of send on / auto-send off.
-
-	Parameters
-	----------
-	str_block_key : str
-		The ``emails.yaml`` block key (e.g. ``"schema_failure"``).
-
-	Returns
-	-------
-	tuple of (bool, bool)
-		``(bool_send, bool_auto_send)``.
-	"""
-	bool_send = _dispatch_flag("EMAIL_SEND", str_block_key, True)
-	bool_auto_send = _dispatch_flag("EMAIL_AUTO_SEND", str_block_key, False)
-	return bool_send, bool_auto_send
 
 
 @type_checker

@@ -5,207 +5,199 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any
+
 
 try:
-    import oracledb
+	import oracledb
 except ImportError:  # pragma: no cover - optional dependency
-    oracledb = None  # type: ignore[assignment]
+	oracledb = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
 
 
 class OracleDatabaseHandler(DatabaseHandler):
-    """Oracle handler using oracledb/cx_Oracle.
+	"""Oracle handler using oracledb/cx_Oracle.
 
-    Parameters
-    ----------
-    dsn : str
-        Oracle DSN string (e.g., ``host:port/service`` or EZCONNECT).
-    user : str, optional
-        Database user; falls back to ``DB_USER``.
-    password : str, optional
-        Database password; falls back to ``DB_PASSWORD``.
-    table : str, optional
-        Table name used for storage, by default ``"records"``.
-    id_field : str, optional
-        Identifier field name, by default ``"id"``.
+	Parameters
+	----------
+	dsn : str
+		Oracle DSN string (e.g., ``host:port/service`` or EZCONNECT).
+	user : str, optional
+		Database user; falls back to ``DB_USER``.
+	password : str, optional
+		Database password; falls back to ``DB_PASSWORD``.
+	table : str, optional
+		Table name used for storage, by default ``"records"``.
+	id_field : str, optional
+		Identifier field name, by default ``"id"``.
 
-    Raises
-    ------
-    ImportError
-        If ``oracledb``/``cx_Oracle`` is not installed when instantiating the handler.
-    """
+	Raises
+	------
+	ImportError
+		If ``oracledb``/``cx_Oracle`` is not installed when instantiating the handler.
+	"""
 
-    def __init__(
-        self,
-        dsn: str,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
-        table: str = "records",
-        id_field: str = "id",
-    ):
-        if oracledb is None:
-            raise ImportError(
-                "oracledb (cx_Oracle) is required for OracleDatabaseHandler; "
-                "install it to use this backend."
-            )
-        self.dsn = dsn
-        self.user = user or os.getenv("DB_USER")
-        self.password = password or os.getenv("DB_PASSWORD")
-        self.table = table
-        self.id_field = id_field
-        self._ensure_table()
+	def __init__(
+		self,
+		dsn: str,
+		user: str | None = None,
+		password: str | None = None,
+		table: str = "records",
+		id_field: str = "id",
+	) -> None:
+		if oracledb is None:
+			raise ImportError(
+				"oracledb (cx_Oracle) is required for OracleDatabaseHandler; "
+				"install it to use this backend."
+			)
+		self.dsn = dsn
+		self.user = user or os.getenv("DB_USER")
+		self.password = password or os.getenv("DB_PASSWORD")
+		self.table = table
+		self.id_field = id_field
+		self._ensure_table()
 
-    def create(self, record: Record) -> str:
-        """Insert or update a record.
+	def create(self, record: Record) -> str:
+		"""Insert or update a record.
 
-        Parameters
-        ----------
-        record : Record
-            Data to persist; an ``id`` is generated if missing.
+		Parameters
+		----------
+		record : Record
+			Data to persist; an ``id`` is generated if missing.
 
-        Returns
-        -------
-        str
-            Identifier assigned to the stored record.
-        """
+		Returns
+		-------
+		str
+			Identifier assigned to the stored record.
+		"""
+		record = ensure_id(record, self.id_field)
+		payload = json.dumps(record)
+		with self._connect() as conn:
+			cur = conn.cursor()
+			cur.execute(
+				f"MERGE INTO {self.table} t USING "  # noqa: S608
+				f"(SELECT :1 AS {self.id_field}, :2 AS data FROM dual) s "
+				f"ON (t.{self.id_field} = s.{self.id_field}) "
+				f"WHEN MATCHED THEN UPDATE SET data = s.data "
+				f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) "
+				f"VALUES (s.{self.id_field}, s.data)",
+				[record[self.id_field], payload],
+			)
+			conn.commit()
+		return str(record[self.id_field])
 
-        record = ensure_id(record, self.id_field)
-        payload = json.dumps(record)
-        with self._connect() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                f"MERGE INTO {self.table} t USING "
-                f"(SELECT :1 AS {self.id_field}, :2 AS data FROM dual) s "
-                f"ON (t.{self.id_field} = s.{self.id_field}) "
-                f"WHEN MATCHED THEN UPDATE SET data = s.data "
-                f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) "
-                f"VALUES (s.{self.id_field}, s.data)",
-                [record[self.id_field], payload],
-            )
-            conn.commit()
-        return str(record[self.id_field])
+	def read(self, record_id: str) -> Record | None:
+		"""Fetch a record by identifier.
 
-    def read(self, record_id: str) -> Optional[Record]:
-        """Fetch a record by identifier.
+		Parameters
+		----------
+		record_id : str
+			Identifier to look up.
 
-        Parameters
-        ----------
-        record_id : str
-            Identifier to look up.
+		Returns
+		-------
+		Record or None
+			Stored record if found, else ``None``.
+		"""
+		with self._connect() as conn:
+			cur = conn.cursor()
+			cur.execute(f"SELECT data FROM {self.table} WHERE {self.id_field} = :id", [record_id])  # noqa: S608
+			row = cur.fetchone()
+		if not row:
+			return None
+		return json.loads(row[0].read() if hasattr(row[0], "read") else row[0])
 
-        Returns
-        -------
-        Record or None
-            Stored record if found, else ``None``.
-        """
+	def update(self, record_id: str, updates: Record) -> Record | None:
+		"""Merge updates into an existing record.
 
-        with self._connect() as conn:
-            cur = conn.cursor()
-            cur.execute(f"SELECT data FROM {self.table} WHERE {self.id_field} = :id", [record_id])
-            row = cur.fetchone()
-        if not row:
-            return None
-        return json.loads(row[0].read() if hasattr(row[0], "read") else row[0])
+		Parameters
+		----------
+		record_id : str
+			Identifier of the record to update.
+		updates : Record
+			Partial payload containing fields to override.
 
-    def update(self, record_id: str, updates: Record) -> Optional[Record]:
-        """Merge updates into an existing record.
+		Returns
+		-------
+		Record or None
+			Updated record when found, else ``None``.
+		"""
+		existing = self.read(record_id)
+		if existing is None:
+			return None
+		updated = {**existing, **updates, self.id_field: record_id}
+		self.create(updated)
+		return updated
 
-        Parameters
-        ----------
-        record_id : str
-            Identifier of the record to update.
-        updates : Record
-            Partial payload containing fields to override.
+	def delete(self, record_id: str) -> bool:
+		"""Delete a record by identifier.
 
-        Returns
-        -------
-        Record or None
-            Updated record when found, else ``None``.
-        """
+		Parameters
+		----------
+		record_id : str
+			Identifier of the record to remove.
 
-        existing = self.read(record_id)
-        if existing is None:
-            return None
-        updated = {**existing, **updates, self.id_field: record_id}
-        self.create(updated)
-        return updated
+		Returns
+		-------
+		bool
+			``True`` when a row was deleted, otherwise ``False``.
+		"""
+		with self._connect() as conn:
+			cur = conn.cursor()
+			cur.execute(f"DELETE FROM {self.table} WHERE {self.id_field} = :id", [record_id])  # noqa: S608
+			deleted = cur.rowcount > 0
+			conn.commit()
+		return deleted
 
-    def delete(self, record_id: str) -> bool:
-        """Delete a record by identifier.
+	def backup(self, target_path: str | Path) -> Path:
+		"""Stream all records to a JSON file as a backup artifact.
 
-        Parameters
-        ----------
-        record_id : str
-            Identifier of the record to remove.
+		Parameters
+		----------
+		target_path : str or Path
+			Destination path for the JSON backup.
 
-        Returns
-        -------
-        bool
-            ``True`` when a row was deleted, otherwise ``False``.
-        """
+		Returns
+		-------
+		Path
+			Path to the created backup file.
+		"""
+		target = Path(target_path)
+		target.parent.mkdir(parents=True, exist_ok=True)
+		with target.open("w", encoding="utf-8") as handle, self._connect() as conn:
+			cur = conn.cursor()
+			cur.execute(f"SELECT data FROM {self.table}")  # noqa: S608
+			rows = []
+			for row in cur:
+				cell = row[0]
+				rows.append(json.loads(cell.read() if hasattr(cell, "read") else cell))
+			handle.write(json.dumps(rows, indent=2, ensure_ascii=False))
+		return target
 
-        with self._connect() as conn:
-            cur = conn.cursor()
-            cur.execute(f"DELETE FROM {self.table} WHERE {self.id_field} = :id", [record_id])
-            deleted = cur.rowcount > 0
-            conn.commit()
-        return deleted
+	def close(self) -> None:
+		"""Release resources (no-op, connections are per-call)."""
+		return None
 
-    def backup(self, target_path: str | Path) -> Path:
-        """Stream all records to a JSON file as a backup artifact.
+	def _connect(self) -> Any:
+		"""Create an Oracle connection using the configured DSN."""
+		return oracledb.connect(user=self.user, password=self.password, dsn=self.dsn)
 
-        Parameters
-        ----------
-        target_path : str or Path
-            Destination path for the JSON backup.
-
-        Returns
-        -------
-        Path
-            Path to the created backup file.
-        """
-
-        target = Path(target_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("w", encoding="utf-8") as handle:
-            with self._connect() as conn:
-                cur = conn.cursor()
-                cur.execute(f"SELECT data FROM {self.table}")
-                rows = []
-                for row in cur:
-                    cell = row[0]
-                    rows.append(json.loads(cell.read() if hasattr(cell, "read") else cell))
-                handle.write(json.dumps(rows, indent=2, ensure_ascii=False))
-        return target
-
-    def close(self) -> None:
-        """Release resources (no-op, connections are per-call)."""
-
-        return None
-
-    def _connect(self):
-        """Create an Oracle connection using the configured DSN."""
-
-        return oracledb.connect(user=self.user, password=self.password, dsn=self.dsn)
-
-    def _ensure_table(self) -> None:
-        """Create the backing table when it does not exist."""
-
-        with self._connect() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT COUNT(*) FROM user_tables WHERE table_name = :tbl",
-                {"tbl": self.table.upper()},
-            )
-            exists = cur.fetchone()[0] > 0
-            if not exists:
-                cur.execute(
-                    f"CREATE TABLE {self.table} (\n"
-                    f"  {self.id_field} VARCHAR2(255) PRIMARY KEY,\n"
-                    f"  data CLOB NOT NULL\n"
-                    f")"
-                )
-                conn.commit()
+	def _ensure_table(self) -> None:
+		"""Create the backing table when it does not exist."""
+		with self._connect() as conn:
+			cur = conn.cursor()
+			cur.execute(
+				"SELECT COUNT(*) FROM user_tables WHERE table_name = :tbl",
+				{"tbl": self.table.upper()},
+			)
+			exists = cur.fetchone()[0] > 0
+			if not exists:
+				cur.execute(
+					f"CREATE TABLE {self.table} (\n"
+					f"  {self.id_field} VARCHAR2(255) PRIMARY KEY,\n"
+					f"  data CLOB NOT NULL\n"
+					f")"
+				)
+				conn.commit()
