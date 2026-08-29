@@ -94,6 +94,19 @@ _RE_INCLUDED_QUOTA = re.compile(r"included\s+review\s+limit|fair\s+usage", re.IG
 # already waiting. Prefer the quiet error.
 _INT_COOLDOWN_MIN = 40
 
+# 🔴 blueprintx#280 — SKIP-AFTER-N OVER STRICT FIFO, AND HERE IS WHY.
+#
+# Serving strictly the oldest waiting PR every window is right until the oldest one is somehow
+# permanently unreviewable (a refusal wording this file does not recognise, a PR the reviewer
+# has quietly given up on): strict FIFO would then re-pick it forever and every younger PR
+# starves behind it. Measured upstream (`review_retry.yml`'s own header): 18 of 19 rate-limited
+# PRs were eventually reviewed, so a PR still stuck after several genuine retries is the
+# exceptional 1-in-19 case, not the common one — worth surfacing to a human, not silently
+# blocking the queue. Five attempts at the */10 schedule is most of an hour, well past every
+# declared window measured on this repo (20-35 minutes), so it does not fire on a PR that is
+# merely waiting out a normal window.
+_INT_MAX_ATTEMPTS_PER_PR = 5
+
 
 def _gh_json(list_args: list[str]) -> object:
 	"""Run a ``gh`` command and parse its stdout as JSON, or return ``None`` on any failure.
@@ -531,8 +544,13 @@ def request_review(str_repo: str, int_number: int) -> bool:
 # `--slurp` yields a list of PAGES, each a list of PR objects — so the flattening is one level
 # deeper than the obvious `[d["number"] for d in result]`, which would silently iterate PAGES
 # and yield nothing. Kept a pure function so the multi-page shape can be tested without a network.
-def flatten_pr_numbers(list_pages: list) -> list[int]:
-	"""Flatten ``gh api --paginate --slurp`` output into a flat list of PR numbers.
+#
+# ⚠️ SORTED HERE, NOT LEFT TO THE CALLER — `createdAt` is the FIFO ordering key (blueprintx#280),
+# and leaving the sort to whoever consumes this makes "oldest first" an assumption instead of a
+# guarantee. `created_at` is REST's field name (the endpoint this reads is REST, not the gate's
+# GraphQL query), ISO-8601, so lexical sort already sorts chronologically.
+def flatten_open_prs(list_pages: list) -> list[dict]:
+	"""Flatten ``gh api --paginate --slurp`` output into open PRs, oldest first.
 
 	Parameters
 	----------
@@ -541,16 +559,18 @@ def flatten_pr_numbers(list_pages: list) -> list[int]:
 
 	Returns
 	-------
-	list of int
-		Every PR number across every page, in order.
+	list of dict
+		``{"number", "created_at"}`` for every PR across every page, sorted ascending by
+		``created_at`` — the FIFO order the retry serves.
 	"""
-	return [
-		dict_pr["number"]
+	list_flat = [
+		{"number": dict_pr["number"], "created_at": dict_pr.get("created_at") or ""}
 		for list_page in list_pages
 		if isinstance(list_page, list)
 		for dict_pr in list_page
 		if isinstance(dict_pr, dict) and dict_pr.get("number")
 	]
+	return sorted(list_flat, key=lambda dict_item: dict_item["created_at"])
 
 
 # Whoever the PAT authenticates as is who our request will be authored by, so it is also the
@@ -584,14 +604,20 @@ def resolve_self_login() -> str:
 #
 # The catch is deliberately broad: to this caller a network error, a null node and a malformed
 # payload all mean the same thing — this PR cannot be judged now, try the next one.
-def examine_pr(
+#
+# ⚠️ THIS ONLY DECIDES "IS THE PR STRUCTURALLY WAITING", NOT "SHOULD WE ASK IT NOW"
+# (blueprintx#280). It deliberately does NOT apply `pr_needs_retry`'s cooldown/declared-wait
+# gating — that needs the whole open-PR set in hand first, because the account-level quota
+# means one PR's declared wait binds every other PR too (see ``account_blocked_until``). The
+# per-PR gating still runs, unchanged, inside ``select_pr_for_retry``.
+def build_candidate(
 	str_repo: str,
 	int_number: int,
+	str_created_at: str,
 	set_reviewers: set[str],
 	cls_gate: types.ModuleType,
-	str_self_login: str,
-) -> bool:
-	"""Examine one PR and re-ask for its review when it is waiting on a rate limit.
+) -> dict | None:
+	"""Fetch one PR and return its record when it is waiting on a rate-limited reviewer.
 
 	Parameters
 	----------
@@ -599,17 +625,19 @@ def examine_pr(
 		``owner/repo``.
 	int_number : int
 		The PR number.
+	str_created_at : str
+		The PR's ``created_at``, carried through for FIFO ordering.
 	set_reviewers : set of str
 		Logins that can actually submit a review.
 	cls_gate : types.ModuleType
 		The imported gate module.
-	str_self_login : str
-		The login the retry posts as.
 
 	Returns
 	-------
-	bool
-		``True`` when a review was requested for this PR.
+	dict or None
+		``{"number", "created_at", "pr", "comments", "notice"}``, or ``None`` when this PR's
+		head commit has already been reviewed, nothing has been said about it, or it could not
+		be read at all.
 	"""
 	str_owner, _, str_name = str_repo.partition("/")
 	try:
@@ -617,11 +645,176 @@ def examine_pr(
 		list_comments = fetch_comments(str_repo, int_number)
 	except Exception as cls_error:  # noqa: BLE001 - see the block above: degrade per PR
 		print(f"::warning::could not read #{int_number}, skipping it: {str(cls_error)[:200]}")
-		return False
+		return None
 
-	if not pr_needs_retry(dict_pr, list_comments, set_reviewers, cls_gate, str_self_login):
-		return False
-	return request_review(str_repo, int_number)
+	list_reviews = ((dict_pr.get("reviews") or {}).get("nodes")) or []
+	str_head = dict_pr.get("headRefOid") or ""
+	if cls_gate.reviewers_who_reported(list_reviews, set_reviewers, str_head):
+		return None
+
+	dict_notice = newest_roster_comment(list_comments, set_reviewers, cls_gate.normalise_login)
+	if not _RE_RATE_LIMIT.search((dict_notice or {}).get("body") or ""):
+		return None
+
+	return {
+		"number": int_number,
+		"created_at": str_created_at,
+		"pr": dict_pr,
+		"comments": list_comments,
+		"notice": dict_notice,
+	}
+
+
+def count_self_asks(
+	list_comments: list[dict], str_self_login: str, fn_norm: Callable[[str], str]
+) -> int:
+	"""Count how many times we have already posted the marker on this PR.
+
+	The starvation guard (``_INT_MAX_ATTEMPTS_PER_PR``) needs this; nothing else does, which is
+	why it stayed uncounted before blueprintx#280.
+
+	Parameters
+	----------
+	list_comments : list of dict
+		Normalised comments (``login``/``body``/``created_at``).
+	str_self_login : str
+		The login the retry posts as. Empty trusts no marker, so the count is always ``0``.
+	fn_norm : Callable[[str], str]
+		The gate's ``normalise_login``.
+
+	Returns
+	-------
+	int
+		How many of our own marker comments this PR carries.
+	"""
+	str_self = fn_norm(str_self_login)
+	if not str_self:
+		return 0
+	return sum(
+		1
+		for dict_comment in list_comments
+		if _STR_MARKER in (dict_comment.get("body") or "")
+		and fn_norm(dict_comment.get("login") or "") == str_self
+	)
+
+
+def notice_deadline(dict_notice: dict, dt_now: datetime) -> datetime | None:
+	"""Return the moment a notice's declared wait elapses, or ``None`` when it is not binding.
+
+	``None`` covers every case that carries no ongoing deadline: no declared wait, an unreadable
+	timestamp, or a wait that has already elapsed — deliberately the same set
+	``declared_wait_still_open`` treats as "not open", read from the same two parsers.
+
+	Parameters
+	----------
+	dict_notice : dict
+		A roster comment (``login``/``body``/``created_at``).
+	dt_now : datetime.datetime
+		The current time, timezone-aware.
+
+	Returns
+	-------
+	datetime.datetime or None
+		The deadline, only while it is still in the future.
+	"""
+	int_wait = parse_declared_wait(dict_notice.get("body") or "")
+	if int_wait is None:
+		return None
+	dt_said = parse_timestamp(dict_notice.get("created_at") or "")
+	if dt_said is None:
+		return None
+	dt_deadline = dt_said + timedelta(minutes=int_wait)
+	return dt_deadline if dt_deadline > dt_now else None
+
+
+# 🔴 ACCOUNT-LEVEL, NOT PER-PR — THE CORE FIX FOR BLUEPRINTX#280.
+#
+# Measured on this repo: six PRs asked inside four minutes right after a quota reset, all six
+# rate limited, because the quota is shared across every PR in the account. A per-PR cooldown
+# cannot see that — it only knows what THAT PR's own history says. This reads the NEWEST refusal
+# across every PR still waiting on a review (same "only the newest notice decides" rule
+# `pr_needs_retry` already applies per PR, lifted to the whole waiting set) and, when it declares
+# a wait that has not elapsed, treats that deadline as binding on every other PR too.
+def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetime | None:
+	"""Return when the account-level quota frees up, or ``None`` when nothing is blocking.
+
+	Parameters
+	----------
+	list_notices : list of dict
+		The newest roster comment for each PR still waiting on a review (one per PR).
+	dt_now : datetime.datetime
+		The current time, timezone-aware.
+
+	Returns
+	-------
+	datetime.datetime or None
+		The moment the account frees up, or ``None`` when no notice is currently blocking.
+	"""
+	list_dated = [d for d in list_notices if d and d.get("created_at")]
+	if not list_dated:
+		return None
+	dict_newest = max(list_dated, key=lambda d: d["created_at"])
+	return notice_deadline(dict_newest, dt_now)
+
+
+# ⚠️ EXACTLY ONE PR PER RUN, OLDEST FIRST — AND A STUCK HEAD DOES NOT WEDGE THE QUEUE.
+# `pr_needs_retry` still does the per-PR gating unchanged (its own declared wait, and the
+# marker-cooldown fallback for a refusal that names no number); this only adds the FIFO order
+# and the attempt cap on top, so a PR stuck past `_INT_MAX_ATTEMPTS_PER_PR` is skipped — loudly —
+# rather than starving every younger PR forever.
+def select_pr_for_retry(
+	list_candidates: list[dict],
+	set_reviewers: set[str],
+	cls_gate: types.ModuleType,
+	str_self_login: str,
+	dt_now: datetime,
+	int_max_attempts: int = _INT_MAX_ATTEMPTS_PER_PR,
+) -> int | None:
+	"""Pick the oldest waiting PR that is eligible to be asked right now.
+
+	Parameters
+	----------
+	list_candidates : list of dict
+		Records from :func:`build_candidate`.
+	set_reviewers : set of str
+		Logins that can actually submit a review.
+	cls_gate : types.ModuleType
+		The imported gate module.
+	str_self_login : str
+		The login the retry posts as.
+	dt_now : datetime.datetime
+		The current time, timezone-aware.
+	int_max_attempts : int, optional
+		Attempts after which a PR is skipped past, rather than blocking the queue.
+
+	Returns
+	-------
+	int or None
+		The chosen PR number, or ``None`` when every candidate is either still cooling down or
+		has exhausted its attempts.
+	"""
+	for dict_candidate in sorted(list_candidates, key=lambda d: d["created_at"]):
+		if not pr_needs_retry(
+			dict_candidate["pr"],
+			dict_candidate["comments"],
+			set_reviewers,
+			cls_gate,
+			str_self_login,
+			dt_now,
+		):
+			continue
+		int_attempts = count_self_asks(
+			dict_candidate["comments"], str_self_login, cls_gate.normalise_login
+		)
+		if int_attempts >= int_max_attempts:
+			print(
+				f"::warning::#{dict_candidate['number']} has been asked {int_attempts} times "
+				"and is still unreviewed — skipping past the FIFO head so newer PRs are not "
+				"starved; this PR needs a human look."
+			)
+			continue
+		return int(dict_candidate["number"])
+	return None
 
 
 # ⚠️ THE SETUP STEP RAISES TOO, AND IT IS EASY TO MISS BECAUSE IT LOOKS LIKE CONFIGURATION.
@@ -664,8 +857,58 @@ def resolve_setup(path_bin: pathlib.Path) -> tuple[types.ModuleType, set[str]] |
 	return cls_gate, set_reviewers
 
 
+# ⚠️ ONE ASK PER RUN, EVER — blueprintx#280. The old loop asked every eligible PR it found,
+# which at `*/10` against N open PRs is `6*N` requests/hour against ~1/hour of quota (measured
+# 96:1 at N=16): the retry that exists to unblock the queue was what kept it blocked. This
+# function enumerates, decides once, and stops — the schedule itself is the only rate limiter
+# left, and only ONE PR ever gets asked per tick.
+def collect_waiting_prs(
+	str_repo: str, set_reviewers: set, cls_gate: object
+) -> tuple[list, list[dict]] | None:
+	"""List the open PRs and the subset waiting on a rate-limited review.
+
+	Parameters
+	----------
+	str_repo : str
+		``owner/repo`` for the repository being swept.
+	set_reviewers : set
+		The reviewer logins from the roster.
+	cls_gate : object
+		The shared review-thread gate module.
+
+	Returns
+	-------
+	tuple of (list, list of dict), or None
+		All open PRs and the waiting subset; ``None`` when the listing could not be parsed.
+	"""
+	# ⚠️ `--paginate`, not a bare `per_page=100`: without it only the first page is read, and a
+	# rate-limited PR on page two is never retried — a silent partial pass, which is the exact
+	# failure shape this family of scripts exists to prevent.
+	#
+	# ⚠️ AND NO `--jq` HERE, measured against gh 2.96.0: `--slurp` is REJECTED when combined
+	# with `--jq` ("the `--slurp` option is not supported with `--jq` or `--template`"). Without
+	# `--slurp`, `--paginate` emits one JSON array PER PAGE, which is not parseable as a single
+	# document — so the parse would fail, this function would take its early return, and the
+	# janitor would quietly do nothing on every tick. Slurp into pages and flatten in Python.
+	list_pages = _gh_json(
+		["api", "--paginate", "--slurp", f"repos/{str_repo}/pulls?state=open&per_page=100"]
+	)
+	if not isinstance(list_pages, list):
+		return None
+	list_open = flatten_open_prs(list_pages)
+
+	list_candidates: list[dict] = []
+	for dict_open_pr in list_open:
+		dict_candidate = build_candidate(
+			str_repo, dict_open_pr["number"], dict_open_pr["created_at"], set_reviewers, cls_gate
+		)
+		if dict_candidate is not None:
+			list_candidates.append(dict_candidate)
+	return list_open, list_candidates
+
+
 def main() -> int:
-	"""Re-ask for a review on every open PR whose reviewer is rate limited.
+	"""Re-ask for a review on the single oldest open PR still waiting on a rate limit.
 
 	Returns
 	-------
@@ -692,20 +935,43 @@ def main() -> int:
 	# `--slurp`, `--paginate` emits one JSON array PER PAGE, which is not parseable as a single
 	# document — so the parse would fail, this function would take its early return, and the
 	# janitor would quietly do nothing on every tick. Slurp into pages and flatten in Python.
-	list_pages = _gh_json(
-		["api", "--paginate", "--slurp", f"repos/{str_repo}/pulls?state=open&per_page=100"]
-	)
-	if not isinstance(list_pages, list):
+	tuple_waiting = collect_waiting_prs(str_repo, set_reviewers, cls_gate)
+	if tuple_waiting is None:
 		return 0
-	list_open = flatten_pr_numbers(list_pages)
+	list_open, list_candidates = tuple_waiting
 
 	str_self_login = resolve_self_login()
-	int_asked = sum(
-		examine_pr(str_repo, int(int_number), set_reviewers, cls_gate, str_self_login)
-		for int_number in list_open
-	)
 
-	print(f"open PRs checked: {len(list_open)}; review re-requested on {int_asked}.")
+	if not list_candidates:
+		print(f"open PRs checked: {len(list_open)}; none are waiting on a rate-limited review.")
+		return 0
+
+	dt_now = datetime.now(timezone.utc)
+	dt_blocked_until = account_blocked_until([d["notice"] for d in list_candidates], dt_now)
+	if dt_blocked_until is not None:
+		print(
+			f"account-level quota blocked until {dt_blocked_until.isoformat()} (newest refusal "
+			f"across {len(list_candidates)} waiting PR(s)) — asking nobody this run."
+		)
+		return 0
+
+	int_chosen = select_pr_for_retry(list_candidates, set_reviewers, cls_gate, str_self_login, dt_now)
+	if int_chosen is None:
+		print(
+			f"open PRs checked: {len(list_open)}; {len(list_candidates)} waiting, all still "
+			"cooling down or past the attempt cap."
+		)
+		return 0
+
+	if "--dry-run" in sys.argv:
+		print(
+			f"[dry-run] would request a review on #{int_chosen} — oldest eligible of "
+			f"{len(list_candidates)} waiting PR(s)."
+		)
+		return 0
+
+	bool_asked = request_review(str_repo, int_chosen)
+	print(f"open PRs checked: {len(list_open)}; requested a review on #{int_chosen}: {bool_asked}.")
 	return 0
 
 
