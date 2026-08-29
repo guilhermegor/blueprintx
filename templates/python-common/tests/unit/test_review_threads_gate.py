@@ -85,6 +85,10 @@ _LONG = "x" * 150
 _HEAD = "9ae76ab0000000000000000000000000000000000"
 _SUPERSEDED = "9e7d1fe0000000000000000000000000000000000"
 
+# The head commit's committedDate. A completion notice is evidence only when it POSTDATES this —
+# otherwise it describes code the branch has since moved past (raised by review on #339).
+_HEAD_DATE = "2026-01-01T00:00:00Z"
+
 
 def _thread(list_comments: list[tuple[str, str]], *, bool_resolved: bool = True) -> dict:
 	"""Build a review thread from ``(login, body)`` pairs.
@@ -238,7 +242,7 @@ def _review(str_login: str, str_oid: str = _HEAD) -> dict:
 	return {"author": {"login": str_login}, "commit": {"oid": str_oid}}
 
 
-def _notice(str_login: str, str_body: str) -> dict:
+def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:00Z") -> dict:
 	"""Build one of the PR's issue comments.
 
 	Parameters
@@ -247,13 +251,16 @@ def _notice(str_login: str, str_body: str) -> dict:
 		Comment author's login.
 	str_body : str
 		Comment body.
+	str_created : str
+		ISO-8601 ``createdAt``. Defaults to a date AFTER ``_HEAD_DATE`` so the ordinary case
+		reads as "the reviewer spoke about the current head".
 
 	Returns
 	-------
 	dict
 		An issue comment shaped like the GraphQL response.
 	"""
-	return {"author": {"login": str_login}, "body": str_body}
+	return {"author": {"login": str_login}, "body": str_body, "createdAt": str_created}
 
 
 def test_a_pr_nobody_reviewed_fails() -> None:
@@ -821,9 +828,54 @@ def test_a_declared_completion_is_evidence_the_reviewer_ran() -> None:
 			_ROSTER,
 			"h",
 			str_head_oid=_HEAD,
+			str_head_date=_HEAD_DATE,
 			list_notices=[_notice("coderabbitai", _NOTICE_PERFORMED)],
 		)
 		is None
+	)
+
+
+def test_a_completion_predating_the_head_commit_is_not_evidence() -> None:
+	"""H1/H2: a completion notice must POSTDATE the head commit it is offered as evidence for.
+
+	A notice carries no commit oid, unlike a review object. So a reviewer that finished on H1,
+	followed by a push to H2, leaves the newest roster notice reading "Review finished" while
+	nothing has looked at H2. Raised by review on blueprintx#339, which is where this had been
+	written down as a known limitation instead of being closed.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			str_head_date="2026-06-01T00:00:00Z",
+			list_notices=[
+				_notice("coderabbitai", _NOTICE_PERFORMED, "2026-05-01T00:00:00Z"),
+			],
+		)
+		is not None
+	)
+
+
+def test_an_unknown_head_date_is_not_evidence() -> None:
+	"""Fails CLOSED: without the head commit's date, a completion notice cannot be pinned.
+
+	An absent ``committedDate`` means the query changed or the payload is partial. Treating
+	unknown as "recent enough" is the vacuous pass this whole file exists to remove.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			str_head_date="",
+			list_notices=[_notice("coderabbitai", _NOTICE_PERFORMED)],
+		)
+		is not None
 	)
 
 
@@ -841,6 +893,7 @@ def test_a_superseded_completion_does_not_satisfy_the_gate() -> None:
 			_ROSTER,
 			"h",
 			str_head_oid=_HEAD,
+			str_head_date=_HEAD_DATE,
 			list_notices=[
 				_notice("coderabbitai", _NOTICE_PERFORMED),
 				_notice("coderabbitai", _NOTICE_LIMITED),
@@ -882,6 +935,7 @@ def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str)
 			_ROSTER,
 			"h",
 			str_head_oid=_HEAD,
+			str_head_date=_HEAD_DATE,
 			list_notices=[_notice("coderabbitai", str_notice)],
 		)
 		is not None
@@ -901,6 +955,7 @@ def test_the_failure_message_quotes_the_reviewers_latest_notice() -> None:
 		_ROSTER,
 		"h",
 		str_head_oid=_HEAD,
+		str_head_date=_HEAD_DATE,
 		list_notices=[_notice("coderabbitai", _NOTICE_LIMITED)],
 	)
 	assert "Review rate limited." in str_problem
@@ -914,6 +969,7 @@ def test_the_quoted_notice_is_stripped_of_markup() -> None:
 		_ROSTER,
 		"h",
 		str_head_oid=_HEAD,
+		str_head_date=_HEAD_DATE,
 		list_notices=[_notice("coderabbitai", _NOTICE_FAILED)],
 	)
 	assert "<summary>" not in str_problem
@@ -927,6 +983,7 @@ def test_only_a_roster_notice_is_quoted() -> None:
 		_ROSTER,
 		"h",
 		str_head_oid=_HEAD,
+		str_head_date=_HEAD_DATE,
 		list_notices=[_notice("some-human", "these commits were already reviewed on the old PR")],
 	)
 	assert "already reviewed on the old PR" not in str_problem
@@ -940,6 +997,7 @@ def test_the_newest_roster_notice_is_the_one_quoted() -> None:
 		_ROSTER,
 		"h",
 		str_head_oid=_HEAD,
+		str_head_date=_HEAD_DATE,
 		list_notices=[
 			_notice("coderabbitai", _NOTICE_PERFORMED),
 			_notice("coderabbitai", _NOTICE_LIMITED),

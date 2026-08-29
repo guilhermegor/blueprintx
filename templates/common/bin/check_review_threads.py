@@ -198,7 +198,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
-      comments(last:100) { nodes { author { login } body } }
+      comments(last:100) { nodes { author { login } body createdAt } }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
@@ -206,6 +206,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
         pageInfo { hasNextPage endCursor }
         nodes { author { login } commit { oid } }
       }
+      commits(last:1) { nodes { commit { committedDate } } }
       reviewThreads(first:100, after:$tc) {
         pageInfo { hasNextPage endCursor }
         nodes {
@@ -528,6 +529,28 @@ def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) ->
 	return ""
 
 
+def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) -> str:
+	"""Return the ``createdAt`` of the newest roster-authored notice.
+
+	Parameters
+	----------
+	list_notices : list of dict
+		The PR's issue comments, oldest first.
+	set_roster : set of str
+		Already-normalised logins that can submit a review.
+
+	Returns
+	-------
+	str
+		ISO-8601 timestamp, or ``""`` when the roster has said nothing. Pairs with
+		:func:`summarise_reviewer_notice`, which walks the same stream for the same comment.
+	"""
+	for dict_comment in reversed(list_notices):
+		if normalise_login((dict_comment.get("author") or {}).get("login") or "") in set_roster:
+			return dict_comment.get("createdAt") or ""
+	return ""
+
+
 # ⚠️ COMPLETION — THE ONE NOTICE THAT IS EVIDENCE, AND WHY IT IS NOT A REVERSAL.
 #
 # The notice block above establishes that a roster COMMENT is not evidence a review happened,
@@ -564,8 +587,12 @@ _TUPLE_COMPLETION_PHRASES = (
 )
 
 
-def reviewer_declared_completion(list_notices: list[dict], set_roster: set[str]) -> bool:
-	"""Return whether a roster member's own notice says it reviewed this PR.
+def reviewer_declared_completion(
+	list_notices: list[dict],
+	set_roster: set[str],
+	str_head_date: str = "",
+) -> bool:
+	"""Return whether a roster member's own notice says it reviewed THIS PR's head.
 
 	Parameters
 	----------
@@ -573,20 +600,25 @@ def reviewer_declared_completion(list_notices: list[dict], set_roster: set[str])
 		The PR's issue comments, oldest first — the stream the reviewer reports completion to.
 	set_roster : set of str
 		Already-normalised logins that can submit a review.
+	str_head_date : str, optional
+		ISO-8601 ``committedDate`` of the head commit. A notice created BEFORE it describes
+		superseded code and is not evidence. Empty means unknown, and unknown fails closed.
 
 	Returns
 	-------
 	bool
-		``True`` when a roster-authored comment carries a completion phrase, i.e. the reviewer
-		ran and produced no line comments. ⚠️ Evidence that a review HAPPENED and never that a
-		thread was answered — see the COMPLETION block above.
+		``True`` when a roster-authored comment carries a completion phrase AND postdates the
+		head commit. ⚠️ Evidence that a review HAPPENED and never that a thread was answered —
+		see the COMPLETION block above.
 	"""
-	# ⚠️ THE NEWEST ROSTER NOTICE ONLY — never "any notice ever". Scanning the whole stream
-	# passes a PR whose reviewer finished on an OLD commit and was then turned away on the
-	# current one: the stale completion outlives the state it described. Pinned by
-	# `test_the_newest_roster_notice_is_the_one_quoted`, which caught exactly that.
+	if not str_head_date:
+		return False
 	str_newest = summarise_reviewer_notice(list_notices, set_roster).casefold()
-	return any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES)
+	if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
+		return False
+	str_when = newest_roster_notice_date(list_notices, set_roster)
+	# ISO-8601 UTC from GitHub sorts lexicographically, so no parsing is needed.
+	return bool(str_when) and str_when >= str_head_date
 
 
 # ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
@@ -599,6 +631,7 @@ def find_missing_review_problem(
 	*,
 	str_head_oid: str,
 	list_notices: list[dict] | None = None,
+	str_head_date: str = "",
 ) -> str | None:
 	"""Return a problem when no declared reviewer ever reported on this PR's HEAD.
 
@@ -613,6 +646,9 @@ def find_missing_review_problem(
 		``github-actions[bot]`` can submit a review with the ambient token.
 	str_pr_author : str, optional
 		Login of the PR author; a roster member's own PR is exempt.
+	str_head_date : str, optional
+		ISO-8601 ``committedDate`` of the head commit, so a completion notice can be pinned to
+		the code it described. ⚠️ Empty fails CLOSED: unknown is not evidence.
 	str_head_oid : str, keyword-only
 		The PR's ``headRefOid``. ⚠️ Deliberately has NO default, like ``posts:`` on a roster
 		row: an empty value silently counts every review whatever code it was written
@@ -642,7 +678,7 @@ def find_missing_review_problem(
 	if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
 		return None
 
-	if reviewer_declared_completion(list_notices or [], set_roster):
+	if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
 		# A CLEAN review is not a missing one — see the COMPLETION block above the function.
 		return None
 
@@ -866,6 +902,12 @@ def main() -> int:
 		(dict_pr.get("author") or {}).get("login") or "",
 		str_head_oid=dict_pr.get("headRefOid") or "",
 		list_notices=dict_pr.get("comments", {}).get("nodes", []),
+		str_head_date=(
+			((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit") or {}).get(
+				"committedDate"
+			)
+			or ""
+		),
 	)
 	if str_missing:
 		print(f"❌ {str_missing}")
