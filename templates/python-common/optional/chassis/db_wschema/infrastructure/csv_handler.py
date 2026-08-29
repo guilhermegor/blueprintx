@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import csv
-import shutil
 from pathlib import Path
-from typing import Iterable, Optional
+import shutil
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
@@ -22,7 +22,7 @@ class CSVDatabaseHandler(DatabaseHandler):
 		Identifier column name, by default ``"id"``.
 	"""
 
-	def __init__(self, file_path: str | Path, id_field: str = "id"):
+	def __init__(self, file_path: str | Path, id_field: str = "id") -> None:
 		self.file_path = Path(file_path)
 		self.file_path.parent.mkdir(parents=True, exist_ok=True)
 		self.id_field = id_field
@@ -42,14 +42,13 @@ class CSVDatabaseHandler(DatabaseHandler):
 		str
 			Identifier assigned to the stored record.
 		"""
-
 		record = ensure_id(record, self.id_field)
 		list_rows = self._read_all()
 		list_rows.append(record)
 		self._write_all(list_rows)
 		return str(record[self.id_field])
 
-	def read(self, record_id: str) -> Optional[Record]:
+	def read(self, record_id: str) -> Record | None:
 		"""Retrieve a record by identifier.
 
 		Parameters
@@ -62,13 +61,12 @@ class CSVDatabaseHandler(DatabaseHandler):
 		Record or None
 			Matching record when found, otherwise ``None``.
 		"""
-
 		for dict_row in self._read_all():
 			if str(dict_row.get(self.id_field)) == str(record_id):
 				return dict_row
 		return None
 
-	def update(self, record_id: str, updates: Record) -> Optional[Record]:
+	def update(self, record_id: str, updates: Record) -> Record | None:
 		"""Update a stored record.
 
 		Parameters
@@ -83,13 +81,12 @@ class CSVDatabaseHandler(DatabaseHandler):
 		Record or None
 			Updated record when it exists, otherwise ``None``.
 		"""
-
-		dict_updated: Optional[Record] = None
+		dict_updated: Record | None = None
 		list_rows: list[Record] = []
 		for dict_row in self._read_all():
-			# A separate name rather than rebinding the loop variable: `dict_row` would then
-			# mean two different things in one body — the row as READ and the row as it will
-			# be WRITTEN — and a later edit between the two reads whichever it happens to hit.
+			# A separate name rather than rebinding the loop variable — dict_row would then
+			# mean two different things in one body, the row as READ and the row as it will
+			# be WRITTEN, and a later edit between the two reads whichever it happens to hit.
 			dict_out = dict_row
 			if str(dict_row.get(self.id_field)) == str(record_id):
 				dict_out = {**dict_row, **updates, self.id_field: record_id}
@@ -112,7 +109,6 @@ class CSVDatabaseHandler(DatabaseHandler):
 		bool
 			``True`` when a record was deleted, ``False`` otherwise.
 		"""
-
 		list_rows = self._read_all()
 		list_remaining = [r for r in list_rows if str(r.get(self.id_field)) != str(record_id)]
 		if len(list_remaining) == len(list_rows):
@@ -122,7 +118,6 @@ class CSVDatabaseHandler(DatabaseHandler):
 
 	def backup(self, target_path: str | Path) -> Path:
 		"""Create a file copy as a backup artifact."""
-
 		path_target = Path(target_path)
 		path_target.parent.mkdir(parents=True, exist_ok=True)
 		shutil.copy2(self.file_path, path_target)
@@ -130,7 +125,6 @@ class CSVDatabaseHandler(DatabaseHandler):
 
 	def close(self) -> None:
 		"""No-op for file-based storage."""
-
 		return None
 
 	def _read_all(self) -> list[Record]:
@@ -141,7 +135,6 @@ class CSVDatabaseHandler(DatabaseHandler):
 		list of Record
 			All records currently stored.
 		"""
-
 		if not self.file_path.exists() or self.file_path.stat().st_size == 0:
 			return []
 		with self.file_path.open(newline="", encoding="utf-8") as handle:
@@ -156,12 +149,11 @@ class CSVDatabaseHandler(DatabaseHandler):
 		rows : Iterable[Record]
 			Records to persist.
 		"""
-
 		list_rows = list(rows)
 		if not list_rows:
 			self.file_path.write_text("", encoding="utf-8")
 			return
-		list_fieldnames = sorted({key for dict_row in list_rows for key in dict_row.keys()})
+		list_fieldnames = sorted({key for dict_row in list_rows for key in dict_row})
 		with self.file_path.open("w", newline="", encoding="utf-8") as handle:
 			writer = csv.DictWriter(handle, fieldnames=list_fieldnames)
 			writer.writeheader()

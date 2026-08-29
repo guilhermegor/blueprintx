@@ -163,3 +163,86 @@ Dois efeitos colaterais registrados na observacao original e ainda validos:
 
 O `github-advanced-security` segue reprovando em toda PR (**#221**) — e ruido vermelho
 permanente, sem titulo nem sumario, mas **nao** bloqueia merge.
+
+---
+
+## `github-advanced-security` (#221) — decisão final: documentar, não silenciar
+
+> ⚠️ **Leia isto antes de reabrir uma investigação sobre este check.** Se você chegou aqui porque
+> viu `github-advanced-security` vermelho numa PR nova, a resposta já está medida abaixo — não é
+> preciso isolar de novo.
+
+**Recon 2026-08-28** (PR #298, commit `3567e0c`), seis dias depois da medição original
+(#173/#219, 2026-08-22): **o mesmo defeito, sem mudança.**
+
+```text
+Creating copilot-sdk session with model: claude-opus-4.6 and clientName: github/code-scanning
+Error creating PR review request: SessionModelError: Execution failed:
+  CAPIError: 400 The requested model is not supported.
+  (Request ID: F018:23A888:53CD34A:5D159FB:6A90E161)
+autofind.js version: 0.1.117
+```
+
+com, no ambiente do mesmo job: `COPILOT_AGENT_MODEL: sweagent-capi:claude-opus-4.6`,
+`COPILOT_API_URL: https://api.individual.githubcopilot.com`. `autofind.js` subiu de `0.1.116`
+para `0.1.117` no intervalo — o GitHub segue fazendo deploy do agente — e o 400 sobrevive ao
+deploy. Confirma que não é uma falha transitória: o 400 persiste após um deploy do agente.
+
+⚠️ **A causa continua não confirmada.** O log prova apenas que `The requested model is not
+supported` sobrevive à atualização do `autofind.js`. Entitlement é *hipótese* — o `COPILOT_API_URL`
+aponta para `api.individual.githubcopilot.com`, o que a sugere, mas a documentação do GitHub diz
+que o Copilot Autofix está disponível em repositórios **públicos** sem assinatura do Copilot. Ou a
+hipótese está errada, ou falta evidência que ligue o erro ao entitlement. Não registrar como fato.
+
+O workflow continua **dinâmico** (`event=dynamic`, `path=dynamic/agents/github-advanced-security`,
+gerado pelo GitHub, não presente em `.github/workflows/`) — não há YAML aqui para editar, então a
+opção "consertar a configuração" está descartada de novo, com a mesma evidência.
+
+**A opção "desligar" foi checada e não sai da CLI:**
+
+```text
+GET /repos/guilhermegor/blueprintx                            → sem campo advanced_security
+                                                                  (repo público: GHAS é grátis e
+                                                                  automático, não há toggle aqui)
+GET /repos/guilhermegor/blueprintx  .security_and_analysis     → dependabot, secret_scanning,
+                                                                  secret_scanning_push_protection
+                                                                  — nenhum campo de Autofix
+GET /repos/guilhermegor/blueprintx/code-scanning/default-setup → config do CodeQL em si, sem
+                                                                  campo de Autofix
+```
+
+Não foi encontrado endpoint REST/GraphQL público documentado para o toggle "Copilot Autofix" —
+as consultas acima mostram apenas que os responses não trazem o campo. A documentação do GitHub
+descreve o controle pela UI nos níveis enterprise, organization e repository, sem documentar uma
+operação REST/GraphQL equivalente. Pelo que se apurou, ele vive só em
+**Settings → Code security → Copilot Autofix**, no dashboard, exatamente como o corpo original
+da #221 já apontava (`precisa do painel — nada disso sai da CLI`). Nenhum agente com acesso só a
+`gh`/API conseguiu apertar esse botão nas tentativas feitas aqui. Quem pode: um **administrador
+com a permissão correspondente** — de repositório, de organização ou de empresa —, não apenas o
+dono.
+
+⚠️ **Efeitos colaterais de desligar, a considerar antes:** o GitHub **fecha automaticamente as
+sugestões abertas** do Autofix. Reativar **não as restaura** — novas sugestões só aparecem em PRs
+novas ou após nova análise. Como aqui o recurso nunca produziu sugestão nenhuma (todo run falha
+com 400), o custo é zero neste repo; mas a regra vale se for aplicada noutro.
+
+### Decisão: opção 3 — documentar por que fica vermelho
+
+Não é "consertar configuração" (impossível — 400 é do lado do GitHub, sem YAML aqui) nem
+"desligar via CLI" (impossível — toggle só existe no dashboard). O que fica ao alcance de um PR
+neste repo é registrar o achado de forma que o próximo vermelho não custe outra rodada de
+isolamento:
+
+- Este arquivo é o registro. Quem vir `github-advanced-security` vermelho numa PR encontra aqui:
+  não bloqueia merge (prova em #173 acima), causa-raiz é do lado do GitHub, sem ação disponível
+  por CLI.
+- O lever "desligar" **continua recomendado** para quando o dono passar pelo dashboard — reversível,
+  descrito na #221 original — mas não é algo que este PR possa executar.
+- Isso não é a mesma coisa que "consertado": a cor do check na UI do GitHub não muda com este PR
+  — continua vermelho, sem título, sem sumário. O que muda é que deixa de custar uma investigação
+  nova a cada vez.
+
+**Consequência para o fechamento da #221:** `Refs #221`, não `Closes #221` — o critério da tarefa
+é a cor do check carregar informação de novo, e a cor em si (o que a UI do GitHub mostra) não
+mudou. O que mudou é que a informação agora está a um `grep` de distância em vez de uma
+investigação nova.

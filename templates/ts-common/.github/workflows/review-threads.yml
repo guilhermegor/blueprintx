@@ -1,0 +1,88 @@
+name: Review Threads
+
+# ⚠️ THIS RUNS THE SHARED GATE — IT DOES NOT REIMPLEMENT IT (blueprintx#175).
+#
+# The predicate ("a thread is answered when it holds a substantive comment from an author
+# OUTSIDE the declared review-bot roster") is a GraphQL query plus a comparison — nothing in
+# it is Python-project-specific, and this repo already paid once to collapse two 543-line
+# copies of it into one file. A TypeScript port would be a second implementation of the same
+# rule: a second chance to get the bot-that-resolves-its-own-thread case wrong (see the
+# gate's own docstring for the measurement).
+#
+# ⚠️ THE SCRIPT IS NOT FETCHED OVER THE NETWORK. An earlier revision of this workflow curled
+# it from raw.githubusercontent.com at run time — remote code, from a mutable ref, with no
+# integrity check, executed on a runner holding GITHUB_TOKEN, shipped to every generated
+# ts-* project. Rejected on review: this repo already states the rule that governs exactly
+# this shape (see `templates/python-common/.github/workflows/tests.yaml`'s actionlint step —
+# pin the version AND verify a SHA-256 before executing what arrives). A silently modified
+# copy of a REVIEW gate could simply always exit 0, and nothing downstream would notice — a
+# gate reporting its own blindness as OK, the one failure mode this whole family exists to
+# prevent.
+#
+# So the gate lives at `templates/common/bin/check_review_threads.py` — the one shared,
+# language-agnostic surface both the Python and TypeScript families already copy from — and
+# every `ts_*.sh` scaffold copies it into the generated project's own `bin/` at SCAFFOLD
+# TIME, the same way the Python tiers already receive it. This job runs the LOCAL copy that
+# ships with the checkout: no runtime fetch, no mutable ref, nothing to verify because
+# nothing arrives from outside the repo being tested.
+#
+# `pull_request_review` fires when a review is submitted; `pull_request_review_comment` fires
+# on an individual inline comment. Both are required alongside `pull_request` for the same
+# reason as the Python workflow this mirrors: a verdict computed only at push time goes stale
+# the moment a review lands, and a stale check is indistinguishable from a passing one
+# (blueprintx#180 merged with two threads open and every check green).
+#
+# ⚠️ `pull_request_review_thread` is a real webhook event but NOT a workflow trigger — adding
+# it makes GitHub reject this file wholesale, with no red check to say so (blueprintx#156).
+on:
+  pull_request:
+  pull_request_review:
+  pull_request_review_comment:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  review-threads:
+    name: Review threads answered
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet pyyaml
+
+      # The script reads .review-bots.yaml from its own working directory (Path.cwd()), which
+      # is the checkout root here — the same contract every Python-tier adopter relies on.
+      # This project's roster ships at .github/.review-bots.yaml (the one ts-common tree the
+      # scaffold copies wholesale) rather than the repo root, so it has to be staged first.
+      # Guarded, not a bare `cp`: deleting .review-bots.yaml is the DOCUMENTED way to opt a
+      # project out, and the shared gate treats a missing roster as "not adopted here" (exit 0).
+      # A `run:` step is `bash -e`, so an unguarded cp would fail the job instead — turning the
+      # supported opt-out into broken CI whose only fix is restoring the file you deleted.
+      - name: Stage this project's review-bot roster
+        run: |
+          if [ -f .github/.review-bots.yaml ]; then
+            cp .github/.review-bots.yaml .review-bots.yaml
+          else
+            echo "No .github/.review-bots.yaml — this project has opted out; the gate exits 0."
+          fi
+
+      # A finding takes BOTH halves: reply with what changed and why, then resolve the
+      # thread. Neither half is optional and neither implies the other — a reviewer bot
+      # resolves its own threads on seeing the fix, so `isResolved` records ITS satisfaction,
+      # never the author's reasoning.
+      - name: Every review thread is answered and resolved
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW_THREADS_REQUIRE_RESOLVED: "1"
+        run: python bin/check_review_threads.py
