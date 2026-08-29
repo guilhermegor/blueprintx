@@ -288,7 +288,10 @@ def test_null_reference_files_block_falls_back_to_the_real_spec() -> None:
 def test_scalar_reference_files_block_falls_back_to_the_real_spec() -> None:
 	"""A scalar where a mapping belongs is a config error, not a crash."""
 	fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
-	dict_inputs = {"reference_files": "typo", "example_source": {"dir": "data", "pattern": "*.csv"}}
+	dict_inputs = {
+		"reference_files": "typo",
+		"example_source": {"dir": "data", "pattern": "*.csv"},
+	}
 	assert fn_resolve(dict_inputs, "example_source") == {"dir": "data", "pattern": "*.csv"}
 
 
