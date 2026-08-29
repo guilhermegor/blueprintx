@@ -652,7 +652,13 @@ def is_gutted_body(cls_node: ast.FunctionDef) -> bool:
 
 
 def skip_marks(cls_node: ast.FunctionDef) -> frozenset:
-	"""Return the ``@pytest.mark.{skip,xfail}``-family names decorating a function.
+	"""Return the ``@pytest.mark.{skip,xfail}`` names decorating a function.
+
+	⚠️ Deliberately excludes ``skipif``: measured over ``origin/main~100..origin/main``,
+	its one hit was a legitimate, well-documented environment-conditional skip (a driver
+	that ships to service tiers only), not a hidden failure — flagging it would make the
+	gate unpayable on the repo's own history. ``skip``/``xfail`` are unconditional: they
+	always disable the test, which is the shape blueprintx#324 is watching for.
 
 	Parameters
 	----------
@@ -668,7 +674,7 @@ def skip_marks(cls_node: ast.FunctionDef) -> frozenset:
 		cls_sub.attr
 		for cls_dec in cls_node.decorator_list
 		for cls_sub in ast.walk(cls_dec)
-		if isinstance(cls_sub, ast.Attribute) and cls_sub.attr in {"skip", "skipif", "xfail"}
+		if isinstance(cls_sub, ast.Attribute) and cls_sub.attr in {"skip", "xfail"}
 	)
 
 
