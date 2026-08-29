@@ -201,9 +201,17 @@ report_blocking_checks() {
 	#
 	# blueprintx#307: also assert `strict_required_status_checks_policy` is true, not merely
 	# that checks exist — an unstrict required check still lets a PR merge on a run that never
-	# saw its base. This is the ONLY line in the function that can return non-zero: callers
-	# choose whether that aborts them (`main`'s init flow swallows it — see the header, `poe
-	# init` must never fail; the `verify` subcommand does not).
+	# saw its base.
+	#
+	# blueprintx#311 review (thread 3884918238): a READ FAILURE and an ABSENT ruleset used to
+	# both `return 0` — indistinguishable from CONFIRMED strict. That let `verify` exit 0
+	# without ever having proven anything: "could not check" and "checked and it is fine"
+	# collapsed to the same exit code, which is the exact "gate reporting its own blindness as
+	# OK" this guard exists to prevent. Three states now share one exit-code contract with
+	# assert_branch_protection_strict below: 0 = CONFIRMED strict, 1 = CONFIRMED not strict
+	# (a real violation), 2 = absent or unreadable (proves nothing either way). `main`'s init
+	# flow still swallows any non-zero with `|| true` (must never fail `poe init`); `verify`
+	# is the caller that treats 2 as failure too — see verify_strict_required_checks.
 	local str_repo="$1"
 	local str_id str_live str_strict
 	# ⚠️ A failed READ must never be reported as an empty ANSWER. Swallowing the error turns a
@@ -213,22 +221,22 @@ report_blocking_checks() {
 	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
-		return 0
+		return 2
 	fi
 	str_id="$(printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
-		return 0
+		return 2
 	fi
 	if ! str_live="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
 		'[.rules[]? | select(.type == "required_status_checks")
 		  | .parameters.required_status_checks[]?.context] | join(", ")' 2>&1)"; then
 		print_status "warning" "Could not READ ruleset '$RULESET_NAME' from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_live:-no output from gh}"
-		return 0
+		return 2
 	fi
 	if [ -z "$str_live" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is active but declares NO required status checks — CI runs and blocks NOTHING. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
-		return 0
+		return 2
 	fi
 	print_status "config" "Merge-blocking checks live on $str_repo: $str_live"
 
@@ -236,7 +244,7 @@ report_blocking_checks() {
 		'[.rules[]? | select(.type == "required_status_checks")
 		  | .parameters.strict_required_status_checks_policy] | first' 2>&1)"; then
 		print_status "warning" "Could not READ the strict policy on $str_repo (so it is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
-		return 0
+		return 2
 	fi
 	if [ "$str_strict" != "true" ]; then
 		print_status "error" "strict_required_status_checks_policy is NOT true on $str_repo (ruleset '$RULESET_NAME') — a PR can merge on a green run that never saw its base (blueprintx#307)"
@@ -251,17 +259,20 @@ assert_branch_protection_strict() {
 	# ruleset check above is silent about that: an ABSENT ruleset reads as "nothing blocks",
 	# true for that mechanism but silent on whether a repo enforces the same setting through
 	# classic protection instead. Read it back explicitly so #307 is guarded either way.
-	# $1 = owner/repo, $2 = branch.
+	# Same three-state exit-code contract as report_blocking_checks above (blueprintx#311
+	# review, thread 3884918238): 0 = CONFIRMED strict, 1 = CONFIRMED not strict, 2 = absent
+	# or unreadable — absence is not proof, so it must not share exit 0 with a real
+	# confirmation. $1 = owner/repo, $2 = branch.
 	local str_repo="$1" str_branch="$2"
 	local str_strict
 	if ! str_strict="$(gh api "repos/$str_repo/branches/$str_branch/protection" --jq \
 		'.required_status_checks.strict' 2>&1)"; then
 		print_status "warning" "Could not READ classic branch protection on $str_repo:$str_branch (so strict is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
-		return 0
+		return 2
 	fi
 	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
 		print_status "warning" "$str_repo:$str_branch has no required_status_checks under classic branch protection — nothing to assert strict on"
-		return 0
+		return 2
 	fi
 	if [ "$str_strict" != "true" ]; then
 		print_status "error" "required_status_checks.strict is NOT true on $str_repo:$str_branch (classic branch protection) — a PR can merge on a green run that never saw its base (blueprintx#307)"
@@ -288,10 +299,22 @@ verify_strict_required_checks() {
 	fi
 	str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>/dev/null || echo main)"
 
-	local int_status=0
-	report_blocking_checks "$str_repo" || int_status=1
-	assert_branch_protection_strict "$str_repo" "$str_branch" || int_status=1
-	return "$int_status"
+	# blueprintx#311 review (thread 3884918238): require at least one mechanism to return
+	# CONFIRMED strict (0) — absence/unreadable (2) on both is NOT success, only the absence
+	# of a violation. Captured via `&& x=0 || x=$?` (not a bare call) so `set -e` does not
+	# abort on the non-zero cases this function exists to detect.
+	local int_ruleset_result int_protection_result
+	report_blocking_checks "$str_repo" && int_ruleset_result=0 || int_ruleset_result=$?
+	assert_branch_protection_strict "$str_repo" "$str_branch" && int_protection_result=0 || int_protection_result=$?
+
+	if [ "$int_ruleset_result" -eq 1 ] || [ "$int_protection_result" -eq 1 ]; then
+		return 1
+	fi
+	if [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ]; then
+		print_status "error" "Neither mechanism confirmed strict enforcement on $str_repo (both absent or unreadable) — absence is not proof (blueprintx#307)"
+		return 1
+	fi
+	return 0
 }
 
 enable_code_scanning() {
