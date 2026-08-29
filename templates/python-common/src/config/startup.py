@@ -195,10 +195,7 @@ def resolve_reference_spec(dict_inputs: dict, str_source: str) -> dict | None:
 	"""
 	dict_source = dict_inputs.get(str_source)
 	dict_real = dict_source if isinstance(dict_source, dict) else None
-	# Both levels are normalised by isinstance, never by `.get(k, {})`: a key present with a
-	# null value returns None rather than the default, so `reference_files:` written with an
-	# empty body — valid YAML, and the natural way to comment the block out — would raise
-	# AttributeError instead of falling back. A scalar there does the same.
+	# Both levels are isinstance-checked, never defaulted; see config/CLAUDE.md.
 	dict_overrides = dict_inputs.get("reference_files")
 	if not isinstance(dict_overrides, dict):
 		return dict_real
