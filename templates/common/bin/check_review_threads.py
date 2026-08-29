@@ -528,6 +528,70 @@ def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) ->
 	return ""
 
 
+# ⚠️ COMPLETION — THE ONE NOTICE THAT IS EVIDENCE, AND WHY IT IS NOT A REVERSAL.
+#
+# The notice block above establishes that a roster COMMENT is not evidence a review happened,
+# and that measurement stands: on #204 and #213 (both merged unreviewed) the roster posted an
+# issue comment and `reviews` was 0, so "the roster said something" would have passed both.
+#
+# What that block rejected was the STANDING FOOTNOTE ("does not re-review already reviewed
+# commits") — prose appended to every outcome, true whatever happened, therefore evidence of
+# nothing. These phrases are the opposite: CodeRabbit emits them only on the path where it
+# reviewed and had nothing to attach. A formal review object is produced ONLY when there are
+# line comments to hang on it, so on a clean review `reviews` is 0 and threads are 0 — byte
+# for byte identical to "never ran", which is the state the gate must still fail.
+#
+# Measured 2026-08-29, the narrow phrase against the exact counter-examples that killed the
+# broad version:
+#
+#     #204  merged unreviewed (star-gate refusal)  reviews=0  phrase=0  -> still FAILS ✅
+#     #213  merged unreviewed (star-gate refusal)  reviews=0  phrase=0  -> still FAILS ✅
+#     #209  genuinely reviewed                     reviews=19 phrase=1  -> passes (already did)
+#     #215  genuinely reviewed                     reviews=9  phrase=1  -> passes (already did)
+#     #328  reviewed, found nothing                reviews=0  phrase=1  -> FAILED, now passes
+#
+# ⚠️ THIS IS A LOOSENING, NOT A PURE BUG FIX. A comment is cheaper to produce than a review
+# object, so the gate proves slightly less than it did. The reduction is bounded on purpose:
+# roster author only, literal vendor strings, and evidence that a review RAN — never that a
+# thread was resolved. Thread strictness is untouched.
+#
+# ⚠️ The rate-limit notice deliberately does NOT match. "Rate limited" means the reviewer was
+# turned away, which is the same as never running, and the gate must keep failing it — that
+# is the difference between waiting for a review and skipping one.
+_TUPLE_COMPLETION_PHRASES = (
+	"review finished",
+	"no actionable comments were generated",
+)
+
+
+def reviewer_declared_completion(list_notices: list[dict], set_roster: set[str]) -> bool:
+	"""Return whether a roster member's own notice says it reviewed this PR.
+
+	Parameters
+	----------
+	list_notices : list of dict
+		The PR's issue comments, oldest first — the stream the reviewer reports completion to.
+	set_roster : set of str
+		Already-normalised logins that can submit a review.
+
+	Returns
+	-------
+	bool
+		``True`` when a roster-authored comment carries a completion phrase, i.e. the reviewer
+		ran and produced no line comments. ⚠️ Evidence that a review HAPPENED and never that a
+		thread was answered — see the COMPLETION block above.
+	"""
+	# ⚠️ THE NEWEST ROSTER NOTICE ONLY — never "any notice ever". Scanning the whole stream
+	# passes a PR whose reviewer finished on an OLD commit and was then turned away on the
+	# current one: the stale completion outlives the state it described. Pinned by
+	# `test_the_newest_roster_notice_is_the_one_quoted`, which caught exactly that.
+	str_newest = summarise_reviewer_notice(list_notices, set_roster).casefold()
+	return any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES)
+
+
+# ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
+# #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
+# ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
 def find_missing_review_problem(
 	list_reviews: list[dict],
 	set_reviewers: set[str],
@@ -578,17 +642,18 @@ def find_missing_review_problem(
 	if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
 		return None
 
-	# The reviewer's own latest word, quoted so the reader can see WHICH zero-review state
-	# this is (never ran / refused / rate-limited / declined). It changes the message and
-	# never the verdict — see the notice block above for the measurement that settled that.
+	if reviewer_declared_completion(list_notices or [], set_roster):
+		# A CLEAN review is not a missing one — see the COMPLETION block above the function.
+		return None
+
+	# The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
+	# is (never ran / refused / rate-limited). Display only — see the notice block above.
 	str_seen = summarise_reviewer_notice(list_notices or [], set_roster)
 	str_quote = (
 		f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
 	)
 
-	# ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
-	# #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
-	# ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
+	# TWO FAILURES, TWO SENTENCES — see the block above the function.
 	if reviewers_who_reported(list_reviews, set_roster):
 		return (
 			f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "

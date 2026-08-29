@@ -799,10 +799,61 @@ _NOTICE_LIMITED = (
 _NOTICE_FAILED = f"<summary>\u274c Action failed</summary>\n\nReview failed.\n\n{_FOOTNOTE}"
 
 
+def test_a_declared_completion_is_evidence_the_reviewer_ran() -> None:
+	"""A reviewer that ran and found nothing produces no review object — only a notice.
+
+	CodeRabbit emits a formal review ONLY when it has line comments to attach, so a clean
+	review leaves ``reviews == 0`` and ``threads == 0`` — byte for byte identical to "never
+	ran", which the gate must keep failing. The completion LINE is the discriminator, measured
+	2026-08-29 against the counter-examples that killed the broad version::
+
+	    #204 merged unreviewed  reviews=0  phrase=0  -> still fails
+	    #213 merged unreviewed  reviews=0  phrase=0  -> still fails
+	    #328 reviewed, clean    reviews=0  phrase=1  -> now passes
+
+	⚠️ Evidence the review HAPPENED, never that a thread was answered — thread strictness is
+	untouched. See blueprintx#336.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			list_notices=[_notice("coderabbitai", _NOTICE_PERFORMED)],
+		)
+		is None
+	)
+
+
+def test_a_superseded_completion_does_not_satisfy_the_gate() -> None:
+	"""Only the NEWEST roster notice counts — a stale completion outlives what it described.
+
+	The reviewer finishing on an older commit and then being turned away on the current one
+	leaves both notices in the stream. Reading "any notice ever" passes that PR while its head
+	commit has never been looked at. Caught by this test during blueprintx#336.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			list_notices=[
+				_notice("coderabbitai", _NOTICE_PERFORMED),
+				_notice("coderabbitai", _NOTICE_LIMITED),
+			],
+		)
+		is not None
+	)
+
+
 @pytest.mark.parametrize(
 	"str_notice",
-	[_NOTICE_PERFORMED, _NOTICE_LIMITED, _NOTICE_FAILED],
-	ids=["performed", "rate_limited", "failed"],
+	[_FOOTNOTE, _NOTICE_LIMITED, _NOTICE_FAILED],
+	ids=["footnote_only", "rate_limited", "failed"],
 )
 def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str) -> None:
 	"""The negative control for the defect this check shipped with and review caught.
@@ -812,10 +863,17 @@ def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str)
 	rate-limited and an outright FAILED review read as "declined as redundant". Measured on
 	blueprintx#264 by reading its own comment stream: all three notices carry it verbatim.
 
+	⚠️ The ``performed`` case MOVED to
+	:func:`test_a_declared_completion_is_evidence_the_reviewer_ran` in blueprintx#336, and the
+	distinction is the point: this test protects against keying a pass on the FOOTNOTE, which
+	every outcome carries. A completion LINE is carried by exactly one outcome, so it
+	discriminates where the footnote cannot. The footnote-only case is parametrised here to
+	keep that original protection under test on its own, without a completion line to carry it.
+
 	Parameters
 	----------
 	str_notice : str
-		One of the three real notices, copied from the measured stream.
+		A notice that must NOT satisfy the gate, copied from the measured stream.
 	"""
 	cls_gate = _load_gate()
 	assert (
