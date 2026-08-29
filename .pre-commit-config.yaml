@@ -167,3 +167,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+      - id: makefile-pairing
+        name: Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)
+        # Root-repo-only: Makefile and tasks.sh exist ONLY here, not in templates/ or any
+        # generated project, so the script lives at bin/, not templates/python-common/bin/.
+        entry: bash bin/check_makefile_pairing.sh
+        language: system
+        pass_filenames: false
+        files: ^(Makefile|tasks\.sh|bin/help\.sh|bin/check_makefile_pairing\.sh)$

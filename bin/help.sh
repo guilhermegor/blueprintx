@@ -21,5 +21,6 @@ Targets (no make required):
   update_venv   Update Poetry dependencies
   mkdocs_server  Install docs deps (if needed) and serve with live reload
   changelog     Regenerate root CHANGELOG.md from git tags (cz changelog)
+  update_licenses  Refresh vendored license text files under templates/licenses
   help          Show this help
 EOF

@@ -110,6 +110,22 @@ Checking at the template root is a false green: the generated project pins diffe
 versions. The integration suite matters specifically because it is the only place a `bin/*.sh`
 seam is actually executed.
 
+The **Makefile ↔ tasks.sh ↔ help.sh pairing** is enforced by `bin/check_makefile_pairing.sh`
+(pre-commit hook `makefile-pairing`, the `makefile-pairing` CI job), not by prose (#241).
+Every user-facing `Makefile` target must have a matching `case` branch in `tasks.sh` — the
+non-`make` entry point — **and** be listed in `bin/help.sh`'s usage text; a target satisfying
+only two of the three legs is exactly the drift this rule exists to prevent (`update_licenses`
+was a real, working `Makefile` target missing from `help.sh` until this gate found and fixed
+it — undetected by prose, and found only by accident before). "Paired" means name-equality
+(with `-`/`_` normalised, since `tasks.sh` legitimately spells `dev-clean` as `dev_clean` in
+its `case` pattern) — a target preceded by a `# pairing:internal` comment line is exempt, for
+a future `.PHONY` helper that composes other targets but was never meant to be user-facing on
+its own. This pair is **root-repo-only**: unlike the rest of the gate family, `Makefile` and
+`tasks.sh` exist only at BlueprintX's own root, never in `templates/` and never in a generated
+project (`poe_tasks.toml` replaced them there since #236) — so the script lives at
+`bin/check_makefile_pairing.sh`, not `templates/python-common/bin/`, and never ships as part
+of a scaffold.
+
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
 GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes
