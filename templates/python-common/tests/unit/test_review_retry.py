@@ -506,11 +506,11 @@ def test_every_page_of_open_prs_is_examined(cls_retry: ModuleType) -> None:
 		The retry module.
 	"""
 	list_pages = [
-		[{"number": 1}, {"number": 2}],
-		[{"number": 3}],
+		[{"number": 1, "created_at": "2026-08-24T10:00:00Z"}],
+		[{"number": 2, "created_at": "2026-08-24T09:00:00Z"}],
 	]
 
-	assert cls_retry.flatten_pr_numbers(list_pages) == [1, 2, 3]
+	assert [d["number"] for d in cls_retry.flatten_open_prs(list_pages)] == [2, 1]
 
 
 def test_a_malformed_page_cannot_crash_the_sweep(cls_retry: ModuleType) -> None:
@@ -526,7 +526,25 @@ def test_a_malformed_page_cannot_crash_the_sweep(cls_retry: ModuleType) -> None:
 	"""
 	list_pages = [[{"number": 1}], "not-a-page", [{"no_number": True}, {"number": 4}]]
 
-	assert cls_retry.flatten_pr_numbers(list_pages) == [1, 4]
+	assert [d["number"] for d in cls_retry.flatten_open_prs(list_pages)] == [1, 4]
+
+
+def test_flatten_open_prs_sorts_oldest_created_at_first(cls_retry: ModuleType) -> None:
+	"""``created_at`` is the FIFO ordering key (blueprintx#280) — sorted here, not left implicit.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	list_pages = [
+		[
+			{"number": 9, "created_at": "2026-08-26T00:00:00Z"},
+			{"number": 3, "created_at": "2026-08-20T00:00:00Z"},
+		]
+	]
+
+	assert [d["number"] for d in cls_retry.flatten_open_prs(list_pages)] == [3, 9]
 
 
 def test_an_author_less_marker_cannot_match_an_unknown_identity(
@@ -592,7 +610,10 @@ def test_one_unreadable_pr_does_not_end_the_sweep(
 	)
 
 	assert (
-		cls_retry.examine_pr("acme/widget", 7, {"coderabbitai"}, cls_gate, "guilhermegor") is False
+		cls_retry.build_candidate(
+			"acme/widget", 7, "2026-08-24T00:00:00Z", {"coderabbitai"}, cls_gate
+		)
+		is None
 	)
 
 
@@ -734,8 +755,8 @@ def test_an_oversized_declared_wait_is_rejected_instead_of_crashing(
 	"""⚠️ The number comes from an EXTERNAL service, so it is untrusted input.
 
 	The digit pattern is unbounded and ``timedelta(minutes=10**100)`` raises
-	``OverflowError``. The only caller sits outside ``examine_pr``'s try/except — which wraps
-	just the fetch — so one absurd
+	``OverflowError``. The only caller sits outside ``build_candidate``'s try/except — which
+	wraps just the fetch — so one absurd
 	value would abort the entire unattended sweep and leave every later PR unexamined. That is
 	the per-PR degradation rule this module already states for a deleted or transferred PR,
 	reached through the parser instead of the network.
@@ -768,3 +789,188 @@ def test_a_representable_but_oversized_wait_is_also_rejected(cls_retry: ModuleTy
 	str_absurd = f"Your next included review will be available in {'9' * 100} minutes."
 
 	assert cls_retry.parse_declared_wait(str_absurd) is None
+
+
+# --------------------------
+# FIFO, one ask per run, account-level blocking (blueprintx#280)
+# --------------------------
+
+
+def _candidate(int_number: int, str_created_at: str, list_comments: list, dict_pr: dict) -> dict:
+	"""Build one ``build_candidate``-shaped record for the selection tests.
+
+	Parameters
+	----------
+	int_number : int
+		The PR number.
+	str_created_at : str
+		The PR's ``created_at``.
+	list_comments : list
+		Normalised comments for this PR.
+	dict_pr : dict
+		The ``pullRequest`` node (``headRefOid``/``reviews``).
+
+	Returns
+	-------
+	dict
+		A record shaped like :func:`build_candidate`'s return value.
+	"""
+	return {
+		"number": int_number,
+		"created_at": str_created_at,
+		"pr": dict_pr,
+		"comments": list_comments,
+		"notice": list_comments[-1] if list_comments else None,
+	}
+
+
+def test_account_blocked_until_reads_the_newest_refusal_across_all_waiting_prs(
+	cls_retry: ModuleType,
+) -> None:
+	"""⚠️ The core fix: one PR's declared wait binds every other PR too (shared account quota).
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	list_notices = [
+		_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20),  # older refusal
+		_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=5),  # newest refusal
+	]
+
+	assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is not None
+
+
+def test_account_blocked_until_is_free_once_the_newest_refusal_elapses(
+	cls_retry: ModuleType,
+) -> None:
+	"""The other half: once the newest declared window has passed, nothing blocks.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	list_notices = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)]
+
+	assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is None
+
+
+def test_select_pr_for_retry_picks_the_oldest_of_several_waiting_prs(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""The should-fail witness's core claim: exactly ONE PR, and it is the oldest waiting one.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
+	dict_pr = _pr(list_comments, [])
+	list_candidates = [
+		_candidate(20, "2026-08-25T00:00:00Z", list_comments, dict_pr),
+		_candidate(11, "2026-08-20T00:00:00Z", list_comments, dict_pr),
+	]
+
+	assert (
+		cls_retry.select_pr_for_retry(
+			list_candidates, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		== 11
+	)
+
+
+def test_select_pr_for_retry_picks_none_while_the_only_candidate_is_cooling_down(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""A second invocation while our own ask is outstanding must pick nobody.
+
+	``pr_needs_retry`` already refuses a PR we asked within the cooldown; this pins that the
+	selector propagates ``None`` rather than falling through to a different candidate.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	list_comments = [
+		_comment("coderabbitai", _STR_RATE_LIMITED),
+		_comment("guilhermegor", cls_retry._STR_REQUEST),
+	]
+	dict_pr = _pr(list_comments, [])
+	list_candidates = [_candidate(11, "2026-08-20T00:00:00Z", list_comments, dict_pr)]
+
+	assert (
+		cls_retry.select_pr_for_retry(
+			list_candidates, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+		)
+		is None
+	)
+
+
+def test_select_pr_for_retry_skips_a_pr_past_the_attempt_cap(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""A permanently-stuck oldest PR must not starve every younger PR forever (design Q2).
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	# Five past attempts, all outside the 40-minute cooldown, plus the reviewer's latest refusal.
+	list_comments_stuck = [
+		_comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=250),
+		_comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=200),
+		_comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=150),
+		_comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=100),
+		_comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=60),
+		_comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=50),
+	]
+	dict_pr_stuck = _pr(list_comments_stuck, [])
+	list_comments_next = [_comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=50)]
+	dict_pr_next = _pr(list_comments_next, [])
+	list_candidates = [
+		_candidate(11, "2026-08-20T00:00:00Z", list_comments_stuck, dict_pr_stuck),
+		_candidate(22, "2026-08-21T00:00:00Z", list_comments_next, dict_pr_next),
+	]
+
+	assert (
+		cls_retry.select_pr_for_retry(
+			list_candidates,
+			{"coderabbitai"},
+			cls_gate,
+			"guilhermegor",
+			_DT_NOW,
+			int_max_attempts=5,
+		)
+		== 22
+	)
+
+
+def test_count_self_asks_counts_only_our_own_marker(
+	cls_retry: ModuleType, cls_gate: ModuleType
+) -> None:
+	"""The attempt cap must count OUR asks, not a passer-by's copy of the marker text.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	cls_gate : types.ModuleType
+		The gate module.
+	"""
+	list_comments = [
+		_comment("guilhermegor", cls_retry._STR_REQUEST),
+		_comment("a-passer-by", cls_retry._STR_REQUEST),
+	]
+
+	assert cls_retry.count_self_asks(list_comments, "guilhermegor", cls_gate.normalise_login) == 1

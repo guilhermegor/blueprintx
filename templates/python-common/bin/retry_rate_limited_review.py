@@ -907,6 +907,62 @@ def collect_waiting_prs(
 	return list_open, list_candidates
 
 
+# Split out of `main` to keep it under the PLR0911 return-count ceiling: this owns every
+# reason to ask NOBODY this run (no candidate, an open account-level block, or every
+# candidate cooling down/exhausted), so `main` only has to check "did this hand back a PR".
+def choose_pr_to_retry(
+	list_open: list,
+	list_candidates: list[dict],
+	set_reviewers: set,
+	cls_gate: types.ModuleType,
+	str_self_login: str,
+	dt_now: datetime,
+) -> int | None:
+	"""Decide which PR, if any, to ask this run.
+
+	Parameters
+	----------
+	list_open : list
+		Every open PR, for the "checked N" log line.
+	list_candidates : list of dict
+		Records from :func:`build_candidate`.
+	set_reviewers : set
+		The reviewer logins from the roster.
+	cls_gate : types.ModuleType
+		The imported gate module.
+	str_self_login : str
+		The login the retry posts as.
+	dt_now : datetime.datetime
+		The current time, timezone-aware.
+
+	Returns
+	-------
+	int or None
+		The chosen PR number, or ``None`` when nobody should be asked this run.
+	"""
+	if not list_candidates:
+		print(f"open PRs checked: {len(list_open)}; none are waiting on a rate-limited review.")
+		return None
+
+	dt_blocked_until = account_blocked_until([d["notice"] for d in list_candidates], dt_now)
+	if dt_blocked_until is not None:
+		print(
+			f"account-level quota blocked until {dt_blocked_until.isoformat()} (newest refusal "
+			f"across {len(list_candidates)} waiting PR(s)) — asking nobody this run."
+		)
+		return None
+
+	int_chosen = select_pr_for_retry(
+		list_candidates, set_reviewers, cls_gate, str_self_login, dt_now
+	)
+	if int_chosen is None:
+		print(
+			f"open PRs checked: {len(list_open)}; {len(list_candidates)} waiting, all still "
+			"cooling down or past the attempt cap."
+		)
+	return int_chosen
+
+
 def main() -> int:
 	"""Re-ask for a review on the single oldest open PR still waiting on a rate limit.
 
@@ -926,41 +982,17 @@ def main() -> int:
 		return 0
 	cls_gate, set_reviewers = tuple_setup
 
-	# ⚠️ `--paginate`, not a bare `per_page=100`: without it only the first page is read, and a
-	# rate-limited PR on page two is never retried — a silent partial pass, which is the exact
-	# failure shape this family of scripts exists to prevent.
-	#
-	# ⚠️ AND NO `--jq` HERE, measured against gh 2.96.0: `--slurp` is REJECTED when combined
-	# with `--jq` ("the `--slurp` option is not supported with `--jq` or `--template`"). Without
-	# `--slurp`, `--paginate` emits one JSON array PER PAGE, which is not parseable as a single
-	# document — so the parse would fail, this function would take its early return, and the
-	# janitor would quietly do nothing on every tick. Slurp into pages and flatten in Python.
 	tuple_waiting = collect_waiting_prs(str_repo, set_reviewers, cls_gate)
 	if tuple_waiting is None:
 		return 0
 	list_open, list_candidates = tuple_waiting
 
 	str_self_login = resolve_self_login()
-
-	if not list_candidates:
-		print(f"open PRs checked: {len(list_open)}; none are waiting on a rate-limited review.")
-		return 0
-
 	dt_now = datetime.now(timezone.utc)
-	dt_blocked_until = account_blocked_until([d["notice"] for d in list_candidates], dt_now)
-	if dt_blocked_until is not None:
-		print(
-			f"account-level quota blocked until {dt_blocked_until.isoformat()} (newest refusal "
-			f"across {len(list_candidates)} waiting PR(s)) — asking nobody this run."
-		)
-		return 0
-
-	int_chosen = select_pr_for_retry(list_candidates, set_reviewers, cls_gate, str_self_login, dt_now)
+	int_chosen = choose_pr_to_retry(
+		list_open, list_candidates, set_reviewers, cls_gate, str_self_login, dt_now
+	)
 	if int_chosen is None:
-		print(
-			f"open PRs checked: {len(list_open)}; {len(list_candidates)} waiting, all still "
-			"cooling down or past the attempt cap."
-		)
 		return 0
 
 	if "--dry-run" in sys.argv:
@@ -971,7 +1003,7 @@ def main() -> int:
 		return 0
 
 	bool_asked = request_review(str_repo, int_chosen)
-	print(f"open PRs checked: {len(list_open)}; requested a review on #{int_chosen}: {bool_asked}.")
+	print(f"open PRs checked: {len(list_open)}; requested #{int_chosen}: {bool_asked}.")
 	return 0
 
 
