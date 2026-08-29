@@ -21,7 +21,7 @@ rather than re-deriving the quantisation.
 
 from __future__ import annotations
 
-from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 import functools
 from typing import TYPE_CHECKING
 
@@ -96,7 +96,7 @@ def to_decimal(
 def to_decimal_strict(
 	value: NumericLike,
 	int_places: int,
-	rounding: str = ROUND_HALF_UP,
+	rounding: str = _DEFAULT_ROUNDING,
 ) -> Decimal:
 	"""Coerce ``value`` to a quantised Decimal, raising instead of defaulting.
 
