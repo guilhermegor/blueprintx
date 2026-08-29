@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
-from typing import Callable
 from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
@@ -12,7 +12,7 @@ from chassis.db_schema.infrastructure import DatabaseSession
 from chassis.typing.decorators import type_checker
 
 
-def _compose_url(str_backend: str) -> str:
+def _compose_url(str_backend: str) -> str:  # complexity-ok: URL assembly per backend
 	"""Build a SQLAlchemy URL from generic environment variables."""
 	str_user = os.getenv("DB_USER", "user")
 	str_password = os.getenv("DB_PASSWORD", "password")
