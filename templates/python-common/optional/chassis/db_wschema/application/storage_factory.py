@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
 from pathlib import Path
-from typing import Callable
 
 from dotenv import load_dotenv
 
 from chassis.db.domain.ports import DatabaseHandler
 from chassis.db_wschema.infrastructure import (
 	CSVDatabaseHandler,
-	JSONDatabaseHandler,
 	JoblibHandler,
+	JSONDatabaseHandler,
 )
 
 

@@ -1,0 +1,38 @@
+# Reviewers whose comments are FINDINGS, not answers — read by bin/check_review_threads.py
+# (scaffolded from templates/common/bin/ — the single shared copy every language family
+# copies from; see review-threads.yml for why it is not fetched or vendored).
+#
+# This is the ts-* ECOSYSTEM'S OWN roster, not a copy of python-common's. The predicate
+# the gate enforces is language-agnostic, but the set of reviewers that actually run on a
+# generated TypeScript project is not: nothing in templates/ts-common/ or
+# templates/react-spa-webpack/ wires up GitHub's built-in Copilot reviewer the way
+# templates/python-common/bin/enable_repo_rules.sh does for the Python tiers, so listing it
+# here would name a reviewer that never reports — the exact "roster says something that
+# never happens" failure this gate exists to catch, aimed at itself.
+#
+# ⚠️ THIS IS A ONE-ENTRY-THREADS ROSTER ON PURPOSE, NOT AN OVERSIGHT. `copilot-pull-request-
+# reviewer[bot]` is deliberately absent for the reason above — state it here, not only in a
+# PR description, so the next reader of a short roster does not "helpfully" add it back.
+#
+# ⚠️ Reviewer shapes genuinely differ, and the difference matters:
+#   - some post inline review THREADS (their findings are what this gate tracks)
+#   - some post only a STATUS CHECK and no thread at all (nothing for this gate to see)
+# A roster that assumes every reviewer speaks in threads is born broken, which is why a PR
+# with zero threads is not a THREAD failure — see find_missing_review_problem in the gate.
+#
+# ⚠️ `posts:` IS REQUIRED ON EVERY ROW — a row that omits it, or spells it as anything other
+# than `threads`/`status`, fails loudly rather than defaulting either way. At least one
+# `posts: threads` member is required.
+#
+# Delete this file to opt out; the gate then self-skips with a message instead of failing.
+
+reviewers:
+  - login: coderabbitai[bot]
+    posts: threads
+    note: >-
+      Resolves its own threads on seeing the fix ("Addressed in commit <sha>"), which is why
+      isResolved cannot be the signal for whether the AUTHOR answered.
+
+  - login: github-actions[bot]
+    posts: status
+    note: Workflow output, never a review finding.

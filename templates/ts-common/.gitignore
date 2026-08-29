@@ -32,3 +32,7 @@ coverage/
 /test-results/
 /blob-report/
 /playwright/.cache/
+
+# Docusaurus (ts-lib docs site) — local dev cache and build output.
+/.docusaurus/
+/docs-build/
