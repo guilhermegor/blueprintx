@@ -35,8 +35,8 @@ close_linked_issues() {
 		if [[ "$str_state" == "OPEN" ]]; then
 			print_status "info" "PR #$str_pr -> closing issue #$str_issue"
 			gh issue close "$str_issue" --reason completed \
-				--comment "Closed by #$str_pr (reconciled: a bot-performed merge does not close linked issues)." \
-				|| echo "::warning::could not close issue #$str_issue"
+				--comment "Closed by #$str_pr (reconciled: a bot-performed merge does not close linked issues)." ||
+				echo "::warning::could not close issue #$str_issue"
 		fi
 	done
 }
