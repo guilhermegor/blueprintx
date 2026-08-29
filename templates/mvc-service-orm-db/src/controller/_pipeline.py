@@ -223,9 +223,19 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 	def _notify(self) -> None:
 		"""Send the run-summary notification when a webhook is wired (final phase).
 
-		No-op when no notifier was injected (``cls_webhook is None``) — i.e. the webhook
-		opt-in was declined or the environment failed the production gate in ``main.py``.
+		The payload is measured at composition time, **before** the
+		``cls_webhook is None`` gate — not inside the branch that only runs when a
+		notifier is wired. A measurement placed after the gate only produces output on
+		the success path, which tells you nothing about a run where the webhook opt-in
+		was declined or the environment failed the production gate (the exact runs a
+		"was this safe to turn on?" question needs data from).
+
+		No-op past the log line when no notifier was injected (``cls_webhook is None``)
+		— i.e. the webhook opt-in was declined or the environment failed the production
+		gate in ``main.py``.
 		"""
+		int_payload_chars = len(self.str_webhook_message)
+		log_message(self.logger, f"Notification payload composed: {int_payload_chars} chars")
 		if self.cls_webhook is None:
 			return
 		log_message(self.logger, "Sending webhook notification")
