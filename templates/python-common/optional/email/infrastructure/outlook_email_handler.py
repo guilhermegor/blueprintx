@@ -1,7 +1,7 @@
 """Outlook e-mail adapter — satisfies the ``EmailHandler`` port via an injected gateway.
 
 This is the handler the mvc/ddd layer uses by default: the Outlook dependency (the
-Windows-only Outlook client, wrapped by ``utils.outlook_gateway.OutlookGateway``) is
+Windows-only Outlook client, wrapped by ``utils.ms_office.outlook_gateway.OutlookGateway``) is
 **injected** at construction rather than built here, so the handler stays testable and the
 vendor coupling lives in the gateway. Off Windows the gateway is log-only, so this handler
 degrades the same way (returns ``False`` / ``None`` without raising).
@@ -13,7 +13,7 @@ talks to the local mailbox). Body/table extraction methods can be added here the
 
 from pathlib import Path
 
-from utils.outlook_gateway import OutlookGateway
+from utils.ms_office.outlook_gateway import OutlookGateway
 
 
 class OutlookEmailHandler:
@@ -78,7 +78,8 @@ class OutlookEmailHandler:
 
 		A read capability beyond the shared ``EmailHandler`` port (SMTP cannot read mail), so a
 		consumer that needs it depends on this concrete Outlook handler. Non-fatal off Windows
-		(returns ``None``); see :meth:`utils.outlook_gateway.OutlookGateway.download_attachment`.
+		(returns ``None``); see
+		:meth:`utils.ms_office.outlook_gateway.OutlookGateway.download_attachment`.
 
 		Parameters
 		----------

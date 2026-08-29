@@ -2,9 +2,10 @@
 
 Mirrors the webhook factory: the caller depends only on the :class:`EmailHandler` port and
 this factory decides the concrete backend. ``EMAIL_BACKEND`` selects it (default ``outlook``);
-a blank/``none`` value yields a :class:`NullEmailHandler` (opt-out). The Outlook backend injects
-an :class:`~utils.outlook_gateway.OutlookGateway` into :class:`OutlookEmailHandler`; the SMTP
-backend reads ``SMTP_*`` settings from the environment (like ``connection_db`` reads ``DB_*``).
+a blank/``none`` value yields a :class:`NullEmailHandler` (opt-out). The Outlook backend
+injects an :class:`~utils.ms_office.outlook_gateway.OutlookGateway` into
+:class:`OutlookEmailHandler`; the SMTP backend reads ``SMTP_*`` settings from the environment
+(like ``connection_db`` reads ``DB_*``).
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from chassis.email.domain.ports import EmailHandler
 from chassis.email.infrastructure.null_email_handler import NullEmailHandler
 from chassis.email.infrastructure.outlook_email_handler import OutlookEmailHandler
 from chassis.email.infrastructure.smtp_email_handler import SmtpEmailHandler
-from utils.outlook_gateway import OutlookGateway
+from utils.ms_office.outlook_gateway import OutlookGateway
 
 
 _SET_NONE = frozenset({"", "none", "null", "off"})

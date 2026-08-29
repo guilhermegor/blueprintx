@@ -44,6 +44,8 @@ pandas = ">=2.1.0"
 # becomes a consumer's ImportError, not just a contributor's.
 numpy = ">=1.22"
 openpyxl = ">=3.1.0"
+# Hardened XML parsing at the ingestion trust boundary (utils/xml_reader.py), blueprintx#117.
+defusedxml = ">=0.7"
 
 [tool.poetry.group.dev.dependencies]
 # The task runner (Poe the Poet). Every project command is a task in poe_tasks.toml.

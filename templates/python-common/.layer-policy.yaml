@@ -44,7 +44,7 @@ layers:
     allow:
       pandas: "the seam layer owns the pandas surface (frames, dtypes, tabular_reader)"
       wwdates: "BR business-day calendar, wrapped by utils.dates"
-      win32com: "Outlook COM automation, wrapped by utils.outlook_gateway (Windows only)"
+      win32com: "Outlook COM automation, wrapped by utils.ms_office.outlook_gateway (Windows only)"
       requests: "HTTP transport, wrapped by utils.http_downloader"
       urllib3: "retry/backoff policy used by the download seam"
       defusedxml: "hardened XML parsing at the ingestion trust boundary"
