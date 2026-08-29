@@ -94,6 +94,28 @@ class CreateLog(metaclass=TypeChecker):
 			return True
 		return False
 
+	def _close_handlers(self, logger: logging.Logger) -> None:
+		"""Close and detach every handler currently attached to ``logger``.
+
+		Parameters
+		----------
+		logger : logging.Logger
+			The logger whose handlers are about to be replaced.
+
+		Returns
+		-------
+		None
+		"""
+		# Clearing the handler list alone only drops the reference — the stale FileHandler,
+		# and the OS file descriptor it holds open, survives until garbage collection, which
+		# is when Python raises an invisible ResourceWarning that never surfaces under default
+		# settings. A caller that reconfigures the logger, say rotating to a new dated log
+		# file, leaked one open file handle per reconfiguration. Closing first releases the
+		# descriptor immediately, not at GC time.
+		for cls_stale_handler in logger.handlers:
+			cls_stale_handler.close()
+		logger.handlers.clear()
+
 	def basic_conf(
 		self, complete_path: str, basic_level: Literal["info", "debug"] = "info"
 	) -> logging.Logger:
@@ -134,7 +156,8 @@ class CreateLog(metaclass=TypeChecker):
 				datefmt="%Y-%m-%d,%H:%M:%S",
 			)
 		)
-		logger.handlers.clear()
+		# Reconfiguring must release the previous file descriptor, not just forget it.
+		self._close_handlers(logger)
 		logger.addHandler(handler)
 		return logger
 
