@@ -10,7 +10,41 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from utils.typing import TypeChecker
+from utils.typing import TypeChecker, type_checker
+
+
+_INT_MIN_PERIOD = 190001
+_INT_MAX_PERIOD = 999912
+_INT_FIRST_MONTH = 1
+_INT_LAST_MONTH = 12
+
+
+@type_checker
+def _validate_period(int_period: int | None, str_field: str) -> None:
+	"""Reject a bound that is not a ``YYYYMM`` period, allowing ``None`` for an open bound.
+
+	Parameters
+	----------
+	int_period : int or None
+		The bound to validate. ``None`` means the window is open on that side.
+	str_field : str
+		The attribute name, used in the error message.
+
+	Raises
+	------
+	ValueError
+		If the value is not a six-digit ``YYYYMM`` with a month in ``01``-``12``.
+
+	Returns
+	-------
+	None
+	"""
+	bool_valid = int_period is None or (
+		_INT_MIN_PERIOD <= int_period <= _INT_MAX_PERIOD
+		and _INT_FIRST_MONTH <= int_period % 100 <= _INT_LAST_MONTH
+	)
+	if not bool_valid:
+		raise ValueError(f"{str_field} must be a YYYYMM period with month 01-12, got {int_period}")
 
 
 @dataclass(frozen=True)
@@ -34,6 +68,31 @@ class RegimeWindow(metaclass=TypeChecker):
 	str_name: str
 	int_period_start: int | None
 	int_period_end: int | None
+
+	def __post_init__(self) -> None:
+		"""Reject bounds that are not ``YYYYMM``, or that run backwards.
+
+		Raises
+		------
+		ValueError
+			If a bound is not a valid ``YYYYMM`` period, or the start is after the end.
+
+		Returns
+		-------
+		None
+		"""
+		_validate_period(self.int_period_start, "int_period_start")
+		_validate_period(self.int_period_end, "int_period_end")
+		bool_backwards = (
+			self.int_period_start is not None
+			and self.int_period_end is not None
+			and self.int_period_start > self.int_period_end
+		)
+		if bool_backwards:
+			raise ValueError(
+				f"{self.str_name}: period start {self.int_period_start} is after period end "
+				f"{self.int_period_end}"
+			)
 
 	def covers(  # complexity-ok: a two-sided open-bound range check is the validation itself
 		self, int_period: int

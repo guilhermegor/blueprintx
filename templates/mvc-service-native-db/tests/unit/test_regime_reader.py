@@ -183,3 +183,48 @@ def test_reader_refuses_a_period_belonging_to_a_sibling_regime(
 	"""
 	with pytest.raises(ValueError, match="cnpj_classe_keyed"):
 		RegimeReader(cls_registry, "cnpj_keyed", int_period=202312)
+
+
+@pytest.mark.parametrize(
+	"int_bad_period",
+	[202313, 202400, 20241, 2024011],
+)
+def test_regime_window_rejects_a_non_yyyymm_bound(int_bad_period: int) -> None:
+	"""A bound that is not a ``YYYYMM`` period is refused at construction.
+
+	Without this, ``covers()`` silently answers questions about a period that cannot exist,
+	and ``RegimeRegistry.default_period`` can hand back an end its own window does not cover.
+
+	Parameters
+	----------
+	int_bad_period : int
+		An invalid period bound under test.
+
+	Returns
+	-------
+	None
+	"""
+	with pytest.raises(ValueError, match="YYYYMM"):
+		RegimeWindow(str_name="bad", int_period_start=int_bad_period, int_period_end=None)
+
+
+def test_regime_window_rejects_a_backwards_range() -> None:
+	"""A window whose start is after its end is refused at construction.
+
+	Returns
+	-------
+	None
+	"""
+	with pytest.raises(ValueError, match="after period end"):
+		RegimeWindow(str_name="bad", int_period_start=202412, int_period_end=202401)
+
+
+def test_regime_window_still_accepts_open_bounds() -> None:
+	"""``None`` on either side remains legal — it is how an open-ended regime is expressed.
+
+	Returns
+	-------
+	None
+	"""
+	cls_window = RegimeWindow(str_name="open", int_period_start=None, int_period_end=None)
+	assert cls_window.covers(202406) is True

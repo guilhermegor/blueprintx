@@ -53,22 +53,38 @@ def _build_args(tmp_path: Path) -> tuple:
 # resolve_intent
 # --------------------------
 @pytest.mark.parametrize(
-	"str_raw",
-	["send", "Send", "ENVIO", "envio", "reconcile", "Reconcile", "reconciliacao", "Reconciliação"],
+	("str_raw", "str_expected"),
+	[
+		("send", "send"),
+		("Send", "send"),
+		("ENVIO", "send"),
+		("envio", "send"),
+		("reconcile", "reconcile"),
+		("Reconcile", "reconcile"),
+		("reconciliacao", "reconcile"),
+		("Reconciliação", "reconcile"),
+	],
 )
-def test_resolve_intent_maps_known_spelling_to_canonical_intent(str_raw: str) -> None:
-	"""Every documented spelling (English/pt-BR, any case/accent) resolves to a known intent.
+def test_resolve_intent_maps_known_spelling_to_canonical_intent(
+	str_raw: str, str_expected: str
+) -> None:
+	"""Every documented spelling (English/pt-BR, any case/accent) maps to ITS canonical intent.
+
+	Equality, not membership: `in {"send", "reconcile"}` passes even when a spelling resolves to
+	the wrong one of the two, which is the mapping this test exists to pin.
 
 	Parameters
 	----------
 	str_raw : str
 		A raw ``PIPELINE_INTENT`` spelling under test.
+	str_expected : str
+		The canonical intent that spelling must resolve to.
 
 	Returns
 	-------
 	None
 	"""
-	assert resolve_intent(str_raw) in {"send", "reconcile"}
+	assert resolve_intent(str_raw) == str_expected
 
 
 def test_resolve_intent_raises_systemexit_on_unknown_spelling() -> None:
