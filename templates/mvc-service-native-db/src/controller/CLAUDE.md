@@ -37,10 +37,12 @@ repo or branching inside `main`:
   **same constructor contract** and a **zero-arg `run()`** (no leading underscore — these are
   discoverable, unlike single mode's `_pipeline.py`). Shipped examples: `pipeline_send.py`
   (read → render → persist → notify) and `pipeline_reconcile.py` (re-read the last run).
-- **`controller/pipeline_dispatch.py`** — `resolve_intent(raw)` normalises the env value
-  (case/accents/separators, bilingual aliases) and **fails loud** (`SystemExit(2)`) on a typo;
-  `build_pipeline(intent, **shared)` constructs the matching orchestrator from a dispatch table.
-- **`controller/main.py`** — thin: `build_pipeline(resolve_intent(PIPELINE_INTENT), …).run()`.
+- **`controller/pipeline_dispatch.py`** — `raw_intent(argv, env_value)` picks an explicit CLI
+  argument (`poe run reconcile`) over the inherited `PIPELINE_INTENT` env value; `resolve_intent(raw)`
+  normalises the result (case/accents/separators, bilingual aliases) and **fails loud**
+  (`SystemExit(2)`) on a typo; `build_pipeline(intent, **shared)` constructs the matching
+  orchestrator from a dispatch table.
+- **`controller/main.py`** — thin: `build_pipeline(resolve_intent(raw_intent(sys.argv, PIPELINE_INTENT)), …).run()`.
 - Add a purpose = add a `pipeline_<intent>.py` + one entry in each table in `pipeline_dispatch`.
 
 ### Multi-intent + a "reconcile" purpose (re-reading the last run)
