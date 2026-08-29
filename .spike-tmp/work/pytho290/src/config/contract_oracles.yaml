@@ -1,0 +1,20 @@
+# Contract-drift oracle registry — read by bin/check_contract_drift.py (the weekly, NON-gating
+# drift job wired into .github/workflows/contract_drift.yaml).
+#
+# Each entry re-fetches a source's live header and diffs it against the shipped FileContract, so a
+# schema change the source makes AFTER you shipped becomes a tracked issue. EMPTY by default: the
+# drift job self-skips to success until you add a source. The drift job must NEVER gate a PR or a
+# release (see src/config/CLAUDE.md → "Pin every contract to a source-published oracle").
+#
+# Key: <source_key> must match a FileContract.str_source_key declared in config/contracts/.
+#   url:      live artifact URL to re-fetch and diff the header against the shipped contract
+#   sep:      header column delimiter (default ";")
+#   encoding: text encoding to decode the header (default "utf-8-sig")
+#
+# Example (replace with real sources):
+# oracles:
+#   example_source:
+#     url: "https://dados.example.gov.br/dataset/example_source.csv"
+#     sep: ";"
+#     encoding: "utf-8-sig"
+oracles: {}

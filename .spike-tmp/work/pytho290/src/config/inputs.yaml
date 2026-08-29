@@ -1,0 +1,7 @@
+# Input parameters consumed by use-cases — add keys here.
+
+# Single output root for logs and run artifacts. "~" expands to the user home
+# directory; absolute and Windows UNC paths are also supported.
+daily_infos_base_path: "logs"
+# Partition output into <base>/<YYYY-MM-DD>/ subdirectories.
+daily_infos_dated: false

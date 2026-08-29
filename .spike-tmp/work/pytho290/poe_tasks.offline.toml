@@ -1,0 +1,46 @@
+# Offline-only tasks — present only when the project is scaffolded WITHOUT a GitHub remote.
+#
+# Wired into poe_tasks.toml by the scaffold's `add_poe_include`, never declared there: poe
+# prints a warning on every invocation for a missing include, unlike the Makefile's silent
+# `-include`, so the reference has to appear only when this file actually does.
+#
+# These wrap the local git workflow that substitutes for GitHub's branch + PR flow, plus the
+# git-diff helpers for sharing changes without a remote.
+
+[tool.poe.tasks.new_branch]
+cmd = "bash bin/new_branch.sh $name"
+help = "Create a feature branch off the default branch (CONTRIBUTING prefix enforced)"
+
+	[[tool.poe.tasks.new_branch.args]]
+	name = "name"
+	positional = true
+	required = true
+	help = "branch name, e.g. feat/thing"
+
+[tool.poe.tasks.git_merge_to_main]
+cmd = "bash bin/git_merge_to_main.sh"
+help = "Merge the current clean branch into the default branch and delete it"
+
+[tool.poe.tasks.git_diff_export]
+cmd = "bash bin/git_diff_export.sh"
+help = "Export the current branch's changes as a shareable diff"
+
+[tool.poe.tasks.git_diff_apply]
+cmd = "bash bin/git_diff_apply.sh $file"
+help = "Apply a diff exported from another checkout"
+
+	[[tool.poe.tasks.git_diff_apply.args]]
+	name = "file"
+	positional = true
+	required = true
+	help = "path to the .diff file"
+
+[tool.poe.tasks.git_diff_check]
+cmd = "bash bin/git_diff_check.sh $file"
+help = "Check whether a diff applies cleanly, without applying it"
+
+	[[tool.poe.tasks.git_diff_check.args]]
+	name = "file"
+	positional = true
+	required = true
+	help = "path to the .diff file"

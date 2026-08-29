@@ -1,0 +1,45 @@
+# Reviewers whose comments are FINDINGS, not answers — read by bin/check_review_threads.py.
+#
+# This list IS the provider-agnosticism. The gate's logic names no tool: it subtracts these
+# logins from a thread's authors and asks whether anything is left. Swapping or adding a
+# reviewer is adding a row here, never an edit to the gate.
+#
+# ⚠️ Reviewer shapes genuinely differ, and the difference matters:
+#   - some post inline review THREADS (their findings are what this gate tracks)
+#   - some post only a STATUS CHECK and no thread at all (nothing for this gate to see)
+# A roster that assumes every reviewer speaks in threads is born broken, which is why a PR
+# with zero threads is not a THREAD failure.
+#
+# ⚠️ `posts:` IS REQUIRED ON EVERY ROW, AND IT DECIDES MORE THAN THREAD AUTHORSHIP (#218).
+# A `posts: status` member is excluded from the MISSING-REVIEW gate as well: it is neither
+# named as an expected reviewer nor accepted as having reviewed. Without that, a workflow
+# submitting a review with the ambient GITHUB_TOKEN satisfies a gate whose entire purpose is
+# "a real reviewer looked at this". Neither default is safe — reading a forgotten field as
+# `status` makes the gate unsatisfiable, reading it as `threads` re-opens that hole — so a row
+# that omits `posts:`, or spells it as anything other than `threads`/`status`, fails loudly.
+# At least one `posts: threads` member is required; a roster of only status members is rejected.
+#
+# ⚠️ SUPERSEDED 2026-08-22 (#208). This block used to end "…is a pass here rather than a
+# failure", and that half was wrong. Zero threads is ALSO what you get when no reviewer ever
+# ran — opposite facts, one number — and the gate reported the second as success: PRs #204
+# and #213 merged unreviewed with every check green. Zero threads is now judged against a
+# SUBMITTED REVIEW, not against silence. A reviewer that ran and found nothing still passes;
+# one that never ran fails.
+#
+# Delete this file to opt out; the gate then self-skips with a message instead of failing.
+
+reviewers:
+  - login: coderabbitai[bot]
+    posts: threads
+    note: >-
+      Resolves its own threads on seeing the fix ("Addressed in commit <sha>"), which is why
+      isResolved cannot be the signal — measured on blueprintx#170, all 14 threads read
+      resolved while 11 held no author reply.
+
+  - login: github-actions[bot]
+    posts: status
+    note: Workflow output, never a review finding.
+
+  - login: copilot-pull-request-reviewer[bot]
+    posts: threads
+    note: GitHub's built-in reviewer; enabled per-repo by enable_repo_rules.sh.

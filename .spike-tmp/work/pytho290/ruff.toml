@@ -1,0 +1,290 @@
+line-length = 99
+indent-width = 4
+# Floor of the project's requires-python (>=3.10). Bump in lockstep with pyproject.
+target-version = "py310"
+exclude = [
+    # version control systems
+    ".bzr",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".svn",
+
+    # python-specific
+    "__pycache__",
+    "__pypackages__",
+    ".eggs",
+    "*.egg",
+    "*.egg-info",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+
+    # environment and cache
+    ".direnv",
+    ".env",
+    ".mypy_cache",
+    ".nox",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "venv",
+    "site-packages",
+
+    # build and distribution
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+
+    # ide and editor
+    ".ipynb_checkpoints",
+    ".vscode",
+
+    # project-specific generated / chassis
+    "alembic",
+    # ⚠️ `src/chassis` and `src/capabilities/example_feature` were BOTH excluded here until
+    # blueprintx#203, mirroring #190's mypy fix one tool later. Same argument, measured
+    # separately: these files ship verbatim into every generated DDD project, so a defect in
+    # them (or, for ruff, a STYLE violation the rest of the tree is held to) propagates to
+    # every user. Measured ~230 real findings across both trees (chassis/db, chassis/db_schema
+    # x2 tiers, chassis/db_wschema, chassis/typing, example_feature) — almost entirely D202
+    # (blank line after docstring), S608 (SQL built from an f-string; noqa'd per line, matching
+    # the existing mvc example_entity.py precedent, not rule-suppressed), UP007/UP035
+    # (pre-3.10-style typing), missing ANN204/ANN202 return types, and a docstring hanging
+    # indent authored in literal spaces before the tree was tabified — all fixed in place. A
+    # handful of per-file ANN401 ignores remain below, for the same reason
+    # `src/config/connection_db.py` already has one: a raw driver connection or an arbitrary
+    # deserialized object has no shared type, so `Any` is honest there, not a rule dodge.
+    #
+    # lib-minimal vendors the runtime type-checking engine at a nested private path; its
+    # imports are mechanically rewritten to <pkg>._internal.* (can exceed line-length) and it
+    # is intrinsic metaprogramming — fully excluded (mypy excludes it too).
+    "src/*/_internal/utils/typing",
+
+    # other
+    ".pants.d",
+    ".pyenv",
+    "node_modules",
+    "*.log",
+]
+
+[format]
+quote-style = "double"
+indent-style = "tab"
+docstring-code-format = false
+docstring-code-line-length = 79  # original python standard - readability in terminal (help)
+
+[lint]
+select = [
+    "UP",  # pyupgrade - flags the use of deprecated Python features
+    "E",   # pycodestyle - checks for PEP 8 compliance
+    "F",   # flake8 - checks for various code quality issues
+    "ANN", # annotations - checks for type annotations
+    "B",   # flake8-bugbear - checks for common bugs and design problems
+    "SIM", # flake8-simplify - checks for code simplification opportunities
+    "I",   # isort - checks for import sorting
+    "AIR", # airflow - checks for Airflow-specific issues
+    "ERA", # eradicate - removes commented-out code
+    "S",   # flake8-bandit - checks for security issues
+    "PD",  # pandas-vet - checks for common pandas issues
+    "D",   # pydocstring - this enables all docstring checks
+    "TID", # flake8-tidy-imports - enables the banned-api gate below
+    "W",   # pycodestyle warnings - trailing whitespace, invalid regex escapes (see W191 below)
+    "PL",  # pylint - magic values, over-wide signatures, module-level global
+    "PT",  # flake8-pytest-style - pytest idioms (one assertion per behaviour, etc.)
+]
+ignore = [
+    "D206",  # docstring should be indented with spaces, not tabs
+    # W191 (tab-indentation) treats a tab as a violation, while `[format] indent-style =
+    # "tab"` below makes the formatter PRODUCE tabs. Enabling it would set the linter against
+    # the formatter, and the formatter wins — the same principle the E701 note states, in
+    # reverse: there the formatter already forbids the style, here it already requires it.
+    #
+    # ⚠️ Ignoring W191 is what makes the rest of `W` adoptable, and the difference is the
+    # whole measurement: W191 accounted for 6022 of 6022 findings, so `W` minus W191 is ZERO
+    # today. It costs nothing now and catches trailing whitespace and invalid regex escapes
+    # from here on (blueprintx#222).
+    #
+    # ⚠️ Measuring this is itself a trap: `ruff check --config 'lint.ignore=["W191"]'` does
+    # NOT merge the way it reads and still reported all 6022. Only `--ignore W191` gives the
+    # real number, and the wrong one supports the wrong conclusion ("W is not adoptable").
+    "W191",
+    # E701 (multiple statements on one line) is deliberately NOT ignored. It is
+    # tempting to add it here to allow `if cond: break`, but that would be dead
+    # config: `ruff format` (Black semantics, not configurable) expands a compound
+    # statement back onto its own line regardless of the lint rule, so the linter
+    # and the formatter would fight and the formatter wins. E701 is the linter
+    # agreeing with the formatter. Reach for the EXPRESSION form (`return not cond`,
+    # a comprehension, `any(...)`, a ternary, dict dispatch) for real concision —
+    # the formatter keeps those on one line. General rule: before suppressing a lint
+    # rule to enable a style, check whether the FORMATTER already forbids it.
+]
+fixable = ["I"]
+# allow dummy variables to start with an underscore and be followed by alphanumeric
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Bare pandas readers are banned so every file/SQL read funnels through
+# utils/tabular_reader (which enforces a FileContract + apply_dtypes). ruff resolves
+# `pd.read_csv` to `pandas.read_csv` and flags it. The seam itself and tests
+# (round-trip read-backs) are exempted via per-file-ignores below.
+[lint.flake8-tidy-imports.banned-api]
+"pandas.read_excel".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_csv".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_json".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_table".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_parquet".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_sql".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.read_sql_query".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.read_sql_table".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.ExcelFile".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
+# FileContract is CONSTRUCTED only in config/contracts/ (per-file-exempt below); everywhere
+# else imports the instance. Both import paths of the class are banned; a file importing the
+# class purely for a type annotation carries a line-scoped `# noqa: TID251`.
+"utils.tabular_reader.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
+"config.contracts.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
+
+[lint.isort]
+# ⚠️ DECLARED, never inferred. Without this ruff has to GUESS whether `config`/`utils` are
+# first-party, and different ruff versions guess differently: a script that puts `src` on
+# sys.path had its imports sorted one way by the ruff that wrote it and the other way by the
+# newer ruff pinned in a generated project. The visible symptom is not a lint error — it is
+# `poe lint` MODIFYING a freshly scaffolded tree, so the scaffold check fails on the diff
+# rather than on any rule, and the message names no rule to fix.
+#
+# A superset of every tier's layer names: one that does not exist in a given tier simply
+# never matches, so all five tiers share this one declaration.
+known-first-party = [
+    "app",
+    "capabilities",
+    "chassis",
+    "config",
+    "controller",
+    "model",
+    "utils",
+    "view",
+]
+force-single-line = false
+combine-as-imports = true
+split-on-trailing-comma = true
+force-sort-within-sections = true
+lines-after-imports = 2
+
+[lint.pylint]
+# ⚠️ 8, not pylint's default of 5, and the number is measured rather than picked. The reader
+# and mail seams take a genuine spread of options (encoding, separator, header row, dtype,
+# column names, sheet, quoting), and every one of them is a real dimension of the read — a
+# config object would move the same arguments behind a constructor and buy nothing. At 5 the
+# gate reported 12 functions; at 8 it reports ONE, `read_table` with 11, which is the widest
+# public API here and therefore the finding worth keeping visible.
+max-args = 8
+
+[lint.pydocstyle]
+convention = "numpy"
+
+[lint.flake8-annotations]
+suppress-none-returning = false  # do not suppress warnings for functions that return None
+suppress-dummy-args = false  # require annotations for dummy arguments
+ignore-fully-untyped = false  # flag functions that are completely untyped
+allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
+
+[lint.per-file-ignores]
+# ⚠️ `bin` was ONCE in [exclude] above, with the reason "ruff-format would tabify
+# space-indented helpers and trip E101". Two things were wrong with that (blueprintx#207):
+#
+#   1. It described a HYPOTHETICAL. The 27 E101s were already there — all of them in the one
+#      file that genuinely mixed both (`check_review_threads.py`: 337 tab lines + 21 space
+#      lines). The other 13 files were internally consistent; ruff-format was never the
+#      threat. The exclude was protecting the tree from a diff, not from a defect.
+#   2. It excluded the 16 files that ARE this project's quality machinery from BOTH the
+#      linter and the type checker — the gates policing everything else were the only code
+#      nobody policed. Behind it sat 73 findings. Same shape as blueprintx#190/#203, and the
+#      largest of the three.
+#
+# `bin/` is now formatted like the rest of the tree (tabs) and linted like the rest of the
+# tree, with exactly one rule relaxed:
+"bin/*.py" = [
+    # ERA001 has a 100% false-positive rate on this directory, measured twice. Every gate in
+    # `bin/` carries long wrapped prose comments explaining WHY it exists and what it once got
+    # wrong — that is the house style here and it is the reason these files are readable. The
+    # eradicate heuristic reads any continuation line containing `(`, `:` or `=` as code:
+    #
+    #     # last (empty) page, so the loop terminates on the slower of the two.
+    #     # (required_review_thread_resolution), so this is the LOCAL half of the same rule — it
+    #
+    # 15 findings in `bin/`, 15 false positives; blueprintx#169 independently measured 9 more
+    # with the same result. 0 true positives in 24. Suppressing per line would put a `# noqa`
+    # on 15 prose comments and teach the next author that noqa is how you write a comment.
+    # ⚠️ This is scoped to `bin/` ON PURPOSE. `src/` keeps ERA001 — commented-out code there is
+    # still forbidden (CLAUDE.md), and the global decision stays open in blueprintx#169.
+    "ERA001",
+    # E101 fires on `TAB + spaces` at the start of a line. `bin/` was space-indented and is now
+    # tabbed like the rest of the tree (code AND docstring bodies — `src/` has always used tabs
+    # inside docstrings, which is why D206 is ignored globally). What survives that conversion is
+    # the 2-space HANGING INDENT of a wrapped Markdown bullet inside a module docstring:
+    #
+    #     - **"the source has a column the contract doesn't list" is drift ONLY when the contract
+    #       claims completeness** (``bool_full_column``). …
+    #
+    # Those 2 spaces are the bullet's alignment — a tab there would be 4+ columns and break the
+    # continuation. E101 cannot tell prose alignment from indentation, and a `# noqa` is not
+    # available inside a docstring (it would render as literal text). 4 lines, one file.
+    # ⚠️ Scoped to `bin/`: `tests/` passes E101 clean today and keeps the rule. `src/` picked up
+    # its own instance of the identical shape in blueprintx#203 (below) once `src/chassis` lost
+    # its blanket exclude — a numbered-list hanging indent, not the Markdown bullet above, but
+    # the same "prose alignment, not code indentation" cause.
+    "E101",
+]
+
+# Same E101 shape as `bin/*.py` above, one file: a numbered-list item wrapped inside a
+# docstring hangs its continuation lines under "1. "/"2. "/"3. " with a tab + 3 spaces — the
+# spaces are the list marker's alignment, not stray indentation, and (as noted above) a
+# docstring cannot carry a `# noqa` without it becoming literal text. 3 lines.
+"src/chassis/db_wschema/infrastructure/joblib_handler.py" = ["E101"]
+# SanityCheck.validate() is a post-load validator for an arbitrary deserialized artifact
+# (any joblib payload — a model, an array, a dict); `Any` is the honest parameter type, the
+# same argument as `src/config/connection_db.py` above.
+"src/chassis/db_wschema/infrastructure/sanity_check.py" = ["ANN401"]
+
+"tests/**/*.py" = [
+    "S101",  # use of assert
+    # A literal in a test IS the case under test: `assert add(1, 2) == 3` says what it means,
+    # and naming those numbers moves the case away from the assertion that reads it. 21 of the
+    # 29 findings were in tests/, all of that shape.
+    "PLR2004",
+    "TID251",  # tests legitimately read back outputs with pd.read_* to assert on them
+]
+# The seam itself is the one place allowed to call the bare pandas readers.
+"src/utils/tabular_reader.py" = ["TID251"]
+# config/contracts/ is the one place allowed to construct FileContract.
+"src/config/contracts/*.py" = ["TID251"]
+# Native DB-API 2.0 / SQLAlchemy connections have no shared stdlib type, so `Any` is the
+# honest return/param annotation for the raw-driver connection factory (MVC skeletons).
+"src/config/connection_db.py" = ["ANN401"]
+# ⚠️ TID251 was ONCE ignored here, so the ORM reference entity could call `pd.read_sql` —
+# the very idiom the banned-api list above forbids. That is not an exemption for a file: this
+# is the file the tier's CLAUDE.md tells you to COPY per entity, so exempting it exempts the
+# PATTERN, and every entity derived from it inherited the violation. The example now reads
+# through the session and builds its frame with utils.frames.from_records, so the ignore is
+# gone and cannot come back silently (blueprintx#172).
+"src/model/example_entity.py" = ["ANN401"]
+# The runtime type-checking engine validates arbitrary annotations, so `Any` is
+# intrinsic to its signatures. MVC ships it here; DDD ships the same engine under
+# src/chassis/typing (mirrored below, blueprintx#203 — chassis lost its blanket
+# [exclude] once #190 proved the reference code needs linting like everything else).
+# Ignore ANN401 rather than excluding either tree from all lint.
+"src/utils/typing/**/*.py" = ["ANN401"]
+"src/chassis/typing/**/*.py" = ["ANN401"]
+# Native DB-API 2.0 connections from the optional drivers (psycopg/mysql-connector/
+# pyodbc/oracledb) have no shared type across backends, so `_connect`'s return is
+# `Any` — the same argument as `src/config/connection_db.py` above, one layer down
+# (a handler's `_connect` vs. the MVC-wide factory). sqlite_handler.py needs no
+# entry: stdlib `sqlite3.Connection` is a real shared type, not `Any`.
+"src/chassis/db_schema/infrastructure/*_handler.py" = ["ANN401"]
+# lib-minimal nests the same seams inside a private package (src/<pkg>/_internal/…);
+# mirror the exemptions above for that path (`*` matches the single package segment). The
+# typing engine there is fully excluded (see [exclude]), so it needs no per-file rule.
+"src/*/_internal/utils/tabular_reader.py" = ["TID251"]
+"src/*/_internal/config/contracts/*.py" = ["TID251"]
