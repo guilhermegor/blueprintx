@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Protocol
+from collections.abc import Iterable
+from typing import Protocol
 
 from chassis.typing import ProtocolTypeCheckerMeta
 
@@ -16,6 +17,14 @@ class NoteRepository(Protocol, metaclass=ProtocolTypeCheckerMeta):
 	no inheritance required.
 	"""
 
-	def add(self, cls_note: Note) -> Note: ...
-	def get(self, str_note_id: str) -> Note | None: ...
-	def list(self) -> Iterable[Note]: ...
+	def add(self, cls_note: Note) -> Note:
+		"""Persist a note and return the stored entity."""
+		...
+
+	def get(self, str_note_id: str) -> Note | None:
+		"""Fetch a note by id, or None when it does not exist."""
+		...
+
+	def list(self) -> Iterable[Note]:
+		"""Return every stored note."""
+		...
