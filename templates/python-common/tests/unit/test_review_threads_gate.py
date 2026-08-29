@@ -807,9 +807,9 @@ def test_a_declared_completion_is_evidence_the_reviewer_ran() -> None:
 	ran", which the gate must keep failing. The completion LINE is the discriminator, measured
 	2026-08-29 against the counter-examples that killed the broad version::
 
-	    #204 merged unreviewed  reviews=0  phrase=0  -> still fails
-	    #213 merged unreviewed  reviews=0  phrase=0  -> still fails
-	    #328 reviewed, clean    reviews=0  phrase=1  -> now passes
+		#204 merged unreviewed  reviews=0  phrase=0  -> still fails
+		#213 merged unreviewed  reviews=0  phrase=0  -> still fails
+		#328 reviewed, clean    reviews=0  phrase=1  -> now passes
 
 	⚠️ Evidence the review HAPPENED, never that a thread was answered — thread strictness is
 	untouched. See blueprintx#336.
