@@ -45,7 +45,6 @@ class SanityCheck:
 		AttributeError
 			If any attribute in ``required_attrs`` is absent from ``obj``.
 		"""
-
 		if self.expected_class_name is not None and type(obj).__name__ != self.expected_class_name:
 			raise TypeError(
 				f"Expected class {self.expected_class_name!r}, got {type(obj).__name__!r}"

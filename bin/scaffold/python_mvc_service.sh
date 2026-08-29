@@ -446,6 +446,9 @@ conditional_copy_email() {
 # main.py is intentionally discarded (their .env keys + packages remain — wire them into the
 # intent pipelines manually per controller/CLAUDE.md). Copies the dispatch trio, drops the
 # single _pipeline.py, seeds PIPELINE_INTENT, and flips the controller/CLAUDE.md mode marker.
+# Also overwrites tests/unit/test_pipeline.py: the shipped one imports controller._pipeline,
+# which this function just deleted (blueprintx#289) — the multi-intent replacement covers
+# pipeline_dispatch's resolve_intent/build_pipeline instead, so dispatch isn't left untested.
 conditional_apply_multi_pipeline() {
     local project_path="$1"
     if [[ "$INCLUDE_MULTI_PIPELINE" != "true" ]]; then return; fi
@@ -456,6 +459,7 @@ conditional_apply_multi_pipeline() {
     cp "$mp_root/pipeline_reconcile.py" "$controller_dir/pipeline_reconcile.py"
     cp "$mp_root/pipeline_dispatch.py" "$controller_dir/pipeline_dispatch.py"
     cp "$mp_root/main.py" "$controller_dir/main.py"
+    cp "$mp_root/test_pipeline.py" "$project_path/tests/unit/test_pipeline.py"
     rm -f "$controller_dir/_pipeline.py"
     sed -i 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
     local intent_env

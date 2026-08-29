@@ -4,11 +4,12 @@ from .base import Base, DatabaseSession, Repository, generate_uuid
 from .models import RecordModel
 from .repository import SQLAlchemyRecordRepository
 
+
 __all__ = [
-    "Base",
-    "DatabaseSession",
-    "Repository",
-    "generate_uuid",
-    "RecordModel",
-    "SQLAlchemyRecordRepository",
+	"Base",
+	"DatabaseSession",
+	"Repository",
+	"generate_uuid",
+	"RecordModel",
+	"SQLAlchemyRecordRepository",
 ]

@@ -69,6 +69,7 @@ create_directory_structure() {
     mkdir -p "$project_path"/bin
     mkdir -p "$project_path"/.github/workflows
     mkdir -p "$project_path"/.vscode
+    mkdir -p "$project_path"/docs
 
     print_status "success" "Directory structure created"
 }
@@ -83,17 +84,28 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.esm.json" "$project_path/tsconfig.esm.json"
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.cjs.json" "$project_path/tsconfig.cjs.json"
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.types.json" "$project_path/tsconfig.types.json"
-    cp "$SKELETON_TEMPLATE_ROOT/.babelrc" "$project_path/.babelrc"
+    cp "$SKELETON_TEMPLATE_ROOT/babel.config.test.cjs" "$project_path/babel.config.test.cjs"
     cp "$SKELETON_TEMPLATE_ROOT/jest.config.cjs" "$project_path/jest.config.cjs"
-    # .mjs (not .js): package.json is "type": "commonjs" (so dist/cjs needs no per-file
-    # marker), and these three configs are authored as ESM — the explicit extension makes
-    # each tool load them as ESM regardless of the package's own module type.
+    # .mjs (not .js): package.json's "type" field is left absent (Node treats that
+    # identically to "type": "commonjs", so dist/cjs needs no per-file marker — see
+    # templates/ts-lib/CLAUDE.md), and these three configs are authored as ESM — the
+    # explicit extension makes each tool load them as ESM regardless of the package's
+    # own module type.
     cp "$SKELETON_TEMPLATE_ROOT/eslint.config.mjs" "$project_path/eslint.config.mjs"
     cp "$SKELETON_TEMPLATE_ROOT/.prettierrc.mjs" "$project_path/.prettierrc.mjs"
     cp "$SKELETON_TEMPLATE_ROOT/lint-staged.config.mjs" "$project_path/lint-staged.config.mjs"
     cp "$SKELETON_TEMPLATE_ROOT/bin/write_esm_package_json.sh" "$project_path/bin/write_esm_package_json.sh"
     cp "$SKELETON_TEMPLATE_ROOT/bin/smoke_pack.sh" "$project_path/bin/smoke_pack.sh"
     chmod +x "$project_path/bin/write_esm_package_json.sh" "$project_path/bin/smoke_pack.sh"
+    # Docusaurus site (#134) + npm OIDC / Verdaccio CI (#135, #136). sidebars.js and the
+    # three workflow files below carry no ${VAR} placeholders, so a plain cp is enough;
+    # docusaurus.config.js, docs/*.md and release-npm.yml DO carry placeholders and are
+    # rendered later in copy_common_templates, where PROJECT_NAME/GITHUB_USERNAME etc.
+    # are already exported for envsubst.
+    cp "$SKELETON_TEMPLATE_ROOT/sidebars.js" "$project_path/sidebars.js"
+    cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/docs.yml" "$project_path/.github/workflows/docs.yml"
+    cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/docs-deploy.yml" "$project_path/.github/workflows/docs-deploy.yml"
+    cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/pack-smoke.yml" "$project_path/.github/workflows/pack-smoke.yml"
 
     print_status "success" "Skeleton files copied"
 }
@@ -103,14 +115,56 @@ copy_skeleton_files() {
 # produce invalid JSON, breaking every npm command. Render it with Python's json
 # module instead, which escapes each value before substitution and then re-parses
 # the result so a bad render fails loudly here rather than shipping broken JSON.
+# Same hazard as package.json, one syntax over: envsubst does no JavaScript escaping, so a
+# description containing an apostrophe (`Alan's toolkit`) lands inside the single-quoted
+# `tagline:` value and breaks the Docusaurus config parse. json.dumps produces a valid JS
+# string literal for every input, so substitute the ESCAPED form.
+render_docusaurus_config() {
+    local project_path="$1"
+    python3 - "$SKELETON_TEMPLATE_ROOT/docusaurus.config.js" "$project_path/docusaurus.config.js" \
+        "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$GITHUB_USERNAME" <<'PYEOF'
+import json
+import re
+import sys
+
+path_src, path_dst, str_name, str_desc, str_user = sys.argv[1:6]
+with open(path_src, encoding="utf-8") as f:
+    str_text = f.read()
+# json.dumps returns a QUOTED literal; the template already supplies the quotes around
+# ${PROJECT_DESCRIPTION}, so strip the outer pair and keep the escaping. GITHUB_USERNAME
+# gets the same treatment for consistency, even though GitHub restricts usernames to
+# alphanumerics/hyphens and can never actually carry a quote or backslash.
+str_desc_js = json.dumps(str_desc)[1:-1].replace("'", "\\'")
+str_name_js = json.dumps(str_name)[1:-1].replace("'", "\\'")
+str_user_js = json.dumps(str_user)[1:-1].replace("'", "\\'")
+str_replacements = {
+    "${PROJECT_DESCRIPTION}": str_desc_js,
+    "${PROJECT_NAME}": str_name_js,
+    "${GITHUB_USERNAME}": str_user_js,
+}
+# Single-pass substitution: sequential .replace() calls would let a literal
+# "${PROJECT_NAME}" or "${GITHUB_USERNAME}" inside the description get replaced again
+# by a later iteration, once it's already sitting in the output text.
+str_text = re.sub(
+    r"\$\{PROJECT_DESCRIPTION\}|\$\{PROJECT_NAME\}|\$\{GITHUB_USERNAME\}",
+    lambda match: str_replacements[match.group(0)],
+    str_text,
+)
+with open(path_dst, "w", encoding="utf-8") as f:
+    f.write(str_text)
+PYEOF
+}
+
 render_package_json() {
     local project_path="$1"
     python3 - "$SKELETON_TEMPLATE_ROOT/package.json" "$project_path/package.json" \
-        "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$PROJECT_LICENSE" <<'PY'
+        "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$PROJECT_LICENSE" "$GITHUB_USERNAME" <<'PY'
 import json
 import sys
 
-path_template, path_out, str_name, str_description, str_license = sys.argv[1:6]
+path_template, path_out, str_name, str_description, str_license, str_github_username = (
+    sys.argv[1:7]
+)
 
 
 def json_escape(value):
@@ -124,6 +178,9 @@ with open(path_template, encoding="utf-8") as fh:
 text = text.replace("${PROJECT_NAME}", json_escape(str_name))
 text = text.replace("${PROJECT_DESCRIPTION}", json_escape(str_description))
 text = text.replace("${PROJECT_LICENSE}", json_escape(str_license))
+# repository.url must match the GitHub repo exactly, or npm's OIDC trusted-publishing
+# check fails at publish time (#135).
+text = text.replace("${GITHUB_USERNAME}", json_escape(str_github_username))
 
 json.loads(text)  # fail loudly on any render that produced invalid JSON
 
@@ -147,6 +204,20 @@ copy_common_templates() {
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
         > "$project_path/README.md"
 
+    # Docusaurus site (#134): docs/*.md and docusaurus.config.js carry ${PROJECT_NAME} /
+    # ${PROJECT_DESCRIPTION} / ${GITHUB_USERNAME} placeholders, resolved here where they
+    # are already exported (unlike copy_skeleton_files, which runs before this export).
+    for doc_file in index usage examples faq contributing; do
+        envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
+            < "$SKELETON_TEMPLATE_ROOT/docs/$doc_file.md" \
+            > "$project_path/docs/$doc_file.md"
+    done
+    render_docusaurus_config "$project_path"
+    # npm OIDC release workflow (#135): PACKAGE_NAME env in release-npm.yml.
+    envsubst '${PROJECT_NAME}' \
+        < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release-npm.yml" \
+        > "$project_path/.github/workflows/release-npm.yml"
+
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.nvmrc" "$project_path/.nvmrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
@@ -168,6 +239,11 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     chmod +x "$project_path/bin/export_repo_content.sh"
+
+    # The review-threads.yml gate's only dependency: the ONE shared implementation of the
+    # answered-review-thread predicate (blueprintx#175), same file the Python tiers ship, so
+    # the CI job above never fetches or vendors a copy of its own.
+    cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
 
     print_status "success" "Common templates applied"
 }

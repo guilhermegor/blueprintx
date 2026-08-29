@@ -1,0 +1,161 @@
+name: Release to npm (OIDC Trusted Publishing)
+
+# Mirrors templates/python-common's release-pypi.yaml shape: a manual, versioned
+# release, gated by the full test suite, publishing without a stored long-lived
+# token. npm has no hosted "Test npm" and no pending-publisher concept (the trusted
+# publisher is configured in the PACKAGE's own npmjs.com settings, so the package
+# must already exist — see docs/contributing.md's bootstrap steps).
+#
+# `npm stage publish` (not `npm publish`) is the approval gate: it uploads to the
+# real registry but holds the package until a maintainer approves with 2FA on
+# npmjs.com. Configure the trusted publisher as stage-only (allow `npm stage
+# publish`, disallow `npm publish`) for that reason.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (must match package.json "version")'
+        required: true
+        type: string
+
+env:
+  PACKAGE_NAME: "${PROJECT_NAME}"
+
+jobs:
+  details:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Extract Tag Name
+        id: release
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: echo "tag_name=v$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+
+  check_npm:
+    needs: details
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Guard against republishing an existing version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # Query the specific version, not the "latest" dist-tag — a version published
+          # under another tag (or not tagged "latest") would otherwise be missed.
+          published_version=$(npm view "$PACKAGE_NAME@$INPUT_VERSION" version 2>/dev/null || echo "none")
+          echo "Published version check for $INPUT_VERSION: $published_version"
+          if [ "$published_version" = "$INPUT_VERSION" ]; then
+            echo "::error::version $INPUT_VERSION is already published to npm"
+            exit 1
+          fi
+
+  test:
+    needs: check_npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - name: Verify release version matches package.json
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          manifest_version=$(node -p "require('./package.json').version")
+          if [ "$manifest_version" != "$INPUT_VERSION" ]; then
+            echo "::error::inputs.version ($INPUT_VERSION) does not match package.json version ($manifest_version)"
+            exit 1
+          fi
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm test
+      - run: npm run build
+      - run: npm run pack:smoke
+
+  publish:
+    name: npm stage publish
+    needs: [details, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: release-npm
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # No package-manager cache in a release build — never publish from a cache hit.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: false
+
+      # Pin npm explicitly: `npm stage publish` (staged publishing) requires npm >=
+      # 11.15.0 — higher than trusted publishing's own 11.5.1 floor — which may be
+      # newer than what ships with the pinned Node version.
+      - name: Pin npm >= 11.15.0
+        run: npm install -g npm@^11.15.0
+
+      - run: npm ci
+      - run: npm run build
+
+      # OIDC trusted publishing — no NPM_TOKEN secret. The runner mints a short-lived
+      # OIDC token (via `id-token: write`, above) that npm verifies against the trusted
+      # publisher registered for this repo/workflow/environment. Provenance is
+      # generated automatically by trusted publishing; do not pass --provenance.
+      - name: Stage publish
+        run: npm stage publish --access public
+
+      - name: Pack tarball for the GitHub release
+        run: npm pack
+
+      - name: Upload tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball
+          path: '*.tgz'
+
+  github_release:
+    name: Create GitHub Release
+    needs: [details, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      TAG_NAME: ${{ needs.details.outputs.tag_name }}
+    steps:
+      - name: Download tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-tarball
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          # Name the artifact explicitly, never a glob over an empty dir — a 0-byte or
+          # missing asset aborts action-gh-release mid-way and leaves a draft release.
+          files: '*.tgz'
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  docs_deploy:
+    name: Deploy docs
+    needs: github_release
+    # This release was just created with github.token, so its `release: types:
+    # [published]` event will NOT start docs-deploy.yml on its own — GitHub does not
+    # trigger workflow runs from GITHUB_TOKEN-authored events. Invoke it explicitly.
+    uses: ./.github/workflows/docs-deploy.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
