@@ -45,18 +45,18 @@ class PostgresDatabaseHandler(DatabaseHandler):
 		self.dsn = dsn
 		self.table = table
 		self.id_field = id_field
-		parsed = self._parse_dsn(dsn)
-		self.host = parsed.get("host") or "localhost"
-		self.port = parsed.get("port") or 5432
+		dict_parsed = self._parse_dsn(dsn)
+		self.host = dict_parsed.get("host") or "localhost"
+		self.port = dict_parsed.get("port") or 5432
 		# ⚠️ Chain the literal default as its own "or" term rather than passing it to
 		# os.getenv. Inside an "or", mypy resolves getenv's generic default against the
 		# LEFT operand's type, so a getenv call with a string default comes back as str or None
 		# and every argv built from it becomes a list of str-or-None. Chaining also fixes
 		# a real behavioural gap — an env var set to the EMPTY string now falls back too,
 		# instead of silently connecting as "".
-		self.user = parsed.get("user") or os.getenv("DB_USER") or "user"
-		self.password = parsed.get("password") or os.getenv("DB_PASSWORD") or "password"
-		self.dbname = parsed.get("database") or os.getenv("DB_NAME") or "app"
+		self.user = dict_parsed.get("user") or os.getenv("DB_USER") or "user"
+		self.password = dict_parsed.get("password") or os.getenv("DB_PASSWORD") or "password"
+		self.dbname = dict_parsed.get("database") or os.getenv("DB_NAME") or "app"
 		self._ensure_table()
 
 	def create(self, record: Record) -> str:
@@ -73,12 +73,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
 			Identifier assigned to the stored record.
 		"""
 		record = ensure_id(record, self.id_field)
-		payload = json.dumps(record)
-		with self._connect() as conn, conn.cursor() as cur:
-			cur.execute(
+		json_payload = json.dumps(record)
+		with self._connect() as cls_conn, cls_conn.cursor() as cls_cur:
+			cls_cur.execute(
 				f"INSERT INTO {self.table} ({self.id_field}, data) VALUES (%s, %s) "  # noqa: S608
 				f"ON CONFLICT ({self.id_field}) DO UPDATE SET data = EXCLUDED.data",
-				(record[self.id_field], payload),
+				(record[self.id_field], json_payload),
 			)
 		return str(record[self.id_field])
 
@@ -95,15 +95,15 @@ class PostgresDatabaseHandler(DatabaseHandler):
 		Record or None
 			Stored record when present, otherwise ``None``.
 		"""
-		with self._connect() as conn, conn.cursor() as cur:
-			cur.execute(
+		with self._connect() as cls_conn, cls_conn.cursor() as cls_cur:
+			cls_cur.execute(
 				f"SELECT data FROM {self.table} WHERE {self.id_field} = %s",  # noqa: S608
 				(record_id,),
 			)
-			row = cur.fetchone()
-		if not row:
+			tuple_row = cls_cur.fetchone()
+		if not tuple_row:
 			return None
-		return json.loads(row[0])
+		return json.loads(tuple_row[0])
 
 	def update(self, record_id: str, updates: Record) -> Record | None:
 		"""Update an existing record.
@@ -120,12 +120,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
 		Record or None
 			Updated record when it exists, otherwise ``None``.
 		"""
-		existing = self.read(record_id)
-		if existing is None:
+		dict_existing = self.read(record_id)
+		if dict_existing is None:
 			return None
-		updated = {**existing, **updates, self.id_field: record_id}
-		self.create(updated)
-		return updated
+		dict_updated = {**dict_existing, **updates, self.id_field: record_id}
+		self.create(dict_updated)
+		return dict_updated
 
 	def delete(self, record_id: str) -> bool:
 		"""Delete a record by identifier.
@@ -140,12 +140,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
 		bool
 			``True`` when a record was deleted, ``False`` otherwise.
 		"""
-		with self._connect() as conn, conn.cursor() as cur:
-			cur.execute(
+		with self._connect() as cls_conn, cls_conn.cursor() as cls_cur:
+			cls_cur.execute(
 				f"DELETE FROM {self.table} WHERE {self.id_field} = %s",  # noqa: S608
 				(record_id,),
 			)
-			return cur.rowcount > 0
+			return cls_cur.rowcount > 0
 
 	def backup(self, target_path: str | Path) -> Path:  # complexity-ok: dump + error translation
 		"""Create a PostgreSQL backup using pg_dump in custom format.
@@ -160,14 +160,14 @@ class PostgresDatabaseHandler(DatabaseHandler):
 		Path
 			Path to the created backup file.
 		"""
-		target = Path(target_path)
-		target.parent.mkdir(parents=True, exist_ok=True)
+		path_target = Path(target_path)
+		path_target.parent.mkdir(parents=True, exist_ok=True)
 
-		env = os.environ.copy()
+		dict_env = os.environ.copy()
 		if self.password:
-			env["PGPASSWORD"] = self.password
+			dict_env["PGPASSWORD"] = self.password
 
-		command = [
+		list_command = [
 			"pg_dump",
 			"-h",
 			self.host,
@@ -179,12 +179,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
 			"c",  # custom format for pg_restore
 			"-b",  # include large objects
 			"-f",
-			str(target),
+			str(path_target),
 			self.dbname,
 		]
 
 		try:
-			subprocess.run(command, check=True, env=env)  # noqa: S603
+			subprocess.run(list_command, check=True, env=dict_env)  # noqa: S603
 		except FileNotFoundError as err:
 			raise RuntimeError(
 				"pg_dump is required for PostgreSQL backups but was not found in PATH"
@@ -192,7 +192,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
 		except subprocess.CalledProcessError as err:
 			raise RuntimeError(f"pg_dump failed with exit code {err.returncode}") from err
 
-		return target
+		return path_target
 
 	def close(self) -> None:
 		"""No-op because connections are opened per operation."""
@@ -204,19 +204,19 @@ class PostgresDatabaseHandler(DatabaseHandler):
 
 	def _parse_dsn(self, dsn: str) -> DsnParts:
 		"""Parse a PostgreSQL DSN into connection parts for pg_dump."""
-		parsed = urlparse(dsn)
+		cls_parsed = urlparse(dsn)
 		return {
-			"user": parsed.username,
-			"password": parsed.password,
-			"host": parsed.hostname,
-			"port": parsed.port,
-			"database": (parsed.path.lstrip("/") if parsed.path else None),
+			"user": cls_parsed.username,
+			"password": cls_parsed.password,
+			"host": cls_parsed.hostname,
+			"port": cls_parsed.port,
+			"database": (cls_parsed.path.lstrip("/") if cls_parsed.path else None),
 		}
 
 	def _ensure_table(self) -> None:
 		"""Create the backing table when it does not exist."""
-		with self._connect() as conn, conn.cursor() as cur:
-			cur.execute(
+		with self._connect() as cls_conn, cls_conn.cursor() as cls_cur:
+			cls_cur.execute(
 				f"""
                 CREATE TABLE IF NOT EXISTS {self.table} (
                     {self.id_field} TEXT PRIMARY KEY,
@@ -224,4 +224,4 @@ class PostgresDatabaseHandler(DatabaseHandler):
                 )
                 """
 			)
-			conn.commit()
+			cls_conn.commit()

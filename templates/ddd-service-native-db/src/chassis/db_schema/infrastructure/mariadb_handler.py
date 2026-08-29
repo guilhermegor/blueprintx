@@ -68,15 +68,15 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 			Identifier assigned to the stored record.
 		"""
 		record = ensure_id(record, self.id_field)
-		payload = json.dumps(record)
-		with self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(
+		json_payload = json.dumps(record)
+		with self._connect() as cls_conn:
+			cls_cur = cls_conn.cursor()
+			cls_cur.execute(
 				f"INSERT INTO {self.table} ({self.id_field}, data) VALUES (%s, %s) "  # noqa: S608
 				f"ON DUPLICATE KEY UPDATE data = VALUES(data)",
-				(record[self.id_field], payload),
+				(record[self.id_field], json_payload),
 			)
-			conn.commit()
+			cls_conn.commit()
 		return str(record[self.id_field])
 
 	def read(self, record_id: str) -> Record | None:
@@ -92,16 +92,16 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 		Record or None
 			Stored record when present, otherwise ``None``.
 		"""
-		with self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(
+		with self._connect() as cls_conn:
+			cls_cur = cls_conn.cursor()
+			cls_cur.execute(
 				f"SELECT data FROM {self.table} WHERE {self.id_field} = %s",  # noqa: S608
 				(record_id,),
 			)
-			row = cur.fetchone()
-		if not row:
+			tuple_row = cls_cur.fetchone()
+		if not tuple_row:
 			return None
-		return json.loads(row[0])
+		return json.loads(tuple_row[0])
 
 	def update(self, record_id: str, updates: Record) -> Record | None:
 		"""Update an existing record.
@@ -118,12 +118,12 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 		Record or None
 			Updated record when it exists, otherwise ``None``.
 		"""
-		existing = self.read(record_id)
-		if existing is None:
+		dict_existing = self.read(record_id)
+		if dict_existing is None:
 			return None
-		updated = {**existing, **updates, self.id_field: record_id}
-		self.create(updated)
-		return updated
+		dict_updated = {**dict_existing, **updates, self.id_field: record_id}
+		self.create(dict_updated)
+		return dict_updated
 
 	def delete(self, record_id: str) -> bool:
 		"""Delete a record by identifier.
@@ -138,15 +138,15 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 		bool
 			``True`` when a record was deleted, ``False`` otherwise.
 		"""
-		with self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(
+		with self._connect() as cls_conn:
+			cls_cur = cls_conn.cursor()
+			cls_cur.execute(
 				f"DELETE FROM {self.table} WHERE {self.id_field} = %s",  # noqa: S608
 				(record_id,),
 			)
-			deleted = cur.rowcount > 0
-			conn.commit()
-		return deleted
+			bool_deleted = cls_cur.rowcount > 0
+			cls_conn.commit()
+		return bool_deleted
 
 	def backup(self, target_path: str | Path) -> Path:  # complexity-ok: dump + fallback tool
 		"""Create a MariaDB backup using mariadb-dump (falls back to mysqldump).
@@ -161,15 +161,15 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 		Path
 			Path to the created backup file.
 		"""
-		target = Path(target_path)
-		target.parent.mkdir(parents=True, exist_ok=True)
+		path_target = Path(target_path)
+		path_target.parent.mkdir(parents=True, exist_ok=True)
 
-		env = os.environ.copy()
+		dict_env = os.environ.copy()
 		if self.password:
-			env["MARIADB_PWD"] = self.password
-			env["MYSQL_PWD"] = self.password
+			dict_env["MARIADB_PWD"] = self.password
+			dict_env["MYSQL_PWD"] = self.password
 
-		dump_cmd = [
+		list_dump_cmd = [
 			"mariadb-dump",
 			"-h",
 			self.host,
@@ -181,14 +181,14 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 		]
 
 		try:
-			with target.open("w", encoding="utf-8") as handle:
-				subprocess.run(dump_cmd, stdout=handle, check=True, env=env)  # noqa: S603
+			with path_target.open("w", encoding="utf-8") as handle:
+				subprocess.run(list_dump_cmd, stdout=handle, check=True, env=dict_env)  # noqa: S603
 		except FileNotFoundError:
-			fallback = dump_cmd[:]
-			fallback[0] = "mysqldump"
+			list_fallback = list_dump_cmd[:]
+			list_fallback[0] = "mysqldump"
 			try:
-				with target.open("w", encoding="utf-8") as handle:
-					subprocess.run(fallback, stdout=handle, check=True, env=env)  # noqa: S603
+				with path_target.open("w", encoding="utf-8") as handle:
+					subprocess.run(list_fallback, stdout=handle, check=True, env=dict_env)  # noqa: S603
 			except FileNotFoundError as err:
 				raise RuntimeError(
 					"mariadb-dump/mysqldump is required for MariaDB backups "
@@ -199,7 +199,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 		except subprocess.CalledProcessError as err:
 			raise RuntimeError(f"mariadb-dump failed with exit code {err.returncode}") from err
 
-		return target
+		return path_target
 
 	def close(self) -> None:
 		"""Release resources (no-op; connections are per-call)."""
@@ -211,9 +211,9 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 
 	def _ensure_table(self) -> None:
 		"""Create the backing table when it does not exist."""
-		with self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(
+		with self._connect() as cls_conn:
+			cls_cur = cls_conn.cursor()
+			cls_cur.execute(
 				f"""
                 CREATE TABLE IF NOT EXISTS {self.table} (
                     {self.id_field} VARCHAR(255) PRIMARY KEY,
@@ -221,15 +221,15 @@ class MariaDBDatabaseHandler(DatabaseHandler):
                 )
                 """
 			)
-			conn.commit()
+			cls_conn.commit()
 
 	def _parse_dsn(self, dsn: str) -> DsnParts:
 		"""Parse a MariaDB DSN into keyword arguments for mysql-connector."""
-		parsed = urlparse(dsn)
+		cls_parsed = urlparse(dsn)
 		return {
-			"user": parsed.username or os.getenv("DB_USER"),
-			"password": parsed.password or os.getenv("DB_PASSWORD"),
-			"host": parsed.hostname or os.getenv("DB_HOST", "localhost"),
-			"port": parsed.port or int(os.getenv("DB_PORT", "3306")),
-			"database": parsed.path.lstrip("/") or os.getenv("DB_NAME"),
+			"user": cls_parsed.username or os.getenv("DB_USER"),
+			"password": cls_parsed.password or os.getenv("DB_PASSWORD"),
+			"host": cls_parsed.hostname or os.getenv("DB_HOST", "localhost"),
+			"port": cls_parsed.port or int(os.getenv("DB_PORT", "3306")),
+			"database": cls_parsed.path.lstrip("/") or os.getenv("DB_NAME"),
 		}

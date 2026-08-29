@@ -45,11 +45,11 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 			Identifier assigned to the stored record.
 		"""
 		record = ensure_id(record, self.id_field)
-		payload = json.dumps(record)
-		with self._connect() as conn:
-			conn.execute(
+		json_payload = json.dumps(record)
+		with self._connect() as cls_conn:
+			cls_conn.execute(
 				f"INSERT OR REPLACE INTO {self.table} ({self.id_field}, data) VALUES (?, ?)",  # noqa: S608
-				(record[self.id_field], payload),
+				(record[self.id_field], json_payload),
 			)
 		return str(record[self.id_field])
 
@@ -66,15 +66,15 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 		Record or None
 			Stored record when present, otherwise ``None``.
 		"""
-		with self._connect() as conn:
-			cursor = conn.execute(
+		with self._connect() as cls_conn:
+			cls_cursor = cls_conn.execute(
 				f"SELECT data FROM {self.table} WHERE {self.id_field} = ?",  # noqa: S608
 				(record_id,),
 			)
-			row = cursor.fetchone()
-		if not row:
+			tuple_row = cls_cursor.fetchone()
+		if not tuple_row:
 			return None
-		return json.loads(row[0])
+		return json.loads(tuple_row[0])
 
 	def update(self, record_id: str, updates: Record) -> Record | None:
 		"""Update an existing record.
@@ -91,12 +91,12 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 		Record or None
 			Updated record when it exists, otherwise ``None``.
 		"""
-		existing = self.read(record_id)
-		if existing is None:
+		dict_existing = self.read(record_id)
+		if dict_existing is None:
 			return None
-		updated = {**existing, **updates, self.id_field: record_id}
-		self.create(updated)
-		return updated
+		dict_updated = {**dict_existing, **updates, self.id_field: record_id}
+		self.create(dict_updated)
+		return dict_updated
 
 	def delete(self, record_id: str) -> bool:
 		"""Delete a record.
@@ -111,19 +111,19 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 		bool
 			``True`` when a record was deleted, ``False`` otherwise.
 		"""
-		with self._connect() as conn:
-			cursor = conn.execute(
+		with self._connect() as cls_conn:
+			cls_cursor = cls_conn.execute(
 				f"DELETE FROM {self.table} WHERE {self.id_field} = ?",  # noqa: S608
 				(record_id,),
 			)
-			return cursor.rowcount > 0
+			return cls_cursor.rowcount > 0
 
 	def backup(self, target_path: str | Path) -> Path:
 		"""Copy the SQLite database file to the destination path."""
-		target = Path(target_path)
-		target.parent.mkdir(parents=True, exist_ok=True)
-		shutil.copy2(self.db_path, target)
-		return target
+		path_target = Path(target_path)
+		path_target.parent.mkdir(parents=True, exist_ok=True)
+		shutil.copy2(self.db_path, path_target)
+		return path_target
 
 	def close(self) -> None:
 		"""No-op because connections are short-lived per operation."""
@@ -141,8 +141,8 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 
 	def _ensure_table(self) -> None:
 		"""Create the backing table when it does not exist."""
-		with self._connect() as conn:
-			conn.execute(
+		with self._connect() as cls_conn:
+			cls_conn.execute(
 				f"""
                 CREATE TABLE IF NOT EXISTS {self.table} (
                     {self.id_field} TEXT PRIMARY KEY,

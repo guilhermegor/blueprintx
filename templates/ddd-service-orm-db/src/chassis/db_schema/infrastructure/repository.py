@@ -24,19 +24,19 @@ class SQLAlchemyRecordRepository(Repository):
 
 	Examples
 	--------
-	>>> from core.infrastructure.database import DatabaseSession, SQLAlchemyRecordRepository
+	>>> from chassis.db_schema.infrastructure import DatabaseSession, SQLAlchemyRecordRepository
 	>>> db = DatabaseSession("sqlite:///app.db")
 	>>> db.create_tables()
 	>>> with db.session() as session:
 	...     repo = SQLAlchemyRecordRepository(session)
-	...     record_id = repo.add({"title": "Hello", "content": "World"})
+	...     stored = repo.add({"title": "Hello", "content": "World"})
 	...     session.commit()
 	"""
 
 	def __init__(self, session: Session) -> None:
 		super().__init__(session)
 
-	def add(self, entity: dict) -> str:
+	def add(self, entity: dict) -> dict:
 		"""Add a new record to the database.
 
 		Parameters
@@ -46,8 +46,8 @@ class SQLAlchemyRecordRepository(Repository):
 
 		Returns
 		-------
-		str
-			ID of the created record.
+		dict
+			Persisted record data, including the assigned ``id``.
 		"""
 		record_id = entity.get("id") or generate_uuid()
 		record = RecordModel(
@@ -56,7 +56,7 @@ class SQLAlchemyRecordRepository(Repository):
 		)
 		self.session.add(record)
 		self.session.flush()
-		return record.id
+		return {**entity, "id": record.id}
 
 	def get(self, entity_id: str) -> dict | None:
 		"""Retrieve a record by ID.
