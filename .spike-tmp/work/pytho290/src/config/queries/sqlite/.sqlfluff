@@ -1,9 +1,0 @@
-# sqlfluff resolves configuration per FILE DIRECTORY, merging upwards to the project root.
-# That is the whole payoff of filing queries under queries/<engine>/: each engine declares
-# its own dialect right here, and adding a second engine needs nothing but its own folder.
-# It replaces the "run one sqlfluff pass per --dialect" workaround a flat layout forces.
-#
-# Only the dialect is overridden — templater, excluded rule groups and line length keep
-# coming from the root .sqlfluff, so the house style stays in one place.
-[sqlfluff]
-dialect = sqlite
