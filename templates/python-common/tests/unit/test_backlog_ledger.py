@@ -456,3 +456,224 @@ def test_bare_marker_with_no_reason_does_not_satisfy() -> None:
 	"""The reason is REQUIRED, matching `# complexity-ok: <reason>` elsewhere in this repo."""
 	assert gate_integrity.RE_JUSTIFICATION.search("gate-change-ok:\n") is None
 	assert gate_integrity.RE_JUSTIFICATION.search("gate-change-ok:   \n") is None
+
+
+# --------------------------
+# Assertion integrity (#324) — the sharper half of #309: a test's expected value edited to
+# match a bug, rather than the bug fixed. Pure logic only, offline (same boundary as above).
+# --------------------------
+
+
+def test_module_stem_strips_the_test_prefix() -> None:
+	"""The repo's own naming convention IS the correlation signal — no directory mapping."""
+	assert gate_integrity.test_module_stem("tests/unit/test_decimals.py") == "decimals"
+
+
+def test_touched_code_stems_ignores_test_files_and_non_python() -> None:
+	"""Only non-test .py files contribute a stem; a test file must never gate on itself."""
+	list_changed = [
+		("M", "src/utils/decimals.py"),
+		("M", "tests/unit/test_decimals.py"),
+		("M", "README.md"),
+	]
+	assert gate_integrity.touched_code_stems(list_changed) == frozenset({"decimals"})
+
+
+_TEST_OLD = '''
+def test_to_decimal_strict_truncates_by_default() -> None:
+	"""Truncation, not rounding, is the documented contract."""
+	assert to_decimal_strict("1.999", 2) == Decimal("1.99")
+
+
+def test_something_unrelated() -> None:
+	"""Untouched sibling test — must never appear in any finding."""
+	assert 1 == 1
+'''
+
+_TEST_NEW_WEAKENED = _TEST_OLD.replace(
+	'assert to_decimal_strict("1.999", 2) == Decimal("1.99")',
+	'assert to_decimal_strict("1.999", 2) == Decimal("2.00")',
+)
+
+
+def test_assertion_expected_value_changed_is_detected_and_names_the_test() -> None:
+	"""⚠️ THE SHOULD-FAIL WITNESS: the exact #323 shape — same call, new expected value."""
+	list_problems = gate_integrity.test_assertion_problems(
+		_TEST_OLD, _TEST_NEW_WEAKENED, "tests/unit/test_decimals.py"
+	)
+	assert len(list_problems) == 1
+	assert "test_to_decimal_strict_truncates_by_default" in list_problems[0]
+	assert "expected value changed" in list_problems[0]
+	assert "test_something_unrelated" not in "".join(list_problems)
+
+
+def test_assertion_unrelated_rewrite_is_not_flagged() -> None:
+	"""NEGATIVE CONTROL: a line whose left-hand expression ALSO changed is not the #323 shape."""
+	str_new = _TEST_OLD.replace(
+		'assert to_decimal_strict("1.999", 2) == Decimal("1.99")',
+		'assert to_decimal_strict("1.999", 3) == Decimal("1.999")',
+	)
+	assert gate_integrity.test_assertion_problems(_TEST_OLD, str_new, "x") == []
+
+
+def test_assertion_operator_weakened_to_in_is_detected() -> None:
+	"""The #289 shape: `==` (pins one value) replaced by `in` (pins a set, can't pin one)."""
+	str_old = 'def test_intent() -> None:\n\tassert resolve_intent(x) == "send"\n'
+	str_new = 'def test_intent() -> None:\n\tassert resolve_intent(x) in {"send", "reconcile"}\n'
+	list_problems = gate_integrity.test_assertion_problems(str_old, str_new, "x")
+	assert any("operator weakened from '==' to 'in'" in str_p for str_p in list_problems)
+
+
+def test_assert_equal_to_assert_true_is_detected() -> None:
+	"""`assertTrue` cannot fail on the SHAPE `assertEqual` was pinning, only on falsiness."""
+	str_old = "def test_x(self) -> None:\n\tself.assertEqual(compute(), 42)\n"
+	str_new = "def test_x(self) -> None:\n\tself.assertTrue(compute())\n"
+	list_problems = gate_integrity.test_assertion_problems(str_old, str_new, "x")
+	assert any("assertEqual() -> assertTrue()" in str_p for str_p in list_problems)
+
+
+def test_pytest_raises_broadened_is_detected() -> None:
+	"""A narrow, meaningful exception widened to the exception hierarchy's root catches nothing."""
+	str_old = "def test_x() -> None:\n\twith pytest.raises(ValueError):\n\t\tdo_thing()\n"
+	str_new = "def test_x() -> None:\n\twith pytest.raises(Exception):\n\t\tdo_thing()\n"
+	list_problems = gate_integrity.test_assertion_problems(str_old, str_new, "x")
+	assert any("pytest.raises broadened" in str_p for str_p in list_problems)
+
+
+def test_pytest_raises_removed_is_detected() -> None:
+	"""Dropping the raises wrapper entirely stops asserting the error ever happens.
+
+	The removal reindents the wrapped body, so this is caught by the whole-file COUNT check
+	(``raises_count_decreased``), not the same-length line-replace pairing.
+	"""
+	str_old = "def test_x() -> None:\n\twith pytest.raises(ValueError):\n\t\tdo_thing()\n"
+	str_new = "def test_x() -> None:\n\tdo_thing()\n"
+	list_problems = gate_integrity.test_assertion_problems(str_old, str_new, "x")
+	assert any("pytest.raises(...) count dropped" in str_p for str_p in list_problems)
+
+
+def test_deleted_test_is_detected() -> None:
+	"""A test function gone at HEAD is as much a weakening as a gutted one."""
+	str_old = (
+		"def test_a() -> None:\n\tassert 1 == 1\n\n\ndef test_b() -> None:\n\tassert 2 == 2\n"
+	)
+	str_new = "def test_a() -> None:\n\tassert 1 == 1\n"
+	list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
+	assert list_problems == ["x: test 'test_b' deleted"]
+
+
+def test_gutted_test_body_is_detected() -> None:
+	"""A body collapsed to `pass` is functionally the same as deleting the test."""
+	str_old = 'def test_a() -> None:\n\t"""Doc."""\n\tassert compute() == 42\n'
+	str_new = 'def test_a() -> None:\n\t"""Doc."""\n\tpass\n'
+	list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
+	assert list_problems == ["x: test 'test_a' body replaced with a no-op"]
+
+
+def test_gutted_test_body_assert_true_is_detected() -> None:
+	"""`assert True` never fails — an equally silent way to gut a test."""
+	str_old = "def test_a() -> None:\n\tassert compute() == 42\n"
+	str_new = "def test_a() -> None:\n\tassert True\n"
+	list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
+	assert list_problems == ["x: test 'test_a' body replaced with a no-op"]
+
+
+def test_new_test_with_a_trivial_body_is_not_flagged() -> None:
+	"""NEGATIVE CONTROL: a BRAND NEW test has nothing to have been gutted FROM."""
+	str_old = ""
+	str_new = "def test_a() -> None:\n\tpass\n"
+	assert gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x") == []
+
+
+def test_newly_skipped_test_is_detected() -> None:
+	"""A skip mark added since the merge-base stops the test from ever running at all."""
+	str_old = "def test_a() -> None:\n\tassert compute() == 42\n"
+	str_new = (
+		"@pytest.mark.skip(reason='flaky')\ndef test_a() -> None:\n\tassert compute() == 42\n"
+	)
+	list_problems = gate_integrity.newly_skipped_tests(str_old, str_new, "x")
+	assert list_problems == ["x: test 'test_a' newly decorated @pytest.mark.skip"]
+
+
+def test_preexisting_skip_mark_is_not_a_new_weakening() -> None:
+	"""NEGATIVE CONTROL: a mark present on BOTH sides is pre-existing, not a delta."""
+	str_old = "@pytest.mark.skip\ndef test_a() -> None:\n\tassert compute() == 42\n"
+	str_new = "@pytest.mark.skip\ndef test_a() -> None:\n\tassert compute() == 43\n"
+	assert gate_integrity.newly_skipped_tests(str_old, str_new, "x") == []
+
+
+def test_test_path_regex_matches_unit_and_integration_only() -> None:
+	"""Only the shipped test tree is watched — an ordinary source file is invisible to this."""
+	assert gate_integrity.RE_TEST_PATH.search("tests/unit/test_decimals.py")
+	assert gate_integrity.RE_TEST_PATH.search("templates/python-common/tests/unit/test_x.py")
+	assert gate_integrity.RE_TEST_PATH.search("src/utils/decimals.py") is None
+
+
+def _stub_show(str_ref: str, _str_path: str) -> str:
+	"""Module-level stand-in for ``show`` — a nested ``def`` inside a test costs +1 complexity.
+
+	Parameters
+	----------
+	str_ref : str
+		``STR_INDEX_REF`` (the new content) or anything else (the merge-base content).
+	_str_path : str
+		Unused — ``show``'s real signature, kept for ``monkeypatch.setattr`` compatibility.
+
+	Returns
+	-------
+	str
+		``_TEST_NEW_WEAKENED`` for the index ref, ``_TEST_OLD`` otherwise.
+	"""
+	return {gate_integrity.STR_INDEX_REF: _TEST_NEW_WEAKENED}.get(str_ref, _TEST_OLD)
+
+
+def test_file_problems_fires_when_code_under_test_is_also_touched(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	"""End-to-end wiring: a real weakening surfaces only when the correlation signal is met."""
+	set_stems = gate_integrity.touched_code_stems(
+		[("M", "src/utils/decimals.py"), ("M", "tests/unit/test_decimals.py")]
+	)
+	monkeypatch.setattr(gate_integrity, "show", _stub_show)
+	list_problems = gate_integrity.file_problems(
+		"tests/unit/test_decimals.py", "deadbeef", set_stems
+	)
+	assert any("expected value changed" in str_p for str_p in list_problems)
+
+
+def test_file_problems_stays_silent_when_code_under_test_is_untouched(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	"""⚠️ THE SHOULD-PASS WITNESS (issue #324, Case 3).
+
+	Correcting a wrong expectation alone — no change to the code it tests — is the legitimate
+	case and must never be caught.
+	"""
+	monkeypatch.setattr(gate_integrity, "show", _stub_show)
+	list_problems = gate_integrity.file_problems(
+		"tests/unit/test_decimals.py", "deadbeef", frozenset()
+	)
+	assert list_problems == []
+
+
+def test_deletion_flags_a_test_file_deleted_with_its_code() -> None:
+	"""Deleting the whole test file is the bluntest form of weakening it.
+
+	Same as #313's config case — but only when the branch also touches the code the deleted
+	test covered.
+	"""
+	list_changed = [("D", "tests/unit/test_decimals.py"), ("M", "src/utils/decimals.py")]
+	set_stems = gate_integrity.touched_code_stems(list_changed)
+	assert gate_integrity.deletion_problems(list_changed, set_stems) == [
+		"tests/unit/test_decimals.py: test file deleted while its code under test changed"
+	]
+
+
+def test_deletion_of_a_test_file_alone_is_not_flagged() -> None:
+	"""NEGATIVE CONTROL: a test file deleted with NO matching code change is out of scope here.
+
+	E.g. a real cleanup of an obsolete test, not a cover-up.
+	"""
+	list_changed = [("D", "tests/unit/test_decimals.py")]
+	set_stems = gate_integrity.touched_code_stems(list_changed)
+	assert gate_integrity.deletion_problems(list_changed, set_stems) == []
