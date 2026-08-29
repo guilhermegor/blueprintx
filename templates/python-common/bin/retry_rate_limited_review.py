@@ -633,6 +633,31 @@ def examine_pr(
 # Same property as `examine_pr` one level up: degrade and report, never die. The catch is broad
 # for the same reason — to this caller an import error, a malformed roster and an ineligible
 # roster all mean "there is nothing I can safely do this tick".
+def _resolve_gate_dir(path_own_bin: pathlib.Path) -> pathlib.Path:
+	"""Return the directory holding ``check_review_threads.py``.
+
+	The gate's single source is ``templates/common/bin/`` (blueprintx#175 follow-up), a
+	SIBLING of ``templates/python-common/bin/`` where this script lives — but every scaffold
+	copies the gate into the generated project's own flat ``bin/``, alongside this script.
+	Both layouts have to resolve from the one runtime call site (``main``, below).
+
+	Parameters
+	----------
+	path_own_bin : pathlib.Path
+		This script's own ``bin/`` directory.
+
+	Returns
+	-------
+	pathlib.Path
+		``path_own_bin`` when the gate is co-located there (every generated project);
+		otherwise ``templates/common/bin/``, for when this script runs straight out of the
+		BlueprintX template tree (``templates/python-common/bin/``).
+	"""
+	if (path_own_bin / "check_review_threads.py").is_file():
+		return path_own_bin
+	return path_own_bin.parents[1] / "common" / "bin"
+
+
 def resolve_setup(path_bin: pathlib.Path) -> tuple[types.ModuleType, set[str]] | None:
 	"""Load the gate and the roster, or report why nothing can be done.
 
@@ -678,7 +703,7 @@ def main() -> int:
 		print("::warning::GITHUB_REPOSITORY is unset — nothing to do.")
 		return 0
 
-	tuple_setup = resolve_setup(pathlib.Path(__file__).resolve().parent)
+	tuple_setup = resolve_setup(_resolve_gate_dir(pathlib.Path(__file__).resolve().parent))
 	if tuple_setup is None:
 		return 0
 	cls_gate, set_reviewers = tuple_setup

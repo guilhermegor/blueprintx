@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from chassis.typing import ABCTypeCheckerMeta
 
@@ -45,7 +45,7 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
 		"""
 
 	@abstractmethod
-	def read(self, record_id: str) -> Optional[Record]:
+	def read(self, record_id: str) -> Record | None:
 		"""Fetch a record by identifier.
 
 		Parameters
@@ -60,7 +60,7 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
 		"""
 
 	@abstractmethod
-	def update(self, record_id: str, updates: Record) -> Optional[Record]:
+	def update(self, record_id: str, updates: Record) -> Record | None:
 		"""Update a record and return the new value if it exists.
 
 		Parameters

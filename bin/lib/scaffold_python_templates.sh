@@ -164,6 +164,13 @@ scaffold_copy_executables_and_vscode() {
 	cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$str_project_path/bin/commit.sh"
 	chmod +x "$str_project_path/bin/export_repo_content.sh" \
 		"$str_project_path/bin/ship.sh" "$str_project_path/bin/commit.sh"
+	# check_review_threads.py moved out of python-common/bin/ into the language-agnostic
+	# templates/common/bin/ (blueprintx#175 follow-up) — the wholesale COMMON_TEMPLATE_ROOT
+	# copy above no longer reaches it, so it is copied explicitly from SHARED_TEMPLATE_ROOT,
+	# same destination as before (project bin/), so review_threads.yaml's
+	# `python bin/check_review_threads.py` needs no change.
+	cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" \
+		"$str_project_path/bin/check_review_threads.py"
 
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"

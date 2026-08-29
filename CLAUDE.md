@@ -89,12 +89,20 @@ the tier's dependency table. That is the one-implementation rule losing to a mea
 constraint, which is why the reason is written into all five manifests rather than remembered.
 
 The **review-thread gate** follows the same rule, reached from the other direction: it *did* have
-two 543-line copies, and `.github/workflows/review_threads.yml` now runs the template's
-`templates/python-common/bin/check_review_threads.py` directly. It needs no `--root` — unlike the
+two 543-line copies, and `.github/workflows/review_threads.yml` now runs the shared
+`templates/common/bin/check_review_threads.py` directly. It needs no `--root` — unlike the
 filesystem gates it takes its subject from `GITHUB_REPOSITORY`/`PR_NUMBER` and reads
-`.review-bots.yaml` from `Path.cwd()`, so invoking the template copy from the repo root already
+`.review-bots.yaml` from `Path.cwd()`, so invoking the shared copy from the repo root already
 audits *this* repo's roster. There is deliberately no third copy of the roster either: the one in
-`templates/python-common/` is the shipped template, the one at the root is this repo's own data.
+`templates/python-common/` is the shipped Python template, the one at the root is this repo's own
+data. ⚠️ **The script lives in `templates/common/`, not `templates/python-common/`, on purpose
+(blueprintx#175)** — it is the one surface both the Python and TypeScript template families
+already copy from, and every `bin/scaffold/python_*.sh` / `ts_*.sh` script copies it into the
+generated project's own `bin/` at scaffold time. An earlier `ts-*` revision fetched it over the
+network from BlueprintX at CI run time instead; rejected on review as unpinned remote code
+executed on a runner holding `GITHUB_TOKEN` — the same hazard the actionlint SHA-256 check below
+exists to prevent, applied to a security-relevant gate whose silent corruption (always exit 0)
+would be invisible.
 
 `bin/ci/scaffold_lint_test.sh <tier>` is the real verification for template work — it scaffolds
 a project and runs **that project's** `make lint`, `make unit_tests` and `make integration_tests`.
