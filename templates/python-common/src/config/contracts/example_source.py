@@ -4,6 +4,9 @@ Declares the columns the file must carry (``tuple_required``) and the columns th
 at least one valid CNPJ (``tuple_cnpj_cols``). The model/controller passes this instance to
 ``utils.tabular_reader.read_table`` / ``read_query``, which raises ``ContractError`` on any
 violation before types are applied.
+
+Before copying this file for a real source, read ``config/contracts/CLAUDE.md``: confirm
+which spec document is the contract and get the owner's sign-off first.
 """
 
 from __future__ import annotations
