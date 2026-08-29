@@ -13,6 +13,10 @@ export default [
       '**/*.config.js',
       '**/*.config.cjs',
       '**/*.config.mjs',
+      // Docusaurus tooling config, not library source — same reason *.config.js is ignored.
+      'sidebars.js',
+      // Jest-only Babel config; deliberately not named *.config.cjs (see its own header).
+      'babel.config.test.cjs',
     ],
   },
 

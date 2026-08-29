@@ -145,7 +145,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # BOTH halves — see the KNOWN CEILING block at the top of the file for the trade.
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
-        run: python3 templates/python-common/bin/check_review_threads.py
+        run: python3 templates/common/bin/check_review_threads.py
 
       # ⚠️ #263 — THE PUSH-TIME FAILURE OUTLIVES ITS OWN VERDICT.
       # Each trigger above creates a NEW check run; branch protection reads the AGGREGATE. So a
