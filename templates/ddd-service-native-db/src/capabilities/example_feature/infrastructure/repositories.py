@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
+from capabilities.example_feature.domain.entities import Note
 from chassis.typing import TypeChecker
-
-from ..domain.entities import Note
 
 
 class InMemoryNoteRepository(metaclass=TypeChecker):
