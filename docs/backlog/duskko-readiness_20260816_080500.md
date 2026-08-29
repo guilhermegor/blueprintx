@@ -1,111 +1,114 @@
 # Duskko readiness — Tier A bundle
 
-> **CONCLUÍDO 2026-08-16 — mantido como registro.** Tudo aqui foi entregue no PR #170 (squash
-> `ac069c3`) e publicado na **v0.15.3**. Para *o que ainda falta*, leia
-> **`duskko-blockers_20260816_110000.md`**, não este arquivo.
+> **DONE 2026-08-16 — kept as a record.** Everything here was delivered in PR #170 (squash
+> `ac069c3`) and published in **v0.15.3**. For *what still remains*, read
+> **`duskko-blockers_20260816_110000.md`**, not this file.
 >
-> ⚠️ Uma prioridade mudou durante a sessão e vale registrar por escrito, porque a linha abaixo
-> ainda lista **#127** como Tier A: ela foi **rebaixada**. A #127 cobre o índice bloqueado *por
-> inteiro*; a evidência de campo (box do Werner) mostrou o índice bloqueado *parcialmente* — que é
-> a **#165**, já entregue. Não retome a #127 como se fosse urgente.
+> ⚠️ A priority changed during the session and is worth recording in writing, because the line
+> below still lists **#127** as Tier A: it was **downgraded**. #127 covers the index blocked
+> *entirely*; the field evidence (Werner's box) showed the index blocked *partially* — which is
+> **#165**, already delivered. Do not resume #127 as if it were urgent.
 
-**Criado:** 2026-08-16 08:05
+**Created:** 2026-08-16 08:05
 **Branch:** `fix/158-duskko-readiness-bundle`
-**Prazo duro:** 14h de 2026-08-16 (início do projeto duskko com o Werner)
+**Hard deadline:** 14:00 on 2026-08-16 (start of the duskko project with Werner)
 
-## Por que este bundle existe
+## Why this bundle exists
 
-O duskko será scaffoldado a partir de **`mvc-service-native-db`** e faz coleta (API da Tesouraria,
-substituindo as queries de `contexto_duskko/config/consultas_sql/`), tratamento e persistência em
-SQLite. Pela lição `template-fix-does-not-reach-already-scaffolded-projects` (#109), **correção
-que entra antes do `make new` propaga de graça; depois dele, exige backfill manual**. Logo, o
-critério de seleção não é "quantas issues fecho", é "quais tocam a superfície que o duskko usa no
-dia 1".
+Duskko will be scaffolded from **`mvc-service-native-db`** and does collection (Treasury API,
+replacing the queries in `contexto_duskko/config/consultas_sql/`), processing and persistence in
+SQLite. Per the `template-fix-does-not-reach-already-scaffolded-projects` lesson (#109), **a
+fix that lands before `make new` propagates for free; after it, it requires a manual
+backfill**. So the selection criterion isn't "how many issues do I close", it's "which ones
+touch the surface duskko uses on day 1".
 
-Ambientes-alvo confirmados: **Windows + proxy TLS da XP** *e* **Linux/WSL com saída para PyPI** —
-os dois contam, então os itens de ambiente corporativo permanecem no escopo.
+Confirmed target environments: **Windows + XP's TLS proxy** *and* **Linux/WSL publishing to
+PyPI** — both count, so the corporate-environment items stay in scope.
 
-**Fora de escopo por decisão:** o `make new` do duskko não é feito aqui. O usuário decide quando
-parar o desenvolvimento na BlueprintX e scaffoldar.
+**Out of scope by decision:** duskko's `make new` is not done here. The user decides when to
+stop developing on BlueprintX and scaffold.
 
-## Escopo (ordenado por bloqueio × custo)
+## Scope (ordered by blocking × cost)
 
-- [x] **#158** `default_stages` no `.pre-commit-config.yaml` — todo gate rodava 2x (commit + push)
-- [x] **#143** `tabular_reader`: `any()` em série vazia + `astype(str)` não NA-safe
-      — controle negativo: 2 failed no código antigo → 9 passed no corrigido. Achado extra: em
-      **pandas 3** o `.astype(str)` não produz `"nan"` (comportamento do pandas 2), ele deixa o
-      `float nan` chegar ao validador e o beartype levanta `TypeError`. O defeito é um crash, não
-      uma validação errada silenciosa. `safe_str` corrige os dois regimes.
-- [x] **#165** índice PyPI parcialmente bloqueado (403) aborta o `init` inteiro — **evidência de
-      campo do box do Werner (2026-08-16)**; poda por `DB_BACKEND` + instalação incremental.
-      O teste de poda pegou um bug meu antes do commit: `_read_env_var` resolve `.env` relativo ao
-      **CWD**, então todos os backends liam `sqlite`. Ancorado em `$PROJECT_ROOT/.env` — mesma
-      classe da lição `resolve-config-paths-to-absolute` (#122).
-- [x] **#147** robustez do reader de ingestão — **2 de 3 licoes entregues**: nomes de campo
-      normalizados no read boundary (`.strip()`) e `decode_positional_payload` com tratamento
-      assimetrico da largura. A terceira (envelope de fixture) e convencao de teste e pertence ao
-      #152/#124, nao ao seam.
-- [x] **#166** o ramo JSON do `read_table` quebrava a garantia de "ler como texto" —
-      `pd.read_json` coage ate valores publicados entre aspas (`"1000.50"` -> `1000.5`,
-      `"007"` -> `7`). Fronteira de parse, atinge direto API JSON com dinheiro.
-- [x] **#115** emoji nos `bin/check_*.py` quebra os gates em Windows cp1252 — 8 arquivos, 41
-      caracteres nao-cp1252. Corrigido no seam de I/O (reconfigure UTF-8), nao removendo os
-      glifos. Controle negativo: 2 failed sem a correcao, 9 passed com ela.
-- [x] **#114** `get_corporate_ca.sh` estreita o trust store TLS em vez de uni-lo — agora le a
-      trust store do SO (`ssl.enum_certificates`, sem rede e sem desabilitar verificacao) e
-      `wire_corporate_ca` monta `bin/ca_bundle.pem` como UNIAO (certifi + bundle do host + CA
-      corporativa). Removidos o append in-place no certifi e o `PIP_TRUSTED_HOST`.
-- [x] **#160** `startup.py` construia o LOGGER depois de resolucao falivel — gradiente de
-      fragilidade explicito, falha capturada e reportada em log + stderr com exit 2, guarda de
-      ordem via `ast`. Controle negativo: 2 failed na forma antiga.
-- [ ] **#127** wheelhouse offline para o fallback pip (índice bloqueado sai 0 com venv vazia)
-      — **prioridade caiu**: a #165 resolveu a falha aguda do Nexus (403 por pacote). O
-      wheelhouse cobre o indice bloqueado por inteiro, que nao e o que o box do Werner mostra.
+- [x] **#158** `default_stages` in `.pre-commit-config.yaml` — every gate ran 2x (commit + push)
+- [x] **#143** `tabular_reader`: `any()` on an empty series + `astype(str)` not NA-safe
+      — negative control: 2 failed on the old code → 9 passed on the fixed one. Extra finding:
+      on **pandas 3** `.astype(str)` does not produce `"nan"` (pandas 2's behavior), it lets
+      `float nan` reach the validator and beartype raises `TypeError`. The defect is a crash,
+      not a silently wrong validation. `safe_str` fixes both regimes.
+- [x] **#165** a partially blocked (403) PyPI index aborts the whole `init` — **field evidence
+      from Werner's box (2026-08-16)**; pruned by `DB_BACKEND` + incremental install.
+      The pruning test caught a bug of mine before the commit: `_read_env_var` resolves `.env`
+      relative to **CWD**, so every backend read `sqlite`. Anchored to `$PROJECT_ROOT/.env` —
+      same family as the `resolve-config-paths-to-absolute` lesson (#122).
+- [x] **#147** ingestion-reader robustness — **2 of 3 lessons delivered**: field names
+      normalized at the read boundary (`.strip()`) and `decode_positional_payload` with
+      asymmetric width handling. The third (fixture envelope) is a test convention and belongs
+      to #152/#124, not to the seam.
+- [x] **#166** the `read_table` JSON branch broke the "read as text" guarantee —
+      `pd.read_json` coerces even values published in quotes (`"1000.50"` -> `1000.5`,
+      `"007"` -> `7`). A parse boundary, hits directly on JSON API money data.
+- [x] **#115** emoji in `bin/check_*.py` breaks the gates on Windows cp1252 — 8 files, 41
+      non-cp1252 characters. Fixed at the I/O seam (UTF-8 reconfigure), not by removing the
+      glyphs. Negative control: 2 failed without the fix, 9 passed with it.
+- [x] **#114** `get_corporate_ca.sh` narrowed the TLS trust store instead of merging into it —
+      now reads the OS trust store (`ssl.enum_certificates`, no network and no verification
+      disabled) and `wire_corporate_ca` builds `bin/ca_bundle.pem` as a UNION (certifi + host
+      bundle + corporate CA). Removed the in-place certifi append and `PIP_TRUSTED_HOST`.
+- [x] **#160** `startup.py` built the LOGGER after a fallible resolution — explicit fragility
+      gradient, failure caught and reported to log + stderr with exit 2, order guard via
+      `ast`. Negative control: 2 failed on the old form.
+- [ ] **#127** offline wheelhouse for the pip fallback (blocked index exits 0 with an empty
+      venv) — **priority dropped**: #165 resolved the acute Nexus failure (403 per package).
+      The wheelhouse covers the index blocked entirely, which isn't what Werner's box shows.
 
-## Fronteira de vendor (pedido do dono, meio da sessao)
+## Vendor boundary (owner's request, mid-session)
 
-- [x] `utils/frames.from_cursor` + `model/example_entity` da tier **native-db** deixam de chamar
-      a API do pandas; `pd.DataFrame` fica so como anotacao. Scaffold real: 203 passed, lint limpo.
-- [x] **#171** o gate que torna isso mecanico — `bin/check_layer_imports.py` +
-      `.layer-policy.yaml` por tier + 10 testes + wiring pre-commit/CI/scaffolds. Prova nos 4
-      formatos: vendor no topo reprova; vendor em funcao sob `try/except ImportError` reprova
-      (mensagem nomeia a evasao); `pd.read_sql` reprova; `pd.DataFrame` so em anotacao passa.
-      Scaffold real: **213 passed**.
-- [x] **#172** tier **ORM**: `example_entity` lia com `pd.read_sql` (banido pelo proprio
-      `ruff.toml`) e o arquivo estava isento de `TID251` via `per-file-ignores` — a isencao
-      estava no arquivo que o `CLAUDE.md` manda COPIAR, entao isentava o padrao. Agora le pela
-      sessao ORM e monta o frame com `utils.frames.from_records`; isencao removida; as duas
-      afirmacoes do `CLAUDE.md` corrigidas.
-- [x] Revisao do CodeRabbit no PR #170 colhida e resolvida: 4 Major (2 deles reintroduziriam
-      defeitos ja corrigidos nesta sessao) + 2 menores.
-- [x] Cards do kanban corrigidos — o hook so move o card da issue que originou a branch, e eu
-      bundlei 8 numa branch so.
-- [ ] **#173** aplicar o PR gate ao proprio BlueprintX (`required_conversation_resolution`,
-      checks obrigatorios, GitGuardian) — ~~medido: nada bloqueia merge hoje~~ **desatualizado.**
-      Medido na API em 2026-08-22: `required_conversation_resolution=true` e **15** required
-      status checks em `main` (threads, spell, shellcheck, actionlint, mkdocs, version sync,
-      meta, copy-lists e os 7 jobs de scaffold+lint+test). O merge recusado foi **provado na PR
-      #219 com controle negativo**: gate vermelho + GHAS vermelho = `BLOCKED`; gate verde +
-      GHAS vermelho = `CLEAN`, logo o GHAS nao bloqueia e a causa e o gate. Falta **so o
-      GitGuardian** (#153/#155) — ver `pr-gate-blocks-merge_20260817_104500.md`.
+- [x] `utils/frames.from_cursor` + `model/example_entity` in the **native-db** tier stop
+      calling the pandas API; `pd.DataFrame` stays only as an annotation. Real scaffold: 203
+      passed, lint clean.
+- [x] **#171** the gate that makes this mechanical — `bin/check_layer_imports.py` +
+      `.layer-policy.yaml` per tier + 10 tests + hook/CI/scaffolds wiring. Proven across 4
+      shapes: top-level vendor call fails; vendor call inside a function under
+      `try/except ImportError` fails (message names the evasion); `pd.read_sql` fails;
+      `pd.DataFrame` only as an annotation passes. Real scaffold: **213 passed**.
+- [x] **#172** **ORM** tier: `example_entity` read via `pd.read_sql` (banned by `ruff.toml`
+      itself) and the file was exempted from `TID251` via `per-file-ignores` — the exemption
+      sat in the file `CLAUDE.md` tells you to COPY, so it exempted the pattern. Now reads
+      through the ORM session and builds the frame with `utils.frames.from_records`; exemption
+      removed; both `CLAUDE.md` claims corrected.
+- [x] CodeRabbit review on PR #170 collected and resolved: 4 Major (2 of them would have
+      reintroduced defects already fixed this session) + 2 minor.
+- [x] Kanban cards fixed — the hook only moves the card of the issue that started the branch,
+      and I bundled 8 into one branch.
+- [ ] **#173** apply the PR gate to BlueprintX itself (`required_conversation_resolution`,
+      required checks, GitGuardian) — ~~measured: nothing blocks a merge today~~ **stale.**
+      Measured via the API on 2026-08-22: `required_conversation_resolution=true` and **15**
+      required status checks on `main` (threads, spell, shellcheck, actionlint, mkdocs, version
+      sync, meta, copy-lists and the 7 scaffold+lint+test jobs). The refused merge was **proven
+      in PR #219 with a negative control**: red gate + red GHAS = `BLOCKED`; green gate + red
+      GHAS = `CLEAN`, so GHAS does not block and the gate is the cause. Only **GitGuardian**
+      remains (#153/#155) — see `pr-gate-blocks-merge_20260817_104500.md`.
 
-## Aberto durante a sessao (fora do Tier A, registrado para depois)
+## Opened during the session (outside Tier A, logged for later)
 
-- **#167** gate de complexidade ciclomatica no python-common (1 testes / 2 modulos) — com medicao
-- **#168** o mesmo gate explorado para os layouts ts-*
+- **#167** cyclomatic-complexity gate in python-common (1 test / 2 modules) — with measurement
+- **#168** the same gate explored for the ts-* layouts
 
-## Fora do Tier A (não tocam o duskko no dia 1)
+## Outside Tier A (don't touch duskko on day 1)
 
-ts-lib (#132–#136), gates de docs (#159, #130, #141), PR-gate (#145), GitGuardian (#153/#155/#129),
-e as 6 issues abertas nesta sessão que seguem sem implementação (#159 a #164).
+ts-lib (#132–#136), docs gates (#159, #130, #141), PR-gate (#145), GitGuardian
+(#153/#155/#129), and the 6 issues opened this session that remain unimplemented
+(#159 through #164).
 
-## Registro de auditoria desta sessão
+## This session's audit record
 
-Varredura de lições em `~/dev`, `~/github` e `~/.claude` cruzada com as issues abertas. As ondas
-1+2 (#113–#130, #143–#156) já haviam drenado o corpus até 2026-08-09 e carimbado as lições com
-`blueprintx#N`; sobraram 14 lições capturadas depois, que viraram **#158–#164**. O diff
-bidirecional espelho↔store deu 3 anomalias, todas conhecidas e benignas.
+Swept lessons in `~/dev`, `~/github` and `~/.claude` cross-checked against open issues. Waves
+1+2 (#113–#130, #143–#156) had already drained the corpus by 2026-08-09 and stamped the
+lessons with `blueprintx#N`; 14 lessons captured afterward remained, which became
+**#158–#164**. The bidirectional mirror↔store diff turned up 3 anomalies, all known and
+benign.
 
-Dobras decididas (sem issue nova, mesma superfície entregue):
-- skip de build output no `.codespellrc` → estende **#126**
-- destinatários vazios no envio → critério de aceite da **#121**
+Folds decided (no new issue, same surface delivered):
+- skipping build output in `.codespellrc` → extends **#126**
+- empty recipients on send → acceptance criterion of **#121**
