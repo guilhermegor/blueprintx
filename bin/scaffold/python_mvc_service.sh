@@ -496,6 +496,7 @@ copy_shared_utils() {
         br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
         tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
         ms_office email raw_workspace daily_cache queries
+        regime_window regime_registry regime_adapter spec_gap_registry
     )
     for util in "${utils[@]}"; do
         # A util is either a single module or a PACKAGE — retry/ was split into one in
@@ -528,6 +529,11 @@ copy_shared_utils() {
         "$project_path/tests/unit/test_email_sender.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_html_body.py" \
         "$project_path/tests/unit/test_email_html_body.py"
+    # test_regime_adapters.py covers FOUR modules (regime_window/regime_registry/
+    # regime_adapter/spec_gap_registry) in one file — the loop's `test_${util}.py` naming
+    # cannot name it for any single util, so it rides an explicit cp like ms_office/email above.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_regime_adapters.py" \
+        "$project_path/tests/unit/test_regime_adapters.py"
     # A COUNT, never an enumeration: the old message listed 15 of the 17 names and had already
     # drifted (lesson `ci-python-gates` — the enumeration is what goes stale). The number still
     # proves the step ran, which silence would not.
