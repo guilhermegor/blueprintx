@@ -6,10 +6,10 @@ No infrastructure imports — the repo is injected by the caller.
 
 from __future__ import annotations
 
-from ..domain.dto import NoteCreateDTO, NoteResponseDTO
-from ..domain.entities import Note
-from ..domain.ports import NoteRepository
-from .use_cases import CreateNote, ListNotes
+from capabilities.example_feature.application.use_cases import CreateNote, ListNotes
+from capabilities.example_feature.domain.dto import NoteCreateDTO, NoteResponseDTO
+from capabilities.example_feature.domain.entities import Note
+from capabilities.example_feature.domain.ports import NoteRepository
 
 
 # --- assemblers (DTO ↔ entity) ---

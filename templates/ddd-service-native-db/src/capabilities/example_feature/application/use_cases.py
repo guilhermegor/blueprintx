@@ -5,8 +5,8 @@ Operate exclusively on domain entities and port interfaces — no DTOs, no I/O l
 
 from __future__ import annotations
 
-from ..domain.entities import Note
-from ..domain.ports import NoteRepository
+from capabilities.example_feature.domain.entities import Note
+from capabilities.example_feature.domain.ports import NoteRepository
 
 
 class CreateNote:
