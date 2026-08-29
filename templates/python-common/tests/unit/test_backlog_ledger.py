@@ -329,6 +329,26 @@ def test_mypy_ignore_errors_section_added() -> None:
 	assert "mypy.ini: [mypy-chassis.*] ignore_errors = True added" in list_problems
 
 
+def test_mypy_ignore_errors_flipped_on_existing_section() -> None:
+	"""The should-fail witness for blueprintx#313.
+
+	Flipping ``ignore_errors`` on a section that was ALREADY there — not just a brand new
+	one — must still be caught, by comparing the effective value rather than only scanning
+	sections added since the merge-base.
+	"""
+	str_old = _MYPY_BASE + "\n[mypy-legacy_module]\nignore_errors = False\n"
+	str_new = _MYPY_BASE + "\n[mypy-legacy_module]\nignore_errors = True\n"
+	list_problems = gate_integrity.mypy_ini_problems(str_old, str_new, "mypy.ini")
+	assert "mypy.ini: [mypy-legacy_module] ignore_errors = True added" in list_problems
+
+
+def test_mypy_ignore_errors_left_true_is_not_a_new_weakening() -> None:
+	"""NEGATIVE CONTROL: a section already True on both sides is pre-existing, not a delta."""
+	str_old = _MYPY_BASE + "\n[mypy-legacy_module]\nignore_errors = True\n"
+	str_new = _MYPY_BASE + "\n[mypy-legacy_module]\nignore_errors = True\n"
+	assert gate_integrity.mypy_ini_problems(str_old, str_new, "mypy.ini") == []
+
+
 _PYTEST_BASE = (
 	"[pytest]\n"
 	"filterwarnings =\n"
@@ -384,6 +404,27 @@ def test_deletion_flags_a_bin_check_script() -> None:
 	list_changed = [("D", "bin/check_typing.py")]
 	assert gate_integrity.deletion_problems(list_changed) == [
 		"bin/check_typing.py: quality-check script deleted"
+	]
+
+
+def test_deletion_flags_a_watched_config_file() -> None:
+	"""The should-fail witness for blueprintx#313.
+
+	Deleting ``ruff.toml`` outright — the most complete weakening possible — must be caught
+	even though no line-level rule diff exists to read, because there is no file left to
+	read one from.
+	"""
+	list_changed = [("D", "ruff.toml"), ("M", "README.md")]
+	assert gate_integrity.deletion_problems(list_changed) == [
+		"ruff.toml: watched gate configuration deleted"
+	]
+
+
+def test_deletion_flags_a_deleted_workflow() -> None:
+	"""Same weakening, workflow-shaped: deleting the file removes every job at once."""
+	list_changed = [("D", ".github/workflows/tests.yaml")]
+	assert gate_integrity.deletion_problems(list_changed) == [
+		".github/workflows/tests.yaml: watched gate configuration deleted"
 	]
 
 

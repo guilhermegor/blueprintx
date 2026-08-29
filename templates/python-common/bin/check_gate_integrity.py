@@ -20,9 +20,12 @@ files a change touches — never off arbitrary source):
 - a rule removed from a changed ``ruff.toml``'s ``[lint] select``
 - a rule ADDED to ``ignore`` or ``per-file-ignores`` — RULE level, in either config file
 - a path ADDED to ``ruff.toml``'s ``exclude`` or ``mypy.ini``'s ``[mypy] exclude``
-- a ``[mypy-<module>] ignore_errors = True`` section ADDED
+- a ``[mypy-<module>] ignore_errors = True`` section ADDED, or an EXISTING section flipped
+  from ``False``/absent to ``True`` — compared by effective value, not by section presence
 - an ``error:``-escalated ``filterwarnings`` entry removed from ``pytest.ini``
 - a ``bin/ci/*`` file, or a ``bin/check_*``/``bin/lint_*`` gate script, DELETED
+- any watched config (``.pre-commit-config.yaml``, ``ruff.toml``, ``mypy.ini``, ``pytest.ini``)
+  or workflow file DELETED outright — the most complete form of every weakening above
 - a job key removed from a changed workflow's ``jobs:`` block
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
@@ -100,19 +103,26 @@ def _git(list_args: list) -> str:
 
 
 def default_branch() -> str:
-	"""Return the repository's default branch name (``main``/``master``, else ``main``).
+	"""Return a resolvable ref for the repository's default branch.
 
 	Returns
 	-------
 	str
-		The default branch name.
+		``origin/<name>`` when only the remote-tracking branch exists — the common CI shape,
+		a checkout with no local ``main`` — else a local ``<name>``. Previously this stripped
+		the remote prefix (``origin/main`` -> ``main``), which is unresolvable by itself when
+		no local branch backs it; ``git merge-base`` then failed silently and ``resolve_base``
+		read that as "nothing to diff" instead of "could not check" (blueprintx#313). Falls
+		back to the literal ``"main"`` only when nothing resolves at all, so ``resolve_base``
+		can tell a real skip apart from an unresolvable baseline.
 	"""
 	str_ref = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).strip()
 	if str_ref:
-		return str_ref.rsplit("/", 1)[-1]
+		return str_ref
 	for str_candidate in ("main", "master"):
-		if _git(["rev-parse", "--verify", "--quiet", str_candidate]).strip():
-			return str_candidate
+		for str_full in (f"origin/{str_candidate}", str_candidate):
+			if _git(["rev-parse", "--verify", "--quiet", str_full]).strip():
+				return str_full
 	return "main"
 
 
@@ -343,9 +353,13 @@ def mypy_ini_problems(str_old: str, str_new: str, str_shown: str) -> list:
 	for str_alt in sorted(set_new_alts - set_old_alts):
 		list_problems.append(f"{str_shown}: path {str_alt!r} added to [mypy] exclude")
 
-	set_added_sections = set(cls_new.sections()) - set(cls_old.sections())
-	for str_section in sorted(set_added_sections):
-		if cls_new.getboolean(str_section, "ignore_errors", fallback=False):
+	# Effective value, not section presence — a pre-existing `[mypy-<module>]` section that
+	# flips `ignore_errors` from False/absent to True is exactly as much a weakening as a
+	# brand new section carrying `ignore_errors = True` (blueprintx#313).
+	for str_section in sorted(cls_new.sections()):
+		bool_old = cls_old.getboolean(str_section, "ignore_errors", fallback=False)
+		bool_new = cls_new.getboolean(str_section, "ignore_errors", fallback=False)
+		if bool_new and not bool_old:
 			list_problems.append(f"{str_shown}: [{str_section}] ignore_errors = True added")
 	return list_problems
 
@@ -528,7 +542,11 @@ def file_problems(str_path: str, str_base: str) -> list:
 
 
 def deletion_problems(list_changed: list) -> list:
-	"""Return findings for a ``bin/ci/`` or ``bin/check_*``/``bin/lint_*`` script deletion.
+	"""Return findings for a deleted gate script, or a deleted watched config/workflow file.
+
+	Deleting the whole file is the bluntest form of every weakening ``file_problems`` reads
+	line-by-line inside it — a ``ruff.toml`` deleted outright removes every rule at once, and
+	that must be at least as loud as removing one rule from it (blueprintx#313).
 
 	Parameters
 	----------
@@ -538,13 +556,17 @@ def deletion_problems(list_changed: list) -> list:
 	Returns
 	-------
 	list of str
-		One message per deleted quality-check script.
+		One message per deleted quality-check script or deleted watched config file.
 	"""
-	return [
-		f"{str_path}: quality-check script deleted"
-		for str_status, str_path in list_changed
-		if str_status == "D" and (RE_CI_SCRIPT.search(str_path) or RE_GATE_SCRIPT.search(str_path))
-	]
+	list_problems = []
+	for str_status, str_path in list_changed:
+		if str_status != "D":
+			continue
+		if RE_CI_SCRIPT.search(str_path) or RE_GATE_SCRIPT.search(str_path):
+			list_problems.append(f"{str_path}: quality-check script deleted")
+		elif pathlib.Path(str_path).name in _DICT_DISPATCH or RE_WORKFLOW_PATH.search(str_path):
+			list_problems.append(f"{str_path}: watched gate configuration deleted")
+	return list_problems
 
 
 def pr_body_text() -> str:
@@ -612,16 +634,24 @@ def apply_root_flag(list_argv: list) -> bool:
 
 
 def resolve_base() -> str | None:
-	"""Resolve the merge-base to diff against, or ``None`` when there is nothing to diff.
+	"""Resolve the merge-base to diff against.
 
 	Returns
 	-------
 	str or None
-		The merge-base commit, or ``None`` on the default branch itself (already reported).
+		The merge-base commit to diff against. ``None`` means a real skip: a ref resolved
+		and HEAD already IS that commit, so there is genuinely nothing to diff. An empty
+		string means the OPPOSITE — no ref could be resolved at all — and is deliberately
+		never treated as a skip: an absent baseline is not proof of no weakening
+		(blueprintx#313); ``main()`` fails the run on it instead of passing it silently.
 	"""
-	str_base = _git(["merge-base", "HEAD", default_branch()]).strip()
+	str_ref = default_branch()
+	str_base = _git(["merge-base", "HEAD", str_ref]).strip()
+	if not str_base:
+		print(f"❌ could not resolve a merge-base against {str_ref!r} — refusing to pass blind.")
+		return ""
 	str_head = _git(["rev-parse", "HEAD"]).strip()
-	if not str_base or str_base == str_head:
+	if str_base == str_head:
 		print("✅ gate-integrity check skipped — on the default branch (nothing to diff).")
 		return None
 	return str_base
@@ -708,6 +738,8 @@ def main(list_argv: list) -> int:
 	str_base = resolve_base()
 	if str_base is None:
 		return 0
+	if not str_base:
+		return 1
 
 	list_changed = changed_paths(str_base)
 	list_problems = collect_problems(list_changed, str_base)
