@@ -41,11 +41,13 @@ pandas = ">=2.0"
 numpy = ">=1.22"
 # BR ANBIMA business-day calendar (wrapped by utils/dates.py). Single-purpose package.
 wwdates = ">=1.0.0"
+# Hardened XML parsing at the ingestion trust boundary (utils/xml_reader.py), blueprintx#117.
+defusedxml = ">=0.7"
 # Microsoft Teams incoming-webhook transport, used by the webhook opt-in (teams adapter).
 pymsteams = ">=0.2.5"
 # YAML config parsing (inputs/outputs/webhooks .yaml) in src/config.
 pyyaml = ">=6.0"
-# Outlook desktop COM automation (utils/outlook_gateway); Windows-only at install time.
+# Outlook desktop COM automation (utils/ms_office/outlook_gateway); Windows-only at install time.
 pywin32 = {version = ">=306", markers = "sys_platform == 'win32'"}
 # DB driver is added by the scaffold based on the chosen backend:
 #   postgresql  → psycopg[binary]>=3.2.4
@@ -109,7 +111,7 @@ known_first_party = ["src"]
 # pywin32 installs modules whose names share no prefix with the distribution, and it is absent
 # off Windows (marker `sys_platform == 'win32'`), so deptry cannot read the mapping from
 # installed metadata and guesses "pywin32". Without this line every Linux/macOS run reports
-# DEP001 win32com three times in utils/outlook_gateway.py AND DEP002 on pywin32 itself.
+# DEP001 win32com three times in utils/ms_office/outlook_gateway.py AND DEP002 on pywin32 itself.
 pywin32 = ["win32com", "win32api", "pythoncom", "pywintypes"]
 
 [tool.deptry.per_rule_ignores]

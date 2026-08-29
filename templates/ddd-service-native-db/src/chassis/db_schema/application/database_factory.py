@@ -2,25 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
 from pathlib import Path
-from typing import Callable
 from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 
 from chassis.db_schema.infrastructure import (
-	SQLiteDatabaseHandler,
-	PostgresDatabaseHandler,
-	MariaDBDatabaseHandler,
-	MySQLDatabaseHandler,
-	MSSQLDatabaseHandler,
-	OracleDatabaseHandler,
 	DatabaseHandler,
+	MariaDBDatabaseHandler,
+	MSSQLDatabaseHandler,
+	MySQLDatabaseHandler,
+	OracleDatabaseHandler,
+	PostgresDatabaseHandler,
+	SQLiteDatabaseHandler,
 )
 
 
-def _compose_dsn(str_backend: str) -> str:
+def _compose_dsn(str_backend: str) -> str:  # complexity-ok: DSN assembly per backend
 	"""Build a connection DSN from generic environment variables."""
 	str_user = os.getenv("DB_USER", "user")
 	str_password = os.getenv("DB_PASSWORD", "password")
