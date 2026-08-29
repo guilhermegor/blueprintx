@@ -43,6 +43,11 @@
 #
 # Idempotent + non-blocking: gh absent / unauthenticated / not repo-admin → WARN and return 0 so
 # `init` still completes.
+#
+# `bash enable_repo_rules.sh verify` — read-only guard (blueprintx#307), no admin needed: asserts
+# `strict_required_status_checks_policy` / `required_status_checks.strict` is true, on whichever
+# mechanism (ruleset or classic branch protection) the repo actually has. Unlike every other path
+# in this file, `verify` DOES fail loud (non-zero exit) — see verify_strict_required_checks.
 
 set -euo pipefail
 
@@ -110,7 +115,15 @@ build_rules_json() {
 			str_contexts+="$(printf '{"context":"%s"},' "$str_check")"
 		done
 		str_contexts="${str_contexts%,}"
-		str_checks_rule=$(printf ',{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[%s]}}' "$str_contexts")
+		# 🔴 strict_required_status_checks_policy MUST be true (blueprintx#307). This is
+		# GitHub's "Require branches to be up to date before merging" — with it false, a PR
+		# can merge on a green run that was evaluated against a base that no longer exists
+		# (measured on blueprintx#302: 6 tier checks were red only because a dependency,
+		# #293, had not merged yet; a rebase, not a re-run, fixed the verdict). Textual
+		# conflicts are already blocked by git; this is the semantic-conflict case git
+		# cannot see. The cost is real (a PR whose base moved must be updated before
+		# merging) and is the accepted trade for a signal that means what it says.
+		str_checks_rule=$(printf ',{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[%s]}}' "$str_contexts")
 	fi
 
 	cat <<EOF
@@ -179,14 +192,34 @@ apply_ruleset() {
 	return 0
 }
 
+# Read the SERVER back instead of echoing what we meant to send. `apply_ruleset` returns 0
+# even when the API refused it (deliberately — this step must never abort `init`), so a
+# summary built from REQUIRED_CHECKS would announce a gate that may not exist. A
+# provisioning step that reports its own INPUT has verified nothing; that is the same
+# failure this ruleset exists to remove, one level up.
+#
+# blueprintx#307: also assert `strict_required_status_checks_policy` is true, not merely
+# that checks exist — an unstrict required check still lets a PR merge on a run that never
+# saw its base.
+#
+# blueprintx#311 review (thread 3884918238): a READ FAILURE and an ABSENT ruleset used to
+# both `return 0` — indistinguishable from CONFIRMED strict. That let `verify` exit 0
+# without ever having proven anything: "could not check" and "checked and it is fine"
+# collapsed to the same exit code, which is the exact "gate reporting its own blindness as
+# OK" this guard exists to prevent. Three states now share one exit-code contract with
+# assert_branch_protection_strict below: 0 = CONFIRMED strict, 1 = CONFIRMED not strict
+# (a real violation), 2 = absent or unreadable (proves nothing either way). `main`'s init
+# flow still swallows any non-zero with `|| true` (must never fail `poe init`); `verify`
+# is the caller that treats 2 as failure too — see verify_strict_required_checks.
+#
+# blueprintx#311 review (thread 3886360534): an ABSENT `strict_required_status_checks_policy`
+# reads back as jq `null` — neither "false" nor "true", just no rule mentioning it. Folding
+# that into the `!= true` check below used to report CONFIRMED violating (1) for a ruleset
+# that never mentions the policy, so a repo whose CLASSIC protection is correctly strict
+# could still fail verification on the ruleset half alone. See the null/absent check below.
 report_blocking_checks() {
-	# Read the SERVER back instead of echoing what we meant to send. `apply_ruleset` returns 0
-	# even when the API refused it (deliberately — this step must never abort `init`), so a
-	# summary built from REQUIRED_CHECKS would announce a gate that may not exist. A
-	# provisioning step that reports its own INPUT has verified nothing; that is the same
-	# failure this ruleset exists to remove, one level up. $1 = owner/repo.
 	local str_repo="$1"
-	local str_id str_live
+	local str_id str_live str_strict
 	# ⚠️ A failed READ must never be reported as an empty ANSWER. Swallowing the error turns a
 	# permission failure, a rate limit or a dropped connection into "nothing blocks a merge" —
 	# a job announcing the exact blindness it exists to remove. "I could not check" and "I
@@ -194,24 +227,113 @@ report_blocking_checks() {
 	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
-		return 0
+		return 2
 	fi
 	str_id="$(printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
-		return 0
+		return 2
 	fi
 	if ! str_live="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
 		'[.rules[]? | select(.type == "required_status_checks")
 		  | .parameters.required_status_checks[]?.context] | join(", ")' 2>&1)"; then
 		print_status "warning" "Could not READ ruleset '$RULESET_NAME' from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_live:-no output from gh}"
-		return 0
+		return 2
 	fi
 	if [ -z "$str_live" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is active but declares NO required status checks — CI runs and blocks NOTHING. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
-	else
-		print_status "config" "Merge-blocking checks live on $str_repo: $str_live"
+		return 2
 	fi
+	print_status "config" "Merge-blocking checks live on $str_repo: $str_live"
+
+	if ! str_strict="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
+		'[.rules[]? | select(.type == "required_status_checks")
+		  | .parameters.strict_required_status_checks_policy] | first' 2>&1)"; then
+		print_status "warning" "Could not READ the strict policy on $str_repo (so it is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
+		return 2
+	fi
+	# Absent/null (thread 3886360534, see the header note above) is UNKNOWN, not a violation.
+	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
+		print_status "warning" "strict_required_status_checks_policy is absent on $str_repo (ruleset '$RULESET_NAME') — UNKNOWN, not enforced"
+		return 2
+	fi
+	if [ "$str_strict" != "true" ]; then
+		print_status "error" "strict_required_status_checks_policy is NOT true on $str_repo (ruleset '$RULESET_NAME') — a PR can merge on a green run that never saw its base (blueprintx#307)"
+		return 1
+	fi
+	print_status "success" "strict_required_status_checks_policy is enforced on $str_repo (ruleset '$RULESET_NAME', verified)"
+}
+
+assert_branch_protection_strict() {
+	# BlueprintX's OWN `main` is on CLASSIC branch protection, not the ruleset this script
+	# provisions (blueprintx#164 — this script has never been run against this repo). The
+	# ruleset check above is silent about that: an ABSENT ruleset reads as "nothing blocks",
+	# true for that mechanism but silent on whether a repo enforces the same setting through
+	# classic protection instead. Read it back explicitly so #307 is guarded either way.
+	# Same three-state exit-code contract as report_blocking_checks above (blueprintx#311
+	# review, thread 3884918238): 0 = CONFIRMED strict, 1 = CONFIRMED not strict, 2 = absent
+	# or unreadable — absence is not proof, so it must not share exit 0 with a real
+	# confirmation. $1 = owner/repo, $2 = branch.
+	local str_repo="$1" str_branch="$2"
+	local str_strict
+	if ! str_strict="$(gh api "repos/$str_repo/branches/$str_branch/protection" --jq \
+		'.required_status_checks.strict' 2>&1)"; then
+		print_status "warning" "Could not READ classic branch protection on $str_repo:$str_branch (so strict is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
+		return 2
+	fi
+	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
+		print_status "warning" "$str_repo:$str_branch has no required_status_checks under classic branch protection — nothing to assert strict on"
+		return 2
+	fi
+	if [ "$str_strict" != "true" ]; then
+		print_status "error" "required_status_checks.strict is NOT true on $str_repo:$str_branch (classic branch protection) — a PR can merge on a green run that never saw its base (blueprintx#307)"
+		return 1
+	fi
+	print_status "success" "required_status_checks.strict is enforced on $str_repo:$str_branch (classic branch protection, verified)"
+}
+
+verify_strict_required_checks() {
+	# Read-only CI guard for blueprintx#307. Unlike the rest of this script — which must
+	# NEVER abort `poe init` (see the file header) — this mode exists to fail: it is what
+	# `.github/workflows/verify_branch_protection.yml` runs against BlueprintX itself, and
+	# what a generated project's own CI can run the same way. No writes, so it needs only
+	# read access, unlike the provisioning steps in `main`. Checks BOTH mechanisms (see the
+	# two assert functions above) since either may be the one a repo actually has configured.
+	if ! require_gh; then
+		return 1
+	fi
+	local str_repo str_branch
+	str_repo="$(resolve_repo)"
+	if [ -z "$str_repo" ]; then
+		print_status "error" "No GitHub remote resolved — cannot verify branch protection"
+		return 1
+	fi
+	# blueprintx#311 review (thread 3886360538, CWE-693): `|| echo main` used to replace a
+	# FAILED read with the literal "main" — verification then silently inspected whatever
+	# branch that guess named instead of the repo's real default and could report success on
+	# it. `verify` is the fail-closed path (see the file header), so a read failure here must
+	# abort loud rather than substitute an answer nobody confirmed.
+	if ! str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>&1)"; then
+		print_status "error" "Could not resolve the default branch for $str_repo (so it is UNKNOWN, not 'main'): ${str_branch:-no output from gh}"
+		return 1
+	fi
+
+	# blueprintx#311 review (thread 3884918238): require at least one mechanism to return
+	# CONFIRMED strict (0) — absence/unreadable (2) on both is NOT success, only the absence
+	# of a violation. Captured via `&& x=0 || x=$?` (not a bare call) so `set -e` does not
+	# abort on the non-zero cases this function exists to detect.
+	local int_ruleset_result int_protection_result
+	report_blocking_checks "$str_repo" && int_ruleset_result=0 || int_ruleset_result=$?
+	assert_branch_protection_strict "$str_repo" "$str_branch" && int_protection_result=0 || int_protection_result=$?
+
+	if [ "$int_ruleset_result" -eq 1 ] || [ "$int_protection_result" -eq 1 ]; then
+		return 1
+	fi
+	if [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ]; then
+		print_status "error" "Neither mechanism confirmed strict enforcement on $str_repo (both absent or unreadable) — absence is not proof (blueprintx#307)"
+		return 1
+	fi
+	return 0
 }
 
 enable_code_scanning() {
@@ -252,6 +374,13 @@ ensure_optout_label() {
 }
 
 main() {
+	# `verify` is the read-only CI guard (blueprintx#307) — see verify_strict_required_checks
+	# for why it is the one path here allowed to return non-zero.
+	if [ "${1:-}" = "verify" ]; then
+		verify_strict_required_checks
+		return $?
+	fi
+
 	print_status "section" "Repository Rules & Merge Settings"
 	# A skip (no gh / not authed) must not fail init — return 0 either way.
 	if ! require_gh; then
@@ -273,8 +402,17 @@ main() {
 	# Say which checks actually block, every time, and say it from the SERVER's answer. A step
 	# silent about the blocking set is indistinguishable from one that provisioned nothing —
 	# and "nothing blocks" is the failure this list exists to prevent, so it must never be the
-	# quiet outcome.
-	report_blocking_checks "$str_repo"
+	# quiet outcome. It can now return 1 (blueprintx#307, strict is not enforced) — swallowed
+	# here so `init` still completes; `poe enable_repo_rules verify` is the path that doesn't.
+	report_blocking_checks "$str_repo" || true
+
+	# Classic branch protection is a secondary mechanism most generated projects won't use,
+	# but the read is one API call and closes the same gap for a repo — like BlueprintX itself
+	# — that predates this script or manages protection outside it. Non-blocking, same as
+	# every other step above.
+	local str_branch
+	str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>/dev/null || echo main)"
+	assert_branch_protection_strict "$str_repo" "$str_branch" || true
 }
 
 main "$@"
