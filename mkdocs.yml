@@ -17,6 +17,7 @@ nav:
   - FAQ: faq.md
   - Contributing: contributing.md
   - Changelog: changelog.md
+  - Versioning: versioning.md
   - Python:
       - DDD Service (Native DB):
           - Overview: py-ddd-service-native-db.md
