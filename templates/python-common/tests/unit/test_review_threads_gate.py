@@ -425,13 +425,33 @@ def test_the_roster_is_read_from_the_declared_file(tmp_path: Path) -> None:
 	assert len(cls_gate.find_thread_problems(list_threads, set(dict_roster))) == 1
 
 
-def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr() -> None:
+def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
 	"""A failed query raises instead of returning an empty list.
 
 	Returning ``[]`` on error would make an outage indistinguishable from "no threads" — the
 	job reporting its own blindness as all-clear.
+
+	``_fetch_page`` is the subprocess boundary — it shells out to the real ``gh`` binary and
+	the live network (blueprintx#201). Mocking it here, the way ``test_both_connections_are_
+	paginated`` already mocks it above, keeps this a UNIT test: no ``gh`` on PATH and no
+	network required. It still proves the real property — ``fetch_pull_request`` PROPAGATES a
+	page failure rather than swallowing it, which is exactly what ``gh`` returning a non-zero
+	exit would trigger in ``_fetch_page`` (see its own ``RuntimeError`` there).
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		Used to replace ``_fetch_page`` with a mock that raises, standing in for a real
+		``gh`` failure without touching a binary or the wire.
 	"""
 	cls_gate = _load_gate()
+	cls_page = Mock(
+		spec=cls_gate._fetch_page,
+		side_effect=RuntimeError("GraphQL query failed: simulated non-zero gh exit"),
+	)
+	monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
 	with pytest.raises(RuntimeError):
 		cls_gate.fetch_pull_request("no-such-owner-xyz", "no-such-repo-xyz", 1)
 
