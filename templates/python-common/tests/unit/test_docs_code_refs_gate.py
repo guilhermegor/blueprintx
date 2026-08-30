@@ -33,7 +33,7 @@ def _load_gate() -> types.ModuleType:
 cls_gate = _load_gate()
 
 
-@pytest.fixture()
+@pytest.fixture
 def path_src(tmp_path: pathlib.Path) -> pathlib.Path:
 	"""Build a miniature ``src/`` tree: a package with one symbol and one submodule.
 
@@ -50,7 +50,8 @@ def path_src(tmp_path: pathlib.Path) -> pathlib.Path:
 	path_root = tmp_path / "src"
 	path_pkg = path_root / "chassis"
 	path_pkg.mkdir(parents=True)
-	(path_pkg / "__init__.py").write_text("def build() -> None:\n\treturn None\n", encoding="utf-8")
+	str_body = "def build() -> None:\n\treturn None\n"
+	(path_pkg / "__init__.py").write_text(str_body, encoding="utf-8")
 	(path_pkg / "widgets.py").write_text(
 		"def build_widget() -> None:\n\treturn None\n", encoding="utf-8"
 	)
