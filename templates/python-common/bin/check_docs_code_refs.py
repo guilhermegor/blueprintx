@@ -249,6 +249,26 @@ def defined_names(path_module: pathlib.Path) -> set[str] | None:
 	return set_names
 
 
+def strip_inline_comment(str_line: str) -> str:
+	"""Return ``str_line`` with any trailing ``# comment`` removed.
+
+	Safe to cut at the first ``#``: the only text this module feeds here is an import
+	statement's module path and name list, and neither can contain a string literal — so no
+	``#`` is ever inside one.
+
+	Parameters
+	----------
+	str_line : str
+		A line, or fragment, of an import statement.
+
+	Returns
+	-------
+	str
+		``str_line`` up to the first ``#``, right-stripped.
+	"""
+	return str_line.split("#")[0].rstrip()
+
+
 def parse_names(str_names: str) -> list[str]:
 	"""Split an import statement's name list into individual imported names.
 
@@ -266,9 +286,7 @@ def parse_names(str_names: str) -> list[str]:
 		Imported names with ``as`` aliases, a trailing comma and any inline comment
 		stripped; ``*`` dropped.
 	"""
-	# Safe to cut at the first "#": an import statement's name list cannot contain a
-	# string literal, so no "#" here is ever inside one.
-	str_clean = str_names.split("#")[0].strip()
+	str_clean = strip_inline_comment(str_names).strip()
 	if str_clean.startswith("("):
 		str_clean = str_clean[1:]
 	if str_clean.endswith(")"):
@@ -342,11 +360,18 @@ def import_statements(list_body: list[str], int_first_lineno: int) -> list[tuple
 			continue
 		str_module, str_names = cls_match.group(1), cls_match.group(2)
 		int_lineno = int_first_lineno + int_i
+		# Strip each fragment's comment BEFORE testing for the closing ")" and before
+		# joining. A ")" inside a comment used to end the scan early (names after it were
+		# never checked), and a "#" anywhere used to swallow every later name once the
+		# fragments were joined. Both are silent misses — the gate passed, having looked
+		# at less than it reported.
+		str_names = strip_inline_comment(str_names)
 		if str_names.strip().startswith("(") and ")" not in str_names:
 			int_i += 1
 			while int_i < len(list_body):
-				str_names += " " + list_body[int_i]
-				if ")" in list_body[int_i]:
+				str_fragment = strip_inline_comment(list_body[int_i])
+				str_names += " " + str_fragment
+				if ")" in str_fragment:
 					break
 				int_i += 1
 		list_found.append((int_lineno, str_module, str_names))

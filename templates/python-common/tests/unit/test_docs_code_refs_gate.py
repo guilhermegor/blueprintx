@@ -121,3 +121,60 @@ def test_an_absent_module_is_still_reported(path_src: pathlib.Path) -> None:
 	str_problem = cls_gate.candidate_problem(path_src, "no_such_package", ["anything"])
 	assert str_problem is not None
 	assert "module not found" in str_problem
+
+
+@pytest.mark.parametrize(
+	("list_body", "list_expected"),
+	[
+		(
+			[
+				"from chassis.widgets import (",
+				"\tbuild_widget,  # )",
+				"\tmissing_name,",
+				")",
+			],
+			["build_widget", "missing_name"],
+		),
+		(
+			[
+				"from chassis.widgets import (",
+				"\tbuild_widget,  # an annotated example",
+				"\tmissing_name,",
+				")",
+			],
+			["build_widget", "missing_name"],
+		),
+		(
+			[
+				"from chassis.widgets import (",
+				"\tbuild_widget,",
+				"\tmissing_name,",
+				")",
+			],
+			["build_widget", "missing_name"],
+		),
+	],
+)
+def test_a_comment_never_shortens_a_multiline_import(
+	list_body: list[str], list_expected: list[str]
+) -> None:
+	"""Every name in a parenthesised import is seen, whatever comments sit between them.
+
+	⚠️ These are silent MISSES, the opposite of the false positives above and worse to live
+	with: the gate reported success having examined fewer names than the import declares.
+
+	Two distinct causes, one fix. A ``)`` inside a comment ended the closing-paren scan early,
+	so names on later lines were never gathered. And once the fragments were joined, cutting
+	the string at its first ``#`` swallowed every name that followed the comment — which the
+	ordinary annotated import in the second case triggers with no exotic syntax at all.
+	"""
+	list_statements = cls_gate.import_statements(list_body, 1)
+	assert len(list_statements) == 1
+	assert cls_gate.parse_names(list_statements[0][2]) == list_expected
+
+
+def test_strip_inline_comment_leaves_an_uncommented_line_alone() -> None:
+	"""The other direction: the helper must not chew on a line that has no comment."""
+	assert cls_gate.strip_inline_comment("build_widget, missing_name") == (
+		"build_widget, missing_name"
+	)
