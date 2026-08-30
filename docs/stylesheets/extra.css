@@ -1,0 +1,9 @@
+/* Home-page hero logo width control.
+ * Without this, the bare markdown image on docs/index.md renders at full
+ * content width. See docs/troubleshooting.md for how that was found. */
+.hero-logo {
+	display: block;
+	width: 180px;
+	max-width: 60%;
+	margin: 0 auto 1.5rem;
+}
