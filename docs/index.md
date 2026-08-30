@@ -1,16 +1,26 @@
 # **Home**
-![BlueprintX logo](https://raw.githubusercontent.com/guilhermegor/blueprintx/main/assets/logo.png)
 
+<img src="assets/logo.png" alt="BlueprintX logo" class="hero-logo">
 
 Lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
 
 📦 **GitHub Repository:** [github.com/guilhermegor/blueprintx](https://github.com/guilhermegor/blueprintx)
 
+!!! info "Who this is for"
+    Anyone scaffolding a new Python or TypeScript project who wants CI, pre-commit, tests, and
+    docs wired in from the first commit — without hand-assembling that tooling per project.
+
 ---
 
-## 🚀 Get Started
+## Where to start
 
-New to BlueprintX? See the [Get Started guide](get-started.md) for installation and quick start instructions.
+| If you want to… | Read |
+|---|---|
+| Scaffold a project right now | [Get Started](get-started.md) |
+| See a skeleton's code before choosing one | [Examples](examples.md) |
+| Look up a `make` or `blueprintx` command | [CLI Reference](cli-reference.md) |
+| Something broke while wiring docs or assets | [Troubleshooting](troubleshooting.md) |
+| Add a skeleton or open a pull request | [Contributing](contributing.md) |
 
 ---
 
