@@ -8,6 +8,23 @@ Guidance for Claude Code (or any agent) working in this repository.
 `ts-lib` skeleton. It ships dual ESM + CommonJS output plus bundled `.d.ts` declarations,
 built with `tsc` alone (no bundler).
 
+## Vendor allowlist (deny-by-default)
+
+`eslint.config.mjs` carries a local `vendor-allowlist` ESLint rule: a third-party import in
+`src/**/*.ts` is REJECTED unless `VENDOR_POLICY` names it, per layer, with a written reason
+(an entry with a blank reason fails at config-load time, not silently). This is the TypeScript
+mirror of the Python skeletons' `.layer-policy.yaml` + `check_layer_imports.py` — see the
+block comment above `VENDOR_POLICY` for why the policy lives inline here rather than in
+`templates/ts-common/`, and why there is no `boundaries` (layer-direction) entry for this
+tier. Adding a new runtime dependency means adding it to the **allow map of the layer that imports
+it**, with a reason, or `npm run lint` fails.
+
+⚠️ **The layer is the first path component under `src/`, not always `__root__`.** A file
+directly under `src/` (`src/index.ts`) resolves to `__root__`; a nested one
+(`src/client/request.ts`) resolves to `client`, and needs `VENDOR_POLICY.client.allow`. Writing
+the entry under `__root__` for a nested importer leaves lint failing on an entry that looks
+correct — the per-layer split is the point of the policy, not an accident of its shape.
+
 ## Public API discipline
 
 `src/index.ts` is the only barrel that matters: **only what it re-exports is public**.
