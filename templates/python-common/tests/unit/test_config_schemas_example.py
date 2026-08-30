@@ -41,3 +41,28 @@ def test_neither_fund_reference_set_is_rejected() -> None:
 	"""Setting NEITHER ``cod_fundo`` nor ``cod_subclasse`` violates the cross-field rule."""
 	with pytest.raises(ValidationError, match="exactly one"):
 		ExampleSchema(cnpj=_VALID_CNPJ, valor="1")
+
+
+@pytest.mark.parametrize(
+	"value",
+	[None, "", "   ", "abc", "12,34,56", float("nan"), float("inf"), float("-inf"), "nan", "inf"],
+)
+def test_unparsable_valor_is_rejected_not_silently_zeroed(value: object) -> None:
+	"""``valor`` that ``to_decimal`` cannot parse is REJECTED, never coerced to zero.
+
+	The regression this pins: ``to_decimal``'s ``default`` is ``Decimal("0")``, so a malformed
+	payload used to validate as a real zero and no downstream reader could tell the two apart.
+	"""
+	with pytest.raises(ValidationError, match="valor"):
+		ExampleSchema(cnpj=_VALID_CNPJ, valor=value, cod_fundo="F1")
+
+
+@pytest.mark.parametrize("value", ["0", "0.00", 0, Decimal("0"), "0,004"])
+def test_genuine_zero_valor_is_still_accepted(value: object) -> None:
+	"""A payload that really reports zero still passes — the other half of the witness.
+
+	Without this direction the rejection above would also be satisfied by a validator that
+	rejects every zero, which would be a different bug with the same green test.
+	"""
+	cls_schema = ExampleSchema(cnpj=_VALID_CNPJ, valor=value, cod_fundo="F1")
+	assert cls_schema.valor == Decimal("0.00")

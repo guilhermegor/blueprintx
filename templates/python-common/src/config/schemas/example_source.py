@@ -23,6 +23,11 @@ from config.schemas._fields import CnpjStr
 from utils.decimals import to_decimal
 
 
+# Sentinel default for ``to_decimal``: a value it can never produce from parsable input, so
+# "the fallback fired" stays distinguishable from "the payload said zero".
+_UNPARSABLE = Decimal("NaN")
+
+
 class ExampleSchema(BaseModel):
 	"""One record of the example external structured payload.
 
@@ -32,7 +37,8 @@ class ExampleSchema(BaseModel):
 		Reporting entity's CNPJ, validated via ``utils.br_identifiers.is_valid_cnpj``.
 	valor : Decimal
 		Monetary amount, quantised to 2 decimal places via ``utils.decimals.to_decimal`` —
-		never re-implemented here.
+		never re-implemented here. Missing, unparsable or non-finite input is **rejected**,
+		not coerced: see :meth:`_quantise_valor`.
 	cod_fundo : str, optional
 		Fund code. The published standard names either a fund or one of its subclasses,
 		never both — see :meth:`_check_exactly_one_fund_reference`.
@@ -51,7 +57,12 @@ class ExampleSchema(BaseModel):
 	@field_validator("valor", mode="before")
 	@classmethod
 	def _quantise_valor(cls, value: object) -> Decimal:
-		"""Quantise ``valor`` to 2 decimal places via the shared Decimal helper.
+		"""Quantise ``valor`` to 2 decimal places, rejecting input ``to_decimal`` cannot parse.
+
+		``to_decimal`` answers "missing or unparsable" with its ``default``, which is
+		``Decimal("0")`` — indistinguishable from a payload that really reported zero.
+		``valor`` is a required external amount, so this passes a non-finite sentinel as the
+		default instead and raises on it. See ``src/config/CLAUDE.md``.
 
 		Parameters
 		----------
@@ -62,8 +73,16 @@ class ExampleSchema(BaseModel):
 		-------
 		Decimal
 			``value`` quantised to 2 places, ``ROUND_DOWN`` (``to_decimal``'s default).
+
+		Raises
+		------
+		ValueError
+			When ``value`` is missing, unparsable, or non-finite (``NaN`` / ``±Inf``).
 		"""
-		return to_decimal(value, 2)
+		cls_quantised = to_decimal(value, 2, default=_UNPARSABLE)
+		if cls_quantised.is_nan():
+			raise ValueError("valor must be a finite number; got an unparsable value")
+		return cls_quantised
 
 	@model_validator(mode="after")
 	def _check_exactly_one_fund_reference(self) -> ExampleSchema:
