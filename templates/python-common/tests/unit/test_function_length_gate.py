@@ -227,3 +227,38 @@ def test_audit_mode_passes_and_reports_the_count(
 
 	assert gate.main([]) == 0
 	assert "1 file(s) checked" in capsys.readouterr().out
+
+
+# --------------------------
+# .claude/worktrees — a parallel-agent worktree is not project source (blueprintx#331)
+# --------------------------
+
+
+def test_a_dot_claude_worktree_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+	"""A file inside `.claude/worktrees/` (a stale, older checkout) is not discovered."""
+	path_worktree = tmp_path / ".claude" / "worktrees" / "agent-abc" / "sample.py"
+	path_worktree.parent.mkdir(parents=True)
+	path_worktree.write_text("def f() -> None:\n\tint_x = 1\n", encoding="utf-8")
+	monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+
+	assert gate.audit_paths() == []
+
+
+def test_a_dot_claude_ancestor_above_root_does_not_hide_real_files(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""Skipping `.claude` must key off the path RELATIVE to root, not any ancestor.
+
+	This gate runs from inside its own worktree (`.claude/worktrees/agent-*/…`), so
+	`PATH_ROOT` itself commonly sits under a directory literally named `.claude`. Matching
+	against `path_file.parts` (absolute) rather than `path_file.relative_to(PATH_ROOT).parts`
+	would then exclude every file on every such run — the self-inflicted vacuous audit this
+	fix must not reintroduce.
+	"""
+	path_root = tmp_path / ".claude" / "worktrees" / "agent-abc"
+	path_file = path_root / "sample.py"
+	path_file.parent.mkdir(parents=True)
+	path_file.write_text("def f() -> None:\n\tint_x = 1\n", encoding="utf-8")
+	monkeypatch.setattr(gate, "PATH_ROOT", path_root)
+
+	assert gate.audit_paths() == [path_file]
