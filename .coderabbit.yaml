@@ -1,0 +1,23 @@
+# CodeRabbit review configuration for this repo.
+#
+# Why this file exists (issue #362): with no .coderabbit.yaml at all, every
+# review setting is the vendor default — including
+# reviews.auto_review.auto_incremental_review (default true), which re-runs
+# a full review on every push to an already-reviewed PR. That is on top of
+# this repo's workflow already posting an explicit "@coderabbitai review"
+# comment after most fix pushes, so both mechanisms compete for the same
+# quota.
+#
+# Measured 2026-08-30 (see docs/backlog/coderabbit-incremental-review-362_*
+# for the full method and per-class counts): across the 70 PRs touched in
+# the prior 7 days, 522 CodeRabbit events occurred AFTER a PR's opening
+# review. Of those, only 41 (~8%) produced a genuinely new finding
+# ("Actionable comments posted: N", N>=1); the remaining ~92% were a
+# rate-limit notice, an empty acknowledgement, or another non-actionable
+# reply. Turning auto_incremental_review off costs nothing observable
+# (initial review + explicit "@coderabbitai review" requests are both
+# unaffected) and removes the small residual of confirmed
+# push-only-triggered re-reviews.
+reviews:
+  auto_review:
+    auto_incremental_review: false
