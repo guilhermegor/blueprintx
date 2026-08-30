@@ -59,6 +59,7 @@ re-running ``tests/unit/test_comment_language_gate.py``, which pins each class b
 import ast
 import pathlib
 import re
+import subprocess
 import sys
 import tokenize
 
@@ -170,6 +171,13 @@ DICT_MARKERS = {
 #
 # An allow-list also fails silently on every future addition — a new top-level directory is
 # simply never scanned, and nothing says so.
+#
+# Discovery walks `git ls-files`, not the filesystem (blueprintx#331) — a stray directory the
+# repo does not track (a `.claude/worktrees/<agent>/` copy of the whole tree, a stray venv) is
+# structurally invisible to it, with no entry to remember. What remains in TUPLE_SKIP_DIRS below
+# is now pure POLICY, not filesystem hygiene: `docs`/`fixtures` ARE tracked and are excluded on
+# purpose (locale, verbatim bytes) — everything else here is defense against a build artifact
+# someone force-added by mistake, since `git ls-files` would otherwise surface it too.
 TUPLE_SKIP_DIRS = (
 	".git",
 	".venv",
@@ -517,29 +525,55 @@ def file_problems(path_file: pathlib.Path) -> list:
 	return list_out
 
 
+def tracked_files() -> list:
+	"""Return every file ``git`` tracks under ``PATH_ROOT``, relative to it.
+
+	`git ls-files` scopes to the cwd it is run in and returns paths already relative to that
+	cwd — exactly the shape the old ``rglob`` + ``relative_to(PATH_ROOT)`` walk produced, with
+	no skip-list needed for anything a worktree or a cache directory could contain: neither is
+	ever tracked by the main working tree.
+
+	Returns
+	-------
+	list of pathlib.Path
+		Tracked paths, relative to ``PATH_ROOT``. Empty when `git` is unavailable or
+		``PATH_ROOT`` is not inside a work tree — the caller's zero-discovery guard turns that
+		into a failure rather than a silent pass.
+	"""
+	try:
+		# Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
+		# resolution BY DESIGN: this must use the `git` the developer's PATH selects — the one
+		# their shell, pre-commit and CI all use — not a path this file hardcodes.
+		cls_result = subprocess.run(  # noqa: S603
+			["git", "ls-files"],  # noqa: S607
+			cwd=PATH_ROOT,
+			capture_output=True,
+			text=True,
+			check=True,
+		)
+	except (OSError, subprocess.CalledProcessError) as cls_error:
+		print(f"❌ `git ls-files` failed under {PATH_ROOT}: {cls_error}", file=sys.stderr)
+		return []
+	return [pathlib.Path(str_line) for str_line in cls_result.stdout.splitlines() if str_line]
+
+
 def audit_paths() -> list:
 	"""Return the files scanned when no filenames are passed.
 
 	Returns
 	-------
 	list of pathlib.Path
-		Every file carrying a supported extension, minus the skipped directories, sorted.
+		Every TRACKED file carrying a supported extension, minus the skipped directories, sorted.
 	"""
 	set_supported = set(DICT_MARKERS) | {".py"}
-	list_paths = []
-	for path_file in PATH_ROOT.rglob("*"):
-		if path_file.suffix not in set_supported or not path_file.is_file():
-			continue
-		# ⚠️ Compare the REPOSITORY-RELATIVE parts. `path_file.parts` carries every ancestor
-		# above the repo too, so a checkout living under a directory named `docs` or `fixtures`
-		# — `~/docs/myproject`, a CI workspace under `fixtures/` — would match the skip list on
-		# EVERY file. The audit would then find nothing and fail with the vacuous-audit error,
-		# on a tree that is perfectly fine. The bug depends only on where someone cloned.
-		if any(str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts):
-			continue
-		list_paths.append(path_file)
-	# `.env.example` carries `#` comments but its suffix is `.example`, already in DICT_MARKERS,
-	# so it is picked up by the walk above with no special case.
+	list_paths = [
+		PATH_ROOT / path_rel
+		for path_rel in tracked_files()
+		if path_rel.suffix in set_supported
+		# `.env.example` carries `#` comments but its suffix is `.example`, already in
+		# DICT_MARKERS, so it is picked up above with no special case.
+		and not any(str_part in TUPLE_SKIP_DIRS for str_part in path_rel.parts)
+	]
 	return sorted(set(list_paths))
 
 

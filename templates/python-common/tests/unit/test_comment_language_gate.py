@@ -1,14 +1,22 @@
-"""Unit tests for the documentation-language gate (offline; no git, no network).
+"""Unit tests for the documentation-language gate (no network; discovery reads local `git`).
 
 **The calibration is the thing under test.** The gate's first draft reported 19 findings of
 which 18 were false, and a gate that cries wolf gets switched off — so each test below pins one
 measured class of false positive **by name**. A "simplification" that drops a redaction rule
 keeps the true positives passing and silently restores the noise, which is why the negative
 half of this file is larger than the positive half.
+
+Discovery (blueprintx#331) reads ``git ls-files`` rather than walking the filesystem, so the
+audit-mode tests below run against the REAL checkout — this file's own repo — where `git` is
+already available and every file under test is already tracked. The one test that fabricates a
+throwaway tree (``test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem``) `git
+init`s and commits it for the same reason: an untracked ``tmp_path`` fixture is invisible to
+``git ls-files`` by construction, which is the property the migration exists to rely on.
 """
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -264,15 +272,17 @@ def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
 	]
 	assert list_missing == [], f"supported but unaudited: {list_missing}"
 
-	# And the general property, so a NEW location cannot quietly fall outside either.
+	# And the general property, so a NEW location cannot quietly fall outside either. Compared
+	# against TRACKED files, not a raw filesystem walk — discovery now reads `git ls-files`
+	# (blueprintx#331), so an untracked file in a developer's working tree is correctly out of
+	# scope, not a false "missed" here.
 	set_supported = set(gate.DICT_MARKERS) | {".py"}
 	list_missed = [
-		path_file
-		for path_file in gate.PATH_ROOT.rglob("*")
-		if path_file.suffix in set_supported
-		and path_file.is_file()
-		and not any(str_part in gate.TUPLE_SKIP_DIRS for str_part in path_file.parts)
-		and path_file.resolve() not in set_audited
+		path_rel
+		for path_rel in gate.tracked_files()
+		if path_rel.suffix in set_supported
+		and not any(str_part in gate.TUPLE_SKIP_DIRS for str_part in path_rel.parts)
+		and (gate.PATH_ROOT / path_rel).resolve() not in set_audited
 	]
 	assert list_missed == [], f"supported but unaudited: {list_missed[:10]}"
 
@@ -289,6 +299,30 @@ def test_published_docs_are_never_audited() -> None:
 		for path_file in gate.audit_paths()
 		if "docs" in path_file.relative_to(gate.PATH_ROOT).parts
 	]
+
+
+def _git_init_and_commit(path_repo: Path) -> None:
+	"""Turn a throwaway directory into a minimal git repo with everything in it tracked.
+
+	Parameters
+	----------
+	path_repo : pathlib.Path
+		The directory to initialise and commit.
+	"""
+	dict_env = {
+		"GIT_AUTHOR_NAME": "test",
+		"GIT_AUTHOR_EMAIL": "test@example.com",
+		"GIT_COMMITTER_NAME": "test",
+		"GIT_COMMITTER_EMAIL": "test@example.com",
+	}
+	for list_args in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "fixture"]):
+		# Constant, trusted argv against a throwaway fixture dir; no shell involved.
+		subprocess.run(  # noqa: S603
+			["git", *list_args],  # noqa: S607
+			cwd=path_repo,
+			env=dict_env,
+			check=True,
+		)
 
 
 def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
@@ -316,6 +350,9 @@ def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
 	(path_repo / "docs" / "guia.py").write_text(
 		"# esta linha nao esta escrita em ingles\n", encoding="utf-8"
 	)
+	# Discovery reads `git ls-files` (blueprintx#331) — an untracked fixture tree is invisible
+	# to it by construction, so the fixture must actually be a committed repo.
+	_git_init_and_commit(path_repo)
 
 	monkeypatch.setattr(gate, "PATH_ROOT", path_repo)
 	list_paths = gate.audit_paths()
@@ -323,4 +360,39 @@ def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
 	assert [p.name for p in list_paths] == ["ok.py"], (
 		"the ancestor named 'docs' must not disqualify the tree, "
 		"while the repo's own docs/ stays excluded"
+	)
+
+
+def test_untracked_files_are_invisible_but_tracked_ones_are_not(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""The blueprintx#331 property: discovery needs no skip-list entry for a stray worktree.
+
+	`git ls-files` only ever returns TRACKED files, so a directory the audit was never told
+	about — `.claude/worktrees/<agent>/`, a second checkout, any copy of the tree that was
+	never `git add`-ed — cannot inflate the count, with nothing to remember. Both halves are
+	asserted: the untracked file stays invisible, and a genuinely tracked file is still found.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir; holds the fake repo.
+	monkeypatch : pytest.MonkeyPatch
+		Used to point the gate's ``PATH_ROOT`` at that fake repo.
+	"""
+	path_repo = tmp_path / "proj"
+	(path_repo / "src").mkdir(parents=True)
+	(path_repo / "src" / "ok.py").write_text("# English comment\n", encoding="utf-8")
+	_git_init_and_commit(path_repo)
+
+	# An orphan worktree stand-in — present on disk, never staged, never committed.
+	path_worktree = path_repo / ".claude" / "worktrees" / "orphan" / "src"
+	path_worktree.mkdir(parents=True)
+	(path_worktree / "bloat.py").write_text("# English comment too\n", encoding="utf-8")
+
+	monkeypatch.setattr(gate, "PATH_ROOT", path_repo)
+	list_names = sorted(p.name for p in gate.audit_paths())
+
+	assert list_names == ["ok.py"], (
+		f"untracked worktree content leaked into discovery: {list_names}"
 	)
