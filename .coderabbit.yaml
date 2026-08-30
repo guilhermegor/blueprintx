@@ -1,23 +1,34 @@
 # CodeRabbit review configuration for this repo.
 #
-# Why this file exists (issue #362): with no .coderabbit.yaml at all, every
-# review setting is the vendor default — including
-# reviews.auto_review.auto_incremental_review (default true), which re-runs
-# a full review on every push to an already-reviewed PR. That is on top of
-# this repo's workflow already posting an explicit "@coderabbitai review"
-# comment after most fix pushes, so both mechanisms compete for the same
-# quota.
+# ⚠️ READ THIS BEFORE ASSUMING THIS FILE CHANGES ANYTHING HERE. It does not,
+# and that is deliberate — see below.
 #
-# Measured 2026-08-30 (see docs/backlog/coderabbit-incremental-review-362_*
-# for the full method and per-class counts): across the 70 PRs touched in
-# the prior 7 days, 522 CodeRabbit events occurred AFTER a PR's opening
-# review. Of those, only 41 (~8%) produced a genuinely new finding
-# ("Actionable comments posted: N", N>=1); the remaining ~92% were a
-# rate-limit notice, an empty acknowledgement, or another non-actionable
-# reply. Turning auto_incremental_review off costs nothing observable
-# (initial review + explicit "@coderabbitai review" requests are both
-# unaffected) and removes the small residual of confirmed
-# push-only-triggered re-reviews.
+# `reviews.auto_review.*` governs CodeRabbit's AUTOMATIC review path. That path
+# is disabled on this repository regardless of what this file says: CodeRabbit
+# declines automatic reviews on a repository with fewer than 10 stars, and the
+# threshold is not configurable from `.coderabbit.yaml` (there is no popularity
+# key in the schema). This repo has 0 stars. The full account of that, with the
+# PRs it cost, is in `.github/workflows/coderabbit_trigger.yml` lines 5-13.
+#
+# So `auto_incremental_review: false` is a NO-OP here today. It is written down
+# for the two cases where it stops being one:
+#   1. this repo crosses 10 stars and the automatic path switches on;
+#   2. a project scaffolded from these templates adopts the setting knowingly
+#      (it is NOT shipped to `templates/*` today — see the backlog note).
+#
+# What `auto_incremental_review: true` actually does when it IS active: re-review
+# the changes added since the last review. It does not re-review the whole PR.
+#
+# ⚠️ It is NOT the quota driver on this repo. `coderabbit_trigger.yml` fires on
+# `synchronize` — every push to an open PR — and posts an EXPLICIT review
+# request via PAT, which CodeRabbit honours regardless of auto-review config.
+# That is the mechanism spending the slot here, and this file cannot reach it.
+#
+# Measured 2026-08-30 (method and counts in
+# `docs/backlog/coderabbit-incremental-review-362_*`): across 71 PRs updated in
+# the prior 7 days, 773 CodeRabbit events occurred after each PR's opening
+# review. 42 (5.4%) produced a new finding; 538 (69.6%) were rate-limit notices.
+# The waste is real. The remedy for it is not in this file.
 reviews:
   auto_review:
     auto_incremental_review: false
