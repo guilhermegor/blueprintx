@@ -52,10 +52,17 @@ precommit:
 # -------------------
 # LINTING
 # -------------------
-.PHONY: lint check_function_length
+.PHONY: lint check_function_length verify_tiers
 
 lint:
 	@poetry run pre-commit run --all-files
+
+# The real verification for template work: scaffold every Python tier and run THAT project's
+# own lint + tests. Runs the tiers in parallel, each in its own sandbox — pass JOBS=1 to
+# serialise while debugging. `make lint` does NOT cover this; a template defect is only visible
+# from inside a generated project (blueprintx#276).
+verify_tiers:
+	@bash bin/ci/scaffold_lint_test_all.sh $(if $(JOBS),--jobs $(JOBS),)
 
 # Also reachable on its own, so a contributor can check the one rule without paying for the
 # whole hook set. `make lint` covers it via the pre-commit hook.
