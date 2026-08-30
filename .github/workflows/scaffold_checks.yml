@@ -77,6 +77,22 @@ jobs:
       - name: Check cyclomatic complexity across bin/ and templates/
         run: bash templates/python-common/bin/check_complexity.sh --root .
 
+  gate-integrity:
+    name: Gate integrity — a PR must not weaken a check without saying why
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # Merge-base resolution needs full history — a shallow clone has no common ancestor.
+          fetch-depth: 0
+
+      # No dependency and no setup-python step: like function-length, this is a stdlib-only
+      # gate (ast/re/configparser), so it runs on whatever python3 the runner ships.
+      - name: Check for an unjustified gate weakening since main
+        run: python3 templates/python-common/bin/check_gate_integrity.py --root .
+
   docs-code-refs:
     name: Docs code references — symbols + import paths (blueprintx#159)
     runs-on: ubuntu-latest
