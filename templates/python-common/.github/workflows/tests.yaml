@@ -192,6 +192,15 @@ jobs:
         # sweep leaving a precedent that the next author copies, so the CI pass must be total.
         run: poetry run python bin/check_comment_language.py
 
+      - name: Run Gate Integrity Enforcement
+        if: runner.os == 'Linux'
+        # Mirrors the `gate-integrity` pre-commit hook: a PR must not weaken a hook, rule,
+        # exclude, or check without a `gate-change-ok: <reason>` justification (blueprintx#309).
+        # CI runs its gates as explicit steps, not via pre-commit, so this must be listed here
+        # or a hook-skipping contributor bypasses it. Diff-scoped against merge-base(HEAD,
+        # main), so it needs the `fetch-depth: 0` checkout already set above.
+        run: poetry run python bin/check_gate_integrity.py
+
       - name: Run Function Length Gate
         if: runner.os == 'Linux'
         # Mirrors the `function-length` pre-commit hook. CI runs its gates as explicit steps,

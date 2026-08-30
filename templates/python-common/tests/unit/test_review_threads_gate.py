@@ -23,15 +23,43 @@ import pytest
 # --------------------------
 
 
+def _find_gate_path() -> Path:
+	"""Locate ``check_review_threads.py``, whether run from the template tree or a scaffold.
+
+	The gate's single source is ``templates/common/bin/`` (blueprintx#175 follow-up), a
+	SIBLING of ``templates/python-common/`` — but every scaffold copies it into the
+	generated project's own flat ``bin/``, alongside this test file's own copy at
+	``tests/unit/``. Both layouts have to resolve from the same test source.
+
+	Returns
+	-------
+	Path
+		Whichever candidate exists. ⚠️ No branch here on purpose — ``tests/`` is capped at
+		cyclomatic complexity 1 (`` bin/check_complexity.sh``); an ``if``/``raise`` pair
+		would violate that ceiling for a path lookup that is not itself a test. Defaulting
+		to the template-tree candidate when neither exists lets a genuinely missing gate
+		fail naturally in the loader below, which already reports an absent file clearly.
+	"""
+	path_here = Path(__file__).resolve()
+	tuple_candidates = (
+		path_here.parents[2] / "bin" / "check_review_threads.py",  # generated project
+		path_here.parents[3] / "common" / "bin" / "check_review_threads.py",  # template tree
+	)
+	return next(
+		(path_candidate for path_candidate in tuple_candidates if path_candidate.is_file()),
+		tuple_candidates[-1],
+	)
+
+
 def _load_gate() -> ModuleType:
-	"""Import ``bin/check_review_threads.py`` as a module.
+	"""Import ``check_review_threads.py`` as a module.
 
 	Returns
 	-------
 	ModuleType
 		The loaded gate module.
 	"""
-	path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_review_threads.py"
+	path_gate = _find_gate_path()
 	cls_spec = importlib.util.spec_from_file_location("_check_review_threads", path_gate)
 	# Split rather than combined. A conjunction in one assertion reports only that the
 	# whole thing was false, so a failure cannot say WHICH half broke — an absent loader
@@ -56,6 +84,10 @@ _LONG = "x" * 150
 # review was attributed to a commit pushed five minutes before the head.
 _HEAD = "9ae76ab0000000000000000000000000000000000"
 _SUPERSEDED = "9e7d1fe0000000000000000000000000000000000"
+
+# The head commit's committedDate. A completion notice is evidence only when it POSTDATES this —
+# otherwise it describes code the branch has since moved past (raised by review on #339).
+_HEAD_DATE = "2026-01-01T00:00:00Z"
 
 
 def _thread(list_comments: list[tuple[str, str]], *, bool_resolved: bool = True) -> dict:
@@ -210,7 +242,7 @@ def _review(str_login: str, str_oid: str = _HEAD) -> dict:
 	return {"author": {"login": str_login}, "commit": {"oid": str_oid}}
 
 
-def _notice(str_login: str, str_body: str) -> dict:
+def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:00Z") -> dict:
 	"""Build one of the PR's issue comments.
 
 	Parameters
@@ -219,13 +251,16 @@ def _notice(str_login: str, str_body: str) -> dict:
 		Comment author's login.
 	str_body : str
 		Comment body.
+	str_created : str
+		ISO-8601 ``createdAt``. Defaults to a date AFTER ``_HEAD_DATE`` so the ordinary case
+		reads as "the reviewer spoke about the current head".
 
 	Returns
 	-------
 	dict
 		An issue comment shaped like the GraphQL response.
 	"""
-	return {"author": {"login": str_login}, "body": str_body}
+	return {"author": {"login": str_login}, "body": str_body, "createdAt": str_created}
 
 
 def test_a_pr_nobody_reviewed_fails() -> None:
@@ -771,10 +806,107 @@ _NOTICE_LIMITED = (
 _NOTICE_FAILED = f"<summary>\u274c Action failed</summary>\n\nReview failed.\n\n{_FOOTNOTE}"
 
 
+def test_a_declared_completion_is_evidence_the_reviewer_ran() -> None:
+	"""A reviewer that ran and found nothing produces no review object — only a notice.
+
+	CodeRabbit emits a formal review ONLY when it has line comments to attach, so a clean
+	review leaves ``reviews == 0`` and ``threads == 0`` — byte for byte identical to "never
+	ran", which the gate must keep failing. The completion LINE is the discriminator, measured
+	2026-08-29 against the counter-examples that killed the broad version::
+
+		#204 merged unreviewed  reviews=0  phrase=0  -> still fails
+		#213 merged unreviewed  reviews=0  phrase=0  -> still fails
+		#328 reviewed, clean    reviews=0  phrase=1  -> now passes
+
+	⚠️ Evidence the review HAPPENED, never that a thread was answered — thread strictness is
+	untouched. See blueprintx#336.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			str_head_date=_HEAD_DATE,
+			list_notices=[_notice("coderabbitai", _NOTICE_PERFORMED)],
+		)
+		is None
+	)
+
+
+def test_a_completion_predating_the_head_commit_is_not_evidence() -> None:
+	"""H1/H2: a completion notice must POSTDATE the head commit it is offered as evidence for.
+
+	A notice carries no commit oid, unlike a review object. So a reviewer that finished on H1,
+	followed by a push to H2, leaves the newest roster notice reading "Review finished" while
+	nothing has looked at H2. Raised by review on blueprintx#339, which is where this had been
+	written down as a known limitation instead of being closed.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			str_head_date="2026-06-01T00:00:00Z",
+			list_notices=[
+				_notice("coderabbitai", _NOTICE_PERFORMED, "2026-05-01T00:00:00Z"),
+			],
+		)
+		is not None
+	)
+
+
+def test_an_unknown_head_date_is_not_evidence() -> None:
+	"""Fails CLOSED: without the head commit's date, a completion notice cannot be pinned.
+
+	An absent ``committedDate`` means the query changed or the payload is partial. Treating
+	unknown as "recent enough" is the vacuous pass this whole file exists to remove.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			str_head_date="",
+			list_notices=[_notice("coderabbitai", _NOTICE_PERFORMED)],
+		)
+		is not None
+	)
+
+
+def test_a_superseded_completion_does_not_satisfy_the_gate() -> None:
+	"""Only the NEWEST roster notice counts — a stale completion outlives what it described.
+
+	The reviewer finishing on an older commit and then being turned away on the current one
+	leaves both notices in the stream. Reading "any notice ever" passes that PR while its head
+	commit has never been looked at. Caught by this test during blueprintx#336.
+	"""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			str_head_date=_HEAD_DATE,
+			list_notices=[
+				_notice("coderabbitai", _NOTICE_PERFORMED),
+				_notice("coderabbitai", _NOTICE_LIMITED),
+			],
+		)
+		is not None
+	)
+
+
 @pytest.mark.parametrize(
 	"str_notice",
-	[_NOTICE_PERFORMED, _NOTICE_LIMITED, _NOTICE_FAILED],
-	ids=["performed", "rate_limited", "failed"],
+	[_FOOTNOTE, _NOTICE_LIMITED, _NOTICE_FAILED],
+	ids=["footnote_only", "rate_limited", "failed"],
 )
 def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str) -> None:
 	"""The negative control for the defect this check shipped with and review caught.
@@ -784,10 +916,17 @@ def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str)
 	rate-limited and an outright FAILED review read as "declined as redundant". Measured on
 	blueprintx#264 by reading its own comment stream: all three notices carry it verbatim.
 
+	⚠️ The ``performed`` case MOVED to
+	:func:`test_a_declared_completion_is_evidence_the_reviewer_ran` in blueprintx#336, and the
+	distinction is the point: this test protects against keying a pass on the FOOTNOTE, which
+	every outcome carries. A completion LINE is carried by exactly one outcome, so it
+	discriminates where the footnote cannot. The footnote-only case is parametrised here to
+	keep that original protection under test on its own, without a completion line to carry it.
+
 	Parameters
 	----------
 	str_notice : str
-		One of the three real notices, copied from the measured stream.
+		A notice that must NOT satisfy the gate, copied from the measured stream.
 	"""
 	cls_gate = _load_gate()
 	assert (
@@ -796,6 +935,7 @@ def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str)
 			_ROSTER,
 			"h",
 			str_head_oid=_HEAD,
+			str_head_date=_HEAD_DATE,
 			list_notices=[_notice("coderabbitai", str_notice)],
 		)
 		is not None
@@ -815,6 +955,7 @@ def test_the_failure_message_quotes_the_reviewers_latest_notice() -> None:
 		_ROSTER,
 		"h",
 		str_head_oid=_HEAD,
+		str_head_date=_HEAD_DATE,
 		list_notices=[_notice("coderabbitai", _NOTICE_LIMITED)],
 	)
 	assert "Review rate limited." in str_problem
@@ -828,6 +969,7 @@ def test_the_quoted_notice_is_stripped_of_markup() -> None:
 		_ROSTER,
 		"h",
 		str_head_oid=_HEAD,
+		str_head_date=_HEAD_DATE,
 		list_notices=[_notice("coderabbitai", _NOTICE_FAILED)],
 	)
 	assert "<summary>" not in str_problem
@@ -841,6 +983,7 @@ def test_only_a_roster_notice_is_quoted() -> None:
 		_ROSTER,
 		"h",
 		str_head_oid=_HEAD,
+		str_head_date=_HEAD_DATE,
 		list_notices=[_notice("some-human", "these commits were already reviewed on the old PR")],
 	)
 	assert "already reviewed on the old PR" not in str_problem
@@ -854,6 +997,7 @@ def test_the_newest_roster_notice_is_the_one_quoted() -> None:
 		_ROSTER,
 		"h",
 		str_head_oid=_HEAD,
+		str_head_date=_HEAD_DATE,
 		list_notices=[
 			_notice("coderabbitai", _NOTICE_PERFORMED),
 			_notice("coderabbitai", _NOTICE_LIMITED),

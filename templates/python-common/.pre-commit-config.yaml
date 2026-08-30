@@ -157,6 +157,18 @@ repos:
         files: \.(py|sh)$
         pass_filenames: false
 
+      # Diff-scoped against merge-base(HEAD, main) — unlike every OTHER hook here, this one
+      # checks a DELTA, not a whole-tree property: a hook/rule/exclude that was never added is
+      # not a violation, but one that WAS there and got REMOVED without a `gate-change-ok:
+      # <reason>` justification is (blueprintx#309). Same script BlueprintX runs over itself
+      # via `--root .` — one implementation, both sides.
+      - id: gate-integrity
+        name: gate integrity (a PR must not weaken a check without saying why)
+        entry: bash bin/poetry_exec.sh run python bin/check_gate_integrity.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       # A package that declares __all__ must name every public member its submodules define.
       # The usual introspective test DISCOVERS the family through __all__ and therefore cannot
       # see a member missing from it: the sweep just returns one fewer item and passes by not

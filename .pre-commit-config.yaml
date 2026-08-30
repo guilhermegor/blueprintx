@@ -123,6 +123,16 @@ repos:
         pass_filenames: false
         files: \.py$
 
+      - id: gate-integrity
+        name: gate integrity (a PR must not weaken a check without saying why)
+        # Diff-scoped against merge-base(HEAD, main) — the one gate in this family that is
+        # NOT a whole-tree audit, because what it checks is a delta (blueprintx#309). Same
+        # ONE-implementation treatment as function-length/check-complexity above.
+        entry: python3 templates/python-common/bin/check_gate_integrity.py --root .
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: check-secrets
         name: secret scan (gitleaks)
         # Same treatment as check-complexity above: ONE implementation, run over this repo via
