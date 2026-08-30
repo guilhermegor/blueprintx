@@ -14,6 +14,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `examples.md` | Utility page | Examples hub — links the per-skeleton example walkthroughs |
 | `cli-reference.md` | Utility page | Every BlueprintX command: `make` targets + `blueprintx` CLI flags |
 | `faq.md` | Utility page | Common questions about using and extending BlueprintX |
+| `troubleshooting.md` | Utility page | What broke while wiring this site's brand assets/routing, the cause, the fix, and which of those fixes were decided against scaffolding into `templates/` |
 | `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, release) |
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
@@ -83,6 +84,7 @@ nav:
   - Examples: examples.md
   - CLI Reference: cli-reference.md
   - FAQ: faq.md
+  - Troubleshooting: troubleshooting.md
   - Contributing: contributing.md
   - Changelog: changelog.md
   - Python:
@@ -136,7 +138,7 @@ Required sections in order:
 
 ### Type C: Utility page
 
-Files: `index.md`, `get-started.md`
+Files: `index.md`, `get-started.md`, `troubleshooting.md`
 
 No fixed section template — these pages serve different purposes. Preserve the intent of each:
 
@@ -144,6 +146,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 |------|--------|--------------------------|
 | `index.md` | Landing page / hub | Logo, tagline, Python scaffolds overview, local docs instructions, scaffold quick reference |
 | `get-started.md` | First-run guide | Numbered setup steps, requirements, feature highlights |
+| `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
 
 When adding a new utility page, document its intent and key sections in the table above.
 

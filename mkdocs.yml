@@ -15,6 +15,7 @@ nav:
   - Examples: examples.md
   - CLI Reference: cli-reference.md
   - FAQ: faq.md
+  - Troubleshooting: troubleshooting.md
   - Contributing: contributing.md
   - Changelog: changelog.md
   - Versioning: versioning.md
@@ -38,6 +39,8 @@ nav:
       - React SPA (Webpack): ts-react-spa-webpack.md
 theme:
   name: material
+  logo: assets/logo.png
+  favicon: assets/logo.png
   palette:
     - scheme: default
       primary: indigo
@@ -49,6 +52,8 @@ theme:
       toggle:
         icon: material/white-balance-sunny
         name: Switch to light mode
+extra_css:
+  - stylesheets/extra.css
 markdown_extensions:
   - admonition
   - toc:
