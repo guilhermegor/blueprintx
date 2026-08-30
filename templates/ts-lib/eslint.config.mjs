@@ -72,6 +72,23 @@ function vendorRoot(specifier) {
 // A local ESLint rule (no new dependency — ESLint's flat config natively supports an
 // inline plugin+rule object). Scope is deliberately irrelevant to the verdict, exactly
 // like the Python gate: a dynamic `import('vendor')` is judged the same as a top-level one.
+/** Whether an import carries NO runtime coupling — type-only at the declaration or on every
+ *  specifier. A bare `import 'p'` has no specifiers and IS a runtime side-effect import, so it
+ *  must not qualify: `.every()` on an empty array returns true, hence the length guard. */
+function isTypeOnlyImport(node) {
+	if (node.importKind === 'type') return true;
+	const list_specs = node.specifiers ?? [];
+	return list_specs.length > 0 && list_specs.every((s) => s.importKind === 'type');
+}
+
+/** The export-side twin of isTypeOnlyImport. `export * from 'p'` has no specifiers and re-exports
+ *  runtime bindings, so the same length guard applies. */
+function isTypeOnlyExport(node) {
+	if (node.exportKind === 'type') return true;
+	const list_specs = node.specifiers ?? [];
+	return list_specs.length > 0 && list_specs.every((s) => s.exportKind === 'type');
+}
+
 const vendorAllowlistRule = {
   meta: {
     type: 'problem',
@@ -92,12 +109,23 @@ const vendorAllowlistRule = {
       });
     }
     return {
+      // ⚠️ TWO PLACES CARRY `type`, AND CHECKING ONLY THE OUTER ONE IS INCONSISTENT.
+      //
+      // `import type { A } from 'p'` sets importKind='type' on the DECLARATION.
+      // `import { type A } from 'p'` leaves the declaration at 'value' and marks each
+      // SPECIFIER instead. Both are erased at compile time, so both are equally free of
+      // runtime coupling — but reading only the declaration passed the first and blocked the
+      // second. Measured on blueprintx#348: `import type {Foo}` -> 0 findings,
+      // `import {type Foo}` -> 1. Same semantics, opposite verdicts.
+      //
+      // A mixed import (`{ type Foo, merge }`) still couples: `merge` survives to runtime, so
+      // it must fail — hence "every specifier is type", never "any".
       ImportDeclaration(node) {
-        if (node.importKind === 'type') return; // erased at compile time, no runtime coupling
+        if (isTypeOnlyImport(node)) return; // erased at compile time, no runtime coupling
         check(node, node.source.value);
       },
       ExportNamedDeclaration(node) {
-        if (node.exportKind === 'type' || !node.source) return;
+        if (!node.source || isTypeOnlyExport(node)) return;
         check(node, node.source.value);
       },
       ExportAllDeclaration(node) {
