@@ -93,6 +93,20 @@ jobs:
       - name: Check for an unjustified gate weakening since main
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
 
+  docs-code-refs:
+    name: Docs code references — symbols + import paths (blueprintx#159)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # No dependency and no setup-python step: the gate is stdlib-only ast/re, same as
+      # function-length above.
+      - name: Check docs-cited symbols and import paths across docs/
+        run: python3 templates/python-common/bin/check_docs_code_refs.py --root .
+
   test-copy-lists:
     name: Shared test copy lists — scaffolds vs python-common
     runs-on: ubuntu-latest
