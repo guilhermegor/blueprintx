@@ -60,6 +60,19 @@ cmd_check_function_length() {
 # Mirrors the Makefile's `verify_tiers`. Extra argv is forwarded, so `./tasks.sh verify_tiers
 # --jobs 1` serialises the run the same way `make verify_tiers JOBS=1` does.
 cmd_verify_tiers() {
+	# ⚠️ `JOBS` is translated here so BOTH entry points honour it. The Makefile already maps
+	# `JOBS=1` to `--jobs 1`; `tasks.sh` forwarded only positional arguments, and the script
+	# reads `--jobs` alone and never the environment — so `JOBS=1 ./tasks.sh verify_tiers` ran
+	# at FULL concurrency while `bin/help.sh` promised it serialised. Silent, and in the
+	# dangerous direction: the flag exists to debug a tier interactively.
+	#
+	# Translating beats documenting the divergence. Makefile and tasks.sh are two interfaces to
+	# one command list and must not drift — a written sync rule was tried and had already been
+	# broken when blueprintx#189 found it. An explicit `--jobs` still wins, so the escape hatch
+	# in the script's own header keeps working. Raised by review on #277.
+	if [ -n "${JOBS:-}" ] && [ "$#" -eq 0 ]; then
+		set -- --jobs "$JOBS"
+	fi
 	bash "$SCRIPT_DIR/bin/ci/scaffold_lint_test_all.sh" "$@"
 }
 
