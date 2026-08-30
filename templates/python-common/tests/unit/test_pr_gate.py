@@ -7,7 +7,10 @@ classification policy is testable with no API access — the autouse network gua
 ``bin/`` is not a package, so the module is loaded **by path** via importlib.
 """
 
+import contextlib
 import importlib.util
+import io
+import json
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -178,3 +181,68 @@ def test_render_comment_carries_the_sticky_marker_and_the_failing_names() -> Non
 	assert "Run Automated Tests (ubuntu)" in str_body
 	assert "risk:" in str_body
 	assert "deps" in str_body
+
+
+def _fake_urlopen(dict_body: dict) -> contextlib.closing:
+	"""Stand in for ``urllib.request.urlopen`` — a stdlib context manager over the JSON body.
+
+	``io.BytesIO`` already implements ``read()``; ``contextlib.closing`` supplies the
+	``__enter__``/``__exit__`` pair ``_api`` needs, so no hand-rolled fake response class is
+	needed for a one-shot read.
+
+	Parameters
+	----------
+	dict_body : dict
+		The parsed JSON body this fake HTTP response carries.
+
+	Returns
+	-------
+	contextlib.closing
+		A context manager yielding a readable stream of the encoded JSON body.
+	"""
+	return contextlib.closing(io.BytesIO(json.dumps(dict_body).encode()))
+
+
+def test_graphql_refusal_is_reported_to_stderr(
+	monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+	"""An HTTP-200 body carrying ``errors`` is REPORTED loudly, never a silent no-op (#145).
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		Patches the network seam and ``GITHUB_TOKEN``.
+	capsys : pytest.CaptureFixture[str]
+		Captures stdout/stderr so the loud-failure report can be asserted.
+	"""
+	monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+	dict_refusal = {
+		"data": None,
+		"errors": [{"message": "Pull request Auto Merge is not allowed for this repository"}],
+	}
+	monkeypatch.setattr(gate.urllib.request, "urlopen", lambda req: _fake_urlopen(dict_refusal))
+	dict_result = gate._graphql("mutation { enablePullRequestAutoMerge }", {"id": "PR_x"})
+	str_err = capsys.readouterr().err
+	assert "::error::" in str_err
+	assert "Pull request Auto Merge is not allowed" in str_err
+	assert dict_result == dict_refusal
+
+
+def test_graphql_success_is_silent(
+	monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+	"""A normal, error-free GraphQL response prints nothing to stderr (#145).
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		Patches the network seam and ``GITHUB_TOKEN``.
+	capsys : pytest.CaptureFixture[str]
+		Captures stdout/stderr to prove the success path stays quiet.
+	"""
+	monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+	dict_ok = {"data": {"enablePullRequestAutoMerge": {"clientMutationId": None}}}
+	monkeypatch.setattr(gate.urllib.request, "urlopen", lambda req: _fake_urlopen(dict_ok))
+	dict_result = gate._graphql("mutation { enablePullRequestAutoMerge }", {"id": "PR_x"})
+	assert capsys.readouterr().err == ""
+	assert dict_result == dict_ok

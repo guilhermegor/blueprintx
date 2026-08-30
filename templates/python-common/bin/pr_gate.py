@@ -323,6 +323,11 @@ def _api(str_method: str, str_url: str, dict_payload: dict | None = None) -> obj
 def _graphql(str_query: str, dict_vars: dict) -> object:
 	"""Call the GraphQL API (native auto-merge has no REST equivalent).
 
+	⚠️ GraphQL answers a REFUSED mutation with HTTP 200 and an ``errors`` array in the
+	**body** — ``_api`` only catches a 4xx/5xx *envelope*, so a refusal reads exactly like an
+	accepted mutation unless the body itself is inspected. Checked here, once, so no caller can
+	discard the refusal by only checking the return value is not ``None``.
+
 	Parameters
 	----------
 	str_query : str
@@ -333,9 +338,12 @@ def _graphql(str_query: str, dict_vars: dict) -> object:
 	Returns
 	-------
 	object
-		Parsed JSON, or ``None`` on error.
+		Parsed JSON, or ``None`` on a transport-level (4xx/5xx) error.
 	"""
-	return _api("POST", f"{API}/graphql", {"query": str_query, "variables": dict_vars})
+	dict_result = _api("POST", f"{API}/graphql", {"query": str_query, "variables": dict_vars})
+	if isinstance(dict_result, dict) and dict_result.get("errors"):
+		print(f"::error::GraphQL call refused: {dict_result['errors']!r}", file=sys.stderr)
+	return dict_result
 
 
 def collect_axes(list_check_runs: list, dict_axis_rules: dict) -> tuple:
