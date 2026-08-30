@@ -89,6 +89,15 @@ function isTypeOnlyExport(node) {
 	return list_specs.length > 0 && list_specs.every((s) => s.exportKind === 'type');
 }
 
+/** Whether a dynamic-import specifier is provably first-party: a template literal whose FIXED
+ *  leading text is relative. `` `./x/${y}` `` cannot reach a package whatever `y` holds; a
+ *  template starting with an interpolation (`` `${p}/x` ``) proves nothing and is not exempt. */
+function isProvablyLocalSpecifier(node) {
+	if (node.type !== 'TemplateLiteral' || node.quasis.length === 0) return false;
+	const str_head = node.quasis[0].value.cooked ?? '';
+	return str_head.startsWith('./') || str_head.startsWith('../');
+}
+
 const vendorAllowlistRule = {
   meta: {
     type: 'problem',
@@ -132,10 +141,28 @@ const vendorAllowlistRule = {
         if (node.exportKind === 'type' || !node.source) return;
         check(node, node.source.value);
       },
+      // ⚠️ A NON-LITERAL `import(x)` USED TO EXIT SILENTLY, WHICH IS THE ONE OUTCOME A
+      // DENY-BY-DEFAULT RULE MAY NEVER HAVE. The guard read "if I can resolve it, check it",
+      // so `const v = 'lodash'; import(v)` reached any vendor with nothing asking — measured
+      // on blueprintx#348: 0 findings. Unresolvable is not the same as allowed; a policy that
+      // cannot see a specifier must SAY so, not wave it through.
+      //
+      // A relative specifier is exempt because it is provably first-party: `import('./x')` and
+      // a template starting `./` or `../` cannot reach a package however the rest is built.
       ImportExpression(node) {
-        if (node.source.type === 'Literal' && typeof node.source.value === 'string') {
-          check(node, node.source.value);
+        const cls_src = node.source;
+        if (cls_src.type === 'Literal' && typeof cls_src.value === 'string') {
+          check(node, cls_src.value);
+          return;
         }
+        if (isProvablyLocalSpecifier(cls_src)) return;
+        context.report({
+          node,
+          message:
+            'dynamic import() with a non-literal specifier cannot be checked against ' +
+            'VENDOR_POLICY. Use a string literal, or a template starting "./" or "../" for a ' +
+            'local module — an unresolvable specifier is not an allowed one.',
+        });
       },
       // ⚠️ `import x = require('pkg')` is a FIFTH way in, and it is the one a deny-by-default
       // list cannot afford to miss: the other four are ESM syntax a reader recognises as an
