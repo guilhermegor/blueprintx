@@ -109,6 +109,23 @@ const vendorAllowlistRule = {
           check(node, node.source.value);
         }
       },
+      // ⚠️ `import x = require('pkg')` is a FIFTH way in, and it is the one a deny-by-default
+      // list cannot afford to miss: the other four are ESM syntax a reader recognises as an
+      // import, while this one reads like an assignment. typescript-eslint models it as
+      // TSImportEqualsDeclaration whose `moduleReference` is a TSExternalModuleReference —
+      // NOT a CallExpression, so nothing else in this visitor set sees it. Raised by review
+      // on blueprintx#348.
+      TSImportEqualsDeclaration(node) {
+        if (node.importKind === 'type') return; // erased at compile time, like the ESM cases
+        const cls_ref = node.moduleReference;
+        if (
+          cls_ref.type === 'TSExternalModuleReference' &&
+          cls_ref.expression.type === 'Literal' &&
+          typeof cls_ref.expression.value === 'string'
+        ) {
+          check(node, cls_ref.expression.value);
+        }
+      },
     };
   },
 };
