@@ -256,14 +256,19 @@ def parse_names(str_names: str) -> list[str]:
 	----------
 	str_names : str
 		Everything after ``import `` — e.g. ``"Foo, Bar as Baz"`` or a joined
-		multi-line ``"(Foo, Bar,)"`` group.
+		multi-line ``"(Foo, Bar,)"`` group. A trailing ``# comment`` is dropped: docs
+		routinely annotate an example import, and keeping the comment turns the name into
+		one that no module can define.
 
 	Returns
 	-------
 	list of str
-		Imported names with ``as`` aliases and a trailing comma stripped; ``*`` dropped.
+		Imported names with ``as`` aliases, a trailing comma and any inline comment
+		stripped; ``*`` dropped.
 	"""
-	str_clean = str_names.strip()
+	# Safe to cut at the first "#": an import statement's name list cannot contain a
+	# string literal, so no "#" here is ever inside one.
+	str_clean = str_names.split("#")[0].strip()
 	if str_clean.startswith("("):
 		str_clean = str_clean[1:]
 	if str_clean.endswith(")"):
@@ -368,7 +373,9 @@ def candidate_problem(
 	str or None
 		A human-readable finding, or ``None`` when the module resolves and every named
 		symbol is defined (or the target could not be parsed, in which case level 2 is
-		skipped rather than guessed at).
+		skipped rather than guessed at). A name that is not defined in the module but
+		resolves as a **submodule** of it is accepted: ``from chassis import widgets`` is
+		valid Python whether or not ``chassis/__init__.py`` re-exports the name.
 	"""
 	path_module = resolve_module(path_src, str_module)
 	if path_module is None:
@@ -376,7 +383,12 @@ def candidate_problem(
 	set_defined = defined_names(path_module)
 	if set_defined is None:
 		return None
-	list_missing = [str_name for str_name in list_names if str_name not in set_defined]
+	list_missing = [
+		str_name
+		for str_name in list_names
+		if str_name not in set_defined
+		and resolve_module(path_src, f"{str_module}.{str_name}") is None
+	]
 	if list_missing:
 		str_rel = path_module.relative_to(path_src.parent)
 		return f"{', '.join(list_missing)} not defined in {str_module} ({str_rel})"
