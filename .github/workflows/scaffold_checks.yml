@@ -77,6 +77,30 @@ jobs:
       - name: Check cyclomatic complexity across bin/ and templates/
         run: bash templates/python-common/bin/check_complexity.sh --root .
 
+  complexity-templates:
+    name: Cyclomatic complexity — templates/python-common (tests 1, src 2, bin 8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install ruff
+        run: pipx install ruff
+
+      # blueprintx#271: the job above only ever sees bin/ (2 files) because its tree
+      # discovery is a literal top-level dirname lookup (tests/, src/, bin/ under whatever
+      # --root cd's to) — BlueprintX's own root has only bin/. templates/python-common/ IS a
+      # src/ + tests/ tree, just not at the repo root. ⚠️ function-length is NOT duplicated
+      # the same way here: its discovery already walks the WHOLE --root recursively
+      # (rglob), so the job above already reaches templates/python-common/{src,tests} today
+      # — measured by planting a 66-line function there and confirming the existing job
+      # alone reported it. A second function-length job would re-scan a subset of what the
+      # first already covers, for no new coverage.
+      - name: Check cyclomatic complexity across templates/python-common
+        run: bash templates/python-common/bin/check_complexity.sh --root templates/python-common
+
   gate-integrity:
     name: Gate integrity — a PR must not weaken a check without saying why
     runs-on: ubuntu-latest
