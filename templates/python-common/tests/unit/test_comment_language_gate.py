@@ -15,6 +15,7 @@ init`s and commits it for the same reason: an untracked ``tmp_path`` fixture is 
 """
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -309,7 +310,9 @@ def _git_init_and_commit(path_repo: Path) -> None:
 	path_repo : pathlib.Path
 		The directory to initialise and commit.
 	"""
+	# Inherit the environment; a bare dict drops PATH. See the backlog note for the measurement.
 	dict_env = {
+		**os.environ,
 		"GIT_AUTHOR_NAME": "test",
 		"GIT_AUTHOR_EMAIL": "test@example.com",
 		"GIT_COMMITTER_NAME": "test",

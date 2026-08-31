@@ -25,7 +25,7 @@ risks a silent coverage loss.
 | `check_function_length.py` (OFF LIMITS — open PR) | repo root, `PATH_ROOT.rglob()` (`__file__`-relative) | 223 (with bloat) | 161 | 62 (all bloat) | **Read-only** — same shape as `check_comment_language.py`; recommend migrating once its PR lands |
 | `check_test_copy_lists.py` (OFF LIMITS — open PR) | not measured (outside file surface) | — | — | — | **Read-only**, out of scope for this PR |
 
-**Why six gates show delta=0:** they resolve their discovery root as `pathlib.Path("src")` /
+**Why seven gates show delta=0:** they resolve their discovery root as `pathlib.Path("src")` /
 `Path("docs")` / `Path("tests")` **relative to cwd**, and `.claude/` is a *sibling* of `src/`
 at the repo root, not a descendant of it. `rglob` starting inside `src/` structurally cannot
 walk into `.claude/worktrees/`. Migrating these to `git ls-files` would trade a real
@@ -59,8 +59,41 @@ Those are exactly the ones the issue's own measurement (14,961 vs 316) was taken
       (`PATH_ROOT.rglob()` → `git ls-files`), reusing the same shape proven here.
 - [ ] Once the PR holding `check_test_copy_lists.py` merges, measure and (if warranted)
       migrate it — not measured in this pass since it was off-limits.
-- [x] Leave `check_all_exports.py`, `check_docstrings.py`, `check_dtypes.py`,
-      `check_layer_imports.py`, `check_provenance.py`, `check_typing.py` unmigrated — measured
+- [x] Leave `check_all_exports.py`, `check_docs_sections.py`, `check_docstrings.py`,
+      `check_dtypes.py`, `check_layer_imports.py`, `check_provenance.py`, `check_typing.py`
+      unmigrated — measured
       delta=0, no benefit, real (if narrow) untracked-coverage risk.
 
 Completed — kept as a record. #331 stays open: two off-limits gates remain unmigrated.
+
+## Follow-up from the PR review, 2026-08-31
+
+Two of four findings valid, both fixed; two rejected with measurement.
+
+**Valid — the fixture's `env` dropped `PATH`.** `subprocess.run(["git", …], env=dict_env)` with a
+bare dict removes `PATH`, and Python then resolves the executable through `os.defpath`, which is
+only `/bin:/usr/bin`. Measured on this machine: `git` is `/usr/bin/git`, so it worked here and
+would have kept working in CI — and a binary outside those two directories raises
+`FileNotFoundError` before the fixture is ever built. That is Homebrew's `/opt/homebrew/bin/git`
+and any custom install, so a contributor to a **generated** project hits it where we never would.
+Fixed by starting from `os.environ` and overriding only the four identity values.
+
+⚠️ Worth naming: the first attempt to explain this fix inline was a four-line comment, and
+`ERA001` rejected it as commented-out code — correctly. The reasoning belongs here; the code
+keeps a one-line pointer.
+
+**Valid — the delta=0 count.** The table lists seven gates at delta 0; the prose said six and the
+completed-work list omitted `check_docs_sections.py`. Both corrected.
+
+**Rejected — "restore Ruff import order".** `ruff.toml` sets `force-sort-within-sections = true`,
+which sorts `import X` and `from X import …` **together** by module name within a section. The
+existing order (`importlib.util`, `pathlib`, `subprocess`, `sys`, `types`) is what that setting
+produces, and `ruff check --config ruff.toml` reports **No issues found**. The finding inverted
+the setting's meaning.
+
+**Rejected — "split the combined discovery test".** The assertion is
+`sorted(names) == ["ok.py"]`, a single exact equality that already covers both directions: the
+tracked file must be present AND nothing untracked may appear. Splitting it into
+`"ok.py" in names` plus `"bloat.py" not in names` is strictly **weaker** — the pair stops
+catching a third, unexpected file, which exact equality catches by construction. The failure
+message already names what leaked.
