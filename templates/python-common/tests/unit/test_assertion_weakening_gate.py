@@ -371,3 +371,42 @@ def test_a_unittest_call_rewritten_as_a_stricter_bare_assert_is_clean() -> None:
 	str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
 	str_new = "class T:\n\tdef test_v(self) -> None:\n\t\tassert a() > 5\n"
 	assert _findings(str_old, str_new) == []
+
+
+@pytest.mark.parametrize("str_new_assert", ["assert True", "assert 1", 'assert "x"'])
+def test_a_call_trivialised_to_any_truthy_constant_is_reported(str_new_assert: str) -> None:
+	"""``assert True`` is not the only assertion that can never fail.
+
+	The cross-kind rule first checked ``value is True`` literally, so ``assert 1`` and
+	``assert "x"`` — equally unfailable — slipped through. It now reuses
+	``_is_trivial_assert_test()``, the same predicate the same-kind path already used, rather
+	than carrying a second, narrower notion of "trivial".
+
+	Parameters
+	----------
+	str_new_assert : str
+		The trivialised assertion replacing the unittest call.
+	"""
+	str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
+	str_new = f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n"
+	list_found = _findings(str_old, str_new)
+	assert len(list_found) == 1
+	assert "truthy constant" in list_found[0]
+
+
+@pytest.mark.parametrize("str_new_assert", ["assert 0", "assert None"])
+def test_a_call_replaced_by_a_falsy_constant_is_not_a_weakening(str_new_assert: str) -> None:
+	"""⚠️ The other direction: a falsy constant always FAILS, so it is not weaker.
+
+	Without this case the rule above would also be satisfied by one that flags every constant,
+	which would fire on a test deliberately pinned red — and a gate that cannot tell those
+	apart gets an escape hatch instead of a fix.
+
+	Parameters
+	----------
+	str_new_assert : str
+		The falsy assertion replacing the unittest call.
+	"""
+	str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
+	str_new = f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n"
+	assert _findings(str_old, str_new) == []

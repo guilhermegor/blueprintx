@@ -719,8 +719,8 @@ def _compare_call_to_assert(old_node: ast.Call, new_node: ast.Assert) -> str:
 	if not str_old_op:
 		return ""
 	expr_new = new_node.test if isinstance(new_node, ast.Assert) else new_node
-	if isinstance(expr_new, ast.Constant) and expr_new.value is True:
-		return f"{old_node.func.attr} weakened to a bare assert True"
+	if _is_trivial_assert_test(expr_new):
+		return f"{old_node.func.attr} trivialised to a bare truthy constant"
 	if not isinstance(expr_new, ast.Compare) or len(expr_new.ops) != 1:
 		return ""
 	str_new_op = type(expr_new.ops[0]).__name__
