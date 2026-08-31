@@ -60,6 +60,7 @@ def create(cls_dto: NoteCreateDTO, cls_session: Session = Depends(get_db)) -> No
 
 ## Wiring a use-case in main.py
 
+<!-- docs-refs-ok: "notes" is the hand-built feature this walkthrough has the reader create following Architecture — it never ships as a generated file, unlike capabilities/example_feature -->
 ```python
 from capabilities.notes.domain.dto import NoteCreateDTO
 from capabilities.notes.infrastructure.repositories import SQLNoteRepository

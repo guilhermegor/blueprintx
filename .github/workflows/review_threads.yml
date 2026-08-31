@@ -84,6 +84,25 @@ on:
   pull_request:
   pull_request_review:
   pull_request_review_comment:
+  # ⚠️ `issue_comment` IS LOAD-BEARING — a CLEAN review arrives here and nowhere else.
+  #
+  # CodeRabbit emits a formal review object only when it has line comments to attach. On the
+  # clean path it posts a plain ISSUE comment, which is neither `pull_request_review` nor
+  # `pull_request_review_comment`. So the three triggers above never fire for it, and the gate
+  # stays frozen on the verdict it computed at push time — before any review existed.
+  #
+  # Measured on #342 (2026-08-29), and the margin is the point:
+  #
+  #   21:46:50Z  gate ran      -> FAILED (correct: no review yet)
+  #   21:46:52Z  "@coderabbitai review"
+  #   21:46:54Z  "No actionable comments were generated in the recent review."
+  #   21:47:19Z  "✅ Action performed  Review finished."
+  #
+  # The gate was wrong 2 seconds later and nothing re-evaluated it. #336 taught the gate to
+  # RECOGNISE a clean review; without this trigger it is never re-run at the moment that
+  # recognition becomes possible — half a fix, and the half that is invisible.
+  issue_comment:
+    types: [created, edited]
 
 permissions:
   contents: read
@@ -119,6 +138,11 @@ jobs:
     name: Review threads answered
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # `issue_comment` fires for plain ISSUES too, where there is no PR to audit. Without this
+    # the job would run on every issue comment in the repo and fail resolving PR_NUMBER.
+    if: >-
+      github.event_name != 'issue_comment' ||
+      github.event.issue.pull_request != null
     steps:
       - uses: actions/checkout@v4
         with:
@@ -142,7 +166,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # ⚠️ The two events name it differently: `pull_request*` events carry
+          # `pull_request.number`, while `issue_comment` carries `issue.number` — a PR IS an
+          # issue to that event. Reading only the first yields an EMPTY PR_NUMBER on the very
+          # event this trigger was added for.
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           # BOTH halves — see the KNOWN CEILING block at the top of the file for the trade.
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python3 templates/common/bin/check_review_threads.py
@@ -155,10 +183,29 @@ jobs:
       #
       # `if: success()` is the loop guard, not decoration: this may only ever run from a run
       # that PASSED, or it would re-run itself forever. The script skips $GITHUB_RUN_ID too.
+      # ⚠️ `issue_comment` CARRIES NO `pull_request` OBJECT, SO THE HEAD SHA MUST BE FETCHED.
+      #
+      # `github.event.pull_request.head.sha` is empty on that event, and the script exits early
+      # on an empty HEAD_SHA — so the cleanup did nothing on exactly the event #347 added it
+      # for. The gate re-ran and went green while the stale failures it was meant to clear
+      # stayed in the rollup, which is the whole reason a hand `gh run rerun` was still needed.
+      # Half a fix, and the half nobody sees. Raised by review on #347 as an out-of-diff
+      # comment, i.e. one the review-thread gate itself cannot see (blueprintx#350).
       - name: Clear stale failed runs of this gate at the same head
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash templates/python-common/bin/rerun_stale_gate_runs.sh
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          str_head="$EVENT_HEAD_SHA"
+          if [ -z "$str_head" ]; then
+            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          fi
+          # Fail loudly rather than skipping: an unresolved head means the cleanup would run
+          # over nothing while reporting success — the vacuous pass this gate family exists
+          # to remove.
+          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
+          HEAD_SHA="$str_head" bash templates/python-common/bin/rerun_stale_gate_runs.sh
