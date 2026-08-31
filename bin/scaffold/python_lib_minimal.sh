@@ -463,6 +463,29 @@ lib_minimal_copy_github_assets() {
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
 }
 
+# The tests that cover the gates themselves. Split out of the copy function when it crossed
+# the 60-line ceiling: a real grouping, not an arbitrary cut, so the next gate test has an
+# obvious home instead of pushing the parent over again. Mirrors scaffold_copy_gate_tests()
+# in bin/lib/scaffold_python_templates.sh.
+lib_minimal_copy_gate_tests() {
+    local project_path="$1"
+
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
+        "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
+        "$project_path/tests/unit/test_comment_language_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
+        "$project_path/tests/unit/test_function_length_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
+        "$project_path/tests/unit/test_review_threads_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
+        "$project_path/tests/unit/test_review_retry.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_code_refs_gate.py" \
+        "$project_path/tests/unit/test_docs_code_refs_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_assertion_weakening_gate.py" \
+        "$project_path/tests/unit/test_assertion_weakening_gate.py"
+}
+
 lib_minimal_copy_project_scaffolding() {
     local project_path="$1"
 
@@ -487,22 +510,11 @@ lib_minimal_copy_project_scaffolding() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
-        "$project_path/tests/unit/test_layer_imports_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
-        "$project_path/tests/unit/test_comment_language_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
-        "$project_path/tests/unit/test_function_length_gate.py"
+    lib_minimal_copy_gate_tests "$project_path"
     # Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
     # selector could be wrong without any tier noticing (blueprintx#211).
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
         "$project_path/tests/unit/test_pip_requirements.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
-        "$project_path/tests/unit/test_review_threads_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
-        "$project_path/tests/unit/test_review_retry.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_code_refs_gate.py" \
-        "$project_path/tests/unit/test_docs_code_refs_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
         "$project_path/tests/unit/test_family_convention_example.py"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
