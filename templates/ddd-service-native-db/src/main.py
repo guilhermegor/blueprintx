@@ -5,7 +5,7 @@ from __future__ import annotations
 from app.bootstrap import cls_create_log, init, teardown
 from app.container import build
 from capabilities.example_feature.domain.dto import NoteCreateDTO
-from src.config.startup import LOGGER
+from config.startup import LOGGER
 
 
 # ─── BOOTSTRAP ────────────────────────────────────────────────────────────────

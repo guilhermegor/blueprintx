@@ -165,6 +165,44 @@ def output_path(str_name_key: str) -> Path:
 	)
 
 
+@type_checker
+def resolve_reference_spec(dict_inputs: dict, str_source: str) -> dict | None:
+	"""Resolve ``str_source``'s reference ("golden copy") spec, override-first then real-input.
+
+	Generalises the ``_input_spec_for_source`` pattern (lesson
+	``config-reference-optional-override.md``, blueprintx#225) into a domain-neutral seam.
+	``inputs.yaml``'s ``reference_files`` block is an OPTIONAL OVERRIDE: it lists only the
+	sources whose reference copy lives somewhere OTHER than the real input. Every other
+	source's reference IS its real input, resolved by looking up the SAME ``str_source`` key
+	at the top level of ``dict_inputs`` — so a project never restates a ``{dir, pattern}`` it
+	already declared for the real file. A path is therefore declared exactly once: change the
+	real input's spec and every source with no override follows automatically, instead of
+	silently drifting out of step with a second, hand-mirrored copy.
+
+	Parameters
+	----------
+	dict_inputs : dict
+		The loaded ``inputs.yaml`` mapping (``YAML_INPUTS`` at runtime).
+	str_source : str
+		The input's top-level key in ``inputs.yaml`` (e.g. ``"example_source"``).
+
+	Returns
+	-------
+	dict or None
+		The override spec when ``str_source`` is listed under ``reference_files``; otherwise
+		the source's own real-input spec, when that key holds a mapping; otherwise ``None`` —
+		the source has neither an override nor a real spec to fall back to.
+	"""
+	dict_source = dict_inputs.get(str_source)
+	dict_real = dict_source if isinstance(dict_source, dict) else None
+	# Both levels are isinstance-checked, never defaulted; see config/CLAUDE.md.
+	dict_overrides = dict_inputs.get("reference_files")
+	if not isinstance(dict_overrides, dict):
+		return dict_real
+	dict_override = dict_overrides.get(str_source)
+	return dict_override if isinstance(dict_override, dict) else dict_real
+
+
 PATH_LOG: Path = output_path("log_name")
 PATH_JSON: Path = output_path("json_name")
 PATH_TXT: Path = output_path("txt_name")
