@@ -239,6 +239,17 @@ repos:
         files: ^(mkdocs\.yml|docs/)
         pass_filenames: false
 
+      # Structural gate for the SYMBOLS a docs page cites, not just its slug/links — neither
+      # check-docs-sections (slugs) nor `mkdocs build --strict` (links) sees a `from x import Y`
+      # example, so a renamed/deleted module keeps being cited after every other gate goes
+      # green (blueprintx#159). Triggers on either side changing: a docs edit or a src move.
+      - id: check-docs-code-refs
+        name: docs code references (symbols + import paths)
+        entry: bash bin/poetry_exec.sh run python bin/check_docs_code_refs.py
+        language: system
+        files: ^(docs/|README\.md|src/)
+        pass_filenames: false
+
       # Structural gate for the per-branch work-ledger convention: a branch whose cumulative diff
       # touches src/ or ci paths must add docs/backlog/<kebab>_YYYYMMDD_HHMMSS.md with a checklist.
       # Diffs the INDEX against merge-base so a staged-but-uncommitted ledger counts.

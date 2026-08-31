@@ -84,6 +84,9 @@ $POETRY run python bin/check_provenance.py
 print_status info "docs skeleton (slug + nav)"
 $POETRY run python bin/check_docs_sections.py
 
+print_status info "docs code references (symbols + import paths)"
+$POETRY run python bin/check_docs_code_refs.py
+
 print_status info "unix filename validity"
 bash bin/check_unix_filenames.sh
 
