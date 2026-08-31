@@ -153,6 +153,17 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: check-secrets
+        name: secret scan (gitleaks)
+        # Same treatment as check-complexity above: ONE implementation, run over this repo via
+        # --root rather than kept as a second copy. gitleaks resolves its own config from
+        # <root>/.gitleaks.toml, so no --config flag is needed. Resolves gracefully when
+        # gitleaks is absent locally; CI sets GITLEAKS_REQUIRED=1.
+        entry: bash templates/python-common/bin/check_secrets.sh --root .
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: test-copy-lists
         name: shared test copy lists (scaffolds vs python-common)
         entry: python3 bin/ci/check_test_copy_lists.py
