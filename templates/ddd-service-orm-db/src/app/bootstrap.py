@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 from chassis.typing import ProtocolTypeCheckerMeta, type_checker
-from src.config.startup import DIR_PARENT, LOGGER
+from config.startup import DIR_PARENT, LOGGER
 from utils.logs import CreateLog, initiate_logging
 
 
