@@ -195,6 +195,14 @@ help = "Cap a function at 60 lines of code (docstring excluded)"
 cmd = "bash bin/check_complexity.sh"
 help = "Cyclomatic-complexity ceiling per tree (tests 1, src 2, bin 8)"
 
+# Manual/scheduled only — never part of `lint`, like check_contract_drift.py it needs a
+# resource this project does not vendor (there, a live network source; here, a BlueprintX
+# checkout) and always exits 0 (a reporter, blueprintx#109). No args declared, so poe passes
+# extras straight through: `poe template_drift --blueprintx-root /path/to/blueprintx`.
+[tool.poe.tasks.template_drift]
+cmd = "python bin/check_template_drift.py"
+help = "Report template files this project never received (needs --blueprintx-root or BLUEPRINTX_TEMPLATE_ROOT)"
+
 # Pre-flight a commit message BEFORE `git commit -F <file>`.
 #
 # commitizen and gitlint reject at the commit-msg stage — AFTER every pre-commit gate has
