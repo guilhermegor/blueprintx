@@ -1,7 +1,7 @@
 # Assertion-weakening gate (#324, companion to #309/#313)
 
 Detect a PR that turns a red test green by weakening its assertion — the sharper half of
-#309's gate-integrity guard, which watches config, not the assertion itself.
+Issue `#309`'s gate-integrity guard, which watches config, not the assertion itself.
 
 - [x] Read #324 in full.
 - [x] **File-surface decision: new file, not an extension of `check_gate_integrity.py`.** The
@@ -50,6 +50,11 @@ Detect a PR that turns a red test green by weakening its assertion — the sharp
       file-by-file). All five Python tiers route through `scaffold_copy_common_templates`, so one
       line covers all of them. The gate script itself needs no copy line: `scaffold_copy_executables_and_vscode`
       already does `cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$str_project_path/bin"`.
+      ⚠️ **Two copy paths, not one.** The four service tiers go through
+      `scaffold_copy_gate_tests()` in `bin/lib/scaffold_python_templates.sh`; `lib-minimal`
+      keeps its own list and calls `lib_minimal_copy_gate_tests()` from
+      `bin/scaffold/python_lib_minimal.sh`. A new gate test needs BOTH, and
+      `check_test_copy_lists.py` is what catches the one you forget.
 - [ ] **Wiring deferred to a follow-up — option (b) from the dispatch brief.** `.pre-commit-config.yaml`
       (both root and `templates/python-common/`) and `.github/workflows/scaffold_checks.yml` /
       `templates/python-common/.github/workflows/tests.yaml` are held by open PR #330 in this same
@@ -70,5 +75,29 @@ Detect a PR that turns a red test green by weakening its assertion — the sharp
       measurement and the wiring deferral explicitly, `Closes #324`. Watch CI, resolve review
       threads, merge on green gates.
 
-Completed — kept as a record once every box above is ticked (wiring itself is a tracked
-follow-up, not blocking this PR per the dispatch brief's option (b)).
+**Implementation complete; follow-ups remain open** — the unchecked boxes above are real, not
+oversight. The gate, its tests and both copy paths are done; wiring it into
+`.pre-commit-config.yaml` and `scaffold_checks.yml` is deliberately deferred (PR #330 holds both
+files), so the gate ships without running. Do not read this note as finished work: it is finished
+*code* with a named next step.
+
+## Review round, 2026-08-31
+
+Seven findings, all verified by running the gate rather than reading it. Four were real:
+
+- 🔴 **Two classes sharing a method name collided.** Indexing by bare `node.name` let the later
+  class overwrite the earlier, so weakening the overwritten method produced **no finding**. Now
+  keyed by qualified name, and the message names the class (`TestOne.test_v`).
+- 🔴 **A changed assertion KIND slipped through.** `self.assertEqual(a, b)` rewritten as
+  `assert a in b` keeps the check count identical, so the same-kind comparison never saw it.
+  The call is now normalised to its equivalent operator before the pair is compared.
+- **`--root` did not reach the git subprocesses.** `PATH_ROOT` was set but `cwd` was not passed,
+  so a run from elsewhere inspected the caller's repository. Fixed at the runner.
+- **`-> list` vs `list of str`** failed `check_docstrings.py` and with it all seven scaffold
+  jobs. Now `list[str]`.
+
+⚠️ **The first measurement attempt was invalid and worth recording as a method lesson.** The
+throwaway repo had no `origin`, so the merge-base never resolved and the gate self-skipped — every
+case "passed", including a control that should have failed. A harness that cannot fail proves
+nothing. Rebuilt with a real bare remote, confirmed the gate's own canonical case (`==` → `in`)
+DOES fire, and only then trusted the two negatives.

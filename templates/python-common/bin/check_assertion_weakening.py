@@ -119,6 +119,7 @@ def _git(list_args: list) -> str:
 			capture_output=True,
 			text=True,
 			check=False,
+			cwd=PATH_ROOT,
 		)
 	except OSError:
 		return ""
@@ -673,6 +674,59 @@ def _compare_pair(tuple_old: tuple, tuple_new: tuple, bool_prod_changed: bool) -
 		return _compare_assert(old_node, new_node, bool_prod_changed)
 	if old_kind == "call" and new_kind == "call":
 		return _compare_call(old_node, new_node, bool_prod_changed)
+	if old_kind == "call" and new_kind == "assert":
+		return _compare_call_to_assert(old_node, new_node)
+	return ""
+
+
+# A unittest call and the bare `assert` it is equivalent to. Only the pairs where the
+# equivalence is exact are listed -- see the backlog note for why the rest stay out.
+_CALL_AS_OPERATOR = {
+	"assertEqual": "Eq",
+	"assertListEqual": "Eq",
+	"assertDictEqual": "Eq",
+	"assertIn": "In",
+	"assertIs": "Is",
+	"assertIsNot": "IsNot",
+	"assertNotEqual": "NotEq",
+}
+
+
+def _compare_call_to_assert(old_node: ast.Call, new_node: ast.Assert) -> str:
+	"""Return a weakening message when a unittest call became a weaker bare ``assert``.
+
+	Rewriting ``self.assertEqual(a, b)`` as ``assert a in b`` changes the assertion's kind, so
+	a same-kind comparison never sees it and the check count stays identical. Normalising the
+	call to the operator it is equivalent to makes the pair comparable.
+
+	Parameters
+	----------
+	old_node : ast.Call
+		The ``self.assertX(...)`` call at the merge-base.
+	new_node : ast.Assert
+		The bare ``assert`` statement on the branch. Its ``.test`` carries the comparison --
+		the checks list stores the statement, not the expression.
+
+	Returns
+	-------
+	str
+		A human-readable finding, or ``""`` when the rewrite is not a decidable weakening
+		(an unlisted call, or a new form that is not a simple comparison).
+	"""
+	if not isinstance(old_node.func, ast.Attribute):
+		return ""
+	str_old_op = _CALL_AS_OPERATOR.get(old_node.func.attr, "")
+	if not str_old_op:
+		return ""
+	expr_new = new_node.test if isinstance(new_node, ast.Assert) else new_node
+	if isinstance(expr_new, ast.Constant) and expr_new.value is True:
+		return f"{old_node.func.attr} weakened to a bare assert True"
+	if not isinstance(expr_new, ast.Compare) or len(expr_new.ops) != 1:
+		return ""
+	str_new_op = type(expr_new.ops[0]).__name__
+	if str_old_op == "Eq" and str_new_op in _WEAK_FROM_EQ:
+		str_symbol = _OP_SYMBOLS.get(str_new_op, str_new_op)
+		return f"{old_node.func.attr} weakened to a bare assert with {str_symbol}"
 	return ""
 
 
@@ -696,12 +750,34 @@ def parse_functions(str_source: str) -> dict | None:
 	except SyntaxError:
 		return None
 	dict_funcs = {}
-	for node in ast.walk(cls_tree):
-		if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith(
+	_index_tests(cls_tree, "", dict_funcs)
+	return dict_funcs
+
+
+def _index_tests(node_parent: ast.AST, str_prefix: str, dict_funcs: dict) -> None:
+	"""Index every ``test_*`` function under ``node_parent`` by its qualified name.
+
+	Qualified, not bare: two classes in one module routinely define the same method name, and
+	a bare key silently overwrites the first -- so weakening the overwritten one produced no
+	finding. See the backlog note.
+
+	Parameters
+	----------
+	node_parent : ast.AST
+		Module or class body to walk. Only direct children are visited; nested classes
+		recurse with an extended prefix.
+	str_prefix : str
+		Dotted prefix accumulated from enclosing classes, ``""`` at module level.
+	dict_funcs : dict
+		Accumulator, mutated in place: qualified name to AST node.
+	"""
+	for node in ast.iter_child_nodes(node_parent):
+		if isinstance(node, ast.ClassDef):
+			_index_tests(node, f"{str_prefix}{node.name}.", dict_funcs)
+		elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith(
 			"test_"
 		):
-			dict_funcs[node.name] = node
-	return dict_funcs
+			dict_funcs[f"{str_prefix}{node.name}"] = node
 
 
 def _function_findings(

@@ -43,7 +43,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_assertion_weakening")
 
 
-def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) -> list:
+def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) -> list[str]:
 	"""Run the file-level comparator over two versions of one test file's source.
 
 	Parameters
@@ -287,7 +287,13 @@ def test_a_clean_file_with_no_test_changes_reports_nothing() -> None:
 def test_the_report_passes_a_flagged_diff_with_a_justification_trailer(
 	monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-	"""``test-change-ok: <reason>`` in the searched text clears an otherwise-failing report."""
+	"""``test-change-ok: <reason>`` in the searched text clears an otherwise-failing report.
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		Replaces the gate's git runner so the trailer search reads a fixed commit message.
+	"""
 	monkeypatch.setattr(
 		gate,
 		"_git",
@@ -312,3 +318,56 @@ def test_a_bare_marker_with_no_reason_does_not_justify(monkeypatch: pytest.Monke
 	monkeypatch.setattr(gate, "_git", lambda _args: "test-change-ok:\n")
 
 	assert gate.report(["some finding"], "base-sha", 1) == 1
+
+
+def test_two_classes_sharing_a_method_name_are_tracked_separately() -> None:
+	"""A bare method name is not identity: two classes routinely define ``test_value``.
+
+	Keying only on ``node.name`` let the later class overwrite the earlier one, so weakening
+	the overwritten method produced no finding at all — a silent miss, and the worst kind for
+	a gate whose whole job is to notice a check that got weaker.
+	"""
+	str_old = (
+		'class TestOne:\n\tdef test_v(self) -> None:\n\t\tassert a() == "send"\n\n\n'
+		'class TestTwo:\n\tdef test_v(self) -> None:\n\t\tassert b() == "x"\n'
+	)
+	str_new = (
+		'class TestOne:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n\n\n'
+		'class TestTwo:\n\tdef test_v(self) -> None:\n\t\tassert b() == "x"\n'
+	)
+	list_found = _findings(str_old, str_new)
+	assert len(list_found) == 1
+	assert "TestOne.test_v" in list_found[0]
+
+
+def test_a_unittest_call_rewritten_as_a_weaker_bare_assert_is_reported() -> None:
+	"""Changing the assertion's KIND must not hide the weakening.
+
+	``self.assertEqual(a, b)`` rewritten as ``assert a in b`` keeps the check count identical,
+	so a same-kind comparison never sees it. The call is normalised to the operator it is
+	equivalent to before the pair is compared.
+	"""
+	str_old = 'class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), "send")\n'
+	str_new = 'class T:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n'
+	list_found = _findings(str_old, str_new)
+	assert len(list_found) == 1
+	assert "in" in list_found[0]
+
+
+def test_a_unittest_call_rewritten_as_an_equivalent_bare_assert_is_clean() -> None:
+	"""⚠️ The other direction: the cross-kind rule must not fire on an ordinary refactor.
+
+	Dropping ``unittest`` for a bare ``assert`` with the SAME operator asserts exactly as much.
+	Without this case the rule above would also be satisfied by one that flags every rewrite,
+	which is how a gate earns its way into everyone's escape hatch.
+	"""
+	str_old = 'class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), "send")\n'
+	str_new = 'class T:\n\tdef test_v(self) -> None:\n\t\tassert a() == "send"\n'
+	assert _findings(str_old, str_new) == []
+
+
+def test_a_unittest_call_rewritten_as_a_stricter_bare_assert_is_clean() -> None:
+	"""A stricter operator after the rewrite is a strengthening, not a weakening."""
+	str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
+	str_new = "class T:\n\tdef test_v(self) -> None:\n\t\tassert a() > 5\n"
+	assert _findings(str_old, str_new) == []
