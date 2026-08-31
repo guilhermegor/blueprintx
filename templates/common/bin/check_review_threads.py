@@ -62,6 +62,7 @@ reviewed".
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import pathlib
@@ -551,6 +552,105 @@ def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) ->
 	return ""
 
 
+# ⚠️ TWO QUOTAS WEAR THE SAME WORDS "RATE LIMIT", AND THEY WANT OPPOSITE BEHAVIOUR (blueprintx#364).
+#
+# CodeRabbit emits two structurally different refusals under one umbrella phrase:
+#
+#   REVIEW quota — "Review rate limited." inside a `<details>` block, resets in HOURS.
+#   CHAT quota   — "...exceeded the limit for the number of chat messages per hour...", resets
+#                  in MINUTES — and POSTING A REVIEW REQUEST IS ITSELF A CHAT MESSAGE, so the act
+#                  of asking for a review is exactly what can spend this quota.
+#
+# Measured on this repo, 562 notices over 7 days: 503 review, 59 chat. 10.5% is not an error rate
+# a caller can round away — the NEWEST notice is what a caller reads, so one chat notice landing
+# last inverts the answer. Measured 2026-08-30T18:44:28Z: a 4-minute-37-second chat wait was read
+# as an hours-long review block and cost a review-request window.
+#
+# `NOTICE_UNKNOWN` exists because a notice that says "rate limit" in neither recognised shape is
+# still NOT an all-clear — collapsing it into `NOTICE_OK` is how a caller re-derives the very
+# conflation this function exists to remove.
+_RE_CHAT_LIMIT = re.compile(
+	r"exceeded\s+the\s+limit\s+for\s+the\s+number\s+of\s+chat\s+messages", re.IGNORECASE
+)
+_RE_REVIEW_LIMIT = re.compile(r"review\s+rate\s+limited", re.IGNORECASE)
+_RE_ANY_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
+
+NOTICE_REVIEW_LIMITED = "REVIEW_LIMITED"
+NOTICE_CHAT_LIMITED = "CHAT_LIMITED"
+NOTICE_OK = "OK"
+NOTICE_UNKNOWN = "UNKNOWN"
+
+
+def classify_reviewer_notice(str_notice: str) -> str:
+	"""Classify a reviewer's notice by which quota (if any) it reports.
+
+	Parameters
+	----------
+	str_notice : str
+		A reviewer comment body, or ``""`` when the roster has said nothing.
+
+	Returns
+	-------
+	str
+		One of :data:`NOTICE_CHAT_LIMITED`, :data:`NOTICE_REVIEW_LIMITED`, :data:`NOTICE_OK`
+		(no rate-limit wording at all — including an empty notice), or :data:`NOTICE_UNKNOWN`
+		(mentions a rate limit in neither recognised shape — see the block above).
+	"""
+	if _RE_CHAT_LIMIT.search(str_notice):
+		return NOTICE_CHAT_LIMITED
+	if _RE_REVIEW_LIMIT.search(str_notice):
+		return NOTICE_REVIEW_LIMITED
+	if _RE_ANY_RATE_LIMIT.search(str_notice):
+		return NOTICE_UNKNOWN
+	return NOTICE_OK
+
+
+# 🔴 THE REVIEWER DECLARES ITS OWN WAIT — READ IT INSTEAD OF GUESSING.
+#
+# `retry_rate_limited_review.py` carries an earlier attempt at this idea and, measured against
+# the real bodies above, matches neither format (blueprintx#364) — this is the fixed version;
+# that file still needs the same fix, tracked as a follow-up rather than duplicated here.
+#
+# Returned in SECONDS, not minutes: the chat quota declares "N minutes AND M seconds" (a
+# whole-minute unit would truncate the 37 seconds that made the #364 window wrong), while the
+# review quota declares whole minutes only. Seconds is the one unit that loses nothing either way.
+_RE_CHAT_WAIT = re.compile(
+	r"wait\s+\*{0,2}(\d+)\s+minutes?(?:\s+and\s+(\d+)\s+seconds?)?\*{0,2}", re.IGNORECASE
+)
+_RE_REVIEW_WAIT = re.compile(
+	r"next\s+included\s+review\s+will\s+be\s+available\s+in\s+(\d+)\s+minutes?", re.IGNORECASE
+)
+
+
+def parse_declared_wait(str_notice: str) -> int | None:
+	"""Return the wait in SECONDS the reviewer declared, or ``None`` when it declared none.
+
+	Parameters
+	----------
+	str_notice : str
+		The reviewer's refusal body.
+
+	Returns
+	-------
+	int or None
+		Seconds to wait, or ``None`` when the notice states no parseable wait.
+	"""
+	cls_chat = _RE_CHAT_WAIT.search(str_notice)
+	if cls_chat is not None:
+		try:
+			return int(cls_chat.group(1)) * 60 + int(cls_chat.group(2) or 0)
+		except ValueError:
+			# Untrusted external digits — mirrors the guard in the sibling parser's own file.
+			return None
+	cls_review = _RE_REVIEW_WAIT.search(str_notice)
+	if cls_review is not None:
+		try:
+			return int(cls_review.group(1)) * 60
+		except ValueError:
+			return None
+	return None
+
+
 # ⚠️ COMPLETION — THE ONE NOTICE THAT IS EVIDENCE, AND WHY IT IS NOT A REVERSAL.
 #
 # The notice block above establishes that a roster COMMENT is not evidence a review happened,
@@ -859,25 +959,106 @@ def report_verdict(
 # hand. ⚠️ That makes the stale-run accumulation in the merge rollup (#263) load-bearing rather
 # than cosmetic — the re-run is the ONLY way a finished PR goes green, so #263 must land for that
 # re-run to actually clear the block.
-def main() -> int:
+def parse_args(list_argv: list[str] | None = None) -> argparse.Namespace:
+	"""Parse this gate's CLI arguments.
+
+	Parameters
+	----------
+	list_argv : list of str, optional
+		Arguments to parse; ``None`` (the default) makes argparse read ``sys.argv[1:]``, so
+		``sys.exit(main())`` at the bottom of this file is unaffected.
+
+	Returns
+	-------
+	argparse.Namespace
+		A ``json`` boolean. Every other input stays environment-only (``GITHUB_REPOSITORY``,
+		``PR_NUMBER``, ``REVIEW_THREADS_REQUIRE_RESOLVED``) — unchanged by this addition.
+	"""
+	cls_parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+	cls_parser.add_argument(
+		"--json",
+		action="store_true",
+		help="Emit a machine-readable JSON verdict on stdout instead of prose (default: prose).",
+	)
+	return cls_parser.parse_args(list_argv)
+
+
+# blueprintx#364 — the gate's only interface was English prose, so every caller grepped
+# sentences; one re-implementation matched the phrase "so zero threads would be fine" inside the
+# no-reviewer message via `grep 'thread'` and misreported 27 PRs. `--json` is additive: the
+# default (prose) path below is untouched line for line, so existing callers see no change.
+def _print_skip(bool_json: bool, str_reason: str) -> int:
+	"""Print a self-skip in the requested representation and return ``0``."""
+	print(json.dumps({"status": "skipped", "reason": str_reason}) if bool_json else str_reason)
+	return 0
+
+
+def _print_missing_review(
+	bool_json: bool, str_missing: str, list_notices: list[dict], set_reviewers: set[str]
+) -> int:
+	"""Print the missing-review failure in the requested representation and return ``1``."""
+	if bool_json:
+		str_notice = summarise_reviewer_notice(list_notices, set_reviewers)
+		print(
+			json.dumps(
+				{
+					"status": "fail",
+					"reason": "missing_review",
+					"detail": str_missing,
+					"notice_classification": classify_reviewer_notice(str_notice),
+				}
+			)
+		)
+	else:
+		print(f"❌ {str_missing}")
+	return 1
+
+
+def _print_thread_verdict(
+	bool_json: bool, list_problems: list[str], int_threads: int, bool_require_resolved: bool
+) -> int:
+	"""Print the thread verdict in the requested representation and return the exit code."""
+	if bool_json:
+		print(
+			json.dumps(
+				{
+					"status": "fail" if list_problems else "pass",
+					"threads_examined": int_threads,
+					"require_resolved": bool_require_resolved,
+					"problems": list_problems,
+				}
+			)
+		)
+		return 1 if list_problems else 0
+	return report_verdict(list_problems, int_threads, bool_require_resolved)
+
+
+def main(list_argv: list[str] | None = None) -> int:
 	"""Check the current PR's review threads.
+
+	Parameters
+	----------
+	list_argv : list of str, optional
+		CLI arguments; ``None`` defaults to ``sys.argv[1:]`` — see :func:`parse_args`.
 
 	Returns
 	-------
 	int
 		``0`` when every thread is answered (or the repo declares no roster), ``1`` otherwise.
 	"""
+	bool_json = parse_args(list_argv).json
+
 	str_repo_full = os.environ.get("GITHUB_REPOSITORY", "")
 	str_number = os.environ.get("PR_NUMBER", "")
 	if not str_repo_full or not str_number.isdigit():
-		print("PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
-		return 0
+		return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
 
 	path_root = pathlib.Path.cwd()
 	dict_roster = load_roster(path_root)
 	if not dict_roster:
-		print(f"No {_ROSTER_FILE} — the review-thread gate is not adopted here")
-		return 0
+		return _print_skip(
+			bool_json, f"No {_ROSTER_FILE} — the review-thread gate is not adopted here"
+		)
 
 	# TWO sets from one roster, and they are not the same set. The thread half subtracts every
 	# member (a status member posts no answers either); the missing-review half considers only
@@ -888,6 +1069,7 @@ def main() -> int:
 	str_owner, _, str_repo = str_repo_full.partition("/")
 	dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
 	list_threads = dict_pr["reviewThreads"]["nodes"]
+	list_notices = dict_pr.get("comments", {}).get("nodes", [])
 
 	# ⚠️ THE EMPTY SET IS THE CASE THIS GATE MOST NEEDS TO CATCH, AND IT USED TO PASS IT.
 	#
@@ -901,7 +1083,7 @@ def main() -> int:
 		set_reviewers,
 		(dict_pr.get("author") or {}).get("login") or "",
 		str_head_oid=dict_pr.get("headRefOid") or "",
-		list_notices=dict_pr.get("comments", {}).get("nodes", []),
+		list_notices=list_notices,
 		str_head_date=(
 			((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit") or {}).get(
 				"committedDate"
@@ -910,8 +1092,8 @@ def main() -> int:
 		),
 	)
 	if str_missing:
-		print(f"❌ {str_missing}")
-		return 1
+		return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
+
 	# Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
 	# See the SUPERSEDED block above `main` for why CI stopped passing 0.
 	bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
@@ -919,7 +1101,9 @@ def main() -> int:
 		list_threads, set_roster, bool_require_resolved=bool_require_resolved
 	)
 
-	return report_verdict(list_problems, len(list_threads), bool_require_resolved)
+	return _print_thread_verdict(
+		bool_json, list_problems, len(list_threads), bool_require_resolved
+	)
 
 
 if __name__ == "__main__":
