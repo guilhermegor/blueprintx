@@ -178,3 +178,134 @@ def test_render_comment_carries_the_sticky_marker_and_the_failing_names() -> Non
 	assert "Run Automated Tests (ubuntu)" in str_body
 	assert "risk:" in str_body
 	assert "deps" in str_body
+
+
+def test_graphql_reports_a_refused_mutation_to_stderr(
+	capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""A GraphQL refusal is HTTP 200 + an ``errors`` body — it must not be discarded in silence.
+
+	Regression for the defect where the mutation's return value was thrown away: a rejected
+	auto-merge looked identical to a successful one in the log.
+	"""
+	monkeypatch.setattr(gate, "_api", lambda *a, **k: {"errors": [{"message": "refused"}]})
+	gate._graphql("mutation{}", {})
+	assert "refused" in capsys.readouterr().err
+
+
+def test_graphql_stays_quiet_on_a_clean_response(
+	capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""A response with no ``errors`` key prints nothing — the check must not cry wolf."""
+	monkeypatch.setattr(gate, "_api", lambda *a, **k: {"data": {"clientMutationId": None}})
+	gate._graphql("mutation{}", {})
+	assert capsys.readouterr().err == ""
+
+
+# --------------------------
+# Module Utilities
+# --------------------------
+# Plain module-level helpers, never nested inside a test — a nested `def` counts as a decision
+# point for ruff's C901, and tests/ is capped at complexity 1 (see bin/check_complexity.sh).
+
+_DICT_MAIN_API_RESPONSES = {
+	"https://api.github.com/repos/o/r/pulls/7": {
+		"head": {"sha": "sha1"},
+		"additions": 2,
+		"deletions": 0,
+		"labels": [],
+		"node_id": "PR_NODE",
+	},
+	"https://api.github.com/repos/o/r/pulls/7/files?per_page=100": [
+		{"filename": "docs/readme.md"}
+	],
+	"https://api.github.com/repos/o/r/issues/7/comments": [],
+}
+
+
+def _fake_api_for_main(str_method: str, str_url: str, dict_payload: dict | None = None) -> object:
+	"""Stand in for every REST call ``main()`` makes, keyed by URL.
+
+	Parameters
+	----------
+	str_method : str
+		HTTP method (ignored — the fake distinguishes calls by URL only).
+	str_url : str
+		Absolute URL requested.
+	dict_payload : dict, optional
+		JSON body (ignored).
+
+	Returns
+	-------
+	object
+		The canned response for ``str_url``, or ``None`` when unmapped.
+	"""
+	return _DICT_MAIN_API_RESPONSES.get(str_url)
+
+
+class _CallRecorder:
+	"""Record that this seam was invoked, standing in for either of two `main()` calls.
+
+	Both `poll_axes_until_terminal` (destructured as ``dict_axes, dict_failing``) and
+	`_enable_auto_merge` (return value discarded) accept the same ``({}, {})`` shape, so one
+	recorder type replaces either seam with no branch on which one it is.
+	"""
+
+	def __init__(self, list_target: list, str_label: str) -> None:
+		"""Bind the shared call log and this instance's label.
+
+		Parameters
+		----------
+		list_target : list
+			The call log every recorder instance appends its label to, in call order.
+		str_label : str
+			The label this instance appends when invoked.
+		"""
+		self._list_target = list_target
+		self._str_label = str_label
+
+	def __call__(self, *args: object, **kwargs: object) -> tuple[dict, dict]:
+		"""Append this recorder's label and return the shared stand-in value.
+
+		Parameters
+		----------
+		*args : object
+			Ignored positional arguments from the real seam's call site.
+		**kwargs : object
+			Ignored keyword arguments from the real seam's call site.
+
+		Returns
+		-------
+		tuple of dict
+			``({}, {})`` — valid whether the caller destructures it or discards it.
+		"""
+		self._list_target.append(self._str_label)
+		return {}, {}
+
+
+# --------------------------
+# Tests
+# --------------------------
+
+
+def test_main_hands_the_merge_over_after_the_poll_not_before(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	"""The merge handover happens AFTER polling, never up front.
+
+	Arming ``enablePullRequestAutoMerge`` at ``opened`` finds nothing pending yet (sibling
+	check-runs have not registered), so GitHub either merges too early or refuses the mutation
+	outright. Polling first gives those check-runs time to register.
+	"""
+	monkeypatch.setenv("GITHUB_TOKEN", "tkn")
+	monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+	monkeypatch.setenv("PR_NUMBER", "7")
+	list_calls: list = []
+
+	monkeypatch.setattr(gate, "_api", _fake_api_for_main)
+	monkeypatch.setattr(gate, "poll_axes_until_terminal", _CallRecorder(list_calls, "poll"))
+	monkeypatch.setattr(gate, "_enable_auto_merge", _CallRecorder(list_calls, "enable_auto_merge"))
+
+	gate.main()
+
+	assert list_calls == ["poll", "enable_auto_merge"]
