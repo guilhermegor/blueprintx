@@ -31,8 +31,18 @@ paths = [
 # the FULL matched text ("sweagent-capi:claude-opus-4.6"), not just the rule's captured secret
 # group ("claude-opus-4.6" alone) — the default target — so the allowlist stays anchored to the
 # exact logged value rather than a bare version-looking string that could recur elsewhere.
+# Anchored with ^...$ : the allowlist regex is a SUBSTRING match, so the unanchored form
+# also suppressed any longer finding containing this string. Measured with gitleaks 8.30.1:
+# a high-entropy token wrapped around it scored 1 finding without the allowlist and 0 with
+# the unanchored one -- a real secret silenced by a documentation quote.
+# The trailing \W* is load-bearing. gitleaks' "match" carries whatever delimiter closed the
+# value, and that differs per source: a double quote in Python, a BACKTICK in these markdown
+# ledgers. A bare $ anchors against text that is never present, and ["']? still missed the
+# backtick -- the pre-commit hook caught that on the history scan. \W* accepts any
+# non-alphanumeric tail while still refusing an alphanumeric one, which is what a wrapped
+# high-entropy token would be. Measured both ways, and over the full git history.
 # docs/backlog/pr-gate-blocks-merge_20260817_104500.md:186 (commits f24161c, 1eb23cf).
 regexTarget = "match"
 regexes = [
-  '''sweagent-capi:claude-opus-4\.6''',
+  '''^sweagent-capi:claude-opus-4\.6\W*$''',
 ]
