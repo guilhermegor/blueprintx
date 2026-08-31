@@ -66,6 +66,13 @@ PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 # metaprogramming), but a long function is just as hard to read there as anywhere else.
 TUPLE_SKIP_DIRS = (
 	".git",
+	# A parallel-agent worktree under `.claude/worktrees/agent-NAME` is a FULL, older
+	# checkout of this repo, not project source — walking it inflates the file count and
+	# polices a stale revision (blueprintx#331). Only relevant here because this gate's
+	# `PATH_ROOT` is overridable via `--root` to the actual repo root — the comment-language
+	# gate carries the same `TUPLE_SKIP_DIRS` pattern but never needs this entry, since its
+	# root is fixed to `templates/python-common` and never reaches `.claude` at all.
+	".claude",
 	".mypy_cache",
 	".pytest_cache",
 	".ruff_cache",
@@ -262,10 +269,19 @@ def audit_paths() -> list:
 	list of pathlib.Path
 		Sorted ``.py`` and ``.sh`` paths, skipping vendored and generated trees.
 	"""
+	# Compare parts RELATIVE TO PATH_ROOT, never `path_file.parts` directly. The latter
+	# carries every ancestor above the repo too, and a directory literally named `.claude`
+	# is not a rare ancestor here — this very gate runs from inside a parallel-agent
+	# worktree under `.claude/worktrees`, so `PATH_ROOT` itself commonly sits under one.
+	# An ancestor-based match would then skip every file on every such run, blueprintx#331 —
+	# the vacuous-audit failure this gate exists to catch, self-inflicted. The
+	# comment-language gate already avoids this the same way.
 	list_paths = []
 	for str_suffix in ("*.py", "*.sh"):
 		for path_file in PATH_ROOT.rglob(str_suffix):
-			if any(str_part in TUPLE_SKIP_DIRS for str_part in path_file.parts):
+			if any(
+				str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
+			):
 				continue
 			list_paths.append(path_file)
 	return sorted(list_paths)

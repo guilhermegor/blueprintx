@@ -123,12 +123,43 @@ repos:
         pass_filenames: false
         files: \.py$
 
+      - id: check-complexity-templates
+        name: cyclomatic complexity (templates/python-common — tests 1, src 2, bin 8)
+        # blueprintx#271: the invocation above only ever sees bin/ (2 files) because its tree
+        # discovery is a literal top-level dirname lookup (tests/, src/, bin/ under whatever
+        # --root cd's to) — BlueprintX's own root has only bin/. templates/python-common/ IS a
+        # src/ + tests/ tree, just not at the repo root, so a second invocation scoped there
+        # catches a template defect here in ~3s instead of by a 5-tier CI matrix minutes later
+        # (measured on blueprintx#270: an inner function in a test raised its complexity to 2
+        # against the tests/ ceiling of 1, invisible to `make lint`, then failed 8 CI checks).
+        # ⚠️ function-length is NOT duplicated the same way: its discovery already walks the
+        # WHOLE --root recursively (`PATH_ROOT.rglob`), so `--root .` already reaches
+        # templates/python-common/tests and .../src today — measured by planting a 66-line
+        # function there and confirming `--root .` alone reported it. A second function-length
+        # invocation would re-scan a subset of what the first already covers, for no new
+        # coverage.
+        entry: bash templates/python-common/bin/check_complexity.sh --root templates/python-common
+        language: system
+        pass_filenames: false
+        files: ^templates/python-common/.*\.py$
+
       - id: gate-integrity
         name: gate integrity (a PR must not weaken a check without saying why)
         # Diff-scoped against merge-base(HEAD, main) — the one gate in this family that is
         # NOT a whole-tree audit, because what it checks is a delta (blueprintx#309). Same
         # ONE-implementation treatment as function-length/check-complexity above.
         entry: python3 templates/python-common/bin/check_gate_integrity.py --root .
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-secrets
+        name: secret scan (gitleaks)
+        # Same treatment as check-complexity above: ONE implementation, run over this repo via
+        # --root rather than kept as a second copy. gitleaks resolves its own config from
+        # <root>/.gitleaks.toml, so no --config flag is needed. Resolves gracefully when
+        # gitleaks is absent locally; CI sets GITLEAKS_REQUIRED=1.
+        entry: bash templates/python-common/bin/check_secrets.sh --root .
         language: system
         pass_filenames: false
         always_run: true
@@ -176,3 +207,14 @@ repos:
         language: system
         pass_filenames: false
         files: ^(Makefile|tasks\.sh|bin/help\.sh|bin/check_makefile_pairing\.sh)$
+      - id: docs-code-refs
+        name: docs code references (symbols + import paths, blueprintx#159)
+        # Same treatment as function-length/check-complexity above: ONE implementation, run
+        # over this repo via --root rather than kept as a second copy. BlueprintX's own root
+        # has no src/, so this always finds 0 in-scope candidates here (see the script's own
+        # module docstring) — it travels with the template it polices rather than earning its
+        # keep from what it finds on this side.
+        entry: python3 templates/python-common/bin/check_docs_code_refs.py --root .
+        language: system
+        pass_filenames: false
+        files: \.(py|md)$

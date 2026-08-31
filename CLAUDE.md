@@ -110,6 +110,26 @@ Checking at the template root is a false green: the generated project pins diffe
 versions. The integration suite matters specifically because it is the only place a `bin/*.sh`
 seam is actually executed.
 
+**Run all five tiers with `make verify_tiers`** (`bin/ci/scaffold_lint_test_all.sh`; `JOBS=1` to
+serialise while debugging). It fans the tiers out in parallel — measured 477s of work in 103s wall
+clock — and CI needs none of it, because `tests.yaml` already runs one job per tier.
+
+⚠️ **Each worker gets its OWN COPY of `templates/` + `bin/`, and that is load-bearing rather than
+tidy.** "The tiers are independent" is the obvious assumption and it is false: `scaffold_lint_test.sh`
+seeds cache fixtures before scaffolding (#205) and deletes them in an EXIT trap, and **six of its
+eight fixtures live in the shared `templates/python-common/` tree**. Sharing one working tree means
+the first tier to finish deletes fixtures the others are still using — an intermittent failure
+*misattributed to an innocent tier*, which is worse than the slow loop it replaces. The copy costs
+~9 MB (the repo's bulk is `.venv`, not tracked content).
+
+⚠️ **The runner disables Poetry's keyring** (`PYTHON_KEYRING_BACKEND=…null.Keyring`). Measured on
+the first parallel run: 1 of 5 tiers died inside `poetry install` with *"Message recipient
+disconnected from message bus without replying"* while the same five passed sequentially — several
+Poetry keyring probes against one DBus session bus. The failure lands on whichever worker loses the
+race, so it reads as a flaky tier rather than as a job-count artefact. It is set in the parallel
+runner and **not** in `scaffold_lint_test.sh`, because that harness also runs as one job per tier in
+CI where there is no contention.
+
 The **Makefile ↔ tasks.sh ↔ help.sh pairing** is enforced by `bin/check_makefile_pairing.sh`
 (pre-commit hook `makefile-pairing`, the `makefile-pairing` CI job), not by prose (#241).
 Every user-facing `Makefile` target must have a matching `case` branch in `tasks.sh` — the

@@ -117,18 +117,13 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_contract_family_conventions.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
 		"$str_project_path/tests/unit/test_comment_language_gate.py"
-	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
-		"$str_project_path/tests/unit/test_function_length_gate.py"
 	# Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
 	# selector could be wrong without any tier noticing (blueprintx#211).
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
 		"$str_project_path/tests/unit/test_pip_requirements.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \
 		"$str_project_path/tests/unit/test_startup_fragility_order.py"
-	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
-		"$str_project_path/tests/unit/test_review_threads_gate.py"
-	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
-		"$str_project_path/tests/unit/test_review_retry.py"
+	scaffold_copy_gate_tests "$str_project_path"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
 		"$str_project_path/tests/unit/test_contract_oracle_example.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
@@ -141,6 +136,24 @@ scaffold_copy_shared_tests() {
 	mkdir -p "$str_project_path/tests/fixtures"
 	cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \
 		"$str_project_path/tests/fixtures/example_source__header.csv"
+}
+
+# The tests that cover the gates themselves. Split out of scaffold_copy_shared_tests when
+# that function crossed the 60-line ceiling: this is a real grouping, not an arbitrary cut,
+# so the next gate test has an obvious home instead of pushing the parent over again.
+scaffold_copy_gate_tests() {
+	local str_project_path="$1"
+
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
+		"$str_project_path/tests/unit/test_function_length_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
+		"$str_project_path/tests/unit/test_review_threads_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
+		"$str_project_path/tests/unit/test_review_retry.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_code_refs_gate.py" \
+		"$str_project_path/tests/unit/test_docs_code_refs_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_assertion_weakening_gate.py" \
+		"$str_project_path/tests/unit/test_assertion_weakening_gate.py"
 }
 
 scaffold_copy_executables_and_vscode() {
