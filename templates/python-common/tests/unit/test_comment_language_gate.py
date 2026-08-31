@@ -315,14 +315,16 @@ def _git_init_and_commit(path_repo: Path) -> None:
 		"GIT_COMMITTER_NAME": "test",
 		"GIT_COMMITTER_EMAIL": "test@example.com",
 	}
-	for list_args in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "fixture"]):
-		# Constant, trusted argv against a throwaway fixture dir; no shell involved.
-		subprocess.run(  # noqa: S603
-			["git", *list_args],  # noqa: S607
-			cwd=path_repo,
-			env=dict_env,
-			check=True,
-		)
+	# Three calls in a row rather than a loop over the argv list — a loop costs complexity
+	# points and tests/ is capped at 1. Constant, trusted argv; no shell involved.
+	subprocess.run(["git", "init", "-q"], cwd=path_repo, env=dict_env, check=True)  # noqa: S603, S607
+	subprocess.run(["git", "add", "-A"], cwd=path_repo, env=dict_env, check=True)  # noqa: S603, S607
+	subprocess.run(  # noqa: S603
+		["git", "commit", "-q", "-m", "fixture"],  # noqa: S607
+		cwd=path_repo,
+		env=dict_env,
+		check=True,
+	)
 
 
 def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
