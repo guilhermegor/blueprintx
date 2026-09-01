@@ -500,8 +500,13 @@ def reviewers_who_reported(
 	} & set_roster
 
 
-def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) -> str:
-	"""Return the roster's most recent notice, flattened, to quote in a failure message.
+# Display budget for a quoted notice. ⚠️ It bounds what a HUMAN reads, never what a matcher
+# reads — see `newest_roster_notice` below (blueprintx#372).
+_INT_NOTICE_DISPLAY_CHARS = 200
+
+
+def newest_roster_notice(list_notices: list[dict], set_roster: set[str]) -> str:
+	"""Return the roster's most recent notice, flattened and COMPLETE.
 
 	Parameters
 	----------
@@ -513,10 +518,19 @@ def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) ->
 	Returns
 	-------
 	str
-		The newest roster comment with markup stripped and truncated, or ``""`` when the
-		roster has said nothing. ⚠️ DISPLAY ONLY, never a verdict — see the notice block
-		above: every outcome carries the same "already reviewed" footnote, so the text
-		cannot discriminate between them.
+		The newest roster comment with markup stripped, untruncated, or ``""`` when the roster
+		has said nothing.
+
+	Notes
+	-----
+	Every matcher reads THIS, never the truncated display form. A phrase the reviewer buries
+	past the display budget is still a phrase it said, and a cut string turns "found" into
+	"absent" — silent in both directions. Measured over 112 real notices in this repo
+	(blueprintx#372). Four classified ``UNKNOWN`` on the full body and ``OK`` on the first
+	200 chars, with the phrase at offsets 394, 583, 583 and 2700 — an unrecognised rate
+	limit reported as no rate limit, the third state collapsing into the wrong one. Four
+	carried a completion phrase past the budget, so the gate would claim no review completed
+	on a PR whose reviewer had written "Review finished".
 	"""
 	# Only the NEWEST roster notice. An older one is a sentence the reviewer has since
 	# superseded, so quoting it would describe a state that no longer holds.
@@ -526,8 +540,29 @@ def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) ->
 			not in set_roster
 		):
 			continue
-		return " ".join(_RE_MARKUP.sub(" ", dict_comment.get("body") or "").split())[:200]
+		return " ".join(_RE_MARKUP.sub(" ", dict_comment.get("body") or "").split())
 	return ""
+
+
+def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) -> str:
+	"""Return the roster's most recent notice, truncated, to quote in a failure message.
+
+	Parameters
+	----------
+	list_notices : list of dict
+		The PR's issue comments, oldest first — the stream a declining reviewer posts to.
+	set_roster : set of str
+		Already-normalised logins that can submit a review.
+
+	Returns
+	-------
+	str
+		:func:`newest_roster_notice` cut to :data:`_INT_NOTICE_DISPLAY_CHARS`, or ``""`` when
+		the roster has said nothing. ⚠️ DISPLAY ONLY, never a verdict — see the notice block
+		above: every outcome carries the same "already reviewed" footnote, so the text cannot
+		discriminate between them. Match on :func:`newest_roster_notice` instead.
+	"""
+	return newest_roster_notice(list_notices, set_roster)[:_INT_NOTICE_DISPLAY_CHARS]
 
 
 def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) -> str:
@@ -713,7 +748,9 @@ def reviewer_declared_completion(
 	"""
 	if not str_head_date:
 		return False
-	str_newest = summarise_reviewer_notice(list_notices, set_roster).casefold()
+	# The complete notice rather than the display summary — four of 112 real notices buried
+	# their completion phrase past the display budget (blueprintx#372).
+	str_newest = newest_roster_notice(list_notices, set_roster).casefold()
 	if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
 		return False
 	str_when = newest_roster_notice_date(list_notices, set_roster)
@@ -998,7 +1035,8 @@ def _print_missing_review(
 ) -> int:
 	"""Print the missing-review failure in the requested representation and return ``1``."""
 	if bool_json:
-		str_notice = summarise_reviewer_notice(list_notices, set_reviewers)
+		# Classify the complete notice — the display summary can hide the phrase (blueprintx#372).
+		str_notice = newest_roster_notice(list_notices, set_reviewers)
 		print(
 			json.dumps(
 				{

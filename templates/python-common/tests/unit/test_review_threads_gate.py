@@ -1224,10 +1224,10 @@ def test_print_thread_verdict_json_pass_has_no_problems(
 	assert json.loads(capsys.readouterr().out)["status"] == "pass"
 
 
-def test_print_thread_verdict_json_fail_lists_the_problems(
+def test_print_thread_verdict_json_fail_reports_fail_status(
 	capsys: pytest.CaptureFixture[str],
 ) -> None:
-	"""A non-empty problem list must report ``fail`` and carry the problems themselves.
+	"""A non-empty problem list must report ``fail``.
 
 	This is the concrete case #364 names: a caller that must grep prose for "thread" matched
 	the phrase "so zero threads would be fine" inside an unrelated message and misreported 27
@@ -1235,6 +1235,93 @@ def test_print_thread_verdict_json_fail_lists_the_problems(
 	"""
 	cls_gate = _load_gate()
 	cls_gate._print_thread_verdict(True, ["src/thing.py: thread is open"], 1, True)
+	assert json.loads(capsys.readouterr().out)["status"] == "fail"
+
+
+def test_print_thread_verdict_json_fail_carries_the_problems(
+	capsys: pytest.CaptureFixture[str],
+) -> None:
+	"""A failing verdict must carry the problems themselves, not only the status.
+
+	Separate from the status assertion above: a verdict that says ``fail`` and drops the
+	problem list tells a caller something is wrong without saying what, and the two
+	outcomes fail independently.
+	"""
+	cls_gate = _load_gate()
+	cls_gate._print_thread_verdict(True, ["src/thing.py: thread is open"], 1, True)
+	assert json.loads(capsys.readouterr().out)["problems"] == ["src/thing.py: thread is open"]
+
+
+# ⚠️ WITNESS FOR blueprintx#372 — THE DISPLAY BUDGET MUST NOT REACH A MATCHER.
+#
+# `summarise_reviewer_notice` cuts the notice to 200 chars so a failure message stays readable.
+# Two matchers used to read that cut string, and a phrase past the budget therefore read as
+# ABSENT. Measured over 112 real reviewer notices in this repo: 4 flipped UNKNOWN -> OK (phrase
+# at offsets 394, 583, 583, 2700) and 4 lost a completion phrase. Both directions are silent.
+_STR_FILLER = "x" * 400
+
+# ⚠️ NORMALISED, unlike `_ROSTER`. These four call the notice helpers DIRECTLY, and those take
+# the roster already stripped of `[bot]` (`find_missing_review_problem` normalises on the way
+# in). Passing `_ROSTER` here matches nothing and every helper returns "" — a green-looking
+# empty answer, not an error.
+_ROSTER_NORMALISED = set(_ROSTER_WITH_POSTS)
+
+
+def test_newest_roster_notice_is_not_truncated() -> None:
+	"""A matcher needs the whole notice; truncation is a display concern only."""
+	cls_gate = _load_gate()
+	str_body = f"{_STR_FILLER} Review rate limited."
+	assert cls_gate.newest_roster_notice(
+		[_notice("coderabbitai[bot]", str_body)], _ROSTER_NORMALISED
+	).endswith("Review rate limited.")
+
+
+def test_summarise_reviewer_notice_still_truncates_for_display() -> None:
+	"""The quoted form stays bounded, or a failure message becomes unreadable."""
+	cls_gate = _load_gate()
+	str_seen = cls_gate.summarise_reviewer_notice(
+		[_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")], _ROSTER_NORMALISED
+	)
+	assert len(str_seen) == cls_gate._INT_NOTICE_DISPLAY_CHARS
+
+
+def test_the_json_verdict_classifies_a_limit_past_the_display_budget(
+	capsys: pytest.CaptureFixture[str],
+) -> None:
+	"""Exercises the CALL SITE, not the helper — a limit the display form cannot show.
+
+	⚠️ The obvious form of this test — ``classify_reviewer_notice(newest_roster_notice(...))``
+	— is a TAUTOLOGY: it wires the two helpers together itself, so it passes no matter which
+	one the gate actually calls. Measured: with the fix reverted it stayed green, proving the
+	helper works and nothing about the gate. The assertion has to run through
+	``_print_missing_review``, which is where the wrong argument was passed.
+	"""
+	cls_gate = _load_gate()
+	cls_gate._print_missing_review(
+		True,
+		"no declared reviewer ever reported",
+		[_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")],
+		_ROSTER_NORMALISED,
+	)
 	dict_out = json.loads(capsys.readouterr().out)
-	assert dict_out["status"] == "fail"
-	assert dict_out["problems"] == ["src/thing.py: thread is open"]
+	assert dict_out["notice_classification"] == cls_gate.NOTICE_REVIEW_LIMITED
+
+
+def test_classify_on_the_truncated_form_would_have_missed_it() -> None:
+	"""Pins the DEFECT itself: the cut string classifies as OK, so a revert cannot be quiet."""
+	cls_gate = _load_gate()
+	str_cut = cls_gate.summarise_reviewer_notice(
+		[_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")],
+		_ROSTER_NORMALISED,
+	)
+	assert cls_gate.classify_reviewer_notice(str_cut) == cls_gate.NOTICE_OK
+
+
+def test_completion_is_seen_past_the_display_budget() -> None:
+	"""4 of 112 real notices buried "Review finished" past 200 chars — a false red."""
+	cls_gate = _load_gate()
+	assert cls_gate.reviewer_declared_completion(
+		[_notice("coderabbitai[bot]", f"{_STR_FILLER} Review finished.")],
+		_ROSTER_NORMALISED,
+		_HEAD_DATE,
+	)
