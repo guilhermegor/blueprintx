@@ -1,5 +1,3 @@
-WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
-
 # -------------------
 # BLUEPRINTX SCRIPTS
 # -------------------
