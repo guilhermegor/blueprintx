@@ -37,3 +37,33 @@ the test-doubling actually appears.
 
 Type every column on load (`apply_dtypes`, never pandas inference); normalise CNPJ/CPF via
 `utils.br_identifiers` before any merge/compare; merge keys must share a dtype on both sides.
+
+## Read-modify-write races (issue #385)
+
+A transaction guarantees all-or-nothing, **not** exclusivity. `READ COMMITTED` — the default
+isolation level on both PostgreSQL and MySQL — lets a second writer read the same row your
+transaction just read, before either commits. A counter read in Python (`if estoque > 0:`)
+then written back can have two concurrent callers each read the same value, each decide
+independently that the write is safe, and each write — the row goes negative in silence, no
+exception, no failed commit.
+
+**Push the decision into the database**, so the row lock the `UPDATE` itself takes is what
+serialises the writers:
+
+```sql
+UPDATE produto SET estoque = estoque - 1 WHERE id = ? AND estoque >= 1;
+```
+
+`rowcount == 0` **is** the "sold out" signal — check it, don't treat it as exceptional, and
+never `SELECT` the value first and branch on it in Python (that reintroduces the race).
+
+`SELECT ... FOR UPDATE` also serialises correctly but every contender queues behind the row
+lock, costing throughput under contention. An optimistic `version` column
+(`UPDATE ... WHERE version = ?`) avoids holding a lock but pushes the retry loop onto the
+client — `rowcount == 0` means someone else won and the caller must retry the whole
+read-modify-write. Neither replaces the arithmetic `WHERE` form above for a plain
+increment/decrement.
+
+Add `CHECK (estoque >= 0)` at the schema level regardless — it is the last line of defence,
+turning a future silent `-7` into a raised error at the offending statement instead of a
+number nobody questions. A worked example belongs with the Alembic migration scaffold (#381).
