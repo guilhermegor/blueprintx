@@ -1,54 +1,54 @@
-# Rastreabilidade do store de lições — limpeza da dívida do audit
+# Lesson-store traceability — clearing the audit's debt
 
-**Criado:** 2026-08-16 · **Base:** `main` @ `b039a42`
-**Origem:** o achado residual do `/wrap-up` da sessão anterior — *"170 lições sem referência
-de issue/PR e 9 issues órfãs"*, deixado explicitamente para uma sessão própria.
+**Created:** 2026-08-16 · **Base:** `main` @ `b039a42`
+**Origin:** the residual finding from the previous session's `/wrap-up` — *"170 lessons with no
+issue/PR reference and 9 orphan issues"*, explicitly left for its own session.
 
 ---
 
-## O que o audit realmente mede
+## What the audit actually measures
 
 `session_capture_audit.sh` → `emit_completeness()`:
 
-- **Linha 1 (lições → issues):** uma lição conta como rastreada **apenas** se o texto do
-  arquivo casar `blueprintx#[0-9]+`. Nada mais é reconhecido.
-- **Linha 2 (issues → lições):** uma issue aberta conta como *sourced* se algum arquivo do
-  store citar `blueprintx#<n>`.
+- **Line 1 (lessons → issues):** a lesson counts as traced **only** if the file's text
+  matches `blueprintx#[0-9]+`. Nothing else is recognized.
+- **Line 2 (issues → lessons):** an open issue counts as *sourced* if some file in the store
+  cites `blueprintx#<n>`.
 
-## Dois defeitos no próprio audit (achados hoje)
+## Two defects in the audit itself (found today)
 
-- 🔴 **O denominador estava truncado.** A linha 2 chama `gh issue list --state open --json
-  number` **sem `--limit`**. O default do `gh` é **30**. O repo tem **46** issues abertas, logo
-  o audit nunca olhou para 16 delas — e o "9 órfãs" reportado é na verdade **12**. Um audit
-  que reporta sobre uma amostra silenciosa da população é a falha que metade das lições deste
-  store descreve, ocorrendo no medidor.
-- 🔴 **Não existe marcador de "entregue".** Uma lição já scaffoldada conta como dívida para
-  sempre, porque a única coisa que a quita é citar um número. Consequência medida: das 243
-  lições, **73** citam um número e **170** não — mas isso não separa *pendente* de
-  *entregue-sem-citação*. O formato da lição **não tem campo de status**; é a causa raiz de
-  ninguém conseguir responder "isso já foi?".
+- 🔴 **The denominator was truncated.** Line 2 calls `gh issue list --state open --json
+  number` **without `--limit`**. `gh`'s default is **30**. The repo has **46** open issues, so
+  the audit never looked at 16 of them — and the reported "9 orphans" is actually **12**. An
+  audit that reports over a silent sample of the population is the exact failure half this
+  store's lessons describe, occurring in the meter itself.
+- 🔴 **There is no "delivered" marker.** A lesson already scaffolded counts as debt forever,
+  because the only thing that clears it is citing a number. Measured consequence: of 243
+  lessons, **73** cite a number and **170** do not — but that doesn't separate *pending* from
+  *delivered-without-citation*. The lesson format **has no status field**; that's the root
+  cause of nobody being able to answer "has this shipped yet?".
 
-## A ponte mecânica
+## The mechanical bridge
 
-Casar 170 lições à mão contra 101 issues seria o erro que a lição
-`backlog-seeded-from-a-proxy-inherits-its-blind-spot` descreve. A ponte existe: **corpos de
-issue e de PR já nomeiam o slug da lição em crases**. Um regex de slug kebab (≥3 segmentos,
-para não colidir com prosa) sobre os 101 issues + 81 PRs resolve **82 das 170 sem julgamento
-nenhum**.
+Matching 170 lessons by hand against 101 issues would be the error the
+`backlog-seeded-from-a-proxy-inherits-its-blind-spot` lesson describes. The bridge exists:
+**issue and PR bodies already name the lesson's slug in backticks**. A kebab-slug regex (≥3
+segments, to avoid colliding with prose) over the 101 issues + 81 PRs resolves **82 of the 170
+with zero judgment calls**.
 
-Restam **88** que nenhuma issue e nenhuma PR jamais nomeou.
+**88** remain that no issue and no PR has ever named.
 
-## Decisão do dono (2026-08-16)
+## Owner's decision (2026-08-16)
 
-- Resíduo de 88: **verificar e marcar status, sem abrir issues novas.** Não inflar o backlog
-  de 46 → ~80 antes do `make new` do duskko.
-- **Corrigir o script de audit** no dotfiles-dev (fonte versionada), não só reportar.
+- Residue of 88: **verify and mark status, without opening new issues.** Do not inflate the
+  backlog from 46 → ~80 before duskko's `make new`.
+- **Fix the audit script** in dotfiles-dev (the version-controlled source), not just report on it.
 
 ---
 
-## Formato novo — campo `Status:`
+## New format — `Status:` field
 
-Entra logo abaixo de `**Tier:**` em cada lição:
+Goes right below `**Tier:**` in every lesson:
 
 ```markdown
 - **Status:** delivered — blueprintx#182
@@ -56,105 +56,107 @@ Entra logo abaixo de `**Tier:**` em cada lição:
 - **Status:** queued — no issue filed
 ```
 
-`delivered`/`tracked` satisfazem o regex atual do audit. `queued — no issue filed` **não** —
-de propósito: é uma dívida consciente, e a segunda correção do script é ensiná-lo a
-distinguir *não-declarado* de *declarado-pendente*.
+`delivered`/`tracked` satisfy the audit's current regex. `queued — no issue filed` does
+**not** — on purpose: it is conscious debt, and the script's second fix is teaching it to
+distinguish *undeclared* from *declared-pending*.
 
 ---
 
-## Execução — ✅ CONCLUÍDA
+## Execution — ✅ COMPLETE
 
-### 1. Ponte mecânica — 82 lições
+### 1. Mechanical bridge — 82 lessons
 
-- [x] estampadas: **53 `delivered`**, **29 `tracked`**, derivadas do estado do próprio ref
-      (PR mergeada / issue fechada → `delivered`; issue aberta → `tracked`)
-- [x] controle negativo: `assert lessons` — a ponte **recusa rodar** com o store vazio, em vez
-      de reportar "tudo rastreado"
-- [x] amostras cruzadas contra o backlog anterior: #125 e #130 são issues abertas do corte e
-      saíram `tracked`, como deviam
+- [x] stamped: **53 `delivered`**, **29 `tracked`**, derived from the ref's own state
+      (merged PR / closed issue → `delivered`; open issue → `tracked`)
+- [x] negative control: `assert lessons` — the bridge **refuses to run** with an empty store,
+      instead of reporting "everything traced"
+- [x] samples cross-checked against the previous backlog: #125 and #130 are open issues from
+      that cut and came out `tracked`, as they should
 
-### 2. Resíduo — 88 lições
+### 2. Residue — 88 lessons
 
-- [x] **71 resolvidas pelo histórico do repo**: `git log --diff-filter=A -- <alvo>` → sufixo
-      `(#N)` do commit de squash. 13 delas caem antes do merge-por-PR e citam o SHA
-      (`delivered — pre-PR (799db84)`), em vez de um número inventado
-- [x] **17 a julgamento**, cada uma verificada contra o repo antes do veredito
-- [x] 🔴 **três correções de método no caminho, todas falso-negativo meu:**
-      1. um `Scaffold into:` costuma ser escrito da perspectiva do **projeto gerado**
-         (`bin/precommit.sh`), não da raiz do blueprintx — resolver só na raiz reportou
-         21 lições entregues como pendentes; resolvendo nas duas bases, caiu para 9
-      2. alvos são renomeados (`ci.yml` → `tests.yaml`) e re-grafados
-         (`release_test_pypi.yaml` → `release-test-pypi.yaml`); sem normalizar `-`/`_`,
-         4 lições de release apareciam como dívida
-      3. `docs/backlog/*.md` é um **terceiro livro-razão** e já registrava `DONE` para lições
-         que eu ia marcar como pendentes
-- [x] ⚠️ nenhuma marcada `delivered` porque "o arquivo existe" — todo veredito nomeia o commit
-      ou a checagem que o sustenta
+- [x] **71 resolved from the repo's history**: `git log --diff-filter=A -- <target>` → the
+      squash commit's `(#N)` suffix. 13 of them predate merge-by-PR and cite the SHA
+      (`delivered — pre-PR (799db84)`) instead of a made-up number
+- [x] **17 by judgment call**, each verified against the repo before the verdict
+- [x] 🔴 **three method corrections along the way, all my own false negatives:**
+      1. a `Scaffold into:` is usually written from the **generated project's** perspective
+         (`bin/precommit.sh`), not from the blueprintx root — resolving against the root only
+         reported 21 delivered lessons as pending; resolving against both bases dropped it to 9
+      2. targets get renamed (`ci.yml` → `tests.yaml`) and re-hyphenated
+         (`release_test_pypi.yaml` → `release-test-pypi.yaml`); without normalizing `-`/`_`,
+         4 release lessons showed up as debt
+      3. `docs/backlog/*.md` is a **third ledger** and already recorded `DONE` for lessons I was
+         about to mark pending
+- [x] ⚠️ none marked `delivered` because "the file exists" — every verdict names the commit
+      or the check that backs it
 
-### 3. Direção reversa — issues órfãs
+### 3. Reverse direction — orphan issues
 
-- [x] o audit dizia **9**; o número real era **12** (ver defeito do `--limit` acima)
-- [x] após a estampagem caíram para **8**, e duas delas **eram** nascidas de lição, só que a
-      lição não citava o número: **#120** (`ingestion-reader-persists-raw-artifact`) e
-      **#175** (`gate-on-thread-content-not-on-resolver-identity`) — referências adicionadas
-- [x] as **6** restantes (#110, #132, #133, #134, #136, #164) são trabalho de feature/ops que
-      genuinamente não nasce de lição → registradas na seção **"Issues not born of a lesson"**
-      do README do store, para pararem de ser re-triadas toda sessão
+- [x] the audit said **9**; the real number was **12** (see the `--limit` defect above)
+- [x] after stamping it dropped to **8**, and two of those **did** originate from a lesson,
+      the lesson just never cited the number: **#120**
+      (`ingestion-reader-persists-raw-artifact`) and **#175**
+      (`gate-on-thread-content-not-on-resolver-identity`) — references added
+- [x] the remaining **6** (#110, #132, #133, #134, #136, #164) are feature/ops work that
+      genuinely does not originate from a lesson → logged in the **"Issues not born of a
+      lesson"** section of the store's README, so they stop being re-triaged every session
 
-### 4. README do store
+### 4. Store README
 
-- [x] campo `Status:` documentado com a tabela dos 5 valores
-- [x] os dois avisos que custaram tempo nesta sessão escritos como regra: nunca marcar
-      `delivered` por existência de arquivo; resolver caminho nas duas bases
+- [x] `Status:` field documented with the table of 5 values
+- [x] the two warnings that cost time this session written down as a rule: never mark
+      `delivered` from a file's mere existence; resolve the path against both bases
 
-### 5. Script de audit (dotfiles-dev)
+### 5. Audit script (dotfiles-dev)
 
-- [x] `--limit 500` explícito, mais aviso quando a página **enche** (aí a contagem é piso, não total)
-- [x] `Status:` reconhecido como declaração; `queued` contado **à parte** — é o único número
-      que é dívida real
-- [x] 4 testes novos no `tests/session_capture_audit.bats` (Status sem número conta como
-      declarado; `queued` conta à parte; `advisory` não conta como queued; o stub de `gh`
-      registra o argv e prova o `--limit`)
-- [x] `shellcheck` limpo; **`bats` não está instalado nesta máquina**, então a verificação foi
-      executar o script contra o repo real, mais controle negativo (lição sem `Status` → é
-      acusada; removida → volta a zero)
-- [x] deployado para `~/.claude/hooks/` (a cópia viva ainda tinha o bug)
-- [ ] ⚠️ **não commitado** — a única branch do dotfiles-dev é `feat/pr-merge-threads-guard-126`,
-      da PR #127 ainda aberta, e este fix não pertence a ela
+- [x] explicit `--limit 500`, plus a warning when the page **fills up** (at which point the
+      count is a floor, not a total)
+- [x] `Status:` recognized as a declaration; `queued` counted **separately** — it's the only
+      number that is real debt
+- [x] 4 new tests in `tests/session_capture_audit.bats` (a `Status` with no number counts as
+      declared; `queued` counts separately; `advisory` does not count as queued; the `gh` stub
+      records the argv and proves the `--limit`)
+- [x] `shellcheck` clean; **`bats` is not installed on this machine**, so verification was
+      running the script against the real repo, plus a negative control (a lesson with no
+      `Status` → flagged; removed → back to zero)
+- [x] deployed to `~/.claude/hooks/` (the live copy still had the bug)
+- [ ] ⚠️ **not committed** — dotfiles-dev's only branch is `feat/pr-merge-threads-guard-126`,
+      from PR #127 which is still open, and this fix doesn't belong on it
 
 ---
 
-## Resultado
+## Result
 
-| | antes | depois |
+| | before | after |
 |---|---|---|
-| lições com disposição registrada | 73 / 243 (só citação) | **244 / 244** |
-| dívida real (`queued`) | desconhecida | **6** |
-| issues abertas órfãs | 9 reportadas (12 reais) | **0** |
+| lessons with a recorded disposition | 73 / 243 (citation only) | **244 / 244** |
+| real debt (`queued`) | unknown | **6** |
+| orphan open issues | 9 reported (12 real) | **0** |
 
-O denominador sobe de 243 para 244 porque o store **ganhou uma lição durante esta sessão** —
-`scaffold-copy-excludes-build-artifacts`, do achado colateral abaixo. As 243 originais foram
-todas estampadas; a 244ª nasceu já com `Status:`.
+The denominator rises from 243 to 244 because the store **gained one lesson during this
+session** — `scaffold-copy-excludes-build-artifacts`, from the collateral finding below. All
+243 original lessons were stamped; the 244th was born already carrying `Status:`.
 
-Distribuição final: **156 delivered · 76 tracked · 6 queued · 4 advisory · 2 superseded** = 244.
+Final distribution: **156 delivered · 76 tracked · 6 queued · 4 advisory · 2 superseded** = 244.
 
-As 6 `queued` são a dívida honesta que sobrou, cada uma com a evidência da ausência anotada:
-`confirm-the-spec-document-before-writing-the-reader` (sem `config/contracts/CLAUDE.md`),
+The 6 `queued` are the honest debt left over, each with its absence evidence noted:
+`confirm-the-spec-document-before-writing-the-reader` (no `config/contracts/CLAUDE.md`),
 `config-reference-optional-override`, `instrument-before-the-gate-not-after-it`,
 `codeql-default-setup-drops-a-pr-dispatch-deadlocking-merge`,
 `recorded-browser-flow-is-data-not-code`, `scaffold-copy-excludes-build-artifacts`.
 
-## Achado colateral — build output dentro de `templates/`
+## Collateral finding — build output inside `templates/`
 
-Enquanto verificava alvos, dois `__pycache__` apontaram para módulos **deletados de propósito**
-(`mkdocs_hooks.py`, `yaml_reader.py`). São **205 arquivos `.pyc`** sob `templates/`, e os
-scaffolds fazem `cp -r templates/<tier>/src/.` **sem nenhuma exclusão** — todo projeto gerado
-nasce com bytecode de outra máquina. O git nunca rastreou esses arquivos, então `git status`
-fica limpo e o defeito é invisível.
+While verifying targets, two `__pycache__` entries pointed to modules **deleted on purpose**
+(`mkdocs_hooks.py`, `yaml_reader.py`). There are **205 `.pyc` files** under `templates/`, and
+the scaffolds do `cp -r templates/<tier>/src/.` **with no exclusion at all** — every generated
+project is born with bytecode from another machine. Git never tracked these files, so
+`git status` stays clean and the defect is invisible.
 
-O custo caro não é o lixo: um `.pyc` órfão **sobrevive ao `.py`** e faz `grep -rl` responder que
-um módulo ships quando ele não ships — foi o que quase produziu dois vereditos errados aqui.
-Lição registrada (`scaffold-copy-excludes-build-artifacts`, `queued`); **não abri issue**, pela
-mesma decisão que rege esta sessão.
+The expensive cost isn't the litter: an orphaned `.pyc` **outlives its `.py`** and makes
+`grep -rl` answer that a module ships when it doesn't — which is what nearly produced two
+wrong verdicts here. Lesson logged (`scaffold-copy-excludes-build-artifacts`, `queued`); **no
+issue opened**, per the same decision governing this session.
 
-**Completo — mantido como registro.**
+**Complete — kept as a record.**
