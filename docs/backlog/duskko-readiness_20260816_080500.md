@@ -1,6 +1,6 @@
 # Duskko readiness — Tier A bundle
 
-> **DONE 2026-08-16 — kept as a record.** Everything here was delivered in PR #170 (squash
+> **DONE 2026-08-16 — kept as a record.** Everything here EXCEPT `#127` was delivered in PR #170 (squash
 > `ac069c3`) and published in **v0.15.3**. For *what still remains*, read
 > **`duskko-blockers_20260816_110000.md`**, not this file.
 >

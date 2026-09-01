@@ -20,7 +20,7 @@ PR #184 merged with **32 of 47 checks passed**. No rule objected, because there 
 nothing at all, because `enforce_admins: false` lets the admin — the only person who merges
 in this repo — silently override it.
 
-#184's threads were in fact answered and resolved at the moment of merge (verified via
+`#184`'s threads were in fact answered and resolved at the moment of merge (verified via
 GraphQL). That's the point, not the defense: **it was luck, not a guarantee.**
 
 ## The three layers, and why none of them blocks

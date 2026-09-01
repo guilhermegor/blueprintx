@@ -122,7 +122,7 @@ heredoc cases are now genuinely short, with no exception carved into the rule.
 
 ## Note
 
-#167 (cyclomatic complexity) **does exist as an open issue** — what does not exist is an
+`#167` (cyclomatic complexity) **does exist as an open issue** — what does not exist is an
 implementation. The readiness checkpoint in memory claimed there was no issue either; corrected
 here.
 
@@ -171,7 +171,7 @@ Every one of these was invisible until a long function was pulled apart:
 ## Closed out 2026-08-22
 
 All three issues delivered and merged: #192 (PR #202), #190 (PR #204), #189 (PR #209 + the
-#213 cleanup). Released as **v0.15.7** (#192 + #190) and **v0.15.8** (#189), each verified on
+`#213` cleanup). Released as **v0.15.7** (#192 + #190) and **v0.15.8** (#189), each verified on
 per-job conclusions, tag presence and non-draft state.
 
 ⚠️ **Two corrections to what this ledger claimed earlier**, kept visible rather than edited
@@ -185,4 +185,4 @@ away, because both are the more instructive half:
    against duplication. It was already the stale copy. Removed in #213.
 
 Nine issues opened from findings along the way: #201, #203, #205, #206, #207, #208, #211,
-#212. Kept as a record per the backlog discipline — do not delete this file.
+`#212`. Kept as a record per the backlog discipline — do not delete this file.
