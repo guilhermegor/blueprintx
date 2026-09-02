@@ -154,6 +154,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_docs_code_refs_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_assertion_weakening_gate.py" \
 		"$str_project_path/tests/unit/test_assertion_weakening_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_rmw_race_gate.py" \
+		"$str_project_path/tests/unit/test_rmw_race_gate.py"
 }
 
 scaffold_copy_executables_and_vscode() {
