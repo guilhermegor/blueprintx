@@ -677,3 +677,54 @@ def test_deletion_of_a_test_file_alone_is_not_flagged() -> None:
 	list_changed = [("D", "tests/unit/test_decimals.py")]
 	set_stems = gate_integrity.touched_code_stems(list_changed)
 	assert gate_integrity.deletion_problems(list_changed, set_stems) == []
+
+
+# ⚠️ REGRESSIONS FOR THE #334 REVIEW — three ways the guard could be defeated or misfire.
+
+
+def test_a_string_literal_cannot_restore_the_raises_count() -> None:
+	"""A regex over source text counts occurrences; only calls are calls."""
+	gate_integrity = _load("check_gate_integrity")
+	assert gate_integrity.count_pytest_raises_calls('marker = "pytest.raises(ValueError)"\n') == 0
+
+
+def test_a_real_raises_call_is_still_counted() -> None:
+	"""The control: tightening the count must not blind it to the genuine wrapper."""
+	gate_integrity = _load("check_gate_integrity")
+	assert (
+		gate_integrity.count_pytest_raises_calls("with pytest.raises(ValueError):\n\tpass\n") == 1
+	)
+
+
+def test_unparsable_source_falls_back_to_the_regex_count() -> None:
+	"""One diff side can be a fragment; a rough count beats no count."""
+	gate_integrity = _load("check_gate_integrity")
+	assert (
+		gate_integrity.count_pytest_raises_calls("with pytest.raises(ValueError):\n\tdef f(:") == 1
+	)
+
+
+def test_not_equal_is_weaker_than_equal() -> None:
+	"""``!=`` accepts every value except one, so it is a weakening of ``==``."""
+	gate_integrity = _load("check_gate_integrity")
+	assert "!=" in gate_integrity._SET_WEAKER_THAN_EQ
+
+
+def test_skipif_does_not_register_a_skip_mark() -> None:
+	"""``@pytest.mark.skipif(platform.skip, …)`` holds `skip` in its ARGUMENTS, not as a mark."""
+	import ast
+
+	gate_integrity = _load("check_gate_integrity")
+	cls_node = ast.parse(
+		'@pytest.mark.skipif(platform.skip, reason="x")\ndef test_a() -> None:\n\tpass\n'
+	).body[0]
+	assert gate_integrity.skip_marks(cls_node) == frozenset()
+
+
+def test_a_bare_skip_mark_is_still_registered() -> None:
+	"""The control: excluding `skipif` must not exclude `skip` itself."""
+	import ast
+
+	gate_integrity = _load("check_gate_integrity")
+	cls_node = ast.parse("@pytest.mark.skip\ndef test_b() -> None:\n\tpass\n").body[0]
+	assert gate_integrity.skip_marks(cls_node) == frozenset({"skip"})

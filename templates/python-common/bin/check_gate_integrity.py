@@ -120,7 +120,10 @@ RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
 RE_PYTEST_RAISES = re.compile(r"pytest\.raises\(\s*([A-Za-z_][\w.]*)")
-_SET_WEAKER_THAN_EQ = frozenset({"in", "not in", ">=", "<="})
+# ⚠️ `!=` BELONGS HERE, and it is the weakest of the set: `assert actual != expected` accepts
+# every value except one, so a concurrent code+test change could flip `==` to `!=` and keep a
+# green test that asserts almost nothing.
+_SET_WEAKER_THAN_EQ = frozenset({"in", "not in", ">=", "<=", "!="})
 _SET_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 
 # `git show :<path>` (empty ref) reads the INDEX blob — equal to HEAD on a clean CI checkout,
@@ -688,12 +691,38 @@ def skip_marks(cls_node: ast.FunctionDef) -> frozenset:
 	frozenset of str
 		e.g. ``{"skip"}``. Empty when undecorated or decorated with something else.
 	"""
+	# ⚠️ The OUTER chain only, never a walk. `@pytest.mark.skipif(platform.skip, …)` contains
+	# an Attribute named `skip` in its ARGUMENTS, so walking the decorator reported a `skip`
+	# mark on a conditional test — contradicting the deliberate `skipif` exclusion and
+	# blocking valid work. Measured: the walk returns {'skip'} on that decorator.
 	return frozenset(
-		cls_sub.attr
+		str_mark
 		for cls_dec in cls_node.decorator_list
-		for cls_sub in ast.walk(cls_dec)
-		if isinstance(cls_sub, ast.Attribute) and cls_sub.attr in {"skip", "xfail"}
+		for str_mark in (_outer_pytest_mark(cls_dec),)
+		if str_mark in {"skip", "xfail"}
 	)
+
+
+def _outer_pytest_mark(cls_dec: ast.expr) -> str:
+	"""Return the mark name of a ``pytest.mark.<name>`` decorator, or ``""``.
+
+	Parameters
+	----------
+	cls_dec : ast.expr
+		One entry of a ``decorator_list``.
+
+	Returns
+	-------
+	str
+		The mark name for ``@pytest.mark.<name>`` and ``@pytest.mark.<name>(...)``, else ``""``.
+	"""
+	cls_target = cls_dec.func if isinstance(cls_dec, ast.Call) else cls_dec
+	if not isinstance(cls_target, ast.Attribute):
+		return ""
+	cls_owner = cls_target.value
+	if isinstance(cls_owner, ast.Attribute) and cls_owner.attr == "mark":
+		return cls_target.attr
+	return ""
 
 
 def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
@@ -879,11 +908,64 @@ def raises_count_decreased(str_old: str, str_new: str, str_shown: str) -> list:
 	list of str
 		A single finding when the count dropped, else empty.
 	"""
-	int_old = len(RE_PYTEST_RAISES.findall(str_old))
-	int_new = len(RE_PYTEST_RAISES.findall(str_new))
+	int_old = count_pytest_raises_calls(str_old)
+	int_new = count_pytest_raises_calls(str_new)
 	if int_new < int_old:
 		return [f"{str_shown}: pytest.raises(...) count dropped from {int_old} to {int_new}"]
 	return []
+
+
+def count_pytest_raises_calls(str_source: str) -> int:
+	"""Return how many real ``pytest.raises(...)`` CALLS the source makes.
+
+	Parameters
+	----------
+	str_source : str
+		Python source to parse.
+
+	Returns
+	-------
+	int
+		The number of call nodes, or the regex count when the source does not parse.
+
+	Notes
+	-----
+	⚠️ A regex over source TEXT counts occurrences, not calls — so adding
+	``marker = "pytest.raises(ValueError)"`` restores the count while the real wrapper stays
+	removed, and the drop check sees nothing. Measured: the regex finds 1 in that string, the
+	AST finds 0 calls. Counting `ast.Call` nodes cannot be fooled by a string literal.
+
+	The regex remains the fallback for unparsable source (a partial diff side), where a rough
+	count beats no count at all — but a parse failure means the number is approximate, never
+	that there is nothing to find.
+	"""
+	try:
+		cls_tree = ast.parse(str_source)
+	except SyntaxError:
+		return len(RE_PYTEST_RAISES.findall(str_source))
+	return sum(
+		1
+		for cls_node in ast.walk(cls_tree)
+		if isinstance(cls_node, ast.Call) and _is_pytest_raises_target(cls_node.func)
+	)
+
+
+def _is_pytest_raises_target(cls_func: ast.expr) -> bool:
+	"""Return whether a call target is ``pytest.raises`` (or a bare ``raises``).
+
+	Parameters
+	----------
+	cls_func : ast.expr
+		The ``func`` of an ``ast.Call``.
+
+	Returns
+	-------
+	bool
+		``True`` for ``pytest.raises`` and for ``raises`` imported directly.
+	"""
+	if isinstance(cls_func, ast.Attribute):
+		return cls_func.attr == "raises"
+	return isinstance(cls_func, ast.Name) and cls_func.id == "raises"
 
 
 def enclosing_test_name(str_new: str, int_lineno: int) -> str:
