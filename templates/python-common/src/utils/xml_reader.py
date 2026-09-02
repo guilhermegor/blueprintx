@@ -183,15 +183,12 @@ def find_xml_row_problems(  # complexity-ok: two independent guards, missing fil
 	-------
 	ProblemReport
 		``list_fatal`` and ``list_warnings`` both empty when at least one ``str_row_anchor``
-		element is found; otherwise ``list_fatal`` names the missing anchor.
-
-	Raises
-	------
-	FileNotFoundError
-		If ``path_file`` does not exist.
+		element is found; otherwise ``list_fatal`` names the missing file or the missing
+		anchor. A missing file is a **finding, not an exception** — see the note below.
 	"""
+	# ⚠️ Reported, NOT raised — see "Never raises includes a missing file" in utils/CLAUDE.md.
 	if not path_file.exists():
-		raise FileNotFoundError(f"File not found: {path_file}")
+		return ProblemReport(list_fatal=[f"File not found: {path_file}"], list_warnings=[])
 	cls_root = defused_et.parse(str(path_file)).getroot()
 	if _find_rows(cls_root, str_row_anchor):
 		return ProblemReport(list_fatal=[], list_warnings=[])

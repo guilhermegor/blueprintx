@@ -76,6 +76,13 @@ def test_find_file_problems_reports_without_raising(tmp_path: Path) -> None:
 	assert any("absent" in p for p in cls_report.list_fatal)
 
 
+def test_find_file_problems_reports_a_missing_file_as_fatal(tmp_path: Path) -> None:
+	"""A missing file is a FATAL finding, not a FileNotFoundError (the "never raises" half)."""
+	cls_contract = FileContract("t", "t", (), ())
+	cls_report = find_file_problems(cls_contract, tmp_path / "nope.csv", "")
+	assert "not found" in " ".join(cls_report.list_fatal)
+
+
 def test_find_file_problems_missing_column_is_fatal_never_a_warning(tmp_path: Path) -> None:
 	"""A missing required column lands in ``list_fatal``, never in ``list_warnings``.
 

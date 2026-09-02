@@ -42,6 +42,14 @@ problem-finding implementation instead of the two drifting apart.
 Adding a new finding to an existing validator means picking one of the two lists — there is
 no default, and no third option that skips the choice.
 
+⚠️ **"Never raises" includes a missing file.** The obvious reading is that the guarantee
+covers validation findings and that a missing path may still raise, and that reading defeats
+the contract: a caller would have to wrap the call whose job is to describe what is wrong in
+a `try/except FileNotFoundError`, and a caller that trusted the promise crashes on the single
+most common real problem at a read boundary. `find_file_problems` and `find_xml_row_problems`
+therefore return a **fatal** finding for a missing file. Their strict twins (`read_table`,
+`read_xml`) keep raising — those *are* the read boundary.
+
 ## The runtime-typing layout shim
 
 Every function carries `@type_checker`; every class `metaclass=TypeChecker`. Because `utils/`

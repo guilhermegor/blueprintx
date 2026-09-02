@@ -18,6 +18,17 @@ from utils.tabular_reader import ProblemReport
 _EMPTY_REPORT = ProblemReport(list_fatal=[], list_warnings=[])
 
 
+def _is_fatal_only(cls_report: ProblemReport) -> bool:
+	"""Return whether the report classifies its finding as FATAL and *only* fatal.
+
+	Asserting ``list_fatal != []`` alone does not test the severity split this module exists
+	for: a finding wrongly placed in BOTH lists would pass. The pair of checks is one
+	behaviour — "classified fatal" — so it lives in one named predicate rather than in two
+	assertions per test.
+	"""
+	return cls_report.list_fatal != [] and cls_report.list_warnings == []
+
+
 def test_find_sheet_name_problems_accepts_a_sound_name() -> None:
 	"""A short, plain, ASCII name with no rule broken reports no problems."""
 	assert find_sheet_name_problems("Dados Abril") == _EMPTY_REPORT
@@ -25,9 +36,7 @@ def test_find_sheet_name_problems_accepts_a_sound_name() -> None:
 
 def test_find_sheet_name_problems_flags_blank_name() -> None:
 	"""An empty name is rejected as FATAL — a blank tab breaks every write."""
-	cls_report = find_sheet_name_problems("")
-	assert cls_report.list_fatal != []
-	assert cls_report.list_warnings == []
+	assert _is_fatal_only(find_sheet_name_problems(""))
 
 
 def test_find_sheet_name_problems_flags_too_long_name() -> None:
@@ -73,15 +82,18 @@ def test_find_sheet_name_problems_accepts_cell_reference_shaped_names() -> None:
 def test_find_sheet_name_problems_flags_invisible_characters() -> None:
 	"""A name carrying a zero-width space is rejected as FATAL, and the character is named."""
 	cls_report = find_sheet_name_problems("Dados" + "\u200b" + "Abril")
-	assert cls_report.list_fatal != []
-	assert "ZERO WIDTH SPACE" in cls_report.list_fatal[0]
+	assert "ZERO WIDTH SPACE" in " ".join(cls_report.list_fatal)
 
 
 def test_find_workbook_sheet_name_problems_flags_case_insensitive_duplicates() -> None:
-	"""Sheet names differing only by case still collide in Excel, as a FATAL finding."""
+	"""Sheet names differing only by case still collide in Excel, and the message says so."""
 	cls_report = find_workbook_sheet_name_problems(["DADOS", "Dados"])
 	assert "collide" in " ".join(cls_report.list_fatal)
-	assert cls_report.list_warnings == []
+
+
+def test_find_workbook_sheet_name_problems_classifies_duplicates_as_fatal_only() -> None:
+	"""The duplicate finding is FATAL and *only* fatal — a caller reading warnings sees none."""
+	assert _is_fatal_only(find_workbook_sheet_name_problems(["DADOS", "Dados"]))
 
 
 def test_find_workbook_sheet_name_problems_accepts_a_sound_workbook() -> None:

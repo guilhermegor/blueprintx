@@ -313,13 +313,13 @@ def find_file_problems(
 	Returns
 	-------
 	ProblemReport
-		``list_fatal`` and ``list_warnings``, both empty when the file is sound.
-
-	Raises
-	------
-	FileNotFoundError
-		If the file does not exist (raised by the reader).
+		``list_fatal`` and ``list_warnings``, both empty when the file is sound. A missing
+		file is a **finding, not an exception** — see the note below.
 	"""
+	# ⚠️ Checked HERE, not left to the raising `_read_raw` — see "Never raises includes a
+	# missing file" in utils/CLAUDE.md.
+	if not path_file.exists():
+		return ProblemReport(list_fatal=[f"File not found: {path_file}"], list_warnings=[])
 	df_raw = _read_raw(path_file, str_sheet, "str", str_csv_sep)
 	return find_contract_problems(df_raw, cls_contract)
 

@@ -205,6 +205,12 @@ def test_read_xml_raises_filenotfound_for_a_missing_file(tmp_path: Path) -> None
 		read_xml(tmp_path / "nope.xml", "Tx", {}, {}, _empty_contract())
 
 
+def test_find_xml_row_problems_reports_a_missing_file_as_fatal(tmp_path: Path) -> None:
+	"""A missing file is a FATAL finding, not a FileNotFoundError (the "never raises" half)."""
+	cls_report = find_xml_row_problems(tmp_path / "nope.xml", "Tx", _empty_contract())
+	assert "not found" in " ".join(cls_report.list_fatal)
+
+
 def test_find_xml_row_problems_is_empty_when_rows_are_found(tmp_path: Path) -> None:
 	"""A document carrying the expected row tag reports no problems."""
 	path_xml = tmp_path / "fixture.xml"
