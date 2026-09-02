@@ -221,3 +221,89 @@ def test_unexplained_suppresses_only_the_registered_gap() -> None:
 	cls_registry = SpecGapRegistry({"cnpj_keyed": frozenset({"TP_FUNDO_CLASSE"})})
 	set_reported = frozenset({"TP_FUNDO_CLASSE", "UNEXPECTED_COLUMN"})
 	assert cls_registry.unexplained("cnpj_keyed", set_reported) == frozenset({"UNEXPECTED_COLUMN"})
+
+
+# ⚠️ WITNESSES FOR THE #344 REVIEW — AMBIGUITY AND INVALID PERIODS.
+#
+# `resolve` returns the FIRST covering window, and the registry's docstring promises the
+# windows may arrive "in any order". Two overlapping windows therefore bound a period to
+# whichever happened to be listed first — a reader parsing a real file against the wrong
+# published header, with nothing reporting it.
+
+
+def test_overlapping_windows_are_rejected_at_construction() -> None:
+	"""Two windows covering a common period make resolve() order-dependent."""
+	with pytest.raises(ValueError, match="overlap"):
+		RegimeRegistry(
+			[
+				RegimeWindow(
+					str_name="a",
+					int_period_start=202301,
+					int_period_end=202306,
+				),
+				RegimeWindow(
+					str_name="b",
+					int_period_start=202306,
+					int_period_end=202312,
+				),
+			]
+		)
+
+
+def test_repeated_regime_names_are_rejected_at_construction() -> None:
+	"""Two windows under one name make the registry's own lookups ambiguous."""
+	with pytest.raises(ValueError, match="unique"):
+		RegimeRegistry(
+			[
+				RegimeWindow(
+					str_name="dup",
+					int_period_start=202301,
+					int_period_end=202306,
+				),
+				RegimeWindow(
+					str_name="dup",
+					int_period_start=202307,
+					int_period_end=202312,
+				),
+			]
+		)
+
+
+def test_adjacent_windows_that_do_not_overlap_are_accepted() -> None:
+	"""The correct case must still build, or the check fires on valid registries."""
+	cls_built = RegimeRegistry(
+		[
+			RegimeWindow(
+				str_name="old",
+				int_period_start=None,
+				int_period_end=202311,
+			),
+			RegimeWindow(
+				str_name="new",
+				int_period_start=202312,
+				int_period_end=None,
+			),
+		]
+	)
+	assert len(cls_built.list_windows) == 2
+
+
+def test_covers_rejects_a_month_outside_01_12() -> None:
+	"""An open window would otherwise report month 13 as covered."""
+	cls_open = RegimeWindow(
+		str_name="open",
+		int_period_start=None,
+		int_period_end=None,
+	)
+	with pytest.raises(ValueError, match="month 01-12"):
+		cls_open.covers(202313)
+
+
+def test_covers_still_accepts_a_valid_period_on_an_open_window() -> None:
+	"""The guard must not reject the case the window exists to serve."""
+	cls_open = RegimeWindow(
+		str_name="open",
+		int_period_start=None,
+		int_period_end=None,
+	)
+	assert cls_open.covers(202312) is True

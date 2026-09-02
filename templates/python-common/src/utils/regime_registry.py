@@ -24,6 +24,71 @@ else:
 		from chassis.typing import TypeChecker, type_checker
 
 
+# ⚠️ AMBIGUITY IS RESOLVED AT CONSTRUCTION, NEVER AT LOOKUP.
+#
+# `resolve` returns the FIRST covering window, so with two overlapping windows the schema a
+# period binds to depends on list order — and the docstring promises "in any order". The
+# reader would then parse a real file against the wrong published header and produce numbers
+# nobody flags: the silent wrong answer this module exists to prevent. Rejecting here means a
+# registry that survives construction cannot answer ambiguously.
+def _reject_ambiguous_windows(  # complexity-ok: pairwise overlap IS the check
+	list_windows: list[RegimeWindow],
+) -> None:
+	"""Raise when two windows share a name or cover a common period.
+
+	Parameters
+	----------
+	list_windows : list of RegimeWindow
+		The windows a registry is being built from, in any order.
+
+	Raises
+	------
+	ValueError
+		When a regime name repeats, or two windows overlap.
+	"""
+	list_names = [cls_window.str_name for cls_window in list_windows]
+	set_repeated = {str_name for str_name in list_names if list_names.count(str_name) > 1}
+	if set_repeated:
+		raise ValueError(f"regime names must be unique; repeated: {sorted(set_repeated)}")
+	# Sorting by start puts an open start first, so overlap can only occur between neighbours.
+	list_sorted = sorted(
+		list_windows,
+		key=lambda cls_window: (
+			cls_window.int_period_start is not None,
+			cls_window.int_period_start or 0,
+		),
+	)
+	for cls_earlier, cls_later in zip(list_sorted, list_sorted[1:], strict=False):
+		if _windows_overlap(cls_earlier, cls_later):
+			raise ValueError(
+				f"regime windows overlap: {cls_earlier.str_name} and {cls_later.str_name} "
+				f"both cover at least one period, so resolve() would depend on list order"
+			)
+
+
+def _windows_overlap(cls_earlier: RegimeWindow, cls_later: RegimeWindow) -> bool:
+	"""Return whether two windows share at least one period.
+
+	Parameters
+	----------
+	cls_earlier : RegimeWindow
+		The window with the earlier (or equally open) start.
+	cls_later : RegimeWindow
+		The window that starts at or after ``cls_earlier``.
+
+	Returns
+	-------
+	bool
+		``True`` when the earlier window has no end, or its end reaches the later's start.
+	"""
+	if cls_earlier.int_period_end is None:
+		return True
+	return (
+		cls_later.int_period_start is None
+		or cls_earlier.int_period_end >= cls_later.int_period_start
+	)
+
+
 class RegimeRegistry(metaclass=TypeChecker):
 	"""Look up which regime window covers a period, or the newest period a closed one covers.
 
@@ -34,6 +99,7 @@ class RegimeRegistry(metaclass=TypeChecker):
 	"""
 
 	def __init__(self, list_windows: list[RegimeWindow]) -> None:
+		_reject_ambiguous_windows(list_windows)
 		self.list_windows = list_windows
 
 	@type_checker
