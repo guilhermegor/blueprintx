@@ -143,9 +143,14 @@ pip_fallback_write_requirements_file() {
 	local str_groups_csv="$1"
 	local str_req_file="$2"
 
-	pip_fallback_ensure_toml_reader
-	pip_fallback_emit_pip_requirements_from_pyproject "$str_groups_csv" >"$str_req_file"
-	pip_fallback_prune_unused_db_drivers "$str_req_file"
+	# ⚠️ EVERY STATUS IS CHECKED, and that is the whole point. This used to return the
+	# PRUNING status, which succeeds on an empty file — so a failed TOML reader or a failed
+	# emitter produced an empty requirements file and reported success. Install and verify
+	# both accept zero requirements, so the venv was declared good having installed nothing.
+	pip_fallback_ensure_toml_reader || return 1
+	pip_fallback_emit_pip_requirements_from_pyproject "$str_groups_csv" >"$str_req_file" ||
+		return 1
+	pip_fallback_prune_unused_db_drivers "$str_req_file" || return 1
 }
 
 # The package name at the head of a requirement line, stripped of extras, version
@@ -315,7 +320,11 @@ pip_fallback_install_groups_in_venv() {
 	str_req_file="$(mktemp "${TMPDIR:-/tmp}/bx_pip_fallback.XXXXXX.txt")"
 
 	print_status "info" "Installing $str_label with pip fallback..."
-	pip_fallback_write_requirements_file "$str_groups_csv" "$str_req_file"
+	if ! pip_fallback_write_requirements_file "$str_groups_csv" "$str_req_file"; then
+		print_status "error" "Could not build the pip requirements for $str_label."
+		rm -f "$str_req_file"
+		return 1
+	fi
 
 	"$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade pip setuptools wheel
 

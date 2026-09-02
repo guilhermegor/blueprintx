@@ -51,6 +51,62 @@ def requirement_name(str_line: str) -> str | None:
 	return cls_match.group(0) if cls_match else None
 
 
+def top_level_from_files(cls_dist: importlib.metadata.Distribution) -> list[str]:
+	"""Return the top-level module names a distribution's own file list implies.
+
+	Parameters
+	----------
+	cls_dist : importlib.metadata.Distribution
+		The installed distribution to inspect.
+
+	Returns
+	-------
+	list of str
+		Top-level package and module names, or ``[]`` when the file list is unavailable.
+
+	Notes
+	-----
+	Metadata directories (``*.dist-info``, ``*.egg-info``) and anything nested below the
+	first path element are excluded, so what remains is what an ``import`` can reach.
+	"""
+	list_files = cls_dist.files or []
+	set_tops: set[str] = set()
+	for cls_path in list_files:
+		str_top = _importable_head(cls_path.parts)
+		if str_top:
+			set_tops.add(str_top)
+	return sorted(set_tops)
+
+
+def _importable_head(tuple_parts: tuple[str, ...]) -> str | None:
+	"""Return the importable module name a RECORD path implies, or ``None``.
+
+	Parameters
+	----------
+	tuple_parts : tuple of str
+		The path components of one installed file, relative to site-packages.
+
+	Returns
+	-------
+	str or None
+		The top-level package or module name, or ``None`` when the path is not importable.
+
+	Notes
+	-----
+	⚠️ A RECORD lists more than importable code. Metadata directories are excluded, and so
+	is anything starting with ``..`` — console scripts are recorded as
+	``../../../bin/<name>``, which measured as a literal ``..`` candidate here and would
+	have made ``__import__("..")`` fail, rejecting a correctly installed distribution.
+	``str.isidentifier`` is the final filter, so no non-module path can reach an import.
+	"""
+	if not tuple_parts or tuple_parts[0].endswith((".dist-info", ".egg-info")):
+		return None
+	str_head = tuple_parts[0]
+	if len(tuple_parts) == 1:
+		str_head = str_head[:-3] if str_head.endswith(".py") else ""
+	return str_head if str_head.isidentifier() else None
+
+
 def top_level_imports(str_name: str) -> list[str]:
 	"""Resolve the import name(s) a distribution actually installs.
 
@@ -72,9 +128,49 @@ def top_level_imports(str_name: str) -> list[str]:
 	str_text = cls_dist.read_text("top_level.txt")
 	if str_text:
 		return [str_line.strip() for str_line in str_text.splitlines() if str_line.strip()]
-	# Some wheel-built distributions omit top_level.txt entirely. The normalised
-	# name is the best available guess and is right for the common single-module case.
-	return [str_name.replace("-", "_")]
+	# Some wheel-built distributions omit top_level.txt. Derive the candidates from the
+	# files the distribution actually installed rather than guessing from its name: a
+	# guess that misses rejects a correctly installed package, and the normalised-name
+	# rule is wrong for every distribution whose module differs from its PyPI name.
+	list_from_files = top_level_from_files(cls_dist)
+	return list_from_files or [str_name.replace("-", "_")]
+
+
+def requirement_is_active(str_line: str) -> bool:
+	"""Return whether this requirement's PEP 508 marker applies to THIS interpreter.
+
+	Parameters
+	----------
+	str_line : str
+		A requirement line, possibly carrying a ``; marker`` suffix.
+
+	Returns
+	-------
+	bool
+		``True`` when there is no marker or the marker evaluates true here.
+
+	Notes
+	-----
+	⚠️ `pip install -r` SKIPS a requirement whose marker is false, and
+	:func:`requirement_name` strips the marker before the lookup — so without this the
+	verifier demands a distribution pip was right not to install, and fails the whole
+	fallback on a correct install.
+
+	The evaluation happens in the TARGET interpreter (this script runs under
+	``$str_venv_python``), which is the only environment the marker is about. ``packaging``
+	ships with the setuptools this venv already upgraded, but the import is guarded: an
+	unevaluatable marker is reported on stderr rather than silently skipped, since a silent
+	skip is indistinguishable from a requirement that verified.
+	"""
+	str_marker = str_line.split(";", 1)[1].strip() if ";" in str_line else ""
+	if not str_marker:
+		return True
+	try:
+		from packaging.markers import Marker
+	except ImportError:
+		print(f"warning: cannot evaluate marker for {str_line.strip()!r}", file=sys.stderr)
+		return False
+	return bool(Marker(str_marker).evaluate())
 
 
 def check_requirement(str_req: str) -> str | None:
@@ -92,6 +188,8 @@ def check_requirement(str_req: str) -> str | None:
 	"""
 	str_name = requirement_name(str_req)
 	if str_name is None:
+		return None
+	if not requirement_is_active(str_req):
 		return None
 
 	try:
