@@ -78,7 +78,7 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
+    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -610,7 +610,7 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
+    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review
@@ -618,7 +618,7 @@ apply_branch_protection() {
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
             local reviews_json
-            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -896,7 +896,7 @@ PY
 #   - initiate_logging(logger, path_log)              — attach handlers / a log file
 prompt_logs() {
     local answer
-    read -r -p "Include the in-repo logging helper (utils/logs.py)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include the in-repo logging helper (utils/logs.py)? [y/N]: ")" answer || true
     case "$answer" in
         y|Y) INCLUDE_LOGS=true; print_status "config" "logs.py: included" ;;
         *)   INCLUDE_LOGS=false ;;
@@ -913,16 +913,16 @@ prompt_publish_targets() {
     # Two orthogonal axes, banner-separated so Q3 doesn't read as a fork of Q1/Q2:
     # publishing = where THIS library ships to; consuming = where its own deps come from.
     print_status "section" "Publishing — where this library ships to"
-    read -r -p "Publish to the official public registry (PyPI)? [Y/n]: " answer || true
+    read -r -p "$(prompt_main "Publish to the official public registry (PyPI)? [Y/n]: ")" answer || true
     case "$answer" in n | N) PUBLISH_PYPI=false ;; *) PUBLISH_PYPI=true ;; esac
     print_status "config" "Publish target PyPI: $PUBLISH_PYPI"
 
-    read -r -p "Add a staging/sandbox registry (Test PyPI) first? [Y/n]: " answer || true
+    read -r -p "$(prompt_main "Add a staging/sandbox registry (Test PyPI) first? [Y/n]: ")" answer || true
     case "$answer" in n | N) PUBLISH_TEST_PYPI=false ;; *) PUBLISH_TEST_PYPI=true ;; esac
     print_status "config" "Staging registry Test PyPI: $PUBLISH_TEST_PYPI"
 
     print_status "section" "Consuming — where this library's own dependencies come from"
-    read -r -p "Consume this library from a non-official source (private index / git)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Consume this library from a non-official source (private index / git)? [y/N]: ")" answer || true
     case "$answer" in y | Y) CONSUME_PRIVATE=true ;; *) CONSUME_PRIVATE=false ;; esac
     print_status "config" "Private consumer source: $CONSUME_PRIVATE"
 }
@@ -955,11 +955,11 @@ EOF
 # needs it, but the seam is offered for libs whose integration tests spin up a real DB.
 prompt_docker_compose() {
     local answer db_ans
-    read -r -p "Include Docker Compose for database infrastructure? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")" answer || true
     case "$answer" in
         y|Y)
             INCLUDE_DOCKER_COMPOSE=true
-            read -r -p "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): " db_ans || true
+            read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans || true
             case "${db_ans:-postgresql}" in
                 mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
                 *) DB_COMPOSE_BACKEND="postgresql" ;;

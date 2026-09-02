@@ -36,6 +36,55 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # ============================================================================
+# PROMPT HIERARCHY + CANCEL COLOURS (blueprintx#251, blueprintx#253)
+# ============================================================================
+#
+# The six colours above are already each bound to one print_status level
+# (RED=error, GREEN=success, YELLOW=warning, BLUE=info, CYAN=config,
+# MAGENTA=debug/section). Reusing any of them for "this is a top-level
+# question" or "this is a deliberate, non-error exit" would give that colour
+# a second, unrelated meaning — the exact defect blueprintx#253 reported
+# (Cancel painted RED, print_status's "error" colour, even though cancelling
+# is not a failure). So these three get their own escape codes instead of
+# aliasing an existing level:
+#
+#   PROMPT_PRIMARY — a top-level scaffolder question (bold blue)
+#   PROMPT_SUB     — a conditional follow-up, always rendered indented with
+#                     a "└" continuation glyph so the hierarchy survives
+#                     NO_COLOR / a non-TTY pipe with the colour stripped
+#                     (bold magenta — the "pink" asked for in both issues)
+#   CANCEL         — the menu's Cancel option: deliberately the SAME code as
+#                     PROMPT_SUB, because both are "secondary but
+#                     intentional, never an error"
+#
+# BlueprintX-repo-only, deliberately NOT added to templates/common or
+# templates/python-common/bin/lib/common.sh: those two are copied verbatim
+# into every generated project, and "which scaffolder question is a
+# sub-question" is a concept of BlueprintX's own interactive menu, not
+# something a generated project's scripts ask about. Shipping it there would
+# be a scaffolder-only concept leaking into every user's repo.
+#
+# Usage:
+#   read -r -p "$(prompt_main "Question? [y/N]: ")" answer
+#   read -r -p "$(prompt_sub  "Follow-up? [a/b]: ")" sub_answer
+#   printf "  ${CANCEL}%d) Cancel${NC}\n" "$idx"
+
+PROMPT_PRIMARY='\033[1;34m'
+PROMPT_SUB='\033[1;35m'
+# Read by bin/blueprintx.sh (a different file), which shellcheck cannot follow
+# when it lints this file standalone.
+# shellcheck disable=SC2034
+CANCEL="$PROMPT_SUB"
+
+prompt_main() {
+    printf "${PROMPT_PRIMARY}[?]${NC} %s" "$1"
+}
+
+prompt_sub() {
+    printf "    ${PROMPT_SUB}└${NC} %s" "$1"
+}
+
+# ============================================================================
 # print_status — standard status-keyword API
 # ============================================================================
 #

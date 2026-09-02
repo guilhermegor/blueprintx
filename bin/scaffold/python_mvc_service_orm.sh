@@ -76,7 +76,7 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
+    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -242,7 +242,7 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
+    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review
@@ -250,7 +250,7 @@ apply_branch_protection() {
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
             local reviews_json
-            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -285,11 +285,11 @@ EOF
 
 prompt_docker_compose() {
     local ans
-    read -r -p "Include Docker Compose for database infrastructure? [y/N] " ans
+    read -r -p "$(prompt_main "Include Docker Compose for database infrastructure? [y/N] ")" ans
     if [[ "$ans" =~ ^[Yy]$ ]]; then
         INCLUDE_DOCKER_COMPOSE=true
         local db_ans
-        read -r -p "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): " db_ans
+        read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans
         case "$db_ans" in
             mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
             *) DB_COMPOSE_BACKEND="postgresql" ;;
@@ -310,13 +310,13 @@ conditional_copy_docker_compose() {
 
 prompt_data_dir() {
     local answer base_ans dated_ans
-    read -r -p "Customise the output directory (logs/artifacts root)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")" answer || true
     case "$answer" in
         y|Y)
             INCLUDE_DATA_DIR=true
-            read -r -p "Output base directory [logs]: " base_ans || true
+            read -r -p "$(prompt_sub "Output base directory [logs]: ")" base_ans || true
             DATA_DIR_BASE="${base_ans:-logs}"
-            read -r -p "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: " dated_ans || true
+            read -r -p "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")" dated_ans || true
             case "$dated_ans" in
                 y|Y) DATA_DIR_DATED=true ;;
                 *) DATA_DIR_DATED=false ;;
@@ -331,11 +331,11 @@ prompt_data_dir() {
 
 prompt_webhook() {
     local answer platform_ans
-    read -r -p "Include outbound webhook notifications? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include outbound webhook notifications? [y/N]: ")" answer || true
     case "$answer" in
         y|Y)
             INCLUDE_WEBHOOK=true
-            read -r -p "Which platform? [teams/slack] (default: teams): " platform_ans || true
+            read -r -p "$(prompt_sub "Which platform? [teams/slack] (default: teams): ")" platform_ans || true
             case "${platform_ans:-teams}" in
                 slack) WEBHOOK_PLATFORM="slack" ;;
                 *) WEBHOOK_PLATFORM="teams" ;;
@@ -350,11 +350,11 @@ prompt_webhook() {
 
 prompt_email() {
     local answer backend_ans
-    read -r -p "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")" answer || true
     case "$answer" in
         y | Y)
             INCLUDE_EMAIL=true
-            read -r -p "Which backend? [outlook/smtp] (default: outlook): " backend_ans || true
+            read -r -p "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")" backend_ans || true
             case "${backend_ans:-outlook}" in
                 smtp) EMAIL_BACKEND="smtp" ;;
                 *) EMAIL_BACKEND="outlook" ;;
@@ -378,7 +378,7 @@ prompt_pipeline_intent() {
         print_status "config" "Pipeline mode: multi-intent (PIPELINE_INTENT dispatch) [env override]"
         return
     fi
-    read -r -p "Does this process have multiple run intents (e.g. send/reconcile/notify)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Does this process have multiple run intents (e.g. send/reconcile/notify)? [y/N]: ")" answer || true
     case "$answer" in
         y | Y)
             INCLUDE_MULTI_PIPELINE=true
