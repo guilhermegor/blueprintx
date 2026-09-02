@@ -406,3 +406,37 @@ def test_an_unlocked_branch_is_not_masked_by_a_locked_one(tmp_path: Path) -> Non
 	)
 
 	assert gate.check_file(str(path_file)) == 1
+
+
+def test_a_string_mentioning_version_id_col_is_not_a_version_column(tmp_path: Path) -> None:
+	"""A gate turned off by writing its own keyword in prose is no gate."""
+	path_file = _python_file(
+		tmp_path,
+		"class Product:\n"
+		'\t__tablename__ = "product"\n'
+		'\tstr_note = "todo: consider version_id_col here"\n'
+		"\n\n"
+		"def decrement_stock(session, product_id, quantity):\n"
+		"\trecord = session.get(Product, product_id)\n"
+		"\trecord.stock = record.stock - quantity\n"
+		"\tsession.flush()\n",
+	)
+
+	assert gate.check_file(str(path_file)) == 1
+
+
+def test_a_declared_version_id_col_still_suppresses(tmp_path: Path) -> None:
+	"""The control: parsing must not blind the gate to a real optimistic lock."""
+	path_file = _python_file(
+		tmp_path,
+		"class Product:\n"
+		'\t__tablename__ = "product"\n'
+		'\t__mapper_args__ = {"version_id_col": version}\n'
+		"\n\n"
+		"def decrement_stock(session, product_id, quantity):\n"
+		"\trecord = session.get(Product, product_id)\n"
+		"\trecord.stock = record.stock - quantity\n"
+		"\tsession.flush()\n",
+	)
+
+	assert gate.check_file(str(path_file)) == 0

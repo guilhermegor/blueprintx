@@ -289,20 +289,58 @@ def _model_has_version_id_col(tree: ast.Module, str_source: str, str_model: str)
 	tree : ast.Module
 		The parsed module.
 	str_source : str
-		The module's source text (for ``ast.get_source_segment``).
+		Unused; kept so the call site stays stable. See Notes.
 	str_model : str
 		The model name to look up.
 
 	Returns
 	-------
 	bool
-		``True`` when the class body's source mentions ``version_id_col``. A model defined
-		in another file cannot be resolved by this structural gate and reads as unprotected —
-		use ``with_for_update()`` or the escape hatch for that case.
+		``True`` when the class assigns ``__mapper_args__`` with a ``version_id_col`` key.
+		A model defined in another file cannot be resolved by this structural gate and reads
+		as unprotected — use ``with_for_update()`` or the escape hatch for that case.
+
+	Notes
+	-----
+	⚠️ Parsed, never text-matched. A substring test over the class body's SOURCE is satisfied
+	by a docstring, a comment or a string literal that merely mentions the option — measured:
+	``str_note = "todo: consider version_id_col here"`` suppressed the finding entirely. That
+	is the same defeat shape as counting ``pytest.raises`` by regex (blueprintx#334): a gate
+	turned off by writing its own keyword in prose.
 	"""
+	del str_source
 	for cls_node in ast.walk(tree):
 		if isinstance(cls_node, ast.ClassDef) and cls_node.name == str_model:
-			return "version_id_col" in (ast.get_source_segment(str_source, cls_node) or "")
+			return _class_declares_version_id_col(cls_node)
+	return False
+
+
+def _class_declares_version_id_col(cls_class: ast.ClassDef) -> bool:
+	"""Return whether a class body assigns ``__mapper_args__`` carrying ``version_id_col``.
+
+	Parameters
+	----------
+	cls_class : ast.ClassDef
+		The model class to inspect.
+
+	Returns
+	-------
+	bool
+		``True`` when a ``__mapper_args__`` dict declares the key.
+	"""
+	for cls_stmt in cls_class.body:
+		if not isinstance(cls_stmt, ast.Assign) or not isinstance(cls_stmt.value, ast.Dict):
+			continue
+		if not any(
+			isinstance(cls_target, ast.Name) and cls_target.id == "__mapper_args__"
+			for cls_target in cls_stmt.targets
+		):
+			continue
+		if any(
+			isinstance(cls_key, ast.Constant) and cls_key.value == "version_id_col"
+			for cls_key in cls_stmt.value.keys
+		):
+			return True
 	return False
 
 
