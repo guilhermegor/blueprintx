@@ -73,6 +73,30 @@ prompt_state_management() {
     esac
 }
 
+prompt_deploy_target() {
+    # ⚠️ ONE target, never both. Each workflow triggers on `push: branches: [main]`, so
+    # shipping both deploys twice on every merge, to two URLs, with nothing saying which is
+    # canonical. The choice is made here so only one workflow ever reaches the project.
+    echo ""
+    print_status "info" "Deploy target for the built SPA:"
+    echo "  1) GitHub Pages  (no extra secrets; served under /<repo-name>/)"
+    echo "  2) Vercel        (needs VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID)"
+    echo "  3) None          (no deploy workflow)"
+    read -r -p "$(prompt_main "Choice [1]: ")" deploy_choice || true
+    DEPLOY_TARGET_CHOICE="${deploy_choice:-1}"
+    case "$DEPLOY_TARGET_CHOICE" in
+        1) print_status "config" "Deploy target: GitHub Pages" ;;
+        2) print_status "config" "Deploy target: Vercel"
+           # Stated at scaffold time, not in a doc read after the first red push: the
+           # Vercel project must already EXIST for those IDs to exist at all.
+           print_status "warning" "Create the Vercel project first, then add the three repository secrets."
+           print_status "info" "  gh secret set VERCEL_TOKEN; gh secret set VERCEL_ORG_ID; gh secret set VERCEL_PROJECT_ID" ;;
+        3) print_status "config" "Deploy target: none" ;;
+        *) print_status "warning" "Invalid choice; defaulting to GitHub Pages"
+           DEPLOY_TARGET_CHOICE=1 ;;
+    esac
+}
+
 prompt_module_federation() {
     echo ""
     read -r -p "$(prompt_main "Enable Webpack Module Federation? [y/N]: ")" mf_answer || true
@@ -236,6 +260,25 @@ with open('$project_path/package.json', 'w') as f:
     print_status "success" "Package variants applied"
 }
 
+# Ships exactly ONE deploy workflow, per prompt_deploy_target. The workflows live under
+# optional/deploy/ rather than .github/workflows/ precisely so the `.github` overlay above
+# cannot copy both unconditionally.
+copy_deploy_target() {
+    local project_path="$1"
+    local deploy_root="$SKELETON_TEMPLATE_ROOT/optional/deploy"
+
+    case "$DEPLOY_TARGET_CHOICE" in
+        1) cp "$deploy_root/pages/deploy-spa.yml" "$project_path/.github/workflows/deploy-spa.yml"
+           print_status "success" "GitHub Pages deploy workflow added" ;;
+        2) cp "$deploy_root/vercel/deploy-vercel.yml" "$project_path/.github/workflows/deploy-vercel.yml"
+           # vercel.json is what `vercel build` reads for the SPA rewrites, so it belongs at
+           # the project root, not in .github/.
+           cp "$deploy_root/vercel/vercel.json" "$project_path/vercel.json"
+           print_status "success" "Vercel deploy workflow + vercel.json added" ;;
+        *) print_status "info" "No deploy workflow added" ;;
+    esac
+}
+
 copy_common_templates() {
     local project_path="$1"
 
@@ -277,6 +320,7 @@ copy_common_templates() {
     if [ -d "$SKELETON_TEMPLATE_ROOT/.github" ]; then
         cp -r "$SKELETON_TEMPLATE_ROOT/.github/." "$project_path/.github"
     fi
+    copy_deploy_target "$project_path"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
 
     # Ship the repo→LLM context exporter (and its print_status helper) unconditionally,
@@ -470,7 +514,9 @@ prompt_git_remote_setup() {
 	# the prompt returned (#212).
 	if scaffold_prompt_git_remote_setup "$1"; then
 		apply_branch_protection "$1"
-		prompt_pages_setup
+		# Only the Pages target needs the one-off Pages enablement; offering it on the
+		# Vercel or none path would wait on a gh-pages branch nothing ever pushes.
+		[ "$DEPLOY_TARGET_CHOICE" = "1" ] && prompt_pages_setup
 	fi
 }
 
@@ -482,6 +528,13 @@ apply_offline_mode() {
     # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
     print_status "info" "Removed .github (GitHub-only assets)"
+    # vercel.json lives at the project ROOT, so the .github sweep above does not reach it —
+    # and a Vercel config with no workflow to read it is dead configuration pointing at a
+    # deploy that cannot happen. It goes with its workflow.
+    if [ -f "$project_path/vercel.json" ]; then
+        rm -f "$project_path/vercel.json"
+        print_status "info" "Removed vercel.json (its deploy workflow went with .github)"
+    fi
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
@@ -520,6 +573,7 @@ main() {
     validate_inputs
     resolve_github_username
     prompt_state_management
+    prompt_deploy_target
     prompt_module_federation
     prompt_docker
     create_directory_structure "$PROJECT_PATH"

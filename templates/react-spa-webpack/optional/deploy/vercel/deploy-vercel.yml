@@ -1,0 +1,52 @@
+name: Deploy SPA to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Vercel builds and hosts from its own infrastructure, so nothing is pushed
+# back to this repo — unlike the gh-pages target, which needs contents: write.
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # GitHub's default bound is 6 hours, and an unbounded job that hangs reports
+    # `cancelled` — indistinguishable from a human pressing cancel (blueprintx#192).
+    timeout-minutes: 20
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Single-sources the version from .nvmrc rather than pinning it a
+          # second time here, where the two spellings can drift apart.
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      # Fails loudly when VERCEL_TOKEN / ORG_ID / PROJECT_ID are missing or the
+      # Vercel project does not exist — the three secrets this target needs and
+      # the gh-pages target does not. See the repo README's deploy section.
+      - name: Pull Vercel environment information
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      # `vercel build` reads vercel.json, whose `rewrites` block sends every path
+      # to index.html — Vercel's equivalent of the gh-pages 404.html copy, and
+      # required by react-router for any deep link to resolve.
+      - name: Build project artifacts
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy project artifacts to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
