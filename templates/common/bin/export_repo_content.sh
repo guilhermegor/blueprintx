@@ -45,7 +45,7 @@ trap cleanup EXIT
 prepare_output_path() {
 	local output_dir
 	output_dir="$(dirname "$OUTPUT_FILE")"
-	mkdir -p "$output_dir"
+	ensure_dir "$output_dir"
 }
 
 create_temp_files() {

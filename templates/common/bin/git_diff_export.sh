@@ -24,7 +24,7 @@ main() {
 	str_branch_kebab="${str_branch//\//-}"
 	str_diff_file="${str_diff_dir}/${str_branch_kebab}_$(date +%Y%m%d_%H%M%S).diff"
 
-	mkdir -p "$str_diff_dir"
+	ensure_dir "$str_diff_dir"
 	git format-patch "$str_range" --stdout >"$str_diff_file"
 
 	if [ ! -s "$str_diff_file" ]; then

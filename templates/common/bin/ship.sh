@@ -72,7 +72,7 @@ stage_copy() {
 	# Extract the committed tree of str_ship_ref into the staging dir, then prune.
 	local str_stage_dir="$1"
 	print_status "info" "Staging committed tree of '$str_ship_ref' (excluding untracked, caches, secrets)..."
-	mkdir -p "$str_stage_dir"
+	ensure_dir "$str_stage_dir"
 	git archive --format=tar "$str_ship_ref" | tar -x -C "$str_stage_dir"
 	prune_excludes "$str_stage_dir"
 }
@@ -85,7 +85,7 @@ copy_git_diffs() {
 	local str_stage_dir="$1"
 	if [[ -d "$PROJECT_ROOT/git_diffs" ]] && compgen -G "$PROJECT_ROOT/git_diffs/*" >/dev/null 2>&1; then
 		print_status "info" "Bundling working-tree git_diffs/ (offline share payload)..."
-		mkdir -p "$str_stage_dir/git_diffs"
+		ensure_dir "$str_stage_dir/git_diffs"
 		cp -a "$PROJECT_ROOT/git_diffs/." "$str_stage_dir/git_diffs/"
 	fi
 }
@@ -94,7 +94,7 @@ create_zip() {
 	# Zip the staged copy (at str_stage_root/str_repo_kebab) into str_archive.
 	local str_stage_root="$1"
 	local str_archive="$2"
-	mkdir -p "$(dirname "$str_archive")"
+	ensure_dir "$(dirname "$str_archive")"
 	print_status "info" "Zipping to $str_archive ..."
 	(cd "$str_stage_root" && zip -q -r "$str_archive" "$str_repo_kebab")
 }
