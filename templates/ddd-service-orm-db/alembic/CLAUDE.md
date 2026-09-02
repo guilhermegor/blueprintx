@@ -40,7 +40,29 @@ The `file_template` in `alembic.ini` prepends a sortable datetime prefix
    views. Create them with `op.execute("CREATE OR REPLACE VIEW ...")` in
    `upgrade()` and `op.execute("DROP VIEW IF EXISTS ...")` in `downgrade()`.
 
-5. **Test both directions locally** before committing:
+5. ⚠️ **A `batch_alter_table` migration cannot be generated as offline SQL unless it
+   passes `copy_from`.** On SQLite, batch mode rewrites the table (create temp → copy →
+   drop → rename), and to emit that `CREATE TABLE` Alembic must know the table's full
+   definition. Online it reflects the definition from the live database; with `--sql`
+   there is no connection to reflect from, so it stops:
+
+   ```
+   This operation cannot proceed in --sql mode; batch mode with dialect sqlite requires
+   a live database connection with which to reflect the table "pessoa". […] a complete
+   Table object should be passed to the "copy_from" argument […]
+   ```
+
+   Measured on alembic 1.19.1 / SQLAlchemy 2.0.52: the same migration applies cleanly
+   **online** and exits **255** offline, having written a `.sql` file holding only the
+   `alembic_version` table — 8 lines, no `ALTER`. 🔴 **A pipeline that redirects the
+   output and does not check the exit code keeps a truncated script that looks
+   finished.** Always check the status, never just the file.
+
+   `copy_from` is an argument to `batch_alter_table()` in the migration itself, so it
+   cannot be configured in `env.py`. Either pass a complete `Table` to it, or accept
+   that this migration is online-only — and say which, in the migration's docstring.
+
+6. **Test both directions locally** before committing:
    ```bash
    poetry run alembic upgrade head
    poetry run alembic downgrade -1
