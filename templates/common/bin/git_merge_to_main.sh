@@ -15,7 +15,11 @@ source "$SCRIPT_DIR/lib/common.sh"
 # was the target branch immediately before this merge?" — an online repo gets
 # that free from its PR list. CHECKPOINTS_FILE is the append-only substitute:
 # timestamp, source tip, target-before hash, and the literal reset command.
-CHECKPOINTS_FILE="docs/checkpoints.md"
+# ⚠️ ANCHORED TO THE REPO ROOT, not to the caller's directory. `ensure_git_repo` is
+# satisfied anywhere inside the work tree, so a run from `src/` would otherwise create and
+# stage `src/docs/checkpoints.md` — a second, invisible ledger, while the real one silently
+# stops recording.
+CHECKPOINTS_FILE="$(git rev-parse --show-toplevel 2>/dev/null || echo .)/docs/checkpoints.md"
 
 ensure_git_repo() {
 	if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -94,12 +98,40 @@ seed_checkpoints_file() {
 	HEADER
 }
 
+backup_checkpoints_file() {
+	local str_backup
+	str_backup="$(mktemp)"
+	# An absent file is represented by an absent backup, so restore knows to delete.
+	if [[ -f "$CHECKPOINTS_FILE" ]]; then
+		cp "$CHECKPOINTS_FILE" "$str_backup"
+	else
+		rm -f "$str_backup"
+	fi
+	printf '%s' "$str_backup"
+}
+
+restore_checkpoints_file() {
+	local str_backup="$1"
+
+	git restore --staged "$CHECKPOINTS_FILE" >/dev/null 2>&1 || true
+	if [[ -f "$str_backup" ]]; then
+		cp "$str_backup" "$CHECKPOINTS_FILE"
+		rm -f "$str_backup"
+	else
+		rm -f "$CHECKPOINTS_FILE"
+	fi
+}
+
 record_checkpoint() {
 	local str_source="$1"
 	local str_target="$2"
-	local str_source_tip str_target_before
+	local str_source_tip str_target_before str_backup
 
 	seed_checkpoints_file
+	# Snapshot BEFORE appending, so a rejected commit can be undone. Without this the
+	# entry stays staged, the next run trips the uncommitted-changes guard and exits
+	# before reaching here — making the "re-run" this function advises impossible.
+	str_backup="$(backup_checkpoints_file)"
 
 	str_source_tip="$(git rev-parse "$str_source")"
 	str_target_before="$(git rev-parse "$str_target")"
@@ -116,9 +148,11 @@ record_checkpoint() {
 	print_status "info" "Recording checkpoint on '$str_source' — this commit runs the FULL pre-commit gate (lint + unit + integration + coverage) and can take several minutes; give it a timeout of at least 7 minutes."
 	git add "$CHECKPOINTS_FILE"
 	if ! git commit -m "chore: record merge checkpoint for '$str_source' -> '$str_target'"; then
+		restore_checkpoints_file "$str_backup"
 		print_status "error" "Checkpoint commit failed — resolve the hook failure, then re-run."
 		exit 1
 	fi
+	rm -f "$str_backup"
 	print_status "success" "Checkpoint recorded in $CHECKPOINTS_FILE."
 }
 
