@@ -307,3 +307,30 @@ def test_covers_still_accepts_a_valid_period_on_an_open_window() -> None:
 		int_period_end=None,
 	)
 	assert cls_open.covers(202312) is True
+
+
+# ⚠️ REGRESSION FOR THE #344 REVIEW — validation the caller can undo is not validation.
+
+
+def test_a_later_append_to_the_callers_list_cannot_reach_the_registry() -> None:
+	"""Storing the caller's list by reference lets an append bypass the ambiguity check."""
+	list_windows = [RegimeWindow(str_name="old", int_period_start=None, int_period_end=202311)]
+	cls_registry = RegimeRegistry(list_windows)
+
+	list_windows.append(
+		RegimeWindow(str_name="overlap", int_period_start=None, int_period_end=202312)
+	)
+
+	assert len(cls_registry.list_windows) == 1
+
+
+def test_the_stored_windows_cannot_be_appended_to() -> None:
+	"""The second path in: mutating the attribute itself."""
+	cls_registry = RegimeRegistry(
+		[RegimeWindow(str_name="old", int_period_start=None, int_period_end=202311)]
+	)
+
+	with pytest.raises(AttributeError):
+		cls_registry.list_windows.append(  # type: ignore[attr-defined]
+			RegimeWindow(str_name="x", int_period_start=None, int_period_end=None)
+		)

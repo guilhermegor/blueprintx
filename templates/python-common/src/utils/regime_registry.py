@@ -97,12 +97,17 @@ class RegimeRegistry(metaclass=TypeChecker):
 	Parameters
 	----------
 	list_windows : list of RegimeWindow
-		Every regime this registry knows, in any order.
+		Every regime this registry knows, in any order. Copied into a tuple on construction,
+		so a later mutation of the caller's list cannot reach the validated set.
 	"""
 
 	def __init__(self, list_windows: list[RegimeWindow]) -> None:
 		_reject_ambiguous_windows(list_windows)
-		self.list_windows = list_windows
+		# ⚠️ A COPY, and immutable. Storing the caller's list by reference lets an append
+		# after construction slip a window past `_reject_ambiguous_windows` entirely —
+		# validation the caller can undo is not validation. `RegimeWindow` is frozen, so a
+		# shallow tuple is deep enough here.
+		self.list_windows: tuple[RegimeWindow, ...] = tuple(list_windows)
 
 	@type_checker
 	def resolve(  # complexity-ok: scanning windows for the covering one is the lookup itself
