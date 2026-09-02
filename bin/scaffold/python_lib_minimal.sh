@@ -189,6 +189,7 @@ copy_internal_utils() {
         __init__.py dtypes.py br_identifiers.py http_downloader.py
         tabular_reader.py xml_reader.py provenance.py sidecar_metadata.py text.py
         zip_extractor.py raw_workspace.py daily_cache.py
+        regime_window.py regime_registry.py regime_adapter.py spec_gap_registry.py
     )
     # retry/ is a PACKAGE, not a module (blueprintx#116) — it needs cp -r, and it is listed
     # apart from `modules` so the loop below stays a plain file copy. rewrite_internal_imports
@@ -221,6 +222,18 @@ copy_internal_utils() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
 
     rewrite_internal_imports "$internal_dir"
+
+    # test_regime_adapters.py is the shared oracle for the four regime_* modules above. Unlike
+    # the OTHER vendored utils (whose shared tests are a documented, accepted gap — see
+    # DICT_EXPECTED_ABSENT in bin/ci/check_test_copy_lists.py — because they assert against the
+    # bare `utils.` import path a vendored+rewritten module no longer has), this one is copied
+    # AND rewritten through the same mechanism as the modules it covers, so it actually runs
+    # here instead of adding a fifth entry to that documented gap.
+    mkdir -p "$project_path/tests/unit"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_regime_adapters.py" \
+        "$project_path/tests/unit/test_regime_adapters.py"
+    rewrite_internal_imports "$project_path/tests/unit"
+
     print_status "success" "Private internal utils (_internal/utils) applied"
 }
 
