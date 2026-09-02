@@ -49,6 +49,7 @@ from utils.dtypes import apply_dtypes
 from utils.tabular_reader import (
 	ContractError,
 	FileContract,  # noqa: TID251
+	ProblemReport,
 	find_contract_problems,
 )
 
@@ -68,6 +69,7 @@ else:
 __all__ = [
 	"ContractError",
 	"FileContract",
+	"ProblemReport",
 	"find_xml_row_problems",
 	"is_attribute_path",
 	"read_xml",
@@ -145,9 +147,9 @@ def read_xml(  # noqa: PLR0913 — the public reader API; each argument is a rea
 	# The shared contract + dtype tail (blueprintx#117): validate BEFORE typing, exactly as
 	# utils.tabular_reader.read_table does, so an XML and a tabular source cannot diverge on
 	# what "validated" or "typed" means.
-	list_problems = find_contract_problems(df_raw, cls_contract)
-	if list_problems:
-		raise ContractError(list_problems)
+	cls_report = find_contract_problems(df_raw, cls_contract)
+	if cls_report.list_fatal or cls_report.list_warnings:
+		raise ContractError(cls_report.list_fatal + cls_report.list_warnings)
 	return apply_dtypes(
 		df_raw,
 		dict_dtypes=dict_dtypes,
@@ -159,13 +161,14 @@ def read_xml(  # noqa: PLR0913 — the public reader API; each argument is a rea
 @type_checker
 def find_xml_row_problems(  # complexity-ok: two independent guards, missing file vs no rows
 	path_file: Path, str_row_anchor: str, cls_contract: FileContract
-) -> list[str]:
+) -> ProblemReport:
 	"""Return whether ``path_file`` has at least one ``str_row_anchor`` element (never raises).
 
 	A lightweight pre-check for a caller that wants to skip/notify on a document carrying none
 	of the expected rows before attempting the full :func:`read_xml` (which would otherwise
 	raise a required-column :class:`ContractError` on an empty extraction, naming a symptom
-	rather than the cause).
+	rather than the cause). A document with no row-anchor at all is a structural problem —
+	there is nothing to extract — so it is always **fatal**, never a warning.
 
 	Parameters
 	----------
@@ -178,20 +181,21 @@ def find_xml_row_problems(  # complexity-ok: two independent guards, missing fil
 
 	Returns
 	-------
-	list of str
-		Empty when at least one ``str_row_anchor`` element is found.
-
-	Raises
-	------
-	FileNotFoundError
-		If ``path_file`` does not exist.
+	ProblemReport
+		``list_fatal`` and ``list_warnings`` both empty when at least one ``str_row_anchor``
+		element is found; otherwise ``list_fatal`` names the missing file or the missing
+		anchor. A missing file is a **finding, not an exception** — see the note below.
 	"""
+	# ⚠️ Reported, NOT raised — see "Never raises includes a missing file" in utils/CLAUDE.md.
 	if not path_file.exists():
-		raise FileNotFoundError(f"File not found: {path_file}")
+		return ProblemReport(list_fatal=[f"File not found: {path_file}"], list_warnings=[])
 	cls_root = defused_et.parse(str(path_file)).getroot()
 	if _find_rows(cls_root, str_row_anchor):
-		return []
-	return [f"No '{str_row_anchor}' element found for contract '{cls_contract.str_name}'"]
+		return ProblemReport(list_fatal=[], list_warnings=[])
+	return ProblemReport(
+		list_fatal=[f"No '{str_row_anchor}' element found for contract '{cls_contract.str_name}'"],
+		list_warnings=[],
+	)
 
 
 @type_checker
