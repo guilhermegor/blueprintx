@@ -27,23 +27,38 @@ HELP_SH="$REPO_ROOT/bin/help.sh"
 list_makefile_targets() {
 	local prev=""
 	while IFS= read -r line; do
-		if [[ "$line" =~ ^([A-Za-z0-9_-]+):([^=]|$) ]]; then
-			local target="${BASH_REMATCH[1]}"
-			if [[ "$target" != ".PHONY" ]] && [[ "$prev" != *"pairing:internal"* ]]; then
-				echo "$target"
-			fi
+		# ⚠️ EVERY name before the colon, not just the first. `build test:` is one rule
+		# declaring TWO targets, and a single-name pattern skips both — silently, since the
+		# line simply does not match and nothing counts what was never seen.
+		if [[ "$line" =~ ^([A-Za-z0-9_][A-Za-z0-9_\ -]*):([^=]|$) ]]; then
+			local names="${BASH_REMATCH[1]}" target
+			for target in $names; do
+				# The marker must be the WHOLE comment token: a substring test also accepts
+				# `# pairing:internalized` and any prose that happens to contain it, which
+				# would drop a target from the gate without using the documented opt-out.
+				if [[ "$target" != ".PHONY" ]] && ! [[ "$prev" =~ (^|[[:space:]])#[[:space:]]*pairing:internal([[:space:]]|$) ]]; then
+					echo "$target"
+				fi
+			done
 		fi
 		prev="$line"
 	done <"$MAKEFILE"
 }
 
+# `dev-clean` and `dev_clean` are the documented equivalent spellings, so BOTH companions
+# must accept both. Normalising in only one of them made a `dev_clean` Makefile target paired
+# with `dev-clean` in help.sh fail the gate despite being correctly paired.
+target_spellings() {
+	local hyphened="${1//_/-}" underscored="${1//-/_}"
+	printf '%s|%s' "$hyphened" "$underscored"
+}
+
 target_in_tasks_sh() {
-	local target="$1" underscored="${1//-/_}"
-	grep -qE "^[[:space:]]*(${target}|${underscored})(\||\))" "$TASKS_SH"
+	grep -qE "^[[:space:]]*($(target_spellings "$1"))(\||\))" "$TASKS_SH"
 }
 
 target_in_help_sh() {
-	grep -qE "^[[:space:]]*${1}[[:space:]]" "$HELP_SH"
+	grep -qE "^[[:space:]]*($(target_spellings "$1"))[[:space:]]" "$HELP_SH"
 }
 
 main() {
