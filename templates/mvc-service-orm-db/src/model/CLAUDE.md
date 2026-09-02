@@ -40,9 +40,10 @@ Type every column on load (`apply_dtypes`, never pandas inference); normalise CN
 
 ## Read-modify-write races (issue #385)
 
-A transaction guarantees all-or-nothing, **not** exclusivity. `READ COMMITTED` — the default
-isolation level on both PostgreSQL and MySQL — lets a second writer read the same row your
-transaction just read, before either commits. A counter read in Python (`if estoque > 0:`)
+A transaction guarantees all-or-nothing, **not** exclusivity. The defaults differ — PostgreSQL
+`READ COMMITTED`, MySQL/InnoDB `REPEATABLE READ` — and ⚠️ neither prevents this: the stronger
+level stabilises what your transaction *reads*, not what another writer *does* between your read
+and your write. Under both, a second writer can read the same row your transaction just read. A counter read in Python (`if estoque > 0:`)
 then written back can have two concurrent callers each read the same value, each decide
 independently that the write is safe, and each write — the row goes negative in silence, no
 exception, no failed commit.
@@ -54,15 +55,20 @@ serialises the writers:
 UPDATE produto SET estoque = estoque - 1 WHERE id = ? AND estoque >= 1;
 ```
 
-`rowcount == 0` **is** the "sold out" signal — check it, don't treat it as exceptional, and
-never `SELECT` the value first and branch on it in Python (that reintroduces the race).
+Check `rowcount`, but ⚠️ **`0` has two causes** — no such `id`, or insufficient stock. Follow a
+zero with `SELECT 1 FROM produto WHERE id = ?`: a row means sold out, no row means the id was
+wrong (a caller error, not a business outcome). Never `SELECT` the value first and branch on it
+in Python — that reintroduces the race.
 
 `SELECT ... FOR UPDATE` also serialises correctly but every contender queues behind the row
 lock, costing throughput under contention. An optimistic `version` column
-(`UPDATE ... WHERE version = ?`) avoids holding a lock but pushes the retry loop onto the
-client — `rowcount == 0` means someone else won and the caller must retry the whole
-read-modify-write. Neither replaces the arithmetic `WHERE` form above for a plain
-increment/decrement.
+(`UPDATE … SET v = v + 1 WHERE id = ? AND v = ?`) avoids holding a lock across a client round
+trip but pushes the retry loop onto the client — `rowcount == 0` means someone else won and the
+caller must retry the whole read-modify-write. ⚠️ Both halves of that predicate matter: without
+`id = ?` it matches every row at that version, and without `SET v = v + 1` two writers both
+match the same version and both succeed. Neither replaces the arithmetic `WHERE` form above for
+a plain increment/decrement, which needs no **explicit** lock — it still takes a row lock while
+it writes, as every `UPDATE` does.
 
 Add `CHECK (estoque >= 0)` at the schema level regardless — it is the last line of defence,
 turning a future silent `-7` into a raised error at the offending statement instead of a

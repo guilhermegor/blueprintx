@@ -7,9 +7,11 @@ concurrent read-modify-write calls racing on the same row.
 
 ## Read-modify-write races (issue #385)
 
-A transaction guarantees all-or-nothing; it does **not** guarantee exclusivity. `READ
-COMMITTED` — the default isolation level on both PostgreSQL and MySQL — lets a second writer
-read the same row your transaction just read, before either commits. Two concurrent decrements
+A transaction guarantees all-or-nothing; it does **not** guarantee exclusivity. Neither
+default isolation level prevents this, and they differ: PostgreSQL defaults to `READ
+COMMITTED`, MySQL/InnoDB to `REPEATABLE READ`. ⚠️ The stronger level does not help — it
+stabilises what your transaction *reads*, not what another writer *does* between your read and
+your write. Under both, a second writer can read the same row your transaction just read. Two concurrent decrements
 of a stock counter can each read `1`, each decide "there is stock" **in the application**, and
 each write — both did the right thing alone, and the row goes negative in silence: no
 exception, no failed commit, just a wrong number.
@@ -21,20 +23,35 @@ into the database so the row lock the `UPDATE` itself takes is what serialises t
 UPDATE produto SET estoque = estoque - 1 WHERE id = ? AND estoque >= 1;
 ```
 
-Check `rowcount` after executing it — `rowcount == 0` **is** the "sold out" signal, not an
-exceptional condition to catch. Do not `SELECT` the value first and branch on it in Python;
-that reintroduces the race the `WHERE estoque >= 1` clause exists to close.
+Check `rowcount` after executing it — but ⚠️ **`rowcount == 0` has TWO causes**: the `id`
+matched no row, or it matched and the stock was insufficient. Collapsing them is the same
+"two facts, one number" defect this whole page is about. Separate them explicitly:
+
+```sql
+UPDATE produto SET estoque = estoque - 1 WHERE id = ? AND estoque >= 1;   -- rowcount 0 or 1
+SELECT 1 FROM produto WHERE id = ?;                                       -- only when 0
+```
+
+An existing row means sold out; no row means the id was wrong, which is a caller error and not
+a business outcome. Do not `SELECT` the value first and branch on it in Python; that
+reintroduces the race the `WHERE estoque >= 1` clause exists to close.
 
 ### Two ways to serialise, and what each one costs
 
 | Approach | Cost |
 |---|---|
 | `SELECT ... FOR UPDATE` then update | Serialises writers correctly, but every contender queues behind the row lock — pays in throughput under contention. |
-| Optimistic lock: a `version` column, `UPDATE ... WHERE version = ?` | No lock held while the client thinks; loser's `rowcount == 0` and must retry the read-modify-write from the top. Fast under low contention, but the retry loop is the client's responsibility to write. |
+| Optimistic lock: a `version` column, `UPDATE … SET v = v + 1 WHERE id = ? AND v = ?` | No lock held while the client thinks; loser's `rowcount == 0` and must retry the read-modify-write from the top. Fast under low contention, but the retry loop is the client's responsibility to write. |
+
+⚠️ **Both halves of that predicate are load-bearing.** Without `id = ?` the statement matches
+every row at that version; without `SET v = v + 1` two concurrent writers both match the same
+version and both succeed, which is precisely the race the version column exists to detect.
 
 Neither replaces the arithmetic `WHERE` clause above when the operation is a simple
-increment/decrement — that form needs no row lock and no version column at all, because the
-database re-evaluates `estoque >= 1` against whatever the current row holds, atomically.
+increment/decrement — that form needs no **explicit** `SELECT … FOR UPDATE` and no version
+column, because the database re-evaluates `estoque >= 1` against whatever the current row
+holds, atomically. It still takes a row lock for the duration of the write, as every `UPDATE`
+does; what it avoids is holding one across a round trip to the client.
 
 ### `CHECK` is the last line of defence, not the first
 
