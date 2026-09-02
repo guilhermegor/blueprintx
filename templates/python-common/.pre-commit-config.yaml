@@ -217,6 +217,21 @@ repos:
           - python
         pass_filenames: false
 
+      # Structural gate for the read-modify-write race (blueprintx#385) — an attribute
+      # reassigned from an ARITHMETIC expression over its own value, read via
+      # session.get()/.query(...).first()/.one() in the same function, with no
+      # with_for_update() and no version_id_col on the model. Two concurrent writers can
+      # read the same value and silently lose an update; nothing crashes, nothing logs.
+      # Does NOT gate a plain read-then-write with no arithmetic (every ORM update() does
+      # that) — see the module docstring. Escape hatch: "# rmw-ok: <reason>".
+      - id: check-rmw-race
+        name: read-modify-write race (arithmetic write on an ORM-read row, no lock)
+        entry: bash bin/poetry_exec.sh run python bin/check_rmw_race.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
       # Structural gate for the layer-import policy: a third-party dependency is reached
       # through a seam in utils/, never imported by model/view/controller. ruff's banned-api
       # is a BLOCKLIST and by construction cannot catch a vendor nobody thought to list;
