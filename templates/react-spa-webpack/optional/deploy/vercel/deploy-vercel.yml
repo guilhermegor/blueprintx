@@ -23,6 +23,7 @@ jobs:
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +34,17 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
+      # If `.git` survives into `vercel pull`/`deploy`, the CLI creates a
+      # git-linked deployment that belongs to Vercel's own Git integration,
+      # not to this CLI run — and the CLI then waits forever for a build
+      # that integration never reports back (blueprintx#390). vercel.json's
+      # `git.deploymentEnabled: false` stops that integration from firing a
+      # SECOND, competing deploy on the same push; this step stops the CLI
+      # from mistaking itself for that integration in the first place. Both
+      # are required — either alone still hangs.
+      - name: Remove git metadata
+        run: rm -rf .git
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
@@ -40,13 +52,20 @@ jobs:
       # Vercel project does not exist — the three secrets this target needs and
       # the gh-pages target does not. See the repo README's deploy section.
       - name: Pull Vercel environment information
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
 
       # `vercel build` reads vercel.json, whose `rewrites` block sends every path
       # to index.html — Vercel's equivalent of the gh-pages 404.html copy, and
       # required by react-router for any deep link to resolve.
       - name: Build project artifacts
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token=$VERCEL_TOKEN
 
       - name: Deploy project artifacts to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+
+      # A green run here is NOT proof the site was updated: while this hang
+      # was live, Vercel's Git integration kept publishing an OLDER build
+      # from the same push, so the workflow read healthy and the served
+      # site was stale (blueprintx#390). The only honest check is probing
+      # the live bundle for a string unique to the new commit, e.g.:
+      #   curl -s https://<project>.vercel.app | grep -F '<marker-string>'
