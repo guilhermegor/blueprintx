@@ -326,7 +326,15 @@ pip_fallback_install_groups_in_venv() {
 		return 1
 	fi
 
-	"$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade pip setuptools wheel
+	# The LAST unchecked call in this function, and the same shape as the other four: an
+	# empty dependency group makes install and verify both succeed, so a failed bootstrap
+	# upgrade would still report a good venv. pip/setuptools/wheel are what the install
+	# below runs ON, so their failure is a precondition failure, not a warning.
+	if ! "$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade pip setuptools wheel; then
+		print_status "error" "Could not upgrade pip/setuptools/wheel in the target venv."
+		rm -f "$str_req_file"
+		return 1
+	fi
 
 	if ! pip_fallback_install_requirements_file_into_venv "$str_venv_python" "$str_req_file"; then
 		rm -f "$str_req_file"
