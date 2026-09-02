@@ -419,3 +419,17 @@ jobs:
       # side was the template, so only generated projects paid for it.
       - name: Codespell ignore-list sync (root vs template)
         run: bash bin/ci/check_codespell_sync.sh
+
+  makefile-pairing:
+    name: Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Root-repo-only: Makefile and tasks.sh exist ONLY here, not in templates/ or any
+      # generated project, so the script lives at bin/, not templates/python-common/bin/.
+      - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
+        run: bash bin/check_makefile_pairing.sh
