@@ -27,7 +27,7 @@ semantics in `bin/lib/common.sh` and `bin/blueprintx.sh` / `bin/scaffold/*.sh`).
 - [x] #253 — Cancel uses `CANCEL` instead of `RED` (`bin/blueprintx.sh:117`, `:398`)
 - [x] `PROMPT_PRIMARY` / `PROMPT_SUB` / `CANCEL` + `prompt_main`/`prompt_sub` helpers
       added to `bin/lib/common.sh`, shellcheck-clean
-- [x] Convert `read -r -p` sites to `prompt_main`/`prompt_sub` (74 sites, all converted):
+- [x] Convert `read -r -p` sites to `prompt_main`/`prompt_sub` (75 sites, all converted):
   - [x] `bin/blueprintx.sh` (3 sites)
   - [x] `bin/scaffold/python_ddd_service.sh` (13 sites)
   - [x] `bin/scaffold/python_ddd_service_orm.sh` (13 sites)
