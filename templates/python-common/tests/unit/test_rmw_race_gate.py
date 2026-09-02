@@ -336,3 +336,73 @@ def test_discovery_finds_nothing_when_there_is_no_src_dir(
 	monkeypatch.chdir(tmp_path)
 
 	assert gate._source_files() == []  # noqa: SLF001 — testing the discovery seam directly
+
+
+# ⚠️ REGRESSIONS FOR THE #392 REVIEW — two ways a lock could be claimed without existing.
+
+
+def test_with_for_update_false_is_not_a_lock(tmp_path: Path) -> None:
+	"""Presence of the keyword is not protection; `False` means no lock."""
+	path_file = _python_file(
+		tmp_path,
+		"class Product:\n"
+		'\t__tablename__ = "product"\n'
+		"\n\n"
+		"def decrement_stock(session, product_id, quantity):\n"
+		"\trecord = session.get(Product, product_id, with_for_update=False)\n"
+		"\trecord.stock = record.stock - quantity\n"
+		"\tsession.flush()\n",
+	)
+
+	assert gate.check_file(str(path_file)) == 1
+
+
+def test_with_for_update_none_is_not_a_lock(tmp_path: Path) -> None:
+	"""`None` is the other falsey spelling and means no lock either."""
+	path_file = _python_file(
+		tmp_path,
+		"class Product:\n"
+		'\t__tablename__ = "product"\n'
+		"\n\n"
+		"def decrement_stock(session, product_id, quantity):\n"
+		"\trecord = session.get(Product, product_id, with_for_update=None)\n"
+		"\trecord.stock = record.stock - quantity\n"
+		"\tsession.flush()\n",
+	)
+
+	assert gate.check_file(str(path_file)) == 1
+
+
+def test_with_for_update_true_still_suppresses(tmp_path: Path) -> None:
+	"""The control: evaluating the value must not blind the gate to a genuine lock."""
+	path_file = _python_file(
+		tmp_path,
+		"class Product:\n"
+		'\t__tablename__ = "product"\n'
+		"\n\n"
+		"def decrement_stock(session, product_id, quantity):\n"
+		"\trecord = session.get(Product, product_id, with_for_update=True)\n"
+		"\trecord.stock = record.stock - quantity\n"
+		"\tsession.flush()\n",
+	)
+
+	assert gate.check_file(str(path_file)) == 0
+
+
+def test_an_unlocked_branch_is_not_masked_by_a_locked_one(tmp_path: Path) -> None:
+	"""Two definitions of one name: the unlocked branch decides, whatever the source order."""
+	path_file = _python_file(
+		tmp_path,
+		"class Product:\n"
+		'\t__tablename__ = "product"\n'
+		"\n\n"
+		"def decrement_stock(session, product_id, quantity, use_lock):\n"
+		"\tif use_lock:\n"
+		"\t\trecord = session.get(Product, product_id, with_for_update=True)\n"
+		"\telse:\n"
+		"\t\trecord = session.get(Product, product_id)\n"
+		"\trecord.stock = record.stock - quantity\n"
+		"\tsession.flush()\n",
+	)
+
+	assert gate.check_file(str(path_file)) == 1

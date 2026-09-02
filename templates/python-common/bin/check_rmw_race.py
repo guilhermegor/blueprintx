@@ -128,8 +128,41 @@ def _session_get_read(call: ast.Call) -> tuple | None:
 	if "session" not in ast.unparse(call.func.value) or not call.args:
 		return None
 	str_model = ast.unparse(call.args[0])
-	bool_lock = any(cls_kw.arg == _LOCK_KWARG for cls_kw in call.keywords)
+	bool_lock = _keyword_locks(call.keywords)
 	return str_model, bool_lock
+
+
+def _keyword_locks(list_keywords: list) -> bool:
+	"""Return whether a lock keyword is present AND asks for a lock.
+
+	Parameters
+	----------
+	list_keywords : list of ast.keyword
+		The call's keyword arguments.
+
+	Returns
+	-------
+	bool
+		``True`` only when the lock keyword is given a truthy literal.
+
+	Notes
+	-----
+	⚠️ Presence is not protection. ``with_for_update=False`` and ``with_for_update=None`` read
+	as "a lock keyword is here" to a presence check while meaning **no lock** — and a gate that
+	suppresses on them reports a protected read where none exists, which is the direction that
+	hides the very race this file exists to find.
+
+	A non-literal value (a variable, a call) is treated as UNLOCKED: whether it is truthy is a
+	runtime question, and a static check that guesses "probably locked" trades a false positive
+	for a false negative. The escape hatch is for the cases where the author knows better.
+	"""
+	for cls_kw in list_keywords:
+		if cls_kw.arg != _LOCK_KWARG:
+			continue
+		if isinstance(cls_kw.value, ast.Constant):
+			return bool(cls_kw.value.value)
+		return False
+	return False
 
 
 def _query_chain_read(call: ast.Call) -> tuple | None:
@@ -181,8 +214,16 @@ def _collect_read_entities(func: ast.AST) -> dict:
 		if not isinstance(cls_node.value, ast.Call):
 			continue
 		cls_read = _session_get_read(cls_node.value) or _query_chain_read(cls_node.value)
-		if cls_read:
-			dict_entities[cls_node.targets[0].id] = cls_read
+		if not cls_read:
+			continue
+		str_name = cls_node.targets[0].id
+		cls_prev = dict_entities.get(str_name)
+		# ⚠️ EVERY binding that can reach the write counts, and the UNLOCKED one decides.
+		# `if cond: row = get(..., with_for_update=True)` / `else: row = get(...)` gives two
+		# definitions of one name; keeping the last one seen suppressed the finding whenever
+		# the locked branch happened to come second — a race hidden by source order.
+		if cls_prev is None or (cls_prev[1] and not cls_read[1]):
+			dict_entities[str_name] = cls_read
 	return dict_entities
 
 
