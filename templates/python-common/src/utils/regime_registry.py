@@ -31,6 +31,7 @@ else:
 # reader would then parse a real file against the wrong published header and produce numbers
 # nobody flags: the silent wrong answer this module exists to prevent. Rejecting here means a
 # registry that survives construction cannot answer ambiguously.
+@type_checker
 def _reject_ambiguous_windows(  # complexity-ok: pairwise overlap IS the check
 	list_windows: list[RegimeWindow],
 ) -> None:
@@ -66,6 +67,7 @@ def _reject_ambiguous_windows(  # complexity-ok: pairwise overlap IS the check
 			)
 
 
+@type_checker
 def _windows_overlap(cls_earlier: RegimeWindow, cls_later: RegimeWindow) -> bool:
 	"""Return whether two windows share at least one period.
 
