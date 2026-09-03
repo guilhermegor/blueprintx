@@ -110,15 +110,79 @@ jobs:
           fi
           echo "no whitespace in the stored value."
 
-      # Fails with GitHub's own reason, which the step above has already narrowed: if the value
-      # is well-formed and STILL 401s, the token itself is expired, revoked, or scoped to the
-      # wrong resource owner — none of which this repo can fix.
+      # A 401 here means the shape check above already passed but the token itself is bad — this
+      # is the case the comment used to (wrongly) claim as the ONLY failure mode.
+      #
+      # ⚠️ A 403 IS A DIFFERENT FAILURE AND NEEDS A DIFFERENT DIAGNOSIS. Measured on run
+      # 33421018798 (PR #380): `gh api user` failed with `API rate limit exceeded for user ID
+      # … (HTTP 403)` — the token was fine, but the old comment told the reader it was "expired,
+      # revoked, or scoped to the wrong resource owner", all three false. This is the GITHUB API
+      # rate limit for the PAT's user, NOT CodeRabbit's own review-quota rate limit (that one is
+      # handled by `review_retry.yml` on a schedule) — different limit, different window,
+      # different fix. It is transient and self-clearing, so it must not read the same as a bad
+      # token, and it must not leave a red check that stays red after the window has passed (the
+      # #380 run sat red for 2 days over a cause that cleared in minutes).
       - name: The PAT must authenticate as a user
+        id: pat_check
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
-        run: gh api user --jq '"authenticates as \(.login) [\(.type)]"'
+        run: |
+          set +e
+          RESPONSE="$(gh api -i --jq '"authenticates as \(.login) [\(.type)]"' user 2>&1)"
+          STATUS=$?
+          set -e
+
+          if [ "$STATUS" -eq 0 ]; then
+            echo "$RESPONSE" | tail -n1
+            exit 0
+          fi
+
+          echo "$RESPONSE" >&2
+          str_http_status="$(printf '%s\n' "$RESPONSE" | head -n1 | grep -oE '[0-9]{3}' | head -n1)"
+
+          # ⚠️ Match on "rate limit" ALONE, never on "API rate limit exceeded". GitHub has TWO
+          # limits, with different wording, different headers and different status codes:
+          #   primary   "API rate limit exceeded for user ID …"        403, x-ratelimit-reset
+          #   secondary "You have exceeded a secondary rate limit …"   403 OR 429, retry-after
+          # The secondary message does not contain the primary's phrase, so the narrow matcher
+          # routed it to the branch below and printed the bad-token diagnosis this whole step
+          # exists to stop printing — the same defect it was written to fix, one wording over.
+          if printf '%s\n' "$RESPONSE" | grep -qi 'rate limit'; then
+            str_retry_after="$(printf '%s\n' "$RESPONSE" \
+              | grep -i '^retry-after:' | tr -d '\r ' | cut -d: -f2)"
+            str_reset_epoch="$(printf '%s\n' "$RESPONSE" \
+              | grep -i '^x-ratelimit-reset:' | tr -d '\r ' | cut -d: -f2)"
+
+            if [ -n "$str_retry_after" ]; then
+              int_wait_min=$(( (str_retry_after + 59) / 60 ))
+              echo "::warning::GitHub SECONDARY rate limit (HTTP ${str_http_status:-403/429})" \
+                "hit for the PAT's user — not a bad token, and not CodeRabbit's review quota." \
+                "Retry after ${str_retry_after}s (~${int_wait_min}m). Skipping the review" \
+                "request this run; the next push will ask again." >&2
+            elif [ -n "$str_reset_epoch" ]; then
+              str_reset_utc="$(date -u -d "@$str_reset_epoch" '+%Y-%m-%d %H:%M:%S UTC')"
+              int_wait_min=$(( (str_reset_epoch - $(date -u +%s) + 59) / 60 ))
+              echo "::warning::GitHub API rate limit (HTTP ${str_http_status:-403}) hit for the" \
+                "PAT's user — not a bad token. This is the GitHub API's own limit, not" \
+                "CodeRabbit's review quota. Quota resets at $str_reset_utc (~${int_wait_min}m)." \
+                "Skipping the review request this run; the next push will ask again." >&2
+            else
+              echo "::warning::GitHub rate limit (HTTP ${str_http_status:-unknown}) hit for the" \
+                "PAT's user, but neither retry-after nor x-ratelimit-reset was present to say" \
+                "when it clears." >&2
+            fi
+            echo "skip_review=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::PAT auth failed with HTTP ${str_http_status:-unknown}, and the response" \
+            "carries no rate-limit wording. If the value was well-formed (previous step), the" \
+            "token itself is expired, revoked, or scoped to the wrong resource owner — none of" \
+            "which this repo can fix." >&2
+          exit 1
 
       - name: Request the review
+        if: steps.pat_check.outputs.skip_review != 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
