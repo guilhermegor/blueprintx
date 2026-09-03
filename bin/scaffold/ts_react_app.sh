@@ -119,6 +119,17 @@ prompt_docker() {
     esac
 }
 
+prompt_js_copy_delivery() {
+    echo ""
+    read -r -p "$(prompt_main "Ship a plain-JavaScript delivery copy script (js-copy)? [y/N]: ")" js_copy_answer || true
+    case "$js_copy_answer" in
+        y|Y) USE_JS_COPY_DELIVERY=1
+             print_status "config" "JS-copy delivery: enabled (npm run js-copy:build / js-copy:verify)" ;;
+        *)   USE_JS_COPY_DELIVERY=0
+             print_status "config" "JS-copy delivery: disabled" ;;
+    esac
+}
+
 create_directory_structure() {
     local project_path="$1"
 
@@ -171,6 +182,73 @@ apply_docker_files() {
     cp "$SKELETON_TEMPLATE_ROOT/nginx.conf" "$project_path/nginx.conf"
     cp "$SKELETON_TEMPLATE_ROOT/.dockerignore" "$project_path/.dockerignore"
     print_status "success" "Docker files added — build with: docker build --secret id=env,src=.env -t ${PROJECT_NAME} ."
+}
+
+# Adds "scripts"/"dependencies" entries to a generated project's package.json.
+#
+# ⚠️ The path travels through argv and is NEVER interpolated into the Python source. Four
+# copies of this block wrote open('$project_path/package.json') inside a double-quoted
+# `python3 -c`, so a project path holding an apostrophe (…/Joao's app/) ended the Python
+# string literal — and with a newline it injected statements. The break is not exotic: an
+# apostrophe in a directory name is enough.
+patch_package_json() {
+    local pkg_path="$1" section="$2"
+    shift 2
+
+    python3 - "$pkg_path" "$section" "$@" <<'PYEOF'
+import json
+import sys
+
+path_pkg, str_section = sys.argv[1], sys.argv[2]
+with open(path_pkg) as cls_file:
+	dict_pkg = json.load(cls_file)
+dict_section = dict_pkg.setdefault(str_section, {})
+for str_pair in sys.argv[3:]:
+	str_key, _, str_value = str_pair.partition("=")
+	dict_section[str_key] = str_value
+with open(path_pkg, "w") as cls_file:
+	json.dump(dict_pkg, cls_file, indent=2)
+	cls_file.write("\n")
+PYEOF
+}
+
+# Optional plain-JavaScript delivery copy (course submission, client handoff,
+# a consumer with no TS toolchain). Copied only when prompt_js_copy_delivery
+# was accepted. Depends on package.json, .gitignore and eslint.config.js
+# already existing in the project (copy_skeleton_files + copy_common_templates
+# must have run first).
+apply_js_copy_delivery() {
+    local project_path="$1"
+    local js_copy_root="$SKELETON_TEMPLATE_ROOT/optional/js-copy"
+
+    if [ "${USE_JS_COPY_DELIVERY:-0}" -ne 1 ]; then
+        return
+    fi
+
+    print_status "info" "Adding plain-JavaScript delivery copy scripts..."
+    mkdir -p "$project_path/scripts"
+    cp "$js_copy_root/emit-js-copy.mjs" "$project_path/scripts/emit-js-copy.mjs"
+    cp "$js_copy_root/verify-js-copy.mjs" "$project_path/scripts/verify-js-copy.mjs"
+
+    patch_package_json "$project_path/package.json" scripts \
+        'js-copy:build=node scripts/emit-js-copy.mjs' \
+        'js-copy:verify=node scripts/verify-js-copy.mjs' \
+        'js-copy=npm run js-copy:build && npm run js-copy:verify'
+
+    # The generated js-copy/ tree is a build artifact — never committed —
+    # and must be excluded from lint, or every finding is reported twice
+    # (once on src/, once on a copy nobody can edit).
+    printf '\n# js-copy delivery script output (npm run js-copy:build)\n/js-copy/\n' \
+        >> "$project_path/.gitignore"
+    sed -i "s#'\*\*/dist/\*\*',#'**/dist/**',\n      '**/js-copy/**',#" \
+        "$project_path/eslint.config.js"
+    # scripts/*.mjs are Node CLI tooling, not app code — they fall outside every
+    # `files:` block that grants browser/node globals, so process/console read
+    # as undefined without this.
+    sed -i "s#  // 9. Prettier config#  // 9. scripts/ (js-copy delivery tooling) — Node CLI, not app code\n  {\n    files: ['scripts/**/*.mjs'],\n    languageOptions: { globals: { ...globals.node } },\n  },\n\n  // 10. Prettier config#" \
+        "$project_path/eslint.config.js"
+
+    print_status "success" "JS-copy delivery scripts added"
 }
 
 apply_file_variants() {
@@ -231,28 +309,13 @@ apply_package_variants() {
     case "$STATE_MGMT_CHOICE" in
         2)
             print_status "info" "Adding Zustand dependency..."
-            python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg['dependencies']['zustand'] = '^5.0.0'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+            patch_package_json "$project_path/package.json" dependencies \
+                'zustand=^5.0.0'
             ;;
         3)
             print_status "info" "Adding Redux Toolkit dependencies..."
-            python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg['dependencies']['@reduxjs/toolkit'] = '^2.0.0'
-pkg['dependencies']['react-redux'] = '^9.0.0'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+            patch_package_json "$project_path/package.json" dependencies \
+                '@reduxjs/toolkit=^2.0.0' 'react-redux=^9.0.0'
             ;;
         *) ;;
     esac
@@ -545,18 +608,10 @@ apply_offline_mode() {
         "$project_path/bin/git_diff_check.sh"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
-    python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg.setdefault('scripts', {})
-pkg['scripts']['git:diff:export'] = 'bash bin/git_diff_export.sh'
-pkg['scripts']['git:diff:check'] = 'bash bin/git_diff_check.sh'
-pkg['scripts']['git:diff:apply'] = 'bash bin/git_diff_apply.sh'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+    patch_package_json "$project_path/package.json" scripts \
+        'git:diff:export=bash bin/git_diff_export.sh' \
+        'git:diff:check=bash bin/git_diff_check.sh' \
+        'git:diff:apply=bash bin/git_diff_apply.sh'
     print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
 }
 
@@ -576,12 +631,14 @@ main() {
     prompt_deploy_target
     prompt_module_federation
     prompt_docker
+    prompt_js_copy_delivery
     create_directory_structure "$PROJECT_PATH"
     copy_skeleton_files "$PROJECT_PATH"
     apply_docker_files "$PROJECT_PATH"
     apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
+    apply_js_copy_delivery "$PROJECT_PATH"
     # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
