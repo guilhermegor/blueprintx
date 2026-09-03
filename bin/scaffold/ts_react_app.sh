@@ -184,6 +184,34 @@ apply_docker_files() {
     print_status "success" "Docker files added — build with: docker build --secret id=env,src=.env -t ${PROJECT_NAME} ."
 }
 
+# Adds "scripts"/"dependencies" entries to a generated project's package.json.
+#
+# ⚠️ The path travels through argv and is NEVER interpolated into the Python source. Four
+# copies of this block wrote open('$project_path/package.json') inside a double-quoted
+# `python3 -c`, so a project path holding an apostrophe (…/Joao's app/) ended the Python
+# string literal — and with a newline it injected statements. The break is not exotic: an
+# apostrophe in a directory name is enough.
+patch_package_json() {
+    local pkg_path="$1" section="$2"
+    shift 2
+
+    python3 - "$pkg_path" "$section" "$@" <<'PYEOF'
+import json
+import sys
+
+path_pkg, str_section = sys.argv[1], sys.argv[2]
+with open(path_pkg) as cls_file:
+	dict_pkg = json.load(cls_file)
+dict_section = dict_pkg.setdefault(str_section, {})
+for str_pair in sys.argv[3:]:
+	str_key, _, str_value = str_pair.partition("=")
+	dict_section[str_key] = str_value
+with open(path_pkg, "w") as cls_file:
+	json.dump(dict_pkg, cls_file, indent=2)
+	cls_file.write("\n")
+PYEOF
+}
+
 # Optional plain-JavaScript delivery copy (course submission, client handoff,
 # a consumer with no TS toolchain). Copied only when prompt_js_copy_delivery
 # was accepted. Depends on package.json, .gitignore and eslint.config.js
@@ -202,17 +230,10 @@ apply_js_copy_delivery() {
     cp "$js_copy_root/emit-js-copy.mjs" "$project_path/scripts/emit-js-copy.mjs"
     cp "$js_copy_root/verify-js-copy.mjs" "$project_path/scripts/verify-js-copy.mjs"
 
-    python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg['scripts']['js-copy:build'] = 'node scripts/emit-js-copy.mjs'
-pkg['scripts']['js-copy:verify'] = 'node scripts/verify-js-copy.mjs'
-pkg['scripts']['js-copy'] = 'npm run js-copy:build && npm run js-copy:verify'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+    patch_package_json "$project_path/package.json" scripts \
+        'js-copy:build=node scripts/emit-js-copy.mjs' \
+        'js-copy:verify=node scripts/verify-js-copy.mjs' \
+        'js-copy=npm run js-copy:build && npm run js-copy:verify'
 
     # The generated js-copy/ tree is a build artifact — never committed —
     # and must be excluded from lint, or every finding is reported twice
@@ -288,28 +309,13 @@ apply_package_variants() {
     case "$STATE_MGMT_CHOICE" in
         2)
             print_status "info" "Adding Zustand dependency..."
-            python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg['dependencies']['zustand'] = '^5.0.0'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+            patch_package_json "$project_path/package.json" dependencies \
+                'zustand=^5.0.0'
             ;;
         3)
             print_status "info" "Adding Redux Toolkit dependencies..."
-            python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg['dependencies']['@reduxjs/toolkit'] = '^2.0.0'
-pkg['dependencies']['react-redux'] = '^9.0.0'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+            patch_package_json "$project_path/package.json" dependencies \
+                '@reduxjs/toolkit=^2.0.0' 'react-redux=^9.0.0'
             ;;
         *) ;;
     esac
@@ -602,18 +608,10 @@ apply_offline_mode() {
         "$project_path/bin/git_diff_check.sh"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
-    python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg.setdefault('scripts', {})
-pkg['scripts']['git:diff:export'] = 'bash bin/git_diff_export.sh'
-pkg['scripts']['git:diff:check'] = 'bash bin/git_diff_check.sh'
-pkg['scripts']['git:diff:apply'] = 'bash bin/git_diff_apply.sh'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+    patch_package_json "$project_path/package.json" scripts \
+        'git:diff:export=bash bin/git_diff_export.sh' \
+        'git:diff:check=bash bin/git_diff_check.sh' \
+        'git:diff:apply=bash bin/git_diff_apply.sh'
     print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
 }
 
