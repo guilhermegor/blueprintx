@@ -165,10 +165,31 @@ jobs:
       - name: Install ggshield
         run: pipx install ggshield
 
-      - name: Scan for secrets
+      - name: Scan the push/PR range for secrets
+        # ⚠️ The four range variables are NOT optional tuning. Without them `ggshield secret
+        # scan ci` falls back to `GITHUB_SHA~1...`, i.e. the LAST COMMIT ONLY — so a push of
+        # five commits gets one scanned and four skipped, and the job still exits 0. That is
+        # the same "looks exactly like scanned, found nothing" failure this file's header
+        # warns about, one level subtler: not a scan that never ran, a scan that ran over the
+        # wrong range.
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         env:
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+          GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_PUSH_BASE_SHA: ${{ github.event.base }}
+          GITHUB_PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: ggshield secret scan ci
+
+      - name: Scan the whole repository for secrets
+        # A manual run has no push/PR range to diff at all, so `scan ci` there would compute a
+        # degenerate one. Two named steps rather than one branching step, so the Actions log
+        # says WHICH scan ran — a range bug is invisible when both modes print the same name.
+        # workflow_call keeps the caller's event_name, so a called PR run takes the step above.
+        if: github.event_name != 'push' && github.event_name != 'pull_request'
+        env:
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+        run: ggshield secret scan repo .
 
   project-name-identities:
     name: Dist name vs import package
