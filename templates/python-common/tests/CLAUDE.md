@@ -48,6 +48,26 @@ from view.report_renderer import RenderToExcel  # NOT src.view.report_renderer
 The plain `from src.X import …` convention is fine for classes whose constructor takes only
 stdlib types / paths (no cross-src instances to `isinstance`-check).
 
+**Measured (blueprintx#290): the `.` on `pythonpath` is removable, and the fix is purely
+mechanical.** Dropping `pythonpath = . src` to `pythonpath = src` and stripping the `src.`
+prefix from every import in this directory (29 lines across 27 files, including **both**
+branches of the `test_typing.py` layout shim — the flush-left sed that fixed the rest misses
+its indented `try`/`except` lines) took a scaffolded `ddd-service-native-db` project from 23
+collection errors back to a fully green suite — no cross-import defect to untangle, just the
+prefix. `mypy.ini` and `.coveragerc` are unaffected: mypy runs from `src/` via a separate
+`../mypy.ini` invocation that never reads `pytest.ini`, and coverage attributes lines by file
+path, not import alias (confirmed: `TOTAL` read `0/0 100%` before and after — though that
+figure can't detect a regression either way, since a fresh scaffold's only non-omitted files
+are two empty `__init__.py`s). **Not shipped**: `mvc-service-{native,orm}-db`'s own
+`tests/unit/{test_pipeline.py,test_report_renderer.py}` need the identical one-line strip (4
+lines, 2 tiers) and were frozen by an unrelated collision at measurement time — land those
+together with the `pytest.ini` edit in one pass; a partial rewrite breaks two of five tiers.
+Separately: `ddd-service-{native,orm}-db`'s `src/{main.py,app/bootstrap.py}` import `from
+src.config.startup import …` as real (non-test) application code, resolved by `bin/run.sh`'s
+own `PYTHONPATH=".:src"` — unrelated to this file, but it means the app is not uniformly
+`src.`-free at runtime the way the prose above assumes; worth aligning with the bare `from
+app.bootstrap import …` line beside it in a later pass.
+
 Order imports as `ruff.toml` enforces (`force-sort-within-sections = true`) — within each
 group, `import X` and `from X import Y` are sorted together by module name, stdlib then
 third-party then first-party, two blank lines after the import block:
