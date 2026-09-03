@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_package_json.sh
+source "$SCRIPT_DIR/../lib/scaffold_package_json.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -184,33 +186,8 @@ apply_docker_files() {
     print_status "success" "Docker files added — build with: docker build --secret id=env,src=.env -t ${PROJECT_NAME} ."
 }
 
-# Adds "scripts"/"dependencies" entries to a generated project's package.json.
-#
-# ⚠️ The path travels through argv and is NEVER interpolated into the Python source. Four
-# copies of this block wrote open('$project_path/package.json') inside a double-quoted
-# `python3 -c`, so a project path holding an apostrophe (…/Joao's app/) ended the Python
-# string literal — and with a newline it injected statements. The break is not exotic: an
-# apostrophe in a directory name is enough.
-patch_package_json() {
-    local pkg_path="$1" section="$2"
-    shift 2
-
-    python3 - "$pkg_path" "$section" "$@" <<'PYEOF'
-import json
-import sys
-
-path_pkg, str_section = sys.argv[1], sys.argv[2]
-with open(path_pkg) as cls_file:
-	dict_pkg = json.load(cls_file)
-dict_section = dict_pkg.setdefault(str_section, {})
-for str_pair in sys.argv[3:]:
-	str_key, _, str_value = str_pair.partition("=")
-	dict_section[str_key] = str_value
-with open(path_pkg, "w") as cls_file:
-	json.dump(dict_pkg, cls_file, indent=2)
-	cls_file.write("\n")
-PYEOF
-}
+# patch_package_json is defined in bin/lib/scaffold_package_json.sh (#397) — shared with
+# ts_lib.sh, which needs the exact same argv-not-source-interpolated write.
 
 # Optional plain-JavaScript delivery copy (course submission, client handoff,
 # a consumer with no TS toolchain). Copied only when prompt_js_copy_delivery
