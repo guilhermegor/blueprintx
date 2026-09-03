@@ -1325,6 +1325,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#plain-javascript-delivery-copy-js-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plain-JavaScript delivery copy (js-copy)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1544,6 +1555,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#plain-javascript-delivery-copy-js-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plain-JavaScript delivery copy (js-copy)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1585,7 +1607,10 @@
 <p>At scaffold time you are prompted for:</p>
 <ul>
 <li><strong>State management strategy</strong> — React Context (default, zero deps), Zustand, or Redux Toolkit. Only the chosen variant's files are written.</li>
+<li><strong>Deploy target</strong> — GitHub Pages (default), Vercel, or none.</li>
 <li><strong>Webpack Module Federation</strong> — optional; replaces <code>webpack.config.js</code> with a Module Federation-aware config.</li>
+<li><strong>Docker setup</strong> — optional; adds a multi-stage <code>Dockerfile</code> + <code>nginx.conf</code> + <code>.dockerignore</code>.</li>
+<li><strong>Plain-JavaScript delivery copy (js-copy)</strong> — optional; adds <code>scripts/emit-js-copy.mjs</code> + <code>scripts/verify-js-copy.mjs</code>, for deliveries that must not contain TypeScript (a course submission, a client handoff, a TS-toolchain-free consumer). No new dependency — it reuses <code>@babel/core</code> + <code>@babel/preset-typescript</code>, already devDependencies for <code>babel-loader</code>.</li>
 </ul>
 <h2 id="expected-layout">Expected layout<a class="headerlink" href="#expected-layout" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>project/
@@ -1878,6 +1903,25 @@
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="p">.</span><span class="nc">card</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">padding</span><span class="p">:</span><span class="w"> </span><span class="nf">var</span><span class="p">(</span><span class="nv">--space-</span><span class="mi">4</span><span class="p">);</span><span class="w"> </span><span class="k">color</span><span class="p">:</span><span class="w"> </span><span class="nf">var</span><span class="p">(</span><span class="nv">--color-text-default</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>Dark/light switching is handled by toggling <code>data-theme="light"</code> on <code>&lt;html&gt;</code> — no JavaScript class manipulation needed.</p>
+<h3 id="plain-javascript-delivery-copy-js-copy">Plain-JavaScript delivery copy (js-copy)<a class="headerlink" href="#plain-javascript-delivery-copy-js-copy" title="Permanent link">&para;</a></h3>
+<p><code>scripts/emit-js-copy.mjs</code> transpiles <code>src/</code> into <code>js-copy/</code>, stripping types
+with <code>@babel/preset-typescript</code> (no new dependency — <code>babel-loader</code> already
+uses it). Two config traps only surface <em>after</em> the extension change, and the
+generated <code>js-copy/webpack.config.js</code> ships with both already handled:</p>
+<ul>
+<li>A <code>.babelrc</code> inside <code>js-copy/</code> would be resolved against the invoking
+  shell's cwd and silently ignored — presets are declared inline instead
+  (<code>babelrc: false, configFile: false</code>).</li>
+<li><code>"type": "module"</code> requires an extension on every relative import for
+  <code>.js</code>/<code>.jsx</code> (<code>.ts</code>/<code>.tsx</code> are exempt) — opted out via
+  <code>resolve.fullySpecified: false</code>.</li>
+</ul>
+<p><code>scripts/verify-js-copy.mjs</code> proves the delivery is actually clean: it fails
+if any <code>.ts</code>/<code>.tsx</code>/<code>tsconfig*.json</code> file survived the transpile, <strong>and</strong> if
+any generated <code>.md</code>/<code>.txt</code>/<code>.html</code> document mentions TypeScript or a <code>.ts(x)</code>
+path — a constraint enforced on the transpiled source is not automatically
+enforced on documents generated alongside it (e.g. a README that credits its
+sources by path). Run both with <code>npm run js-copy</code>.</p>
 <h2 id="rules-of-thumb">Rules of thumb<a class="headerlink" href="#rules-of-thumb" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
