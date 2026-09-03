@@ -80,6 +80,8 @@ main() {
 	local target="${1:-help}"
 	shift || true
 
+	# Each hyphenated alt (dev-clean, dry-run, mkdocs_server) is the pre-#365 spelling, kept
+	# for one release so a script or muscle memory typing the old name still works.
 	case "$target" in
 		new) cmd_new ;;
 		install) cmd_install ;;
@@ -95,7 +97,7 @@ main() {
 		check_function_length) cmd_check_function_length ;;
 		verify_tiers) cmd_verify_tiers "$@" ;;
 		update_venv) cmd_update_venv ;;
-		mkdocs_server|mkdocs_serve) cmd_mkdocs_serve ;;
+		mkdocs_serve|mkdocs_server) cmd_mkdocs_serve ;;
 		changelog) cmd_changelog ;;
 		help|-h|--help) usage ;;
 		*) echo "Unknown target: $target" >&2; usage >&2; exit 1 ;;
