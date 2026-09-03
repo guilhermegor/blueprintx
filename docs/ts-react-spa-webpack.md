@@ -5,7 +5,10 @@ A single-page application skeleton built on **React 19**, **TypeScript 6**, **We
 At scaffold time you are prompted for:
 
 - **State management strategy** — React Context (default, zero deps), Zustand, or Redux Toolkit. Only the chosen variant's files are written.
+- **Deploy target** — GitHub Pages (default), Vercel, or none.
 - **Webpack Module Federation** — optional; replaces `webpack.config.js` with a Module Federation-aware config.
+- **Docker setup** — optional; adds a multi-stage `Dockerfile` + `nginx.conf` + `.dockerignore`.
+- **Plain-JavaScript delivery copy (js-copy)** — optional; adds `scripts/emit-js-copy.mjs` + `scripts/verify-js-copy.mjs`, for deliveries that must not contain TypeScript (a course submission, a client handoff, a TS-toolchain-free consumer). No new dependency — it reuses `@babel/core` + `@babel/preset-typescript`, already devDependencies for `babel-loader`.
 
 ## Expected layout
 
@@ -228,6 +231,27 @@ Global CSS custom properties are defined in `shared/styles/foundations/`. Import
 ```
 
 Dark/light switching is handled by toggling `data-theme="light"` on `<html>` — no JavaScript class manipulation needed.
+
+### Plain-JavaScript delivery copy (js-copy)
+
+`scripts/emit-js-copy.mjs` transpiles `src/` into `js-copy/`, stripping types
+with `@babel/preset-typescript` (no new dependency — `babel-loader` already
+uses it). Two config traps only surface *after* the extension change, and the
+generated `js-copy/webpack.config.js` ships with both already handled:
+
+- A `.babelrc` inside `js-copy/` would be resolved against the invoking
+  shell's cwd and silently ignored — presets are declared inline instead
+  (`babelrc: false, configFile: false`).
+- `"type": "module"` requires an extension on every relative import for
+  `.js`/`.jsx` (`.ts`/`.tsx` are exempt) — opted out via
+  `resolve.fullySpecified: false`.
+
+`scripts/verify-js-copy.mjs` proves the delivery is actually clean: it fails
+if any `.ts`/`.tsx`/`tsconfig*.json` file survived the transpile, **and** if
+any generated `.md`/`.txt`/`.html` document mentions TypeScript or a `.ts(x)`
+path — a constraint enforced on the transpiled source is not automatically
+enforced on documents generated alongside it (e.g. a README that credits its
+sources by path). Run both with `npm run js-copy`.
 
 ## Rules of thumb
 
