@@ -23,21 +23,48 @@ explicitly open. Everything named below is the only thing a major version bump
 
 **Frozen at `1.0.0`:**
 
-1. **The CLI/menu surface** — the subcommands `new`, `preview`, `dev`, `dev-clean`,
-   `dry-run`, and `--help` (via `blueprintx`, `make`, or `tasks.sh`), and their
-   observable behavior (what each prompts for, what it writes). Adding a new
-   subcommand is a minor change; renaming or removing one of these is major.
+1. **The scaffolding CLI surface** — and *only* the scaffolding modes: `new`,
+   `preview`, `dev`, `dev_clean`, `dry_run`, and `--help` (via `blueprintx`,
+   `make`, or `tasks.sh`). Adding a new subcommand is minor; renaming or removing
+   one of these is major.
+
+   ⚠️ **Maintenance targets are deliberately NOT frozen**, and there are more of
+   them than of the frozen set: `tasks.sh` also dispatches `install`, `init`,
+   `venv`, `precommit`, `lint`, `check_function_length`, `verify_tiers`,
+   `update_venv`, `mkdocs_serve`, `mkdocs_server`, `changelog` and
+   `update_licenses`. They serve a contributor working *in this repo*, who moves
+   with it; a frozen name there would buy nobody anything and would block the kind
+   of rename `mkdocs_server` → `mkdocs_serve` already went through. Renaming one
+   is **minor**, with the old spelling kept as a deprecated alias for one tagged
+   release (blueprintx#365).
+
+   ⚠️ **"Observable behavior" here means what each mode PROMPTS FOR, not what it
+   writes.** What `new` writes is template content, which item 3 leaves open —
+   see the boundary note there.
 2. **The `skeleton.meta` discovery format** — the four required keys `language`,
-   `display_name`, `description`, `scaffold`, and the contract that any directory
-   under `templates/` carrying a valid one appears in the menu automatically
-   (`bin/ci/validate_meta.sh` enforces the four keys today). Adding a new optional
+   `display_name`, `description`, `scaffold`, and the contract that any **direct
+   child** directory of `templates/` carrying a valid one appears in the menu
+   automatically. ⚠️ Direct child, not "any directory under" — both
+   `bin/ci/validate_meta.sh` and `bin/blueprintx.sh` glob `templates/*/skeleton.meta`,
+   so a nested one is neither validated nor discovered. Making discovery recursive
+   would be a **minor** change (it only widens what appears); this line documents
+   the shipped behaviour rather than an aspiration. Adding a new optional
    key is minor; removing or repurposing one of the four is major.
 
 **Explicitly NOT frozen at `1.0.0` — recommendation, needs owner sign-off:**
 
 3. **Everything inside `templates/`** — the generated project's internal layout,
    task names (`poe lint`, `poe unit_tests`), gate implementations, and config file
-   formats. A scaffolded project is forked at scaffold time and never pulls
+   formats.
+
+   ⚠️ **The boundary against item 1, stated so the same change cannot be classified
+   twice.** A template change changes what `new` writes, and item 1 freezes the
+   scaffolding CLI — so without this line one edit could read as major (item 1) and
+   minor (item 3) at once. The split: item 1 freezes the **interaction** — which
+   modes exist, what each prompts for, the exit status, and that a run produces a
+   project at the path the user named. Item 3 leaves the **contents** of that
+   project open. Renaming a prompt is major; changing a file the scaffold writes
+   into the project is minor. A scaffolded project is forked at scaffold time and never pulls
    updates from BlueprintX again — there is no live channel through which a later
    BlueprintX release can break an already-generated project. `1.0.0`'s major-bump
    guarantee is about compatibility over time for a consumer that stays connected
@@ -69,10 +96,15 @@ Every row is decidable — yes/no, not a feeling.
       `typecheck-ts`, and all 6 via `dry-run-smoke`. Measured true on `main` as of
       2026-08-29 (`Scaffold Checks` workflow, latest run: success). **Not a
       blocker — already met; re-verify green at cut time.**
-- [x] **Every gate that can block a merge carries a should-fail regression test**
+- [ ] **Every gate that can block a merge carries a should-fail regression test**
       ([#111](https://github.com/guilhermegor/blueprintx/issues/111), closed in
-      Wave A per `docs/backlog/issue-waves_20260823_145527.md`). **Not a blocker —
-      already delivered; re-verify no regression before cutting.**
+      Wave A per `docs/backlog/issue-waves_20260823_145527.md`).
+      ⚠️ **Reopened by measurement, 2026-09-04:** the merge-blocking `validate-meta`
+      job runs `bin/ci/validate_meta.sh`, and a search of `tests/` for it returns
+      **nothing** — no case covers a missing key, an empty value, or a `scaffold`
+      path that does not exist. A checklist row that claims full coverage while one
+      blocking gate has none is the same failure this whole page is about: a green
+      that nobody can contradict. Needs those cases before it goes back to `[x]`.
 - [ ] **Wave C (en-US prose consistency —
       [#194](https://github.com/guilhermegor/blueprintx/issues/194),
       [#195](https://github.com/guilhermegor/blueprintx/issues/195),
@@ -96,8 +128,12 @@ Every row is decidable — yes/no, not a feeling.
       above), so [#109](https://github.com/guilhermegor/blueprintx/issues/109) is
       not required to land first. **Not a blocker under this page's
       recommendation** — reopens if the sign-off above goes the other way.
-- [x] **The post-1.0 breaking-change policy is decided.** See below. Satisfied by
-      this page.
+- [ ] **The post-1.0 breaking-change policy is decided.** ⚠️ Unchecked on purpose:
+      the section below is headed *"recommendation, needs owner sign-off"*, so this
+      page **proposes** the policy rather than settling it. This row is a yes/no
+      entry-bar item and flips to `[x]` when the sign-off is recorded — marking it
+      done while the heading still asks for approval would make the checklist
+      report an entry bar that was never cleared.
 
 ## Post-1.0 policy — recommendation, needs owner sign-off
 
