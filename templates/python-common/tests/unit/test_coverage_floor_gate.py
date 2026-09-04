@@ -186,12 +186,23 @@ def test_omit_patterns_expands_environment_variables(
 	assert cls_gate.omit_patterns(path_cfg) == ["/srv/app/src/capabilities/*/domain/*"]
 
 
-def test_absolute_omit_pattern_still_swallows_a_relative_module(tmp_path: Path) -> None:
-	"""An expanded, absolute pattern must match the module it really omits."""
+# ⚠️ Both tests below pass a RELATIVE path_module and chdir into the project root, because
+# that is how main() calls swallowed_by_omit. Passing an absolute path instead makes each
+# test vacuous: the absolute pattern then matches the "relative" branch and the relative
+# pattern is compared against a path that can never match it. Measured — with the absolute
+# branch reverted out of the gate, the earlier absolute-path versions of these two tests
+# still reported `2 passed`.
+
+
+def test_absolute_omit_pattern_still_swallows_a_relative_module(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""An expanded, absolute pattern must match the RELATIVE module path it really omits."""
 	cls_gate = _load_gate()
 	path_root = _project(tmp_path, "")
 	_capability(path_root, "orders", "domain", "def place() -> None:\n    return None\n")
-	path_module = path_root / "src" / "capabilities" / "orders" / "domain" / "service.py"
+	monkeypatch.chdir(path_root)
+	path_module = Path("src/capabilities/orders/domain/service.py")
 	str_absolute_pattern = f"{path_root.resolve().as_posix()}/src/capabilities/*/domain/*"
 
 	list_problems = cls_gate.swallowed_by_omit([path_module], [str_absolute_pattern])
@@ -199,11 +210,17 @@ def test_absolute_omit_pattern_still_swallows_a_relative_module(tmp_path: Path) 
 	assert len(list_problems) == 1
 
 
-def test_relative_omit_pattern_keeps_working(tmp_path: Path) -> None:
+def test_relative_omit_pattern_keeps_working(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
 	"""Widening to absolute must not break the plain relative form the template ships."""
 	cls_gate = _load_gate()
 	path_root = _project(tmp_path, "")
 	_capability(path_root, "orders", "domain", "def place() -> None:\n    return None\n")
-	path_module = path_root / "src" / "capabilities" / "orders" / "domain" / "service.py"
+	monkeypatch.chdir(path_root)
+	path_module = Path("src/capabilities/orders/domain/service.py")
 
-	assert cls_gate.swallowed_by_omit([path_module], ["src/chassis/*"]) == []
+	# A pattern that DOES cover this module, so a broken relative branch fails the test.
+	list_problems = cls_gate.swallowed_by_omit([path_module], ["src/capabilities/*/domain/*"])
+
+	assert len(list_problems) == 1
