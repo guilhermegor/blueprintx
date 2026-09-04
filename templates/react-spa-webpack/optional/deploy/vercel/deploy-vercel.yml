@@ -20,10 +20,11 @@ jobs:
     # GitHub's default bound is 6 hours, and an unbounded job that hangs reports
     # `cancelled` — indistinguishable from a human pressing cancel (blueprintx#192).
     timeout-minutes: 20
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    # ⚠️ No job-wide `env:` here, deliberately. `vercel build` runs the PROJECT'S OWN build
+    # (vercel.json's buildCommand → npm run build), so anything a job-wide variable holds is
+    # readable by every dependency and build script in the tree. A credential that only two
+    # steps need must not be visible to the one step that executes third-party code. The three
+    # values are therefore declared per step, on the steps that use them.
     steps:
       - uses: actions/checkout@v4
 
@@ -52,16 +53,32 @@ jobs:
       # Vercel project does not exist — the three secrets this target needs and
       # the gh-pages target does not. See the repo README's deploy section.
       - name: Pull Vercel environment information
-        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       # `vercel build` reads vercel.json, whose `rewrites` block sends every path
       # to index.html — Vercel's equivalent of the gh-pages 404.html copy, and
       # required by react-router for any deep link to resolve.
+      # ⚠️ NO TOKEN ON THIS STEP, and that is the point of the split. `vercel build` works
+      # from the Project Settings and environment that `vercel pull` already wrote into
+      # `.vercel/` — Vercel's own docs list only --prod/--yes/--target/--output for it, and
+      # --yes exists precisely to pull when local state is MISSING, which it is not here.
+      #
+      # Passing the token as a CLI argument instead is NOT the safer alternative it looks
+      # like: argv is readable by any process in the same container, which is exactly the
+      # third-party build code this split exists to keep it away from.
       - name: Build project artifacts
-        run: vercel build --prod --token=$VERCEL_TOKEN
+        run: vercel build --prod
 
       - name: Deploy project artifacts to Vercel
-        run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
       # A green run here is NOT proof the site was updated: while this hang
       # was live, Vercel's Git integration kept publishing an OLDER build
