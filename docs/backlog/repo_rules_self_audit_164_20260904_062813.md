@@ -2,9 +2,10 @@
 
 Created 2026-09-04. Read-only audit: does `guilhermegor/blueprintx` itself match what
 `bin/enable_repo_rules.sh` / `bin/enable_security.sh` (shipped to every generated project)
-impose? The scripts were **never run against BlueprintX**, and one drift (`required_approving_
-review_count: 1`) was already found and hand-fixed on 2026-08-09 — this issue asks whether more
-drifted.
+impose? Their **provisioning path was never run against BlueprintX** (no writes, ever — and
+none in this pass either); their read-only `verify` path WAS run here, and is where the numbers
+below come from. One drift (`required_approving_review_count: 1`) was already found and
+hand-fixed on 2026-08-09 — this issue asks whether more drifted.
 
 ⚠️ **Scope note — two different deliverables, only the first two are done here:**
 1. measure the divergence between blueprintx's repo config and what the scripts impose — DONE.
@@ -42,7 +43,9 @@ admin rights and never writes.
 - **`strict_required_status_checks_policy` = true — APPLIES, is a real gap.** BlueprintX argued
   for this itself (blueprintx#307: a PR merged with 6 tier checks red only because a dependency
   PR hadn't merged yet). Its own `main` doesn't enforce it. Flagged for a maintainer with
-  repo-admin to fix by hand or via `poe enable_repo_rules` — not done here (no writes this pass).
+  repo-admin — see "How to apply" below. ⚠️ **NOT via `poe enable_repo_rules`**: that command
+  provisions the `pr-quality-gate` ruleset, which is the very second enforcement surface the
+  exception two bullets down argues against. Not done here (no writes this pass).
 - **`do-not-merge` label — APPLIES.** One `gh label create` call away; not a config-shape
   question, purely an oversight from the script never having been run here.
 - **Ruleset vs. classic branch protection — EXCEPTION, not a defect.** BlueprintX's `main` has
@@ -116,11 +119,39 @@ reports on a fork/first run):
   no divergence in its territory (all three toggles already match).
 - This file.
 
+## How to apply (targeted writes only — NOT `poe enable_repo_rules`)
+
+⚠️ **The obvious command is the wrong one here, and this is the whole reason this section
+exists.** `poe enable_repo_rules` provisions the `pr-quality-gate` **ruleset**. BlueprintX's
+`main` is protected by **classic branch protection** and has ZERO rulesets. Running it would not
+migrate one mechanism to the other — it would **add a second, independent enforcement surface on
+top of the first**, which is exactly the risk the "Ruleset vs. classic" exception above names.
+Two surfaces that disagree fail in the worst way available: the merge button's state stops
+matching either config, and neither is obviously wrong on inspection.
+
+So the two real divergences are fixed by writing to the mechanism blueprintx **already has**:
+
+```bash
+# 1. strict — PATCH the CLASSIC protection, do not POST a ruleset.
+#    Re-send the existing contexts: this endpoint REPLACES required_status_checks, so
+#    omitting them silently drops every required check.
+gh api -X GET repos/guilhermegor/blueprintx/branches/main/protection/required_status_checks \
+  --jq '.contexts'          # read them FIRST, then pass the same list back
+gh api -X PATCH repos/guilhermegor/blueprintx/branches/main/protection/required_status_checks \
+  -F strict=true -f 'contexts[]=<each context from the read above>'
+
+# 2. do-not-merge label — independent of either mechanism.
+gh label create do-not-merge --repo guilhermegor/blueprintx \
+  --color B60205 --description "Blocks merge; see CONTRIBUTING"
+```
+
+Both are `guilhermegor/blueprintx` writes and stay a maintainer decision — nothing here was run.
+
 ## Not done (tracked, not silently dropped)
 
 - Applying the two real divergences (`strict` flag, `do-not-merge` label) to
-  `guilhermegor/blueprintx` — needs a maintainer with repo-admin running `poe enable_repo_rules`
-  (or the two `gh api` calls by hand), out of scope for this read-only pass.
+  `guilhermegor/blueprintx` — needs a maintainer with repo-admin, out of scope for this
+  read-only pass. **See "How to apply" for why the obvious command is the wrong one.**
 - A real dry-run mode for either script.
 
 - [x] Read-only divergence measured, item-by-item exception written, `REQUIRED_CHECKS` decision

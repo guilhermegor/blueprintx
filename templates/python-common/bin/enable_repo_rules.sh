@@ -50,8 +50,8 @@
 # in this file, `verify` DOES fail loud (non-zero exit) — see verify_strict_required_checks.
 #
 # blueprintx#164 self-audit (2026-09-04, read-only `gh api` reads + `verify`, full numbers in
-# docs/backlog/repo_rules_self_audit_164_20260904_062813.md): this script had NEVER been run
-# against BlueprintX itself. Found and left unfixed (needs a maintainer with repo-admin —
+# docs/backlog/repo_rules_self_audit_164_20260904_062813.md): this script's PROVISIONING path
+# had never been run against BlueprintX itself (its read-only `verify` was, by that audit). Found and left unfixed (needs a maintainer with repo-admin —
 # no writes were made by the audit): `strict` is FALSE on blueprintx's own `main` (confirmed by
 # `verify` above, exit 1) and the `do-not-merge` label is absent (404). Found and NOT a defect —
 # written here so the next audit doesn't reopen it as one: blueprintx has ZERO rulesets and uses
