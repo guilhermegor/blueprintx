@@ -228,9 +228,11 @@ def test_nolock_in_sql_file_is_reported(tmp_path: Path) -> None:
 
 
 def test_nolock_split_across_lines_is_reported(tmp_path: Path) -> None:
-	"""``WITH\\n(NOLOCK)`` is one hint; a per-line search can never match across the break."""
+	"""A hint broken after ``WITH`` is one hint; a per-line search never spans the break."""
 	path_file = tmp_path / "query.sql"
-	path_file.write_text("SELECT *\nFROM comments WITH\n(NOLOCK)\nWHERE id = 1;\n", encoding="utf-8")
+	path_file.write_text(
+		"SELECT *\nFROM comments WITH\n(NOLOCK)\nWHERE id = 1;\n", encoding="utf-8"
+	)
 
 	list_problems = gate._nolock_problems_in_sql(path_file)
 
