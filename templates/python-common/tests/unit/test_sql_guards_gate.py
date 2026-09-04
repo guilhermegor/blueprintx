@@ -82,6 +82,36 @@ def test_whereless_core_delete_is_reported(tmp_path: Path) -> None:
 	assert "sql-guard-ok:" in list_problems[0]
 
 
+def test_whereless_module_qualified_delete_is_reported(tmp_path: Path) -> None:
+	"""``sa.delete(t)`` is a Core builder, not the ambiguous ``.delete()`` attribute form."""
+	path_file = _python_file(
+		tmp_path,
+		"import sqlalchemy as sa\n\nstmt = sa.delete(comments)\n",
+	)
+
+	assert len(gate.check_python_file(path_file)) == 1
+
+
+def test_whereless_module_qualified_update_is_reported(tmp_path: Path) -> None:
+	"""The unaliased spelling reaches the same branch — the module name IS the alias."""
+	path_file = _python_file(
+		tmp_path,
+		'import sqlalchemy\n\nstmt = sqlalchemy.update(comments).values(status="x")\n',
+	)
+
+	assert len(gate.check_python_file(path_file)) == 1
+
+
+def test_module_qualified_delete_with_where_passes(tmp_path: Path) -> None:
+	"""Widening to the module alias must not fire on a properly scoped mutation."""
+	path_file = _python_file(
+		tmp_path,
+		"import sqlalchemy as sa\n\nstmt = sa.delete(comments).where(comments.c.id == 1)\n",
+	)
+
+	assert gate.check_python_file(path_file) == []
+
+
 def test_whereless_core_delete_with_where_passes(tmp_path: Path) -> None:
 	"""The same call with a ``.where()`` chained on is clean."""
 	path_file = _python_file(
@@ -195,6 +225,28 @@ def test_nolock_in_sql_file_is_reported(tmp_path: Path) -> None:
 
 	assert len(list_problems) == 1
 	assert "WITH (NOLOCK)" in list_problems[0]
+
+
+def test_nolock_split_across_lines_is_reported(tmp_path: Path) -> None:
+	"""``WITH\\n(NOLOCK)`` is one hint; a per-line search can never match across the break."""
+	path_file = tmp_path / "query.sql"
+	path_file.write_text("SELECT *\nFROM comments WITH\n(NOLOCK)\nWHERE id = 1;\n", encoding="utf-8")
+
+	list_problems = gate._nolock_problems_in_sql(path_file)
+
+	assert len(list_problems) == 1
+	assert ":2:" in list_problems[0]
+
+
+def test_nolock_split_across_lines_honours_the_hatch(tmp_path: Path) -> None:
+	"""The hatch is read on the line the match STARTS on, not on the line it ends."""
+	path_file = tmp_path / "query.sql"
+	path_file.write_text(
+		"SELECT *\nFROM comments WITH  -- sql-guard-ok: reporting replica\n(NOLOCK);\n",
+		encoding="utf-8",
+	)
+
+	assert gate._nolock_problems_in_sql(path_file) == []
 
 
 def test_query_without_nolock_passes(tmp_path: Path) -> None:

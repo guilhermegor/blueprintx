@@ -104,7 +104,7 @@ def _line_allowed(list_lines: list[str], int_line: int) -> bool:
 	return _hatch_reason(list_lines[int_line - 1]) is not None
 
 
-def _sqlalchemy_usage(cls_tree: ast.Module) -> tuple[bool, set[str]]:
+def _sqlalchemy_usage(cls_tree: ast.Module) -> tuple[bool, set[str], set[str]]:
 	"""Return whether the module imports ``sqlalchemy``, and its bare mutation aliases.
 
 	Parameters
@@ -114,20 +114,28 @@ def _sqlalchemy_usage(cls_tree: ast.Module) -> tuple[bool, set[str]]:
 
 	Returns
 	-------
-	tuple of (bool, set of str)
-		Whether any ``sqlalchemy`` import is present, and the local names bound to
+	tuple of (bool, set of str, set of str)
+		Whether any ``sqlalchemy`` import is present; the local names bound to
 		``sqlalchemy``'s ``delete``/``update`` Core builder functions (honouring ``as``
 		aliases), e.g. ``{"delete", "update"}`` for a plain ``from sqlalchemy import
-		delete, update``.
+		delete, update``; and the local names bound to the ``sqlalchemy`` MODULE itself,
+		e.g. ``{"sa"}`` for ``import sqlalchemy as sa``.
 	"""
 	bool_uses_sqlalchemy = False
 	set_core_aliases: set[str] = set()
+	set_module_aliases: set[str] = set()
 	for cls_node in ast.walk(cls_tree):
 		if isinstance(cls_node, ast.Import):
-			bool_uses_sqlalchemy = bool_uses_sqlalchemy or any(
-				cls_alias.name == "sqlalchemy" or cls_alias.name.startswith("sqlalchemy.")
-				for cls_alias in cls_node.names
-			)
+			for cls_alias in cls_node.names:
+				if cls_alias.name == "sqlalchemy" or cls_alias.name.startswith("sqlalchemy."):
+					bool_uses_sqlalchemy = True
+					# ⚠️ The MODULE alias, not just the fact of the import. `import sqlalchemy
+					# as sa` makes `sa.delete(t)` a Core builder call, but it reaches the
+					# classifier as an ATTRIBUTE call — the same shape as `dict.update()`. The
+					# attribute branch demands a `.query(` anchor to stay out of that false
+					# positive, so without the alias recorded here the module-qualified form
+					# is silently skipped: a WHERE-less delete reported as OK.
+					set_module_aliases.add(cls_alias.asname or cls_alias.name.split(".")[0])
 		elif (
 			isinstance(cls_node, ast.ImportFrom)
 			and cls_node.module
@@ -137,7 +145,7 @@ def _sqlalchemy_usage(cls_tree: ast.Module) -> tuple[bool, set[str]]:
 			for cls_alias in cls_node.names:
 				if cls_alias.name in _MUTATION_NAMES:
 					set_core_aliases.add(cls_alias.asname or cls_alias.name)
-	return bool_uses_sqlalchemy, set_core_aliases
+	return bool_uses_sqlalchemy, set_core_aliases, set_module_aliases
 
 
 def _parent_map(cls_tree: ast.AST) -> dict[int, ast.AST]:
@@ -248,7 +256,9 @@ def _whereless_message(path_file: pathlib.Path, int_line: int, str_verb: str) ->
 	)
 
 
-def _mutation_verb(cls_call: ast.Call, set_core_aliases: set[str]) -> tuple[str | None, bool]:
+def _mutation_verb(
+	cls_call: ast.Call, set_core_aliases: set[str], set_module_aliases: set[str]
+) -> tuple[str | None, bool]:
 	"""Return the mutation verb a call invokes, and whether it needs the ``query`` anchor.
 
 	Parameters
@@ -257,6 +267,8 @@ def _mutation_verb(cls_call: ast.Call, set_core_aliases: set[str]) -> tuple[str 
 		The call to classify.
 	set_core_aliases : set of str
 		Local names bound to ``sqlalchemy``'s bare ``delete``/``update`` builders.
+	set_module_aliases : set of str
+		Local names bound to the ``sqlalchemy`` module itself, e.g. ``{"sa"}``.
 
 	Returns
 	-------
@@ -269,6 +281,14 @@ def _mutation_verb(cls_call: ast.Call, set_core_aliases: set[str]) -> tuple[str 
 	if isinstance(cls_call.func, ast.Name) and cls_call.func.id in set_core_aliases:
 		return cls_call.func.id, False
 	if isinstance(cls_call.func, ast.Attribute) and cls_call.func.attr in _MUTATION_NAMES:
+		# `sa.delete(t)` is a Core builder, NOT the ambiguous attribute form: the receiver is
+		# the sqlalchemy module, so no `.query(` anchor is needed and demanding one would
+		# skip it entirely.
+		if (
+			isinstance(cls_call.func.value, ast.Name)
+			and cls_call.func.value.id in set_module_aliases
+		):
+			return cls_call.func.attr, False
 		return cls_call.func.attr, True
 	return None, False
 
@@ -292,7 +312,7 @@ def _whereless_mutation_problems(
 	list of str
 		Human-readable findings; empty when the file complies.
 	"""
-	bool_uses_sqlalchemy, set_core_aliases = _sqlalchemy_usage(cls_tree)
+	bool_uses_sqlalchemy, set_core_aliases, set_module_aliases = _sqlalchemy_usage(cls_tree)
 	if not bool_uses_sqlalchemy:
 		return []
 
@@ -302,7 +322,9 @@ def _whereless_mutation_problems(
 	for cls_node in ast.walk(cls_tree):
 		if not isinstance(cls_node, ast.Call):
 			continue
-		str_verb, bool_is_query_style = _mutation_verb(cls_node, set_core_aliases)
+		str_verb, bool_is_query_style = _mutation_verb(
+			cls_node, set_core_aliases, set_module_aliases
+		)
 		if str_verb is None:
 			continue
 
@@ -389,12 +411,21 @@ def _nolock_problems_in_sql(path_file: pathlib.Path) -> list[str]:
 	list of str
 		Human-readable findings; empty when the file complies.
 	"""
-	list_lines = path_file.read_text(encoding="utf-8").splitlines()
-	return [
-		_nolock_message(path_file, int_no)
-		for int_no, str_line in enumerate(list_lines, start=1)
-		if _RE_NOLOCK.search(str_line) and _hatch_reason(str_line) is None
-	]
+	# ⚠️ Searched as ONE text stream, never line by line. `_RE_NOLOCK` already tolerates
+	# whitespace between its tokens, and in SQL that whitespace is routinely a NEWLINE
+	# (`WITH\n(NOLOCK)`) — a per-line search can never match its own pattern across the
+	# break, so the hint reads as absent and the file reports clean. That is this gate's own
+	# failure mode: a dirty read reported as OK.
+	str_text = path_file.read_text(encoding="utf-8")
+	list_lines = str_text.splitlines()
+	list_problems: list[str] = []
+	for cls_match in _RE_NOLOCK.finditer(str_text):
+		# The line the match STARTS on: that is where a reader looks, and where the escape
+		# hatch has to be written for a deliberate hint.
+		int_no = str_text.count("\n", 0, cls_match.start()) + 1
+		if _hatch_reason(list_lines[int_no - 1]) is None:
+			list_problems.append(_nolock_message(path_file, int_no))
+	return list_problems
 
 
 def check_python_file(path_file: pathlib.Path) -> list[str]:
