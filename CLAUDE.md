@@ -13,13 +13,13 @@ BlueprintX is a **Make + bash scaffolding tool** — not a Python application. T
 make new           # interactive scaffolder — prompts for language, skeleton, project name
 make preview       # show all skeleton structures without creating anything
 make dev           # scaffold into a temp dir (preserved)
-make dev-clean     # scaffold into temp dir, auto-deleted on exit
-make dry-run       # print chosen skeleton structure; no files written
+make dev_clean     # scaffold into temp dir, auto-deleted on exit
+make dry_run       # print chosen skeleton structure; no files written
 ```
 
 ### Docs site (MkDocs)
 ```bash
-make mkdocs_server  # installs docs deps then serves at http://0.0.0.0:8000
+make mkdocs_serve   # installs docs deps then serves at http://0.0.0.0:8000
 ```
 
 ### Dev environment (root project)
@@ -137,10 +137,25 @@ non-`make` entry point — **and** be listed in `bin/help.sh`'s usage text; a ta
 only two of the three legs is exactly the drift this rule exists to prevent (`update_licenses`
 was a real, working `Makefile` target missing from `help.sh` until this gate found and fixed
 it — undetected by prose, and found only by accident before). "Paired" means name-equality
-(with `-`/`_` normalised, since `tasks.sh` legitimately spells `dev-clean` as `dev_clean` in
-its `case` pattern) — a target preceded by a `# pairing:internal` comment line is exempt, for
-a future `.PHONY` helper that composes other targets but was never meant to be user-facing on
-its own. This pair is **root-repo-only**: unlike the rest of the gate family, `Makefile` and
+(with `-`/`_` normalised, since `tasks.sh`'s deprecated `dev-clean`/`dry-run` aliases still
+have to match their `dev_clean`/`dry_run` canonical spelling in its `case` pattern) — a target
+preceded by a `# pairing:internal` comment line is exempt, for a `.PHONY` helper that composes
+other targets but was never meant to be user-facing on its own (used by the `mkdocs_server`
+deprecated alias below).
+
+**Multi-word Makefile targets use underscore, never hyphen** (blueprintx#365, measured
+2026-08-30: 4 underscore vs 2 hyphen among the 6 multi-word targets that existed then).
+Underscore is the only spelling `tasks.sh` can mirror — a bash function name cannot contain
+`-` — so hyphen was never a real second option, only an undecided default. `mkdocs_server` →
+`mkdocs_serve` (also a noun→verb fix: every sibling target is a verb phrase), `dev-clean` →
+`dev_clean`, `dry-run` → `dry_run`. Each old spelling stays as a deprecated `Makefile` alias
+(a dependency-only target, no recipe of its own) for one tagged release rather than breaking
+it silently; `dev-clean`/`dry-run` need no separate `tasks.sh`/`help.sh` entry since the gate's
+`-`/`_` normalisation already treats them as their `_` twin, while `mkdocs_server` is a real
+name change so it carries its own `# pairing:internal` marker instead and is no longer listed
+in `make help`.
+
+This pair is **root-repo-only**: unlike the rest of the gate family, `Makefile` and
 `tasks.sh` exist only at BlueprintX's own root, never in `templates/` and never in a generated
 project (`poe_tasks.toml` replaced them there since #236) — so the script lives at
 `bin/check_makefile_pairing.sh`, not `templates/python-common/bin/`, and never ships as part
