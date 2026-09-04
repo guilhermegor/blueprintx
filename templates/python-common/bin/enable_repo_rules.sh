@@ -48,6 +48,23 @@
 # `strict_required_status_checks_policy` / `required_status_checks.strict` is true, on whichever
 # mechanism (ruleset or classic branch protection) the repo actually has. Unlike every other path
 # in this file, `verify` DOES fail loud (non-zero exit) — see verify_strict_required_checks.
+#
+# blueprintx#164 self-audit (2026-09-04, read-only `gh api` reads + `verify`, full numbers in
+# docs/backlog/repo_rules_self_audit_164_20260904_062813.md): this script had NEVER been run
+# against BlueprintX itself. Found and left unfixed (needs a maintainer with repo-admin —
+# no writes were made by the audit): `strict` is FALSE on blueprintx's own `main` (confirmed by
+# `verify` above, exit 1) and the `do-not-merge` label is absent (404). Found and NOT a defect —
+# written here so the next audit doesn't reopen it as one: blueprintx has ZERO rulesets and uses
+# CLASSIC branch protection instead of the `pr-quality-gate` ruleset this script provisions (has
+# done so since blueprintx#99, predates this script); its classic protection requires 15 status
+# checks, which is THIS repo's own multi-tier scaffold CI, not a generated project's — the two
+# lists were never meant to match. `copilot_code_review` could not be assessed independently
+# (no ruleset exists here at all) and is plan-gated per the header note above regardless.
+# `verify` only asserts the strict-checks flag — the audit had to read the other 8 items above
+# by hand; there is still no single dry-run command that reports the full diff.
+#
+# `enable_security.sh`'s territory (Dependabot alerts, security updates, private vulnerability
+# reporting) had NO divergence — all three toggles already match on blueprintx.
 
 set -euo pipefail
 
@@ -84,6 +101,13 @@ RULESET_NAME="pr-quality-gate"
 # nothing. Measured blueprintx 2026-08-16: a PR merged with **32 of 47 checks passed** and no
 # rule objected, because the only things standing between a red check and `main` were a hook and
 # a habit — and both are probabilistic. A gate nobody can bypass by forgetting is the whole point.
+#
+# blueprintx#164: re-confirmed one entry is enough, not expanded. A generated project's own CI
+# (templates/python-common/.github/workflows/tests.yaml) collapses to ONE check-run name per
+# matrix leg (`Run Automated Tests (<os>, py<version>)`) — same "guessed name that drifts" trap
+# this comment already warns against, and no fresh scaffold + real PR was run to capture the
+# exact leg names, so there is no population evidence (same bar GitGuardian failed, see
+# secret_scan.yaml) to require any of them.
 REQUIRED_CHECKS=("Review threads answered")
 
 require_gh() {
