@@ -166,33 +166,52 @@ jobs:
         run: pipx install ggshield
 
       - name: Scan the push/PR range for secrets
-        # ⚠️ EXACTLY these two variables, and the names are counter-intuitive. Verified
+        # ⚠️ EXACTLY this one variable, and its name is counter-intuitive. Verified
         # against ggshield's own source (core/git_hooks/ci/commit_range.py, v1.54.0), not its
         # docs:
         #   CI_PREVIOUS_COMMIT_VAR[GITHUB] == "GITHUB_PUSH_BASE_SHA"
         # So GITHUB_PUSH_BASE_SHA is the PREVIOUS-COMMIT variable and must carry
         # `github.event.before`. `GITHUB_PUSH_BEFORE_SHA` — the name that reads correct — and
         # `GITHUB_PULL_BASE_SHA` appear NOWHERE in ggshield: setting them protects nothing
-        # while looking like it does. The pull_request path needs nothing here at all,
-        # because ggshield reads GITHUB_BASE_REF, which Actions already sets.
+        # while looking like it does. `GITHUB_DEFAULT_BRANCH` is gone for the same reason:
+        # with the guard below, this step only ever runs with a real previous commit, so
+        # ggshield's fallback to it is unreachable — and an unreachable setting reads as
+        # protection too. The pull_request path needs nothing here at all, because
+        # ggshield reads GITHUB_BASE_REF, which Actions already sets.
         #
         # Without a usable previous commit, `ggshield secret scan ci` falls back to
         # `GITHUB_SHA~1...` — the LAST COMMIT ONLY. A push of five commits gets one scanned
         # and four skipped, exit 0 either way: the "looks exactly like scanned, found
         # nothing" failure this file's header warns about, one level subtler.
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        #
+        # ⚠️ A branch-CREATING push is excluded here on purpose: `github.event.before` is
+        # forty zeroes, and there is no previous commit to diff against. ggshield would then
+        # fall back to GITHUB_DEFAULT_BRANCH, which it uses as a BARE ref (`main..<sha>`, no
+        # `origin/` prefix — the remote prefix is applied only on the pull_request path). The
+        # runner checks out detached with no local `main`, so that resolves to nothing and
+        # lands back on `GITHUB_SHA~1...`. Prefixing it with `origin/` does not save it
+        # either: on the push that CREATES the branch, `origin/main` already equals HEAD, so
+        # the range is empty. The whole repository IS the correct range there — which is
+        # exactly the first push of a freshly scaffolded project, the one carrying everything.
+        if: >-
+          github.event_name == 'pull_request' ||
+          (github.event_name == 'push' &&
+           github.event.before != '0000000000000000000000000000000000000000')
         env:
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
           GITHUB_PUSH_BASE_SHA: ${{ github.event.before }}
-          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: ggshield secret scan ci
 
       - name: Scan the whole repository for secrets
-        # A manual run has no push/PR range to diff at all, so `scan ci` there would compute a
-        # degenerate one. Two named steps rather than one branching step, so the Actions log
-        # says WHICH scan ran — a range bug is invisible when both modes print the same name.
-        # workflow_call keeps the caller's event_name, so a called PR run takes the step above.
-        if: github.event_name != 'push' && github.event_name != 'pull_request'
+        # Runs for a manual dispatch (no range to diff at all) AND for a branch-creating push
+        # (`before` is forty zeroes). Two named steps rather than one branching step, so the
+        # Actions log says WHICH scan ran — a range bug is invisible when both modes print the
+        # same name. workflow_call keeps the caller's event_name, so a called PR run takes the
+        # step above.
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.event_name != 'push' ||
+           github.event.before == '0000000000000000000000000000000000000000')
         env:
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
         run: ggshield secret scan repo .
