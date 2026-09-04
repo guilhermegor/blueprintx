@@ -474,6 +474,17 @@ copy_required_chassis_db() {
     print_status "success" "chassis/db copied (required by db_schema)"
 }
 
+# blueprintx#274: prune each declined opt-in's dependency line from the just-rendered
+# pyproject.toml — joblib is imported only by chassis/db_wschema (storage opt-in), pymsteams
+# only by optional/webhook (webhook opt-in).
+conditional_prune_optin_deps() {
+    local project_path="$1"
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_STORAGE" \
+        '/^# Used only by the schema-less-storage opt-in/,/^joblib = /d'
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
+        '/^# Microsoft Teams incoming-webhook transport/,/^pymsteams = /d'
+}
+
 conditional_copy_storage() {
     local project_path="$1"
     if [[ "$INCLUDE_STORAGE" != "true" ]]; then return; fi
@@ -794,6 +805,7 @@ main() {
     copy_required_chassis_db "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_prune_optin_deps "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_copy_storage "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"

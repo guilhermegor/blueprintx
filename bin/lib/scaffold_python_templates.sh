@@ -51,6 +51,20 @@ scaffold_render_pyproject() {
 	envsubst <"$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" >"$str_project_path/LICENSE"
 }
 
+# scaffold_prune_optin_dependency: delete a declared dependency's line (and, when the sed
+# pattern is a range, its descriptive comment) from the just-rendered pyproject.toml when the
+# opt-in feature that imports it was declined -- blueprintx#274. A tier manifest used to
+# declare an opt-in's dependency UNCONDITIONALLY, so a project that declined the feature still
+# installed it; deptry's DEP002 (declared, never imported) then had to be silenced with a
+# per_rule_ignores entry instead of a real fix. Called once per opt-in per tier, AFTER
+# scaffold_render_pyproject, with the flag the matching prompt_* function already set.
+scaffold_prune_optin_dependency() {
+	local str_project_path="$1" str_flag_value="$2" str_sed_pattern="$3"
+
+	[[ "$str_flag_value" == "true" ]] && return
+	sed -i "$str_sed_pattern" "$str_project_path/pyproject.toml"
+}
+
 scaffold_copy_tooling_configs() {
 	local str_project_path="$1"
 
