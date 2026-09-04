@@ -388,14 +388,27 @@ def _nolock_problems_in_python(
 	list of str
 		Human-readable findings; empty when the file complies.
 	"""
-	return [
-		_nolock_message(path_file, cls_node.lineno)
-		for cls_node in ast.walk(cls_tree)
-		if isinstance(cls_node, ast.Constant)
-		and isinstance(cls_node.value, str)
-		and _RE_NOLOCK.search(cls_node.value)
-		and not _line_allowed(list_lines, cls_node.lineno)
-	]
+	# ⚠️ Per MATCH, never per constant. `search()` returns ONE boolean for the whole literal
+	# and `cls_node.lineno` is where the literal OPENS — so a hatch on the first line
+	# suppressed every hint inside it. Implicit concatenation makes that a two-line source
+	# edit: an approved hint on line 1, an unannotated one on line 2, and the gate reported
+	# clean. Measured before the fix: a probe with exactly that shape gave exit 0.
+	#
+	# ⚠️ Matched against the literal's SOURCE segment, not its parsed value. Implicit
+	# concatenation collapses `"a" "b"` into ONE Constant whose value holds no newline at
+	# all — the break lives in the source only. Counting newlines in the value therefore
+	# maps every match back to the opening line, which is the same bug wearing a loop.
+	str_source = "\n".join(list_lines)
+	list_problems: list[str] = []
+	for cls_node in ast.walk(cls_tree):
+		if not (isinstance(cls_node, ast.Constant) and isinstance(cls_node.value, str)):
+			continue
+		str_segment = ast.get_source_segment(str_source, cls_node) or ""
+		for cls_match in _RE_NOLOCK.finditer(str_segment):
+			int_line = cls_node.lineno + str_segment.count("\n", 0, cls_match.start())
+			if not _line_allowed(list_lines, int_line):
+				list_problems.append(_nolock_message(path_file, int_line))
+	return list_problems
 
 
 def _nolock_problems_in_sql(path_file: pathlib.Path) -> list[str]:

@@ -227,6 +227,22 @@ def test_nolock_in_sql_file_is_reported(tmp_path: Path) -> None:
 	assert "WITH (NOLOCK)" in list_problems[0]
 
 
+def test_second_nolock_in_one_literal_is_still_reported(tmp_path: Path) -> None:
+	"""A hatch on the first hint must not cover a second, unannotated one in the same literal."""
+	path_file = _python_file(
+		tmp_path,
+		'STR_Q = (\n'
+		'\t"SELECT a FROM t1 WITH (NOLOCK) "  # sql-guard-ok: reporting replica\n'
+		'\t"UNION ALL SELECT b FROM t2 WITH (NOLOCK)"\n'
+		')\n',
+	)
+
+	list_problems = gate.check_python_file(path_file)
+
+	assert len(list_problems) == 1
+	assert ":3:" in list_problems[0]
+
+
 def test_nolock_split_across_lines_is_reported(tmp_path: Path) -> None:
 	"""A hint broken after ``WITH`` is one hint; a per-line search never spans the break."""
 	path_file = tmp_path / "query.sql"
