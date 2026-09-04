@@ -319,6 +319,11 @@ jobs:
       - name: Build documentation (--strict catches broken refs)
         run: bash bin/ci/check_docs_build.sh
 
+  # blueprintx#384: deliberately CI-only, no pre-commit mirror. Every one of the six
+  # skeletons must be dry-run scaffolded on every push, and pre-commit only re-runs hooks
+  # whose `files:` pattern matches the staged diff — a skeleton.meta change would trigger
+  # just that one skeleton, not all six, so the hook could never give the same coverage
+  # this matrix does. `scaffold-lint-test` below has the same shape for the same reason.
   dry-run-smoke:
     name: Dry-run smoke — ${{ matrix.skeleton }}
     runs-on: ubuntu-latest
