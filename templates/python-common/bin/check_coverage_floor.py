@@ -32,6 +32,7 @@ probe in the test suite is what proves discovery works before a second capabilit
 import ast
 import configparser
 import fnmatch
+import os
 import pathlib
 import re
 import sys
@@ -64,7 +65,16 @@ def omit_patterns(path_coveragerc: pathlib.Path) -> list[str]:
 	cls_parser = configparser.ConfigParser()
 	cls_parser.read(path_coveragerc, encoding="utf-8")
 	str_raw = cls_parser.get("run", "omit", fallback="")
-	return [str_line.strip() for str_line in str_raw.splitlines() if str_line.strip()]
+	# ⚠️ Expanded exactly as Coverage.py expands it before applying `omit`. A pattern written
+	# as `${PWD}/src/...` is what Coverage.py ACTS on after expansion, so comparing against
+	# the raw `${PWD}` text would never match a real module path — the omission would be
+	# real and this gate would report clean. That is a false negative in the one direction
+	# this gate exists to prevent: logic dropped from the denominator, silently.
+	return [
+		os.path.expandvars(str_line.strip())
+		for str_line in str_raw.splitlines()
+		if str_line.strip()
+	]
 
 
 def whole_capability_exclusions(list_patterns: list[str]) -> set[str]:
@@ -187,8 +197,16 @@ def swallowed_by_omit(
 	list_problems = []
 	for path_module in list_must_stay_covered:
 		str_posix = path_module.as_posix()
+		# Both spellings, because an expanded pattern is ABSOLUTE while the module path is
+		# relative to the project root. Matching only the relative form would let an
+		# absolute pattern slip through; matching only the absolute form would break every
+		# plain relative pattern the shipped .coveragerc actually uses.
+		str_absolute = path_module.resolve().as_posix()
 		list_matched = [
-			str_pattern for str_pattern in list_patterns if fnmatch.fnmatch(str_posix, str_pattern)
+			str_pattern
+			for str_pattern in list_patterns
+			if fnmatch.fnmatch(str_posix, str_pattern)
+			or fnmatch.fnmatch(str_absolute, str_pattern)
 		]
 		if list_matched:
 			list_problems.append(

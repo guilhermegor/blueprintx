@@ -170,3 +170,40 @@ def test_whole_capability_exclusions_reads_only_literal_names() -> None:
 		["src/capabilities/example_feature/*", "src/capabilities/*/infrastructure/*"]
 	)
 	assert set_excluded == {"example_feature"}
+
+
+def test_omit_patterns_expands_environment_variables(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""Coverage.py expands ``${VAR}`` before applying omit; the raw text would never match."""
+	cls_gate = _load_gate()
+	monkeypatch.setenv("COV_ROOT", "/srv/app")
+	path_cfg = tmp_path / ".coveragerc"
+	path_cfg.write_text(
+		"[run]\nomit =\n    ${COV_ROOT}/src/capabilities/*/domain/*\n", encoding="utf-8"
+	)
+
+	assert cls_gate.omit_patterns(path_cfg) == ["/srv/app/src/capabilities/*/domain/*"]
+
+
+def test_absolute_omit_pattern_still_swallows_a_relative_module(tmp_path: Path) -> None:
+	"""An expanded, absolute pattern must match the module it really omits."""
+	cls_gate = _load_gate()
+	path_root = _project(tmp_path, "")
+	_capability(path_root, "orders", "domain", "def place() -> None:\n    return None\n")
+	path_module = path_root / "src" / "capabilities" / "orders" / "domain" / "service.py"
+	str_absolute_pattern = f"{path_root.resolve().as_posix()}/src/capabilities/*/domain/*"
+
+	list_problems = cls_gate.swallowed_by_omit([path_module], [str_absolute_pattern])
+
+	assert len(list_problems) == 1
+
+
+def test_relative_omit_pattern_keeps_working(tmp_path: Path) -> None:
+	"""Widening to absolute must not break the plain relative form the template ships."""
+	cls_gate = _load_gate()
+	path_root = _project(tmp_path, "")
+	_capability(path_root, "orders", "domain", "def place() -> None:\n    return None\n")
+	path_module = path_root / "src" / "capabilities" / "orders" / "domain" / "service.py"
+
+	assert cls_gate.swallowed_by_omit([path_module], ["src/chassis/*"]) == []
