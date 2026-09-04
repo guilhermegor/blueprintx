@@ -131,19 +131,33 @@ matching either config, and neither is obviously wrong on inspection.
 
 So the two real divergences are fixed by writing to the mechanism blueprintx **already has**:
 
+⚠️ **The PATCH below REPLACES `required_status_checks` wholesale.** A hand-typed
+`contexts[]` list is the failure mode: one omitted entry silently unprotects that check, and
+one typo names a check that never reports, which blocks every merge forever. So the payload
+is **built from the live read**, validated, and piped in — never retyped.
+
 ```bash
-# 1. strict — PATCH the CLASSIC protection, do not POST a ruleset.
-#    Re-send the existing contexts: this endpoint REPLACES required_status_checks, so
-#    omitting them silently drops every required check.
-gh api -X GET repos/guilhermegor/blueprintx/branches/main/protection/required_status_checks \
-  --jq '.contexts'          # read them FIRST, then pass the same list back
-gh api -X PATCH repos/guilhermegor/blueprintx/branches/main/protection/required_status_checks \
-  -F strict=true -f 'contexts[]=<each context from the read above>'
+set -euo pipefail
+str_repo=guilhermegor/blueprintx
+str_ep="repos/$str_repo/branches/main/protection/required_status_checks"
+
+# 1. strict — PATCH the CLASSIC protection, never POST a ruleset (see above).
+json_payload="$(gh api "$str_ep" | jq -e '{strict: true, contexts: .contexts}')"
+
+# Refuse to send a payload that would drop the checks: `jq -e` already fails on null,
+# and an empty list means the read came back wrong, not that the repo has no checks.
+[ "$(printf '%s' "$json_payload" | jq '.contexts | length')" -gt 0 ] || {
+  echo "read returned no contexts — aborting rather than unprotecting main" >&2; exit 1; }
+
+printf '%s' "$json_payload" | gh api -X PATCH "$str_ep" --input -
 
 # 2. do-not-merge label — independent of either mechanism.
-gh label create do-not-merge --repo guilhermegor/blueprintx \
+gh label create do-not-merge --repo "$str_repo" \
   --color B60205 --description "Blocks merge; see CONTRIBUTING"
 ```
+
+Read back with `gh api "$str_ep"` and confirm `strict: true` **and** that `contexts` still
+holds every entry it held before — the PATCH succeeding is not evidence that it kept them.
 
 Both are `guilhermegor/blueprintx` writes and stay a maintainer decision — nothing here was run.
 
