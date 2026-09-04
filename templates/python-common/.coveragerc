@@ -1,5 +1,9 @@
 [run]
 source = src/
+# Guarded by bin/check_coverage_floor.py: a pattern here must never widen past
+# infrastructure/ (or a whole capability named outright, like example_feature below) into
+# a capability's domain/ or application/ layer — that would silently drop real logic out of
+# the fail_under denominator below. See the gate's module docstring for why (blueprintx#149).
 omit =
     src/chassis/*
     src/capabilities/example_feature/*
