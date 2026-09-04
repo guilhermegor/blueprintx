@@ -4,7 +4,8 @@
 # WHY THIS EXISTS: a published project should have supply-chain + vulnerability-reporting hygiene
 # on, but the Settings → Security checkboxes are not reproducible and are silently forgotten on a
 # fork or a fresh clone — the same rationale that put the branch ruleset in enable_repo_rules.sh.
-# All three toggles are plain PUTs (204 No Content), so nothing needs a click.
+# The three toggles below are plain PUTs (204 No Content); secret scanning + push protection are
+# NOT a fourth toggle — see enable_secret_scanning for why they need their own PATCH.
 #
 # Sibling of enable_repo_rules.sh / enable_pages.sh: these are repo-settings writes, so CI's
 # GITHUB_TOKEN (an App installation token) CANNOT make them — only a maintainer's `gh auth` with
@@ -16,6 +17,12 @@
 # Version bumps vs security fixes are DIFFERENT features:
 #   * automated-security-fixes (below)  — Dependabot opens PRs for known VULNERABILITIES.
 #   * .github/dependabot.yml (shipped)  — Dependabot opens PRs for ordinary VERSION updates.
+#
+# GitGuardian (blueprintx#155) was evaluated for the secret-detection role this file's toggles
+# fill and deferred: these are public repos with a GitHub remote, so the native toggles below are
+# free and need no third-party app/token/config. Reconsider only if the scaffold starts covering
+# private repos (where secret scanning becomes a paid SKU) or the offline tier wants a local,
+# pre-commit-time scanner — a separate decision from "which SaaS provider".
 
 set -euo pipefail
 
@@ -50,6 +57,26 @@ enable_toggle() {
 	fi
 }
 
+enable_secret_scanning() {
+	# Secret scanning + push protection live on the repo object itself, set via
+	# PATCH /repos/{owner}/{repo} with a security_and_analysis body — NOT a toggle path, so
+	# enable_toggle's PUT cannot express this. $1 = owner/repo.
+	#
+	# Both fields ship in ONE PATCH, secret_scanning listed first: push protection depends on
+	# scanning already being on, and GitHub applies a security_and_analysis body's fields in the
+	# order given.
+	#
+	# Free on public repos only — a private repo is on the paid Secret Protection SKU and this
+	# call 422s/403s there, same as any other toggle in this file: warn and keep going.
+	local str_repo="$1"
+	local json_body='{"security_and_analysis":{"secret_scanning":{"status":"enabled"},"secret_scanning_push_protection":{"status":"enabled"}}}'
+	if gh api -X PATCH "repos/$str_repo" --input - <<<"$json_body" >/dev/null 2>&1; then
+		print_status "success" "Secret scanning + push protection enabled"
+	else
+		print_status "warning" "Could not enable secret scanning / push protection (private repos need the paid Secret Protection SKU, or repo-admin rights) — check Settings → Code security"
+	fi
+}
+
 main() {
 	print_status "section" "GitHub Security Toggles"
 	# A skip (no gh / not authed) must not fail init — return 0 either way.
@@ -69,6 +96,8 @@ main() {
 	# Dependabot alerts must be on BEFORE automated security fixes, which depend on them.
 	enable_toggle "$str_repo" "vulnerability-alerts" "Dependabot alerts"
 	enable_toggle "$str_repo" "automated-security-fixes" "Dependabot security updates"
+	# PATCH-based, not a toggle path — see enable_secret_scanning.
+	enable_secret_scanning "$str_repo"
 }
 
 main "$@"
