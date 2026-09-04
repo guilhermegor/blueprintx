@@ -38,6 +38,23 @@ from ``GITHUB_EVENT_PATH``) or as a trailer on any commit since the merge-base �
 covers a local run before a PR exists, and a squash-merge that drops the PR body. A bare marker
 with no reason does not count, matching ``check_complexity.sh``'s "the reason is required" rule.
 
+⚠️ NEITHER of those two sources is reachable at the moment this gate actually FIRES locally
+(blueprintx#354). The PR body needs ``GITHUB_EVENT_PATH``, live only inside a GitHub Actions
+run. The trailer is read from ``git log <base>..HEAD``, and the commit this pre-commit run is
+guarding is never in ``HEAD`` yet — it does not exist until the hook exits 0. The obvious third
+candidate, reading the message the author is CURRENTLY typing, was measured and does not work
+either: this hook runs at git's own ``pre-commit`` stage (``default_stages`` in
+``.pre-commit-config.yaml``), and at that stage ``.git/COMMIT_EDITMSG`` still holds the
+PREVIOUS commit's message — git does not (re)write it until AFTER the pre-commit hooks pass —
+and neither ``COMMIT_EDITMSG`` nor ``PRE_COMMIT_COMMIT_MSG_SOURCE`` is set in the hook's
+environment at this stage (both are populated only for ``commit-msg``). So a THIRD source,
+the ``GATE_CHANGE_OK`` environment variable, covers exactly that gap: it needs neither a
+finished commit nor a PR, so it is live at the one moment the other two are not, and it costs
+CI nothing — CI never reads a contributor's shell environment, so the PR-body/trailer path
+stays the one a PR must still satisfy before it can merge. Read directly (no ``gate-change-ok:``
+prefix — the variable name already says what it is), it carries the same non-empty-reason
+rule, so it cannot become a quieter ``--no-verify``.
+
 ⚠️ LINE-LEVEL SUPPRESSIONS (``# noqa: X``, ``# complexity-ok: <reason>``, ``# type: ignore``,
 ``# pragma: no cover``, ``# shellcheck disable`` — ~250 in this tree) MUST NEVER TRIP THIS GATE,
 and structurally cannot: for the config-file checks above it only ever reads the five files
@@ -1149,8 +1166,22 @@ def pr_body_text() -> str:
 	return str(dict_pr.get("body") or "")
 
 
+def env_reason() -> str:
+	"""Return the ``GATE_CHANGE_OK`` reason from the environment, or ``""`` (I/O seam).
+
+	Returns
+	-------
+	str
+		The non-empty, stripped value of ``GATE_CHANGE_OK`` — the one escape hatch reachable
+		at local ``pre-commit`` time (blueprintx#354); see the module docstring for why the
+		PR body and the commit trailer are not. No ``gate-change-ok:`` prefix is expected
+		here, unlike the other two sources — the variable name already carries the meaning.
+	"""
+	return os.environ.get("GATE_CHANGE_OK", "").strip()
+
+
 def justification_reason(str_base: str) -> str:
-	"""Return the ``gate-change-ok`` reason from the PR body or a commit trailer, or ``""``.
+	"""Return the ``gate-change-ok`` reason from the env, the PR body, or a commit trailer.
 
 	Parameters
 	----------
@@ -1160,8 +1191,13 @@ def justification_reason(str_base: str) -> str:
 	Returns
 	-------
 	str
-		The non-empty reason text, or ``""`` when no valid justification is present.
+		The non-empty reason text, or ``""`` when no valid justification is present. Checked
+		in the order a LOCAL run can actually satisfy them: ``GATE_CHANGE_OK`` first (needs
+		neither a finished commit nor a PR), then the PR body, then a commit trailer.
 	"""
+	str_env = env_reason()
+	if str_env:
+		return str_env
 	str_trailers = _git(["log", f"{str_base}..HEAD", "--format=%B"])
 	for str_text in (pr_body_text(), str_trailers):
 		cls_match = RE_JUSTIFICATION.search(str_text)
@@ -1271,9 +1307,11 @@ def report(list_problems: list, str_base: str, int_changed_count: int) -> int:
 		return 0
 
 	print(
-		f"\n❌ {len(list_problems)} gate-weakening change(s) with no justification. Add a "
-		f"'gate-change-ok: <reason>' line to the PR body or as a commit trailer — the reason "
-		f"is required, matching '# complexity-ok: <reason>' elsewhere in this repo."
+		f"\n❌ {len(list_problems)} gate-weakening change(s) with no justification. Locally, "
+		f"run this commit with GATE_CHANGE_OK='<reason>' set (e.g. `GATE_CHANGE_OK='<reason>' "
+		f"git commit -m ...`) — a PR body or commit-trailer 'gate-change-ok: <reason>' line is "
+		f"CI-only and cannot be read at commit time. The reason is required either way, "
+		f"matching '# complexity-ok: <reason>' elsewhere in this repo."
 	)
 	return 1
 

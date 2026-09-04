@@ -60,6 +60,11 @@ DICT_EXPECTED_ABSENT = {
         # database engine and ships no queries directory. utils/queries.py is not vendored
         # into lib-minimal at all, so its test has nothing to cover.
         "test_queries.py": "lib-minimal ships no DB engine selection or queries/ tree",
+        # A clean exclusion: check_gate_integrity.py itself is NOT copied into generated
+        # projects (no cp line in any scaffold), so its test would cover a script the tier
+        # does not have. Verified 2026-09-04. ⚠️ If that script ever ships, this entry must
+        # go together with the cp line — the stale-exclusion check below flags it.
+        "test_gate_integrity_gate.py": "check_gate_integrity.py is not vendored into generated projects",
         # Contract oracles describe an ingested external file; a library tier ships none.
         "test_contract_oracle_example.py": "lib-minimal ships no contract oracle registry",
         # The weekly drift reporter re-fetches the sources in config/contract_oracles.yaml;
@@ -126,15 +131,35 @@ DICT_EXPECTED_ABSENT = {
     },
     "python_ddd_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        # A clean exclusion: check_gate_integrity.py itself is NOT copied into generated
+        # projects (no cp line in any scaffold), so its test would cover a script the tier
+        # does not have. Verified 2026-09-04. ⚠️ If that script ever ships, this entry must
+        # go together with the cp line — the stale-exclusion check below flags it.
+        "test_gate_integrity_gate.py": "check_gate_integrity.py is not vendored into generated projects",
     },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        # A clean exclusion: check_gate_integrity.py itself is NOT copied into generated
+        # projects (no cp line in any scaffold), so its test would cover a script the tier
+        # does not have. Verified 2026-09-04. ⚠️ If that script ever ships, this entry must
+        # go together with the cp line — the stale-exclusion check below flags it.
+        "test_gate_integrity_gate.py": "check_gate_integrity.py is not vendored into generated projects",
     },
     "python_mvc_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        # A clean exclusion: check_gate_integrity.py itself is NOT copied into generated
+        # projects (no cp line in any scaffold), so its test would cover a script the tier
+        # does not have. Verified 2026-09-04. ⚠️ If that script ever ships, this entry must
+        # go together with the cp line — the stale-exclusion check below flags it.
+        "test_gate_integrity_gate.py": "check_gate_integrity.py is not vendored into generated projects",
     },
     "python_mvc_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        # A clean exclusion: check_gate_integrity.py itself is NOT copied into generated
+        # projects (no cp line in any scaffold), so its test would cover a script the tier
+        # does not have. Verified 2026-09-04. ⚠️ If that script ever ships, this entry must
+        # go together with the cp line — the stale-exclusion check below flags it.
+        "test_gate_integrity_gate.py": "check_gate_integrity.py is not vendored into generated projects",
     },
 }
 
