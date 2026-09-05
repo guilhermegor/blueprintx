@@ -23,6 +23,22 @@
 # free and need no third-party app/token/config. Reconsider only if the scaffold starts covering
 # private repos (where secret scanning becomes a paid SKU) or the offline tier wants a local,
 # pre-commit-time scanner — a separate decision from "which SaaS provider".
+#
+# blueprintx#287: the scaffold still ships .github/workflows/secret_scan.yaml (ggshield) to every
+# ONLINE project regardless of this deferral, and that workflow needs its OWN secret
+# (GITGUARDIAN_API_KEY) — this script's PATCH above only reaches GitHub's native scanning, it
+# cannot set a third-party repo secret for ggshield. A maintainer who wants ggshield anyway runs
+# `gh secret set GITGUARDIAN_API_KEY --repo <owner>/<repo>` once; #287 tracks whether that
+# workflow should become opt-in (and, if so, whether this script is where the opt-in belongs)
+# instead of shipping — and failing on its first PR — by default.
+#
+# blueprintx#164 self-audit (2026-09-04, read-only `gh api` reads, no writes — full numbers in
+# docs/backlog/repo_rules_self_audit_164_20260904_062813.md): this script had never been run
+# against BlueprintX itself either, but found NO divergence — `vulnerability-alerts`,
+# `automated-security-fixes`, and `private-vulnerability-reporting` were already enabled on
+# blueprintx. Unlike enable_repo_rules.sh, this file has no read-only/`verify` mode at all;
+# noted as a gap, not fixed here (a dry-run mode is a second script surface, out of scope for a
+# read-only audit).
 
 set -euo pipefail
 

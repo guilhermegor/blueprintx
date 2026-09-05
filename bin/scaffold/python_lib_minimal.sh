@@ -491,6 +491,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
         "$project_path/tests/unit/test_gate_integrity_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
+        "$project_path/tests/unit/test_coverage_floor_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
         "$project_path/tests/unit/test_function_length_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
@@ -555,6 +557,38 @@ lib_minimal_copy_project_scaffolding() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
 }
 
+# Records WHICH tier and WHICH BlueprintX commit this project was scaffolded from
+# (blueprintx#109/#318). Mirrors scaffold_stamp_provenance in
+# bin/lib/scaffold_python_templates.sh byte-for-byte (same fields, same format) —
+# NOT a source of that function, because on the commit this was written from, that
+# function does not exist on main yet: it ships only in the still-open PR #319, and
+# bin/lib/scaffold_python_templates.sh is locked by three other in-flight PRs
+# (#319, #316, #297). Sourcing it would require editing a file this task is not
+# free to touch. Once #319 merges, collapsing this copy into a shared call is a
+# one-function refactor (the format below is already identical, so no downstream
+# consumer needs to change) — tracked as a follow-up, not attempted here.
+lib_minimal_stamp_provenance() {
+    local project_path="$1"
+
+    local str_version
+    str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || echo unknown)"
+    local str_commit
+    str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+    local str_scaffolded_at
+    str_scaffolded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    cat >"$project_path/.blueprintx-provenance.yaml" <<-EOF
+	# Written by BlueprintX at scaffold time — do not edit by hand.
+	# Read by bin/check_template_drift.py (blueprintx#109) to know which template
+	# tier and BlueprintX version this project was generated from, so a later
+	# drift check knows what to compare against.
+	tier: lib-minimal
+	blueprintx_version: ${str_version#v}
+	blueprintx_commit: ${str_commit}
+	scaffolded_at: ${str_scaffolded_at}
+	EOF
+}
+
 copy_common_templates() {
     local project_path="$1"
 
@@ -563,6 +597,7 @@ copy_common_templates() {
     lib_minimal_copy_tooling_configs "$project_path"
     lib_minimal_copy_github_assets "$project_path"
     lib_minimal_copy_project_scaffolding "$project_path"
+    lib_minimal_stamp_provenance "$project_path"
     print_status "success" "Common templates applied"
 }
 

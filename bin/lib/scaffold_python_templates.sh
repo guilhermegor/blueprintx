@@ -133,6 +133,8 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_comment_language_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
 		"$str_project_path/tests/unit/test_gate_integrity_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
+		"$str_project_path/tests/unit/test_coverage_floor_gate.py"
 	# Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
 	# selector could be wrong without any tier noticing (blueprintx#211).
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
