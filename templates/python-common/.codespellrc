@@ -42,4 +42,4 @@ quiet-level = 3
 # repo. A locale word this project's own docs/templates don't currently need is not
 # protecting anything; extend this list again the same way — one measured word at a time
 # — if a real pt-BR docstring in a generated project needs one back.
-ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,caracteres,caractere,prefere,meu,ser,vai,sinal,notin
+ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,caracteres,caractere,prefere,meu,ser,vai,sinal,notin,attch,exmaple,mis,falso,unparseable
