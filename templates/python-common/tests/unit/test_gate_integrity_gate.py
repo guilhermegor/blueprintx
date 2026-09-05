@@ -41,20 +41,35 @@ def _load(str_name: str) -> ModuleType:
 gate_integrity = _load("check_gate_integrity")
 
 
+def _local_shell(monkeypatch: pytest.MonkeyPatch) -> None:
+	"""Clear the CI markers so the GATE_CHANGE_OK hatch is live (it is local-only).
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		The fixture whose ``delenv`` is applied to every marker.
+	"""
+	for str_marker in gate_integrity.TUPLE_CI_MARKERS:
+		monkeypatch.delenv(str_marker, raising=False)
+
+
 def test_env_reason_is_blank_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 	"""No ``GATE_CHANGE_OK`` set means no local justification."""
+	_local_shell(monkeypatch)
 	monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
 	assert gate_integrity.env_reason() == ""
 
 
 def test_env_reason_returns_the_stripped_value(monkeypatch: pytest.MonkeyPatch) -> None:
 	"""A real reason satisfies the hatch, whitespace and all — stripped for the caller."""
+	_local_shell(monkeypatch)
 	monkeypatch.setenv("GATE_CHANGE_OK", "  reviewed, main's own ignores  ")
 	assert gate_integrity.env_reason() == "reviewed, main's own ignores"
 
 
 def test_env_reason_rejects_whitespace_only(monkeypatch: pytest.MonkeyPatch) -> None:
 	"""⚠️ A blank reason must NOT satisfy the hatch — same rule as `# complexity-ok: <reason>`."""
+	_local_shell(monkeypatch)
 	monkeypatch.setenv("GATE_CHANGE_OK", "   ")
 	assert gate_integrity.env_reason() == ""
 
@@ -68,6 +83,7 @@ def test_justification_reason_prefers_env_without_calling_git(
 	time (blueprintx#354) — this asserts the env source satisfies the gate WITHOUT reaching
 	either, matching what is actually available at that moment.
 	"""
+	_local_shell(monkeypatch)
 	monkeypatch.setenv("GATE_CHANGE_OK", "local merge from main, ignores already reviewed there")
 	monkeypatch.setattr(
 		gate_integrity, "_git", lambda _args: (_ for _ in ()).throw(AssertionError("git called"))
@@ -87,6 +103,7 @@ def test_justification_reason_falls_back_when_env_is_blank(
 	monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 	"""NEGATIVE CONTROL: an unset/blank env var must not mask a real trailer/PR-body reason."""
+	_local_shell(monkeypatch)
 	monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
 	monkeypatch.setattr(gate_integrity, "_git", lambda _args: "gate-change-ok: from trailer")
 	monkeypatch.setattr(gate_integrity, "pr_body_text", lambda: "")
@@ -97,6 +114,7 @@ def test_report_fails_a_real_weakening_with_no_local_justification(
 	monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 	"""Both directions, part 1: a weakening with nothing set must still FAIL at commit time."""
+	_local_shell(monkeypatch)
 	monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
 	monkeypatch.setattr(gate_integrity, "_git", lambda _args: "")
 	monkeypatch.setattr(gate_integrity, "pr_body_text", lambda: "")
@@ -107,6 +125,7 @@ def test_report_passes_the_same_weakening_with_gate_change_ok_set(
 	monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 	"""Both directions, part 2: the SAME finding, justified only via GATE_CHANGE_OK, must PASS."""
+	_local_shell(monkeypatch)
 	monkeypatch.setenv("GATE_CHANGE_OK", "reviewed with the team")
 	monkeypatch.setattr(gate_integrity, "_git", lambda _args: "")
 	monkeypatch.setattr(gate_integrity, "pr_body_text", lambda: "")
@@ -115,7 +134,31 @@ def test_report_passes_the_same_weakening_with_gate_change_ok_set(
 
 def test_report_rejects_a_whitespace_only_gate_change_ok(monkeypatch: pytest.MonkeyPatch) -> None:
 	"""A blank-looking reason must still FAIL — matching the trailer/PR-body rule exactly."""
+	_local_shell(monkeypatch)
 	monkeypatch.setenv("GATE_CHANGE_OK", "   ")
+	monkeypatch.setattr(gate_integrity, "_git", lambda _args: "")
+	monkeypatch.setattr(gate_integrity, "pr_body_text", lambda: "")
+	assert gate_integrity.report(["ruff.toml: rule 'S608' added to [lint] ignore"], "base", 1) == 1
+
+
+@pytest.mark.parametrize("str_marker", ["CI", "GITHUB_ACTIONS"])
+def test_env_reason_is_ignored_under_ci(monkeypatch: pytest.MonkeyPatch, str_marker: str) -> None:
+	"""The hatch is LOCAL-ONLY: a CI runner exposing it must not be able to justify anything."""
+	_local_shell(monkeypatch)
+	monkeypatch.setenv("GATE_CHANGE_OK", "set by a workflow env: line, not by a reviewer")
+	monkeypatch.setenv(str_marker, "true")
+	assert gate_integrity.env_reason() == ""
+
+
+def test_report_rejects_a_ci_set_gate_change_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+	"""The end-to-end half: the SAME weakening that PASSES locally must FAIL under CI.
+
+	Paired with ``test_report_passes_the_same_weakening_with_gate_change_ok_set`` — the two
+	differ only in whether a CI marker is set, so neither can pass with the guard removed.
+	"""
+	_local_shell(monkeypatch)
+	monkeypatch.setenv("GATE_CHANGE_OK", "reviewed with the team")
+	monkeypatch.setenv("GITHUB_ACTIONS", "true")
 	monkeypatch.setattr(gate_integrity, "_git", lambda _args: "")
 	monkeypatch.setattr(gate_integrity, "pr_body_text", lambda: "")
 	assert gate_integrity.report(["ruff.toml: rule 'S608' added to [lint] ignore"], "base", 1) == 1

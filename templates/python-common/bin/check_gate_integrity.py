@@ -49,11 +49,14 @@ PREVIOUS commit's message — git does not (re)write it until AFTER the pre-comm
 and neither ``COMMIT_EDITMSG`` nor ``PRE_COMMIT_COMMIT_MSG_SOURCE`` is set in the hook's
 environment at this stage (both are populated only for ``commit-msg``). So a THIRD source,
 the ``GATE_CHANGE_OK`` environment variable, covers exactly that gap: it needs neither a
-finished commit nor a PR, so it is live at the one moment the other two are not, and it costs
-CI nothing — CI never reads a contributor's shell environment, so the PR-body/trailer path
-stays the one a PR must still satisfy before it can merge. Read directly (no ``gate-change-ok:``
-prefix — the variable name already says what it is), it carries the same non-empty-reason
-rule, so it cannot become a quieter ``--no-verify``.
+finished commit nor a PR, so it is live at the one moment the other two are not. ⚠️ It is
+IGNORED under CI (``CI`` / ``GITHUB_ACTIONS`` set), and that is enforced rather than assumed:
+"CI never reads a contributor's shell environment" is true of a contributor's shell and false
+of a workflow ``env:`` line or a repo/org variable, either of which would let a weakening merge
+with no justification a reviewer can read. So the PR-body/trailer path stays the one a PR must
+satisfy before it can merge. Read directly (no ``gate-change-ok:`` prefix — the variable name
+already says what it is), it carries the same non-empty-reason rule, so it cannot become a
+quieter ``--no-verify``.
 
 ⚠️ LINE-LEVEL SUPPRESSIONS (``# noqa: X``, ``# complexity-ok: <reason>``, ``# type: ignore``,
 ``# pragma: no cover``, ``# shellcheck disable`` — ~250 in this tree) MUST NEVER TRIP THIS GATE,
@@ -1166,6 +1169,11 @@ def pr_body_text() -> str:
 	return str(dict_pr.get("body") or "")
 
 
+# Set by GitHub Actions (both) and by essentially every other CI provider (``CI``). Their only
+# job here is to make the GATE_CHANGE_OK hatch local-only — see env_reason.
+TUPLE_CI_MARKERS = ("CI", "GITHUB_ACTIONS")
+
+
 def env_reason() -> str:
 	"""Return the ``GATE_CHANGE_OK`` reason from the environment, or ``""`` (I/O seam).
 
@@ -1176,7 +1184,11 @@ def env_reason() -> str:
 		at local ``pre-commit`` time (blueprintx#354); see the module docstring for why the
 		PR body and the commit trailer are not. No ``gate-change-ok:`` prefix is expected
 		here, unlike the other two sources — the variable name already carries the meaning.
+		``""`` under CI: the hatch is LOCAL-ONLY, so a workflow ``env:`` line or a repo
+		variable cannot stand in for a justification a PR reviewer can actually read.
 	"""
+	if any(os.environ.get(str_marker) for str_marker in TUPLE_CI_MARKERS):
+		return ""
 	return os.environ.get("GATE_CHANGE_OK", "").strip()
 
 
