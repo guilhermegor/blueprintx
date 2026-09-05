@@ -13,8 +13,8 @@ cd blueprintx
 make new         # interactive scaffolder
 make preview     # show skeleton structures
 make dev         # scaffold into a temp dir (kept)
-make dev-clean   # scaffold into temp dir and auto-delete on exit
-make dry-run     # print structure; no files written
+make dev_clean   # scaffold into temp dir and auto-delete on exit
+make dry_run     # print structure; no files written
 ```
 
 ---
@@ -23,7 +23,7 @@ make dry-run     # print structure; no files written
 
 - `bash` ≥ 4
 - For **Python skeletons**: `pyenv` + `poetry` (or your Python toolchain of choice) in the generated project
-- For **TypeScript skeletons**: Node.js ≥ 20; run `npm install` after scaffolding
+- For **TypeScript skeletons**: Node.js ≥ 22; run `npm install` after scaffolding
 
 ---
 

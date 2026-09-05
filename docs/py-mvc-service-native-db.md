@@ -13,7 +13,6 @@ Shared tooling (Ruff, pre-commit, pytest.ini, GitHub Actions CI, Makefile, `bin/
 | Structure | Hexagonal: `chassis/` + `capabilities/<feature>/{domain,application,infrastructure}` | Flat MVC: `controller/`, `model/`, `view/` |
 | Entry point | `src/main.py` wiring a composition root | `src/controller/main.py` — script-style, top-to-bottom, no `run()` |
 | Data access | `DatabaseHandler` ABC + factory + ports | `model/conexao_db.build_connection()` — direct DB-API connection |
-| Tests | unittest | pytest |
 | Best for | Long-lived services, APIs | Data pipelines, analytics scripts, reports |
 
 ---

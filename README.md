@@ -114,13 +114,16 @@ make new
 The `blueprintx` command is available system-wide:
 
 ```bash
-blueprintx new          # interactive scaffolder — choose a skeleton and project name
-blueprintx preview      # show all available skeleton structures
-blueprintx dev          # scaffold into a temp dir (kept after exit)
-blueprintx dev-clean    # scaffold into temp dir, auto-deleted on exit
-blueprintx dry-run      # print chosen skeleton structure; no files written
-blueprintx --help       # show all commands and options
+blueprintx new              # interactive scaffolder — choose a skeleton and project name
+blueprintx new --dev        # scaffold into a temp dir (kept after exit)
+blueprintx new --dev --clean  # scaffold into temp dir, auto-deleted on exit
+blueprintx new --dry-run    # print chosen skeleton structure; no files written
+blueprintx preview          # show all available skeleton structures
+blueprintx --help           # show all commands and options
 ```
+
+`new`, `preview`, and `help` are the only `blueprintx` subcommands — `--dev`, `--dry-run`, and
+`--clean` are flags on `new`, not standalone subcommands.
 
 ### After git clone
 
@@ -130,17 +133,17 @@ The same targets are available via `make` or `./tasks.sh` from the repo root:
 make new          # equivalent to blueprintx new
 make preview      # equivalent to blueprintx preview
 make dev
-make dev-clean
-make dry-run
-make mkdocs_server  # serve the docs site locally at http://0.0.0.0:8000
+make dev_clean
+make dry_run
+make mkdocs_serve  # serve the docs site locally at http://0.0.0.0:8000
 ```
 
-**Requirements:** `bash` ≥ 4. For Python skeletons, use `pyenv`/`poetry` in the generated project. For TypeScript skeletons, use Node.js ≥ 20 and run `npm install` after scaffolding. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
+**Requirements:** `bash` ≥ 4. For Python skeletons, use `pyenv`/`poetry` in the generated project. For TypeScript skeletons, use Node.js ≥ 22 and run `npm install` after scaffolding. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
 
 ## 🏗️ Supported skeletons
 
 ### DDD service — Native DB (templates/ddd-service-native-db)
-Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. Uses **native database libraries** (psycopg2, sqlite3, cx_Oracle, pyodbc, pymysql) for direct DB access. `chassis/` holds shared cross-cutting providers; `capabilities/<feature>/` hosts each bounded context's domain, application layer, and adapters.
+Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. Uses **native database libraries** (psycopg, sqlite3, oracledb, pyodbc, mysql-connector-python) for direct DB access. `chassis/` holds shared cross-cutting providers; `capabilities/<feature>/` hosts each bounded context's domain, application layer, and adapters.
 
 ```
 project/
@@ -151,7 +154,7 @@ project/
                 domain/
                 infrastructure/           # sqlite, postgres, mariadb, mysql, mssql, oracle
                 application/              # build_database_handler() factory
-            db_wschema/
+            db_wschema/                   # optional — added only if you opt into schema-less storage
                 infrastructure/           # json, csv, joblib handlers + SanityCheck
                 application/              # build_storage_handler() factory
             typing/                       # ABCTypeCheckerMeta, ProtocolTypeCheckerMeta
@@ -324,7 +327,7 @@ Cross-platform (Windows Git Bash, macOS, Linux); the scripts live in `bin/` and 
 
 ```
 BlueprintX/
-├── Makefile                 # entry targets: new, preview, dev, dev-clean, dry-run
+├── Makefile                 # entry targets: new, preview, dev, dev_clean, dry_run
 ├── tasks.sh                 # same targets for non-make usage
 ├── bin/
 │   ├── blueprintx.sh        # interactive menu + auto-discovery

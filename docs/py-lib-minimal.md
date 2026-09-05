@@ -60,22 +60,22 @@ def main() -> None:
     print("Hello from lib-minimal!")
 ```
 
-The generated `tests/unit/test_main.py` asserts that this output appears using `unittest`:
+The generated `tests/unit/test_main.py` asserts that this output appears using `pytest`:
 
 ```python
 # tests/unit/test_main.py
-import io
-import sys
-import unittest
+"""Unit tests for the library entry point."""
+
+import pytest
+
 from <project_name>.main import main
 
-class TestMain(unittest.TestCase):
-    def test_main_prints_hello(self) -> None:
-        cls_buffer = io.StringIO()
-        sys.stdout = cls_buffer
-        main()
-        sys.stdout = sys.__stdout__
-        self.assertIn("Hello", cls_buffer.getvalue())
+
+def test_main(capsys: pytest.CaptureFixture[str]) -> None:
+    """The entry point prints the placeholder greeting to stdout."""
+    main()
+    captured = capsys.readouterr()
+    assert "Hello from lib-minimal!" in captured.out
 ```
 
 ---
@@ -113,13 +113,13 @@ def add(int_a: int, int_b: int) -> int:
 
 ```python
 # tests/unit/test_math_utils.py
-import unittest
 from <project_name>.math_utils import add
 
-class TestMathUtils(unittest.TestCase):
-    def test_add_two_positive_ints_returns_sum(self) -> None:
-        self.assertEqual(add(2, 3), 5)
 
-    def test_add_negative_int_returns_correct_sum(self) -> None:
-        self.assertEqual(add(-1, 1), 0)
+def test_add_two_positive_ints_returns_sum() -> None:
+    assert add(2, 3) == 5
+
+
+def test_add_negative_int_returns_correct_sum() -> None:
+    assert add(-1, 1) == 0
 ```
