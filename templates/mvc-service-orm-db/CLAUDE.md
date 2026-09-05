@@ -187,7 +187,7 @@ Every DataFrame or SQL-to-memory load must declare its column types via a dtype 
 
 ## Data-handling guardrails (advisory)
 
-When a pipeline merges, overrides, or validates tabular data, five recurring traps are
+When a pipeline merges, overrides, or validates tabular data, these recurring traps are
 worth guarding against (apply when relevant — these are advisories, not scaffolded code):
 
 - **Override layers must re-apply the canonical normaliser.** A substitution/override path
@@ -222,7 +222,7 @@ worth guarding against (apply when relevant — these are advisories, not scaffo
   nothing — so the rule ships as an env-var kill switch with a SAFE-side default (an unset
   *or mistyped* value both resolve to "do not exclude"), and the filter call always returns
   the measured price (rows before/after/dropped), never only the filtered frame. Runnable
-  reference: `model/scope_filter_example.py` (full rationale in that leaf's `CLAUDE.md`);
+  reference: `src/model/scope_filter_example.py` (full rationale in that leaf's `CLAUDE.md`);
   `.env.example` shows the variable.
 
 ## Naming conventions

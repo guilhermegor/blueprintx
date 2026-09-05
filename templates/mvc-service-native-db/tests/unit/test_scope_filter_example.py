@@ -3,7 +3,7 @@
 Freezes the measured-price contract: an active filter must report the exact rows
 dropped alongside the before/after counts, and an unset or garbled kill switch must
 resolve to the caller's safe-side default rather than silently reverting to the
-expensive side. Revert either guard in ``model/scope_filter_example.py`` and
+expensive side. Revert either guard in ``src/model/scope_filter_example.py`` and
 ``test_apply_scope_filter_measures_the_price_when_active`` or
 ``test_resolve_kill_switch_unrecognised_token_falls_back_to_default`` goes red.
 """
