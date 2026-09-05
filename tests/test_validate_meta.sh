@@ -51,12 +51,24 @@ write_meta() {
 }
 
 expect_gate() {
-    # $1 = description, $2 = sandbox root (consumed + removed), $3 = expected pass|fail.
-    local str_desc="$1" str_root="$2" str_want="$3" str_got="pass"
-    bash "$str_root/bin/ci/validate_meta.sh" >/dev/null 2>&1 || str_got="fail"
+    # $1 = description, $2 = sandbox root (consumed + removed), $3 = expected pass|fail,
+    # $4 = OPTIONAL diagnostic that must appear in the gate's output when $3 is "fail".
+    #
+    # ⚠️ $4 is what makes a failing case mean anything. A non-zero exit alone is NOT proof
+    # that the intended check ran: under `set -euo pipefail` a missing key used to kill the
+    # gate inside its own grep pipeline, exiting 1 with an EMPTY message, so every
+    # missing-key case reported "fail" against a gate whose required-field check had been
+    # skipped entirely — and would have kept reporting "fail" with that check deleted.
+    local str_desc="$1" str_root="$2" str_want="$3" str_needle="${4:-}" str_got="pass" str_out
+    str_out="$(bash "$str_root/bin/ci/validate_meta.sh" 2>&1)" || str_got="fail"
     rm -rf "$str_root"
     if [ "$str_got" != "$str_want" ]; then
         print_status "error" "$str_desc -> $str_got (expected $str_want)"
+        int_failures=$((int_failures + 1))
+        return
+    fi
+    if [ -n "$str_needle" ] && ! printf '%s' "$str_out" | grep -qF "$str_needle"; then
+        print_status "error" "$str_desc -> failed, but never said '$str_needle'"
         int_failures=$((int_failures + 1))
     fi
 }
@@ -88,7 +100,8 @@ test_missing_key() {
             list_lines+=("$str_other=$(base_value "$str_other")")
         done
         write_meta "$str_root" "${list_lines[@]}"
-        expect_gate "missing key '$str_field'" "$str_root" "fail"
+        expect_gate "missing key '$str_field'" "$str_root" "fail" \
+            "field '$str_field' is missing or empty"
     done
 }
 
@@ -108,7 +121,8 @@ test_empty_value() {
             fi
         done
         write_meta "$str_root" "${list_lines[@]}"
-        expect_gate "empty value for key '$str_field'" "$str_root" "fail"
+        expect_gate "empty value for key '$str_field'" "$str_root" "fail" \
+            "field '$str_field' is missing or empty"
     done
 }
 
@@ -122,7 +136,8 @@ test_missing_scaffold_path() {
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
         "scaffold=bin/scaffold/does-not-exist.sh"
-    expect_gate "scaffold= path that does not exist" "$str_root" "fail"
+    expect_gate "scaffold= path that does not exist" "$str_root" "fail" \
+        "scaffold path does not exist"
 }
 
 main() {
