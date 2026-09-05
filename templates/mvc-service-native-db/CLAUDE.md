@@ -221,6 +221,15 @@ worth guarding against (apply when relevant — these are advisories, not scaffo
   leading-zero rows, silently (no error, just no match — an approved override dropped).
   Canonicalise on read (healing the persisted store too) and build a normalised key for both
   operands of every merge/overlay.
+- **A filter that REMOVES rows from a deliverable needs a kill switch, not a constant**
+  (blueprintx#161). Measured incident: a hard-coded exclusion silently dropped whole fund
+  classes from a regulatory delivery; a counterparty had to ask for the missing fund before
+  anyone noticed. Sub-delivering costs money per record per day, over-delivering costs
+  nothing — so the rule ships as an env-var kill switch with a SAFE-side default (an unset
+  *or mistyped* value both resolve to "do not exclude"), and the filter call always returns
+  the measured price (rows before/after/dropped), never only the filtered frame. Runnable
+  reference: `model/scope_filter_example.py` (full rationale in that leaf's `CLAUDE.md`);
+  `.env.example` shows the variable.
 
 ## Naming conventions
 
