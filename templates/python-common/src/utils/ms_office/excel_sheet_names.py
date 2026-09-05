@@ -27,6 +27,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import unicodedata
 
+from utils.tabular_reader import ProblemReport
+
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
 # DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
@@ -53,8 +55,15 @@ _SET_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf"})
 @type_checker
 def find_sheet_name_problems(  # complexity-ok: seven independent Excel naming rules
 	str_name: str,
-) -> list[str]:
+) -> ProblemReport:
 	"""Validate one worksheet name against Excel's naming rules; return problems (never raises).
+
+	Every rule here guards the SAME write boundary — ``openpyxl``/Excel silently truncate or
+	substitute a name breaking any one of them, with no exception to catch (see the module
+	docstring) — so every finding is **fatal**: there is no rule in this validator whose
+	violation is merely cosmetic. ``list_warnings`` is therefore always empty; it stays part
+	of the return shape (:class:`~utils.tabular_reader.ProblemReport`) so a future rule that
+	genuinely is advisory-only can be added without changing the signature again.
 
 	Parameters
 	----------
@@ -63,12 +72,13 @@ def find_sheet_name_problems(  # complexity-ok: seven independent Excel naming r
 
 	Returns
 	-------
-	list of str
-		One message per broken rule; empty when the name is sound. A blank name short-circuits
-		to a single problem, since none of the other rules say anything useful about it.
+	ProblemReport
+		``list_fatal`` carries one message per broken rule (empty when the name is sound);
+		``list_warnings`` is always empty. A blank name short-circuits to a single fatal
+		problem, since none of the other rules say anything useful about it.
 	"""
 	if not str_name:
-		return ["Sheet name is blank"]
+		return ProblemReport(list_fatal=["Sheet name is blank"], list_warnings=[])
 
 	list_problems: list[str] = []
 	if len(str_name) > _INT_MAX_LEN:
@@ -91,17 +101,18 @@ def find_sheet_name_problems(  # complexity-ok: seven independent Excel naming r
 	]
 	if list_invisible:
 		list_problems.append(f"Sheet name {str_name!r} has invisible characters: {list_invisible}")
-	return list_problems
+	return ProblemReport(list_fatal=list_problems, list_warnings=[])
 
 
 @type_checker
-def find_workbook_sheet_name_problems(list_names: list[str]) -> list[str]:
+def find_workbook_sheet_name_problems(list_names: list[str]) -> ProblemReport:
 	"""Validate every proposed sheet name for one workbook, plus cross-name uniqueness.
 
 	Runs :func:`find_sheet_name_problems` on each name, then checks uniqueness
 	**case-insensitively** across the whole set — ``"DADOS"`` and ``"Dados"`` collide in Excel
 	even though ``len(set(list_names))`` says they do not, so that comparison alone would miss
-	the collision this function exists to catch.
+	the collision this function exists to catch. A collision is fatal for the same reason every
+	per-name rule is: the second name would silently overwrite or get renamed by Excel itself.
 
 	Parameters
 	----------
@@ -110,14 +121,15 @@ def find_workbook_sheet_name_problems(list_names: list[str]) -> list[str]:
 
 	Returns
 	-------
-	list of str
-		Every broken rule across every name, followed by any case-insensitive duplicates;
-		empty when the whole workbook is sound.
+	ProblemReport
+		``list_fatal`` carries every broken rule across every name, followed by any
+		case-insensitive duplicates; ``list_warnings`` is always empty (see
+		:func:`find_sheet_name_problems`).
 	"""
 	list_problems = [
 		str_problem
 		for str_name in list_names
-		for str_problem in find_sheet_name_problems(str_name)
+		for str_problem in find_sheet_name_problems(str_name).list_fatal
 	]
 	list_lower = [str_name.casefold() for str_name in list_names]
 	list_duplicates = sorted(
@@ -125,4 +137,4 @@ def find_workbook_sheet_name_problems(list_names: list[str]) -> list[str]:
 	)
 	if list_duplicates:
 		list_problems.append(f"Sheet names collide case-insensitively: {list_duplicates}")
-	return list_problems
+	return ProblemReport(list_fatal=list_problems, list_warnings=[])

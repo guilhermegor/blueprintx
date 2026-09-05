@@ -1,0 +1,58 @@
+name: PR Reconcile
+
+# BlueprintX's OWN copy of the post-merge reconcile automation it ships to every generated
+# project (blueprintx#255) — close the linked issues and delete the head branch of a MERGED PR.
+# Until this file existed, #248 and #249 both merged and left their branches behind: the repo
+# that publishes this automation was never pointed at it.
+#
+# WHY THIS EXISTS — the finding, measured, not suspected: a PR whose body says `Closes #N` and is
+# merged by GitHub's NATIVE AUTO-MERGE (armed by a workflow using github.token) merges and leaves
+# #N **open**. The link is parsed (`closingIssuesReferences` contains it) — the only variable is
+# WHO merged. Manually merging the identical PR closes the issue. Same root cause takes a second
+# casualty: `delete_branch_on_merge: true` does NOT fire either, so the branch survives.
+#
+# ⚠️ THE TWO PATHS ARE NOT EQUAL — know which one is load-bearing:
+#   * `pull_request: [closed]` — the FAST path. Immediate WHEN it fires, but it is itself
+#     suppressed for a bot merge (see the source workflow's header for the measurement). Treat
+#     it as an optimization.
+#   * `schedule` — the GUARANTEED BACKSTOP AND THE ACTUAL FIX. Scheduled events are exempt from
+#     the GITHUB_TOKEN "no new workflow runs" suppression, so this path runs whether or not the
+#     event path did. Cost: up to one sweep interval of latency. Accept that rather than reaching
+#     for a PAT.
+#
+# ⚠️ NOT A COPY OF THE SHIPPED WORKFLOW FILE — this repo IS the source tree, so the mechanism
+# it calls lives at `templates/python-common/bin/pr_reconcile.sh` (the un-flattened path), not
+# `bin/pr_reconcile.sh` (a generated project's post-scaffold path, used by
+# `templates/python-common/.github/workflows/pr-reconcile.yaml`). Same script, two callers, each
+# with the path correct for its own filesystem layout — the one-implementation rule from
+# `check_review_threads.py` / `review_threads.yml`, not a second copy of the reconcile logic.
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "23 3 * * *" # daily backstop
+  workflow_dispatch:
+
+permissions:
+  contents: write # delete the merged head branch
+  issues: write # close the linked issues
+  pull-requests: read
+
+jobs:
+  reconcile:
+    name: Close linked issues of merged PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # On the event path, reconcile just this PR; on schedule/dispatch, sweep a window.
+          EVENT_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.number || '' }}
+          SWEEP_LIMIT: "30"
+        run: bash templates/python-common/bin/pr_reconcile.sh

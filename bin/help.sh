@@ -11,8 +11,8 @@ Targets (no make required):
   install       Deploy bin/ + templates/ to /usr/share/blueprintx (needs sudo)
   preview       Show available skeletons and examples
   dev           Scaffold into a temporary directory
-  dev-clean     Scaffold into a temp directory and delete it on exit
-  dry-run       Show structure only, no files created
+  dev_clean     Scaffold into a temp directory and delete it on exit
+  dry_run       Show structure only, no files created
   init          Bootstrap venv + install pre-commit hooks (venv + precommit)
   venv          Create local Poetry venv using .python-version (installs deps)
   precommit     Install pre-commit hooks (pre-commit + commit-msg stages)
@@ -20,7 +20,7 @@ Targets (no make required):
   check_function_length  Fail any function over 60 lines of code (docstring excluded)
   verify_tiers  Scaffold every Python tier and run ITS OWN lint + tests (parallel; JOBS=1 to serialise)
   update_venv   Update Poetry dependencies
-  mkdocs_server  Install docs deps (if needed) and serve with live reload
+  mkdocs_serve  Install docs deps (if needed) and serve with live reload
   changelog     Regenerate root CHANGELOG.md from git tags (cz changelog)
   update_licenses  Refresh templates/licenses/ from the upstream license texts
   help          Show this help

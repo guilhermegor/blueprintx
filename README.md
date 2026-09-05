@@ -375,6 +375,8 @@ BlueprintX/
 
 * [Issue Tracker](https://github.com/guilhermegor/BlueprintX/issues)
 
+* [Versioning & the v1.0.0 entry bar](docs/versioning.md)
+
 ## 🤝 Contributing
 Issues and PRs are welcome. Please keep templates minimal, opinionated, and consistent across skeletons.
 

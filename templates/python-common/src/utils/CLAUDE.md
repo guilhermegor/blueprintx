@@ -15,16 +15,40 @@ A vendor is imported here, never in `model/`/`view`/`controller` (MVC) or
 written `allow` entry in every tier's `.layer-policy.yaml` (the reason is required, not the
 package name alone).
 
-## `find_*_problems` — validate without raising
+## `find_*_problems` — validate without raising, severity-typed (blueprintx#162)
 
-Every read/write boundary that can fail exposes a `find_*_problems(...) -> list[str]` sibling
-that **never raises**: `find_file_problems` / `find_contract_problems` (`tabular_reader.py`),
-`find_xml_row_problems` (`xml_reader.py`), `find_sheet_name_problems` /
-`find_workbook_sheet_name_problems` (`ms_office/excel_sheet_names.py`). The caller decides
-whether an empty list means "proceed" and a non-empty one means "abort, skip, or notify" — the
-finder itself never makes that call. A stricter twin built on top (`read_table`, `read_xml`)
-is free to raise (`ContractError`), because both share ONE problem-finding implementation
-instead of the two drifting apart.
+Every read/write boundary that can fail exposes a `find_*_problems(...) -> ProblemReport`
+sibling that **never raises**: `find_file_problems` / `find_contract_problems`
+(`tabular_reader.py`, where `ProblemReport` is also defined), `find_xml_row_problems`
+(`xml_reader.py`), `find_sheet_name_problems` / `find_workbook_sheet_name_problems`
+(`ms_office/excel_sheet_names.py`).
+
+`ProblemReport` carries two lists, `list_fatal` and `list_warnings`, rather than one flat
+`list[str]` plus a severity field on each entry. A flat list forces every caller to guess —
+from the wording alone — whether a finding means "abort" or "log and continue", and the
+loader author and the caller author routinely guess differently. Two lists make the mistake
+**unrepresentable**: a caller that reads only `list_warnings` (its "proceed with a note"
+branch) cannot see a fatal problem, because a fatal one is never placed there. A caller
+still decides what "empty" means for its own boundary — `list_fatal` non-empty means abort,
+`list_warnings` non-empty means log and continue — but it can no longer misclassify a
+finding it never had to inspect closely.
+
+A stricter twin built on top (`read_table`, `read_query`, `read_xml`) is free to raise
+(`ContractError`) on **either** list — it is the mandatory-contract path, not the tolerant
+one, so it does not get to pick per severity. Only a caller reading the report directly
+(`find_file_problems`, `find_sheet_name_problems`, …) makes that choice. Both share ONE
+problem-finding implementation instead of the two drifting apart.
+
+Adding a new finding to an existing validator means picking one of the two lists — there is
+no default, and no third option that skips the choice.
+
+⚠️ **"Never raises" includes a missing file.** The obvious reading is that the guarantee
+covers validation findings and that a missing path may still raise, and that reading defeats
+the contract: a caller would have to wrap the call whose job is to describe what is wrong in
+a `try/except FileNotFoundError`, and a caller that trusted the promise crashes on the single
+most common real problem at a read boundary. `find_file_problems` and `find_xml_row_problems`
+therefore return a **fatal** finding for a missing file. Their strict twins (`read_table`,
+`read_xml`) keep raising — those *are* the read boundary.
 
 ## The runtime-typing layout shim
 

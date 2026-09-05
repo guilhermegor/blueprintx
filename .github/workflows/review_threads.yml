@@ -183,10 +183,29 @@ jobs:
       #
       # `if: success()` is the loop guard, not decoration: this may only ever run from a run
       # that PASSED, or it would re-run itself forever. The script skips $GITHUB_RUN_ID too.
+      # ⚠️ `issue_comment` CARRIES NO `pull_request` OBJECT, SO THE HEAD SHA MUST BE FETCHED.
+      #
+      # `github.event.pull_request.head.sha` is empty on that event, and the script exits early
+      # on an empty HEAD_SHA — so the cleanup did nothing on exactly the event #347 added it
+      # for. The gate re-ran and went green while the stale failures it was meant to clear
+      # stayed in the rollup, which is the whole reason a hand `gh run rerun` was still needed.
+      # Half a fix, and the half nobody sees. Raised by review on #347 as an out-of-diff
+      # comment, i.e. one the review-thread gate itself cannot see (blueprintx#350).
       - name: Clear stale failed runs of this gate at the same head
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash templates/python-common/bin/rerun_stale_gate_runs.sh
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          str_head="$EVENT_HEAD_SHA"
+          if [ -z "$str_head" ]; then
+            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          fi
+          # Fail loudly rather than skipping: an unresolved head means the cleanup would run
+          # over nothing while reporting success — the vacuous pass this gate family exists
+          # to remove.
+          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
+          HEAD_SHA="$str_head" bash templates/python-common/bin/rerun_stale_gate_runs.sh

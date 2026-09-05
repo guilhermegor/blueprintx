@@ -35,6 +35,7 @@ Non-SQLite backends read `DB_DSN` first; if unset they compose a DSN from `DB_US
 
 `build_storage_handler()` reads `STORAGE_BACKEND` from `.env`.
 
+<!-- docs-refs-ok: chassis/db_wschema is only injected when the storage opt-in is chosen at scaffold time — see templates/python-common/CLAUDE.md -->
 ```python
 from chassis.db_wschema.application import build_storage_handler
 
@@ -56,6 +57,7 @@ Supported values for `STORAGE_BACKEND`: `json`, `csv`, `joblib`.
 
 ## Wiring a use-case in main.py
 
+<!-- docs-refs-ok: "notes" is the hand-built feature this walkthrough has the reader create following Architecture — it never ships as a generated file, unlike capabilities/example_feature -->
 ```python
 from capabilities.notes.domain.dto import NoteCreateDTO
 from capabilities.notes.infrastructure.repositories import InMemoryNoteRepository

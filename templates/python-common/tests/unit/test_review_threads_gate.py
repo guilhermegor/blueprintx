@@ -11,6 +11,7 @@ the gate: 14 threads all reading ``isResolved: true`` while 11 held no author re
 """
 
 import importlib.util
+import json
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
@@ -432,13 +433,33 @@ def test_the_roster_is_read_from_the_declared_file(tmp_path: Path) -> None:
 	assert len(cls_gate.find_thread_problems(list_threads, set(dict_roster))) == 1
 
 
-def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr() -> None:
+def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
 	"""A failed query raises instead of returning an empty list.
 
 	Returning ``[]`` on error would make an outage indistinguishable from "no threads" — the
 	job reporting its own blindness as all-clear.
+
+	``_fetch_page`` is the subprocess boundary — it shells out to the real ``gh`` binary and
+	the live network (blueprintx#201). Mocking it here, the way ``test_both_connections_are_
+	paginated`` already mocks it above, keeps this a UNIT test: no ``gh`` on PATH and no
+	network required. It still proves the real property — ``fetch_pull_request`` PROPAGATES a
+	page failure rather than swallowing it, which is exactly what ``gh`` returning a non-zero
+	exit would trigger in ``_fetch_page`` (see its own ``RuntimeError`` there).
+
+	Parameters
+	----------
+	monkeypatch : pytest.MonkeyPatch
+		Used to replace ``_fetch_page`` with a mock that raises, standing in for a real
+		``gh`` failure without touching a binary or the wire.
 	"""
 	cls_gate = _load_gate()
+	cls_page = Mock(
+		spec=cls_gate._fetch_page,
+		side_effect=RuntimeError("GraphQL query failed: simulated non-zero gh exit"),
+	)
+	monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
 	with pytest.raises(RuntimeError):
 		cls_gate.fetch_pull_request("no-such-owner-xyz", "no-such-repo-xyz", 1)
 
@@ -1095,3 +1116,232 @@ def test_a_current_unresolved_thread_does_not_claim_to_be_outdated() -> None:
 		)
 	]
 	assert "OUTDATED" not in cls_gate.find_thread_problems(list_current, _ROSTER)[0]
+
+
+# --------------------------
+# classify_reviewer_notice / parse_declared_wait (blueprintx#364)
+# --------------------------
+
+# The REAL notice bodies, fetched via `gh api graphql` from PR #363 (chat quota,
+# 2026-08-30T18:44:28Z) and PR #317 (review quota, 2026-08-29T17:11:51Z) — never retyped. The
+# issue this closes was itself first written against retyped text that classified differently
+# from the real bytes, which is why every should-fail witness below is pinned against these two
+# exact strings rather than an invented approximation.
+_CHAT_NOTICE = (
+	"<!-- This is an auto-generated reply by CodeRabbit -->\n### Rate Limit Exceeded\n\n"
+	"`@guilhermegor` have exceeded the limit for the number of chat messages per hour. Please "
+	"wait **4 minutes and 37 seconds** before sending another message."
+)
+_REVIEW_NOTICE = (
+	"<!-- This is an auto-generated reply by CodeRabbit -->\n<!-- CodeRabbit review command "
+	"invocation: v2:d76d52b00d2dea173ffbdd1777877b36ea6f3150af9dfa2c0dd7a18cd167e6a1 -->\n"
+	"<details>\n<summary>⚠️ Action not completed</summary>\n\nReview rate limited.\n\n---\n\n"
+	"Your included review limit is currently reached under our [Fair Usage Limits "
+	"Policy](https://docs.coderabbit.ai/management/plans#fair-usage-limits-policy). This "
+	"review may still proceed through usage-based billing if eligible. Your next included "
+	"review will be available in 21 minutes.\n\n</details>"
+)
+
+
+def test_classify_reviewer_notice_reads_the_real_chat_body_as_chat_limited() -> None:
+	"""The should-fail witness this issue exists for: chat must not read as review."""
+	cls_gate = _load_gate()
+	assert cls_gate.classify_reviewer_notice(_CHAT_NOTICE) == cls_gate.NOTICE_CHAT_LIMITED
+
+
+def test_classify_reviewer_notice_reads_the_real_review_body_as_review_limited() -> None:
+	"""The should-fail witness in the other direction: review must not read as chat."""
+	cls_gate = _load_gate()
+	assert cls_gate.classify_reviewer_notice(_REVIEW_NOTICE) == cls_gate.NOTICE_REVIEW_LIMITED
+
+
+def test_classify_reviewer_notice_an_unrecognised_rate_limit_mention_is_unknown_not_ok() -> None:
+	"""UNKNOWN must never collapse into OK — an unrecognised notice is not an all-clear."""
+	cls_gate = _load_gate()
+	str_notice = "we are experiencing a general rate limit issue today"
+	assert cls_gate.classify_reviewer_notice(str_notice) == cls_gate.NOTICE_UNKNOWN
+
+
+def test_classify_reviewer_notice_a_clean_completion_is_ok() -> None:
+	"""The should-PASS case: a notice with no rate-limit wording at all."""
+	cls_gate = _load_gate()
+	str_notice = "Review finished. No actionable comments were generated."
+	assert cls_gate.classify_reviewer_notice(str_notice) == cls_gate.NOTICE_OK
+
+
+def test_parse_declared_wait_reads_277_seconds_from_the_real_chat_body() -> None:
+	"""Pinned exactly on the number blueprintx#364 measured the loop stalling on: 4m37s."""
+	cls_gate = _load_gate()
+	assert cls_gate.parse_declared_wait(_CHAT_NOTICE) == 277
+
+
+def test_parse_declared_wait_reads_minutes_from_the_real_review_body() -> None:
+	"""The review quota declares whole minutes; 21 minutes is 1260 seconds."""
+	cls_gate = _load_gate()
+	assert cls_gate.parse_declared_wait(_REVIEW_NOTICE) == 1260
+
+
+def test_parse_declared_wait_returns_none_when_no_wait_is_declared() -> None:
+	"""A notice that names no number must not invent one."""
+	cls_gate = _load_gate()
+	assert cls_gate.parse_declared_wait("Review rate limited.") is None
+
+
+# --------------------------
+# --json output (blueprintx#364)
+# --------------------------
+
+
+def test_parse_args_default_is_prose() -> None:
+	"""Without ``--json`` the gate keeps its historical prose-only behaviour."""
+	cls_gate = _load_gate()
+	assert cls_gate.parse_args([]).json is False
+
+
+def test_parse_args_json_flag_is_read() -> None:
+	"""``--json`` is the one new flag this issue adds."""
+	cls_gate = _load_gate()
+	assert cls_gate.parse_args(["--json"]).json is True
+
+
+def test_print_skip_prose_mode_prints_the_reason(capsys: pytest.CaptureFixture[str]) -> None:
+	"""Default mode: the self-skip line is unchanged prose."""
+	cls_gate = _load_gate()
+	cls_gate._print_skip(
+		False, "No .review-bots.yaml — the review-thread gate is not adopted here"
+	)
+	assert "not adopted here" in capsys.readouterr().out
+
+
+def test_print_skip_json_mode_emits_a_status_field(capsys: pytest.CaptureFixture[str]) -> None:
+	"""``--json`` mode: the same self-skip is machine-readable, never grepped prose."""
+	cls_gate = _load_gate()
+	cls_gate._print_skip(True, "nothing to check")
+	assert json.loads(capsys.readouterr().out)["status"] == "skipped"
+
+
+def test_print_missing_review_json_carries_the_notice_classification(
+	capsys: pytest.CaptureFixture[str],
+) -> None:
+	"""The exact gap #364 names: a caller must not have to grep the quoted notice itself."""
+	cls_gate = _load_gate()
+	list_notices = [{"author": {"login": "coderabbitai[bot]"}, "body": _CHAT_NOTICE}]
+	# Strip the bot suffix first, or the notice lookup silently finds nothing.
+	set_roster = {cls_gate.normalise_login(str_login) for str_login in _ROSTER}
+	cls_gate._print_missing_review(
+		True, "no declared reviewer ever reported", list_notices, set_roster
+	)
+	dict_out = json.loads(capsys.readouterr().out)
+	assert dict_out["notice_classification"] == cls_gate.NOTICE_CHAT_LIMITED
+
+
+def test_print_thread_verdict_json_pass_has_no_problems(
+	capsys: pytest.CaptureFixture[str],
+) -> None:
+	"""An empty problem list must report ``pass``, matching the prose "All N answered" case."""
+	cls_gate = _load_gate()
+	cls_gate._print_thread_verdict(True, [], 3, True)
+	assert json.loads(capsys.readouterr().out)["status"] == "pass"
+
+
+def test_print_thread_verdict_json_fail_reports_fail_status(
+	capsys: pytest.CaptureFixture[str],
+) -> None:
+	"""A non-empty problem list must report ``fail``.
+
+	This is the concrete case #364 names: a caller that must grep prose for "thread" matched
+	the phrase "so zero threads would be fine" inside an unrelated message and misreported 27
+	PRs. JSON mode gives it a status field instead.
+	"""
+	cls_gate = _load_gate()
+	cls_gate._print_thread_verdict(True, ["src/thing.py: thread is open"], 1, True)
+	assert json.loads(capsys.readouterr().out)["status"] == "fail"
+
+
+def test_print_thread_verdict_json_fail_carries_the_problems(
+	capsys: pytest.CaptureFixture[str],
+) -> None:
+	"""A failing verdict must carry the problems themselves, not only the status.
+
+	Separate from the status assertion above: a verdict that says ``fail`` and drops the
+	problem list tells a caller something is wrong without saying what, and the two
+	outcomes fail independently.
+	"""
+	cls_gate = _load_gate()
+	cls_gate._print_thread_verdict(True, ["src/thing.py: thread is open"], 1, True)
+	assert json.loads(capsys.readouterr().out)["problems"] == ["src/thing.py: thread is open"]
+
+
+# ⚠️ WITNESS FOR blueprintx#372 — THE DISPLAY BUDGET MUST NOT REACH A MATCHER.
+#
+# `summarise_reviewer_notice` cuts the notice to 200 chars so a failure message stays readable.
+# Two matchers used to read that cut string, and a phrase past the budget therefore read as
+# ABSENT. Measured over 112 real reviewer notices in this repo: 4 flipped UNKNOWN -> OK (phrase
+# at offsets 394, 583, 583, 2700) and 4 lost a completion phrase. Both directions are silent.
+_STR_FILLER = "x" * 400
+
+# ⚠️ NORMALISED, unlike `_ROSTER`. These four call the notice helpers DIRECTLY, and those take
+# the roster already stripped of `[bot]` (`find_missing_review_problem` normalises on the way
+# in). Passing `_ROSTER` here matches nothing and every helper returns "" — a green-looking
+# empty answer, not an error.
+_ROSTER_NORMALISED = set(_ROSTER_WITH_POSTS)
+
+
+def test_newest_roster_notice_is_not_truncated() -> None:
+	"""A matcher needs the whole notice; truncation is a display concern only."""
+	cls_gate = _load_gate()
+	str_body = f"{_STR_FILLER} Review rate limited."
+	assert cls_gate.newest_roster_notice(
+		[_notice("coderabbitai[bot]", str_body)], _ROSTER_NORMALISED
+	).endswith("Review rate limited.")
+
+
+def test_summarise_reviewer_notice_still_truncates_for_display() -> None:
+	"""The quoted form stays bounded, or a failure message becomes unreadable."""
+	cls_gate = _load_gate()
+	str_seen = cls_gate.summarise_reviewer_notice(
+		[_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")], _ROSTER_NORMALISED
+	)
+	assert len(str_seen) == cls_gate._INT_NOTICE_DISPLAY_CHARS
+
+
+def test_the_json_verdict_classifies_a_limit_past_the_display_budget(
+	capsys: pytest.CaptureFixture[str],
+) -> None:
+	"""Exercises the CALL SITE, not the helper — a limit the display form cannot show.
+
+	⚠️ The obvious form of this test — ``classify_reviewer_notice(newest_roster_notice(...))``
+	— is a TAUTOLOGY: it wires the two helpers together itself, so it passes no matter which
+	one the gate actually calls. Measured: with the fix reverted it stayed green, proving the
+	helper works and nothing about the gate. The assertion has to run through
+	``_print_missing_review``, which is where the wrong argument was passed.
+	"""
+	cls_gate = _load_gate()
+	cls_gate._print_missing_review(
+		True,
+		"no declared reviewer ever reported",
+		[_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")],
+		_ROSTER_NORMALISED,
+	)
+	dict_out = json.loads(capsys.readouterr().out)
+	assert dict_out["notice_classification"] == cls_gate.NOTICE_REVIEW_LIMITED
+
+
+def test_classify_on_the_truncated_form_would_have_missed_it() -> None:
+	"""Pins the DEFECT itself: the cut string classifies as OK, so a revert cannot be quiet."""
+	cls_gate = _load_gate()
+	str_cut = cls_gate.summarise_reviewer_notice(
+		[_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")],
+		_ROSTER_NORMALISED,
+	)
+	assert cls_gate.classify_reviewer_notice(str_cut) == cls_gate.NOTICE_OK
+
+
+def test_completion_is_seen_past_the_display_budget() -> None:
+	"""4 of 112 real notices buried "Review finished" past 200 chars — a false red."""
+	cls_gate = _load_gate()
+	assert cls_gate.reviewer_declared_completion(
+		[_notice("coderabbitai[bot]", f"{_STR_FILLER} Review finished.")],
+		_ROSTER_NORMALISED,
+		_HEAD_DATE,
+	)

@@ -1,9 +1,7 @@
-WIKI_REPO ?= https://github.com/guilhermegor/BlueprintX.wiki.git
-
 # -------------------
 # BLUEPRINTX SCRIPTS
 # -------------------
-.PHONY: new install preview dev dev-clean dry-run
+.PHONY: new install preview dev dev_clean dry_run dev-clean dry-run
 
 new:
 	@bash bin/blueprintx.sh
@@ -25,11 +23,19 @@ preview:
 dev:
 	@bash bin/blueprintx.sh --dev
 
-dev-clean:
+dev_clean:
 	@bash bin/blueprintx.sh --dev --clean
 
-dry-run:
+dry_run:
 	@bash bin/blueprintx.sh --dry-run
+
+# Deprecated spellings kept for one release (blueprintx#365): multi-word targets settled on
+# underscore, the only spelling a `tasks.sh` shell function name can mirror (`-` is illegal
+# in a bash function name). The pairing gate's spelling-normalisation already treats these as
+# the same target as their `_` twin, so no separate tasks.sh/help.sh entry is needed. Remove
+# both aliases after the next tagged release.
+dev-clean: dev_clean
+dry-run: dry_run
 
 # -------------------
 # VIRTUAL ENVIRONMENT
@@ -72,11 +78,18 @@ check_function_length:
 # -------------------
 # DOCS
 # -------------------
-.PHONY: mkdocs_server changelog
+.PHONY: mkdocs_serve mkdocs_server changelog
 
-mkdocs_server:
+mkdocs_serve:
 	@poetry install --with docs
 	@poetry run mkdocs serve -a 0.0.0.0:8000 --livereload
+
+# Deprecated spelling kept for one release (blueprintx#365): "server" was a noun where every
+# sibling target is a verb phrase ("lint", "install", "preview"); renamed to the verb
+# "mkdocs_serve". No longer advertised in `make help` — remove this alias after the next
+# tagged release.
+# pairing:internal
+mkdocs_server: mkdocs_serve
 
 # Regenerate the root CHANGELOG.md from the conventional-commit / git-tag history. The docs
 # Changelog page single-sources this file via a snippets include; CI regenerates it fresh on

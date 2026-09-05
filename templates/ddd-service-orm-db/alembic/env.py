@@ -75,11 +75,15 @@ def run_migrations_offline() -> None:
 	Generates SQL scripts that can be reviewed and applied manually.
 	"""
 	url = config.get_main_option("sqlalchemy.url")
+	# A batch_alter_table migration still cannot run here without copy_from — the
+	# constraint is the migration's, not this config's. See alembic/CLAUDE.md rule 5.
 	context.configure(
 		url=url,
 		target_metadata=target_metadata,
 		literal_binds=True,
 		dialect_opts={"paramstyle": "named"},
+		compare_type=True,
+		render_as_batch=True,
 	)
 	with context.begin_transaction():
 		context.run_migrations()
@@ -119,6 +123,8 @@ def run_migrations_online() -> None:
 			connection=connection,
 			target_metadata=target_metadata,
 			version_table_schema=_DB_SCHEMA,
+			compare_type=True,
+			render_as_batch=True,
 		)
 		with context.begin_transaction():
 			context.run_migrations()

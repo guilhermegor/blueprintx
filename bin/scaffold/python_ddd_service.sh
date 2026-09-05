@@ -78,7 +78,7 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
+    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -239,7 +239,7 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
+    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review
@@ -247,7 +247,7 @@ apply_branch_protection() {
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
             local reviews_json
-            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -316,11 +316,11 @@ prompt_git_remote_setup() {
 
 prompt_docker_compose() {
     local answer db_ans
-    read -r -p "Include Docker Compose for database infrastructure? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")" answer || true
     case "$answer" in
         y|Y)
             INCLUDE_DOCKER_COMPOSE=true
-            read -r -p "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): " db_ans || true
+            read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans || true
             case "${db_ans:-postgresql}" in
                 mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
                 *) DB_COMPOSE_BACKEND="postgresql" ;;
@@ -335,7 +335,7 @@ prompt_docker_compose() {
 
 prompt_storage() {
     local answer
-    read -r -p "Include schema-less file storage (JSON/CSV/joblib)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include schema-less file storage (JSON/CSV/joblib)? [y/N]: ")" answer || true
     case "$answer" in
         y|Y) INCLUDE_STORAGE=true; print_status "config" "Schema-less storage: enabled" ;;
         *) INCLUDE_STORAGE=false ;;
@@ -344,13 +344,13 @@ prompt_storage() {
 
 prompt_data_dir() {
     local answer base_ans dated_ans
-    read -r -p "Customise the output directory (logs/artifacts root)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")" answer || true
     case "$answer" in
         y|Y)
             INCLUDE_DATA_DIR=true
-            read -r -p "Output base directory [logs]: " base_ans || true
+            read -r -p "$(prompt_sub "Output base directory [logs]: ")" base_ans || true
             DATA_DIR_BASE="${base_ans:-logs}"
-            read -r -p "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: " dated_ans || true
+            read -r -p "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")" dated_ans || true
             case "$dated_ans" in
                 y|Y) DATA_DIR_DATED=true ;;
                 *) DATA_DIR_DATED=false ;;
@@ -365,11 +365,11 @@ prompt_data_dir() {
 
 prompt_webhook() {
     local answer platform_ans
-    read -r -p "Include outbound webhook notifications? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include outbound webhook notifications? [y/N]: ")" answer || true
     case "$answer" in
         y|Y)
             INCLUDE_WEBHOOK=true
-            read -r -p "Which platform? [teams/slack/custom] (default: teams): " platform_ans || true
+            read -r -p "$(prompt_sub "Which platform? [teams/slack/custom] (default: teams): ")" platform_ans || true
             case "${platform_ans:-teams}" in
                 slack|custom) WEBHOOK_PLATFORM="$platform_ans" ;;
                 *) WEBHOOK_PLATFORM="teams" ;;
@@ -409,6 +409,7 @@ copy_shared_utils() {
         br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
         tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
         ms_office email raw_workspace daily_cache queries
+        regime_window regime_registry regime_adapter spec_gap_registry
     )
     for util in "${utils[@]}"; do
         # A util is either a single module or a PACKAGE — retry/ was split into one in
@@ -441,6 +442,11 @@ copy_shared_utils() {
         "$project_path/tests/unit/test_email_sender.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_html_body.py" \
         "$project_path/tests/unit/test_email_html_body.py"
+    # test_regime_adapters.py covers FOUR modules (regime_window/regime_registry/
+    # regime_adapter/spec_gap_registry) in one file — the loop's `test_${util}.py` naming
+    # cannot name it for any single util, so it rides an explicit cp like ms_office/email above.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_regime_adapters.py" \
+        "$project_path/tests/unit/test_regime_adapters.py"
     # A COUNT, never an enumeration: the old message listed 15 of the 17 names and had already
     # drifted (lesson `ci-python-gates` — the enumeration is what goes stale). The number still
     # proves the step ran, which silence would not.
@@ -468,6 +474,17 @@ copy_required_chassis_db() {
     print_status "success" "chassis/db copied (required by db_schema)"
 }
 
+# blueprintx#274: prune each declined opt-in's dependency line from the just-rendered
+# pyproject.toml — joblib is imported only by chassis/db_wschema (storage opt-in), pymsteams
+# only by optional/webhook (webhook opt-in).
+conditional_prune_optin_deps() {
+    local project_path="$1"
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_STORAGE" \
+        '/^# Used only by the schema-less-storage opt-in/,/^joblib = /d'
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
+        '/^# Microsoft Teams incoming-webhook transport/,/^pymsteams = /d'
+}
+
 conditional_copy_storage() {
     local project_path="$1"
     if [[ "$INCLUDE_STORAGE" != "true" ]]; then return; fi
@@ -483,6 +500,8 @@ copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # GitGuardian secret-scanning gate (blueprintx#153). GitHub-only, like tests.yaml.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
     # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
     # after the last push is still checked — a push-only trigger goes stale exactly then.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
@@ -633,11 +652,11 @@ conditional_copy_webhooks_yaml() {
 
 prompt_email() {
     local answer backend_ans
-    read -r -p "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")" answer || true
     case "$answer" in
         y | Y)
             INCLUDE_EMAIL=true
-            read -r -p "Which backend? [outlook/smtp] (default: outlook): " backend_ans || true
+            read -r -p "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")" backend_ans || true
             case "${backend_ans:-outlook}" in
                 smtp) EMAIL_BACKEND="smtp" ;;
                 *) EMAIL_BACKEND="outlook" ;;
@@ -786,6 +805,7 @@ main() {
     copy_required_chassis_db "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_prune_optin_deps "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_copy_storage "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"

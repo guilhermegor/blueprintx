@@ -78,7 +78,7 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
+    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -189,6 +189,7 @@ copy_internal_utils() {
         __init__.py dtypes.py br_identifiers.py http_downloader.py
         tabular_reader.py xml_reader.py provenance.py sidecar_metadata.py text.py
         zip_extractor.py raw_workspace.py daily_cache.py
+        regime_window.py regime_registry.py regime_adapter.py spec_gap_registry.py
     )
     # retry/ is a PACKAGE, not a module (blueprintx#116) — it needs cp -r, and it is listed
     # apart from `modules` so the loop below stays a plain file copy. rewrite_internal_imports
@@ -221,6 +222,18 @@ copy_internal_utils() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
 
     rewrite_internal_imports "$internal_dir"
+
+    # test_regime_adapters.py is the shared oracle for the four regime_* modules above. Unlike
+    # the OTHER vendored utils (whose shared tests are a documented, accepted gap — see
+    # DICT_EXPECTED_ABSENT in bin/ci/check_test_copy_lists.py — because they assert against the
+    # bare `utils.` import path a vendored+rewritten module no longer has), this one is copied
+    # AND rewritten through the same mechanism as the modules it covers, so it actually runs
+    # here instead of adding a fifth entry to that documented gap.
+    mkdir -p "$project_path/tests/unit"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_regime_adapters.py" \
+        "$project_path/tests/unit/test_regime_adapters.py"
+    rewrite_internal_imports "$project_path/tests/unit"
+
     print_status "success" "Private internal utils (_internal/utils) applied"
 }
 
@@ -415,6 +428,8 @@ lib_minimal_copy_github_assets() {
     local project_path="$1"
 
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    # GitGuardian secret-scanning gate (blueprintx#153). GitHub-only, like tests.yaml.
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
     # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
     # after the last push is still checked — a push-only trigger goes stale exactly then.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
@@ -463,6 +478,33 @@ lib_minimal_copy_github_assets() {
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
 }
 
+# The tests that cover the gates themselves. Split out of the copy function when it crossed
+# the 60-line ceiling: a real grouping, not an arbitrary cut, so the next gate test has an
+# obvious home instead of pushing the parent over again. Mirrors scaffold_copy_gate_tests()
+# in bin/lib/scaffold_python_templates.sh.
+lib_minimal_copy_gate_tests() {
+    local project_path="$1"
+
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
+        "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
+        "$project_path/tests/unit/test_comment_language_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
+        "$project_path/tests/unit/test_coverage_floor_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
+        "$project_path/tests/unit/test_function_length_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
+        "$project_path/tests/unit/test_review_threads_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
+        "$project_path/tests/unit/test_review_retry.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_code_refs_gate.py" \
+        "$project_path/tests/unit/test_docs_code_refs_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_assertion_weakening_gate.py" \
+        "$project_path/tests/unit/test_assertion_weakening_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_rmw_race_gate.py" \
+        "$project_path/tests/unit/test_rmw_race_gate.py"
+}
+
 lib_minimal_copy_project_scaffolding() {
     local project_path="$1"
 
@@ -487,20 +529,11 @@ lib_minimal_copy_project_scaffolding() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
-        "$project_path/tests/unit/test_layer_imports_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
-        "$project_path/tests/unit/test_comment_language_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
-        "$project_path/tests/unit/test_function_length_gate.py"
+    lib_minimal_copy_gate_tests "$project_path"
     # Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
     # selector could be wrong without any tier noticing (blueprintx#211).
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
         "$project_path/tests/unit/test_pip_requirements.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
-        "$project_path/tests/unit/test_review_threads_gate.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
-        "$project_path/tests/unit/test_review_retry.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
         "$project_path/tests/unit/test_family_convention_example.py"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
@@ -522,6 +555,38 @@ lib_minimal_copy_project_scaffolding() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.vscode/tasks.json" "$project_path/.vscode/tasks.json"
 }
 
+# Records WHICH tier and WHICH BlueprintX commit this project was scaffolded from
+# (blueprintx#109/#318). Mirrors scaffold_stamp_provenance in
+# bin/lib/scaffold_python_templates.sh byte-for-byte (same fields, same format) —
+# NOT a source of that function, because on the commit this was written from, that
+# function does not exist on main yet: it ships only in the still-open PR #319, and
+# bin/lib/scaffold_python_templates.sh is locked by three other in-flight PRs
+# (#319, #316, #297). Sourcing it would require editing a file this task is not
+# free to touch. Once #319 merges, collapsing this copy into a shared call is a
+# one-function refactor (the format below is already identical, so no downstream
+# consumer needs to change) — tracked as a follow-up, not attempted here.
+lib_minimal_stamp_provenance() {
+    local project_path="$1"
+
+    local str_version
+    str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || echo unknown)"
+    local str_commit
+    str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+    local str_scaffolded_at
+    str_scaffolded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    cat >"$project_path/.blueprintx-provenance.yaml" <<-EOF
+	# Written by BlueprintX at scaffold time — do not edit by hand.
+	# Read by bin/check_template_drift.py (blueprintx#109) to know which template
+	# tier and BlueprintX version this project was generated from, so a later
+	# drift check knows what to compare against.
+	tier: lib-minimal
+	blueprintx_version: ${str_version#v}
+	blueprintx_commit: ${str_commit}
+	scaffolded_at: ${str_scaffolded_at}
+	EOF
+}
+
 copy_common_templates() {
     local project_path="$1"
 
@@ -530,6 +595,7 @@ copy_common_templates() {
     lib_minimal_copy_tooling_configs "$project_path"
     lib_minimal_copy_github_assets "$project_path"
     lib_minimal_copy_project_scaffolding "$project_path"
+    lib_minimal_stamp_provenance "$project_path"
     print_status "success" "Common templates applied"
 }
 
@@ -596,7 +662,7 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
+    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review
@@ -604,7 +670,7 @@ apply_branch_protection() {
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
             local reviews_json
-            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -882,7 +948,7 @@ PY
 #   - initiate_logging(logger, path_log)              — attach handlers / a log file
 prompt_logs() {
     local answer
-    read -r -p "Include the in-repo logging helper (utils/logs.py)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include the in-repo logging helper (utils/logs.py)? [y/N]: ")" answer || true
     case "$answer" in
         y|Y) INCLUDE_LOGS=true; print_status "config" "logs.py: included" ;;
         *)   INCLUDE_LOGS=false ;;
@@ -899,16 +965,16 @@ prompt_publish_targets() {
     # Two orthogonal axes, banner-separated so Q3 doesn't read as a fork of Q1/Q2:
     # publishing = where THIS library ships to; consuming = where its own deps come from.
     print_status "section" "Publishing — where this library ships to"
-    read -r -p "Publish to the official public registry (PyPI)? [Y/n]: " answer || true
+    read -r -p "$(prompt_main "Publish to the official public registry (PyPI)? [Y/n]: ")" answer || true
     case "$answer" in n | N) PUBLISH_PYPI=false ;; *) PUBLISH_PYPI=true ;; esac
     print_status "config" "Publish target PyPI: $PUBLISH_PYPI"
 
-    read -r -p "Add a staging/sandbox registry (Test PyPI) first? [Y/n]: " answer || true
+    read -r -p "$(prompt_main "Add a staging/sandbox registry (Test PyPI) first? [Y/n]: ")" answer || true
     case "$answer" in n | N) PUBLISH_TEST_PYPI=false ;; *) PUBLISH_TEST_PYPI=true ;; esac
     print_status "config" "Staging registry Test PyPI: $PUBLISH_TEST_PYPI"
 
     print_status "section" "Consuming — where this library's own dependencies come from"
-    read -r -p "Consume this library from a non-official source (private index / git)? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Consume this library from a non-official source (private index / git)? [y/N]: ")" answer || true
     case "$answer" in y | Y) CONSUME_PRIVATE=true ;; *) CONSUME_PRIVATE=false ;; esac
     print_status "config" "Private consumer source: $CONSUME_PRIVATE"
 }
@@ -941,11 +1007,11 @@ EOF
 # needs it, but the seam is offered for libs whose integration tests spin up a real DB.
 prompt_docker_compose() {
     local answer db_ans
-    read -r -p "Include Docker Compose for database infrastructure? [y/N]: " answer || true
+    read -r -p "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")" answer || true
     case "$answer" in
         y|Y)
             INCLUDE_DOCKER_COMPOSE=true
-            read -r -p "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): " db_ans || true
+            read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans || true
             case "${db_ans:-postgresql}" in
                 mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
                 *) DB_COMPOSE_BACKEND="postgresql" ;;

@@ -120,6 +120,25 @@ DICT_EXPECTED_ABSENT = {
         "test_email_dispatch.py": "lib-minimal does not ship email/",
         "test_email_sender.py": "lib-minimal does not ship email/",
         "test_email_html_body.py": "lib-minimal does not ship email/",
+        # ⚠️ NOT a clean exclusion — the config/schemas/ seam (blueprintx#267) ships in
+        # src/config/schemas/ here, but `pydantic` is not yet a declared dependency in ANY
+        # tier's pyproject.toml (that needs its own explicit yes, priced separately per the
+        # issue), so wiring the cp line now would ship a test that imports a package the
+        # generated project never installs. Remove this exclusion together with the cp line
+        # the day pydantic lands as a dependency.
+        "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+    },
+    "python_ddd_service.sh": {
+        "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+    },
+    "python_ddd_service_orm.sh": {
+        "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+    },
+    "python_mvc_service.sh": {
+        "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+    },
+    "python_mvc_service_orm.sh": {
+        "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
     },
 }
 

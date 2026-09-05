@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_package_json.sh
+source "$SCRIPT_DIR/../lib/scaffold_package_json.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -47,7 +49,7 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
+    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -62,7 +64,7 @@ prompt_state_management() {
     echo "  1) React Context  (zero deps, default)"
     echo "  2) Zustand        (lightweight store)"
     echo "  3) Redux Toolkit  (enterprise, RTK Query)"
-    read -r -p "Choice [1]: " sm_choice || true
+    read -r -p "$(prompt_main "Choice [1]: ")" sm_choice || true
     STATE_MGMT_CHOICE="${sm_choice:-1}"
     case "$STATE_MGMT_CHOICE" in
         1) print_status "config" "State management: React Context" ;;
@@ -73,9 +75,33 @@ prompt_state_management() {
     esac
 }
 
+prompt_deploy_target() {
+    # ⚠️ ONE target, never both. Each workflow triggers on `push: branches: [main]`, so
+    # shipping both deploys twice on every merge, to two URLs, with nothing saying which is
+    # canonical. The choice is made here so only one workflow ever reaches the project.
+    echo ""
+    print_status "info" "Deploy target for the built SPA:"
+    echo "  1) GitHub Pages  (no extra secrets; served under /<repo-name>/)"
+    echo "  2) Vercel        (needs VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID)"
+    echo "  3) None          (no deploy workflow)"
+    read -r -p "$(prompt_main "Choice [1]: ")" deploy_choice || true
+    DEPLOY_TARGET_CHOICE="${deploy_choice:-1}"
+    case "$DEPLOY_TARGET_CHOICE" in
+        1) print_status "config" "Deploy target: GitHub Pages" ;;
+        2) print_status "config" "Deploy target: Vercel"
+           # Stated at scaffold time, not in a doc read after the first red push: the
+           # Vercel project must already EXIST for those IDs to exist at all.
+           print_status "warning" "Create the Vercel project first, then add the three repository secrets."
+           print_status "info" "  gh secret set VERCEL_TOKEN; gh secret set VERCEL_ORG_ID; gh secret set VERCEL_PROJECT_ID" ;;
+        3) print_status "config" "Deploy target: none" ;;
+        *) print_status "warning" "Invalid choice; defaulting to GitHub Pages"
+           DEPLOY_TARGET_CHOICE=1 ;;
+    esac
+}
+
 prompt_module_federation() {
     echo ""
-    read -r -p "Enable Webpack Module Federation? [y/N]: " mf_answer || true
+    read -r -p "$(prompt_main "Enable Webpack Module Federation? [y/N]: ")" mf_answer || true
     case "$mf_answer" in
         y|Y) USE_MODULE_FEDERATION=1
              print_status "config" "Module Federation: enabled" ;;
@@ -86,12 +112,23 @@ prompt_module_federation() {
 
 prompt_docker() {
     echo ""
-    read -r -p "Add a Docker setup (multi-stage build → nginx)? [y/N]: " docker_answer || true
+    read -r -p "$(prompt_main "Add a Docker setup (multi-stage build → nginx)? [y/N]: ")" docker_answer || true
     case "$docker_answer" in
         y|Y) USE_DOCKER=1
              print_status "config" "Docker: enabled (Dockerfile + nginx.conf + .dockerignore)" ;;
         *)   USE_DOCKER=0
              print_status "config" "Docker: disabled" ;;
+    esac
+}
+
+prompt_js_copy_delivery() {
+    echo ""
+    read -r -p "$(prompt_main "Ship a plain-JavaScript delivery copy script (js-copy)? [y/N]: ")" js_copy_answer || true
+    case "$js_copy_answer" in
+        y|Y) USE_JS_COPY_DELIVERY=1
+             print_status "config" "JS-copy delivery: enabled (npm run js-copy:build / js-copy:verify)" ;;
+        *)   USE_JS_COPY_DELIVERY=0
+             print_status "config" "JS-copy delivery: disabled" ;;
     esac
 }
 
@@ -147,6 +184,48 @@ apply_docker_files() {
     cp "$SKELETON_TEMPLATE_ROOT/nginx.conf" "$project_path/nginx.conf"
     cp "$SKELETON_TEMPLATE_ROOT/.dockerignore" "$project_path/.dockerignore"
     print_status "success" "Docker files added — build with: docker build --secret id=env,src=.env -t ${PROJECT_NAME} ."
+}
+
+# patch_package_json is defined in bin/lib/scaffold_package_json.sh (#397) — shared with
+# ts_lib.sh, which needs the exact same argv-not-source-interpolated write.
+
+# Optional plain-JavaScript delivery copy (course submission, client handoff,
+# a consumer with no TS toolchain). Copied only when prompt_js_copy_delivery
+# was accepted. Depends on package.json, .gitignore and eslint.config.js
+# already existing in the project (copy_skeleton_files + copy_common_templates
+# must have run first).
+apply_js_copy_delivery() {
+    local project_path="$1"
+    local js_copy_root="$SKELETON_TEMPLATE_ROOT/optional/js-copy"
+
+    if [ "${USE_JS_COPY_DELIVERY:-0}" -ne 1 ]; then
+        return
+    fi
+
+    print_status "info" "Adding plain-JavaScript delivery copy scripts..."
+    mkdir -p "$project_path/scripts"
+    cp "$js_copy_root/emit-js-copy.mjs" "$project_path/scripts/emit-js-copy.mjs"
+    cp "$js_copy_root/verify-js-copy.mjs" "$project_path/scripts/verify-js-copy.mjs"
+
+    patch_package_json "$project_path/package.json" scripts \
+        'js-copy:build=node scripts/emit-js-copy.mjs' \
+        'js-copy:verify=node scripts/verify-js-copy.mjs' \
+        'js-copy=npm run js-copy:build && npm run js-copy:verify'
+
+    # The generated js-copy/ tree is a build artifact — never committed —
+    # and must be excluded from lint, or every finding is reported twice
+    # (once on src/, once on a copy nobody can edit).
+    printf '\n# js-copy delivery script output (npm run js-copy:build)\n/js-copy/\n' \
+        >> "$project_path/.gitignore"
+    sed -i "s#'\*\*/dist/\*\*',#'**/dist/**',\n      '**/js-copy/**',#" \
+        "$project_path/eslint.config.js"
+    # scripts/*.mjs are Node CLI tooling, not app code — they fall outside every
+    # `files:` block that grants browser/node globals, so process/console read
+    # as undefined without this.
+    sed -i "s#  // 9. Prettier config#  // 9. scripts/ (js-copy delivery tooling) — Node CLI, not app code\n  {\n    files: ['scripts/**/*.mjs'],\n    languageOptions: { globals: { ...globals.node } },\n  },\n\n  // 10. Prettier config#" \
+        "$project_path/eslint.config.js"
+
+    print_status "success" "JS-copy delivery scripts added"
 }
 
 apply_file_variants() {
@@ -207,33 +286,37 @@ apply_package_variants() {
     case "$STATE_MGMT_CHOICE" in
         2)
             print_status "info" "Adding Zustand dependency..."
-            python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg['dependencies']['zustand'] = '^5.0.0'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+            patch_package_json "$project_path/package.json" dependencies \
+                'zustand=^5.0.0'
             ;;
         3)
             print_status "info" "Adding Redux Toolkit dependencies..."
-            python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg['dependencies']['@reduxjs/toolkit'] = '^2.0.0'
-pkg['dependencies']['react-redux'] = '^9.0.0'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+            patch_package_json "$project_path/package.json" dependencies \
+                '@reduxjs/toolkit=^2.0.0' 'react-redux=^9.0.0'
             ;;
         *) ;;
     esac
 
     print_status "success" "Package variants applied"
+}
+
+# Ships exactly ONE deploy workflow, per prompt_deploy_target. The workflows live under
+# optional/deploy/ rather than .github/workflows/ precisely so the `.github` overlay above
+# cannot copy both unconditionally.
+copy_deploy_target() {
+    local project_path="$1"
+    local deploy_root="$SKELETON_TEMPLATE_ROOT/optional/deploy"
+
+    case "$DEPLOY_TARGET_CHOICE" in
+        1) cp "$deploy_root/pages/deploy-spa.yml" "$project_path/.github/workflows/deploy-spa.yml"
+           print_status "success" "GitHub Pages deploy workflow added" ;;
+        2) cp "$deploy_root/vercel/deploy-vercel.yml" "$project_path/.github/workflows/deploy-vercel.yml"
+           # vercel.json is what `vercel build` reads for the SPA rewrites, so it belongs at
+           # the project root, not in .github/.
+           cp "$deploy_root/vercel/vercel.json" "$project_path/vercel.json"
+           print_status "success" "Vercel deploy workflow + vercel.json added" ;;
+        *) print_status "info" "No deploy workflow added" ;;
+    esac
 }
 
 copy_common_templates() {
@@ -277,6 +360,7 @@ copy_common_templates() {
     if [ -d "$SKELETON_TEMPLATE_ROOT/.github" ]; then
         cp -r "$SKELETON_TEMPLATE_ROOT/.github/." "$project_path/.github"
     fi
+    copy_deploy_target "$project_path"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
 
     # Ship the repo→LLM context exporter (and its print_status helper) unconditionally,
@@ -313,7 +397,7 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
+    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review
@@ -321,7 +405,7 @@ apply_branch_protection() {
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
             local reviews_json
-            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -377,7 +461,7 @@ wait_for_gh_pages_branch() {
     gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1 && return 0
 
     print_status "info" "The 'gh-pages' branch doesn't exist yet — the first deploy creates it (~1-3 min)."
-    read -r -p "Wait for the first deploy and enable Pages automatically? [Y/n]: " wait_ans || true
+    read -r -p "$(prompt_main "Wait for the first deploy and enable Pages automatically? [Y/n]: ")" wait_ans || true
     case "$wait_ans" in
     n | N)
         print_status "info" "After the first deploy finishes, enable Pages with:"
@@ -426,7 +510,7 @@ prompt_pages_setup() {
     pages_prerequisites_met "$repo" || return
 
     print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
-    read -r -p "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: " pages_ans || true
+    read -r -p "$(prompt_main "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: ")" pages_ans || true
     case "$pages_ans" in
     y | Y) ;;
     *)
@@ -470,7 +554,9 @@ prompt_git_remote_setup() {
 	# the prompt returned (#212).
 	if scaffold_prompt_git_remote_setup "$1"; then
 		apply_branch_protection "$1"
-		prompt_pages_setup
+		# Only the Pages target needs the one-off Pages enablement; offering it on the
+		# Vercel or none path would wait on a gh-pages branch nothing ever pushes.
+		[ "$DEPLOY_TARGET_CHOICE" = "1" ] && prompt_pages_setup
 	fi
 }
 
@@ -482,6 +568,13 @@ apply_offline_mode() {
     # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
     print_status "info" "Removed .github (GitHub-only assets)"
+    # vercel.json lives at the project ROOT, so the .github sweep above does not reach it —
+    # and a Vercel config with no workflow to read it is dead configuration pointing at a
+    # deploy that cannot happen. It goes with its workflow.
+    if [ -f "$project_path/vercel.json" ]; then
+        rm -f "$project_path/vercel.json"
+        print_status "info" "Removed vercel.json (its deploy workflow went with .github)"
+    fi
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
@@ -492,18 +585,10 @@ apply_offline_mode() {
         "$project_path/bin/git_diff_check.sh"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
-    python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg.setdefault('scripts', {})
-pkg['scripts']['git:diff:export'] = 'bash bin/git_diff_export.sh'
-pkg['scripts']['git:diff:check'] = 'bash bin/git_diff_check.sh'
-pkg['scripts']['git:diff:apply'] = 'bash bin/git_diff_apply.sh'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+    patch_package_json "$project_path/package.json" scripts \
+        'git:diff:export=bash bin/git_diff_export.sh' \
+        'git:diff:check=bash bin/git_diff_check.sh' \
+        'git:diff:apply=bash bin/git_diff_apply.sh'
     print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
 }
 
@@ -520,14 +605,17 @@ main() {
     validate_inputs
     resolve_github_username
     prompt_state_management
+    prompt_deploy_target
     prompt_module_federation
     prompt_docker
+    prompt_js_copy_delivery
     create_directory_structure "$PROJECT_PATH"
     copy_skeleton_files "$PROJECT_PATH"
     apply_docker_files "$PROJECT_PATH"
     apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
+    apply_js_copy_delivery "$PROJECT_PATH"
     # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"

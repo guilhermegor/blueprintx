@@ -41,6 +41,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # The mechanism lives in bin/pr_reconcile.sh (blueprintx#255) — ONE implementation, so a
+      # repo that ships this workflow to every generated project and also wants it for itself
+      # (blueprintx's own .github/workflows/pr-reconcile.yaml) invokes the same script instead
+      # of forking a second copy of the logic. `bin/pr_reconcile.sh` is this file's OWN
+      # post-scaffold path (templates/python-common/bin/ is flattened to bin/ on copy) — a
+      # generated project's checkout, not blueprintx's own source tree.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Reconcile
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,42 +58,4 @@ jobs:
           # On the event path, reconcile just this PR; on schedule/dispatch, sweep a window.
           EVENT_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.number || '' }}
           SWEEP_LIMIT: "30"
-        run: |
-          set -euo pipefail
-
-          reconcile_pr() {
-            pr="$1"
-            # Only act on a MERGED pr; a closed-unmerged PR must not close its issues.
-            merged=$(gh pr view "$pr" --json merged --jq .merged 2>/dev/null || echo "false")
-            [ "$merged" = "true" ] || return 0
-
-            # Close each linked issue that is still OPEN (an already-closed one is a no-op).
-            for issue in $(gh pr view "$pr" --json closingIssuesReferences \
-                            --jq '.closingIssuesReferences[].number' 2>/dev/null || true); do
-              state=$(gh issue view "$issue" --json state --jq .state 2>/dev/null || echo "")
-              if [ "$state" = "OPEN" ]; then
-                echo "PR #$pr -> closing issue #$issue"
-                gh issue close "$issue" --reason completed \
-                  --comment "Closed by #$pr (reconciled: a bot-performed merge does not close linked issues)." \
-                  || echo "::warning::could not close issue #$issue"
-              fi
-            done
-
-            # Second casualty of the same root cause: delete_branch_on_merge does not fire either.
-            ref=$(gh pr view "$pr" --json headRefName --jq .headRefName 2>/dev/null || echo "")
-            same_repo=$(gh pr view "$pr" --json isCrossRepository --jq .isCrossRepository 2>/dev/null || echo "true")
-            if [ -n "$ref" ] && [ "$same_repo" = "false" ]; then
-              # An already-deleted branch is a no-op, not an error.
-              gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$ref" >/dev/null 2>&1 \
-                && echo "PR #$pr -> deleted branch $ref" || true
-            fi
-          }
-
-          if [ -n "${EVENT_PR:-}" ]; then
-            reconcile_pr "$EVENT_PR"
-          else
-            # Bounded sweep: walk the most recently merged PRs and reconcile anything missed.
-            for pr in $(gh pr list --state merged --limit "$SWEEP_LIMIT" --json number --jq '.[].number'); do
-              reconcile_pr "$pr"
-            done
-          fi
+        run: bash bin/pr_reconcile.sh

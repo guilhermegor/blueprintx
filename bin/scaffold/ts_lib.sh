@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_package_json.sh
+source "$SCRIPT_DIR/../lib/scaffold_package_json.sh"
 
 PROJECT_ROOT="${1:-}"
 PROJECT_NAME="${2:-}"
@@ -51,7 +53,7 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "GitHub username (default: $DEFAULT_GITHUB_USERNAME): " input || true
+    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -267,13 +269,13 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "Protect branch '$branch' on GitHub now? [y/N]: " protect_ans || true
+    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review rule — GitHub
             # forbids self-approval, so the first PR's merge would be permanently blocked.
             local reviews_json
-            read -r -p "Will human reviewers gate merges to '$branch'? [y/N]: " reviews_ans || true
+            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -357,18 +359,10 @@ apply_offline_mode() {
         "$project_path/bin/git_diff_check.sh"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
-    python3 -c "
-import json
-with open('$project_path/package.json') as f:
-    pkg = json.load(f)
-pkg.setdefault('scripts', {})
-pkg['scripts']['git:diff:export'] = 'bash bin/git_diff_export.sh'
-pkg['scripts']['git:diff:check'] = 'bash bin/git_diff_check.sh'
-pkg['scripts']['git:diff:apply'] = 'bash bin/git_diff_apply.sh'
-with open('$project_path/package.json', 'w') as f:
-    json.dump(pkg, f, indent=2)
-    f.write('\n')
-"
+    patch_package_json "$project_path/package.json" scripts \
+        'git:diff:export=bash bin/git_diff_export.sh' \
+        'git:diff:check=bash bin/git_diff_check.sh' \
+        'git:diff:apply=bash bin/git_diff_apply.sh'
     print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
     commit_offline_artifacts "$project_path"
 }

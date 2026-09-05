@@ -33,8 +33,13 @@ discover_workflows() {
 	# ⚠️ Group the expression: `-name '*.yaml' -o -name '*.yml' -type f` parses as
 	# `(-name '*.yaml') OR (-name '*.yml' AND -type f)`, because `-o` binds looser than the
 	# implicit `-a` — so a DIRECTORY named `*.yaml` would enter the list.
+	# ⚠️ TWO shapes under templates/, and the second is easy to lose. Most template
+	# workflows sit in a `.github/workflows/` the scaffold copies wholesale; a workflow the
+	# scaffold copies CONDITIONALLY cannot live there, or the copy would be unconditional —
+	# so it sits under `optional/deploy/` and a path filter anchored on `.github/workflows`
+	# stops seeing it. A workflow this gate cannot see is a workflow shipped unchecked.
 	find .github/workflows templates \
-		-path '*/.github/workflows/*' \
+		\( -path '*/.github/workflows/*' -o -path '*/optional/deploy/*' \) \
 		\( -name '*.yml' -o -name '*.yaml' \) -type f 2>/dev/null | sort -u
 	find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -type f 2>/dev/null | sort -u
 }

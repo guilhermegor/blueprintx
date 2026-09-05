@@ -77,6 +77,30 @@ jobs:
       - name: Check cyclomatic complexity across bin/ and templates/
         run: bash templates/python-common/bin/check_complexity.sh --root .
 
+  complexity-templates:
+    name: Cyclomatic complexity — templates/python-common (tests 1, src 2, bin 8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install ruff
+        run: pipx install ruff
+
+      # blueprintx#271: the job above only ever sees bin/ (2 files) because its tree
+      # discovery is a literal top-level dirname lookup (tests/, src/, bin/ under whatever
+      # --root cd's to) — BlueprintX's own root has only bin/. templates/python-common/ IS a
+      # src/ + tests/ tree, just not at the repo root. ⚠️ function-length is NOT duplicated
+      # the same way here: its discovery already walks the WHOLE --root recursively
+      # (rglob), so the job above already reaches templates/python-common/{src,tests} today
+      # — measured by planting a 66-line function there and confirming the existing job
+      # alone reported it. A second function-length job would re-scan a subset of what the
+      # first already covers, for no new coverage.
+      - name: Check cyclomatic complexity across templates/python-common
+        run: bash templates/python-common/bin/check_complexity.sh --root templates/python-common
+
   gate-integrity:
     name: Gate integrity — a PR must not weaken a check without saying why
     runs-on: ubuntu-latest
@@ -92,6 +116,20 @@ jobs:
       # gate (ast/re/configparser), so it runs on whatever python3 the runner ships.
       - name: Check for an unjustified gate weakening since main
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
+
+  docs-code-refs:
+    name: Docs code references — symbols + import paths (blueprintx#159)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # No dependency and no setup-python step: the gate is stdlib-only ast/re, same as
+      # function-length above.
+      - name: Check docs-cited symbols and import paths across docs/
+        run: python3 templates/python-common/bin/check_docs_code_refs.py --root .
 
   test-copy-lists:
     name: Shared test copy lists — scaffolds vs python-common
@@ -142,6 +180,79 @@ jobs:
         env:
           LINT_ACTIONS_REQUIRED: "1"
         run: bash bin/ci/check_actions.sh
+
+  secret-scan:
+    name: GitGuardian — secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # ⚠️ NOT wired into bin/enable_repo_rules.sh's REQUIRED_CHECKS (blueprintx#155). Per
+    # `measure-a-checks-population-before-requiring-it`, GitGuardian's population here is
+    # unmeasured — GITGUARDIAN_API_KEY is not yet set as a repo secret on BlueprintX, so this job
+    # cannot report at all until an admin runs
+    # `gh secret set GITGUARDIAN_API_KEY --repo <owner>/<repo>`. Absent the key, `ggshield` fails
+    # loud on its own (exit 3, "A GitGuardian API key is needed") rather than silently no-op'ing —
+    # same contract as GH_PAT_REVIEW_TRIGGER in coderabbit_trigger.yml: a scanner that never ran
+    # must not print the same thing as a scanner that found nothing.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # ggshield needs the full range to diff, not just the tip.
+          fetch-depth: 0
+
+      - name: Install ggshield
+        run: pipx install ggshield
+
+      - name: Scan the push/PR range for secrets
+        # ⚠️ EXACTLY this one variable, and its name is counter-intuitive. Verified
+        # against ggshield's own source (core/git_hooks/ci/commit_range.py, v1.54.0), not its
+        # docs:
+        #   CI_PREVIOUS_COMMIT_VAR[GITHUB] == "GITHUB_PUSH_BASE_SHA"
+        # So GITHUB_PUSH_BASE_SHA is the PREVIOUS-COMMIT variable and must carry
+        # `github.event.before`. `GITHUB_PUSH_BEFORE_SHA` — the name that reads correct — and
+        # `GITHUB_PULL_BASE_SHA` appear NOWHERE in ggshield: setting them protects nothing
+        # while looking like it does. `GITHUB_DEFAULT_BRANCH` is gone for the same reason:
+        # with the guard below, this step only ever runs with a real previous commit, so
+        # ggshield's fallback to it is unreachable — and an unreachable setting reads as
+        # protection too. The pull_request path needs nothing here at all, because
+        # ggshield reads GITHUB_BASE_REF, which Actions already sets.
+        #
+        # Without a usable previous commit, `ggshield secret scan ci` falls back to
+        # `GITHUB_SHA~1...` — the LAST COMMIT ONLY. A push of five commits gets one scanned
+        # and four skipped, exit 0 either way: the "looks exactly like scanned, found
+        # nothing" failure this file's header warns about, one level subtler.
+        #
+        # ⚠️ A branch-CREATING push is excluded here on purpose: `github.event.before` is
+        # forty zeroes, and there is no previous commit to diff against. ggshield would then
+        # fall back to GITHUB_DEFAULT_BRANCH, which it uses as a BARE ref (`main..<sha>`, no
+        # `origin/` prefix — the remote prefix is applied only on the pull_request path). The
+        # runner checks out detached with no local `main`, so that resolves to nothing and
+        # lands back on `GITHUB_SHA~1...`. Prefixing it with `origin/` does not save it
+        # either: on the push that CREATES the branch, `origin/main` already equals HEAD, so
+        # the range is empty. The whole repository IS the correct range there — which is
+        # exactly the first push of a freshly scaffolded project, the one carrying everything.
+        if: >-
+          github.event_name == 'pull_request' ||
+          (github.event_name == 'push' &&
+           github.event.before != '0000000000000000000000000000000000000000')
+        env:
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+          GITHUB_PUSH_BASE_SHA: ${{ github.event.before }}
+        run: ggshield secret scan ci
+
+      - name: Scan the whole repository for secrets
+        # Runs for a manual dispatch (no range to diff at all) AND for a branch-creating push
+        # (`before` is forty zeroes). Two named steps rather than one branching step, so the
+        # Actions log says WHICH scan ran — a range bug is invisible when both modes print the
+        # same name. workflow_call keeps the caller's event_name, so a called PR run takes the
+        # step above.
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.event_name != 'push' ||
+           github.event.before == '0000000000000000000000000000000000000000')
+        env:
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+        run: ggshield secret scan repo .
 
   project-name-identities:
     name: Dist name vs import package
@@ -208,6 +319,11 @@ jobs:
       - name: Build documentation (--strict catches broken refs)
         run: bash bin/ci/check_docs_build.sh
 
+  # blueprintx#384: deliberately CI-only, no pre-commit mirror. Every one of the six
+  # skeletons must be dry-run scaffolded on every push, and pre-commit only re-runs hooks
+  # whose `files:` pattern matches the staged diff — a skeleton.meta change would trigger
+  # just that one skeleton, not all six, so the hook could never give the same coverage
+  # this matrix does. `scaffold-lint-test` below has the same shape for the same reason.
   dry-run-smoke:
     name: Dry-run smoke — ${{ matrix.skeleton }}
     runs-on: ubuntu-latest
@@ -381,3 +497,17 @@ jobs:
       # side was the template, so only generated projects paid for it.
       - name: Codespell ignore-list sync (root vs template)
         run: bash bin/ci/check_codespell_sync.sh
+
+  makefile-pairing:
+    name: Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Root-repo-only: Makefile and tasks.sh exist ONLY here, not in templates/ or any
+      # generated project, so the script lives at bin/, not templates/python-common/bin/.
+      - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
+        run: bash bin/check_makefile_pairing.sh

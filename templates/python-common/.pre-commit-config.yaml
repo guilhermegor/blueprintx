@@ -186,6 +186,17 @@ repos:
         files: \.py$
         pass_filenames: false
 
+      # Secret scanning via gitleaks (blueprintx#305, gitleaks slice). No Poetry involved —
+      # gitleaks is a system binary, resolved the same way shellcheck/actionlint are below.
+      # Config is gitleaks' own (.gitleaks.toml at the project root); resolve-don't-install,
+      # graceful skip locally, hard-fail only when GITLEAKS_REQUIRED=1 (set by CI).
+      - id: check-secrets
+        name: secret scan (gitleaks)
+        entry: bash bin/check_secrets.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: check-all-exports
         name: __all__ names every public member
         entry: bash bin/poetry_exec.sh run python bin/check_all_exports.py
@@ -201,6 +212,21 @@ repos:
       - id: check-dtypes
         name: numeric dtype policy check (no binary floats)
         entry: bash bin/poetry_exec.sh run python bin/check_dtypes.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      # Structural gate for the read-modify-write race (blueprintx#385) — an attribute
+      # reassigned from an ARITHMETIC expression over its own value, read via
+      # session.get()/.query(...).first()/.one() in the same function, with no
+      # with_for_update() and no version_id_col on the model. Two concurrent writers can
+      # read the same value and silently lose an update; nothing crashes, nothing logs.
+      # Does NOT gate a plain read-then-write with no arithmetic (every ORM update() does
+      # that) — see the module docstring. Escape hatch: "# rmw-ok: <reason>".
+      - id: check-rmw-race
+        name: read-modify-write race (arithmetic write on an ORM-read row, no lock)
+        entry: bash bin/poetry_exec.sh run python bin/check_rmw_race.py
         language: system
         types:
           - python
@@ -226,6 +252,17 @@ repos:
         entry: bash bin/poetry_exec.sh run python bin/check_docs_sections.py
         language: system
         files: ^(mkdocs\.yml|docs/)
+        pass_filenames: false
+
+      # Structural gate for the SYMBOLS a docs page cites, not just its slug/links — neither
+      # check-docs-sections (slugs) nor `mkdocs build --strict` (links) sees a `from x import Y`
+      # example, so a renamed/deleted module keeps being cited after every other gate goes
+      # green (blueprintx#159). Triggers on either side changing: a docs edit or a src move.
+      - id: check-docs-code-refs
+        name: docs code references (symbols + import paths)
+        entry: bash bin/poetry_exec.sh run python bin/check_docs_code_refs.py
+        language: system
+        files: ^(docs/|README\.md|src/)
         pass_filenames: false
 
       # Structural gate for the per-branch work-ledger convention: a branch whose cumulative diff

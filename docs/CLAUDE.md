@@ -17,6 +17,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `troubleshooting.md` | Utility page | What broke while wiring this site's brand assets/routing, the cause, the fix, and which of those fixes were decided against scaffolding into `templates/` |
 | `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, release) |
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
+| `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
 | `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
 | `py-mvc-service-native-db.md` | Skeleton overview | Layered MVC scaffold using native DB drivers (script/pipeline style) |

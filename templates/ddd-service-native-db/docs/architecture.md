@@ -156,6 +156,7 @@ To swap to a persistent backend, accept a `DatabaseHandler` in `__init__` and de
 
 **What goes here:** Reusable cross-cutting providers shared by all features. Each sub-provider has its own `domain/`, `application/`, `infrastructure/` sub-layers.
 
+<!-- docs-refs-ok: chassis/db_wschema is only injected when the storage opt-in is chosen at scaffold time — see templates/python-common/CLAUDE.md -->
 ```python
 # main.py — wiring example
 from chassis.db_schema.application import build_database_handler

@@ -1,0 +1,36 @@
+# gitleaks config — copied verbatim into every generated Python project's root.
+#
+# Modelled on healthmoney/ditto's .gitleaks.toml: extend the default ruleset (AWS, GCP,
+# Azure, GitHub, Stripe, Slack, JWT, RSA/SSH keys, etc.) rather than replace it, and keep
+# the allowlist to what a fresh, empty project measurably needs — not a speculative list
+# copied from ditto's own (Firebase/Prisma/Next.js) app surface, which does not exist here.
+# Extend this file per-project as real false positives are measured, the same way
+# templates/python-common/.codespellrc grows its ignore-words-list one rejected commit at
+# a time rather than upfront.
+#
+# blueprintx#305 (gitleaks slice).
+
+title = "BlueprintX generated project — gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "generated-project allowlist — narrow, reasoned entries only"
+
+paths = [
+  # gitleaks' own config, and poetry's lockfile (pinned package-hash entropy, not secrets).
+  '''\.gitleaks\.toml''',
+  '''poetry\.lock''',
+]
+
+# Placeholder markers used throughout this template's .env.example / README — never real
+# secrets. Mirrors ditto's stopwords list; a value containing any of these is ignored.
+stopwords = [
+  "example",
+  "placeholder",
+  "your-key-here",
+  "your-secret-here",
+  "your-token-here",
+  "changeme",
+]

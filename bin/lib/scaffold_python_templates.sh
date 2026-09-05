@@ -51,6 +51,20 @@ scaffold_render_pyproject() {
 	envsubst <"$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" >"$str_project_path/LICENSE"
 }
 
+# scaffold_prune_optin_dependency: delete a declared dependency's line (and, when the sed
+# pattern is a range, its descriptive comment) from the just-rendered pyproject.toml when the
+# opt-in feature that imports it was declined -- blueprintx#274. A tier manifest used to
+# declare an opt-in's dependency UNCONDITIONALLY, so a project that declined the feature still
+# installed it; deptry's DEP002 (declared, never imported) then had to be silenced with a
+# per_rule_ignores entry instead of a real fix. Called once per opt-in per tier, AFTER
+# scaffold_render_pyproject, with the flag the matching prompt_* function already set.
+scaffold_prune_optin_dependency() {
+	local str_project_path="$1" str_flag_value="$2" str_sed_pattern="$3"
+
+	[[ "$str_flag_value" == "true" ]] && return
+	sed -i "$str_sed_pattern" "$str_project_path/pyproject.toml"
+}
+
 scaffold_copy_tooling_configs() {
 	local str_project_path="$1"
 
@@ -126,6 +140,8 @@ scaffold_copy_shared_tests() {
 scaffold_copy_shared_test_gates() {
 	local str_project_path="$1"
 
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
+		"$str_project_path/tests/unit/test_coverage_floor_gate.py"
 	# Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
 	# selector could be wrong without any tier noticing (blueprintx#211).
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
@@ -135,10 +151,7 @@ scaffold_copy_shared_test_gates() {
 		"$str_project_path/tests/unit/test_verify_venv_imports.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \
 		"$str_project_path/tests/unit/test_startup_fragility_order.py"
-	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
-		"$str_project_path/tests/unit/test_review_threads_gate.py"
-	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
-		"$str_project_path/tests/unit/test_review_retry.py"
+	scaffold_copy_gate_tests "$str_project_path"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_oracle_example.py" \
 		"$str_project_path/tests/unit/test_contract_oracle_example.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
@@ -151,6 +164,26 @@ scaffold_copy_shared_test_gates() {
 	mkdir -p "$str_project_path/tests/fixtures"
 	cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \
 		"$str_project_path/tests/fixtures/example_source__header.csv"
+}
+
+# The tests that cover the gates themselves. Split out of scaffold_copy_shared_tests when
+# that function crossed the 60-line ceiling: this is a real grouping, not an arbitrary cut,
+# so the next gate test has an obvious home instead of pushing the parent over again.
+scaffold_copy_gate_tests() {
+	local str_project_path="$1"
+
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
+		"$str_project_path/tests/unit/test_function_length_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
+		"$str_project_path/tests/unit/test_review_threads_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
+		"$str_project_path/tests/unit/test_review_retry.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_code_refs_gate.py" \
+		"$str_project_path/tests/unit/test_docs_code_refs_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_assertion_weakening_gate.py" \
+		"$str_project_path/tests/unit/test_assertion_weakening_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_rmw_race_gate.py" \
+		"$str_project_path/tests/unit/test_rmw_race_gate.py"
 }
 
 scaffold_copy_executables_and_vscode() {

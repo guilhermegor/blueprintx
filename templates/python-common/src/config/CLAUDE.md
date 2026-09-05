@@ -337,3 +337,22 @@ The drift job, the probe and the daily ingestion all talk to the same source and
 different policies. When a job reuses a client written for another purpose, audit *every*
 default it carries — that is where a 43-minute probe and a cache that hides drift both come
 from.
+
+## Why `resolve_reference_spec` uses `isinstance`, not a `.get` default
+
+Both the override block and each entry inside it are validated with `isinstance` rather than
+relying on a mapping default. The reason is a YAML property that surprises everyone once:
+
+```yaml
+reference_files:
+```
+
+That is **valid YAML with a null value**, and it is the natural way to comment the whole block
+out. A mapping default only applies when the key is *absent* — a key that is present but null
+hands back the null, so a chained lookup raises `AttributeError` on it. A scalar in that
+position behaves the same way.
+
+So the guard is not defensive noise: it is what makes commenting out the block behave the way
+the person doing it expects — falling back to the real input spec instead of crashing at
+startup. The same check is applied to each entry, so an empty entry falls back too rather than
+resolving to "an override exists and it is empty".

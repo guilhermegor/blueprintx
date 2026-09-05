@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from src.utils.tabular_reader import ContractError, FileContract, find_file_problems, read_table
+from src.utils.tabular_reader import (
+	ContractError,
+	FileContract,
+	ProblemReport,
+	find_file_problems,
+	read_table,
+)
 
 
 def _write_csv(path_dir: Path) -> Path:
@@ -63,11 +69,35 @@ def test_read_table_raises_on_missing_required_column(tmp_path: Path) -> None:
 
 
 def test_find_file_problems_reports_without_raising(tmp_path: Path) -> None:
-	"""find_file_problems returns the problem list instead of raising."""
+	"""find_file_problems returns a ProblemReport instead of raising."""
 	path_csv = _write_csv(tmp_path)
 	cls_contract = FileContract("data", "data", ("code", "absent"), ())
-	list_problems = find_file_problems(cls_contract, path_csv, "")
-	assert any("absent" in p for p in list_problems)
+	cls_report = find_file_problems(cls_contract, path_csv, "")
+	assert any("absent" in p for p in cls_report.list_fatal)
+
+
+def test_find_file_problems_reports_a_missing_file_as_fatal(tmp_path: Path) -> None:
+	"""A missing file is a FATAL finding, not a FileNotFoundError (the "never raises" half)."""
+	cls_contract = FileContract("t", "t", (), ())
+	cls_report = find_file_problems(cls_contract, tmp_path / "nope.csv", "")
+	assert "not found" in " ".join(cls_report.list_fatal)
+
+
+def test_find_file_problems_missing_column_is_fatal_never_a_warning(tmp_path: Path) -> None:
+	"""A missing required column lands in ``list_fatal``, never in ``list_warnings``.
+
+	Should-fail witness for blueprintx#162: under the OLD flat-list shape, a caller wanting to
+	"proceed with a note" on cosmetic problems had to string-match messages — e.g. skip
+	anything mentioning "CNPJ" — and nothing stopped it from ALSO matching a missing-column
+	message by accident, silently swallowing a fatal problem as a warning. Under the new
+	shape that mistake is unrepresentable: a caller reading only ``list_warnings`` (its
+	"proceed" branch) cannot see this finding at all, because it is never placed there.
+	"""
+	path_csv = _write_csv(tmp_path)
+	cls_contract = FileContract("data", "data", ("code", "absent"), ())
+	cls_report = find_file_problems(cls_contract, path_csv, "")
+	assert any("absent" in p for p in cls_report.list_fatal)
+	assert cls_report.list_warnings == []
 
 
 def test_header_only_file_passes_its_cnpj_contract(tmp_path: Path) -> None:
@@ -80,20 +110,27 @@ def test_header_only_file_passes_its_cnpj_contract(tmp_path: Path) -> None:
 	path_csv = tmp_path / "empty.csv"
 	path_csv.write_text("cnpj;amount\n", encoding="utf-8")
 	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
-	assert find_file_problems(cls_contract, path_csv, "") == []
+	cls_report = find_file_problems(cls_contract, path_csv, "")
+	assert cls_report == ProblemReport(list_fatal=[], list_warnings=[])
 
 
-def test_populated_cnpj_column_with_no_valid_value_still_fails(tmp_path: Path) -> None:
-	"""The emptiness guard must not relax the check for a column that HAS values.
+def test_populated_cnpj_column_with_no_valid_value_is_a_warning_not_fatal(
+	tmp_path: Path,
+) -> None:
+	"""A populated-but-invalid CNPJ column is reported, but as a WARNING, never fatal.
 
 	The other half of the control above: skipping an empty column is right, skipping a
-	populated-but-invalid one would delete the check entirely.
+	populated-but-invalid one would delete the check entirely — it must still be reported.
+	It is content-quality, not structural (the column is present, the shape is sound), which
+	is why it belongs in ``list_warnings`` rather than ``list_fatal`` — see the should-fail
+	witness in ``test_find_file_problems_missing_column_is_fatal_never_a_warning``.
 	"""
 	path_csv = tmp_path / "garbage.csv"
 	path_csv.write_text("cnpj;amount\nnot-a-cnpj;10\nalso-not;20\n", encoding="utf-8")
 	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
-	list_problems = find_file_problems(cls_contract, path_csv, "")
-	assert any("holds no valid CNPJ" in p for p in list_problems)
+	cls_report = find_file_problems(cls_contract, path_csv, "")
+	assert any("holds no valid CNPJ" in p for p in cls_report.list_warnings)
+	assert cls_report.list_fatal == []
 
 
 def test_missing_cnpj_value_is_not_stringified_to_nan(tmp_path: Path) -> None:
@@ -106,7 +143,8 @@ def test_missing_cnpj_value_is_not_stringified_to_nan(tmp_path: Path) -> None:
 	path_csv = tmp_path / "blank.csv"
 	path_csv.write_text("cnpj;amount\n;10\n11.222.333/0001-81;20\n", encoding="utf-8")
 	cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
-	assert find_file_problems(cls_contract, path_csv, "") == []
+	cls_report = find_file_problems(cls_contract, path_csv, "")
+	assert cls_report == ProblemReport(list_fatal=[], list_warnings=[])
 
 
 def test_empty_contract_constrains_nothing(tmp_path: Path) -> None:

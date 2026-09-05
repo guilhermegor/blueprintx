@@ -61,6 +61,9 @@ $POETRY run python bin/check_function_length.py
 print_status info "cyclomatic complexity"
 bash bin/check_complexity.sh
 
+print_status info "secret scan (gitleaks)"
+bash bin/check_secrets.sh
+
 print_status info "runtime type-checker application"
 $POETRY run python bin/check_typing.py
 
@@ -80,6 +83,9 @@ $POETRY run python bin/check_provenance.py
 
 print_status info "docs skeleton (slug + nav)"
 $POETRY run python bin/check_docs_sections.py
+
+print_status info "docs code references (symbols + import paths)"
+$POETRY run python bin/check_docs_code_refs.py
 
 print_status info "unix filename validity"
 bash bin/check_unix_filenames.sh

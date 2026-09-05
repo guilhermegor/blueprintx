@@ -156,6 +156,25 @@ docker run --rm -p 8080:80 ${PROJECT_NAME}   # → http://localhost:8080
 To pin the build to the Node version in `.nvmrc`, add
 `--build-arg NODE_VERSION="$(cat .nvmrc)"`. See `CLAUDE.md → Docker` for details.
 
+## 📦 Plain-JavaScript delivery copy (optional)
+
+If you scaffolded with the JS-copy option, `scripts/emit-js-copy.mjs` and
+`scripts/verify-js-copy.mjs` are present. Use this when a delivery must not
+contain TypeScript at all — a course submission, a client handoff, a
+consumer with no TS toolchain.
+
+```bash
+npm run js-copy:build   # strips types with @babel/preset-typescript → js-copy/
+npm run js-copy:verify  # fails loudly if any .ts(x)/tsconfig, or a mention
+                         # of TypeScript in a generated .md/.txt/.html, survived
+npm run js-copy          # both, in order
+```
+
+`js-copy/` is a build artifact (git-ignored, excluded from lint) with its own
+generated `webpack.config.js` — build it with `npx webpack --mode production`
+from inside `js-copy/`, resolving `webpack`/`babel-loader` from the parent
+project's `node_modules`.
+
 ## 👨‍💻 Authors
 - ${GITHUB_USERNAME} — [GitHub](https://github.com/${GITHUB_USERNAME})
 

@@ -389,6 +389,7 @@ def test_prune_keeps_only_the_configured_backends_driver(
 _GLYPH_GATES = (
 	"check_backlog_ledger.py",
 	"check_contract_drift.py",
+	"check_docs_code_refs.py",
 	"check_docs_sections.py",
 	"check_docstrings.py",
 	"check_dtypes.py",
@@ -1444,6 +1445,129 @@ def test_docs_sections_gate_announces_its_skip_rather_than_passing_silently(
 
 	assert cls_result.returncode == 0
 	assert "skipping" in cls_result.stdout
+
+
+# --------------------------
+# check_docs_code_refs.py — docs-cited symbols/import paths vs real src/ (blueprintx#159)
+#
+# ⚠️ Unlike check_docs_sections.py (cwd-relative), this gate's default PATH_ROOT is derived
+# from `__file__` (same seam as check_function_length.py, so BlueprintX can run it via
+# `--root .`), which means `_run_py_gate`'s `cwd=` alone does not point it at a throwaway
+# tree — the real repo would be scanned instead. Every test below passes `--root` explicitly.
+# --------------------------
+
+
+def _run_docs_code_refs_gate(path_root: Path) -> subprocess.CompletedProcess:
+	"""Run ``check_docs_code_refs.py --root <path_root>``.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		The throwaway project tree to check.
+
+	Returns
+	-------
+	subprocess.CompletedProcess
+		The completed run, stdout and stderr captured as text.
+	"""
+	str_python = shutil.which("python3") or shutil.which("python") or "python3"
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	return subprocess.run(  # noqa: S603
+		[str_python, str(_bin_script("check_docs_code_refs.py")), "--root", str(path_root)],
+		capture_output=True,
+		encoding="utf-8",
+		errors="replace",
+		check=False,
+	)
+
+
+def _seed_widgets_module(tmp_path: Path) -> None:
+	"""Write a minimal ``src/chassis/widgets.py`` defining exactly ``build_widget``.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		The throwaway project tree.
+
+	Returns
+	-------
+	None
+	"""
+	_write(tmp_path / "src" / "chassis" / "__init__.py", "")
+	_write(
+		tmp_path / "src" / "chassis" / "widgets.py",
+		'"""Widgets."""\n\n\ndef build_widget() -> str:\n\t"""Build one."""\n\treturn "w"\n',
+	)
+
+
+def test_docs_code_refs_gate_fires_on_a_symbol_that_does_not_exist(tmp_path: Path) -> None:
+	"""The should-fail control: a real module cited for a symbol it never defines.
+
+	This is the renamed-export case the module docstring describes — the module still exists
+	(so a `ModuleNotFoundError` alone would miss it), but the docs cite a name that isn't there.
+	"""
+	_seed_widgets_module(tmp_path)
+	_write(
+		tmp_path / "docs" / "bad.md",
+		"# Bad\n\n```python\nfrom chassis.widgets import build_gadget\n```\n",
+	)
+
+	cls_result = _run_docs_code_refs_gate(tmp_path)
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 1
+	assert "docs/bad.md:4" in str_all
+	assert "build_gadget" in str_all
+	assert "chassis.widgets" in str_all
+
+
+def test_docs_code_refs_gate_passes_on_the_real_symbol(tmp_path: Path) -> None:
+	"""The should-pass control: the same page, citing the symbol that actually exists."""
+	_seed_widgets_module(tmp_path)
+	_write(
+		tmp_path / "docs" / "good.md",
+		"# Good\n\n```python\nfrom chassis.widgets import build_widget\n```\n",
+	)
+
+	cls_result = _run_docs_code_refs_gate(tmp_path)
+
+	assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+
+
+def test_docs_code_refs_gate_respects_the_escape_hatch(tmp_path: Path) -> None:
+	"""``<!-- docs-refs-ok: <reason> -->`` immediately before the fence exempts the block."""
+	_seed_widgets_module(tmp_path)
+	_write(
+		tmp_path / "docs" / "before.md",
+		"# Before example\n\n"
+		"<!-- docs-refs-ok: deliberately-wrong sample, see architecture.md -->\n"
+		"```python\nfrom chassis.widgets import build_gadget\n```\n",
+	)
+
+	cls_result = _run_docs_code_refs_gate(tmp_path)
+
+	assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+
+
+def test_docs_code_refs_gate_treats_zero_in_scope_candidates_as_legitimate(
+	tmp_path: Path,
+) -> None:
+	"""No ``src/`` (or a docs page citing only stdlib) is a normal state — but it must SAY so.
+
+	Measured against `templates/lib-minimal`'s own shipped docs, which carry zero fenced
+	```python blocks at all: forcing a non-zero floor here would fail a project for a reason
+	unrelated to any defect, the same "gate nobody can pay" trap the `bin/` complexity ceiling
+	already documents. The printed count is what stops that zero from reading as unchecked.
+	"""
+	_write(
+		tmp_path / "docs" / "stdlib_only.md",
+		"# Stdlib\n\n```python\nfrom dataclasses import dataclass\n```\n",
+	)
+
+	cls_result = _run_docs_code_refs_gate(tmp_path)
+
+	assert cls_result.returncode == 0
+	assert "0 first-party candidate" in cls_result.stdout
 
 
 # --------------------------

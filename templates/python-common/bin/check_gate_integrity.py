@@ -40,16 +40,64 @@ with no reason does not count, matching ``check_complexity.sh``'s "the reason is
 
 ⚠️ LINE-LEVEL SUPPRESSIONS (``# noqa: X``, ``# complexity-ok: <reason>``, ``# type: ignore``,
 ``# pragma: no cover``, ``# shellcheck disable`` — ~250 in this tree) MUST NEVER TRIP THIS GATE,
-and structurally cannot: it only ever reads the config files named above, never a ``.py``/``.sh``
-source file. PR #306 suppressed S608 per LINE for exactly this reason — a rule-level ignore
-would have silenced every future S608 finding, not just the one reviewed. A gate that blocked
-line-level suppressions would be worse than no gate: it teaches people to route around it, and
-then they route around it for the real findings too.
+and structurally cannot: for the config-file checks above it only ever reads the five files
+named above, never a ``.py``/``.sh`` source file; for the assertion checks below it only ever
+reads ``tests/{unit,integration}/test_*.py``, never an arbitrary source file where such a
+suppression would live. PR #306 suppressed S608 per LINE for exactly this reason — a rule-level
+ignore would have silenced every future S608 finding, not just the one reviewed. A gate that
+blocked line-level suppressions would be worse than no gate: it teaches people to route around
+it, and then they route around it for the real findings too.
+
+THE SHARPER HALF (blueprintx#324): the cheapest way to turn a red build green is not a config
+file at all, it is editing the assertion:
+
+    - assert to_decimal_strict("1.999", 2) == Decimal("1.99")
+    + assert to_decimal_strict("1.999", 2) == Decimal("2.00")
+
+That diff turns a money-truncation BUG into a green suite, and nothing above this section would
+object — PR #323 shipped exactly that failure in all six tiers. ⚠️ Whether "2.00" is the WRONG
+answer is not decidable from a diff, and a gate that guesses is wrong in both directions. What
+IS decidable is the SHAPE of the change, read only from a diff that satisfies BOTH halves of one
+combination — either alone is routine, the two together are not:
+
+- a changed ``tests/{unit,integration}/test_*.py`` file, AND
+- the same branch also touches a non-test ``.py`` file sharing its module stem
+  (``test_decimals.py`` <-> any ``decimals.py``) — the repo's own naming convention doubling
+  as the correlation signal, never a claim about which lines are "the code under test".
+
+Inside a file that clears that combination, four shapes count (all pure ``ast``/line-diff, no
+semantic judgement):
+
+- a ``test_*`` function present at the merge-base and gone now, or its body collapsed to a bare
+  ``pass`` / ``assert True``
+- a REPLACED assert line whose left-hand expression is unchanged but whose right-hand (expected)
+  value changed — the #323 shape verbatim
+- a REPLACED assert line whose operator weakened from ``==`` to ``in``/``>=``/``<=``/``not in``,
+  or a ``self.assertEqual(`` replaced by ``self.assertTrue(`` — the #289 shape (``in`` where
+  ``==`` belonged, found by a human review because nothing else was watching)
+- a ``pytest.raises(<Specific>)`` replaced by a broader ``pytest.raises(Exception)`` /
+  ``pytest.raises(BaseException)``, or removed outright on a line that had one
+- a ``test_*`` function newly decorated ``@pytest.mark.skip`` / ``@pytest.mark.xfail`` where it
+  carried no such mark at the merge-base
+
+A test file touched WITHOUT the matching code file — a correction to a genuinely wrong
+expectation, the common and legitimate case — clears none of this and must stay silent; that is
+what keeps the gate payable rather than a semantic judge.
+
+THE ESCAPE HATCH is the SAME ``gate-change-ok: <reason>`` marker as the config checks above, not
+a second one. Both classes are one question — "is a change that weakens confidence in this PR's
+own CI deliberate and explained?" — and a single marker means a reviewer scanning a PR body has
+one phrase to look for, not two near-identical ones to tell apart. Splitting it would also
+duplicate ``RE_JUSTIFICATION``/``justification_reason``/``report`` for no behavioural gain — the
+kind of second implementation ``check_codespell_sync.sh`` exists to police, applied to a hatch
+rather than a script.
 
 CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ancestor to resolve.
 """
 
+import ast
 import configparser
+import difflib
 import json
 import os
 import pathlib
@@ -68,6 +116,15 @@ RE_REQUIRED_CHECKS = re.compile(r"REQUIRED_CHECKS=\((.*?)\)", re.S)
 RE_CI_SCRIPT = re.compile(r"(^|/)bin/ci/[^/]+$")
 RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
+RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
+RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
+RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
+RE_PYTEST_RAISES = re.compile(r"pytest\.raises\(\s*([A-Za-z_][\w.]*)")
+# ⚠️ `!=` BELONGS HERE, and it is the weakest of the set: `assert actual != expected` accepts
+# every value except one, so a concurrent code+test change could flip `==` to `!=` and keep a
+# green test that asserts almost nothing.
+_SET_WEAKER_THAN_EQ = frozenset({"in", "not in", ">=", "<=", "!="})
+_SET_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 
 # `git show :<path>` (empty ref) reads the INDEX blob — equal to HEAD on a clean CI checkout,
 # and the staged content in a local pre-commit run. Using it for BOTH sides is what lets one
@@ -519,6 +576,476 @@ def required_checks_problems(str_old: str, str_new: str, str_shown: str) -> list
 	]
 
 
+def touched_code_stems(list_changed: list) -> frozenset:
+	"""Return the module stems of every non-test ``.py`` file the branch touches.
+
+	Parameters
+	----------
+	list_changed : list of tuple
+		``(status_letter, path)`` rows from ``changed_paths`` — every status counts, including
+		a deletion, since removing the implementation is as much "touching" it as editing it.
+
+	Returns
+	-------
+	frozenset of str
+		e.g. ``{"decimals"}`` for a branch that touches ``src/utils/decimals.py``. This is the
+		correlation half of blueprintx#324's combination signal.
+	"""
+	return frozenset(
+		pathlib.Path(str_path).stem
+		for _str_status, str_path in list_changed
+		if not RE_TEST_PATH.search(str_path) and pathlib.Path(str_path).suffix == ".py"
+	)
+
+
+def test_module_stem(str_test_path: str) -> str:
+	"""Return the module stem a ``test_<x>.py`` file names, by the repo's own convention.
+
+	Parameters
+	----------
+	str_test_path : str
+		A path matching ``RE_TEST_PATH``.
+
+	Returns
+	-------
+	str
+		``"decimals"`` for ``tests/unit/test_decimals.py``.
+	"""
+	str_stem = pathlib.Path(str_test_path).stem
+	return str_stem[len("test_") :] if str_stem.startswith("test_") else str_stem
+
+
+def test_functions(str_text: str) -> dict:
+	"""Return ``{name: ast.FunctionDef}`` for every ``test_*`` function, ``{}`` on a parse error.
+
+	Parameters
+	----------
+	str_text : str
+		Full test-file content.
+
+	Returns
+	-------
+	dict
+		Empty when the text does not parse — this gate compares two versions of valid Python,
+		it does not validate syntax.
+	"""
+	try:
+		cls_tree = ast.parse(str_text)
+	except SyntaxError:
+		return {}
+	return {
+		cls_node.name: cls_node
+		for cls_node in ast.walk(cls_tree)
+		if isinstance(cls_node, ast.FunctionDef) and cls_node.name.startswith("test_")
+	}
+
+
+def is_gutted_body(cls_node: ast.FunctionDef) -> bool:
+	"""Return ``True`` when a function's only real statement is ``pass`` / ``assert True``.
+
+	Parameters
+	----------
+	cls_node : ast.FunctionDef
+		The function to inspect.
+
+	Returns
+	-------
+	bool
+		``True`` for a body reduced to nothing but a docstring plus ``pass``/``assert True``.
+	"""
+	list_stmts = [
+		cls_stmt
+		for cls_stmt in cls_node.body
+		if not (isinstance(cls_stmt, ast.Expr) and isinstance(cls_stmt.value, ast.Constant))
+	]
+	if not list_stmts:
+		return True
+	cls_only = list_stmts[0]
+	if len(list_stmts) > 1:
+		return False
+	if isinstance(cls_only, ast.Pass):
+		return True
+	return (
+		isinstance(cls_only, ast.Assert)
+		and isinstance(cls_only.test, ast.Constant)
+		and cls_only.test.value is True
+	)
+
+
+def skip_marks(cls_node: ast.FunctionDef) -> frozenset:
+	"""Return the ``@pytest.mark.{skip,xfail}`` names decorating a function.
+
+	⚠️ Deliberately excludes ``skipif``: measured over ``origin/main~100..origin/main``,
+	its one hit was a legitimate, well-documented environment-conditional skip (a driver
+	that ships to service tiers only), not a hidden failure — flagging it would make the
+	gate unpayable on the repo's own history. ``skip``/``xfail`` are unconditional: they
+	always disable the test, which is the shape blueprintx#324 is watching for.
+
+	Parameters
+	----------
+	cls_node : ast.FunctionDef
+		The function to inspect.
+
+	Returns
+	-------
+	frozenset of str
+		e.g. ``{"skip"}``. Empty when undecorated or decorated with something else.
+	"""
+	# ⚠️ The OUTER chain only, never a walk. `@pytest.mark.skipif(platform.skip, …)` contains
+	# an Attribute named `skip` in its ARGUMENTS, so walking the decorator reported a `skip`
+	# mark on a conditional test — contradicting the deliberate `skipif` exclusion and
+	# blocking valid work. Measured: the walk returns {'skip'} on that decorator.
+	return frozenset(
+		str_mark
+		for cls_dec in cls_node.decorator_list
+		for str_mark in (_outer_pytest_mark(cls_dec),)
+		if str_mark in {"skip", "xfail"}
+	)
+
+
+def _outer_pytest_mark(cls_dec: ast.expr) -> str:
+	"""Return the mark name of a ``pytest.mark.<name>`` decorator, or ``""``.
+
+	Parameters
+	----------
+	cls_dec : ast.expr
+		One entry of a ``decorator_list``.
+
+	Returns
+	-------
+	str
+		The mark name for ``@pytest.mark.<name>`` and ``@pytest.mark.<name>(...)``, else ``""``.
+	"""
+	cls_target = cls_dec.func if isinstance(cls_dec, ast.Call) else cls_dec
+	if not isinstance(cls_target, ast.Attribute):
+		return ""
+	cls_owner = cls_target.value
+	if isinstance(cls_owner, ast.Attribute) and cls_owner.attr == "mark":
+		return cls_target.attr
+	return ""
+
+
+def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
+	"""Return findings for a ``test_*`` function removed, or reduced to a no-op, since base.
+
+	Parameters
+	----------
+	str_old : str
+		Content at the merge-base.
+	str_new : str
+		Content in this change.
+	str_shown : str
+		Path to show in messages.
+
+	Returns
+	-------
+	list of str
+		One message per deleted or gutted test.
+	"""
+	dict_old, dict_new = test_functions(str_old), test_functions(str_new)
+	list_problems = [
+		f"{str_shown}: test {str_name!r} deleted"
+		for str_name in sorted(set(dict_old) - set(dict_new))
+	]
+	for str_name, cls_new_node in dict_new.items():
+		cls_old_node = dict_old.get(str_name)
+		if cls_old_node and not is_gutted_body(cls_old_node) and is_gutted_body(cls_new_node):
+			list_problems.append(f"{str_shown}: test {str_name!r} body replaced with a no-op")
+	return list_problems
+
+
+def newly_skipped_tests(str_old: str, str_new: str, str_shown: str) -> list:
+	"""Return findings for a ``test_*`` function newly marked ``skip``/``xfail`` since base.
+
+	Parameters
+	----------
+	str_old : str
+		Content at the merge-base.
+	str_new : str
+		Content in this change.
+	str_shown : str
+		Path to show in messages.
+
+	Returns
+	-------
+	list of str
+		One message per test newly decorated.
+	"""
+	dict_old, dict_new = test_functions(str_old), test_functions(str_new)
+	list_problems = []
+	for str_name, cls_new_node in dict_new.items():
+		cls_old_node = dict_old.get(str_name)
+		if cls_old_node is None:
+			continue
+		for str_mark in sorted(skip_marks(cls_new_node) - skip_marks(cls_old_node)):
+			list_problems.append(
+				f"{str_shown}: test {str_name!r} newly decorated @pytest.mark.{str_mark}"
+			)
+	return list_problems
+
+
+def diff_replace_pairs(str_old: str, str_new: str) -> list:
+	"""Return ``(old_line, new_line, new_lineno)`` for every 1:1 replaced source line.
+
+	Parameters
+	----------
+	str_old : str
+		Content at the merge-base.
+	str_new : str
+		Content in this change.
+
+	Returns
+	-------
+	list of tuple
+		``new_lineno`` is 1-based, so it can be matched back against ``ast`` node line numbers.
+		Only equal-length replace blocks are read pairwise — an insertion/deletion tangled into
+		the same hunk is not a like-for-like replacement and carries no comparable pair.
+	"""
+	list_old, list_new = str_old.splitlines(), str_new.splitlines()
+	list_pairs = []
+	for str_tag, int_i1, int_i2, int_j1, int_j2 in difflib.SequenceMatcher(
+		a=list_old, b=list_new, autojunk=False
+	).get_opcodes():
+		if str_tag == "replace" and (int_i2 - int_i1) == (int_j2 - int_j1):
+			for int_offset, cls_pair in enumerate(
+				zip(list_old[int_i1:int_i2], list_new[int_j1:int_j2], strict=True)
+			):
+				list_pairs.append((*cls_pair, int_j1 + int_offset + 1))
+	return list_pairs
+
+
+def assertion_value_or_operator_change(str_old_line: str, str_new_line: str) -> str | None:
+	"""Return a finding when a replaced line weakens an ``assert``/``assertEqual``, else ``None``.
+
+	Parameters
+	----------
+	str_old_line : str
+		The line at the merge-base.
+	str_new_line : str
+		The replacing line.
+
+	Returns
+	-------
+	str or None
+		Describes the weakening (expected-value change, or an operator/method weakened) —
+		only when the left-hand expression is unchanged, so an unrelated rewrite of the whole
+		line is not mistaken for the same assertion pinned to a new value.
+	"""
+	cls_old, cls_new = RE_ASSERT_CMP.match(str_old_line), RE_ASSERT_CMP.match(str_new_line)
+	if cls_old and cls_new and cls_old.group(2).strip() == cls_new.group(2).strip():
+		str_old_op, str_new_op = cls_old.group(3), cls_new.group(3)
+		str_new_stripped = str_new_line.strip()
+		if str_old_op == "==" and str_new_op in _SET_WEAKER_THAN_EQ:
+			return f"assertion operator weakened from '==' to {str_new_op!r}: {str_new_stripped!r}"
+		if (
+			str_old_op == "==" == str_new_op
+			and cls_old.group(4).strip() != cls_new.group(4).strip()
+		):
+			return (
+				f"assertion expected value changed: {str_old_line.strip()!r} -> "
+				f"{str_new_stripped!r}"
+			)
+		return None
+	cls_old_m = RE_ASSERT_METHOD.search(str_old_line)
+	cls_new_m = RE_ASSERT_METHOD.search(str_new_line)
+	if (
+		cls_old_m
+		and cls_new_m
+		and cls_old_m.group(1) == "assertEqual"
+		and cls_new_m.group(1) == "assertTrue"
+	):
+		return f"assertion weakened: assertEqual() -> assertTrue(): {str_new_line.strip()!r}"
+	return None
+
+
+def raises_broadened_or_removed(str_old_line: str, str_new_line: str) -> str | None:
+	"""Return a finding when a replaced line broadens or drops a ``pytest.raises(...)``.
+
+	Parameters
+	----------
+	str_old_line : str
+		The line at the merge-base.
+	str_new_line : str
+		The replacing line.
+
+	Returns
+	-------
+	str or None
+		Describes the broadening/removal, else ``None``.
+	"""
+	cls_old, cls_new = RE_PYTEST_RAISES.search(str_old_line), RE_PYTEST_RAISES.search(str_new_line)
+	if cls_old and not cls_new:
+		return f"pytest.raises removed: {str_old_line.strip()!r}"
+	if (
+		cls_old
+		and cls_new
+		and cls_old.group(1) != cls_new.group(1)
+		and cls_new.group(1) in _SET_BROAD_EXCEPTIONS
+		and cls_old.group(1) not in _SET_BROAD_EXCEPTIONS
+	):
+		return f"pytest.raises broadened from {cls_old.group(1)!r} to {cls_new.group(1)!r}"
+	return None
+
+
+def raises_count_decreased(str_old: str, str_new: str, str_shown: str) -> list:
+	"""Return a finding when ``pytest.raises(...)`` wrappers vanish, counted whole-file.
+
+	A wrapper removed alongside its now-unwrapped body reindents every line under it, so it
+	never lands in a same-length ``diff_replace_pairs`` block — this checks COUNT, not position,
+	which is what makes a plain deletion visible at all.
+
+	Parameters
+	----------
+	str_old : str
+		Content at the merge-base.
+	str_new : str
+		Content in this change.
+	str_shown : str
+		Path to show in messages.
+
+	Returns
+	-------
+	list of str
+		A single finding when the count dropped, else empty.
+	"""
+	int_old = count_pytest_raises_calls(str_old)
+	int_new = count_pytest_raises_calls(str_new)
+	if int_new < int_old:
+		return [f"{str_shown}: pytest.raises(...) count dropped from {int_old} to {int_new}"]
+	return []
+
+
+def count_pytest_raises_calls(str_source: str) -> int:
+	"""Return how many real ``pytest.raises(...)`` CALLS the source makes.
+
+	Parameters
+	----------
+	str_source : str
+		Python source to parse.
+
+	Returns
+	-------
+	int
+		The number of call nodes, or the regex count when the source does not parse.
+
+	Notes
+	-----
+	⚠️ A regex over source TEXT counts occurrences, not calls — so adding
+	``marker = "pytest.raises(ValueError)"`` restores the count while the real wrapper stays
+	removed, and the drop check sees nothing. Measured: the regex finds 1 in that string, the
+	AST finds 0 calls. Counting `ast.Call` nodes cannot be fooled by a string literal.
+
+	The regex remains the fallback for unparsable source (a partial diff side), where a rough
+	count beats no count at all — but a parse failure means the number is approximate, never
+	that there is nothing to find.
+	"""
+	try:
+		cls_tree = ast.parse(str_source)
+	except SyntaxError:
+		return len(RE_PYTEST_RAISES.findall(str_source))
+	return sum(
+		1
+		for cls_node in ast.walk(cls_tree)
+		if isinstance(cls_node, ast.Call) and _is_pytest_raises_target(cls_node.func)
+	)
+
+
+def _is_pytest_raises_target(cls_func: ast.expr) -> bool:
+	"""Return whether a call target is ``pytest.raises`` (or a bare ``raises``).
+
+	Parameters
+	----------
+	cls_func : ast.expr
+		The ``func`` of an ``ast.Call``.
+
+	Returns
+	-------
+	bool
+		``True`` for ``pytest.raises`` and for ``raises`` imported directly.
+	"""
+	if isinstance(cls_func, ast.Attribute):
+		return cls_func.attr == "raises"
+	return isinstance(cls_func, ast.Name) and cls_func.id == "raises"
+
+
+def enclosing_test_name(str_new: str, int_lineno: int) -> str:
+	"""Return the innermost ``test_*`` function containing a 1-based line number.
+
+	Parameters
+	----------
+	str_new : str
+		Content to parse.
+	int_lineno : int
+		1-based line number.
+
+	Returns
+	-------
+	str
+		The function name, or ``""`` when the line falls outside any ``test_*`` function.
+	"""
+	for str_name, cls_node in test_functions(str_new).items():
+		if cls_node.lineno <= int_lineno <= (cls_node.end_lineno or cls_node.lineno):
+			return str_name
+	return ""
+
+
+def replaced_assertion_problems(str_old: str, str_new: str, str_shown: str) -> list:
+	"""Return findings for assertion lines replaced 1:1 between two test-file versions.
+
+	Parameters
+	----------
+	str_old : str
+		Content at the merge-base.
+	str_new : str
+		Content in this change.
+	str_shown : str
+		Path to show in messages.
+
+	Returns
+	-------
+	list of str
+		One message per weakened replaced line, naming its enclosing test where resolvable.
+	"""
+	list_problems = []
+	for str_old_line, str_new_line, int_lineno in diff_replace_pairs(str_old, str_new):
+		str_finding = assertion_value_or_operator_change(
+			str_old_line, str_new_line
+		) or raises_broadened_or_removed(str_old_line, str_new_line)
+		if not str_finding:
+			continue
+		str_test = enclosing_test_name(str_new, int_lineno)
+		str_where = f"test {str_test!r}" if str_test else f"{str_shown}:{int_lineno}"
+		list_problems.append(f"{str_shown}: {str_where} {str_finding}")
+	return list_problems
+
+
+def test_assertion_problems(str_old: str, str_new: str, str_shown: str) -> list:
+	"""Return every assertion-integrity finding for one changed test file (blueprintx#324).
+
+	Parameters
+	----------
+	str_old : str
+		Content at the merge-base.
+	str_new : str
+		Content in this change.
+	str_shown : str
+		Path to show in messages.
+
+	Returns
+	-------
+	list of str
+		Combined findings — deleted/gutted tests, newly skipped tests, and weakened
+		assertions/``raises`` — for a file already known to clear the correlation signal
+		(see ``file_problems``, which is the only caller and gates on ``touched_code_stems``).
+	"""
+	return [
+		*deleted_or_gutted_tests(str_old, str_new, str_shown),
+		*newly_skipped_tests(str_old, str_new, str_shown),
+		*replaced_assertion_problems(str_old, str_new, str_shown),
+		*raises_count_decreased(str_old, str_new, str_shown),
+	]
+
+
 # Dispatch by basename/path shape — the whole reason each analyzer above takes plain
 # (old_text, new_text, shown_path) rather than reaching for git itself.
 _DICT_DISPATCH = {
@@ -530,7 +1057,9 @@ _DICT_DISPATCH = {
 }
 
 
-def file_problems(str_path: str, str_base: str) -> list:
+def file_problems(
+	str_path: str, str_base: str, set_touched_stems: frozenset = frozenset()
+) -> list:
 	"""Return weakening findings for one changed, still-existing path.
 
 	Parameters
@@ -539,11 +1068,14 @@ def file_problems(str_path: str, str_base: str) -> list:
 		Repository-relative path, as reported by ``changed_paths``.
 	str_base : str
 		The merge-base commit.
+	set_touched_stems : frozenset of str
+		Module stems the branch also touches (``touched_code_stems``) — gates the assertion
+		checks on blueprintx#324's correlation signal.
 
 	Returns
 	-------
 	list of str
-		Findings for this path; empty when it is not a watched config file, is newly
+		Findings for this path; empty when it is not a watched config/test file, is newly
 		added (nothing to weaken), or carries no weakening.
 	"""
 	str_new = show(STR_INDEX_REF, str_path)
@@ -554,27 +1086,34 @@ def file_problems(str_path: str, str_base: str) -> list:
 	fn_analyzer = _DICT_DISPATCH.get(pathlib.Path(str_path).name)
 	if fn_analyzer is None and RE_WORKFLOW_PATH.search(str_path):
 		fn_analyzer = workflow_problems
-	if fn_analyzer is None:
-		return []
-	return fn_analyzer(str_old, str_new, str_path)
+	list_problems = fn_analyzer(str_old, str_new, str_path) if fn_analyzer else []
+
+	if RE_TEST_PATH.search(str_path) and test_module_stem(str_path) in set_touched_stems:
+		list_problems.extend(test_assertion_problems(str_old, str_new, str_path))
+	return list_problems
 
 
-def deletion_problems(list_changed: list) -> list:
-	"""Return findings for a deleted gate script, or a deleted watched config/workflow file.
+def deletion_problems(list_changed: list, set_touched_stems: frozenset = frozenset()) -> list:
+	"""Return findings for a deleted gate script, watched config/workflow file, or test file.
 
 	Deleting the whole file is the bluntest form of every weakening ``file_problems`` reads
 	line-by-line inside it — a ``ruff.toml`` deleted outright removes every rule at once, and
-	that must be at least as loud as removing one rule from it (blueprintx#313).
+	that must be at least as loud as removing one rule from it (blueprintx#313). A test file
+	deleted alongside the code it tested is the same shape again (blueprintx#324).
 
 	Parameters
 	----------
 	list_changed : list of tuple
 		``(status_letter, path)`` rows from ``changed_paths``.
+	set_touched_stems : frozenset of str
+		Module stems the branch also touches — gates the test-file-deletion finding on the
+		same correlation signal as ``file_problems``.
 
 	Returns
 	-------
 	list of str
-		One message per deleted quality-check script or deleted watched config file.
+		One message per deleted quality-check script, deleted watched config file, or test
+		file deleted while its code under test changed.
 	"""
 	list_problems = []
 	for str_status, str_path in list_changed:
@@ -584,6 +1123,10 @@ def deletion_problems(list_changed: list) -> list:
 			list_problems.append(f"{str_path}: quality-check script deleted")
 		elif pathlib.Path(str_path).name in _DICT_DISPATCH or RE_WORKFLOW_PATH.search(str_path):
 			list_problems.append(f"{str_path}: watched gate configuration deleted")
+		elif RE_TEST_PATH.search(str_path) and test_module_stem(str_path) in set_touched_stems:
+			list_problems.append(
+				f"{str_path}: test file deleted while its code under test changed"
+			)
 	return list_problems
 
 
@@ -688,12 +1231,13 @@ def collect_problems(list_changed: list, str_base: str) -> list:
 	Returns
 	-------
 	list of str
-		Combined findings from deletions and from modified watched config files.
+		Combined findings from deletions and from modified watched config/test files.
 	"""
-	list_problems = deletion_problems(list_changed)
+	set_touched_stems = touched_code_stems(list_changed)
+	list_problems = deletion_problems(list_changed, set_touched_stems)
 	for str_status, str_path in list_changed:
 		if str_status != "D":
-			list_problems.extend(file_problems(str_path, str_base))
+			list_problems.extend(file_problems(str_path, str_base, set_touched_stems))
 	return list_problems
 
 

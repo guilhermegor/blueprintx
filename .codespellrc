@@ -17,4 +17,15 @@ quiet-level = 3
 # (30 words missing there, 25 missing here), and the copy that ships into new projects was the
 # stale one, so every scaffolded project inherited the older vocabulary. When a failed commit
 # teaches this repo a word, it must land in both files.
-ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,datas,data,caracteres,caractere,momento,repete,essencial,construtor,comando,comandos,sequencia,referencia,valores,coluna,colunas,linha,linhas,arquivo,arquivos,cabecalho,conteudo,tamanho,saida,entrada,obrigatorio,opcional,usuario,parametro,parametros,retorno,entao,acao,nao,erros,prefere,itens,controle,controles,validador,validadores,ambiente,ambientes,superficie,indice,indices,meu,seu,sua,seus,suas,ser,vai,vao,relevante,relevantes,sera,serao,seria,seriam,autor,responde,falso,falsos,sinal,sinais,mede,colateral,cliente,limite,eles,argumentos,envolve,conter,ans
+#
+# Pruned in #197: each entry below was measured, not judged — remove it, run
+# `codespell docs/ templates/ --config=.codespellrc`, and keep it only if that produces a
+# finding. 67 pt-BR entries produced zero findings post-#195 (the repo prose they protected is
+# gone) and were dropped. These 27 survive because something IN THE TREE TODAY still needs
+# them: historical docs/backlog/*.md records quoting an older ignore-words-list or an old bug
+# verbatim (do not edit — CLAUDE.md forbids rewriting a closed backlog file), an ongoing
+# pt-BR-language backlog ledger, `templates/python-common/bin/check_comment_language.py`'s own
+# pt-BR detection dictionary (`ser`, `vai`), a Brazilian-locale UI string sample in
+# `templates/react-spa-webpack/.../ui.md` (`nome`), and `NotIn` (an ast operator name, not
+# locale) in `check_assertion_weakening.py`.
+ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,caracteres,caractere,prefere,meu,ser,vai,sinal,notin

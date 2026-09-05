@@ -10,8 +10,9 @@ configurable delimiter; ``.json`` → a JSON array of records; otherwise Excel).
 - :func:`read_query` — the **SQL** sibling: runs a parameterized query against an
   already-open DB-API connection and shares the same mandatory contract + dtype tail. The
   seam never opens connections (that stays a controller/boundary concern).
-- :func:`find_file_problems` — validates a file against a contract and returns problems
-  **without raising** (the boundary uses it to abort, skip, or notify).
+- :func:`find_file_problems` — validates a file against a contract and returns a
+  :class:`ProblemReport` **without raising** (the boundary reads ``list_fatal`` to decide
+  whether to abort, and ``list_warnings`` to log and continue). See blueprintx#162.
 - :func:`decode_positional_payload` — decodes an API payload whose rows are positional
   arrays beside a separate ``columns`` header, handling a row wider than its own header
   asymmetrically (drop a surplus position only when it is empty everywhere; raise when it
@@ -133,6 +134,30 @@ class ContractError(Exception, metaclass=TypeChecker):
 	def __init__(self, list_problems: list[str]) -> None:
 		self.list_problems = list_problems
 		super().__init__("; ".join(list_problems))
+
+
+@dataclass(frozen=True)
+class ProblemReport(metaclass=TypeChecker):
+	"""Severity-split findings from a ``find_*_problems`` validator (blueprintx#162).
+
+	A single flat list of problem strings carries no severity, so a caller reading it has to
+	guess — from the wording alone — whether a given entry means "abort" or "log and
+	continue", and a loader author and a caller author routinely guess differently. Splitting
+	the findings into two lists instead of tagging each string with a severity field makes the
+	mistake **unrepresentable**: a caller that reads only ``list_warnings`` (its "proceed with
+	a note" branch) physically cannot see a fatal problem, because a fatal one is never placed
+	there — there is no field to forget to check.
+
+	Attributes
+	----------
+	list_fatal : list of str
+		Problems that make the data unusable; the caller should abort.
+	list_warnings : list of str
+		Problems worth logging that do not, on their own, block use of the data.
+	"""
+
+	list_fatal: list[str]
+	list_warnings: list[str]
 
 
 @type_checker
@@ -271,8 +296,8 @@ def read_query(
 @type_checker
 def find_file_problems(
 	cls_contract: FileContract, path_file: Path, str_sheet: str, str_csv_sep: str = ";"
-) -> list[str]:
-	"""Validate a file against its contract; return problems (never raises).
+) -> ProblemReport:
+	"""Validate a file against its contract; return a severity-split report (never raises).
 
 	Parameters
 	----------
@@ -287,21 +312,28 @@ def find_file_problems(
 
 	Returns
 	-------
-	list of str
-		One message per problem found; empty when the file is sound.
-
-	Raises
-	------
-	FileNotFoundError
-		If the file does not exist (raised by the reader).
+	ProblemReport
+		``list_fatal`` and ``list_warnings``, both empty when the file is sound. A missing
+		file is a **finding, not an exception** — see the note below.
 	"""
+	# ⚠️ Checked HERE, not left to the raising `_read_raw` — see "Never raises includes a
+	# missing file" in utils/CLAUDE.md.
+	if not path_file.exists():
+		return ProblemReport(list_fatal=[f"File not found: {path_file}"], list_warnings=[])
 	df_raw = _read_raw(path_file, str_sheet, "str", str_csv_sep)
 	return find_contract_problems(df_raw, cls_contract)
 
 
 @type_checker
-def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -> list[str]:
-	"""Return the contract problems of an already-read frame (never raises).
+def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -> ProblemReport:
+	"""Return the contract problems of an already-read frame, split by severity (never raises).
+
+	A required column that is simply absent is **fatal** — there is no way to proceed, every
+	downstream lookup would raise ``KeyError``. A CNPJ column that is present but holds no
+	valid value is a **warning** — the shape of the frame is sound, only its content is
+	questionable, so a tolerant caller may log it and continue. :func:`_finalize` (the strict
+	twin behind ``read_table``/``read_query``) still aborts on either kind, unchanged from
+	before this split — only a caller reading this report directly gets to tell them apart.
 
 	Parameters
 	----------
@@ -312,8 +344,9 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 
 	Returns
 	-------
-	list of str
-		Missing required columns and CNPJ columns holding no valid CNPJ.
+	ProblemReport
+		``list_fatal`` holds missing required columns; ``list_warnings`` holds CNPJ columns
+		that hold no valid CNPJ.
 	"""
 	list_missing = [
 		f"Required column missing in '{cls_contract.str_name}': '{str_col}'"
@@ -329,7 +362,7 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 		]
 		if str_problem is not None
 	]
-	return list_missing + list_cnpj
+	return ProblemReport(list_fatal=list_missing, list_warnings=list_cnpj)
 
 
 @type_checker
@@ -342,7 +375,8 @@ def _cnpj_column_problem(  # complexity-ok: two acceptance rules, empty-column o
 	False — the exact answer a column of garbage gives — so without this guard a source
 	reporting "nothing today" by shipping its header alone is reproved as holding no valid
 	CNPJ, and the run dies on a perfectly well-formed file. A column that HAS values and none
-	valid must still fail, so the guard is emptiness only.
+	valid must still be reported (as a warning — see :class:`ProblemReport`), so the guard is
+	emptiness only.
 
 	Parameters
 	----------
@@ -526,11 +560,13 @@ def _finalize(
 	Raises
 	------
 	ContractError
-		When the frame violates ``cls_contract``.
+		When the frame violates ``cls_contract`` — fatal or warning, since this is the
+		STRICT twin: unlike a caller reading :class:`ProblemReport` directly, it aborts on
+		either kind rather than choosing per severity.
 	"""
-	list_problems = find_contract_problems(df_raw, cls_contract)
-	if list_problems:
-		raise ContractError(list_problems)
+	cls_report = find_contract_problems(df_raw, cls_contract)
+	if cls_report.list_fatal or cls_report.list_warnings:
+		raise ContractError(cls_report.list_fatal + cls_report.list_warnings)
 	return apply_dtypes(
 		df_raw,
 		dict_dtypes=dict_dtypes,
