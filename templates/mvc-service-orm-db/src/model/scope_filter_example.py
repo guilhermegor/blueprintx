@@ -13,14 +13,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from logging import Logger
 import os
-from typing import TYPE_CHECKING
+
+import pandas as pd
 
 from utils.logs import log_message
-from utils.typing import type_checker
+from utils.typing import TypeChecker, type_checker
 
 
-if TYPE_CHECKING:
-	import pandas as pd
+# ``pandas`` is imported for real (not TYPE_CHECKING-only) because beartype's runtime check
+# resolves ``pd.DataFrame`` against this module's globals at call time — a TYPE_CHECKING-only
+# alias leaves ``pd`` unbound at runtime and the check fails. Still annotation-only per
+# .layer-policy.yaml: ``pd`` is never called, only used as a type.
 
 
 # One table mapping every recognised env token to bool, mirroring
@@ -34,7 +37,7 @@ _DICT_ENV_BOOL: dict[str, bool] = {
 
 
 @dataclass(frozen=True)
-class ScopeFilterPrice:
+class ScopeFilterPrice(metaclass=TypeChecker):
 	"""The measured price of one scope-filter run.
 
 	Returned by every call to :func:`apply_scope_filter`, active or not, so the cost of the
@@ -59,7 +62,9 @@ class ScopeFilterPrice:
 
 
 @type_checker
-def resolve_kill_switch(str_env_var: str, bool_default: bool, logger: Logger | None = None) -> bool:
+def resolve_kill_switch(
+	str_env_var: str, bool_default: bool, logger: Logger | None = None
+) -> bool:
 	"""Resolve a scope-filter kill switch from the environment, safe-side on unset/unknown.
 
 	An unset variable and an unrecognised token (a typo) resolve to the SAME value —
@@ -97,13 +102,13 @@ def resolve_kill_switch(str_env_var: str, bool_default: bool, logger: Logger | N
 
 @type_checker
 def apply_scope_filter(
-	df_input: "pd.DataFrame",
+	df_input: pd.DataFrame,
 	str_column: str,
 	set_excluded_values: frozenset[str],
 	str_env_var: str,
 	bool_default_exclude: bool,
 	logger: Logger | None = None,
-) -> tuple["pd.DataFrame", ScopeFilterPrice]:
+) -> tuple[pd.DataFrame, ScopeFilterPrice]:
 	"""Apply (or skip) a record-removing filter, and MEASURE the price.
 
 	Parameters
