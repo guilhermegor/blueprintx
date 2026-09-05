@@ -281,6 +281,12 @@ jobs:
       - name: Check required fields and scaffold paths
         run: bash bin/ci/validate_meta.sh
 
+      # Should-fail regression suite (blueprintx#407): validate_meta.sh blocks merge and had
+      # zero tests for a missing key, an empty value, or a dead scaffold= path. tests/ is the
+      # right home — this gate is root-only and never travels into a generated project.
+      - name: Should-fail regression tests for validate_meta.sh
+        run: bash tests/test_validate_meta.sh
+
   version-sync:
     name: Version sync — pyproject vs CLI
     runs-on: ubuntu-latest
