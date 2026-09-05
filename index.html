@@ -1405,7 +1405,7 @@ docs wired in from the first commit — without hand-assembling that tooling per
 <hr />
 <h2 id="python-scaffolds">Python scaffolds<a class="headerlink" href="#python-scaffolds" title="Permanent link">&para;</a></h2>
 <ul>
-<li>DDD Service (Native DB): Domain-Driven Design, hexagonal service skeleton with per-feature capabilities and shared chassis infrastructure. Uses native database libraries (psycopg2, sqlite3, cx_Oracle, etc.). See <a href="py-ddd-service-native-db/">DDD Service (Native DB)</a>.</li>
+<li>DDD Service (Native DB): Domain-Driven Design, hexagonal service skeleton with per-feature capabilities and shared chassis infrastructure. Uses native database libraries (psycopg, sqlite3, oracledb, etc.). See <a href="py-ddd-service-native-db/">DDD Service (Native DB)</a>.</li>
 <li>DDD Service (ORM DB): Same DDD/hexagonal structure, but uses SQLAlchemy ORM for database operations. See <a href="py-ddd-service-orm-db/">DDD Service (ORM DB)</a>.</li>
 <li>MVC Service (Native DB): Layered Model–View–Controller skeleton for script/pipeline-style projects, using native DB drivers (sqlite3, psycopg, mysql-connector, pyodbc, oracledb). See <a href="py-mvc-service-native-db/">MVC Service (Native DB)</a>.</li>
 <li>MVC Service (ORM DB): Same flat MVC structure, but the model uses the SQLAlchemy ORM. See <a href="py-mvc-service-orm-db/">MVC Service (ORM DB)</a>.</li>
@@ -1413,7 +1413,7 @@ docs wired in from the first commit — without hand-assembling that tooling per
 </ul>
 <h2 id="typescript-scaffolds">TypeScript scaffolds<a class="headerlink" href="#typescript-scaffolds" title="Permanent link">&para;</a></h2>
 <ul>
-<li>React SPA (Webpack): Single-page application using React 19, TypeScript 5, Webpack 5, Babel, ESLint (flat config), and Prettier. Src directories pre-created for components, pages, contexts, models, routers, utils, and more. See <a href="ts-react-spa-webpack/">React SPA (Webpack)</a>.</li>
+<li>React SPA (Webpack): Single-page application using React 19, TypeScript 6, Webpack 5, Babel, ESLint (flat config), and Prettier. Src directories pre-created for components, pages, contexts, models, routers, utils, and more. See <a href="ts-react-spa-webpack/">React SPA (Webpack)</a>.</li>
 </ul>
 <h2 id="view-these-docs-locally-poetry">View these docs locally (Poetry)<a class="headerlink" href="#view-these-docs-locally-poetry" title="Permanent link">&para;</a></h2>
 <p><strong>Option A (direct)</strong>
@@ -1421,14 +1421,14 @@ docs wired in from the first commit — without hand-assembling that tooling per
 2. Serve with live reload: <code>poetry run mkdocs serve -a 0.0.0.0:8000 --livereload</code>
 3. Build static site: <code>poetry run mkdocs build</code></p>
 <p><strong>Option B (Make recipe)</strong>
-1. <code>make mkdocs_server</code> (installs docs deps, serves with live reload)</p>
+1. <code>make mkdocs_serve</code> (installs docs deps, serves with live reload)</p>
 <p>For a one-off static build, use Option A's <code>poetry run mkdocs build</code>.</p>
 <h2 id="scaffolder-quick-reference">Scaffolder quick reference<a class="headerlink" href="#scaffolder-quick-reference" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Interactive menu: <code>make new</code></li>
 <li>Preview structures: <code>make preview</code></li>
-<li>Temp sandbox: <code>make dev</code> or <code>make dev-clean</code></li>
-<li>Structure-only preview: <code>make dry-run</code></li>
+<li>Temp sandbox: <code>make dev</code> or <code>make dev_clean</code></li>
+<li>Structure-only preview: <code>make dry_run</code></li>
 </ul>
 <p>Each scaffold copies shared assets from a common template directory (<code>templates/python-common</code> for Python, <code>templates/ts-common</code> for TypeScript) and then applies its skeleton-specific layout. New skeletons are discovered automatically via <code>skeleton.meta</code> files — no changes to the menu code needed.</p>
 

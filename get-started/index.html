@@ -1350,15 +1350,15 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>new<span class="w">         </span><span class="c1"># interactive scaffolder</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>preview<span class="w">     </span><span class="c1"># show skeleton structures</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>make<span class="w"> </span>dev<span class="w">         </span><span class="c1"># scaffold into a temp dir (kept)</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>make<span class="w"> </span>dev-clean<span class="w">   </span><span class="c1"># scaffold into temp dir and auto-delete on exit</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>dry-run<span class="w">     </span><span class="c1"># print structure; no files written</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>make<span class="w"> </span>dev_clean<span class="w">   </span><span class="c1"># scaffold into temp dir and auto-delete on exit</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>dry_run<span class="w">     </span><span class="c1"># print structure; no files written</span>
 </span></code></pre></div>
 <hr />
 <h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>bash</code> ≥ 4</li>
 <li>For <strong>Python skeletons</strong>: <code>pyenv</code> + <code>poetry</code> (or your Python toolchain of choice) in the generated project</li>
-<li>For <strong>TypeScript skeletons</strong>: Node.js ≥ 20; run <code>npm install</code> after scaffolding</li>
+<li>For <strong>TypeScript skeletons</strong>: the Node.js floor is per skeleton — <code>react-spa-webpack</code> ≥ 22, <code>ts-lib</code> ≥ 22.14.0 (each declares its own <code>engines.node</code>); run <code>npm install</code> after scaffolding</li>
 </ul>
 <hr />
 <h2 id="highlights">✨ Highlights<a class="headerlink" href="#highlights" title="Permanent link">&para;</a></h2>

@@ -1535,7 +1535,7 @@
 
 <h1 id="ddd-service-native-db-domain-driven-design-hexagonal-service"><strong>DDD Service — Native DB (Domain-Driven Design, hexagonal service)</strong><a class="headerlink" href="#ddd-service-native-db-domain-driven-design-hexagonal-service" title="Permanent link">&para;</a></h1>
 <p>A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It keeps business logic isolated from I/O while allowing shared infrastructure when it is truly cross-cutting.</p>
-<p>This template uses <strong>native database libraries</strong> (psycopg2, sqlite3, cx_Oracle, pyodbc, pymysql, etc.) for direct database access, giving you fine-grained control over queries and connections. For schema-less persistence the same <code>DatabaseHandler</code> contract covers JSON, CSV, and joblib backends via <code>chassis/db_wschema/</code>.</p>
+<p>This template uses <strong>native database libraries</strong> (psycopg, sqlite3, oracledb, pyodbc, mysql-connector-python, etc.) for direct database access, giving you fine-grained control over queries and connections. For schema-less persistence the same <code>DatabaseHandler</code> contract covers JSON, CSV, and joblib backends via <code>chassis/db_wschema/</code> — added only if you opt into schema-less storage at scaffold time (declined by default).</p>
 <blockquote>
 <p><strong>Examples:</strong> <a href="../py-examples/ddd-external-api/">External API Calls</a> · <a href="../py-examples/ddd-usage-examples/">Wiring with FastAPI</a> · <a href="../py-examples/ddd-bank-balance-alert/">Bank Balance Alert</a></p>
 </blockquote>
@@ -1564,7 +1564,7 @@
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">          </span>mysql_handler.py
 </span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">          </span>mssql_handler.py
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">          </span>oracle_handler.py
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">      </span>db_wschema/
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">      </span>db_wschema/<span class="w">                         </span><span class="c1"># optional — added only if you opt into schema-less storage</span>
 </span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">        </span>application/storage_factory.py<span class="w">    </span><span class="c1"># build_storage_handler()</span>
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">        </span>infrastructure/
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">          </span>json_handler.py
@@ -1635,7 +1635,7 @@
 </tr>
 <tr>
 <td><code>src/chassis/db_wschema/</code></td>
-<td>Schema-less handlers</td>
+<td>Schema-less handlers (optional opt-in)</td>
 <td><code>build_storage_handler()</code> factory + JSON, CSV, Joblib handlers + <code>SanityCheck</code></td>
 </tr>
 <tr>

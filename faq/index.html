@@ -1406,7 +1406,8 @@ copied into scaffolded projects.</p>
 <h2 id="online-vs-offline-scaffolds-whats-the-difference">Online vs offline scaffolds — what's the difference?<a class="headerlink" href="#online-vs-offline-scaffolds-whats-the-difference" title="Permanent link">&para;</a></h2>
 <p>If you connect a GitHub remote, the scaffold ships GitHub-only assets (Actions workflows,
 CODEOWNERS, PR template). Without one, it ships an offline git-diff workflow instead. Library
-projects also switch versioning: online = tag-driven, offline = a local <code>make bump_version</code>.</p>
+projects also switch versioning: online = tag-driven, offline = a local <code>poe bump_version</code>
+(<code>cz bump</code>, run inside the generated project — not a BlueprintX <code>make</code> target).</p>
 <h2 id="how-is-blueprintx-itself-versioned">How is BlueprintX itself versioned?<a class="headerlink" href="#how-is-blueprintx-itself-versioned" title="Permanent link">&para;</a></h2>
 <p>The version is the git tag. Cut a release from the <strong>Release</strong> GitHub Action (enter the version
 once); <code>blueprintx --version</code> resolves it via <code>git describe</code> from a checkout, or a stamped
