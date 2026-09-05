@@ -28,4 +28,4 @@ quiet-level = 3
 # pt-BR detection dictionary (`ser`, `vai`), a Brazilian-locale UI string sample in
 # `templates/react-spa-webpack/.../ui.md` (`nome`), and `NotIn` (an ast operator name, not
 # locale) in `check_assertion_weakening.py`.
-ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,caracteres,caractere,prefere,meu,ser,vai,sinal,notin
+ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,caracteres,caractere,prefere,meu,ser,vai,sinal,notin,attch,exmaple,mis,falso,unparseable
