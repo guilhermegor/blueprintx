@@ -138,7 +138,7 @@ make dry_run
 make mkdocs_serve  # serve the docs site locally at http://0.0.0.0:8000
 ```
 
-**Requirements:** `bash` ≥ 4. For Python skeletons, use `pyenv`/`poetry` in the generated project. For TypeScript skeletons, use Node.js ≥ 22 and run `npm install` after scaffolding. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
+**Requirements:** `bash` ≥ 4. For Python skeletons, use `pyenv`/`poetry` in the generated project. For TypeScript skeletons, the Node.js floor is per skeleton — `react-spa-webpack` needs ≥ 22, `ts-lib` needs ≥ 22.14.0 — and each declares its own `engines.node`; run `npm install` after scaffolding. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
 
 ## 🏗️ Supported skeletons
 

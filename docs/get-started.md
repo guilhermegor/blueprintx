@@ -23,7 +23,7 @@ make dry_run     # print structure; no files written
 
 - `bash` ≥ 4
 - For **Python skeletons**: `pyenv` + `poetry` (or your Python toolchain of choice) in the generated project
-- For **TypeScript skeletons**: Node.js ≥ 22; run `npm install` after scaffolding
+- For **TypeScript skeletons**: the Node.js floor is per skeleton — `react-spa-webpack` ≥ 22, `ts-lib` ≥ 22.14.0 (each declares its own `engines.node`); run `npm install` after scaffolding
 
 ---
 
