@@ -10,8 +10,15 @@ from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 
-from browser_steps import BrowserStep, BrowserStepError, resolve_placeholders, run_browser_steps
+from browser_steps import (
+	BrowserStep,
+	BrowserStepError,
+	resolve_placeholders,
+	run_browser_steps,
+	step_handlers,
+)
 from browser_steps.step_handlers import STEP_KINDS
 import pytest
 
@@ -96,7 +103,7 @@ def test_step_kinds_matches_the_vocabulary_in_issue_228() -> None:
 	assert set_expected_kinds == STEP_KINDS
 
 
-def test_run_browser_steps_dispatches_every_kind_in_order() -> None:
+def test_run_browser_steps_dispatches_every_kind_in_order(tmp_path: Path) -> None:
 	"""A full recorded flow calls the page in the recorded order with resolved values."""
 	os.environ["TEST_BROWSER_STEPS_INJECTED_VALUE"] = "resolved-from-env"
 	cls_page = FakePage()
@@ -123,10 +130,10 @@ def test_run_browser_steps_dispatches_every_kind_in_order() -> None:
 		("click", "#export"),
 	]
 
-	asyncio.run(run_browser_steps(list_steps, cls_page))
+	asyncio.run(run_browser_steps(list_steps, cls_page, tmp_path))
 
 	assert cls_page.list_calls == list_expected_calls
-	assert cls_page.cls_download.str_saved_to == "out.xlsx"
+	assert cls_page.cls_download.str_saved_to == str(tmp_path.resolve() / "out.xlsx")
 
 
 def test_run_browser_steps_rejects_an_unknown_kind() -> None:
@@ -154,3 +161,66 @@ def test_resolve_placeholders_fails_fast_on_unset_variable() -> None:
 
 	with pytest.raises(BrowserStepError, match="TEST_BROWSER_STEPS_UNSET"):
 		resolve_placeholders("${TEST_BROWSER_STEPS_UNSET}")
+
+
+@pytest.mark.parametrize(
+	"str_escape",
+	["/etc/passwd", "../../outside.xlsx", "sub/../../outside.xlsx"],
+)
+def test_download_refuses_a_save_path_that_escapes_the_root(
+	tmp_path: Path, str_escape: str
+) -> None:
+	"""A recording is untrusted data: an absolute or ../ save_path must not write out."""
+	cls_page = FakePage()
+	list_steps: list[BrowserStep] = [
+		{"kind": "download", "trigger_selector": "#export", "save_path": str_escape}
+	]
+
+	with pytest.raises(BrowserStepError, match="resolves outside the download root"):
+		asyncio.run(run_browser_steps(list_steps, cls_page, tmp_path / "downloads"))
+	assert cls_page.cls_download.str_saved_to is None
+
+
+def test_download_refuses_an_escape_through_a_symlinked_root(tmp_path: Path) -> None:
+	"""resolve() is what holds here: a symlink inside the root must not be a way out."""
+	path_root = tmp_path / "downloads"
+	path_root.mkdir()
+	(tmp_path / "outside").mkdir()
+	(path_root / "link").symlink_to(tmp_path / "outside")
+	cls_page = FakePage()
+	list_steps: list[BrowserStep] = [
+		{"kind": "download", "trigger_selector": "#export", "save_path": "link/out.xlsx"}
+	]
+
+	with pytest.raises(BrowserStepError, match="resolves outside the download root"):
+		asyncio.run(run_browser_steps(list_steps, cls_page, path_root))
+
+
+def test_every_handler_kind_declares_its_required_fields() -> None:
+	"""The two dicts keyed by kind must not drift — a new handler needs a fields entry."""
+	assert set(step_handlers._DICT_REQUIRED_FIELDS) == STEP_KINDS
+
+
+@pytest.mark.parametrize(
+	("dict_step", "str_match"),
+	[
+		({"kind": "navigate"}, "missing required field 'url'"),
+		({"kind": "navigate", "url": 42}, "field 'url' must be str, got int"),
+		({"kind": "fill", "selector": "#a"}, "missing required field 'value'"),
+		({"kind": "wait", "timeout_ms": "500"}, "must be int, got str"),
+		({"kind": "wait", "timeout_ms": True}, "must be int, got bool"),
+	],
+)
+def test_run_browser_steps_rejects_a_malformed_step(
+	tmp_path: Path, dict_step: BrowserStep, str_match: str
+) -> None:
+	"""A hand-edited recording must fail as a named step, not as a raw KeyError.
+
+	``True`` is included on purpose: it is a valid ``int`` to ``isinstance`` and a
+	nonsense timeout, so accepting it would be the silent wrong answer.
+	"""
+	cls_page = FakePage()
+
+	with pytest.raises(BrowserStepError, match=str_match):
+		asyncio.run(run_browser_steps([dict_step], cls_page, tmp_path))
+	assert cls_page.list_calls == []

@@ -55,8 +55,14 @@ class BrowserDownloadInfo(Protocol):
 class BrowserPage(Protocol):
 	"""The subset of ``playwright.async_api.Page`` the step handlers call."""
 
-	async def goto(self, url: str) -> None:
-		"""Navigate the page to ``url``."""
+	async def goto(self, url: str) -> object:
+		"""Navigate the page to ``url`` (the return value is discarded).
+
+		⚠️ ``object``, not ``None``: the real ``Page.goto`` returns ``Response | None``,
+		and a Protocol method promising ``None`` is NOT satisfied by one returning a
+		Response — strict type checking would reject the very page this port exists to
+		describe. Same reason applies to ``select_option`` below.
+		"""
 		...
 
 	async def fill(self, selector: str, value: str) -> None:
@@ -67,8 +73,8 @@ class BrowserPage(Protocol):
 		"""Click the element matched by ``selector``."""
 		...
 
-	async def select_option(self, selector: str, value: str) -> None:
-		"""Choose ``value`` from the ``<select>`` matched by ``selector``."""
+	async def select_option(self, selector: str, value: str) -> object:
+		"""Choose ``value`` from the ``<select>`` (the real page returns ``list[str]``)."""
 		...
 
 	async def wait_for_timeout(self, timeout: float) -> None:
