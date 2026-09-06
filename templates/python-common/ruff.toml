@@ -73,7 +73,7 @@ exclude = [
 
 [format]
 quote-style = "double"
-indent-style = "tab"
+indent-style = "space"
 docstring-code-format = false
 docstring-code-line-length = 79  # original python standard - readability in terminal (help)
 
@@ -107,23 +107,41 @@ select = [
     # (blueprintx#360). Measured 2 findings there; enabling strict-checking would put a gate
     # violation on deliberate, correct design, which is how a gate teaches everyone to disable it.
     "A",
+    # N - pep8-naming - PEP 8's "Variables" section names two rules; only one is decidable
+    # from the AST. "constants are UPPERCASE" is not: Python has no real constants, so
+    # `max_retries = 5` at module scope is syntactically identical to an ordinary variable —
+    # "this is a constant" is human intent, not a fact the parser can see. `N` cannot gate
+    # that rule and neither can any other tool; it only offers the INVERSE, catching a
+    # local/global variable that is already screaming uppercase (`N806`/`N816`) — precisely
+    # the shape worth flagging. The other PEP 8 rule ("never re-declare a variable") is
+    # already covered where it is decidable: `F811` (redeclared unused symbol), `PLW0127`
+    # (`x = x`), `PLW2901` (loop variable reassigned), `PLR1704` (argument shadowed by a
+    # local) are all active today via `F`/`PL` above. Reassigning a variable still in USE
+    # (an accumulator, a pipeline result) is normal Python and deliberately gets no gate — a
+    # gate that fires on correct code is a gate everyone disables (blueprintx#422).
+    # Measured 2026-09-05 (ruff 0.11.13): `ruff check --select N src/ bin/ tests/ optional/`
+    # -> 8 findings. `N802` (4, all deliberate uppercase-in-name test names carrying the
+    # behaviour under test, e.g. `test_a_glob_governs_packages_NESTED_below_the_sublayer` — renaming
+    # them to satisfy N802 would erase the emphasis `tests/CLAUDE.md` asks test names to
+    # carry) is ignored in `tests/**` below. `N806` (3, a local constant that should have
+    # been a module-level one — exactly rule 1 seen from the reverse) is fixed in place in
+    # `check_assertion_weakening.py`; the third instance, in `check_gate_integrity.py`, is
+    # left as a real, tracked finding via a per-file-ignore below because that file is held
+    # by another open PR (#406) at measurement time — fix it there, not here, to avoid a
+    # collision. `N813` (1, `import defusedxml.ElementTree as defused_et`) is a deliberate
+    # alias — see the per-file-ignore below — so `N` costs zero NEW findings beyond the one
+    # already fixed and the one already deferred.
+    "N",
 ]
 ignore = [
-    "D206",  # docstring should be indented with spaces, not tabs
-    # W191 (tab-indentation) treats a tab as a violation, while `[format] indent-style =
-    # "tab"` below makes the formatter PRODUCE tabs. Enabling it would set the linter against
-    # the formatter, and the formatter wins — the same principle the E701 note states, in
-    # reverse: there the formatter already forbids the style, here it already requires it.
-    #
-    # ⚠️ Ignoring W191 is what makes the rest of `W` adoptable, and the difference is the
-    # whole measurement: W191 accounted for 6022 of 6022 findings, so `W` minus W191 is ZERO
-    # today. It costs nothing now and catches trailing whitespace and invalid regex escapes
-    # from here on (blueprintx#222).
-    #
-    # ⚠️ Measuring this is itself a trap: `ruff check --config 'lint.ignore=["W191"]'` does
-    # NOT merge the way it reads and still reported all 6022. Only `--ignore W191` gives the
-    # real number, and the wrong one supports the wrong conclusion ("W is not adoptable").
-    "W191",
+    # D206 (docstring indented with tabs) and W191 (tab-indentation) both existed only to
+    # keep the linter from fighting `[format] indent-style = "tab"` — the formatter produced
+    # tabs, so the linter had to stop flagging them. blueprintx#419 moved the formatter to
+    # `indent-style = "space"`, which removes the premise for both: neither rule fires on
+    # space-indented code, so there is nothing left to suppress. Re-measured 2026-09-05 after
+    # the conversion: `ruff check --select W191,D206` reports zero findings with both rules
+    # ENABLED, confirming the ignores were the only thing keeping them silent, not a latent
+    # violation count (the 6022-finding number from blueprintx#222 was measured under tabs).
     # E701 (multiple statements on one line) is deliberately NOT ignored. It is
     # tempting to add it here to allow `if cond: break`, but that would be dead
     # config: `ruff format` (Black semantics, not configurable) expands a compound
@@ -193,6 +211,25 @@ lines-after-imports = 2
 # public API here and therefore the finding worth keeping visible.
 max-args = 8
 
+# ⚠️ NO identifier-length ceiling here, MEASURED and REJECTED (blueprintx#420). Across this
+# tier's `src/` + `bin/` (the only trees this file's rules apply to; `tests/` is out of scope
+# by design — test names are descriptive sentences): 493 definitions, of which 63 exceed 20
+# chars, 4 exceed 30, and ZERO exceed 40. The longest name in the tree is 34 chars
+# (`assertion_value_or_operator_change`). A ceiling at 40 would find nothing, which is
+# indistinguishable from a gate that never ran — the same standard this repo already applies
+# to `check_provenance.py`/`check_complexity.sh` failing on zero discovery. Re-measured across
+# all five Python skeletons' own `src/`: the next-longest name anywhere is 26 chars
+# (`SQLAlchemyRecordRepository`, ddd-service-orm-db) — nowhere near 40 either. Ruff itself has
+# no length-based naming rule to turn on (pep8-naming's `N-` rules police casing, not length),
+# so the only way to add this ceiling is a hand-rolled `bin/check_*.py` — exactly the kind of
+# gate this repo's measure-first rule exists to refuse when the number says no. It would also
+# fight a deliberate house convention on purpose: every variable here carries a 3-5 char type
+# prefix (`str_`, `df_`, `cls_`, …), so a length ceiling penalises the prefix convention by
+# design, and the way an author under a tight ceiling escapes it is dropping the prefix or
+# abbreviating the noun — both worse than the long name. Reopen only if the measured max
+# crosses 40 in some tier, or a concrete defect (not just discomfort) is traced to a name's
+# length.
+
 [lint.pydocstyle]
 convention = "numpy"
 
@@ -260,6 +297,15 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 # same argument as `src/config/connection_db.py` above.
 "src/chassis/db_wschema/infrastructure/sanity_check.py" = ["ANN401"]
 
+# check_gate_integrity.py is held by another open PR (#406) at measurement time (blueprintx#422);
+# its N806 finding (`_INT_MIN_FIELDS` at local scope, same shape fixed in
+# check_assertion_weakening.py) is real and tracked, not suppressed for design reasons — fix it
+# there once #406 lands, and drop this line.
+"bin/check_gate_integrity.py" = ["N806"]
+# `ElementTree` aliased to lowercase `defused_et` is deliberate, not a naming slip: the alias
+# communicates "this is defusedxml, not the stdlib module" at every call site (blueprintx#422).
+"src/utils/xml_reader.py" = ["N813"]
+
 "tests/**/*.py" = [
     "S101",  # use of assert
     # A literal in a test IS the case under test: `assert add(1, 2) == 3` says what it means,
@@ -267,6 +313,11 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
     # 29 findings were in tests/, all of that shape.
     "PLR2004",
     "TID251",  # tests legitimately read back outputs with pd.read_* to assert on them
+    # A test name's uppercase word IS the behaviour under test (e.g. `..._NESTED_below_...`,
+    # `..._THREAD_problem`) — `tests/CLAUDE.md` asks a test name to describe the behaviour, not
+    # the function, and renaming to satisfy N802 would erase exactly that emphasis
+    # (blueprintx#422).
+    "N802",
 ]
 # The seam itself is the one place allowed to call the bare pandas readers.
 "src/utils/tabular_reader.py" = ["TID251"]
