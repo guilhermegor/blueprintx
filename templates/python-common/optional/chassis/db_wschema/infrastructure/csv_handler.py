@@ -125,7 +125,6 @@ class CSVDatabaseHandler(DatabaseHandler):
 
 	def close(self) -> None:
 		"""No-op for file-based storage."""
-		return None
 
 	def _read_all(self) -> list[Record]:
 		"""Load all records from disk.

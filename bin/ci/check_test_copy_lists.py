@@ -141,22 +141,27 @@ DICT_EXPECTED_ABSENT = {
         # the day pydantic lands as a dependency.
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_gate_integrity_gate.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
+        "test_ruff_ret_rule.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
     },
     "python_ddd_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_gate_integrity_gate.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
+        "test_ruff_ret_rule.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
     },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_gate_integrity_gate.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
+        "test_ruff_ret_rule.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
     },
     "python_mvc_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_gate_integrity_gate.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
+        "test_ruff_ret_rule.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
     },
     "python_mvc_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_gate_integrity_gate.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
+        "test_ruff_ret_rule.py": _STR_GATE_INTEGRITY_TEST_BLOCKED,
     },
 }
 

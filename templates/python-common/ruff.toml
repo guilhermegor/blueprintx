@@ -95,6 +95,12 @@ select = [
     "W",   # pycodestyle warnings - trailing whitespace, invalid regex escapes (see W191 below)
     "PL",  # pylint - magic values, over-wide signatures, module-level global
     "PT",  # flake8-pytest-style - pytest idioms (one assertion per behaviour, etc.)
+    # RET - flake8-return - early-return style (RET505) and superfluous `return None`
+    # (RET501). Measured 2026-09-06 (ruff 0.11.13): 0 RET505 findings (the repo already
+    # practices early return) and 5 RET501 (all a no-op `close()`/`__aexit__` trailing
+    # `return None`, removed — see CONTRIBUTING.md "Ruff Rule Adoption Log" for the
+    # case-by-case record, blueprintx#426).
+    "RET",
     # A - flake8-builtins - PEP 8 import rule 4: an import must not shadow a builtin.
     # `from re import compile` shadows compile() with no signal today; the fix is an alias
     # (`from re import compile as re_compile`) or a qualified import (`import re`). Measured

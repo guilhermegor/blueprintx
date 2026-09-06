@@ -168,7 +168,6 @@ class JoblibHandler(DatabaseHandler):
 
 	def close(self) -> None:
 		"""No-op for file-based storage."""
-		return None
 
 	def list_all(self) -> list[str]:
 		"""Return identifiers for all artifacts in the store.

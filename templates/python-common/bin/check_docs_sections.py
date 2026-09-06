@@ -74,7 +74,6 @@ def _ignore_unknown(loader: _MkDocsSafeLoader, tag_suffix: str, node: yaml.Node)
 	None
 		Always ``None`` — the value is irrelevant to this gate.
 	"""
-	return None
 
 
 _MkDocsSafeLoader.add_multi_constructor("tag:yaml.org,2002:python/name:", _ignore_unknown)
