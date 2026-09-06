@@ -65,7 +65,18 @@ project/
 ## Enrichment degradation contract
 
 `controller/_pipeline.PipelineOrchestrator._enrich` is the reference example for a
-**documented graceful degradation**. A degradation documented in a docstring ("returns
+**documented graceful degradation**.
+
+⚠️ **The split of responsibility is what makes the contract enforceable.** The business logic
+— reading the label map and merging it into the report — lives in the model collaborator
+`model/label_enricher.LabelEnricher`, per the house rule *"business logic stays in the model;
+the orchestrator only wires and sequences"*. `LabelEnricher.enrich` **raises**; it never
+degrades. `_enrich` keeps only the sequencing and the degraded result.
+
+That direction is deliberate and not interchangeable: a collaborator that swallowed its own
+failures would hand the orchestrator nothing to route, and the documented degradation would
+again be reachable from only *some* failure modes — the exact defect this section describes.
+One place decides what a failure means, and it is the one whose docstring makes the promise. A degradation documented in a docstring ("returns
 `None`/unchanged when X") is a claim about behavior, and the claim is only true if *every*
 failure mode that could prevent the enriching call actually reaches that documented value —
 not just the one mode a test happened to cover.

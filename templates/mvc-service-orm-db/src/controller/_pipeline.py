@@ -26,6 +26,7 @@ import pandas as pd
 from sqlalchemy import Engine
 
 from model.example_entity import ExampleEntity
+from model.label_enricher import LabelEnricher
 from utils.logs import log_message
 from utils.typing import ProtocolTypeCheckerMeta, TypeChecker
 from view.report_renderer import RenderToExcel
@@ -239,10 +240,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 			log_message(self.logger, "Label enrichment skipped: no path_labels configured")
 			return df_report
 		try:
-			with path_labels.open(encoding="utf-8") as file_labels:
-				dict_labels = json.load(file_labels)
-			df_enriched = df_report.copy()
-			df_enriched["label"] = df_enriched["id"].astype(str).map(dict_labels)
+			df_enriched = LabelEnricher(path_labels).enrich(df_report)
 		except Exception as exc:
 			log_message(
 				self.logger,

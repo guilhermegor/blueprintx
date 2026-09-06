@@ -116,8 +116,10 @@ def test_enrich_degrades_on_permission_error(tmp_path: Path, mocker: MockerFixtu
 def test_enrich_degrades_on_unforeseen_failure(tmp_path: Path, mocker: MockerFixture) -> None:
 	"""Mode 5: an unforeseen error unrelated to the file's existence or shape."""
 	mock_log = mocker.patch("src.controller._pipeline.log_message")
+	# Patched where the call lives — the model — see the enrichment degradation contract in
+	# the architecture doc.
 	mocker.patch(
-		"src.controller._pipeline.json.load",
+		"src.model.label_enricher.json.load",
 		side_effect=RuntimeError("unexpected failure"),
 	)
 	df_report = _report()
