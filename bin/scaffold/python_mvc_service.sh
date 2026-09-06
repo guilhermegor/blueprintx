@@ -28,6 +28,7 @@ DATA_DIR_BASE="logs"
 DATA_DIR_DATED=false
 INCLUDE_WEBHOOK=false
 WEBHOOK_PLATFORM="teams"
+INCLUDE_OTEL=false
 INCLUDE_EMAIL=false
 EMAIL_BACKEND="outlook"
 INCLUDE_MULTI_PIPELINE=false
@@ -348,6 +349,15 @@ prompt_webhook() {
     esac
 }
 
+prompt_otel() {
+    local answer
+    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    case "$answer" in
+        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
+        *) INCLUDE_OTEL=false ;;
+    esac
+}
+
 prompt_email() {
     local answer backend_ans
     read -r -p "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")" answer || true
@@ -649,6 +659,44 @@ conditional_patch_main_py() {
     print_status "success" "Webhook notifier wired into PipelineOrchestrator.run() (controller/main.py)"
 }
 
+# OTLP log export (opt-in, blueprintx#438): the module (imports opentelemetry — the ONLY
+# place it is imported, per .layer-policy.yaml), its unit test, the .env block, the pinned
+# pyproject.toml dependencies (declared only here, so an opt-out never installs them), a
+# local-dev collector compose fragment (separate from docker-compose.yml, which the DB prompt
+# already claims), and the startup.py wiring — one function, since a bare copy with no wiring
+# (or vice versa) is not a state either side of this opt-in should ever be in. No
+# chassis→utils rewrite needed: the module has no internal chassis/utils imports of its own
+# (unlike webhook/email), only the layout-agnostic typing shim.
+conditional_copy_otel() {
+    local project_path="$1"
+    if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
+    cp "$COMMON_TEMPLATE_ROOT/optional/otel_logging.py" "$project_path/src/utils/otel_logging.py"
+    cp "$COMMON_TEMPLATE_ROOT/optional/test_otel_logging.py" "$project_path/tests/unit/test_otel_logging.py"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
+    cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
+    cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
+    # Pinned, not left open-ended: the Logs signal is still "Development" status upstream
+    # (see utils/otel_logging.py), so a wider range risks a breaking minor bump landing
+    # silently on the next `poetry update`.
+    sed -i '/^python-dotenv = ">=1.0.0"/a\
+# OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
+# "Development" status upstream (see utils/otel_logging.py for the measured source).\
+opentelemetry-api = ">=1.27,<2.0"\
+opentelemetry-sdk = ">=1.27,<2.0"\
+opentelemetry-exporter-otlp-proto-http = ">=1.27,<2.0"' "$project_path/pyproject.toml"
+    cat >> "$project_path/src/config/startup.py" <<'PYBLOCK'
+
+# OTLP log export (opt-in) — ADDS a handler to LOGGER; never replaces the FileHandler
+# above. A no-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset (see utils/otel_logging.py).
+from utils.otel_logging import configure_otel_logging  # noqa: E402
+
+
+configure_otel_logging(LOGGER)
+PYBLOCK
+    print_status "success" "OTLP log export (utils/otel_logging.py) wired into startup.py + collector compose added"
+}
+
 # GitHub-only assets are copied only when a GitHub remote is established (see main()).
 copy_github_assets() {
     local project_path="$1"
@@ -848,6 +896,7 @@ main() {
     prompt_docker_compose
     prompt_data_dir
     prompt_webhook
+    prompt_otel
     prompt_email
     prompt_pipeline_intent
     prompt_env_wise_config
@@ -866,6 +915,7 @@ main() {
     conditional_copy_webhooks_yaml "$PROJECT_PATH"
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
+    conditional_copy_otel "$PROJECT_PATH"
     conditional_copy_email "$PROJECT_PATH"
     conditional_apply_multi_pipeline "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"

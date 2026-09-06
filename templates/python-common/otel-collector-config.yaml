@@ -1,0 +1,27 @@
+# Minimal local-dev OTel Collector config for the OTLP log seam (blueprintx#438).
+# The collector is the decoupling point: point the "logging" exporter below at
+# Axiom/Loki/Datadog/SigNoz/Honeycomb/Elastic (or any OTLP-speaking backend) instead —
+# a config change here, never an application change.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch: {}
+
+exporters:
+  # Prints received logs to the collector's own stdout — enough to prove the seam is
+  # wired end-to-end before pointing it at a real backend.
+  logging:
+    verbosity: detailed
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging]
