@@ -178,7 +178,6 @@ class OracleDatabaseHandler(DatabaseHandler):
 
 	def close(self) -> None:
 		"""Release resources (no-op, connections are per-call)."""
-		return None
 
 	def _connect(self) -> Any:
 		"""Create an Oracle connection using the configured DSN."""
