@@ -230,7 +230,8 @@ def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
     -------
     bool
             ``True`` only when git can prove the file exists there. Any failure (no git, shallow
-            clone, no remote) returns ``False``, so an unresolvable state never invents a violation.
+            clone, no remote) returns ``False``, so an unresolvable state never
+            invents a violation.
     """
     for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
         # S607 (partial path) is resolution BY DESIGN: use the `git` on PATH, the one the
