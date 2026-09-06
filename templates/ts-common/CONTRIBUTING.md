@@ -25,6 +25,9 @@ docs: update README setup steps
 - Prettier formats on save (`.prettierrc.js`)
 - ESLint enforces rules on save (`eslint.config.js`)
 - TypeScript strict mode is enabled — no `any` without justification
+- Functions are capped at 60 lines (100 for a `.tsx`/`.jsx` component body) via
+  `max-lines-per-function`, and catch clauses must narrow before use — see
+  `CLAUDE.md`'s "Function length" / "Catch safety" sections for the reasoning
 
 ## Pull requests
 

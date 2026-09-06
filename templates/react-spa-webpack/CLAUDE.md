@@ -289,6 +289,44 @@ immediately above the flagged function (ESLint attributes the error there, not
 on the branch) — mirrors python-common's `# complexity-ok: <reason>`, though
 unlike that gate, a missing reason is not (yet) mechanically enforced.
 
+### Function length
+
+`eslint.config.js` wires ESLint's built-in `max-lines-per-function`, split into
+**two blocks with two ceilings** — a settled decision (#439), never to be
+merged even if the numbers happen to match some week: **60** for
+`src/**/*.ts` (logic, mirrors `templates/python-common`'s 60-line
+`check_function_length.py` ceiling) and **100** for `src/**/*.{tsx,jsx}`
+(markup — a component's returned JSX can legitimately run long without
+representing added logic, and policing it at the logic ceiling is a rule
+people turn off). Both measured with
+`--rule '{"max-lines-per-function":["warn",{"max":0}]}'` against this
+scaffold's own source (blueprintx#425's technique): longest today is 27 lines
+in `.ts`, 23 in `.tsx` — both ceilings cost zero findings.
+
+⚠️ **Not the same options as Python's exclusion, and the gap is accepted, not
+compensated.** `skipBlankLines: false` matches Python (its span counts blank
+lines too). `skipComments: true` is the nearest ESLint has to "docstring
+excluded" but is **not equivalent** — it skips every comment, including
+inline ones, so the same digit buys a slightly more permissive rule here. Not
+corrected with a lower number because every measured function sits 33+ lines
+under either ceiling regardless. `IIFEs: true`: an IIFE is still a function
+body that can grow unchecked.
+
+### Catch safety
+
+Two type-aware ESLint rules close the gap `strict: true` (`tsconfig.json`)
+leaves open (#440): `useUnknownInCatchVariables` covers a `catch (err)`
+clause but **not** a promise `.catch(cb)` callback, whose parameter stays
+`any` even under strict mode.
+
+- `@typescript-eslint/use-unknown-in-catch-callback-variable` — forces the
+  same `unknown`-and-narrow discipline onto `.catch(cb)` callbacks.
+- `@typescript-eslint/only-throw-error` — only `Error` values may be thrown,
+  so a catch's `instanceof Error` narrowing can actually succeed.
+
+`no-empty` / `no-useless-catch` (an empty or pass-through catch) are already
+covered by `js.configs.recommended` — not re-added here.
+
 ## State management: ${STATE_MANAGEMENT_VARIANT}
 
 ${STATE_MANAGEMENT_DESC}
