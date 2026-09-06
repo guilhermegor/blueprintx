@@ -17,4 +17,4 @@ import sys
 
 _PATH_OPTIONAL = Path(__file__).resolve().parents[2]
 if str(_PATH_OPTIONAL) not in sys.path:
-	sys.path.insert(0, str(_PATH_OPTIONAL))
+    sys.path.insert(0, str(_PATH_OPTIONAL))

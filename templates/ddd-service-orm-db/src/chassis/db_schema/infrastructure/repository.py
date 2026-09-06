@@ -11,124 +11,124 @@ from .models import RecordModel
 
 
 class SQLAlchemyRecordRepository(Repository):
-	"""SQLAlchemy-based repository for Record entities.
+    """SQLAlchemy-based repository for Record entities.
 
-	This repository provides CRUD operations using SQLAlchemy ORM.
-	It works with any database supported by SQLAlchemy (PostgreSQL,
-	MySQL, SQLite, Oracle, MSSQL, etc.).
+    This repository provides CRUD operations using SQLAlchemy ORM.
+    It works with any database supported by SQLAlchemy (PostgreSQL,
+    MySQL, SQLite, Oracle, MSSQL, etc.).
 
-	Parameters
-	----------
-	session : Session
-		SQLAlchemy session for database operations.
+    Parameters
+    ----------
+    session : Session
+            SQLAlchemy session for database operations.
 
-	Examples
-	--------
-	>>> from chassis.db_schema.infrastructure import DatabaseSession, SQLAlchemyRecordRepository
-	>>> db = DatabaseSession("sqlite:///app.db")
-	>>> db.create_tables()
-	>>> with db.session() as session:
-	...     repo = SQLAlchemyRecordRepository(session)
-	...     stored = repo.add({"title": "Hello", "content": "World"})
-	...     session.commit()
-	"""
+    Examples
+    --------
+    >>> from chassis.db_schema.infrastructure import DatabaseSession, SQLAlchemyRecordRepository
+    >>> db = DatabaseSession("sqlite:///app.db")
+    >>> db.create_tables()
+    >>> with db.session() as session:
+    ...     repo = SQLAlchemyRecordRepository(session)
+    ...     stored = repo.add({"title": "Hello", "content": "World"})
+    ...     session.commit()
+    """
 
-	def __init__(self, session: Session) -> None:
-		super().__init__(session)
+    def __init__(self, session: Session) -> None:
+        super().__init__(session)
 
-	def add(self, entity: dict) -> dict:
-		"""Add a new record to the database.
+    def add(self, entity: dict) -> dict:
+        """Add a new record to the database.
 
-		Parameters
-		----------
-		entity : dict
-			Dictionary containing record data.
+        Parameters
+        ----------
+        entity : dict
+                Dictionary containing record data.
 
-		Returns
-		-------
-		dict
-			Persisted record data, including the assigned ``id``.
-		"""
-		record_id = entity.get("id") or generate_uuid()
-		record = RecordModel(
-			id=record_id,
-			data=json.dumps(entity),
-		)
-		self.session.add(record)
-		self.session.flush()
-		return {**entity, "id": record.id}
+        Returns
+        -------
+        dict
+                Persisted record data, including the assigned ``id``.
+        """
+        record_id = entity.get("id") or generate_uuid()
+        record = RecordModel(
+            id=record_id,
+            data=json.dumps(entity),
+        )
+        self.session.add(record)
+        self.session.flush()
+        return {**entity, "id": record.id}
 
-	def get(self, entity_id: str) -> dict | None:
-		"""Retrieve a record by ID.
+    def get(self, entity_id: str) -> dict | None:
+        """Retrieve a record by ID.
 
-		Parameters
-		----------
-		entity_id : str
-			Unique identifier of the record.
+        Parameters
+        ----------
+        entity_id : str
+                Unique identifier of the record.
 
-		Returns
-		-------
-		dict or None
-			Record data if found, otherwise ``None``.
-		"""
-		record = self.session.get(RecordModel, entity_id)
-		if record is None:
-			return None
-		return json.loads(record.data) if record.data else {"id": record.id}
+        Returns
+        -------
+        dict or None
+                Record data if found, otherwise ``None``.
+        """
+        record = self.session.get(RecordModel, entity_id)
+        if record is None:
+            return None
+        return json.loads(record.data) if record.data else {"id": record.id}
 
-	def update(self, entity: dict) -> dict | None:  # complexity-ok: two existence guards
-		"""Update an existing record.
+    def update(self, entity: dict) -> dict | None:  # complexity-ok: two existence guards
+        """Update an existing record.
 
-		Parameters
-		----------
-		entity : dict
-			Dictionary containing record data with ``id`` field.
+        Parameters
+        ----------
+        entity : dict
+                Dictionary containing record data with ``id`` field.
 
-		Returns
-		-------
-		dict or None
-			Updated record data if found, otherwise ``None``.
-		"""
-		entity_id = entity.get("id")
-		if not entity_id:
-			return None
+        Returns
+        -------
+        dict or None
+                Updated record data if found, otherwise ``None``.
+        """
+        entity_id = entity.get("id")
+        if not entity_id:
+            return None
 
-		record = self.session.get(RecordModel, entity_id)
-		if record is None:
-			return None
+        record = self.session.get(RecordModel, entity_id)
+        if record is None:
+            return None
 
-		# Last-write-wins by design, no arithmetic to corrupt — see db_schema/CLAUDE.md (#385).
-		record.data = json.dumps(entity)
-		self.session.flush()
-		return entity
+        # Last-write-wins by design, no arithmetic to corrupt — see db_schema/CLAUDE.md (#385).
+        record.data = json.dumps(entity)
+        self.session.flush()
+        return entity
 
-	def delete(self, entity_id: str) -> bool:
-		"""Delete a record by ID.
+    def delete(self, entity_id: str) -> bool:
+        """Delete a record by ID.
 
-		Parameters
-		----------
-		entity_id : str
-			Unique identifier of the record to delete.
+        Parameters
+        ----------
+        entity_id : str
+                Unique identifier of the record to delete.
 
-		Returns
-		-------
-		bool
-			``True`` if record was deleted, ``False`` if not found.
-		"""
-		record = self.session.get(RecordModel, entity_id)
-		if record is None:
-			return False
-		self.session.delete(record)
-		self.session.flush()
-		return True
+        Returns
+        -------
+        bool
+                ``True`` if record was deleted, ``False`` if not found.
+        """
+        record = self.session.get(RecordModel, entity_id)
+        if record is None:
+            return False
+        self.session.delete(record)
+        self.session.flush()
+        return True
 
-	def list_all(self) -> list[dict]:
-		"""Retrieve all records.
+    def list_all(self) -> list[dict]:
+        """Retrieve all records.
 
-		Returns
-		-------
-		list[dict]
-			List of all record data dictionaries.
-		"""
-		records = self.session.query(RecordModel).all()
-		return [json.loads(r.data) if r.data else {"id": r.id} for r in records]
+        Returns
+        -------
+        list[dict]
+                List of all record data dictionaries.
+        """
+        records = self.session.query(RecordModel).all()
+        return [json.loads(r.data) if r.data else {"id": r.id} for r in records]

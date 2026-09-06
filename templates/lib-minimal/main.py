@@ -16,5 +16,5 @@ from ._internal.utils.typing import type_checker
 
 @type_checker
 def main() -> None:
-	"""Print a greeting — the placeholder entry point for a new library."""
-	print("Hello from lib-minimal!")
+    """Print a greeting — the placeholder entry point for a new library."""
+    print("Hello from lib-minimal!")

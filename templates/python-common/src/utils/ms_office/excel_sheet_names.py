@@ -36,18 +36,18 @@ from utils.tabular_reader import ProblemReport
 # the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from collections.abc import Callable
-	from typing import TypeVar
+    from collections.abc import Callable
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 _INT_MAX_LEN = 31
@@ -62,87 +62,87 @@ _SET_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf"})
 
 @type_checker
 def find_sheet_name_problems(  # complexity-ok: seven independent Excel naming rules
-	str_name: str,
+    str_name: str,
 ) -> ProblemReport:
-	"""Validate one worksheet name against Excel's naming rules; return problems (never raises).
+    """Validate one worksheet name against Excel's naming rules; return problems (never raises).
 
-	Every rule here guards the SAME write boundary — ``openpyxl``/Excel silently truncate or
-	substitute a name breaking any one of them, with no exception to catch (see the module
-	docstring) — so every finding is **fatal**: there is no rule in this validator whose
-	violation is merely cosmetic. ``list_warnings`` is therefore always empty; it stays part
-	of the return shape (:class:`~utils.tabular_reader.ProblemReport`) so a future rule that
-	genuinely is advisory-only can be added without changing the signature again.
+    Every rule here guards the SAME write boundary — ``openpyxl``/Excel silently truncate or
+    substitute a name breaking any one of them, with no exception to catch (see the module
+    docstring) — so every finding is **fatal**: there is no rule in this validator whose
+    violation is merely cosmetic. ``list_warnings`` is therefore always empty; it stays part
+    of the return shape (:class:`~utils.tabular_reader.ProblemReport`) so a future rule that
+    genuinely is advisory-only can be added without changing the signature again.
 
-	Parameters
-	----------
-	str_name : str
-		The candidate worksheet name.
+    Parameters
+    ----------
+    str_name : str
+            The candidate worksheet name.
 
-	Returns
-	-------
-	ProblemReport
-		``list_fatal`` carries one message per broken rule (empty when the name is sound);
-		``list_warnings`` is always empty. A blank name short-circuits to a single fatal
-		problem, since none of the other rules say anything useful about it.
-	"""
-	if not str_name:
-		return ProblemReport(list_fatal=["Sheet name is blank"], list_warnings=[])
+    Returns
+    -------
+    ProblemReport
+            ``list_fatal`` carries one message per broken rule (empty when the name is sound);
+            ``list_warnings`` is always empty. A blank name short-circuits to a single fatal
+            problem, since none of the other rules say anything useful about it.
+    """
+    if not str_name:
+        return ProblemReport(list_fatal=["Sheet name is blank"], list_warnings=[])
 
-	list_problems: list[str] = []
-	if len(str_name) > _INT_MAX_LEN:
-		list_problems.append(
-			f"Sheet name {str_name!r} exceeds {_INT_MAX_LEN} characters ({len(str_name)})"
-		)
-	list_bad_chars = sorted({str_char for str_char in str_name if str_char in _SET_INVALID_CHARS})
-	if list_bad_chars:
-		list_problems.append(f"Sheet name {str_name!r} has forbidden characters: {list_bad_chars}")
-	if str_name != str_name.strip():
-		list_problems.append(f"Sheet name {str_name!r} has leading/trailing whitespace")
-	if str_name.startswith("'") or str_name.endswith("'"):
-		list_problems.append(f"Sheet name {str_name!r} starts or ends with an apostrophe")
-	if str_name.casefold() in _SET_RESERVED_NAMES:
-		list_problems.append(f"Sheet name {str_name!r} is a reserved Excel name")
-	list_invisible = [
-		unicodedata.name(str_char, f"U+{ord(str_char):04X}")
-		for str_char in str_name
-		if unicodedata.category(str_char) in _SET_INVISIBLE_CATEGORIES
-	]
-	if list_invisible:
-		list_problems.append(f"Sheet name {str_name!r} has invisible characters: {list_invisible}")
-	return ProblemReport(list_fatal=list_problems, list_warnings=[])
+    list_problems: list[str] = []
+    if len(str_name) > _INT_MAX_LEN:
+        list_problems.append(
+            f"Sheet name {str_name!r} exceeds {_INT_MAX_LEN} characters ({len(str_name)})"
+        )
+    list_bad_chars = sorted({str_char for str_char in str_name if str_char in _SET_INVALID_CHARS})
+    if list_bad_chars:
+        list_problems.append(f"Sheet name {str_name!r} has forbidden characters: {list_bad_chars}")
+    if str_name != str_name.strip():
+        list_problems.append(f"Sheet name {str_name!r} has leading/trailing whitespace")
+    if str_name.startswith("'") or str_name.endswith("'"):
+        list_problems.append(f"Sheet name {str_name!r} starts or ends with an apostrophe")
+    if str_name.casefold() in _SET_RESERVED_NAMES:
+        list_problems.append(f"Sheet name {str_name!r} is a reserved Excel name")
+    list_invisible = [
+        unicodedata.name(str_char, f"U+{ord(str_char):04X}")
+        for str_char in str_name
+        if unicodedata.category(str_char) in _SET_INVISIBLE_CATEGORIES
+    ]
+    if list_invisible:
+        list_problems.append(f"Sheet name {str_name!r} has invisible characters: {list_invisible}")
+    return ProblemReport(list_fatal=list_problems, list_warnings=[])
 
 
 @type_checker
 def find_workbook_sheet_name_problems(list_names: list[str]) -> ProblemReport:
-	"""Validate every proposed sheet name for one workbook, plus cross-name uniqueness.
+    """Validate every proposed sheet name for one workbook, plus cross-name uniqueness.
 
-	Runs :func:`find_sheet_name_problems` on each name, then checks uniqueness
-	**case-insensitively** across the whole set — ``"DADOS"`` and ``"Dados"`` collide in Excel
-	even though ``len(set(list_names))`` says they do not, so that comparison alone would miss
-	the collision this function exists to catch. A collision is fatal for the same reason every
-	per-name rule is: the second name would silently overwrite or get renamed by Excel itself.
+    Runs :func:`find_sheet_name_problems` on each name, then checks uniqueness
+    **case-insensitively** across the whole set — ``"DADOS"`` and ``"Dados"`` collide in Excel
+    even though ``len(set(list_names))`` says they do not, so that comparison alone would miss
+    the collision this function exists to catch. A collision is fatal for the same reason every
+    per-name rule is: the second name would silently overwrite or get renamed by Excel itself.
 
-	Parameters
-	----------
-	list_names : list of str
-		The proposed sheet names, in the order they would be written.
+    Parameters
+    ----------
+    list_names : list of str
+            The proposed sheet names, in the order they would be written.
 
-	Returns
-	-------
-	ProblemReport
-		``list_fatal`` carries every broken rule across every name, followed by any
-		case-insensitive duplicates; ``list_warnings`` is always empty (see
-		:func:`find_sheet_name_problems`).
-	"""
-	list_problems = [
-		str_problem
-		for str_name in list_names
-		for str_problem in find_sheet_name_problems(str_name).list_fatal
-	]
-	list_lower = [str_name.casefold() for str_name in list_names]
-	list_duplicates = sorted(
-		{str_lower for str_lower in list_lower if list_lower.count(str_lower) > 1}
-	)
-	if list_duplicates:
-		list_problems.append(f"Sheet names collide case-insensitively: {list_duplicates}")
-	return ProblemReport(list_fatal=list_problems, list_warnings=[])
+    Returns
+    -------
+    ProblemReport
+            ``list_fatal`` carries every broken rule across every name, followed by any
+            case-insensitive duplicates; ``list_warnings`` is always empty (see
+            :func:`find_sheet_name_problems`).
+    """
+    list_problems = [
+        str_problem
+        for str_name in list_names
+        for str_problem in find_sheet_name_problems(str_name).list_fatal
+    ]
+    list_lower = [str_name.casefold() for str_name in list_names]
+    list_duplicates = sorted(
+        {str_lower for str_lower in list_lower if list_lower.count(str_lower) > 1}
+    )
+    if list_duplicates:
+        list_problems.append(f"Sheet names collide case-insensitively: {list_duplicates}")
+    return ProblemReport(list_fatal=list_problems, list_warnings=[])

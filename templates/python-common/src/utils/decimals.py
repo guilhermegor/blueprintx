@@ -25,12 +25,12 @@ import pandas as pd
 # DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
 # import (no redefinition); at runtime the try/except picks whichever layout shipped.
 if TYPE_CHECKING:
-	from utils.typing import type_checker
+    from utils.typing import type_checker
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 # Truncation is the safe generic default; override per call when the domain
@@ -45,63 +45,63 @@ NumericLike = str | int | float | bool | Decimal | None
 
 @type_checker
 def to_decimal(
-	value: NumericLike,
-	int_places: int,
-	default: Decimal = Decimal("0"),
-	rounding: str = _DEFAULT_ROUNDING,
+    value: NumericLike,
+    int_places: int,
+    default: Decimal = Decimal("0"),
+    rounding: str = _DEFAULT_ROUNDING,
 ) -> Decimal:
-	"""Coerce ``value`` to a quantised :class:`~decimal.Decimal`.
+    """Coerce ``value`` to a quantised :class:`~decimal.Decimal`.
 
-	Parameters
-	----------
-	value : NumericLike
-		Raw value. Strings may carry Brazilian formatting (``.`` thousands
-		separator and ``,`` decimal separator); both are normalised. ``None``,
-		empty strings, unparsable values and **non-finite** results (``NaN``/``±Inf``,
-		including the strings ``"nan"``/``"inf"``) fall back to ``default``.
-	int_places : int
-		Number of decimal places to quantise to (non-negative).
-	default : Decimal, optional
-		Value returned when ``value`` is missing or unparsable, by default
-		``Decimal("0")``.
-	rounding : str, optional
-		A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
-		by default ``ROUND_DOWN`` (truncation).
+    Parameters
+    ----------
+    value : NumericLike
+            Raw value. Strings may carry Brazilian formatting (``.`` thousands
+            separator and ``,`` decimal separator); both are normalised. ``None``,
+            empty strings, unparsable values and **non-finite** results (``NaN``/``±Inf``,
+            including the strings ``"nan"``/``"inf"``) fall back to ``default``.
+    int_places : int
+            Number of decimal places to quantise to (non-negative).
+    default : Decimal, optional
+            Value returned when ``value`` is missing or unparsable, by default
+            ``Decimal("0")``.
+    rounding : str, optional
+            A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
+            by default ``ROUND_DOWN`` (truncation).
 
-	Returns
-	-------
-	Decimal
-		``value`` quantised to ``int_places`` decimal places using ``rounding``.
+    Returns
+    -------
+    Decimal
+            ``value`` quantised to ``int_places`` decimal places using ``rounding``.
 
-	Raises
-	------
-	ValueError
-		If ``int_places`` is negative.
-	"""
-	if int_places < 0:
-		raise ValueError("int_places must be non-negative")
-	cls_quantum = Decimal(1).scaleb(-int_places)
-	cls_raw = _parse(value, default)
-	return cls_raw.quantize(cls_quantum, rounding=rounding)
+    Raises
+    ------
+    ValueError
+            If ``int_places`` is negative.
+    """
+    if int_places < 0:
+        raise ValueError("int_places must be non-negative")
+    cls_quantum = Decimal(1).scaleb(-int_places)
+    cls_raw = _parse(value, default)
+    return cls_raw.quantize(cls_quantum, rounding=rounding)
 
 
 @type_checker
 def _parse(value: NumericLike, default: Decimal) -> Decimal:
-	"""Parse ``value`` into an unquantised Decimal, falling back to ``default``.
+    """Parse ``value`` into an unquantised Decimal, falling back to ``default``.
 
-	Parameters
-	----------
-	value : NumericLike
-		Raw value to parse.
-	default : Decimal
-		Fallback for missing, unparsable, or non-finite (``NaN``/``±Inf``) input.
+    Parameters
+    ----------
+    value : NumericLike
+            Raw value to parse.
+    default : Decimal
+            Fallback for missing, unparsable, or non-finite (``NaN``/``±Inf``) input.
 
-	Returns
-	-------
-	Decimal
-		The parsed value, or ``default``.
-	"""
-	return _parse_by_type(value, default)
+    Returns
+    -------
+    Decimal
+            The parsed value, or ``default``.
+    """
+    return _parse_by_type(value, default)
 
 
 # Dispatch on the value's TYPE rather than an isinstance chain — the house rule
@@ -111,225 +111,225 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
 @functools.singledispatch
 @type_checker
 def _parse_by_type(value: object, default: Decimal) -> Decimal:
-	"""Parse anything not handled by a registered type: normalise as text, else ``default``.
+    """Parse anything not handled by a registered type: normalise as text, else ``default``.
 
-	Parameters
-	----------
-	value : object
-		Raw value to parse; stringified and normalised.
-	default : Decimal
-		Fallback for unparsable or non-finite input.
+    Parameters
+    ----------
+    value : object
+            Raw value to parse; stringified and normalised.
+    default : Decimal
+            Fallback for unparsable or non-finite input.
 
-	Returns
-	-------
-	Decimal
-		The parsed value, or ``default``.
-	"""
-	str_clean = _normalise_br_number(str(value))
-	try:
-		# The strings nan and inf are valid Decimal literals that parse successfully, so
-		# the finite check — not the handler below — is what maps them to default.
-		return _finite_or(Decimal(str_clean), default)
-	except InvalidOperation:
-		# Covers the empty string too, which is not a Decimal literal.
-		return default
+    Returns
+    -------
+    Decimal
+            The parsed value, or ``default``.
+    """
+    str_clean = _normalise_br_number(str(value))
+    try:
+        # The strings nan and inf are valid Decimal literals that parse successfully, so
+        # the finite check — not the handler below — is what maps them to default.
+        return _finite_or(Decimal(str_clean), default)
+    except InvalidOperation:
+        # Covers the empty string too, which is not a Decimal literal.
+        return default
 
 
 @_parse_by_type.register
 @type_checker
 def _parse_none(value: None, default: Decimal) -> Decimal:
-	"""Map a missing value to ``default``.
+    """Map a missing value to ``default``.
 
-	Parameters
-	----------
-	value : None
-		The missing value.
-	default : Decimal
-		The fallback.
+    Parameters
+    ----------
+    value : None
+            The missing value.
+    default : Decimal
+            The fallback.
 
-	Returns
-	-------
-	Decimal
-		``default``.
-	"""
-	return default
+    Returns
+    -------
+    Decimal
+            ``default``.
+    """
+    return default
 
 
 @_parse_by_type.register
 @type_checker
 def _parse_decimal(value: Decimal, default: Decimal) -> Decimal:
-	"""Pass a Decimal through, mapping a non-finite one (NaN/Infinity) to ``default``.
+    """Pass a Decimal through, mapping a non-finite one (NaN/Infinity) to ``default``.
 
-	Parameters
-	----------
-	value : Decimal
-		The value to check.
-	default : Decimal
-		The fallback for a non-finite value.
+    Parameters
+    ----------
+    value : Decimal
+            The value to check.
+    default : Decimal
+            The fallback for a non-finite value.
 
-	Returns
-	-------
-	Decimal
-		``value`` when finite, else ``default``.
-	"""
-	return _finite_or(value, default)
+    Returns
+    -------
+    Decimal
+            ``value`` when finite, else ``default``.
+    """
+    return _finite_or(value, default)
 
 
 @_parse_by_type.register
 @type_checker
 def _parse_bool(value: bool, default: Decimal) -> Decimal:
-	"""Reject a bool so ``True``/``False`` never become 1/0.
+    """Reject a bool so ``True``/``False`` never become 1/0.
 
-	``bool`` is a subclass of ``int``; without its own handler it would inherit the int one.
+    ``bool`` is a subclass of ``int``; without its own handler it would inherit the int one.
 
-	Parameters
-	----------
-	value : bool
-		The rejected value.
-	default : Decimal
-		The fallback.
+    Parameters
+    ----------
+    value : bool
+            The rejected value.
+    default : Decimal
+            The fallback.
 
-	Returns
-	-------
-	Decimal
-		``default``.
-	"""
-	return default
+    Returns
+    -------
+    Decimal
+            ``default``.
+    """
+    return default
 
 
 @_parse_by_type.register
 @type_checker
 def _parse_int(value: int, default: Decimal) -> Decimal:
-	"""Convert an int, which is always finite — no guard needed.
+    """Convert an int, which is always finite — no guard needed.
 
-	Parameters
-	----------
-	value : int
-		The value to convert.
-	default : Decimal
-		Unused; present to satisfy the dispatch signature.
+    Parameters
+    ----------
+    value : int
+            The value to convert.
+    default : Decimal
+            Unused; present to satisfy the dispatch signature.
 
-	Returns
-	-------
-	Decimal
-		The converted value.
-	"""
-	return Decimal(value)
+    Returns
+    -------
+    Decimal
+            The converted value.
+    """
+    return Decimal(value)
 
 
 @_parse_by_type.register
 @type_checker
 def _parse_float(value: float, default: Decimal) -> Decimal:
-	"""Convert a float via ``repr`` so the shortest round-tripping decimal is used.
+    """Convert a float via ``repr`` so the shortest round-tripping decimal is used.
 
-	The full binary expansion would otherwise leak into the result. A float NaN/Inf maps
-	to ``default``.
+    The full binary expansion would otherwise leak into the result. A float NaN/Inf maps
+    to ``default``.
 
-	Parameters
-	----------
-	value : float
-		The value to convert.
-	default : Decimal
-		The fallback for a non-finite value.
+    Parameters
+    ----------
+    value : float
+            The value to convert.
+    default : Decimal
+            The fallback for a non-finite value.
 
-	Returns
-	-------
-	Decimal
-		The converted value, or ``default``.
-	"""
-	return _finite_or(Decimal(repr(value)), default)
+    Returns
+    -------
+    Decimal
+            The converted value, or ``default``.
+    """
+    return _finite_or(Decimal(repr(value)), default)
 
 
 @type_checker
 def _finite_or(cls_value: Decimal, default: Decimal) -> Decimal:
-	"""Return ``cls_value`` when it is finite, else ``default``.
+    """Return ``cls_value`` when it is finite, else ``default``.
 
-	Centralises the "non-finite is unusable" rule: a ``NaN`` or ``±Inf`` (from a float,
-	a passed-in ``Decimal('NaN')``, or the string ``"nan"``/``"inf"`` which parses
-	successfully) is semantically "missing", which is exactly what ``default`` is for.
-	A leaked non-finite Decimal otherwise detonates downstream (``Decimal('NaN') > x``
-	raises :class:`decimal.InvalidOperation`).
+    Centralises the "non-finite is unusable" rule: a ``NaN`` or ``±Inf`` (from a float,
+    a passed-in ``Decimal('NaN')``, or the string ``"nan"``/``"inf"`` which parses
+    successfully) is semantically "missing", which is exactly what ``default`` is for.
+    A leaked non-finite Decimal otherwise detonates downstream (``Decimal('NaN') > x``
+    raises :class:`decimal.InvalidOperation`).
 
-	Parameters
-	----------
-	cls_value : Decimal
-		The candidate parsed value.
-	default : Decimal
-		Fallback returned when ``cls_value`` is not finite.
+    Parameters
+    ----------
+    cls_value : Decimal
+            The candidate parsed value.
+    default : Decimal
+            Fallback returned when ``cls_value`` is not finite.
 
-	Returns
-	-------
-	Decimal
-		``cls_value`` if finite, otherwise ``default``.
-	"""
-	return cls_value if cls_value.is_finite() else default
+    Returns
+    -------
+    Decimal
+            ``cls_value`` if finite, otherwise ``default``.
+    """
+    return cls_value if cls_value.is_finite() else default
 
 
 @type_checker
 def _normalise_br_number(str_value: str) -> str:
-	"""Normalise a Brazilian-formatted numeric string to a Decimal-parseable form.
+    """Normalise a Brazilian-formatted numeric string to a Decimal-parseable form.
 
-	Handles ``"2.084.960.022,76"`` -> ``"2084960022.76"`` and trims whitespace.
-	A plain ``"1234.56"`` (no comma) is left untouched.
+    Handles ``"2.084.960.022,76"`` -> ``"2084960022.76"`` and trims whitespace.
+    A plain ``"1234.56"`` (no comma) is left untouched.
 
-	Parameters
-	----------
-	str_value : str
-		Raw numeric string.
+    Parameters
+    ----------
+    str_value : str
+            Raw numeric string.
 
-	Returns
-	-------
-	str
-		A string Decimal can parse, or ``""`` when empty.
-	"""
-	str_stripped = str_value.strip()
-	# No comma means nothing to normalise — which covers the empty string as well, so it
-	# needs no guard of its own.
-	if "," not in str_stripped:
-		return str_stripped
-	return str_stripped.replace(".", "").replace(",", ".")
+    Returns
+    -------
+    str
+            A string Decimal can parse, or ``""`` when empty.
+    """
+    str_stripped = str_value.strip()
+    # No comma means nothing to normalise — which covers the empty string as well, so it
+    # needs no guard of its own.
+    if "," not in str_stripped:
+        return str_stripped
+    return str_stripped.replace(".", "").replace(",", ".")
 
 
 @type_checker
 def parse_br_number_series(series_value: pd.Series) -> pd.Series:
-	"""Vectorised parse of a Brazilian-formatted numeric column to ``float``.
+    """Vectorised parse of a Brazilian-formatted numeric column to ``float``.
 
-	Handles thousands ``.``, decimal ``,`` and parenthesised negatives ``(x)`` ->
-	``-x``; non-numeric cells become ``NaN``. The vectorised sibling of
-	:func:`_normalise_br_number` — and it MUST mirror that scalar rule:
+    Handles thousands ``.``, decimal ``,`` and parenthesised negatives ``(x)`` ->
+    ``-x``; non-numeric cells become ``NaN``. The vectorised sibling of
+    :func:`_normalise_br_number` — and it MUST mirror that scalar rule:
 
-	The ``.`` is treated as a **thousands separator only when the cell also carries a
-	``,`` decimal separator** (true BR formatting). A cell with no comma is left
-	intact, so a value already read as a ``float`` (``5.0``) or a plain decimal
-	string (``"1234.56"``) keeps its decimal point instead of being inflated tenfold
-	(``5.0`` -> ``50``). pandas reads count columns as ``float64`` when NaNs are
-	present, so an unconditional ``.str.replace(".", "")`` would silently corrupt
-	them — the two helpers parsing one format must never diverge.
+    The ``.`` is treated as a **thousands separator only when the cell also carries a
+    ``,`` decimal separator** (true BR formatting). A cell with no comma is left
+    intact, so a value already read as a ``float`` (``5.0``) or a plain decimal
+    string (``"1234.56"``) keeps its decimal point instead of being inflated tenfold
+    (``5.0`` -> ``50``). pandas reads count columns as ``float64`` when NaNs are
+    present, so an unconditional ``.str.replace(".", "")`` would silently corrupt
+    them — the two helpers parsing one format must never diverge.
 
-	``pandas`` is imported lazily so this module stays importable in environments
-	that ship the Decimal helpers without pandas.
+    ``pandas`` is imported lazily so this module stays importable in environments
+    that ship the Decimal helpers without pandas.
 
-	Parameters
-	----------
-	series_value : pandas.Series
-		The raw string (or mixed) column.
+    Parameters
+    ----------
+    series_value : pandas.Series
+            The raw string (or mixed) column.
 
-	Returns
-	-------
-	pandas.Series
-		The parsed ``float`` column (``NaN`` where unparsable).
-	"""
-	import pandas as pd
+    Returns
+    -------
+    pandas.Series
+            The parsed ``float`` column (``NaN`` where unparsable).
+    """
+    import pandas as pd
 
-	series_str = series_value.astype(str)
-	series_has_comma = series_str.str.contains(",", regex=False)
-	# When a comma is present the cell is Brazilian-formatted, so the thousands dot is
-	# removed and the decimal comma becomes a dot.
-	series_br = series_str.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
-	# When no comma is present the existing dot already marks the decimal place and is kept.
-	series_clean = (
-		series_str.where(~series_has_comma, series_br)
-		.str.replace("(", "-", regex=False)
-		.str.replace(")", "", regex=False)
-	)
-	return pd.to_numeric(series_clean, errors="coerce")
+    series_str = series_value.astype(str)
+    series_has_comma = series_str.str.contains(",", regex=False)
+    # When a comma is present the cell is Brazilian-formatted, so the thousands dot is
+    # removed and the decimal comma becomes a dot.
+    series_br = series_str.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+    # When no comma is present the existing dot already marks the decimal place and is kept.
+    series_clean = (
+        series_str.where(~series_has_comma, series_br)
+        .str.replace("(", "-", regex=False)
+        .str.replace(")", "", regex=False)
+    )
+    return pd.to_numeric(series_clean, errors="coerce")

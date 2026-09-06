@@ -27,47 +27,47 @@ from utils.typing import type_checker
 # accents; resolve_intent additionally folds spaces/hyphens, so "Envio", "ENVIO", "reconciliação"
 # all map. Anything unmatched fails loud.
 _INTENT_ALIASES: dict[str, str] = {
-	"send": "send",
-	"envio": "send",
-	"reconcile": "reconcile",
-	"reconciliacao": "reconcile",
+    "send": "send",
+    "envio": "send",
+    "reconcile": "reconcile",
+    "reconciliacao": "reconcile",
 }
 
 # Canonical intent -> orchestrator class. One entry per pipeline_<intent>.py.
 _INTENT_BUILDERS: dict[str, Callable[..., Pipeline]] = {
-	"send": SendPipeline,
-	"reconcile": ReconcilePipeline,
+    "send": SendPipeline,
+    "reconcile": ReconcilePipeline,
 }
 
 
 @type_checker
 def resolve_intent(str_raw: str) -> str:
-	"""Map a raw ``PIPELINE_INTENT`` value to a canonical intent, failing loud on an unknown one.
+    """Map a raw ``PIPELINE_INTENT`` value to a canonical intent, failing loud on an unknown one.
 
-	Parameters
-	----------
-	str_raw : str
-		The environment value (any reasonable spelling — case, accents and spaces/hyphens are
-		normalised).
+    Parameters
+    ----------
+    str_raw : str
+            The environment value (any reasonable spelling — case, accents and spaces/hyphens are
+            normalised).
 
-	Returns
-	-------
-	str
-		The canonical intent key (e.g. ``"send"`` / ``"reconcile"``).
+    Returns
+    -------
+    str
+            The canonical intent key (e.g. ``"send"`` / ``"reconcile"``).
 
-	Raises
-	------
-	SystemExit
-		When ``str_raw`` maps to no known intent — after printing a clear error to stderr
-		(exit code 2).
-	"""
-	str_norm = normalize_text(str_raw).replace(" ", "_").replace("-", "_")
-	str_intent = _INTENT_ALIASES.get(str_norm)
-	if str_intent is None:
-		_abort(
-			f"invalid PIPELINE_INTENT {str_raw!r}; expected one of: {sorted(set(_INTENT_ALIASES))}"
-		)
-	return str_intent
+    Raises
+    ------
+    SystemExit
+            When ``str_raw`` maps to no known intent — after printing a clear error to stderr
+            (exit code 2).
+    """
+    str_norm = normalize_text(str_raw).replace(" ", "_").replace("-", "_")
+    str_intent = _INTENT_ALIASES.get(str_norm)
+    if str_intent is None:
+        _abort(
+            f"invalid PIPELINE_INTENT {str_raw!r}; expected one of: {sorted(set(_INTENT_ALIASES))}"
+        )
+    return str_intent
 
 
 @type_checker
@@ -78,79 +78,79 @@ def resolve_intent(str_raw: str) -> str:
 # constructor and buys nothing; the wide signature is what makes every dependency of a
 # pipeline visible in one place.
 def build_pipeline(  # noqa: PLR0913
-	str_intent: str,
-	logger: Logger | None,
-	fn_build_engine: Callable[[], Engine],
-	fn_output_path: Callable[[str], Path],
-	path_json: Path,
-	dict_context: dict[str, Any],
-	cls_email_handler: EmailHandler | None = None,
-	cls_webhook: WebhookNotifier | None = None,
-	str_webhook_message: str = "",
+    str_intent: str,
+    logger: Logger | None,
+    fn_build_engine: Callable[[], Engine],
+    fn_output_path: Callable[[str], Path],
+    path_json: Path,
+    dict_context: dict[str, Any],
+    cls_email_handler: EmailHandler | None = None,
+    cls_webhook: WebhookNotifier | None = None,
+    str_webhook_message: str = "",
 ) -> Pipeline:
-	"""Construct the orchestrator for a canonical intent, sharing one constructor contract.
+    """Construct the orchestrator for a canonical intent, sharing one constructor contract.
 
-	Parameters
-	----------
-	str_intent : str
-		A canonical intent key (as returned by :func:`resolve_intent`).
-	logger : logging.Logger | None
-		The run logger.
-	fn_build_engine : Callable[[], Engine]
-		Zero-arg callable building the SQLAlchemy engine.
-	fn_output_path : Callable[[str], pathlib.Path]
-		Resolver from an ``outputs.yaml`` key to an output path.
-	path_json : pathlib.Path
-		Path to write (or, for reconcile, read) the JSON run summary.
-	dict_context : dict
-		Run-context values logged so every log file is self-describing.
-	cls_email_handler : EmailHandler | None
-		Optional e-mail handler injected by ``main.py``.
-	cls_webhook : WebhookNotifier | None
-		Optional webhook notifier injected by ``main.py``.
-	str_webhook_message : str
-		The run-summary message sent through ``cls_webhook``.
+    Parameters
+    ----------
+    str_intent : str
+            A canonical intent key (as returned by :func:`resolve_intent`).
+    logger : logging.Logger | None
+            The run logger.
+    fn_build_engine : Callable[[], Engine]
+            Zero-arg callable building the SQLAlchemy engine.
+    fn_output_path : Callable[[str], pathlib.Path]
+            Resolver from an ``outputs.yaml`` key to an output path.
+    path_json : pathlib.Path
+            Path to write (or, for reconcile, read) the JSON run summary.
+    dict_context : dict
+            Run-context values logged so every log file is self-describing.
+    cls_email_handler : EmailHandler | None
+            Optional e-mail handler injected by ``main.py``.
+    cls_webhook : WebhookNotifier | None
+            Optional webhook notifier injected by ``main.py``.
+    str_webhook_message : str
+            The run-summary message sent through ``cls_webhook``.
 
-	Returns
-	-------
-	Pipeline
-		The constructed orchestrator (a zero-arg ``run`` returning the run summary).
+    Returns
+    -------
+    Pipeline
+            The constructed orchestrator (a zero-arg ``run`` returning the run summary).
 
-	Raises
-	------
-	SystemExit
-		When ``str_intent`` is not a known canonical intent (exit code 2).
-	"""
-	cls_builder = _INTENT_BUILDERS.get(str_intent)
-	if cls_builder is None:
-		_abort(f"no pipeline registered for intent {str_intent!r}")
-	return cls_builder(
-		logger,
-		fn_build_engine,
-		fn_output_path,
-		path_json,
-		dict_context,
-		cls_email_handler,
-		cls_webhook,
-		str_webhook_message,
-	)
+    Raises
+    ------
+    SystemExit
+            When ``str_intent`` is not a known canonical intent (exit code 2).
+    """
+    cls_builder = _INTENT_BUILDERS.get(str_intent)
+    if cls_builder is None:
+        _abort(f"no pipeline registered for intent {str_intent!r}")
+    return cls_builder(
+        logger,
+        fn_build_engine,
+        fn_output_path,
+        path_json,
+        dict_context,
+        cls_email_handler,
+        cls_webhook,
+        str_webhook_message,
+    )
 
 
 # type-checker-ok: the bare `-> NoReturn` must stay visible to mypy so it narrows the callers'
 # Optional values after the `if x is None: _abort(...)` guard; wrapping it would erase that, and
 # the runtime checker adds nothing to a one-arg string abort.
 def _abort(str_reason: str) -> NoReturn:
-	"""Print a startup error to stderr and abort the process (``SystemExit`` code 2).
+    """Print a startup error to stderr and abort the process (``SystemExit`` code 2).
 
-	Parameters
-	----------
-	str_reason : str
-		The reason shown to the operator.
+    Parameters
+    ----------
+    str_reason : str
+            The reason shown to the operator.
 
-	Raises
-	------
-	SystemExit
-		Always (exit code 2).
-	"""
-	print(f"[startup][ERROR] {str_reason}", file=sys.stderr)
-	raise SystemExit(2)
+    Raises
+    ------
+    SystemExit
+            Always (exit code 2).
+    """
+    print(f"[startup][ERROR] {str_reason}", file=sys.stderr)
+    raise SystemExit(2)
