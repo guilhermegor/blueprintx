@@ -319,6 +319,15 @@ copy_deploy_target() {
     esac
 }
 
+# Shared TS source (blueprintx#436) — mirrors templates/python-common/src/utils/.
+# Lands under src/shared/, this skeleton's existing home for cross-capability code
+# (the eslint-plugin-boundaries "shared" element type already covers shared/**).
+copy_shared_ts_source() {
+    local project_path="$1"
+    mkdir -p "$project_path/src/shared/utils"
+    cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src/shared"
+}
+
 copy_common_templates() {
     local project_path="$1"
 
@@ -374,6 +383,8 @@ copy_common_templates() {
     # answered-review-thread predicate (blueprintx#175), same file the Python tiers ship, so
     # the CI job above never fetches or vendors a copy of its own.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+
+    copy_shared_ts_source "$project_path"
 
     print_status "success" "Common templates applied"
 }

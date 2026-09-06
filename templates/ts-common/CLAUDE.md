@@ -15,10 +15,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Changes here propagate to all TypeScript skeletons on the next scaffold run.**
 
+Almost everything here is *tooling*. **`src/` is the deliberate exception** (blueprintx#436) —
+it holds project-agnostic *application code* that is identical across the TS skeletons, mirroring
+`templates/python-common/src/utils/`. `python-common` already answered "where does shared TS
+source live?" for its own language, and this repo does not get to answer it twice: option A
+(mirror the Python precedent) was chosen over keeping each skeleton with its own copy (drift —
+the exact problem `check_codespell_sync.sh` polices) or publishing a real npm package for one
+interface (correct in the abstract, absurd in practice for this little source). `src/` is copied
+into each generated project's own `src/` tree by both `ts_lib.sh` and `ts_react_app.sh` — see
+"Files and their roles" below for the two different destinations (ts-lib is a flat package;
+react-spa-webpack has a `shared/` layer already reserved for exactly this).
+
+⚠️ **No copy-list drift check exists yet on the TS side.** `bin/ci/check_test_copy_lists.py` is
+Python-only (Python's `tests/` copy step). Both `ts_*.sh` scaffolds hand-list what they copy from
+`src/`, which is precisely the hand-maintained-`cp`-list pattern that has drifted before
+(`python-common/CLAUDE.md`'s `requirements.txt` and `poetry.toml` rows). Left as measured-not-built
+for now — a gate here is worth adding once `ts-common/src/` grows past one subpackage, not before.
+
 ## Files and their roles
 
 | File / Path | Role |
 |-------------|------|
+| `src/utils/log-emitter.ts` | `LogEmitter` port + `NULL_EMITTER` (`ts-lib` default — a published package must not log on its own initiative) + `CONSOLE_EMITTER` (`react-spa-webpack` default — `console` is the only destination reachable in a browser without an explicit network call). One file, no internal relative imports — deliberately: a shared file's own relative imports would need `.js` extensions for `ts-lib`'s Node-ESM output (`dist/esm`) and no extension for `react-spa-webpack`'s webpack resolution (`resolve.extensions` has no `.js`→`.ts` alias), and there is no single spelling that satisfies both. Each skeleton's own (non-shared) consumer file imports this module using whatever extension convention that skeleton already uses. No file-writing emitter: impossible in a browser (`jsdom` has no filesystem) and unneeded by measurement (blueprintx#436) |
 | `package.json` | Project manifest with `${PROJECT_NAME}` and `${PROJECT_DESCRIPTION}` placeholders; pins React 19, TypeScript 6, Webpack 5, Babel, ESLint 9, Prettier, react-refresh, cross-env |
 | `.gitignore` | Node + dist + env patterns |
 | `.vscode/settings.json` | Format-on-save (Prettier), ESLint fix-on-save, workspace TypeScript SDK |
