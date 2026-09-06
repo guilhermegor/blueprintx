@@ -504,6 +504,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cross-language-quality-parity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-language quality parity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#shared-template-sources" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1311,6 +1322,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cross-language-quality-parity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-language quality parity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#shared-template-sources" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1384,6 +1406,13 @@ live in <code>bin/ci/*.sh</code> and both the workflow and the hook call them �
 <li>The interactive menu discovers it automatically — no change to <code>blueprintx.sh</code>.</li>
 <li>Add the install/usage notes to <code>README.md</code> and a docs page under <code>docs/</code>.</li>
 </ol>
+<h2 id="cross-language-quality-parity">Cross-language quality parity<a class="headerlink" href="#cross-language-quality-parity" title="Permanent link">&para;</a></h2>
+<p>A quality decision (a lint rule, a gate, a coding convention) applies to <strong>every</strong> scaffolded
+language unless that language's own community standard overrides it — in which case the
+community standard wins. Parity is by prohibited construct, never by a copied number. These
+decisions are written in <code>CONTRIBUTING.md</code>/<code>README.md</code>/docs, never as a code comment (QA
+suppressions like <code>noqa</code> are exempt). See the root <code>CONTRIBUTING.md</code> → "Cross-Language Quality
+Parity" for the full rule, worked examples, and the dated Python-vs-TypeScript gate table.</p>
 <h2 id="shared-template-sources">Shared template sources<a class="headerlink" href="#shared-template-sources" title="Permanent link">&para;</a></h2>
 <p><code>templates/python-common/</code> (shared Python tooling), <code>templates/ts-common/</code> (shared TypeScript
 tooling), and <code>templates/common/</code> (language-agnostic assets) are the single sources of truth —
