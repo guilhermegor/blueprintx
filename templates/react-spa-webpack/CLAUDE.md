@@ -276,10 +276,14 @@ ships with ESLint. The ceiling differs by tree, same idea as the Python
 skeletons' ruff `C901` gate (`templates/python-common/CLAUDE.md`), but **not
 copied by symmetry**: JSX branching and optional chaining inflate ESLint's
 count in ways mccabe/ruff never see, so the number here was measured against
-this template's own source, not inherited. Currently: **3** for `src/**`
-(measured: 2 already flags ~16% of functions in the scaffolded example
-capability — not a payable number yet), **2** for `**/*.{test,spec}.{ts,tsx}`
-(covers both colocated unit tests and the Playwright `tests/` e2e specs).
+this template's own source, not inherited. Currently: **3** for
+`src/**/*.{ts,tsx}` (measured: 2 already flags ~16% of functions in the
+scaffolded example capability — not a payable number yet), **2** for
+`**/*.{test,spec}.{ts,tsx,js,jsx}` (covers both colocated unit tests and the
+Playwright `tests/` e2e specs). ⚠️ Both selectors are quoted verbatim from
+`eslint.config.js`: a paraphrase here would understate the enforced coverage,
+and a reader trusting the paraphrase would assume a file is unpoliced when it
+is not.
 Escape hatch: `// eslint-disable-next-line complexity -- <reason>` on the line
 immediately above the flagged function (ESLint attributes the error there, not
 on the branch) — mirrors python-common's `# complexity-ok: <reason>`, though
