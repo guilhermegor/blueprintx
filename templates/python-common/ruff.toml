@@ -95,6 +95,18 @@ select = [
     "W",   # pycodestyle warnings - trailing whitespace, invalid regex escapes (see W191 below)
     "PL",  # pylint - magic values, over-wide signatures, module-level global
     "PT",  # flake8-pytest-style - pytest idioms (one assertion per behaviour, etc.)
+    # A - flake8-builtins - PEP 8 import rule 4: an import must not shadow a builtin.
+    # `from re import compile` shadows compile() with no signal today; the fix is an alias
+    # (`from re import compile as re_compile`) or a qualified import (`import re`). Measured
+    # 2026-09-05 (ruff 0.11.13): `ruff check --select A src/ bin/ tests/ optional/` → All
+    # checks passed, so this is adopted at zero cost (blueprintx#418), same shape as the W191
+    # precedent above.
+    # ⚠️ Do NOT also set `[lint.flake8-builtins] strict-checking = true`. That turns on A005
+    # (module shadows a stdlib name) and fires on `utils/typing` / `chassis/typing`, which
+    # shadow stdlib `typing` ON PURPOSE — it is the runtime type-checking engine's layout shim
+    # (blueprintx#360). Measured 2 findings there; enabling strict-checking would put a gate
+    # violation on deliberate, correct design, which is how a gate teaches everyone to disable it.
+    "A",
 ]
 ignore = [
     "D206",  # docstring should be indented with spaces, not tabs
