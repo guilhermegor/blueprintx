@@ -73,7 +73,7 @@ exclude = [
 
 [format]
 quote-style = "double"
-indent-style = "tab"
+indent-style = "space"
 docstring-code-format = false
 docstring-code-line-length = 79  # original python standard - readability in terminal (help)
 
@@ -109,21 +109,14 @@ select = [
     "A",
 ]
 ignore = [
-    "D206",  # docstring should be indented with spaces, not tabs
-    # W191 (tab-indentation) treats a tab as a violation, while `[format] indent-style =
-    # "tab"` below makes the formatter PRODUCE tabs. Enabling it would set the linter against
-    # the formatter, and the formatter wins — the same principle the E701 note states, in
-    # reverse: there the formatter already forbids the style, here it already requires it.
-    #
-    # ⚠️ Ignoring W191 is what makes the rest of `W` adoptable, and the difference is the
-    # whole measurement: W191 accounted for 6022 of 6022 findings, so `W` minus W191 is ZERO
-    # today. It costs nothing now and catches trailing whitespace and invalid regex escapes
-    # from here on (blueprintx#222).
-    #
-    # ⚠️ Measuring this is itself a trap: `ruff check --config 'lint.ignore=["W191"]'` does
-    # NOT merge the way it reads and still reported all 6022. Only `--ignore W191` gives the
-    # real number, and the wrong one supports the wrong conclusion ("W is not adoptable").
-    "W191",
+    # D206 (docstring indented with tabs) and W191 (tab-indentation) both existed only to
+    # keep the linter from fighting `[format] indent-style = "tab"` — the formatter produced
+    # tabs, so the linter had to stop flagging them. blueprintx#419 moved the formatter to
+    # `indent-style = "space"`, which removes the premise for both: neither rule fires on
+    # space-indented code, so there is nothing left to suppress. Re-measured 2026-09-05 after
+    # the conversion: `ruff check --select W191,D206` reports zero findings with both rules
+    # ENABLED, confirming the ignores were the only thing keeping them silent, not a latent
+    # violation count (the 6022-finding number from blueprintx#222 was measured under tabs).
     # E701 (multiple statements on one line) is deliberately NOT ignored. It is
     # tempting to add it here to allow `if cond: break`, but that would be dead
     # config: `ruff format` (Black semantics, not configurable) expands a compound
