@@ -1,9 +1,11 @@
 """Intent resolution and pipeline construction for the multi-intent controller (native DB).
 
-``main.py`` reads the ``PIPELINE_INTENT`` env value, calls :func:`resolve_intent` (bilingual,
-fail-loud) to map it to a canonical intent, then :func:`build_pipeline` to construct the
-matching orchestrator. Adding a purpose = add a ``pipeline_<intent>.py`` plus one entry in the
-alias table and the builder table here — no ``if/elif`` chain in ``main``.
+``main.py`` picks the raw intent via :func:`raw_intent` (an explicit CLI argument beats the
+inherited ``PIPELINE_INTENT`` env value, so ``poe run reconcile`` cannot be silently overridden
+by a stale ``.env``), calls :func:`resolve_intent` (bilingual, fail-loud) to map it to a
+canonical intent, then :func:`build_pipeline` to construct the matching orchestrator. Adding a
+purpose = add a ``pipeline_<intent>.py`` plus one entry in the alias table and the builder table
+here — no ``if/elif`` chain in ``main``.
 """
 
 from __future__ import annotations
@@ -36,6 +38,33 @@ _INTENT_BUILDERS: dict[str, Callable[..., Pipeline]] = {
 	"send": SendPipeline,
 	"reconcile": ReconcilePipeline,
 }
+
+
+@type_checker
+def raw_intent(list_argv: list[str], str_env_value: str) -> str:
+	"""Pick the raw intent token: an explicit CLI argument beats the inherited env value.
+
+	``poe run <intent>`` (and poe-the-poet's task runner in general) appends extra CLI words
+	after the ``argv[0]`` module path, so ``list_argv[1]`` is the explicit intent when the
+	caller gave one. Falling back to ``str_env_value`` keeps ``.env``-driven callers (CI, cron,
+	containers) working unchanged when no argument is given.
+
+	Parameters
+	----------
+	list_argv : list[str]
+		The process argv (``sys.argv``).
+	str_env_value : str
+		The env-derived value (``PIPELINE_INTENT``, already defaulted to ``"send"``) used when
+		no CLI argument is given.
+
+	Returns
+	-------
+	str
+		``list_argv[1]`` when present, else ``str_env_value``.
+	"""
+	if len(list_argv) > 1:
+		return list_argv[1]
+	return str_env_value
 
 
 @type_checker
