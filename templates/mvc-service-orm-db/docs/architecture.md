@@ -62,6 +62,39 @@ project/
 
 ---
 
+## Enrichment degradation contract
+
+`controller/_pipeline.PipelineOrchestrator._enrich` is the reference example for a
+**documented graceful degradation**. A degradation documented in a docstring ("returns
+`None`/unchanged when X") is a claim about behavior, and the claim is only true if *every*
+failure mode that could prevent the enriching call actually reaches that documented value —
+not just the one mode a test happened to cover.
+
+This was measured, not theorized: an earlier version of this pattern promised a blank-labels
+degradation when no enrichment file was configured. The only path that actually reached it was
+a **missing config entry**. An *unreadable* file threw an uncaught exception instead — from a
+phase that ran after the primary read had already succeeded — and killed the whole run even
+though the source data was already safely fetched.
+
+`_enrich` enumerates the five failure modes that can prevent an optional enrichment merge, and
+routes all five to the same degraded return value (the report unchanged):
+
+1. The enrichment path is not configured (`path_labels is None`).
+2. The file is absent.
+3. The file is malformed.
+4. The file cannot be read (permission error).
+5. Any other unforeseen failure while reading or applying the file.
+
+Modes 2-5 share one `try/except Exception` around the single call that can raise them — a
+per-exception-type `except` clause list would, in practice, cover the one mode that got
+tested and silently miss the rest, reproducing the original defect under a different shape.
+
+The second half of the contract is **phase ordering**: `_enrich` runs *before* `_render`
+(which persists the report). A phase that can fail must sit before persistence, never after —
+otherwise its failure invalidates work that already succeeded and was already durable.
+
+---
+
 ## Rules of thumb
 
 - One public service class per file (the ORM model + its `Base` live beside it as mapping declarations).

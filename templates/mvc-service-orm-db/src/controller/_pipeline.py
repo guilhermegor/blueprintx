@@ -1,11 +1,16 @@
 """Phase orchestrator for the MVC pipeline (SQLAlchemy ORM).
 
 The controller's ``main.py`` only builds this orchestrator and calls :meth:`run`. The
-sequencing — log the run context, build the engine, read via the model, render the report
-via the view, write the JSON summary, then notify via the optional webhook — lives here,
-each phase bracketed by log lines. Business logic lives in the model
-(:class:`model.example_entity.ExampleEntity`); this module wires and sequences it. The
-engine is built for the read and always disposed in a ``finally``.
+sequencing — log the run context, build the engine, read via the model, enrich with
+optional labels, render the report via the view, write the JSON summary, then notify via the
+optional webhook — lives here, each phase bracketed by log lines. Business logic lives in
+the model (:class:`model.example_entity.ExampleEntity`); this module wires and sequences it.
+The engine is built for the read and always disposed in a ``finally``.
+
+:meth:`_enrich` is the reference example for a **documented graceful degradation**: see
+docs/architecture.md#enrichment-degradation-contract for why a degradation is a contract
+enforced against every failure mode, not a docstring claim covering only the one that was
+tested (blueprintx#151).
 """
 
 from __future__ import annotations
@@ -80,7 +85,10 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		Path to write the JSON run summary.
 	dict_context : dict
 		Run-context values (app/operator/host/environment/paths) logged so every log file
-		is self-describing.
+		is self-describing. An optional ``"path_labels"`` key (``pathlib.Path``) points
+		:meth:`_enrich` at a ``{id: label}`` JSON lookup; absent or ``None`` means the
+		enrichment is not configured for this project — the first of the five failure modes
+		it degrades on.
 	cls_email_handler : EmailHandler | None
 		Optional e-mail handler (the ``EmailHandler`` port). Injected by ``main.py`` only when
 		the e-mail opt-in is chosen — Outlook backend by default, SMTP if configured. The
@@ -131,6 +139,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		finally:
 			cls_engine.dispose()
 			log_message(self.logger, "DB engine disposed")
+		df_report = self._enrich(df_report)
 		path_report = self._render(df_report)
 		dict_summary: dict[str, Any] = {
 			"rows_read": int(len(df_report)),
@@ -187,6 +196,62 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		df_report = cls_example.fetch_all()
 		log_message(self.logger, f"Finishing data-read process ({len(df_report)} rows)")
 		return df_report
+
+	def _enrich(  # complexity-ok: two distinct degradation triggers, each its own log line
+		self, df_report: pd.DataFrame
+	) -> pd.DataFrame:
+		"""Best-effort merge of the optional labels file onto the report.
+
+		A documented graceful degradation is a contract, not a docstring claim — it holds only
+		if every failure mode that can prevent the merge reaches the SAME degraded value:
+		``df_report`` unchanged (the ``label`` column simply absent). Five modes can prevent
+		it, and this method degrades on all five (full rationale, and the incident it
+		generalises from: docs/architecture.md#enrichment-degradation-contract):
+
+		1. no ``path_labels`` configured (checked up front, no call attempted);
+		2. the file is absent; 3. the file is malformed (not valid JSON, or not a
+		``{id: label}`` object); 4. a permission error; 5. any other unforeseen failure while
+		reading or applying it.
+
+		Modes 2-5 all raise from the same read-and-apply block, so one ``try/except
+		Exception`` around it — logging the collaborator and ``type(exc).__name__``, then
+		returning ``df_report`` unchanged — covers them together; splitting them into separate
+		``except`` clauses would only re-create the original defect under a different shape
+		(one clause remembered, the rest fall through).
+
+		Called before :meth:`_render`, which persists the report — nothing this method does
+		may run after persistence, so a failure here can never invalidate an already-written
+		report.
+
+		Parameters
+		----------
+		df_report : pandas.DataFrame
+			The already-fetched report (the read phase already succeeded; never re-read here).
+
+		Returns
+		-------
+		pandas.DataFrame
+			``df_report`` merged with the ``label`` column, or unchanged when enrichment could
+			not run.
+		"""
+		path_labels = self.dict_context.get("path_labels")
+		if path_labels is None:
+			log_message(self.logger, "Label enrichment skipped: no path_labels configured")
+			return df_report
+		try:
+			with path_labels.open(encoding="utf-8") as file_labels:
+				dict_labels = json.load(file_labels)
+			df_enriched = df_report.copy()
+			df_enriched["label"] = df_enriched["id"].astype(str).map(dict_labels)
+		except Exception as exc:
+			log_message(
+				self.logger,
+				f"Label enrichment degraded: reading {path_labels.name} raised "
+				f"{type(exc).__name__}",
+				"warning",
+			)
+			return df_report
+		return df_enriched
 
 	def _render(self, df_report: pd.DataFrame) -> Path:
 		"""Render the report via the view and return its path.
