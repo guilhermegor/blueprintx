@@ -25,6 +25,7 @@ DATA_DIR_BASE="logs"
 DATA_DIR_DATED=false
 INCLUDE_WEBHOOK=false
 WEBHOOK_PLATFORM="teams"
+INCLUDE_OTEL=false
 INCLUDE_EMAIL=false
 EMAIL_BACKEND="outlook"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/python-common"
@@ -490,6 +491,42 @@ conditional_copy_storage() {
     print_status "success" "Schema-less storage (chassis/db + db_wschema) added"
 }
 
+# OTLP log export (opt-in, blueprintx#438): the module (imports opentelemetry — the ONLY
+# place it is imported, per .layer-policy.yaml), its unit test, the .env block, the pinned
+# pyproject.toml dependencies (declared only here, so an opt-out never installs them), a
+# local-dev collector compose fragment (separate from docker-compose.yml, which the DB prompt
+# already claims), and the startup.py wiring — one function, since a bare copy with no wiring
+# (or vice versa) is not a state either side of this opt-in should ever be in.
+conditional_copy_otel() {
+    local project_path="$1"
+    if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
+    cp "$COMMON_TEMPLATE_ROOT/optional/otel_logging.py" "$project_path/src/chassis/otel_logging.py"
+    cp "$COMMON_TEMPLATE_ROOT/optional/test_otel_logging.py" "$project_path/tests/unit/test_otel_logging.py"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
+    cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
+    cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
+    # Pinned, not left open-ended: the Logs signal is still "Development" status upstream
+    # (see chassis/otel_logging.py), so a wider range risks a breaking minor bump landing
+    # silently on the next `poetry update`.
+    sed -i '/^python-dotenv = ">=1.0.0"/a\
+# OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
+# "Development" status upstream (see chassis/otel_logging.py for the measured source).\
+opentelemetry-api = ">=1.27,<2.0"\
+opentelemetry-sdk = ">=1.27,<2.0"\
+opentelemetry-exporter-otlp-proto-http = ">=1.27,<2.0"' "$project_path/pyproject.toml"
+    cat >> "$project_path/src/config/startup.py" <<'PYBLOCK'
+
+# OTLP log export (opt-in) — ADDS a handler to LOGGER; never replaces the FileHandler
+# above. A no-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset (see chassis/otel_logging.py).
+from chassis.otel_logging import configure_otel_logging  # noqa: E402
+
+
+configure_otel_logging(LOGGER)
+PYBLOCK
+    print_status "success" "OTLP log export (chassis/otel_logging.py) wired into startup.py + collector compose added"
+}
+
 # GitHub-only assets are copied only when a GitHub remote is established (see main()).
 copy_github_assets() {
     local project_path="$1"
@@ -590,6 +627,17 @@ patch_pyproject_db_driver() {
     print_status "success" "DB driver ($DB_COMPOSE_BACKEND) added to pyproject.toml"
 }
 
+# Alembic's own templates plus the pyproject.toml driver entry they need to run — one call
+# site in main() for what is really one concern (provisioning migrations for the chosen
+# DB_COMPOSE_BACKEND), split out here rather than adding a second line to main() (blueprintx#438
+# pushed main() over the function-length ceiling; these two calls were always sequential and
+# never meant to be reordered independently).
+provision_alembic() {
+    local project_path="$1"
+    copy_alembic_templates "$project_path"
+    patch_pyproject_db_driver "$project_path"
+}
+
 # Output directory is data-driven from inputs.yaml (no startup.py patching).
 conditional_patch_inputs_yaml() {
     local project_path="$1"
@@ -675,6 +723,15 @@ conditional_copy_webhooks_yaml() {
     printf '%s' "$webhook_env" >> "$project_path/.env"
     printf '%s' "$webhook_env" >> "$project_path/.env.example"
     print_status "success" "Webhook provider (chassis/webhook) + webhooks.yaml added"
+}
+
+prompt_otel() {
+    local answer
+    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    case "$answer" in
+        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
+        *) INCLUDE_OTEL=false ;;
+    esac
 }
 
 prompt_email() {
@@ -822,6 +879,7 @@ main() {
     prompt_storage
     prompt_data_dir
     prompt_webhook
+    prompt_otel
     prompt_email
     prompt_env_wise_config
     create_directory_structure "$PROJECT_PATH"
@@ -832,14 +890,14 @@ main() {
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     conditional_prune_optin_deps "$PROJECT_PATH"
-    copy_alembic_templates "$PROJECT_PATH"
+    provision_alembic "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_copy_storage "$PROJECT_PATH"
-    patch_pyproject_db_driver "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"
     apply_env_wise_config "$PROJECT_PATH"
     conditional_copy_webhooks_yaml "$PROJECT_PATH"
     conditional_copy_email "$PROJECT_PATH"
+    conditional_copy_otel "$PROJECT_PATH"
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
