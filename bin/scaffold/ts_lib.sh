@@ -191,6 +191,14 @@ with open(path_out, "w", encoding="utf-8") as fh:
 PY
 }
 
+# Shared TS source (blueprintx#436) — mirrors templates/python-common/src/utils/.
+# ts-lib is a flat package (no shared/ layer), so it lands directly under src/utils/.
+copy_shared_ts_source() {
+    local project_path="$1"
+    mkdir -p "$project_path/src/utils"
+    cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src"
+}
+
 copy_common_templates() {
     local project_path="$1"
 
@@ -246,6 +254,8 @@ copy_common_templates() {
     # answered-review-thread predicate (blueprintx#175), same file the Python tiers ship, so
     # the CI job above never fetches or vendors a copy of its own.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+
+    copy_shared_ts_source "$project_path"
 
     print_status "success" "Common templates applied"
 }

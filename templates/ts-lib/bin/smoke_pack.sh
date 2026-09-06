@@ -44,6 +44,20 @@ smoke_require_cjs() {
       if (pkg.greet('World') !== 'Hello, World!') {
         throw new Error('CJS require() smoke failed: unexpected greet() output');
       }
+      // LogEmitter witness (blueprintx#436), both directions: NULL_EMITTER must
+      // write nothing, CONSOLE_EMITTER must write exactly what was passed.
+      const calls = [];
+      const originalInfo = console.info;
+      console.info = (...args) => calls.push(args);
+      pkg.NULL_EMITTER.info('should not be recorded');
+      if (calls.length !== 0) {
+        throw new Error('CJS smoke failed: NULL_EMITTER wrote to console');
+      }
+      pkg.CONSOLE_EMITTER.info('cjs pack smoke');
+      console.info = originalInfo;
+      if (calls.length !== 1 || calls[0][0] !== 'cjs pack smoke') {
+        throw new Error('CJS smoke failed: CONSOLE_EMITTER did not delegate to console.info');
+      }
     ")
     print_status "success" "require('$pkg_name') (CJS) smoke passed"
 }
@@ -51,9 +65,22 @@ smoke_require_cjs() {
 smoke_import_esm() {
     local pkg_name="$1"
     (cd "$TMP_DIR" && node --input-type=module -e "
-      import { greet } from '$pkg_name';
+      import { greet, NULL_EMITTER, CONSOLE_EMITTER } from '$pkg_name';
       if (greet('World') !== 'Hello, World!') {
         throw new Error('ESM import smoke failed: unexpected greet() output');
+      }
+      // Same LogEmitter witness as the CJS branch above, over the ESM build.
+      const calls = [];
+      const originalInfo = console.info;
+      console.info = (...args) => calls.push(args);
+      NULL_EMITTER.info('should not be recorded');
+      if (calls.length !== 0) {
+        throw new Error('ESM smoke failed: NULL_EMITTER wrote to console');
+      }
+      CONSOLE_EMITTER.info('esm pack smoke');
+      console.info = originalInfo;
+      if (calls.length !== 1 || calls[0][0] !== 'esm pack smoke') {
+        throw new Error('ESM smoke failed: CONSOLE_EMITTER did not delegate to console.info');
       }
     ")
     print_status "success" "import('$pkg_name') (ESM) smoke passed"
