@@ -32,6 +32,17 @@ Add a new export by adding it to `src/index.ts`, not by expecting consumers to d
 from `src/*`. Deep imports resolve locally but break at the package boundary — the shipped
 `exports` map exposes only `.` (the barrel).
 
+## Logging (`LogEmitter`)
+
+`src/utils/log-emitter.ts` ships from `templates/ts-common/src/utils/` (blueprintx#436) — the
+shared TS source tree, mirroring `templates/python-common/src/utils/`. It exports the
+`LogEmitter` port and `NULL_EMITTER` (this package's default). A published library must not
+write to a host's console on its own initiative, so every call site accepts a `LogEmitter`
+and defaults to `NULL_EMITTER`; the host injects `CONSOLE_EMITTER` or its own implementation.
+This file has no internal relative imports on purpose — see `ts-common/CLAUDE.md` for why one
+file cannot carry an extension that satisfies both this package's Node-ESM output and
+`react-spa-webpack`'s webpack resolution.
+
 ## Build
 
 Three separate `tsc` invocations, one per concern:
