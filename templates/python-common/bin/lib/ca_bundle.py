@@ -34,108 +34,108 @@ RE_PEM_BLOCK = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE--
 
 
 def collect_sources(str_corporate: str, path_out: pathlib.Path) -> list:
-	"""Return every candidate CA source, corporate certificate first.
+    """Return every candidate CA source, corporate certificate first.
 
-	Order matters: index 0 is the corporate CA, so the caller can tell "trust we added"
-	from "trust that was already there".
+    Order matters: index 0 is the corporate CA, so the caller can tell "trust we added"
+    from "trust that was already there".
 
-	Parameters
-	----------
-	str_corporate : str
-		Path to the corporate proxy's certificate.
-	path_out : pathlib.Path
-		Where the union will be written.
+    Parameters
+    ----------
+    str_corporate : str
+            Path to the corporate proxy's certificate.
+    path_out : pathlib.Path
+            Where the union will be written.
 
-	Returns
-	-------
-	list of str
-		Candidate paths; not all of them necessarily exist.
-	"""
-	list_sources = [str_corporate]
+    Returns
+    -------
+    list of str
+            Candidate paths; not all of them necessarily exist.
+    """
+    list_sources = [str_corporate]
 
-	for str_var in TUPLE_CA_ENV_VARS:
-		str_existing = os.environ.get(str_var, "")
-		# Skip a bundle we generated on a previous run, or the union grows forever.
-		if str_existing and pathlib.Path(str_existing) != path_out:
-			list_sources.append(str_existing)
+    for str_var in TUPLE_CA_ENV_VARS:
+        str_existing = os.environ.get(str_var, "")
+        # Skip a bundle we generated on a previous run, or the union grows forever.
+        if str_existing and pathlib.Path(str_existing) != path_out:
+            list_sources.append(str_existing)
 
-	try:
-		import certifi
+    try:
+        import certifi
 
-		list_sources.append(certifi.where())
-	except ModuleNotFoundError:
-		print("certifi not importable — union built without it", file=sys.stderr)
+        list_sources.append(certifi.where())
+    except ModuleNotFoundError:
+        print("certifi not importable — union built without it", file=sys.stderr)
 
-	return list_sources
+    return list_sources
 
 
 def dedupe_certificates(list_sources: list) -> tuple:
-	"""Read every source and return its unique certificates.
+    """Read every source and return its unique certificates.
 
-	Parameters
-	----------
-	list_sources : list of str
-		Candidate paths, corporate certificate at index 0.
+    Parameters
+    ----------
+    list_sources : list of str
+            Candidate paths, corporate certificate at index 0.
 
-	Returns
-	-------
-	tuple
-		``(list_blocks, int_non_corporate)`` — the unique PEM blocks in first-seen order,
-		and how many of them came from a source OTHER than the corporate certificate.
-	"""
-	list_blocks: list[str] = []
-	set_bodies: set[str] = set()
-	int_non_corporate = 0
+    Returns
+    -------
+    tuple
+            ``(list_blocks, int_non_corporate)`` — the unique PEM blocks in first-seen order,
+            and how many of them came from a source OTHER than the corporate certificate.
+    """
+    list_blocks: list[str] = []
+    set_bodies: set[str] = set()
+    int_non_corporate = 0
 
-	for int_index, str_source in enumerate(list_sources):
-		path_source = pathlib.Path(str_source)
-		if not path_source.is_file():
-			continue
-		str_text = path_source.read_text(encoding="utf-8", errors="replace")
-		for str_block in RE_PEM_BLOCK.findall(str_text):
-			# Dedupe on the base64 body, never on the BEGIN line every certificate shares.
-			str_body = "".join(str_block.split())
-			if str_body in set_bodies:
-				continue
-			set_bodies.add(str_body)
-			list_blocks.append(str_block)
-			if int_index > 0:
-				int_non_corporate += 1
+    for int_index, str_source in enumerate(list_sources):
+        path_source = pathlib.Path(str_source)
+        if not path_source.is_file():
+            continue
+        str_text = path_source.read_text(encoding="utf-8", errors="replace")
+        for str_block in RE_PEM_BLOCK.findall(str_text):
+            # Dedupe on the base64 body, never on the BEGIN line every certificate shares.
+            str_body = "".join(str_block.split())
+            if str_body in set_bodies:
+                continue
+            set_bodies.add(str_body)
+            list_blocks.append(str_block)
+            if int_index > 0:
+                int_non_corporate += 1
 
-	return list_blocks, int_non_corporate
+    return list_blocks, int_non_corporate
 
 
 def main() -> int:
-	"""Write the union bundle, or refuse and explain why.
+    """Write the union bundle, or refuse and explain why.
 
-	Returns
-	-------
-	int
-		0 after writing, 1 when there is nothing to write or the union would be a
-		replacement.
-	"""
-	path_out = pathlib.Path(os.environ["BX_CA_OUT"])
-	list_sources = collect_sources(os.environ["BX_CA_CORPORATE"], path_out)
-	list_blocks, int_non_corporate = dedupe_certificates(list_sources)
+    Returns
+    -------
+    int
+            0 after writing, 1 when there is nothing to write or the union would be a
+            replacement.
+    """
+    path_out = pathlib.Path(os.environ["BX_CA_OUT"])
+    list_sources = collect_sources(os.environ["BX_CA_CORPORATE"], path_out)
+    list_blocks, int_non_corporate = dedupe_certificates(list_sources)
 
-	if not list_blocks:
-		print("No certificates found for the union bundle", file=sys.stderr)
-		return 1
+    if not list_blocks:
+        print("No certificates found for the union bundle", file=sys.stderr)
+        return 1
 
-	if int_non_corporate == 0:
-		print(
-			"Refusing to write a CA bundle containing ONLY the corporate certificate: that "
-			"narrows the trust store instead of widening it. Install certifi (pip install "
-			"certifi) or point PIP_CERT/REQUESTS_CA_BUNDLE at the host's CA bundle, then retry.",
-			file=sys.stderr,
-		)
-		return 1
+    if int_non_corporate == 0:
+        print(
+            "Refusing to write a CA bundle containing ONLY the corporate certificate: that "
+            "narrows the trust store instead of widening it. Install certifi (pip install "
+            "certifi) or point PIP_CERT/REQUESTS_CA_BUNDLE at the host's CA bundle, then retry.",
+            file=sys.stderr,
+        )
+        return 1
 
-	path_out.parent.mkdir(parents=True, exist_ok=True)
-	path_out.write_text("\n".join(list_blocks) + "\n", encoding="utf-8")
-	print(len(list_blocks))
-	return 0
+    path_out.parent.mkdir(parents=True, exist_ok=True)
+    path_out.write_text("\n".join(list_blocks) + "\n", encoding="utf-8")
+    print(len(list_blocks))
+    return 0
 
 
 if __name__ == "__main__":
-	sys.exit(main())
+    sys.exit(main())

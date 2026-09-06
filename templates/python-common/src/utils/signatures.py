@@ -18,58 +18,58 @@ from typing import TYPE_CHECKING
 # the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from collections.abc import Callable
-	from typing import TypeVar
+    from collections.abc import Callable
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 @type_checker
 def resolve_signature(path_signatures_dir: Path, str_sender_email: str) -> str:
-	"""Return the sender's signature HTML, falling back to the default.
+    """Return the sender's signature HTML, falling back to the default.
 
-	Parameters
-	----------
-	path_signatures_dir : pathlib.Path
-		Directory holding ``<sender>.html`` / ``default.html``.
-	str_sender_email : str
-		Sender account; selects ``<sender>.html``.
+    Parameters
+    ----------
+    path_signatures_dir : pathlib.Path
+            Directory holding ``<sender>.html`` / ``default.html``.
+    str_sender_email : str
+            Sender account; selects ``<sender>.html``.
 
-	Returns
-	-------
-	str
-		Signature HTML (``<sender>.html``, else ``default.html``, else empty).
-	"""
-	# "First existing candidate, else empty" stated as a search rather than a loop with an
-	# exit in the middle. The preference order stays visible in the tuple, which is where a
-	# reader looks for it.
-	list_candidates = [
-		path_signatures_dir / str_name for str_name in (f"{str_sender_email}.html", "default.html")
-	]
-	path_sig = next((path for path in list_candidates if path.exists()), None)
-	return path_sig.read_text(encoding="utf-8") if path_sig is not None else ""
+    Returns
+    -------
+    str
+            Signature HTML (``<sender>.html``, else ``default.html``, else empty).
+    """
+    # "First existing candidate, else empty" stated as a search rather than a loop with an
+    # exit in the middle. The preference order stays visible in the tuple, which is where a
+    # reader looks for it.
+    list_candidates = [
+        path_signatures_dir / str_name for str_name in (f"{str_sender_email}.html", "default.html")
+    ]
+    path_sig = next((path for path in list_candidates if path.exists()), None)
+    return path_sig.read_text(encoding="utf-8") if path_sig is not None else ""
 
 
 @type_checker
 def to_html(str_body: str) -> str:
-	"""Convert a plain-text body to minimal HTML (newlines to ``<br>``).
+    """Convert a plain-text body to minimal HTML (newlines to ``<br>``).
 
-	Parameters
-	----------
-	str_body : str
-		Plain-text body.
+    Parameters
+    ----------
+    str_body : str
+            Plain-text body.
 
-	Returns
-	-------
-	str
-		HTML body.
-	"""
-	return str_body.replace("\n", "<br>\n")
+    Returns
+    -------
+    str
+            HTML body.
+    """
+    return str_body.replace("\n", "<br>\n")

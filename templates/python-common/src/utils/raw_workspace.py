@@ -32,18 +32,18 @@ from typing import TYPE_CHECKING
 # the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from collections.abc import Callable
-	from typing import TypeVar
+    from collections.abc import Callable
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 # ``@contextmanager`` must stay OUTERMOST: it turns the generator into a context-manager
@@ -52,30 +52,30 @@ else:
 @contextmanager
 @type_checker
 def raw_workspace(path_raw: Path | None = None) -> Iterator[Path]:
-	"""Yield the directory this read's raw artifacts belong in.
+    """Yield the directory this read's raw artifacts belong in.
 
-	Parameters
-	----------
-	path_raw : pathlib.Path or None, optional
-		Bronze-layer destination. ``None`` (the default) means the bytes are scratch: a
-		temporary directory is used and destroyed on exit. A path means the artifact is
-		kept — the directory is created if missing, parents included, and left in place.
+    Parameters
+    ----------
+    path_raw : pathlib.Path or None, optional
+            Bronze-layer destination. ``None`` (the default) means the bytes are scratch: a
+            temporary directory is used and destroyed on exit. A path means the artifact is
+            kept — the directory is created if missing, parents included, and left in place.
 
-	Yields
-	------
-	pathlib.Path
-		An existing directory to write the downloaded artifact (and anything extracted
-		from it) into.
+    Yields
+    ------
+    pathlib.Path
+            An existing directory to write the downloaded artifact (and anything extracted
+            from it) into.
 
-	Examples
-	--------
-	>>> with raw_workspace() as path_dir:  # scratch — gone afterwards
-	...     path_dir.is_dir()
-	True
-	"""
-	if path_raw is None:
-		with tempfile.TemporaryDirectory() as str_tmp:
-			yield Path(str_tmp)
-		return
-	path_raw.mkdir(parents=True, exist_ok=True)
-	yield path_raw
+    Examples
+    --------
+    >>> with raw_workspace() as path_dir:  # scratch — gone afterwards
+    ...     path_dir.is_dir()
+    True
+    """
+    if path_raw is None:
+        with tempfile.TemporaryDirectory() as str_tmp:
+            yield Path(str_tmp)
+        return
+    path_raw.mkdir(parents=True, exist_ok=True)
+    yield path_raw
