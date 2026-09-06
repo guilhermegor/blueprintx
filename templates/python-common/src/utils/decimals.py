@@ -70,7 +70,9 @@ def to_decimal(
 		Number of decimal places to quantise to (non-negative).
 	default : Decimal, optional
 		Value returned when ``value`` is missing or unparsable, by default
-		``Decimal("0")``.
+		``Decimal("0")``. ⚠️ Also returned when the quantise itself overflows the
+		caller's ``decimal`` context precision — a finite, parsable value can hit
+		that, and this function never raises a decimal exception.
 	rounding : str, optional
 		A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
 		by default ``ROUND_DOWN`` (truncation).
@@ -89,7 +91,13 @@ def to_decimal(
 		raise ValueError("int_places must be non-negative")
 	cls_quantum = Decimal(1).scaleb(-int_places)
 	cls_raw = _parse(value, default)
-	return cls_raw.quantize(cls_quantum, rounding=rounding)
+	try:
+		return cls_raw.quantize(cls_quantum, rounding=rounding)
+	except InvalidOperation:
+		# quantize can raise on a finite value when the caller's context precision is too
+		# low; this function promises a default, never a decimal exception. See the Raises
+		# section above and utils/CLAUDE.md.
+		return default
 
 
 @type_checker
@@ -127,8 +135,9 @@ def to_decimal_strict(
 	Raises
 	------
 	ValueError
-		If ``int_places`` is negative, or if ``value`` is ``None`` or cannot be
-		parsed as a finite decimal number.
+		If ``int_places`` is negative, if ``value`` is ``None`` or cannot be parsed
+		as a finite decimal number, or if quantising it overflows the caller's
+		``decimal`` context precision.
 	"""
 	cls_sentinel = Decimal("NaN")
 	cls_result = to_decimal(value, int_places, default=cls_sentinel, rounding=rounding)

@@ -1,6 +1,6 @@
 """Unit tests for the Decimal coercion helper."""
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 
 import pytest
 
@@ -140,3 +140,31 @@ def test_to_decimal_strict_negative_places_raises() -> None:
 	"""A negative ``int_places`` fails fast with ``ValueError``, like ``to_decimal``."""
 	with pytest.raises(ValueError, match="non-negative"):
 		to_decimal_strict("1.0", -1)
+
+
+def test_to_decimal_returns_the_default_when_the_context_precision_is_too_low() -> None:
+	"""A finite value can still blow up in ``quantize`` — and must not leak that.
+
+	⚠️ The trigger is ``decimal.getcontext().prec``, a property of the CALLER's context and
+	not of ``value``, so the parse step cannot see it coming: a perfectly parsable number
+	reaches ``quantize`` and raises ``InvalidOperation`` there. This function's contract is
+	"returns ``default`` when it cannot produce a number", so the exception must not escape.
+	"""
+	with localcontext() as cls_ctx:
+		cls_ctx.prec = 3
+
+		assert to_decimal("123456789.987654321", 2, default=Decimal("0")) == Decimal("0")
+
+
+def test_to_decimal_strict_raises_value_error_when_quantize_overflows() -> None:
+	"""The strict sibling turns the SAME case into ``ValueError``, per its own contract.
+
+	Paired with the test above: identical input and context, opposite promise. A single
+	``except`` at the quantise site serves both, which is why neither can be satisfied by
+	special-casing one of them.
+	"""
+	with localcontext() as cls_ctx:
+		cls_ctx.prec = 3
+
+		with pytest.raises(ValueError, match="cannot coerce"):
+			to_decimal_strict("123456789.987654321", 2)
