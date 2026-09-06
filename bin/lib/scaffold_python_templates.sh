@@ -221,6 +221,16 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/.vscode/tasks.json"
 }
 
+scaffold_copy_docs_extras() {
+	local str_project_path="$1"
+
+	# Incident-record page (blueprintx#240) — shared source so all reachable tiers stay in
+	# sync, same reasoning as the usage/examples/faq/contributing/changelog loop in each
+	# tier's own copy_mkdocs_templates. Copied here (not there) because docs/ already
+	# exists by the time this runs, and this file is not touched by any in-flight PR.
+	cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" "$str_project_path/docs/incidents.md"
+}
+
 scaffold_copy_common_templates() {
 	local str_tier="$1"
 	local str_project_path="$2"
@@ -231,5 +241,6 @@ scaffold_copy_common_templates() {
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	scaffold_copy_docs_extras "$str_project_path"
 	print_status "success" "Common templates applied"
 }
