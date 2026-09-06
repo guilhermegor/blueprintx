@@ -310,6 +310,22 @@ The `templates/python-common/` directory is the **single source of truth** for s
 
 `chassis/db/domain/ports.py` defines `DatabaseHandler` (ABC) — all DB handlers extend it and implement `create / read / update / delete / backup / close`. SQL backends live in `chassis/db_schema/`, schema-less backends (JSON, CSV, joblib) in `chassis/db_wschema/`.
 
+## Cross-language quality parity
+
+Every quality decision applies to **all** scaffolded languages (Python and TypeScript/JS today),
+unless that language's own community standard says otherwise — the community standard (PEP-8/
+PEP-257, ECMAScript) then outranks the house rule. Parity is by **prohibited construct, never by
+number**: `complexity: 2` in ESLint is stricter than `max-complexity = 2` in ruff because ESLint
+counts `&&`/`||` and mccabe doesn't (blueprintx#425), and PEP-8 requires a space around `=` with a
+type annotation but forbids one without — a single "uniform" rule would be wrong on both sides.
+
+These decisions live in `CONTRIBUTING.md` / `README.md` / `docs/`, never as a code comment
+(QA-suppression comments — `noqa`, `complexity-ok`, `type: ignore`, `codespell:ignore` — are
+exempt, blueprintx#303). Not a gate: "was this applied to both language families?" isn't
+machine-decidable, so it stays a review question. Full precedence order, the worked examples, and
+the dated Python-vs-TS gate-parity table live in `CONTRIBUTING.md` → "Cross-Language Quality
+Parity" — re-measure that table before trusting it, and update its date when you do.
+
 ## File naming conventions
 
 Output files (exports, backups, model artifacts, reports):
