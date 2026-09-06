@@ -114,6 +114,48 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
    - Code coverage should not decrease
    - Documentation must be updated
 
+## Ruff Rule Adoption Log
+
+`templates/python-common/ruff.toml` only carries a short pointer comment beside each
+rule-set entry in `[lint].select` — the full measurement and, where a rule needed a
+case-by-case call, the reasoning for each finding lives here.
+
+### `RET` (flake8-return) — blueprintx#426
+
+Adopted whole, including `RET501` (a `return None` that duplicates the function's
+implicit `None`) — not narrowed to only `RET505` (the "unnecessary `else` after
+`return`" early-return check).
+
+- **`RET505` and the rest of the family:** 0 findings measured across
+  `src/ bin/ tests/ optional/` — the codebase already writes early returns
+  everywhere. Adopting it is a zero-cost regression gate: it does not rewrite any
+  existing code, it only stops a future `if: return … else: return …` shape from
+  landing.
+- **`RET501`:** 5 findings in `templates/python-common` (the scope the original
+  measurement covered), all the same shape — a `close()` method (or, in one case,
+  an async `__aexit__`/a YAML-loader callback) annotated `-> None` whose body ends
+  in an explicit `return None`. **`bin/ci/scaffold_lint_test.sh` then surfaced 6
+  more** in `templates/ddd-service-native-db/src/chassis/db_schema/infrastructure/`
+  (one per SQL backend's `close()`) — a skeleton-owned tree `ruff check` from
+  `templates/python-common` never reaches, so the original measurement could not
+  see them; only running `poe lint` inside a real scaffolded project could. In
+  every one of the 11, `None` is the function's *only* possible return value (per
+  the rule's own message, "if it is the only possible return value") — none of
+  them is a `-> X | None` function where a mid-function `return None` is a
+  deliberate distinct outcome the caller consumes. All 11 were therefore residue
+  and the line was deleted (never suppressed with `# noqa`):
+  - `templates/python-common/bin/check_docs_sections.py::_ignore_unknown`
+  - `templates/python-common/optional/browser_steps/tests/test_step_handlers.py::FakeDownloadInfo.__aexit__`
+  - `templates/python-common/optional/chassis/db_wschema/infrastructure/csv_handler.py::CsvHandler.close`
+  - `templates/python-common/optional/chassis/db_wschema/infrastructure/joblib_handler.py::JoblibHandler.close`
+  - `templates/python-common/optional/chassis/db_wschema/infrastructure/json_handler.py::JsonHandler.close`
+  - `templates/ddd-service-native-db/src/chassis/db_schema/infrastructure/{mariadb,mssql,mysql,oracle,postgres,sqlite}_handler.py::*Handler.close`
+
+  If a future `RET501` finding **is** a deliberate `None` branch of a `-> X | None`
+  function (the `None` is the result the caller consumes, not leftover
+  boilerplate), the right fix is a line-scoped `# noqa: RET501` **with a reason**,
+  not deletion — an unreasoned `noqa` is the same debt as an unreasoned comment.
+
 ## Best Practices
 
 - **Keep branches focused** - one feature/bugfix per branch

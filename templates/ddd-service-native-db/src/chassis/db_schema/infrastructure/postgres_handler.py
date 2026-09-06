@@ -196,7 +196,6 @@ class PostgresDatabaseHandler(DatabaseHandler):
 
 	def close(self) -> None:
 		"""No-op because connections are opened per operation."""
-		return None
 
 	def _connect(self) -> Any:
 		"""Create a psycopg connection using the configured DSN."""
