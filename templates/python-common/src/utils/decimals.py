@@ -139,9 +139,7 @@ def to_decimal_strict(
 
 
 @type_checker
-def _quantise(
-	cls_raw: Decimal, int_places: int, default: Decimal, rounding: str
-) -> Decimal:
+def _quantise(cls_raw: Decimal, int_places: int, default: Decimal, rounding: str) -> Decimal:
 	"""Quantise ``cls_raw``, falling back to ``default`` when the context is too narrow.
 
 	Parameters
