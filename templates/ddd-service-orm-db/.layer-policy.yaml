@@ -102,6 +102,10 @@ layers:
         The ORM IS this tier's persistence contract, not a peripheral dependency: Base,
         Session and the Repository ABC are written in it, and chassis/db_schema is the
         adapter. Swapping it is a rewrite, not a swap — the criterion in CLAUDE.md.
+      opentelemetry: >-
+        OTLP log export behind chassis/otel_logging.py (opt-in, blueprintx#438). The ONLY
+        place this vendor is imported — application code calls configure_otel_logging(logger),
+        never opentelemetry directly, so a later exporter swap touches one adapter.
 
   utils:
     # utils/ IS the seam layer — this is where vendors are supposed to live. Listed
