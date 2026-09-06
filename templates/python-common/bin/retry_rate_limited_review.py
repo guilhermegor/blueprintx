@@ -750,11 +750,21 @@ def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetim
 	datetime.datetime or None
 		The moment the account frees up, or ``None`` when no notice is currently blocking.
 	"""
-	list_dated = [d for d in list_notices if d and d.get("created_at")]
-	if not list_dated:
-		return None
-	dict_newest = max(list_dated, key=lambda d: d["created_at"])
-	return notice_deadline(dict_newest, dt_now)
+	# ⚠️ The LATEST DEADLINE, never the deadline of the latest notice. Across PRs these are
+	# independent statements about ONE shared quota, so the binding moment is the furthest
+	# one out. Taking `max(created_at)` and reading only that notice loses the window
+	# whenever the newest refusal names no number -- `_RE_RATE_LIMIT` matches those too, and
+	# `notice_deadline` returns None for them, which reads as "account free" while another
+	# PR's declared window is still open. (Per PR the newest notice DOES supersede: that
+	# stays `pr_needs_retry`'s job, and is unchanged.)
+	list_deadlines = [
+		dt_deadline
+		for dict_notice in list_notices
+		if dict_notice
+		for dt_deadline in (notice_deadline(dict_notice, dt_now),)
+		if dt_deadline is not None
+	]
+	return max(list_deadlines, default=None)
 
 
 # ⚠️ EXACTLY ONE PR PER RUN, OLDEST FIRST — AND A STUCK HEAD DOES NOT WEDGE THE QUEUE.

@@ -871,6 +871,31 @@ def test_account_blocked_until_reads_the_newest_refusal_across_all_waiting_prs(
 	assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is not None
 
 
+def test_account_blocked_until_takes_the_LATEST_deadline_not_the_latest_notice(
+	cls_retry: ModuleType,
+) -> None:
+	"""A newer refusal naming NO number must not erase an older PR's open window.
+
+	⚠️ The regression this pins: ``_RE_RATE_LIMIT`` matches refusals with no number too, so
+	``notice_deadline`` returns ``None`` for them. Picking ``max(created_at)`` and reading only
+	that notice therefore reported "account free" while another PR's declared window was still
+	open, and the run asked inside it -- pushing the window further out.
+
+	Parameters
+	----------
+	cls_retry : types.ModuleType
+		The retry module.
+	"""
+	list_notices = [
+		# Older, but names 35 minutes and was posted 20 ago -- still blocking for 15 more.
+		_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20),
+		# Newer, but names no number at all.
+		_comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=5),
+	]
+
+	assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is not None
+
+
 def test_account_blocked_until_is_free_once_the_newest_refusal_elapses(
 	cls_retry: ModuleType,
 ) -> None:
