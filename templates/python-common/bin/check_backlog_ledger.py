@@ -55,58 +55,58 @@ BOT_LOGIN_SUFFIX = "[bot]"
 
 
 def is_bot_author(str_login: str) -> bool:
-	"""Return whether a GitHub login belongs to a bot account.
+    """Return whether a GitHub login belongs to a bot account.
 
-	Parameters
-	----------
-	str_login : str
-		A GitHub login, e.g. ``dependabot[bot]`` or ``octocat``. An empty or ``None``-ish
-		value is treated as human, so an unresolved author fails CLOSED.
+    Parameters
+    ----------
+    str_login : str
+            A GitHub login, e.g. ``dependabot[bot]`` or ``octocat``. An empty or ``None``-ish
+            value is treated as human, so an unresolved author fails CLOSED.
 
-	Returns
-	-------
-	bool
-		``True`` only for a login carrying GitHub's ``[bot]`` suffix.
-	"""
-	return bool(str_login) and str_login.endswith(BOT_LOGIN_SUFFIX)
+    Returns
+    -------
+    bool
+            ``True`` only for a login carrying GitHub's ``[bot]`` suffix.
+    """
+    return bool(str_login) and str_login.endswith(BOT_LOGIN_SUFFIX)
 
 
 def pr_author_login() -> str:
-	"""Return the PR author's login from the GitHub event payload (I/O seam).
+    """Return the PR author's login from the GitHub event payload (I/O seam).
 
-	⚠️ This must be the PR **author**, never ``GITHUB_ACTOR``. The actor is whoever
-	*triggered* the run, so an actor-keyed exemption dies the moment a human touches the
-	bot's PR (update-branch, re-run, fixup) — i.e. the act of unblocking it defeats the fix,
-	and every retry looks like "the fix doesn't work".
+    ⚠️ This must be the PR **author**, never ``GITHUB_ACTOR``. The actor is whoever
+    *triggered* the run, so an actor-keyed exemption dies the moment a human touches the
+    bot's PR (update-branch, re-run, fixup) — i.e. the act of unblocking it defeats the fix,
+    and every retry looks like "the fix doesn't work".
 
-	``GITHUB_ACTOR`` is consulted **only** when there is no PR payload at all (a ``push``
-	run, a local pre-commit), where there is no author to confuse it with.
+    ``GITHUB_ACTOR`` is consulted **only** when there is no PR payload at all (a ``push``
+    run, a local pre-commit), where there is no author to confuse it with.
 
-	Returns
-	-------
-	str
-		The author login, or ``""`` when it cannot be resolved — which the caller treats as
-		human, so the gate fails closed rather than exempting everyone.
-	"""
-	str_event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+    Returns
+    -------
+    str
+            The author login, or ``""`` when it cannot be resolved — which the caller treats as
+            human, so the gate fails closed rather than exempting everyone.
+    """
+    str_event_path = os.environ.get("GITHUB_EVENT_PATH", "")
 
-	# Once GITHUB_EVENT_PATH is set we are inside a workflow run, so the payload is the ONLY
-	# authority on who authored the change. Every failure to use it — missing file, unreadable
-	# bytes, malformed JSON, a PR object with no login — returns "" and is treated as human.
-	# Falling back to GITHUB_ACTOR here would reintroduce the exact defect this function exists
-	# to avoid: the actor is whoever triggered the run, so a bot re-running or auto-merging a
-	# human's PR would exempt it. Fail closed: the worst case is a gate that still applies.
-	if str_event_path:
-		try:
-			dict_event = json.loads(pathlib.Path(str_event_path).read_text(encoding="utf-8"))
-		except (OSError, ValueError):
-			return ""
-		dict_pr = dict_event.get("pull_request") or {}
-		return str((dict_pr.get("user") or {}).get("login") or "")
+    # Once GITHUB_EVENT_PATH is set we are inside a workflow run, so the payload is the ONLY
+    # authority on who authored the change. Every failure to use it — missing file, unreadable
+    # bytes, malformed JSON, a PR object with no login — returns "" and is treated as human.
+    # Falling back to GITHUB_ACTOR here would reintroduce the exact defect this function exists
+    # to avoid: the actor is whoever triggered the run, so a bot re-running or auto-merging a
+    # human's PR would exempt it. Fail closed: the worst case is a gate that still applies.
+    if str_event_path:
+        try:
+            dict_event = json.loads(pathlib.Path(str_event_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return ""
+        dict_pr = dict_event.get("pull_request") or {}
+        return str((dict_pr.get("user") or {}).get("login") or "")
 
-	# Not inside a workflow run at all (a local pre-commit, a manual invocation). There is no
-	# PR author to confuse the actor with, so the actor is the best available signal.
-	return os.environ.get("GITHUB_ACTOR", "")
+    # Not inside a workflow run at all (a local pre-commit, a manual invocation). There is no
+    # PR author to confuse the actor with, so the actor is the best available signal.
+    return os.environ.get("GITHUB_ACTOR", "")
 
 
 # Risk classes that REQUIRE a ledger. Kept narrow on purpose: docs/deps/tests-only branches are
@@ -122,184 +122,184 @@ _BIN = pathlib.Path(__file__).resolve().parent
 
 
 def _load_pr_gate() -> types.ModuleType | None:
-	"""Load ``bin/pr_gate.py`` by path (``bin/`` is not a package).
+    """Load ``bin/pr_gate.py`` by path (``bin/`` is not a package).
 
-	Returns
-	-------
-	module or None
-		The ``pr_gate`` module, or ``None`` when it is absent (the gate is an opt-in tier).
-	"""
-	path_gate = _BIN / "pr_gate.py"
-	if not path_gate.is_file():
-		return None
-	cls_spec = importlib.util.spec_from_file_location("pr_gate", path_gate)
-	cls_module = importlib.util.module_from_spec(cls_spec)
-	cls_spec.loader.exec_module(cls_module)
-	return cls_module
+    Returns
+    -------
+    module or None
+            The ``pr_gate`` module, or ``None`` when it is absent (the gate is an opt-in tier).
+    """
+    path_gate = _BIN / "pr_gate.py"
+    if not path_gate.is_file():
+        return None
+    cls_spec = importlib.util.spec_from_file_location("pr_gate", path_gate)
+    cls_module = importlib.util.module_from_spec(cls_spec)
+    cls_spec.loader.exec_module(cls_module)
+    return cls_module
 
 
 def _git(list_args: list) -> str:
-	"""Run a read-only git command and return stdout (empty string on failure).
+    """Run a read-only git command and return stdout (empty string on failure).
 
-	Parameters
-	----------
-	list_args : list of str
-		Arguments after ``git``.
+    Parameters
+    ----------
+    list_args : list of str
+            Arguments after ``git``.
 
-	Returns
-	-------
-	str
-		Captured stdout, stripped.
-	"""
-	try:
-		# Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
-		# resolution BY DESIGN: the hook must use the `git` the developer's PATH selects — the
-		# one their shell, their hooks and CI all use — not a path this file hardcodes.
-		cls_proc = subprocess.run(  # noqa: S603
-			["git", *list_args],  # noqa: S607
-			capture_output=True,
-			text=True,
-			check=False,
-		)
-	except OSError:
-		return ""
-	return cls_proc.stdout.strip()
+    Returns
+    -------
+    str
+            Captured stdout, stripped.
+    """
+    try:
+        # Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
+        # resolution BY DESIGN: the hook must use the `git` the developer's PATH selects — the
+        # one their shell, their hooks and CI all use — not a path this file hardcodes.
+        cls_proc = subprocess.run(  # noqa: S603
+            ["git", *list_args],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return ""
+    return cls_proc.stdout.strip()
 
 
 def default_branch() -> str:
-	"""Return the repository's default branch name (``main``/``master``, else ``main``).
+    """Return the repository's default branch name (``main``/``master``, else ``main``).
 
-	Returns
-	-------
-	str
-		The default branch name.
-	"""
-	str_ref = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
-	if str_ref:
-		return str_ref.rsplit("/", 1)[-1]
-	for str_candidate in ("main", "master"):
-		if _git(["rev-parse", "--verify", "--quiet", str_candidate]):
-			return str_candidate
-	return "main"
+    Returns
+    -------
+    str
+            The default branch name.
+    """
+    str_ref = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
+    if str_ref:
+        return str_ref.rsplit("/", 1)[-1]
+    for str_candidate in ("main", "master"):
+        if _git(["rev-parse", "--verify", "--quiet", str_candidate]):
+            return str_candidate
+    return "main"
 
 
 def changed_paths(str_base: str) -> list:
-	"""Return the branch's cumulative changed paths, INDEX included.
+    """Return the branch's cumulative changed paths, INDEX included.
 
-	Parameters
-	----------
-	str_base : str
-		The merge-base commit to diff against.
+    Parameters
+    ----------
+    str_base : str
+            The merge-base commit to diff against.
 
-	Returns
-	-------
-	list of str
-		Repository-relative paths.
-	"""
-	str_out = _git(["diff", "--cached", "--name-only", str_base])
-	return [p for p in str_out.splitlines() if p]
+    Returns
+    -------
+    list of str
+            Repository-relative paths.
+    """
+    str_out = _git(["diff", "--cached", "--name-only", str_base])
+    return [p for p in str_out.splitlines() if p]
 
 
 def needs_ledger(list_paths: list, cls_gate: types.ModuleType) -> bool:
-	"""Return whether ANY changed path falls in a ledger-requiring class.
+    """Return whether ANY changed path falls in a ledger-requiring class.
 
-	Parameters
-	----------
-	list_paths : list of str
-		The branch's changed paths.
-	cls_gate : module
-		The loaded ``pr_gate`` module (its classifier is the single source of truth).
+    Parameters
+    ----------
+    list_paths : list of str
+            The branch's changed paths.
+    cls_gate : module
+            The loaded ``pr_gate`` module (its classifier is the single source of truth).
 
-	Returns
-	-------
-	bool
-		``True`` when at least one path is in ``LEDGER_CLASSES``.
-	"""
-	# PER PATH — see the module docstring: classify_risk() over the whole list answers a
-	# different question and lets a mixed branch escape the requirement.
-	return any(cls_gate.classify_risk([p]) in LEDGER_CLASSES for p in list_paths)
+    Returns
+    -------
+    bool
+            ``True`` when at least one path is in ``LEDGER_CLASSES``.
+    """
+    # PER PATH — see the module docstring: classify_risk() over the whole list answers a
+    # different question and lets a mixed branch escape the requirement.
+    return any(cls_gate.classify_risk([p]) in LEDGER_CLASSES for p in list_paths)
 
 
 def find_ledger_problems(list_paths: list) -> list:
-	"""Return problems with the branch's ledger (empty when a valid ledger was added).
+    """Return problems with the branch's ledger (empty when a valid ledger was added).
 
-	Parameters
-	----------
-	list_paths : list of str
-		The branch's changed paths.
+    Parameters
+    ----------
+    list_paths : list of str
+            The branch's changed paths.
 
-	Returns
-	-------
-	list of str
-		One message per problem.
-	"""
-	list_ledgers = [p for p in list_paths if p.startswith(f"{LEDGER_DIR}/") and p.endswith(".md")]
-	if not list_ledgers:
-		return [
-			f"❌ this branch changes src/ or ci paths but adds no work ledger "
-			f"under {LEDGER_DIR}/. "
-			f"Create {LEDGER_DIR}/<kebab-topic>_YYYYMMDD_HHMMSS.md with a '- [ ]' checklist."
-		]
-	list_problems = []
-	for str_ledger in list_ledgers:
-		if not LEDGER_RE.match(str_ledger):
-			list_problems.append(
-				f"❌ {str_ledger}: name must match <kebab-topic>_YYYYMMDD_HHMMSS.md"
-			)
-			continue
-		path_ledger = pathlib.Path(str_ledger)
-		if path_ledger.is_file() and not CHECKBOX_RE.search(
-			path_ledger.read_text(encoding="utf-8")
-		):
-			list_problems.append(f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' checkbox")
-	# A single valid ledger satisfies the branch.
-	return [] if len(list_problems) < len(list_ledgers) else list_problems
+    Returns
+    -------
+    list of str
+            One message per problem.
+    """
+    list_ledgers = [p for p in list_paths if p.startswith(f"{LEDGER_DIR}/") and p.endswith(".md")]
+    if not list_ledgers:
+        return [
+            f"❌ this branch changes src/ or ci paths but adds no work ledger "
+            f"under {LEDGER_DIR}/. "
+            f"Create {LEDGER_DIR}/<kebab-topic>_YYYYMMDD_HHMMSS.md with a '- [ ]' checklist."
+        ]
+    list_problems = []
+    for str_ledger in list_ledgers:
+        if not LEDGER_RE.match(str_ledger):
+            list_problems.append(
+                f"❌ {str_ledger}: name must match <kebab-topic>_YYYYMMDD_HHMMSS.md"
+            )
+            continue
+        path_ledger = pathlib.Path(str_ledger)
+        if path_ledger.is_file() and not CHECKBOX_RE.search(
+            path_ledger.read_text(encoding="utf-8")
+        ):
+            list_problems.append(f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' checkbox")
+    # A single valid ledger satisfies the branch.
+    return [] if len(list_problems) < len(list_ledgers) else list_problems
 
 
 def main() -> int:
-	"""Check the branch's ledger requirement.
+    """Check the branch's ledger requirement.
 
-	Returns
-	-------
-	int
-		0 when satisfied (or not applicable), 1 on a violation.
-	"""
-	str_author = pr_author_login()
-	if is_bot_author(str_author):
-		# Keyed on the AUTHOR, never the path: a human branch touching the same files still
-		# owes the ledger. Announced so an unexpected exemption is visible in the log.
-		print(f"✅ work-ledger check skipped — PR authored by a bot ({str_author}).")
-		return 0
+    Returns
+    -------
+    int
+            0 when satisfied (or not applicable), 1 on a violation.
+    """
+    str_author = pr_author_login()
+    if is_bot_author(str_author):
+        # Keyed on the AUTHOR, never the path: a human branch touching the same files still
+        # owes the ledger. Announced so an unexpected exemption is visible in the log.
+        print(f"✅ work-ledger check skipped — PR authored by a bot ({str_author}).")
+        return 0
 
-	cls_gate = _load_pr_gate()
-	if cls_gate is None:
-		print("bin/pr_gate.py absent — skipping the work-ledger check.")
-		return 0
+    cls_gate = _load_pr_gate()
+    if cls_gate is None:
+        print("bin/pr_gate.py absent — skipping the work-ledger check.")
+        return 0
 
-	str_base = _git(["merge-base", "HEAD", default_branch()])
-	str_head = _git(["rev-parse", "HEAD"])
-	if not str_base or str_base == str_head:
-		# On the default branch (or no merge-base): nothing branch-scoped to enforce.
-		return 0
+    str_base = _git(["merge-base", "HEAD", default_branch()])
+    str_head = _git(["rev-parse", "HEAD"])
+    if not str_base or str_base == str_head:
+        # On the default branch (or no merge-base): nothing branch-scoped to enforce.
+        return 0
 
-	list_paths = changed_paths(str_base)
-	if not list_paths or not needs_ledger(list_paths, cls_gate):
-		return 0
+    list_paths = changed_paths(str_base)
+    if not list_paths or not needs_ledger(list_paths, cls_gate):
+        return 0
 
-	list_problems = find_ledger_problems(list_paths)
-	for str_problem in list_problems:
-		print(str_problem)
-	return 1 if list_problems else 0
+    list_problems = find_ledger_problems(list_paths)
+    for str_problem in list_problems:
+        print(str_problem)
+    return 1 if list_problems else 0
 
 
 if __name__ == "__main__":
-	# Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-	# script prints: it would die with UnicodeEncodeError before reporting anything. And
-	# because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-	# a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-	# the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
-	for cls_stream in (sys.stdout, sys.stderr):
-		if hasattr(cls_stream, "reconfigure"):
-			cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
+    # script prints: it would die with UnicodeEncodeError before reporting anything. And
+    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
+    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
+    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
-	sys.exit(main())
+    sys.exit(main())

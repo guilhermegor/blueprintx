@@ -278,7 +278,7 @@ The `templates/python-common/` directory is the **single source of truth** for s
 
 ## Template Python conventions (must be respected in all template files)
 
-- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, tab indent, double quotes, NumPy docstrings.
+- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, 4-space indent, double quotes, NumPy docstrings.
 - **Pre-commit hooks** (`.pre-commit-config.yaml`): ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
 - **Tests**: every skeleton runs `pytest` (`make unit_tests` → `poetry run pytest tests/unit/`; `pytest.ini` is shipped from `templates/python-common/` to all tiers). Tests are pytest-style — plain functions with fixtures (`conftest.py`, `capsys`, `monkeypatch`, `pytest_mock`) — not `unittest.TestCase`. Write new tests as pytest functions regardless of tier.
 - **One class per file**. Ports (ABCs) in `domain/ports.py`, ORM/DB implementations in `infrastructure/`, orchestration in `application/use_cases.py`. Never mix layers in one file.

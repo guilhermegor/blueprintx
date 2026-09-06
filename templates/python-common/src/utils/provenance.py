@@ -52,18 +52,18 @@ from utils.tabular_reader import FileContract  # noqa: TID251
 # the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from collections.abc import Callable
-	from typing import TypeVar
+    from collections.abc import Callable
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 # Read the file in 1 MiB blocks so hashing a large artifact never loads it whole into memory.
@@ -72,121 +72,121 @@ _HASH_CHUNK_BYTES = 1 << 20
 
 @type_checker
 def hash_artifact(path_file: Path) -> str:
-	"""Return the ``sha256`` hex digest of a file's bytes, read in streamed chunks.
+    """Return the ``sha256`` hex digest of a file's bytes, read in streamed chunks.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		The downloaded source artifact to hash. Hash the *raw bytes on disk* (not the parsed
-		frame) so the digest is stable across parser/pandas versions and lets the lake detect a
-		changed source without re-parsing.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+            The downloaded source artifact to hash. Hash the *raw bytes on disk* (not the parsed
+            frame) so the digest is stable across parser/pandas versions and lets the lake detect a
+            changed source without re-parsing.
 
-	Returns
-	-------
-	str
-		The lowercase hex ``sha256`` digest.
+    Returns
+    -------
+    str
+            The lowercase hex ``sha256`` digest.
 
-	Raises
-	------
-	FileNotFoundError
-		If ``path_file`` does not exist (fail fast at the read boundary).
-	"""
-	cls_digest = hashlib.sha256()
-	with path_file.open("rb") as fh:
-		for bytes_chunk in iter(lambda: fh.read(_HASH_CHUNK_BYTES), b""):
-			cls_digest.update(bytes_chunk)
-	return cls_digest.hexdigest()
+    Raises
+    ------
+    FileNotFoundError
+            If ``path_file`` does not exist (fail fast at the read boundary).
+    """
+    cls_digest = hashlib.sha256()
+    with path_file.open("rb") as fh:
+        for bytes_chunk in iter(lambda: fh.read(_HASH_CHUNK_BYTES), b""):
+            cls_digest.update(bytes_chunk)
+    return cls_digest.hexdigest()
 
 
 @type_checker
 def resolve_package_version(str_distribution: str) -> str:
-	"""Resolve an installed distribution's version, tolerating an uninstalled tree.
+    """Resolve an installed distribution's version, tolerating an uninstalled tree.
 
-	Kept out of :func:`stamp_provenance` (which must stay a pure frame transform): the reader
-	resolves the version once and passes it in, exactly as it passes the content hash.
+    Kept out of :func:`stamp_provenance` (which must stay a pure frame transform): the reader
+    resolves the version once and passes it in, exactly as it passes the content hash.
 
-	Parameters
-	----------
-	str_distribution : str
-		The installed distribution name (e.g. the project's package name).
+    Parameters
+    ----------
+    str_distribution : str
+            The installed distribution name (e.g. the project's package name).
 
-	Returns
-	-------
-	str
-		The resolved version, or ``"0.0.0"`` when the distribution is not installed (a source
-		checkout run without ``pip install`` still stamps, just with the stub version).
-	"""
-	try:
-		return metadata.version(str_distribution)
-	except metadata.PackageNotFoundError:
-		return "0.0.0"
+    Returns
+    -------
+    str
+            The resolved version, or ``"0.0.0"`` when the distribution is not installed (a source
+            checkout run without ``pip install`` still stamps, just with the stub version).
+    """
+    try:
+        return metadata.version(str_distribution)
+    except metadata.PackageNotFoundError:
+        return "0.0.0"
 
 
 @type_checker
 def stamp_provenance(
-	df_input: pd.DataFrame,
-	str_url: str,
-	cls_contract: FileContract,
-	str_content_hash: str,
-	str_package_version: str,
+    df_input: pd.DataFrame,
+    str_url: str,
+    cls_contract: FileContract,
+    str_content_hash: str,
+    str_package_version: str,
 ) -> pd.DataFrame:
-	"""Append the provenance columns to an ingested frame (pure transform, no I/O).
+    """Append the provenance columns to an ingested frame (pure transform, no I/O).
 
-	Returns a **new** frame (the input is not mutated) with
-	:attr:`~utils.tabular_reader.FileContract.PROVENANCE_COLUMNS` appended after the source
-	columns. Call it **after** the contract check and dtype coercion, once per read: a single
-	``ingestion_run_id`` UUID is generated here and shared by every row of the read.
+    Returns a **new** frame (the input is not mutated) with
+    :attr:`~utils.tabular_reader.FileContract.PROVENANCE_COLUMNS` appended after the source
+    columns. Call it **after** the contract check and dtype coercion, once per read: a single
+    ``ingestion_run_id`` UUID is generated here and shared by every row of the read.
 
-	Parameters
-	----------
-	df_input : pd.DataFrame
-		The typed, contract-validated frame to stamp.
-	str_url : str
-		The exact source URL the rows came from.
-	cls_contract : FileContract
-		The contract the frame satisfied; its ``str_source_key`` disambiguates rows when
-		several readers share one URL (e.g. N members of one ZIP) or many datasets share a
-		bronze table.
-	str_content_hash : str
-		The ``sha256`` of the downloaded artifact bytes (from :func:`hash_artifact`), shared by
-		every row so the lake can detect a changed source without re-parsing.
-	str_package_version : str
-		The producing package's version (from :func:`resolve_package_version`), so rows made by
-		a buggy version are identifiable and re-ingestible after a fix.
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+            The typed, contract-validated frame to stamp.
+    str_url : str
+            The exact source URL the rows came from.
+    cls_contract : FileContract
+            The contract the frame satisfied; its ``str_source_key`` disambiguates rows when
+            several readers share one URL (e.g. N members of one ZIP) or many datasets share a
+            bronze table.
+    str_content_hash : str
+            The ``sha256`` of the downloaded artifact bytes (from :func:`hash_artifact`), shared by
+            every row so the lake can detect a changed source without re-parsing.
+    str_package_version : str
+            The producing package's version (from :func:`resolve_package_version`), so rows made by
+            a buggy version are identifiable and re-ingestible after a fix.
 
-	Returns
-	-------
-	pd.DataFrame
-		A copy of ``df_input`` with the six provenance columns appended (text columns as the
-		nullable ``string`` dtype; ``updated_at`` as tz-aware UTC).
-	"""
-	dt_fetched = datetime.now(UTC)
-	str_run_id = _new_run_id()
-	dict_text_provenance = {
-		"url": str_url,
-		"source_key": cls_contract.str_source_key,
-		"package_version": str_package_version,
-		"ingestion_run_id": str_run_id,
-		"content_hash": str_content_hash,
-	}
-	df_stamped = df_input.copy()
-	for str_col, str_value in dict_text_provenance.items():
-		df_stamped[str_col] = pd.array([str_value] * len(df_stamped), dtype="string")
-	df_stamped["updated_at"] = pd.Series(
-		[dt_fetched] * len(df_stamped), index=df_stamped.index, dtype="datetime64[ns, UTC]"
-	)
-	return df_stamped[[*df_input.columns, *cls_contract.PROVENANCE_COLUMNS]]
+    Returns
+    -------
+    pd.DataFrame
+            A copy of ``df_input`` with the six provenance columns appended (text columns as the
+            nullable ``string`` dtype; ``updated_at`` as tz-aware UTC).
+    """
+    dt_fetched = datetime.now(UTC)
+    str_run_id = _new_run_id()
+    dict_text_provenance = {
+        "url": str_url,
+        "source_key": cls_contract.str_source_key,
+        "package_version": str_package_version,
+        "ingestion_run_id": str_run_id,
+        "content_hash": str_content_hash,
+    }
+    df_stamped = df_input.copy()
+    for str_col, str_value in dict_text_provenance.items():
+        df_stamped[str_col] = pd.array([str_value] * len(df_stamped), dtype="string")
+    df_stamped["updated_at"] = pd.Series(
+        [dt_fetched] * len(df_stamped), index=df_stamped.index, dtype="datetime64[ns, UTC]"
+    )
+    return df_stamped[[*df_input.columns, *cls_contract.PROVENANCE_COLUMNS]]
 
 
 @type_checker
 def _new_run_id() -> str:
-	"""Return a fresh UUID4 string identifying one ingestion read.
+    """Return a fresh UUID4 string identifying one ingestion read.
 
-	Isolated so a test can monkeypatch it to a deterministic value.
+    Isolated so a test can monkeypatch it to a deterministic value.
 
-	Returns
-	-------
-	str
-		A new random UUID as a string.
-	"""
-	return str(uuid.uuid4())
+    Returns
+    -------
+    str
+            A new random UUID as a string.
+    """
+    return str(uuid.uuid4())

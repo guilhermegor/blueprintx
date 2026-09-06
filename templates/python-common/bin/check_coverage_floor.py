@@ -50,250 +50,250 @@ _RE_WHOLE_CAPABILITY = re.compile(r"^src/capabilities/([A-Za-z0-9_]+)/\*$")
 
 
 def omit_patterns(path_coveragerc: pathlib.Path) -> list[str]:
-	"""Return the ``[run] omit`` glob patterns declared in ``.coveragerc``.
+    """Return the ``[run] omit`` glob patterns declared in ``.coveragerc``.
 
-	Parameters
-	----------
-	path_coveragerc : pathlib.Path
-		The coverage config to read.
+    Parameters
+    ----------
+    path_coveragerc : pathlib.Path
+            The coverage config to read.
 
-	Returns
-	-------
-	list of str
-		One pattern per non-blank line, in declaration order.
-	"""
-	cls_parser = configparser.ConfigParser()
-	cls_parser.read(path_coveragerc, encoding="utf-8")
-	str_raw = cls_parser.get("run", "omit", fallback="")
-	# ⚠️ Expanded exactly as Coverage.py expands it before applying `omit`. A pattern written
-	# as `${PWD}/src/...` is what Coverage.py ACTS on after expansion, so comparing against
-	# the raw `${PWD}` text would never match a real module path — the omission would be
-	# real and this gate would report clean. That is a false negative in the one direction
-	# this gate exists to prevent: logic dropped from the denominator, silently.
-	return [
-		os.path.expandvars(str_line.strip())
-		for str_line in str_raw.splitlines()
-		if str_line.strip()
-	]
+    Returns
+    -------
+    list of str
+            One pattern per non-blank line, in declaration order.
+    """
+    cls_parser = configparser.ConfigParser()
+    cls_parser.read(path_coveragerc, encoding="utf-8")
+    str_raw = cls_parser.get("run", "omit", fallback="")
+    # ⚠️ Expanded exactly as Coverage.py expands it before applying `omit`. A pattern written
+    # as `${PWD}/src/...` is what Coverage.py ACTS on after expansion, so comparing against
+    # the raw `${PWD}` text would never match a real module path — the omission would be
+    # real and this gate would report clean. That is a false negative in the one direction
+    # this gate exists to prevent: logic dropped from the denominator, silently.
+    return [
+        os.path.expandvars(str_line.strip())
+        for str_line in str_raw.splitlines()
+        if str_line.strip()
+    ]
 
 
 def whole_capability_exclusions(list_patterns: list[str]) -> set[str]:
-	"""Return capability names the omit list excludes wholesale, by literal (non-glob) name.
+    """Return capability names the omit list excludes wholesale, by literal (non-glob) name.
 
-	Parameters
-	----------
-	list_patterns : list of str
-		The declared ``omit`` patterns.
+    Parameters
+    ----------
+    list_patterns : list of str
+            The declared ``omit`` patterns.
 
-	Returns
-	-------
-	set of str
-		Capability directory names named outright, e.g. ``{"example_feature"}``.
-	"""
-	return {
-		cls_match.group(1)
-		for str_pattern in list_patterns
-		if (cls_match := _RE_WHOLE_CAPABILITY.match(str_pattern)) is not None
-	}
+    Returns
+    -------
+    set of str
+            Capability directory names named outright, e.g. ``{"example_feature"}``.
+    """
+    return {
+        cls_match.group(1)
+        for str_pattern in list_patterns
+        if (cls_match := _RE_WHOLE_CAPABILITY.match(str_pattern)) is not None
+    }
 
 
 def defines_a_function(path_module: pathlib.Path) -> bool:
-	"""Return whether a module defines a function or method anywhere in its AST.
+    """Return whether a module defines a function or method anywhere in its AST.
 
-	A class with only attribute assignments (an enum) has none; a class with a method does.
-	This is the structural fact that stands in for "carries real behavior" — read from the
-	AST, never from the source text.
+    A class with only attribute assignments (an enum) has none; a class with a method does.
+    This is the structural fact that stands in for "carries real behavior" — read from the
+    AST, never from the source text.
 
-	Parameters
-	----------
-	path_module : pathlib.Path
-		The module to inspect.
+    Parameters
+    ----------
+    path_module : pathlib.Path
+            The module to inspect.
 
-	Returns
-	-------
-	bool
-		``True`` when the module defines at least one function or method.
-	"""
-	cls_tree = ast.parse(path_module.read_text(encoding="utf-8"))
-	return any(
-		isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef)
-		for cls_node in ast.walk(cls_tree)
-	)
+    Returns
+    -------
+    bool
+            ``True`` when the module defines at least one function or method.
+    """
+    cls_tree = ast.parse(path_module.read_text(encoding="utf-8"))
+    return any(
+        isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef)
+        for cls_node in ast.walk(cls_tree)
+    )
 
 
 def logic_bearing_modules(path_capability: pathlib.Path) -> list[pathlib.Path]:
-	"""Return the domain/application modules of one capability that define real behavior.
+    """Return the domain/application modules of one capability that define real behavior.
 
-	Parameters
-	----------
-	path_capability : pathlib.Path
-		A directory under ``src/capabilities/``.
+    Parameters
+    ----------
+    path_capability : pathlib.Path
+            A directory under ``src/capabilities/``.
 
-	Returns
-	-------
-	list of pathlib.Path
-		Modules under ``domain/`` or ``application/`` that define a function, sorted.
-	"""
-	list_modules = []
-	for str_layer in _LAYERS:
-		path_layer = path_capability / str_layer
-		if not path_layer.is_dir():
-			continue
-		list_modules.extend(
-			path_module
-			for path_module in sorted(path_layer.rglob("*.py"))
-			if defines_a_function(path_module)
-		)
-	return list_modules
+    Returns
+    -------
+    list of pathlib.Path
+            Modules under ``domain/`` or ``application/`` that define a function, sorted.
+    """
+    list_modules = []
+    for str_layer in _LAYERS:
+        path_layer = path_capability / str_layer
+        if not path_layer.is_dir():
+            continue
+        list_modules.extend(
+            path_module
+            for path_module in sorted(path_layer.rglob("*.py"))
+            if defines_a_function(path_module)
+        )
+    return list_modules
 
 
 def must_stay_covered(
-	path_capabilities: pathlib.Path, set_excluded: set[str]
+    path_capabilities: pathlib.Path, set_excluded: set[str]
 ) -> list[pathlib.Path]:
-	"""Return every logic-bearing module the omit list has no standing excuse to swallow.
+    """Return every logic-bearing module the omit list has no standing excuse to swallow.
 
-	Parameters
-	----------
-	path_capabilities : pathlib.Path
-		``src/capabilities/``.
-	set_excluded : set of str
-		Capability names the omit list already names outright.
+    Parameters
+    ----------
+    path_capabilities : pathlib.Path
+            ``src/capabilities/``.
+    set_excluded : set of str
+            Capability names the omit list already names outright.
 
-	Returns
-	-------
-	list of pathlib.Path
-		Domain/application modules, across every non-excluded capability, that define a
-		function — the code-derived floor.
-	"""
-	list_capabilities = sorted(
-		path_capability
-		for path_capability in path_capabilities.iterdir()
-		if path_capability.is_dir() and path_capability.name not in set_excluded
-	)
-	return [
-		path_module
-		for path_capability in list_capabilities
-		for path_module in logic_bearing_modules(path_capability)
-	]
+    Returns
+    -------
+    list of pathlib.Path
+            Domain/application modules, across every non-excluded capability, that define a
+            function — the code-derived floor.
+    """
+    list_capabilities = sorted(
+        path_capability
+        for path_capability in path_capabilities.iterdir()
+        if path_capability.is_dir() and path_capability.name not in set_excluded
+    )
+    return [
+        path_module
+        for path_capability in list_capabilities
+        for path_module in logic_bearing_modules(path_capability)
+    ]
 
 
 def swallowed_by_omit(
-	list_must_stay_covered: list[pathlib.Path], list_patterns: list[str]
+    list_must_stay_covered: list[pathlib.Path], list_patterns: list[str]
 ) -> list[str]:
-	"""Return one message per module the omit list excludes despite defining real behavior.
+    """Return one message per module the omit list excludes despite defining real behavior.
 
-	Parameters
-	----------
-	list_must_stay_covered : list of pathlib.Path
-		The code-derived floor: modules that must stay in the coverage denominator.
-	list_patterns : list of str
-		The declared ``omit`` patterns.
+    Parameters
+    ----------
+    list_must_stay_covered : list of pathlib.Path
+            The code-derived floor: modules that must stay in the coverage denominator.
+    list_patterns : list of str
+            The declared ``omit`` patterns.
 
-	Returns
-	-------
-	list of str
-		Human-readable problems; empty when none are swallowed.
-	"""
-	list_problems = []
-	for path_module in list_must_stay_covered:
-		str_posix = path_module.as_posix()
-		# Both spellings, because an expanded pattern is ABSOLUTE while the module path is
-		# relative to the project root. Matching only the relative form would let an
-		# absolute pattern slip through; matching only the absolute form would break every
-		# plain relative pattern the shipped .coveragerc actually uses.
-		str_absolute = path_module.resolve().as_posix()
-		list_matched = [
-			str_pattern
-			for str_pattern in list_patterns
-			if fnmatch.fnmatch(str_posix, str_pattern)
-			or fnmatch.fnmatch(str_absolute, str_pattern)
-		]
-		if list_matched:
-			list_problems.append(
-				f"{str_posix}: defines a function but is matched by omit pattern "
-				f"'{list_matched[0]}' — dropped out of the coverage floor's denominator"
-			)
-	return list_problems
+    Returns
+    -------
+    list of str
+            Human-readable problems; empty when none are swallowed.
+    """
+    list_problems = []
+    for path_module in list_must_stay_covered:
+        str_posix = path_module.as_posix()
+        # Both spellings, because an expanded pattern is ABSOLUTE while the module path is
+        # relative to the project root. Matching only the relative form would let an
+        # absolute pattern slip through; matching only the absolute form would break every
+        # plain relative pattern the shipped .coveragerc actually uses.
+        str_absolute = path_module.resolve().as_posix()
+        list_matched = [
+            str_pattern
+            for str_pattern in list_patterns
+            if fnmatch.fnmatch(str_posix, str_pattern)
+            or fnmatch.fnmatch(str_absolute, str_pattern)
+        ]
+        if list_matched:
+            list_problems.append(
+                f"{str_posix}: defines a function but is matched by omit pattern "
+                f"'{list_matched[0]}' — dropped out of the coverage floor's denominator"
+            )
+    return list_problems
 
 
 def vacuous_discovery_reason() -> str | None:
-	"""Return why discovery would be vacuous, or ``None`` when the inputs are usable.
+    """Return why discovery would be vacuous, or ``None`` when the inputs are usable.
 
-	Split out of ``main`` so the three "nothing to scan" guards share one return path — a
-	gate reporting success after scanning nothing is the exact failure this repo distrusts.
+    Split out of ``main`` so the three "nothing to scan" guards share one return path — a
+    gate reporting success after scanning nothing is the exact failure this repo distrusts.
 
-	Returns
-	-------
-	str or None
-		A human-readable reason, or ``None`` when ``.coveragerc`` and ``src/`` are both real.
-	"""
-	if not _COVERAGERC.is_file():
-		return f"{_COVERAGERC} not found"
-	if not omit_patterns(_COVERAGERC):
-		return (
-			f"{_COVERAGERC} declares an empty omit list — refusing to report success. "
-			f"Either the section moved or discovery is broken."
-		)
-	if not any(_SRC.rglob("*.py")):
-		return f"found ZERO .py files under {_SRC}"
-	return None
+    Returns
+    -------
+    str or None
+            A human-readable reason, or ``None`` when ``.coveragerc`` and ``src/`` are both real.
+    """
+    if not _COVERAGERC.is_file():
+        return f"{_COVERAGERC} not found"
+    if not omit_patterns(_COVERAGERC):
+        return (
+            f"{_COVERAGERC} declares an empty omit list — refusing to report success. "
+            f"Either the section moved or discovery is broken."
+        )
+    if not any(_SRC.rglob("*.py")):
+        return f"found ZERO .py files under {_SRC}"
+    return None
 
 
 def main() -> int:
-	"""Run the gate against the current working directory's ``.coveragerc`` and ``src/``.
+    """Run the gate against the current working directory's ``.coveragerc`` and ``src/``.
 
-	Returns
-	-------
-	int
-		``0`` when no logic-bearing module is silently omitted, ``1`` otherwise.
-	"""
-	str_reason = vacuous_discovery_reason()
-	if str_reason is not None:
-		print(f"check_coverage_floor: {str_reason}", file=sys.stderr)
-		return 1
+    Returns
+    -------
+    int
+            ``0`` when no logic-bearing module is silently omitted, ``1`` otherwise.
+    """
+    str_reason = vacuous_discovery_reason()
+    if str_reason is not None:
+        print(f"check_coverage_floor: {str_reason}", file=sys.stderr)
+        return 1
 
-	list_patterns = omit_patterns(_COVERAGERC)
+    list_patterns = omit_patterns(_COVERAGERC)
 
-	if not _CAPABILITIES.is_dir():
-		print(
-			"check_coverage_floor: no src/capabilities/ in this tier — nothing for the floor "
-			"to check (e.g. the MVC layout has no domain/application split)."
-		)
-		return 0
+    if not _CAPABILITIES.is_dir():
+        print(
+            "check_coverage_floor: no src/capabilities/ in this tier — nothing for the floor "
+            "to check (e.g. the MVC layout has no domain/application split)."
+        )
+        return 0
 
-	set_excluded = whole_capability_exclusions(list_patterns)
-	list_must_stay_covered = must_stay_covered(_CAPABILITIES, set_excluded)
-	if not list_must_stay_covered:
-		print(
-			"check_coverage_floor: 0 non-excluded capabilities carry domain/application "
-			"logic yet — expected on a fresh scaffold (only the shipped, already-excluded "
-			"example capability exists). This is not a broken detector; see the test suite's "
-			"synthetic probe for proof discovery works."
-		)
-		return 0
+    set_excluded = whole_capability_exclusions(list_patterns)
+    list_must_stay_covered = must_stay_covered(_CAPABILITIES, set_excluded)
+    if not list_must_stay_covered:
+        print(
+            "check_coverage_floor: 0 non-excluded capabilities carry domain/application "
+            "logic yet — expected on a fresh scaffold (only the shipped, already-excluded "
+            "example capability exists). This is not a broken detector; see the test suite's "
+            "synthetic probe for proof discovery works."
+        )
+        return 0
 
-	list_problems = swallowed_by_omit(list_must_stay_covered, list_patterns)
-	for str_problem in list_problems:
-		print(f"❌ {str_problem}", file=sys.stderr)
-	if list_problems:
-		print(
-			f"\n{len(list_problems)} problem(s). Scope the omit pattern to the layer that "
-			f"needs it (e.g. .../infrastructure/*), or name the capability outright if the "
-			f"whole thing is deliberately excluded.",
-			file=sys.stderr,
-		)
-		return 1
+    list_problems = swallowed_by_omit(list_must_stay_covered, list_patterns)
+    for str_problem in list_problems:
+        print(f"❌ {str_problem}", file=sys.stderr)
+    if list_problems:
+        print(
+            f"\n{len(list_problems)} problem(s). Scope the omit pattern to the layer that "
+            f"needs it (e.g. .../infrastructure/*), or name the capability outright if the "
+            f"whole thing is deliberately excluded.",
+            file=sys.stderr,
+        )
+        return 1
 
-	print(
-		f"coverage floor OK: {len(list_must_stay_covered)} domain/application module(s) "
-		f"across {len(set(p.parts[2] for p in list_must_stay_covered))} capability(ies) "
-		f"stay in the coverage denominator."
-	)
-	return 0
+    print(
+        f"coverage floor OK: {len(list_must_stay_covered)} domain/application module(s) "
+        f"across {len(set(p.parts[2] for p in list_must_stay_covered))} capability(ies) "
+        f"stay in the coverage denominator."
+    )
+    return 0
 
 
 if __name__ == "__main__":
-	for cls_stream in (sys.stdout, sys.stderr):
-		if hasattr(cls_stream, "reconfigure"):
-			cls_stream.reconfigure(encoding="utf-8", errors="replace")
-	sys.exit(main())
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    sys.exit(main())
