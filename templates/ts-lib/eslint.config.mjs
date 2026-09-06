@@ -236,10 +236,47 @@ export default [
         },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
+      // Catch-safety, type-aware half of #440. `strict: true` (tsconfig.json)
+      // already forces `useUnknownInCatchVariables`, so a `catch (err)`
+      // clause's variable is `unknown` — but that compiler flag does NOT
+      // reach a promise `.catch(cb)` callback, whose parameter stays `any`
+      // even under strict mode. This rule closes that one remaining gap.
+      '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
+      // Catch-safety (#440): only `Error` values may be thrown, so a
+      // `catch`'s `instanceof Error` narrowing can actually succeed —
+      // throwing a string/number/plain object would defeat every
+      // downstream narrowing check silently. `no-empty` / `no-useless-catch`
+      // already come from js.configs.recommended; this is the remaining gap.
+      '@typescript-eslint/only-throw-error': 'error',
     },
   },
 
-  // 5. Import resolution and ordering
+  // 5. Function-length ceiling (#439). Mirrors python-common's 60-line
+  // ceiling (`check_function_length.py`) — this skeleton is a flat library
+  // with no `.tsx`/JSX (see the header comment above `VENDOR_POLICY`), so
+  // there is no markup/logic split to make here: one block, one number.
+  // Measured with `--rule '{"max-lines-per-function":["warn",{"max":0}]}'`
+  // (blueprintx#425's technique): the longest function in this scaffold is
+  // 5 lines, so 60 costs zero findings today.
+  //
+  // `skipBlankLines: false` matches Python (`node.end_lineno - node.lineno
+  // + 1` counts blank lines too). `skipComments: true` is the nearest
+  // ESLint has to "docstring excluded" and is NOT equivalent — it skips
+  // every comment, including inline ones — accepted rather than
+  // compensated, since every measured function sits 55+ lines under the
+  // ceiling either way. `IIFEs: true` because an IIFE is still a function
+  // body that can grow unchecked.
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      'max-lines-per-function': [
+        'error',
+        { max: 60, skipBlankLines: false, skipComments: true, IIFEs: true },
+      ],
+    },
+  },
+
+  // 6. Import resolution and ordering
   {
     files: ['src/**/*.ts'],
     plugins: { import: importPlugin },
@@ -269,7 +306,7 @@ export default [
     },
   },
 
-  // 6. Vendor allowlist (blueprintx#345) — deny-by-default, per layer, written reason required
+  // 7. Vendor allowlist (blueprintx#345) — deny-by-default, per layer, written reason required
   {
     files: ['src/**/*.ts'],
     ignores: ['**/*.{test,spec}.ts'],
@@ -277,6 +314,6 @@ export default [
     rules: { 'local/vendor-allowlist': 'error' },
   },
 
-  // 7. Prettier config (must be last)
+  // 8. Prettier config (must be last)
   prettierConfig,
 ];
