@@ -89,15 +89,7 @@ def to_decimal(
 	"""
 	if int_places < 0:
 		raise ValueError("int_places must be non-negative")
-	cls_quantum = Decimal(1).scaleb(-int_places)
-	cls_raw = _parse(value, default)
-	try:
-		return cls_raw.quantize(cls_quantum, rounding=rounding)
-	except InvalidOperation:
-		# quantize can raise on a finite value when the caller's context precision is too
-		# low; this function promises a default, never a decimal exception. See the Raises
-		# section above and utils/CLAUDE.md.
-		return default
+	return _quantise(_parse(value, default), int_places, default, rounding)
 
 
 @type_checker
@@ -144,6 +136,40 @@ def to_decimal_strict(
 	if cls_result.is_nan():
 		raise ValueError(f"cannot coerce {value!r} to Decimal")
 	return cls_result
+
+
+@type_checker
+def _quantise(
+	cls_raw: Decimal, int_places: int, default: Decimal, rounding: str
+) -> Decimal:
+	"""Quantise ``cls_raw``, falling back to ``default`` when the context is too narrow.
+
+	Parameters
+	----------
+	cls_raw : Decimal
+		The already-parsed, unquantised value.
+	int_places : int
+		Number of decimal places to quantise to.
+	default : Decimal
+		Returned when the quantise overflows the active context precision.
+	rounding : str
+		A :mod:`decimal` rounding mode.
+
+	Returns
+	-------
+	Decimal
+		``cls_raw`` quantised, or ``default``.
+
+	Notes
+	-----
+	``quantize`` raises on a finite value when the RESULT would exceed
+	``decimal.getcontext().prec`` — a property of the caller's context, not of the
+	value, so the parse step cannot anticipate it.
+	"""
+	try:
+		return cls_raw.quantize(Decimal(1).scaleb(-int_places), rounding=rounding)
+	except InvalidOperation:
+		return default
 
 
 @type_checker
