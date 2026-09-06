@@ -75,6 +75,18 @@ RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
 # identical constant for why this serves both a local pre-commit run and CI.
 STR_INDEX_REF = ""
 
+# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
+# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields.
+INT_MIN_FIELDS = 2
+# `assertEqual(actual, expected)` — the two positional args the #323 shape compares.
+INT_MIN_EQ_ARGS = 2
+
+# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
+# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields.
+INT_MIN_FIELDS = 2
+# `assertEqual(actual, expected)` — the two positional args the #323 shape compares.
+INT_MIN_EQ_ARGS = 2
+
 # Comparison operators weaker than `==` — blueprintx#289's `in` example, plus the issue's
 # `>=` example. `Gt`/`Lt` are excluded: swapping equality for a strict inequality is not
 # obviously weaker (it still excludes the old value), so it stays out of the decidable core.
@@ -190,13 +202,11 @@ def changed_paths(str_base: str) -> list:
 	list of tuple
 		``(status_letter, path)``.
 	"""
-	_INT_MIN_FIELDS = 2
-
 	str_out = _git(["diff", "--cached", "--name-status", str_base])
 	list_rows = []
 	for str_line in str_out.splitlines():
 		list_parts = str_line.split("\t")
-		if len(list_parts) >= _INT_MIN_FIELDS:
+		if len(list_parts) >= INT_MIN_FIELDS:
 			list_rows.append((list_parts[0][0], list_parts[-1]))
 	return list_rows
 
@@ -596,12 +606,11 @@ def _compare_call(old_node: ast.Call, new_node: ast.Call, bool_prod_changed: boo
 		return ""
 	if str_new_attr in _WEAKER_ASSERT_CALLS.get(str_old_attr, frozenset()):
 		return f"{str_old_attr}() weakened to {str_new_attr}()"
-	_MIN_EQ_ARGS = 2
 	if (
 		str_old_attr == str_new_attr == "assertEqual"
 		and bool_prod_changed
-		and len(old_node.args) >= _MIN_EQ_ARGS
-		and len(new_node.args) >= _MIN_EQ_ARGS
+		and len(old_node.args) >= INT_MIN_EQ_ARGS
+		and len(new_node.args) >= INT_MIN_EQ_ARGS
 	):
 		str_oa0, str_na0 = _dump(old_node.args[0]), _dump(new_node.args[0])
 		str_oa1, str_na1 = _dump(old_node.args[1]), _dump(new_node.args[1])
