@@ -124,9 +124,28 @@ the wrong rule on one side. Two measured examples:
   rule would be wrong on both sides of that same language.
 
 The correct parity is by *what construct is forbidden*, not by the number that enforces it: both
-languages should forbid nesting and allow a composite condition, but the numbers that deliver
-that differ because the two linters' scales differ — ESLint needs `max-depth` plus a loose
-`complexity`, while ruff's mccabe needs only a tight `max-complexity` by itself.
+languages should forbid nesting and allow a composite condition, but the rules that deliver that
+differ, because **neither linter's complexity rule can see nesting at all**.
+
+⚠️ Ruff `C901` and ESLint `complexity` both measure **McCabe cyclomatic complexity** — a count of
+decision points, blind to how they are arranged. ESLint `max-depth` measures **nested block
+depth**, a different property. Measured witness, two functions with three `if`s each:
+
+| function | shape | ruff `C901` | ruff `PLR1702` |
+|---|---|---|---|
+| three sequential `if`s | depth 1 | `is too complex (4 > 2)` | not flagged |
+| three nested `if`s | depth 3 | `is too complex (4 > 2)` | `Too many nested blocks (3 > 1)` |
+
+**The same number, 4, for opposite shapes.** So a tight `max-complexity` does not enforce the
+nesting rule — it forbids a superset, rejecting the flat early-return form this project prefers
+for exactly the complexity it is trying to reduce.
+
+Python's nesting-specific rule is `PLR1702` (`too-many-nested-blocks`), and it is ⚠️ **not
+configured today**: ruff gates it behind `--preview`, which `templates/python-common/ruff.toml`
+does not enable, so selecting `PL` does not activate it (`warning: Selection PLR1702 has no
+effect because preview is not enabled`). Until blueprintx#434 lands, **the Python and TypeScript
+nesting policies are approximate, not equivalent** — Python bounds nesting only as a side effect
+of bounding complexity.
 
 ### Mandatory question for new quality issues
 
@@ -146,7 +165,8 @@ machine-decidable — it is a review question, so it stays prose reviewed by a h
 | Function-length ceiling | ✅ 60 lines — `check_function_length.py` | ❌ none |
 | Deny-by-default import/vendor policy | ✅ `.layer-policy.yaml` + `check_layer_imports.py` on every Python tier | 🟡 partial — `templates/ts-lib/eslint.config.mjs` has a per-layer vendor allowlist (blueprintx#345); `templates/react-spa-webpack/eslint.config.js` only has `eslint-plugin-boundaries`, which polices layer *direction*, not a vendor allowlist |
 | Builtin-name shadowing | ✅ ruff `A` (blueprintx#421, closes #418) | ❌ none — no `no-shadow`/`no-redeclare` configured |
-| Early-return / forbidden nesting | 🔧 in flight — ruff `RET` (blueprintx#426) | ❌ none |
+| Early-return shape | 🔧 in flight — ruff `RET` (blueprintx#426) | ❌ none |
+| Nesting-depth ceiling | ❌ none — `PLR1702` is preview-gated and preview is off (blueprintx#434); `C901` bounds nesting only as a side effect | ❌ none — no `max-depth` |
 | Coverage floor | ✅ `fail_under = 80` (`.coveragerc`) | ❌ no Jest `coverageThreshold` configured |
 
 Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
