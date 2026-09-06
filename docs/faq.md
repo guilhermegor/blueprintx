@@ -28,7 +28,8 @@ Create `templates/<name>/` with a `skeleton.meta` descriptor, add a scaffold scr
 
 If you connect a GitHub remote, the scaffold ships GitHub-only assets (Actions workflows,
 CODEOWNERS, PR template). Without one, it ships an offline git-diff workflow instead. Library
-projects also switch versioning: online = tag-driven, offline = a local `make bump_version`.
+projects also switch versioning: online = tag-driven, offline = a local `poe bump_version`
+(`cz bump`, run inside the generated project — not a BlueprintX `make` target).
 
 ## How is BlueprintX itself versioned?
 

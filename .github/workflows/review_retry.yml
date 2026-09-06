@@ -30,6 +30,11 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the chosen PR instead of posting a request (blueprintx#280)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -69,8 +74,20 @@ jobs:
       # loudly because a missing PAT means a PR is never reviewed at all. This one is a janitor
       # on a timer — if the PAT is missing the gate still blocks the PR, visibly, and a failing
       # scheduled job every 10 minutes would be pure noise. The script warns and exits 0.
+      #
+      # ⚠️ ONE ASK PER RUN, OLDEST-FIRST — blueprintx#280. The script itself now enumerates every
+      # open PR, applies the account-level quota block, and asks at most ONE (the oldest waiting
+      # PR under the attempt cap) before returning — this step never loops or fans out. `*/10`
+      # above is therefore the only rate limiter left, matching the shared account's ~1
+      # review/hour budget far better than the old "ask everyone eligible" sweep did.
       - name: Re-request a review where the reviewer was rate limited
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python3 templates/python-common/bin/retry_rate_limited_review.py
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python3 templates/python-common/bin/retry_rate_limited_review.py --dry-run
+          else
+            python3 templates/python-common/bin/retry_rate_limited_review.py
+          fi
