@@ -57,18 +57,21 @@ ships to **both** layouts (MVC's `utils.typing`, DDD's `chassis.typing`), the im
 a bare one — copy this block verbatim into a new module rather than hand-rolling a variant:
 
 ```python
-if TYPE_CHECKING:
+try:
 	from utils.typing import type_checker
-else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+	from chassis.typing import type_checker
 ```
 
-The `TYPE_CHECKING` branch is what lets mypy resolve the import statically without picking a
-layout; the `try`/`except` branch is what lets the same file run under either one at import
-time.
+⚠️ **No separate `if TYPE_CHECKING:` branch** (blueprintx#360). An earlier revision duplicated
+the import under `if TYPE_CHECKING: ... else: try/except ...`, on the theory that mypy needed
+a layout-blind branch to resolve statically. Measured: mypy does not special-case a
+`try`/`except ModuleNotFoundError` import at all — gating one copy behind `TYPE_CHECKING`
+changes nothing about which import it reports on, so the extra branch only duplicated the
+`utils.typing`-first guess without fixing it. What actually keeps a DDD-scaffolded project's
+`mypy` step green is `mypy.ini`'s scoped `[mypy-utils.typing.*]` / `[mypy-chassis.typing.*]`
+`ignore_missing_imports` (blueprintx#376) — this file's single try/except is enough for both
+mypy and the runtime.
 
 ## Scalar / Series twins
 

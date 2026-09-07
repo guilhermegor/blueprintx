@@ -25,6 +25,15 @@ live in `bin/ci/*.sh` and both the workflow and the hook call them — one home 
 4. The interactive menu discovers it automatically — no change to `blueprintx.sh`.
 5. Add the install/usage notes to `README.md` and a docs page under `docs/`.
 
+## Cross-language quality parity
+
+A quality decision (a lint rule, a gate, a coding convention) applies to **every** scaffolded
+language unless that language's own community standard overrides it — in which case the
+community standard wins. Parity is by prohibited construct, never by a copied number. These
+decisions are written in `CONTRIBUTING.md`/`README.md`/docs, never as a code comment (QA
+suppressions like `noqa` are exempt). See the root `CONTRIBUTING.md` → "Cross-Language Quality
+Parity" for the full rule, worked examples, and the dated Python-vs-TypeScript gate table.
+
 ## Shared template sources
 
 `templates/python-common/` (shared Python tooling), `templates/ts-common/` (shared TypeScript

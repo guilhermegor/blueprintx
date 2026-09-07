@@ -1,10 +1,15 @@
 """Unit tests for the Decimal coercion helper."""
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 
 import pytest
 
-from src.utils.decimals import _normalise_br_number, parse_br_number_series, to_decimal
+from src.utils.decimals import (
+	_normalise_br_number,
+	parse_br_number_series,
+	to_decimal,
+	to_decimal_strict,
+)
 
 
 def test_to_decimal_truncates_by_default() -> None:
@@ -96,3 +101,70 @@ def test_parse_br_number_series_mirrors_scalar(str_raw: str) -> None:
 	float_scalar = float(_normalise_br_number(str_raw))
 	float_series = parse_br_number_series(pd.Series([str_raw])).iloc[0]
 	assert float_series == pytest.approx(float_scalar)
+
+
+def test_to_decimal_strict_truncates_by_default() -> None:
+	"""The strict variant defaults to ROUND_DOWN, delegating to ``to_decimal``.
+
+	Should-fail witness for issue #268 (two ROUND_DOWN implementations, one
+	domain apart): 1.999 disagrees between ROUND_DOWN (1.99) and ROUND_HALF_UP
+	(2.00) at 2 places, so this fails the moment ``to_decimal_strict`` stops
+	delegating and re-derives its own rounding.
+	"""
+	assert to_decimal_strict("1.999", 2) == Decimal("1.99")
+
+
+def test_to_decimal_strict_matches_to_decimal_on_valid_input() -> None:
+	"""Both doors agree on the same parseable input — the delegation contract."""
+	assert to_decimal_strict("2.084.960,76", 2) == to_decimal("2.084.960,76", 2)
+
+
+def test_to_decimal_strict_honours_explicit_rounding() -> None:
+	"""An explicit rounding mode overrides the truncation default, like ``to_decimal``."""
+	assert to_decimal_strict("1.999", 2, rounding=ROUND_HALF_UP) == Decimal("2.00")
+
+
+def test_to_decimal_strict_raises_on_none() -> None:
+	"""``None`` raises, unlike ``to_decimal``'s default-fallback contract."""
+	with pytest.raises(ValueError, match="cannot coerce"):
+		to_decimal_strict(None, 2)
+
+
+def test_to_decimal_strict_raises_on_unparsable() -> None:
+	"""An unparsable string raises rather than silently defaulting to 0."""
+	with pytest.raises(ValueError, match="cannot coerce"):
+		to_decimal_strict("not a number", 2)
+
+
+def test_to_decimal_strict_negative_places_raises() -> None:
+	"""A negative ``int_places`` fails fast with ``ValueError``, like ``to_decimal``."""
+	with pytest.raises(ValueError, match="non-negative"):
+		to_decimal_strict("1.0", -1)
+
+
+def test_to_decimal_returns_the_default_when_the_context_precision_is_too_low() -> None:
+	"""A finite value can still blow up in ``quantize`` — and must not leak that.
+
+	⚠️ The trigger is ``decimal.getcontext().prec``, a property of the CALLER's context and
+	not of ``value``, so the parse step cannot see it coming: a perfectly parsable number
+	reaches ``quantize`` and raises ``InvalidOperation`` there. This function's contract is
+	"returns ``default`` when it cannot produce a number", so the exception must not escape.
+	"""
+	with localcontext() as cls_ctx:
+		cls_ctx.prec = 3
+
+		assert to_decimal("123456789.987654321", 2, default=Decimal("0")) == Decimal("0")
+
+
+def test_to_decimal_strict_raises_value_error_when_quantize_overflows() -> None:
+	"""The strict sibling turns the SAME case into ``ValueError``, per its own contract.
+
+	Paired with the test above: identical input and context, opposite promise. A single
+	``except`` at the quantise site serves both, which is why neither can be satisfied by
+	special-casing one of them.
+	"""
+	with localcontext() as cls_ctx:
+		cls_ctx.prec = 3
+
+		with pytest.raises(ValueError, match="cannot coerce"):
+			to_decimal_strict("123456789.987654321", 2)

@@ -118,10 +118,13 @@ bootstrap_runtime_with_pip() {
 	"$PYTHON" -m venv "$PROJECT_ROOT/.venv"
 
 	str_venv_python="$(pip_fallback_project_venv_python)"
-	pip_fallback_install_groups_in_venv \
+	if ! pip_fallback_install_groups_in_venv \
 		"$str_venv_python" \
 		"main" \
-		"runtime dependencies"
+		"runtime dependencies"; then
+		print_status "error" "Runtime .venv bootstrap failed — the environment is not usable"
+		return 1
+	fi
 
 	print_status "success" "Runtime dependencies installed with pip"
 }
@@ -178,7 +181,10 @@ main() {
 	export PYTHONPATH=".:src"
 
 	str_entrypoint="$(resolve_entrypoint_module)"
-	ensure_runtime_env
+	if ! ensure_runtime_env; then
+		print_status "error" "Runtime environment is not usable — refusing to run $str_entrypoint against it"
+		return 1
+	fi
 	run_entrypoint "$str_entrypoint"
 }
 

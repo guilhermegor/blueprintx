@@ -2,7 +2,7 @@
 
 A Domain-Driven Design scaffold with a hexagonal (ports-and-adapters) layout. It keeps business logic isolated from I/O while allowing shared infrastructure when it is truly cross-cutting.
 
-This template uses **native database libraries** (psycopg2, sqlite3, cx_Oracle, pyodbc, pymysql, etc.) for direct database access, giving you fine-grained control over queries and connections. For schema-less persistence the same `DatabaseHandler` contract covers JSON, CSV, and joblib backends via `chassis/db_wschema/`.
+This template uses **native database libraries** (psycopg, sqlite3, oracledb, pyodbc, mysql-connector-python, etc.) for direct database access, giving you fine-grained control over queries and connections. For schema-less persistence the same `DatabaseHandler` contract covers JSON, CSV, and joblib backends via `chassis/db_wschema/` — added only if you opt into schema-less storage at scaffold time (declined by default).
 
 > **Examples:** [External API Calls](py-examples/ddd-external-api.md) · [Wiring with FastAPI](py-examples/ddd-usage-examples.md) · [Bank Balance Alert](py-examples/ddd-bank-balance-alert.md)
 
@@ -34,7 +34,7 @@ project/
           mysql_handler.py
           mssql_handler.py
           oracle_handler.py
-      db_wschema/
+      db_wschema/                         # optional — added only if you opt into schema-less storage
         application/storage_factory.py    # build_storage_handler()
         infrastructure/
           json_handler.py
@@ -79,7 +79,7 @@ project/
 | `src/chassis/` | Shared cross-cutting providers | Self-contained providers each with their own DDD sub-layers |
 | `src/chassis/db/` | Shared database contract | `DatabaseHandler` ABC (`ports.py`), `Record` type alias, `ensure_id` helper |
 | `src/chassis/db_schema/` | SQL-backed handlers | `build_database_handler()` factory + six SQL backend handlers |
-| `src/chassis/db_wschema/` | Schema-less handlers | `build_storage_handler()` factory + JSON, CSV, Joblib handlers + `SanityCheck` |
+| `src/chassis/db_wschema/` | Schema-less handlers (optional opt-in) | `build_storage_handler()` factory + JSON, CSV, Joblib handlers + `SanityCheck` |
 | `src/chassis/typing/` | Runtime type enforcement | `ABCTypeCheckerMeta`, `ProtocolTypeCheckerMeta`, `TypeChecker`, `validate` decorators |
 | `src/capabilities/<feature>/` | Feature-specific code | Bounded context with its own domain, application, and infrastructure layers |
 | `src/config/` | Configuration | `startup.py` (shared singletons), YAML files for outputs, webhooks, inputs, emails |
