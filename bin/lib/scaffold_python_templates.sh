@@ -174,6 +174,8 @@ scaffold_copy_gate_tests() {
 
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
 		"$str_project_path/tests/unit/test_function_length_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
+		"$str_project_path/tests/unit/test_gate_integrity_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
 		"$str_project_path/tests/unit/test_review_threads_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
