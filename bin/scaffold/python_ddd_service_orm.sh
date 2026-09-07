@@ -506,15 +506,18 @@ conditional_copy_otel() {
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
     cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
     cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
-    # Pinned, not left open-ended: the Logs signal is still "Development" status upstream
-    # (see chassis/otel_logging.py), so a wider range risks a breaking minor bump landing
-    # silently on the next `poetry update`.
+    # EXACT pins, deliberately against this repo's own house style of ranges
+    # (`beartype = ">=0.22"`). The Logs signal is still "Development" status upstream (see
+    # chassis/otel_logging.py), so a minor bump may change behaviour; `>=1.27,<2.0` is the
+    # constraint that LETS that land silently on the next `poetry update`, which is what the
+    # rest of this comment exists to prevent. Do not "fix" these back to a range without
+    # first re-checking that upstream status.
     sed -i '/^python-dotenv = ">=1.0.0"/a\
 # OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
 # "Development" status upstream (see chassis/otel_logging.py for the measured source).\
-opentelemetry-api = ">=1.27,<2.0"\
-opentelemetry-sdk = ">=1.27,<2.0"\
-opentelemetry-exporter-otlp-proto-http = ">=1.27,<2.0"' "$project_path/pyproject.toml"
+opentelemetry-api = "==1.44.0"\
+opentelemetry-sdk = "==1.44.0"\
+opentelemetry-exporter-otlp-proto-http = "==1.44.0"' "$project_path/pyproject.toml"
     cat >> "$project_path/src/config/startup.py" <<'PYBLOCK'
 
 # OTLP log export (opt-in) — ADDS a handler to LOGGER; never replaces the FileHandler

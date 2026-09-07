@@ -29,6 +29,7 @@ versions before the next bump and switch once the replacement leaves beta.
 import logging
 import os
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
@@ -41,6 +42,118 @@ else:
 		from utils.typing import type_checker
 	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
 		from chassis.typing import type_checker
+
+
+# A cleartext endpoint is only a credential leak when there is a credential to leak, and only
+# when it leaves the machine. Both halves matter: refusing every http:// endpoint would break
+# this seam's own documented quickstart (docker-compose.otel-collector.yml serves
+# http://localhost:4318), and refusing none would ship an API key over the wire in the clear.
+_TUPLE_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+
+
+@type_checker
+def _effective_otlp_logs_config() -> tuple[str, bool]:
+	"""Resolve the endpoint and whether credential headers are set, honouring precedence.
+
+	⚠️ The signal-specific variables OVERRIDE the generic ones (OTel spec). Reading only
+	``OTEL_EXPORTER_OTLP_ENDPOINT``/``_HEADERS`` therefore answers about a configuration the
+	SDK may not be using — it would miss a project that sets only ``..._LOGS_...``, and the
+	miss is silent in both directions: no export where one was configured, or no TLS check
+	where credentials are in fact being sent.
+
+	Returns
+	-------
+	tuple[str, bool]
+		The effective logs endpoint (``""`` when unset) and whether any headers are set.
+
+	Examples
+	--------
+	>>> isinstance(_effective_otlp_logs_config(), tuple)
+	True
+	"""
+	str_endpoint = (
+		os.getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")
+		or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+		or ""
+	).strip()
+	str_headers = (
+		os.getenv("OTEL_EXPORTER_OTLP_LOGS_HEADERS")
+		or os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
+		or ""
+	).strip()
+	return str_endpoint, bool(str_headers)
+
+
+@type_checker
+def _is_cleartext_with_credentials(str_endpoint: str, bool_has_headers: bool) -> bool:
+	"""Report whether credentials would be sent over an unencrypted, off-host connection.
+
+	Parameters
+	----------
+	str_endpoint : str
+		The effective OTLP logs endpoint.
+	bool_has_headers : bool
+		Whether ``OTEL_EXPORTER_OTLP_[LOGS_]HEADERS`` carries anything.
+
+	Returns
+	-------
+	bool
+		``True`` when the exporter must not be started.
+
+	Examples
+	--------
+	>>> _is_cleartext_with_credentials("http://collector.example:4318", True)
+	True
+	>>> _is_cleartext_with_credentials("http://localhost:4318", True)
+	False
+	>>> _is_cleartext_with_credentials("http://collector.example:4318", False)
+	False
+	"""
+	return (
+		bool_has_headers
+		and bool(str_endpoint)
+		and not str_endpoint.startswith("https://")
+		and urlsplit(str_endpoint).hostname not in _TUPLE_LOOPBACK_HOSTS
+	)
+
+
+@type_checker
+def _exportable_endpoint(logger: logging.Logger) -> str:
+	"""Return the endpoint to export to, or ``""`` when export must not start.
+
+	⚠️ The refusal WARNS rather than returning quietly. The install below is deliberately
+	fire-and-forget, so a silent refusal here would look identical to a working exporter that
+	simply never delivers: the user configured export, saw no error, and gets no logs. That is
+	the silent wrong answer this seam is otherwise careful to avoid.
+
+	Parameters
+	----------
+	logger : logging.Logger
+		The logger the warning is written to.
+
+	Returns
+	-------
+	str
+		The effective endpoint, or ``""``.
+
+	Examples
+	--------
+	>>> import logging
+	>>> isinstance(_exportable_endpoint(logging.getLogger("app")), str)
+	True
+	"""
+	str_endpoint, bool_has_headers = _effective_otlp_logs_config()
+	if _is_cleartext_with_credentials(str_endpoint, bool_has_headers):
+		# The endpoint is named because the fix is to change it; the header VALUES never are,
+		# since they are the credential this guard exists to protect.
+		logger.warning(
+			"OTel log export refused: OTLP headers are set but the endpoint %r is neither "
+			"https:// nor loopback, so the credentials would cross the network in cleartext. "
+			"Use an https:// endpoint, or drop the headers for a local collector.",
+			str_endpoint,
+		)
+		return ""
+	return str_endpoint
 
 
 @type_checker
@@ -87,7 +200,8 @@ def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one
 def configure_otel_logging(logger: logging.Logger) -> None:
 	"""Attach an OTLP log handler to ``logger`` when a collector endpoint is configured.
 
-	Opt-in and additive. With ``OTEL_EXPORTER_OTLP_ENDPOINT`` unset (the default — nothing
+	Opt-in and additive. With both ``OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`` and
+	``OTEL_EXPORTER_OTLP_ENDPOINT`` unset (the default — nothing
 	prompts for it unless the OTel scaffold question was answered yes), this returns
 	immediately: no ``opentelemetry`` import is even attempted, so a project that declined the
 	prompt never pays for a dependency it did not install and never sends a byte over the
@@ -109,6 +223,6 @@ def configure_otel_logging(logger: logging.Logger) -> None:
 	>>> import logging
 	>>> configure_otel_logging(logging.getLogger("app"))
 	"""
-	if not os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip():
+	if not _exportable_endpoint(logger):
 		return
 	_install_otel_handler(logger)

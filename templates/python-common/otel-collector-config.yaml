@@ -2,6 +2,12 @@
 # The collector is the decoupling point: point the "logging" exporter below at
 # Axiom/Loki/Datadog/SigNoz/Honeycomb/Elastic (or any OTLP-speaking backend) instead —
 # a config change here, never an application change.
+# ⚠️ 0.0.0.0 BELOW IS CORRECT AND MUST NOT BE "HARDENED" TO 127.0.0.1.
+# This is the address the collector binds INSIDE its container, and the container's loopback
+# is not the host's: narrowing it here makes the collector unreachable through the compose
+# port mapping, and the seam then fails silently — the exporter is fire-and-forget, so a
+# refused connection produces no logs and no error. The host-side exposure is controlled in
+# docker-compose.otel-collector.yml, which publishes these ports on 127.0.0.1 only.
 receivers:
   otlp:
     protocols:
