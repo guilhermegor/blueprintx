@@ -12,6 +12,7 @@ two synthetic fixtures: one that MUST fail, one that MUST pass.
 from pathlib import Path
 import shutil
 import subprocess
+import tomllib
 
 import pytest
 
@@ -22,6 +23,9 @@ _GOOD_SOURCE = "def choose(flag: bool) -> int:\n\tif flag:\n\t\treturn 1\n\tretu
 # Resolved once at collection time; branch lives in the `skipif` marker below, never in the
 # helper, to keep `_run_ruff_ret505` at the `tests/` complexity ceiling of 1.
 _STR_RUFF = shutil.which("ruff")
+
+# The shipped config this test family is the witness for: tests/unit/ -> tests/ -> python-common/.
+_PATH_RUFF_TOML = Path(__file__).parents[2] / "ruff.toml"
 
 
 def _run_ruff_ret505(path_file: Path) -> subprocess.CompletedProcess[str]:
@@ -78,3 +82,15 @@ def test_ret505_allows_early_return(tmp_path: Path) -> None:
 	cls_result = _run_ruff_ret505(path_file)
 	assert cls_result.returncode == 0
 	assert "RET505" not in cls_result.stdout
+
+
+def test_shipped_config_selects_ret() -> None:
+	"""``ruff.toml`` must select `RET`, which the `--isolated` runs above cannot witness.
+
+	⚠️ The two tests above pass `--select RET505` on the command line, so they answer "does
+	this ruff build implement RET505", never "is RET enabled for this project". Dropping
+	`"RET"` from ``[lint].select`` would disable the rule everywhere and leave both of them
+	green — the silent hole this assertion closes.
+	"""
+	dict_config = tomllib.loads(_PATH_RUFF_TOML.read_text(encoding="utf-8"))
+	assert "RET" in dict_config["lint"]["select"]
