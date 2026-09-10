@@ -243,8 +243,8 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 		except Exception as exc:
 			log_message(
 				self.logger,
-				f"Label enrichment degraded: reading {path_labels.name} raised "
-				f"{type(exc).__name__}",
+				f"Label enrichment degraded: LabelEnricher reading {path_labels.name} "
+				f"raised {type(exc).__name__}",
 				"warning",
 			)
 			return df_report
