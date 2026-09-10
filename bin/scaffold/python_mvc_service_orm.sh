@@ -449,6 +449,10 @@ conditional_copy_email() {
 # Also overwrites tests/unit/test_pipeline.py: the shipped one imports controller._pipeline,
 # which this function just deleted (blueprintx#289) — the multi-intent replacement covers
 # pipeline_dispatch's resolve_intent/build_pipeline instead, so dispatch isn't left untested.
+# tests/unit/test_pipeline_enrichment.py is DELETED rather than replaced, for the same reason
+# one layer down: it exercises PipelineOrchestrator's LabelEnricher degradation path, and
+# LabelEnricher is reached only from the single _pipeline.py this function removes. There is no
+# multi-intent equivalent to point it at, so a replacement would be a test of nothing.
 conditional_apply_multi_pipeline() {
     local project_path="$1"
     if [[ "$INCLUDE_MULTI_PIPELINE" != "true" ]]; then return; fi
@@ -460,6 +464,7 @@ conditional_apply_multi_pipeline() {
     cp "$mp_root/pipeline_dispatch.py" "$controller_dir/pipeline_dispatch.py"
     cp "$mp_root/main.py" "$controller_dir/main.py"
     cp "$mp_root/test_pipeline.py" "$project_path/tests/unit/test_pipeline.py"
+    rm -f "$project_path/tests/unit/test_pipeline_enrichment.py"
     rm -f "$controller_dir/_pipeline.py"
     sed -i 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
     local intent_env
