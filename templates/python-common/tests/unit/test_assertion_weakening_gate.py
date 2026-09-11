@@ -297,8 +297,10 @@ def test_the_report_passes_a_flagged_diff_with_a_justification_trailer(
     monkeypatch.setattr(
         gate,
         "_git",
-        lambda _args: "fix: correct the truncation bug\n\n"
-        "test-change-ok: fixing the ROUND_DOWN bug this test pins\n",
+        lambda _args: (
+            "fix: correct the truncation bug\n\n"
+            "test-change-ok: fixing the ROUND_DOWN bug this test pins\n"
+        ),
     )
 
     assert gate.report(["some finding"], "base-sha", 1) == 0
