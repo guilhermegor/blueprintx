@@ -12,9 +12,9 @@ two synthetic fixtures: one that MUST fail, one that MUST pass.
 from pathlib import Path
 import shutil
 import subprocess
-import tomllib
 
 import pytest
+import tomllib
 
 
 _BAD_SOURCE = "def choose(flag: bool) -> int:\n\tif flag:\n\t\treturn 1\n\telse:\n\t\treturn 2\n"
