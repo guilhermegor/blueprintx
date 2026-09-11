@@ -734,7 +734,8 @@ def _outer_pytest_mark(cls_dec: ast.expr) -> str:
     Returns
     -------
     str
-            The mark name for ``@pytest.mark.<name>`` and ``@pytest.mark.<name>(...)``, else ``""``.
+            The mark name for ``@pytest.mark.<name>`` and ``@pytest.mark.<name>(...)``, else
+            ``""``.
     """
     cls_target = cls_dec.func if isinstance(cls_dec, ast.Call) else cls_dec
     if not isinstance(cls_target, ast.Attribute):
