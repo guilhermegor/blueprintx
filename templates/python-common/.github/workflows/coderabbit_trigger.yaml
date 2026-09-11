@@ -51,10 +51,20 @@ name: CodeRabbit Trigger
 
 on:
   pull_request:
-    # `synchronize` is deliberate: with auto-review off, a push after the first review is
-    # otherwise never looked at, and "reviewed at open, real code pushed after" is exactly the
-    # hole this file exists to close. CodeRabbit reviews incrementally, so the cost is bounded.
-    types: [opened, reopened, ready_for_review, synchronize]
+    # `synchronize` was dropped in #454. It used to be the only thing that caught a real push
+    # after the first review — but that hole (PR #204 and #213 merging unreviewed, every check
+    # green) is now closed by a DIFFERENT mechanism: the required "Review threads answered"
+    # check fails a PR with no submitted review, built after those merges (#208, #259, #220).
+    # Measured 2026-09-11: 11 open PRs were simultaneously red on that check with zero
+    # unresolved threads — the gate refusing them purely for lack of a review. It demonstrably
+    # does the job `synchronize` was added to do.
+    #
+    # Measured cost of keeping it (71 PRs / 7 days, 773 post-open events,
+    # docs/backlog/coderabbit-incremental-review-362_20260830_172225.md): 5.4% produced a new
+    # finding, 69.6% were rate-limit notices. Net effect of dropping it: one automatic ask per
+    # PR at open; pushes afterwards are free, so agents can commit and push for durability
+    # without spending account quota. Re-review is now a deliberate `@coderabbitai full review`.
+    types: [opened, reopened, ready_for_review]
 
 permissions:
   pull-requests: write
