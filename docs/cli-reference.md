@@ -14,8 +14,8 @@ Every command BlueprintX exposes. The interactive scaffolder is driven through `
 | `make new` | Interactive scaffolder — prompts for language, skeleton, and project name. |
 | `make preview` | Show every skeleton's structure without creating anything. |
 | `make dev` | Scaffold into a temp dir (preserved on exit). |
-| `make dev-clean` | Scaffold into a temp dir, auto-deleted on exit. |
-| `make dry-run` | Print the chosen skeleton structure; write no files. |
+| `make dev_clean` | Scaffold into a temp dir, auto-deleted on exit. |
+| `make dry_run` | Print the chosen skeleton structure; write no files. |
 
 ## `blueprintx` flags
 
@@ -33,7 +33,7 @@ Every command BlueprintX exposes. The interactive scaffolder is driven through `
 
 | Command | What it does |
 |---------|--------------|
-| `make mkdocs_server` | Install docs deps and serve this site at http://0.0.0.0:8000. |
+| `make mkdocs_serve` | Install docs deps and serve this site at http://0.0.0.0:8000. |
 | `make install` | Install `bin/` + `templates/` under `/usr/share/blueprintx` (needs sudo). |
 
 ## Adding a skeleton

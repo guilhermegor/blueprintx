@@ -19,7 +19,16 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-	from utils.typing import TypeChecker, type_checker
+	from collections.abc import Callable
+	from typing import TypeVar
+
+	_F = TypeVar("_F", bound=Callable[..., object])
+
+	def type_checker(fn: _F) -> _F:
+		"""Type-only stub — see src/utils/CLAUDE.md."""
+
+	class TypeChecker(type):
+		"""Type-only stub — see src/utils/CLAUDE.md."""
 else:
 	try:
 		from utils.typing import TypeChecker, type_checker

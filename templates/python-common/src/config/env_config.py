@@ -24,10 +24,18 @@ import unicodedata
 
 
 # The runtime type-checking engine is always injected, but at a layout-dependent path:
-# utils.typing (MVC) or chassis.typing (DDD). mypy reads the single TYPE_CHECKING import
-# (no redefinition); at runtime the try/except picks whichever layout shipped.
+# utils.typing (MVC) or chassis.typing (DDD). TYPE_CHECKING stubs the decorator's shape
+# locally instead of importing: mypy treats a try/except import as executed code and
+# flags the redefinition once actually checked, so this branch can't pick either layout
+# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from utils.typing import type_checker
+	from collections.abc import Callable
+	from typing import TypeVar
+
+	_F = TypeVar("_F", bound=Callable[..., object])
+
+	def type_checker(fn: _F) -> _F:
+		"""Type-only stub — see src/utils/CLAUDE.md."""
 else:
 	try:
 		from utils.typing import type_checker

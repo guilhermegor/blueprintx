@@ -87,11 +87,99 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
    - Maintain test fixtures for complex scenarios
    - Recommended to use UNIT_TEST_TEMPLATE.md for AI generation of unit tests, in order to implement test-driven development best practices and follow project standards
 
+## Cross-Language Quality Parity
+
+BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality
+decision made only on one side quietly widens the gap between them. Two rules keep that from
+happening silently:
+
+1. **Every quality decision applies to all scaffolded languages**, unless that language's own
+   community standard says otherwise — and when it does, **the community standard outranks the
+   house rule**.
+2. **These decisions live in `README.md` / `CONTRIBUTING.md` / `docs/`, never as a code
+   comment.** The one exception is a QA-suppression comment (`noqa`, `complexity-ok`,
+   `type: ignore`, `codespell:ignore` — blueprintx#303 exempts these explicitly). A config file
+   (`ruff.toml`, `eslint.config.js`) may carry the rule line plus a short pointer comment; the
+   long justification belongs in the docs, not inline.
+
+**Precedence order when a house rule and a language standard conflict:**
+
+1. The language's own community standard (PEP-8 / PEP-257 for Python, ECMAScript/TC39 for
+   JS/TS, the equivalent for any language added later).
+2. This repo's cross-cutting rule.
+3. Style preference.
+
+A house rule that contradicts PEP-8 is a **defect in the rule**, not in Python.
+
+### Parity is by prohibited construct, never by number
+
+Copying a numeric literal between two languages' linters is not parity — it can silently produce
+the wrong rule on one side. Two measured examples:
+
+- **`complexity: 2` in ESLint is *more* severe than `max-complexity = 2` in ruff**, because
+  ESLint's cyclomatic-complexity counter counts `&&`/`||` short-circuit branches and ruff's
+  mccabe engine does not (blueprintx#425). The same digit delivers a different rule.
+- **PEP-8 requires a space around `=` when the assignment carries a type annotation
+  (`x: int = 7`) and forbids one when it doesn't (`x=7`)**. A single "uniform spacing around `=`"
+  rule would be wrong on both sides of that same language.
+
+The correct parity is by *what construct is forbidden*, not by the number that enforces it: both
+languages should forbid nesting and allow a composite condition, but the rules that deliver that
+differ, because **neither linter's complexity rule can see nesting at all**.
+
+⚠️ Ruff `C901` and ESLint `complexity` both measure **McCabe cyclomatic complexity** — a count of
+decision points, blind to how they are arranged. ESLint `max-depth` measures **nested block
+depth**, a different property. Measured witness, two functions with three `if`s each:
+
+| function | shape | ruff `C901` | ruff `PLR1702` |
+|---|---|---|---|
+| three sequential `if`s | depth 1 | `is too complex (4 > 2)` | not flagged |
+| three nested `if`s | depth 3 | `is too complex (4 > 2)` | `Too many nested blocks (3 > 1)` |
+
+**The same number, 4, for opposite shapes.** So a tight `max-complexity` does not enforce the
+nesting rule — it forbids a superset, rejecting the flat early-return form this project prefers
+for exactly the complexity it is trying to reduce.
+
+Python's nesting-specific rule is `PLR1702` (`too-many-nested-blocks`), and it is ⚠️ **not
+configured today**: ruff gates it behind `--preview`, which `templates/python-common/ruff.toml`
+does not enable, so selecting `PL` does not activate it (`warning: Selection PLR1702 has no
+effect because preview is not enabled`). Until blueprintx#434 lands, **the Python and TypeScript
+nesting policies are approximate, not equivalent** — Python bounds nesting only as a side effect
+of bounding complexity.
+
+### Mandatory question for new quality issues
+
+An issue that proposes a new quality decision (a lint rule, a gate, a coding convention) must
+answer, in its body, **"what is the shape of this in the other scaffolded languages?"** — even
+when the honest answer is "no equivalent tool exists yet, tracked as prose, not a gate."
+
+This is **not** a gate. "Was this decision applied to both language families?" is not
+machine-decidable — it is a review question, so it stays prose reviewed by a human, never a
+`bin/check_*.sh` script.
+
+### Cross-language gate-parity snapshot (measured 2026-09-06)
+
+| Quality gate | Python | TypeScript/JS |
+|---|---|---|
+| Cyclomatic-complexity ceiling | ✅ ruff `C901`, tier-scoped (1 for `tests/`, 2 for `src/`, 8 for `bin/`) — `check_complexity.sh` | ❌ none (blueprintx#168) |
+| Function-length ceiling | ✅ 60 lines — `check_function_length.py` | ❌ none |
+| Deny-by-default import/vendor policy | ✅ `.layer-policy.yaml` + `check_layer_imports.py` on every Python tier | 🟡 partial — `templates/ts-lib/eslint.config.mjs` has a per-layer vendor allowlist (blueprintx#345); `templates/react-spa-webpack/eslint.config.js` only has `eslint-plugin-boundaries`, which polices layer *direction*, not a vendor allowlist |
+| Builtin-name shadowing | ✅ ruff `A` (blueprintx#421, closes #418) | ❌ none — no `no-shadow`/`no-redeclare` configured |
+| Early-return shape | 🔧 in flight — ruff `RET` (blueprintx#426) | ❌ none |
+| Nesting-depth ceiling | ❌ none — `PLR1702` is preview-gated and preview is off (blueprintx#434); `C901` bounds nesting only as a side effect | ❌ none — no `max-depth` |
+| Coverage floor | ✅ `fail_under = 80` (`.coveragerc`) | ❌ no Jest `coverageThreshold` configured |
+
+Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
+Update the date in this heading when re-measured, so the next reader knows whether the gap
+narrowed or widened.
+
 ## Pull Request Process
 
 1. **Create an Issue First**:
    - Check existing issues at [GitHub Issues](https://github.com/guilhermegor/blueprintx/issues)
    - Open a new issue if none exists for your work
+   - If the issue proposes a new quality decision, answer the mandatory question above in the
+     issue body before scoping the work
 
 2. **Opening a PR**:
    - Fill out the PR template completely

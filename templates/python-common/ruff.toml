@@ -95,6 +95,18 @@ select = [
     "W",   # pycodestyle warnings - trailing whitespace, invalid regex escapes (see W191 below)
     "PL",  # pylint - magic values, over-wide signatures, module-level global
     "PT",  # flake8-pytest-style - pytest idioms (one assertion per behaviour, etc.)
+    # A - flake8-builtins - PEP 8 import rule 4: an import must not shadow a builtin.
+    # `from re import compile` shadows compile() with no signal today; the fix is an alias
+    # (`from re import compile as re_compile`) or a qualified import (`import re`). Measured
+    # 2026-09-05 (ruff 0.11.13): `ruff check --select A src/ bin/ tests/ optional/` → All
+    # checks passed, so this is adopted at zero cost (blueprintx#418), same shape as the W191
+    # precedent above.
+    # ⚠️ Do NOT also set `[lint.flake8-builtins] strict-checking = true`. That turns on A005
+    # (module shadows a stdlib name) and fires on `utils/typing` / `chassis/typing`, which
+    # shadow stdlib `typing` ON PURPOSE — it is the runtime type-checking engine's layout shim
+    # (blueprintx#360). Measured 2 findings there; enabling strict-checking would put a gate
+    # violation on deliberate, correct design, which is how a gate teaches everyone to disable it.
+    "A",
 ]
 ignore = [
     "D206",  # docstring should be indented with spaces, not tabs
@@ -180,6 +192,25 @@ lines-after-imports = 2
 # gate reported 12 functions; at 8 it reports ONE, `read_table` with 11, which is the widest
 # public API here and therefore the finding worth keeping visible.
 max-args = 8
+
+# ⚠️ NO identifier-length ceiling here, MEASURED and REJECTED (blueprintx#420). Across this
+# tier's `src/` + `bin/` (the only trees this file's rules apply to; `tests/` is out of scope
+# by design — test names are descriptive sentences): 493 definitions, of which 63 exceed 20
+# chars, 4 exceed 30, and ZERO exceed 40. The longest name in the tree is 34 chars
+# (`assertion_value_or_operator_change`). A ceiling at 40 would find nothing, which is
+# indistinguishable from a gate that never ran — the same standard this repo already applies
+# to `check_provenance.py`/`check_complexity.sh` failing on zero discovery. Re-measured across
+# all five Python skeletons' own `src/`: the next-longest name anywhere is 26 chars
+# (`SQLAlchemyRecordRepository`, ddd-service-orm-db) — nowhere near 40 either. Ruff itself has
+# no length-based naming rule to turn on (pep8-naming's `N-` rules police casing, not length),
+# so the only way to add this ceiling is a hand-rolled `bin/check_*.py` — exactly the kind of
+# gate this repo's measure-first rule exists to refuse when the number says no. It would also
+# fight a deliberate house convention on purpose: every variable here carries a 3-5 char type
+# prefix (`str_`, `df_`, `cls_`, …), so a length ceiling penalises the prefix convention by
+# design, and the way an author under a tight ceiling escapes it is dropping the prefix or
+# abbreviating the noun — both worse than the long name. Reopen only if the measured max
+# crosses 40 in some tier, or a concrete defect (not just discomfort) is traced to a name's
+# length.
 
 [lint.pydocstyle]
 convention = "numpy"

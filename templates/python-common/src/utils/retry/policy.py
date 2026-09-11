@@ -16,10 +16,14 @@ from utils.retry._schedule import (
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
-# import (no redefinition); at runtime the try/except picks whichever layout shipped.
+# DDD; always injected, just at different paths). TYPE_CHECKING stubs the metaclass shape
+# locally instead of importing: mypy treats a try/except import as executed code and flags
+# the redefinition once actually checked, so this branch can't pick either layout
+# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from utils.typing import TypeChecker
+
+	class TypeChecker(type):
+		"""Type-only stub — see src/utils/CLAUDE.md."""
 else:
 	try:
 		from utils.typing import TypeChecker

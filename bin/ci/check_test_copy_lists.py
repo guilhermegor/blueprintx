@@ -71,6 +71,10 @@ DICT_EXPECTED_ABSENT = {
         "test_contract_family_conventions.py": "lib-minimal ships no contract family",
         # startup.py is a service-tier singleton; a library has no import-time bootstrap.
         "test_startup_fragility_order.py": "lib-minimal ships no src/config/startup.py",
+        # verify_venv_imports.py is invoked only from bin/lib/pip_fallback.sh, and lib-minimal
+        # copies only bin/lib/common.sh (line ~680) — no bootstrap.sh, pip_fallback.sh, venv.sh
+        # or run.sh, so it has no pip-fallback bootstrap to guard in the first place.
+        "test_verify_venv_imports.py": "lib-minimal ships no bin/lib/pip_fallback.sh bootstrap",
         # NOT missing — DELIVERED BY A THIRD MECHANISM this gate does not model: the scaffold
         # RENDERS it from templates/lib-minimal/rendered/test_typing.py.tmpl via envsubst,
         # because the file needs the package name substituted in and covers a smaller matrix

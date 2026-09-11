@@ -269,6 +269,64 @@ Numeric separators are an **ES2021** feature with universal Node and
 modern-browser support — no transpilation concern, no polyfill needed.
 The separator is purely syntactic; `1_000 === 1000` is `true` at runtime.
 
+### Cyclomatic complexity
+
+`eslint.config.js` wires ESLint's built-in `complexity` rule — no new tool, it
+ships with ESLint. The ceiling differs by tree, same idea as the Python
+skeletons' ruff `C901` gate (`templates/python-common/CLAUDE.md`), but **not
+copied by symmetry**: JSX branching and optional chaining inflate ESLint's
+count in ways mccabe/ruff never see, so the number here was measured against
+this template's own source, not inherited. Currently: **3** for
+`src/**/*.{ts,tsx}` (measured: 2 already flags ~16% of functions in the
+scaffolded example capability — not a payable number yet), **2** for
+`**/*.{test,spec}.{ts,tsx,js,jsx}` (covers both colocated unit tests and the
+Playwright `tests/` e2e specs). ⚠️ Both selectors are quoted verbatim from
+`eslint.config.js`: a paraphrase here would understate the enforced coverage,
+and a reader trusting the paraphrase would assume a file is unpoliced when it
+is not.
+Escape hatch: `// eslint-disable-next-line complexity -- <reason>` on the line
+immediately above the flagged function (ESLint attributes the error there, not
+on the branch) — mirrors python-common's `# complexity-ok: <reason>`, though
+unlike that gate, a missing reason is not (yet) mechanically enforced.
+
+### Function length
+
+`eslint.config.js` wires ESLint's built-in `max-lines-per-function`, split into
+**two blocks with two ceilings** — a settled decision (#439), never to be
+merged even if the numbers happen to match some week: **60** for
+`src/**/*.ts` (logic, mirrors `templates/python-common`'s 60-line
+`check_function_length.py` ceiling) and **100** for `src/**/*.{tsx,jsx}`
+(markup — a component's returned JSX can legitimately run long without
+representing added logic, and policing it at the logic ceiling is a rule
+people turn off). Both measured with
+`--rule '{"max-lines-per-function":["warn",{"max":0}]}'` against this
+scaffold's own source (blueprintx#425's technique): longest today is 27 lines
+in `.ts`, 23 in `.tsx` — both ceilings cost zero findings.
+
+⚠️ **Not the same options as Python's exclusion, and the gap is accepted, not
+compensated.** `skipBlankLines: false` matches Python (its span counts blank
+lines too). `skipComments: true` is the nearest ESLint has to "docstring
+excluded" but is **not equivalent** — it skips every comment, including
+inline ones, so the same digit buys a slightly more permissive rule here. Not
+corrected with a lower number because every measured function sits 33+ lines
+under either ceiling regardless. `IIFEs: true`: an IIFE is still a function
+body that can grow unchecked.
+
+### Catch safety
+
+Two type-aware ESLint rules close the gap `strict: true` (`tsconfig.json`)
+leaves open (#440): `useUnknownInCatchVariables` covers a `catch (err)`
+clause but **not** a promise `.catch(cb)` callback, whose parameter stays
+`any` even under strict mode.
+
+- `@typescript-eslint/use-unknown-in-catch-callback-variable` — forces the
+  same `unknown`-and-narrow discipline onto `.catch(cb)` callbacks.
+- `@typescript-eslint/only-throw-error` — only `Error` values may be thrown,
+  so a catch's `instanceof Error` narrowing can actually succeed.
+
+`no-empty` / `no-useless-catch` (an empty or pass-through catch) are already
+covered by `js.configs.recommended` — not re-added here.
+
 ## State management: ${STATE_MANAGEMENT_VARIANT}
 
 ${STATE_MANAGEMENT_DESC}

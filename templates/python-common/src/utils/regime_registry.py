@@ -14,9 +14,20 @@ from utils.regime_window import RegimeWindow
 
 
 # Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). See src/utils/CLAUDE.md.
+# DDD; always injected, just at different paths). See src/utils/CLAUDE.md — TYPE_CHECKING
+# stubs the decorator/metaclass shape locally (no import), since mypy flags a bare
+# try/except import as a name redefinition once actually type-checked (blueprintx#360).
 if TYPE_CHECKING:
-	from utils.typing import TypeChecker, type_checker
+	from collections.abc import Callable
+	from typing import TypeVar
+
+	_F = TypeVar("_F", bound=Callable[..., object])
+
+	def type_checker(fn: _F) -> _F:
+		"""Type-only stub — see src/utils/CLAUDE.md."""
+
+	class TypeChecker(type):
+		"""Type-only stub — see src/utils/CLAUDE.md."""
 else:
 	try:
 		from utils.typing import TypeChecker, type_checker

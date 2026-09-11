@@ -16,14 +16,17 @@ for meta in "$TEMPLATES_DIR"/*/skeleton.meta; do
     echo "Checking: templates/$skeleton_dir/skeleton.meta"
 
     for field in "${REQUIRED_FIELDS[@]}"; do
-        value="$(grep "^${field}=" "$meta" | cut -d= -f2- | tr -d '[:space:]')"
+        # `|| true`: under `set -euo pipefail` a missing key makes grep exit 1 and kills the
+        # whole gate BEFORE the check below can name the field. Measured: exit 1 with no
+        # message at all, which every should-fail test read as proof the check had run.
+        value="$(grep "^${field}=" "$meta" | cut -d= -f2- | tr -d '[:space:]' || true)"
         if [ -z "$value" ]; then
             echo "  ERROR: field '$field' is missing or empty" >&2
             errors=$((errors + 1))
         fi
     done
 
-    scaffold_rel="$(grep '^scaffold=' "$meta" | cut -d= -f2-)"
+    scaffold_rel="$(grep '^scaffold=' "$meta" | cut -d= -f2- || true)"
     if [ -n "$scaffold_rel" ] && [ ! -f "$REPO_ROOT/$scaffold_rel" ]; then
         echo "  ERROR: scaffold path does not exist: $scaffold_rel" >&2
         errors=$((errors + 1))

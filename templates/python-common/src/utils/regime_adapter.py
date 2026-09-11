@@ -25,8 +25,13 @@ from utils.regime_registry import RegimeRegistry
 from utils.regime_window import RegimeWindow
 
 
+# TYPE_CHECKING stubs the metaclass shape locally instead of importing: mypy treats a
+# try/except import as executed code and flags the redefinition once actually
+# type-checked, so this branch can't pick either layout (blueprintx#360).
 if TYPE_CHECKING:
-	from utils.typing import TypeChecker
+
+	class TypeChecker(type):
+		"""Type-only stub — see src/utils/CLAUDE.md."""
 else:
 	try:
 		from utils.typing import TypeChecker

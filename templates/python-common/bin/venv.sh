@@ -74,10 +74,13 @@ bootstrap_local_venv_with_pip() {
 	"$PYTHON" -m venv "$PROJECT_ROOT/.venv"
 
 	str_venv_python="$(pip_fallback_project_venv_python)"
-	pip_fallback_install_groups_in_venv \
+	if ! pip_fallback_install_groups_in_venv \
 		"$str_venv_python" \
 		"main,dev,docs" \
-		"project dependencies (main, dev, docs)"
+		"project dependencies (main, dev, docs)"; then
+		print_status "error" "Local .venv bootstrap failed — the environment is not usable"
+		return 1
+	fi
 
 	print_status "success" "Local .venv created with pip fallback"
 	print_status "warning" "Fallback mode installed dependencies from pyproject.toml without Poetry package installation"
@@ -134,7 +137,10 @@ main() {
 		bool_full_env_ready=1
 	else
 		print_status "warning" "Falling back because Poetry could not provide a local full environment"
-		bootstrap_local_venv_with_pip
+		if ! bootstrap_local_venv_with_pip; then
+			print_status "error" "venv setup failed — no usable environment was produced. Never treat this as success."
+			return 1
+		fi
 		bool_fallback_used=1
 	fi
 

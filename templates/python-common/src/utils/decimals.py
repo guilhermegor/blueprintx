@@ -10,6 +10,13 @@ The default rounding is ``ROUND_DOWN`` (truncation): deterministic, never inflat
 a value, and free of the directional bias that compounds when summing many rows.
 Pass ``rounding`` explicitly when the domain demands a different mode — e.g.
 ``ROUND_HALF_UP`` for tax or regulatory reporting.
+
+This is the ONLY place the truncation rule is implemented. A caller that needs a
+default-on-bad-input contract (a bulk import, a report) uses :func:`to_decimal`; a
+caller that needs a raise-on-bad-input contract (a Pydantic ``BeforeValidator``,
+where bad input must surface as a validation error rather than launder into a
+fallback) uses :func:`to_decimal_strict`, which delegates to :func:`to_decimal`
+rather than re-deriving the quantisation.
 """
 
 from __future__ import annotations
@@ -63,7 +70,9 @@ def to_decimal(
 		Number of decimal places to quantise to (non-negative).
 	default : Decimal, optional
 		Value returned when ``value`` is missing or unparsable, by default
-		``Decimal("0")``.
+		``Decimal("0")``. ⚠️ Also returned when the quantise itself overflows the
+		caller's ``decimal`` context precision — a finite, parsable value can hit
+		that, and this function never raises a decimal exception.
 	rounding : str, optional
 		A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
 		by default ``ROUND_DOWN`` (truncation).
@@ -80,9 +89,85 @@ def to_decimal(
 	"""
 	if int_places < 0:
 		raise ValueError("int_places must be non-negative")
-	cls_quantum = Decimal(1).scaleb(-int_places)
-	cls_raw = _parse(value, default)
-	return cls_raw.quantize(cls_quantum, rounding=rounding)
+	return _quantise(_parse(value, default), int_places, default, rounding)
+
+
+@type_checker
+def to_decimal_strict(
+	value: NumericLike,
+	int_places: int,
+	rounding: str = _DEFAULT_ROUNDING,
+) -> Decimal:
+	"""Coerce ``value`` to a quantised Decimal, raising instead of defaulting.
+
+	The validator-friendly sibling of :func:`to_decimal`. A Pydantic
+	``BeforeValidator`` must surface bad input as a validation error, not launder
+	it into a fallback value the way ``to_decimal``'s ``default`` does — so this
+	rejects ``None`` and unparsable input with ``ValueError``. It delegates every
+	parse and quantise step to :func:`to_decimal` (passing a sentinel ``NaN``
+	default that is never returned to the caller), so there remains exactly one
+	truncation implementation for both call sites to share.
+
+	Parameters
+	----------
+	value : NumericLike
+		Raw value. See :func:`to_decimal` for the accepted shapes; unlike that
+		function, ``None`` is rejected here rather than defaulted.
+	int_places : int
+		Number of decimal places to quantise to (non-negative).
+	rounding : str, optional
+		A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
+		by default ``ROUND_DOWN`` (truncation), matching :func:`to_decimal`.
+
+	Returns
+	-------
+	Decimal
+		``value`` quantised to ``int_places`` decimal places using ``rounding``.
+
+	Raises
+	------
+	ValueError
+		If ``int_places`` is negative, if ``value`` is ``None`` or cannot be parsed
+		as a finite decimal number, or if quantising it overflows the caller's
+		``decimal`` context precision.
+	"""
+	cls_sentinel = Decimal("NaN")
+	cls_result = to_decimal(value, int_places, default=cls_sentinel, rounding=rounding)
+	if cls_result.is_nan():
+		raise ValueError(f"cannot coerce {value!r} to Decimal")
+	return cls_result
+
+
+@type_checker
+def _quantise(cls_raw: Decimal, int_places: int, default: Decimal, rounding: str) -> Decimal:
+	"""Quantise ``cls_raw``, falling back to ``default`` when the context is too narrow.
+
+	Parameters
+	----------
+	cls_raw : Decimal
+		The already-parsed, unquantised value.
+	int_places : int
+		Number of decimal places to quantise to.
+	default : Decimal
+		Returned when the quantise overflows the active context precision.
+	rounding : str
+		A :mod:`decimal` rounding mode.
+
+	Returns
+	-------
+	Decimal
+		``cls_raw`` quantised, or ``default``.
+
+	Notes
+	-----
+	``quantize`` raises on a finite value when the RESULT would exceed
+	``decimal.getcontext().prec`` — a property of the caller's context, not of the
+	value, so the parse step cannot anticipate it.
+	"""
+	try:
+		return cls_raw.quantize(Decimal(1).scaleb(-int_places), rounding=rounding)
+	except InvalidOperation:
+		return default
 
 
 @type_checker

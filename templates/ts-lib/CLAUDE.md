@@ -25,12 +25,57 @@ directly under `src/` (`src/index.ts`) resolves to `__root__`; a nested one
 the entry under `__root__` for a nested importer leaves lint failing on an entry that looks
 correct — the per-layer split is the point of the policy, not an accident of its shape.
 
+## Function length
+
+`eslint.config.mjs` wires ESLint's built-in `max-lines-per-function` at **60**
+for `src/**/*.ts` (blueprintx#439) — mirrors `templates/python-common`'s
+60-line `check_function_length.py` ceiling. One block, one number: this
+skeleton is a flat library with no `.tsx`/JSX (see the vendor-allowlist note
+above), so there is no markup/logic split to make, unlike `react-spa-webpack`.
+Measured with `--rule '{"max-lines-per-function":["warn",{"max":0}]}'`
+(blueprintx#425's technique) against this scaffold's own source: longest
+function today is 5 lines, so 60 costs zero findings.
+
+⚠️ **Not the same options as Python's exclusion, and the gap is accepted, not
+compensated.** `skipBlankLines: false` matches Python (its span counts blank
+lines too). `skipComments: true` is the nearest ESLint has to "docstring
+excluded" but is **not equivalent** — it skips every comment, including
+inline ones — accepted rather than corrected with a lower number, since every
+measured function sits 55+ lines under the ceiling either way. `IIFEs: true`:
+an IIFE is still a function body that can grow unchecked.
+
+## Catch safety
+
+Two type-aware ESLint rules close the gap `strict: true` (`tsconfig.json`)
+leaves open (blueprintx#440): `useUnknownInCatchVariables` covers a
+`catch (err)` clause but **not** a promise `.catch(cb)` callback, whose
+parameter stays `any` even under strict mode.
+
+- `@typescript-eslint/use-unknown-in-catch-callback-variable` — forces the
+  same `unknown`-and-narrow discipline onto `.catch(cb)` callbacks.
+- `@typescript-eslint/only-throw-error` — only `Error` values may be thrown,
+  so a catch's `instanceof Error` narrowing can actually succeed.
+
+`no-empty` / `no-useless-catch` (an empty or pass-through catch) are already
+covered by `js.configs.recommended` — not re-added here.
+
 ## Public API discipline
 
 `src/index.ts` is the only barrel that matters: **only what it re-exports is public**.
 Add a new export by adding it to `src/index.ts`, not by expecting consumers to deep-import
 from `src/*`. Deep imports resolve locally but break at the package boundary — the shipped
 `exports` map exposes only `.` (the barrel).
+
+## Logging (`LogEmitter`)
+
+`src/utils/log-emitter.ts` ships from `templates/ts-common/src/utils/` (blueprintx#436) — the
+shared TS source tree, mirroring `templates/python-common/src/utils/`. It exports the
+`LogEmitter` port and `NULL_EMITTER` (this package's default). A published library must not
+write to a host's console on its own initiative, so every call site accepts a `LogEmitter`
+and defaults to `NULL_EMITTER`; the host injects `CONSOLE_EMITTER` or its own implementation.
+This file has no internal relative imports on purpose — see `ts-common/CLAUDE.md` for why one
+file cannot carry an extension that satisfies both this package's Node-ESM output and
+`react-spa-webpack`'s webpack resolution.
 
 ## Build
 

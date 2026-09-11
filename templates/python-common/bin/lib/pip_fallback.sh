@@ -143,9 +143,14 @@ pip_fallback_write_requirements_file() {
 	local str_groups_csv="$1"
 	local str_req_file="$2"
 
-	pip_fallback_ensure_toml_reader
-	pip_fallback_emit_pip_requirements_from_pyproject "$str_groups_csv" >"$str_req_file"
-	pip_fallback_prune_unused_db_drivers "$str_req_file"
+	# ⚠️ EVERY STATUS IS CHECKED, and that is the whole point. This used to return the
+	# PRUNING status, which succeeds on an empty file — so a failed TOML reader or a failed
+	# emitter produced an empty requirements file and reported success. Install and verify
+	# both accept zero requirements, so the venv was declared good having installed nothing.
+	pip_fallback_ensure_toml_reader || return 1
+	pip_fallback_emit_pip_requirements_from_pyproject "$str_groups_csv" >"$str_req_file" ||
+		return 1
+	pip_fallback_prune_unused_db_drivers "$str_req_file" || return 1
 }
 
 # The package name at the head of a requirement line, stripped of extras, version
@@ -286,6 +291,25 @@ pip_fallback_install_requirements_file_into_venv() {
 	return 1
 }
 
+# A blocked index can report success with nothing usable: `pip install` may call a
+# requirement "already satisfied" without ever contacting the index (no `--upgrade`), and
+# a batch that fully failed can still leave a .venv that LOOKS bootstrapped. Neither is
+# caught by checking `.venv` existence or a pip exit code alone, so the last word is a real
+# import against the TARGET venv's own interpreter — verify_venv_imports.py, run via
+# "$str_venv_python" so it sees that venv's site-packages, not the bootstrap Python's.
+pip_fallback_verify_importable() {
+	local str_venv_python="$1"
+	local str_req_file="$2"
+
+	if "$str_venv_python" "$PIP_FALLBACK_LIB_DIR/verify_venv_imports.py" "$str_req_file"; then
+		return 0
+	fi
+
+	print_status "error" "pip reported the install as done, but the target venv cannot import what was declared"
+	print_status "error" "This is the silent-empty-venv failure tracked in blueprintx#127 — a blocked package index can report success with nothing usable installed."
+	return 1
+}
+
 pip_fallback_install_groups_in_venv() {
 	local str_venv_python="$1"
 	local str_groups_csv="$2"
@@ -296,10 +320,29 @@ pip_fallback_install_groups_in_venv() {
 	str_req_file="$(mktemp "${TMPDIR:-/tmp}/bx_pip_fallback.XXXXXX.txt")"
 
 	print_status "info" "Installing $str_label with pip fallback..."
-	pip_fallback_write_requirements_file "$str_groups_csv" "$str_req_file"
+	if ! pip_fallback_write_requirements_file "$str_groups_csv" "$str_req_file"; then
+		print_status "error" "Could not build the pip requirements for $str_label."
+		rm -f "$str_req_file"
+		return 1
+	fi
 
-	"$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade pip setuptools wheel
-	pip_fallback_install_requirements_file_into_venv "$str_venv_python" "$str_req_file"
+	# Fatal, not a warning: an empty dependency group makes the install and the verify below
+	# both succeed, so a failed bootstrap upgrade would otherwise report a good venv.
+	if ! "$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade pip setuptools wheel; then
+		print_status "error" "Could not upgrade pip/setuptools/wheel in the target venv."
+		rm -f "$str_req_file"
+		return 1
+	fi
+
+	if ! pip_fallback_install_requirements_file_into_venv "$str_venv_python" "$str_req_file"; then
+		rm -f "$str_req_file"
+		return 1
+	fi
+
+	if ! pip_fallback_verify_importable "$str_venv_python" "$str_req_file"; then
+		rm -f "$str_req_file"
+		return 1
+	fi
 
 	rm -f "$str_req_file"
 	print_status "success" "$str_label installed with pip fallback"

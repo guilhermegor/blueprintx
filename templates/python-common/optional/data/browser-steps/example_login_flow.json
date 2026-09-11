@@ -1,0 +1,44 @@
+[
+	{
+		"kind": "navigate",
+		"url": "https://vendor.example.com/relatorios"
+	},
+	{
+		"kind": "fill",
+		"selector": "#username",
+		"value": "${VENDOR_USERNAME}"
+	},
+	{
+		"kind": "fill",
+		"selector": "#password",
+		"value": "${VENDOR_PASSWORD}"
+	},
+	{
+		"kind": "click",
+		"selector": "#login-button"
+	},
+	{
+		"kind": "select",
+		"selector": "#report-type",
+		"option": "Extrato Mensal"
+	},
+	{
+		"kind": "fill_date",
+		"selector": "#data-inicio",
+		"value": "01/01/2026"
+	},
+	{
+		"kind": "datepicker",
+		"selector": "#data-fim-picker-trigger",
+		"value": "#day-15"
+	},
+	{
+		"kind": "wait",
+		"timeout_ms": 1000
+	},
+	{
+		"kind": "download",
+		"trigger_selector": "#exportar-btn",
+		"save_path": "data/downloads/relatorio-mensal.xlsx"
+	}
+]
