@@ -34,9 +34,6 @@ LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 PROJECT_DISPLAY_NAME=""
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -781,9 +778,6 @@ PY
     print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"

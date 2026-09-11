@@ -20,9 +20,6 @@ TEMPLATES_ROOT="$BLUEPRINTX_ROOT/templates"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
-# =========================================================================
-# ARG PARSING
-# =========================================================================
 
 print_usage() {
     echo "Usage: blueprintx [subcommand] [options]"
@@ -92,9 +89,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 show_banner() {
     echo
@@ -516,9 +510,6 @@ create_project() {
     LICENSE_CHOICE="$license_choice" bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 run_create_flow() {
     PROJECT_NAME=$(prompt_project_name)

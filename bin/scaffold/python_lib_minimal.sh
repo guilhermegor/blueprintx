@@ -34,9 +34,6 @@ PUBLISH_PYPI=true
 PUBLISH_TEST_PYPI=true
 CONSUME_PRIVATE=false
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -1037,9 +1034,6 @@ conditional_copy_docker_compose() {
     print_status "success" "docker-compose.yml (${DB_COMPOSE_BACKEND}) copied"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
