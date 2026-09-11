@@ -460,9 +460,16 @@ jobs:
           cache: "npm"
           cache-dependency-path: templates/ts-common/package.json
 
+      # ⚠️ This must assemble the SAME shape the scaffold produces, or the job
+      # typechecks a project that never exists. `copy_shared_ts_source` in
+      # bin/scaffold/ts_react_app.sh copies templates/ts-common/src/ into the
+      # generated project's src/shared/, which is what the `@/shared/*` path
+      # alias in tsconfig.json resolves to. Omitting that copy here made every
+      # `@/shared/utils/log-emitter` import an unresolved module (TS2307) and
+      # turned this job red on main for reasons no template change could fix.
       - name: Assemble typecheck workspace
         run: |
-          mkdir -p /tmp/ts-typecheck/src
+          mkdir -p /tmp/ts-typecheck/src/shared
           export PROJECT_NAME="ci-typecheck"
           export PROJECT_DESCRIPTION="CI typecheck workspace"
           envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
@@ -470,6 +477,7 @@ jobs:
             > /tmp/ts-typecheck/package.json
           cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
           cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
+          cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared/
 
       - name: Install npm dependencies
         working-directory: /tmp/ts-typecheck
