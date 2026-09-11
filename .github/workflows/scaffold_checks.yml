@@ -470,6 +470,11 @@ jobs:
             > /tmp/ts-typecheck/package.json
           cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
           cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
+          # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
+          # ts-common/src/ lands under src/shared/ in every scaffolded project, so the
+          # typecheck workspace must assemble it the same way or shared imports 404.
+          mkdir -p /tmp/ts-typecheck/src/shared
+          cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared/
 
       - name: Install npm dependencies
         working-directory: /tmp/ts-typecheck
