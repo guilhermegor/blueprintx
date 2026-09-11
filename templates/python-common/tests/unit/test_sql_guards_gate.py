@@ -231,10 +231,10 @@ def test_second_nolock_in_one_literal_is_still_reported(tmp_path: Path) -> None:
 	"""A hatch on the first hint must not cover a second, unannotated one in the same literal."""
 	path_file = _python_file(
 		tmp_path,
-		'STR_Q = (\n'
+		"STR_Q = (\n"
 		'\t"SELECT a FROM t1 WITH (NOLOCK) "  # sql-guard-ok: reporting replica\n'
 		'\t"UNION ALL SELECT b FROM t2 WITH (NOLOCK)"\n'
-		')\n',
+		")\n",
 	)
 
 	list_problems = gate.check_python_file(path_file)
