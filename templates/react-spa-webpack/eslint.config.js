@@ -105,6 +105,18 @@ export default [
       // scaffolded example capability, 3 is the tightest ceiling with zero
       // current violations (2 already flags 4/25 functions, ~16%). See #168.
       complexity: ['error', 3],
+      // Catch-safety, type-aware half of #440. `strict: true` (tsconfig.json)
+      // already forces `useUnknownInCatchVariables`, so a `catch (err)`
+      // clause's variable is `unknown` — but that compiler flag does NOT
+      // reach a promise `.catch(cb)` callback, whose parameter stays `any`
+      // even under strict mode. This rule closes that one remaining gap.
+      '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
+      // Catch-safety (#440): only `Error` values may be thrown, so a
+      // `catch`'s `instanceof Error` narrowing can actually succeed —
+      // throwing a string/number/plain object would defeat every
+      // downstream narrowing check silently. `no-empty` / `no-useless-catch`
+      // already come from js.configs.recommended; this is the remaining gap.
+      '@typescript-eslint/only-throw-error': 'error',
     },
   },
 
@@ -121,7 +133,61 @@ export default [
     },
   },
 
-  // 7. DDD import boundary rules
+  // 7. Function-length ceiling for `.ts` — logic (#439). Mirrors
+  // python-common's 60-line ceiling (`check_function_length.py`) — same
+  // argument, a `.ts` file's body is logic, not markup. Measured with
+  // `--rule '{"max-lines-per-function":["warn",{"max":0}]}'`
+  // (blueprintx#425's technique, not read off docs): the longest function
+  // in this scaffold is 27 lines (`useCreateNote`), so 60 costs zero
+  // findings today — the same "prevents regression, not debt" profile as
+  // the complexity gate above.
+  //
+  // Deliberately NOT the same options as Python's exclusion, and that gap
+  // is accepted rather than compensated: `skipBlankLines: false` matches
+  // Python (`node.end_lineno - node.lineno + 1` counts blank lines too),
+  // but `skipComments: true` is the nearest ESLint has to "docstring
+  // excluded" and is NOT equivalent — it skips every comment, including
+  // inline ones, not only a leading doc block, so the same digit buys a
+  // slightly more permissive rule here. Not compensated with a lower
+  // number because every measured function sits 33+ lines under 60 either
+  // way; an arbitrary correction would buy no real protection. `IIFEs:
+  // true` because an IIFE is still a function body that can grow unchecked
+  // — no reason to exempt the one shape that hides behind a call
+  // expression. See rule 8 immediately below for the `.tsx` twin, which
+  // shares this same options reasoning but not the same ceiling.
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      'max-lines-per-function': [
+        'error',
+        { max: 60, skipBlankLines: false, skipComments: true, IIFEs: true },
+      ],
+    },
+  },
+
+  // 8. Function-length ceiling for `.tsx`/`.jsx` — markup, not logic (#439,
+  // owner decision: settled as its own block with its own number, never
+  // merged into rule 7 even if the digits match some week). A component's
+  // returned JSX can legitimately run long — conditional branches, mapped
+  // lists — and policing it at a logic ceiling is a rule people turn off,
+  // which reads as coverage while providing none.
+  //
+  // Measured the same way as rule 7: the longest `.tsx` function today is
+  // 23 lines (`NoteProvider`). 100 is not that number scaled up by
+  // convention — it is chosen to leave roughly 4x headroom over what this
+  // template's own example capability needs, high enough that it only
+  // fires once a component has clearly outgrown a single responsibility.
+  {
+    files: ['src/**/*.{tsx,jsx}'],
+    rules: {
+      'max-lines-per-function': [
+        'error',
+        { max: 100, skipBlankLines: false, skipComments: true, IIFEs: true },
+      ],
+    },
+  },
+
+  // 9. DDD import boundary rules
   {
     plugins: { boundaries },
     settings: {
@@ -160,7 +226,7 @@ export default [
     },
   },
 
-  // 8. Web worker files - use Worker globals, not DOM
+  // 10. Web worker files - use Worker globals, not DOM
   {
     files: ['src/**/*-worker.js'],
     languageOptions: {
@@ -170,7 +236,7 @@ export default [
     },
   },
 
-  // 9. Import resolution and ordering
+  // 11. Import resolution and ordering
   {
     files: ['src/**/*.{ts,tsx,js,jsx}'],
     plugins: { import: importPlugin },
@@ -200,6 +266,6 @@ export default [
     },
   },
 
-  // 10. Prettier config (must be last)
+  // 12. Prettier config (must be last)
   prettierConfig,
 ];
