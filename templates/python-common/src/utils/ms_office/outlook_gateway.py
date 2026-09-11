@@ -173,8 +173,8 @@ class OutlookGateway(metaclass=TypeChecker):
         Returns
         -------
         pathlib.Path | None
-                The saved attachment path on success; ``None`` off Windows or on any failure / no
-                match (all logged).
+            The saved attachment path on success; ``None`` off Windows or on any failure / no
+            match (all logged).
         """
         list_formats = list_file_formats or ["xlsx"]
         if not running_on_windows():
@@ -187,7 +187,7 @@ class OutlookGateway(metaclass=TypeChecker):
             )
             return None
         try:
-            dict_status = _com_download_attch(
+            dict_status = _com_download_attachment(
                 str_email_account=str_email_account,
                 str_folder=str_folder,
                 str_subject_substring=str_subject_substring,
@@ -364,7 +364,7 @@ def _com_send_email(  # complexity-ok: COM interop, optional fields and non-fata
 
 
 @type_checker
-def _com_download_attch(  # complexity-ok: COM interop, non-fatal degradation
+def _com_download_attachment(  # complexity-ok: COM interop, non-fatal degradation
     str_email_account: str,
     str_folder: str,
     str_subject_substring: str,
