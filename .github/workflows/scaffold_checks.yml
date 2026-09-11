@@ -470,6 +470,13 @@ jobs:
             > /tmp/ts-typecheck/package.json
           cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
           cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
+          # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
+          # a real scaffold lands templates/ts-common/src/ under src/shared/, which is where
+          # @/shared/* imports (e.g. the LogEmitter port, blueprintx#441) resolve from. This
+          # workspace assembly skipped that copy, so tsc could not find a module every real
+          # scaffolded project has.
+          mkdir -p /tmp/ts-typecheck/src/shared
+          cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared
 
       - name: Install npm dependencies
         working-directory: /tmp/ts-typecheck
