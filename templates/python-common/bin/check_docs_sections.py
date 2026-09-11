@@ -72,9 +72,8 @@ def _ignore_unknown(loader: _MkDocsSafeLoader, tag_suffix: str, node: yaml.Node)
     Returns
     -------
     None
-            Always ``None`` — the value is irrelevant to this gate.
+        Always ``None`` — the value is irrelevant to this gate.
     """
-    return None
 
 
 _MkDocsSafeLoader.add_multi_constructor("tag:yaml.org,2002:python/name:", _ignore_unknown)
@@ -113,8 +112,7 @@ def _load_config() -> dict:
     -------
     dict
             The parsed ``docs/.docs-skeleton.yaml`` (``required_pages`` /
-            ``section_families``), or an
-            empty dict when the repo ships no override.
+            ``section_families``), or an empty dict when the repo ships no override.
     """
     if not _SKELETON_CONFIG.exists():
         return {}
