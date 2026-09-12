@@ -55,6 +55,9 @@ $POETRY run python bin/check_layer_imports.py
 print_status info "comment language boundary"
 $POETRY run python bin/check_comment_language.py
 
+print_status info "comment budget"
+$POETRY run python bin/check_comment_budget.py
+
 print_status info "function length"
 $POETRY run python bin/check_function_length.py
 

@@ -183,6 +183,10 @@ help = "Cap a function at 60 lines of code (docstring excluded)"
 cmd = "bash bin/check_complexity.sh"
 help = "Cyclomatic-complexity ceiling per tree (tests 1, src 2, bin 8)"
 
+[tool.poe.tasks.check_comment_budget]
+cmd = "python bin/check_comment_budget.py"
+help = "Bound comment volume (long runs + decorative banners), QA pragmas exempt"
+
 [tool.poe.tasks.check_secrets]
 cmd = "bash bin/check_secrets.sh"
 help = "Secret scan via gitleaks — no API key, no account (blueprintx#305)"
