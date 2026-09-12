@@ -28,7 +28,6 @@ if [ -n "${_BX_COMMON_LOADED:-}" ]; then
 fi
 _BX_COMMON_LOADED=1
 
-
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
