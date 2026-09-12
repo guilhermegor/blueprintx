@@ -47,7 +47,7 @@ def test_download_attachment_hands_com_an_absolute_dest_dir(
 	monkeypatch.chdir(tmp_path)
 	mocker.patch("src.utils.ms_office.outlook_gateway.running_on_windows", return_value=True)
 	cls_com = mocker.patch(
-		"src.utils.ms_office.outlook_gateway._com_download_attch", return_value={}
+		"src.utils.ms_office.outlook_gateway._com_download_attachment", return_value={}
 	)
 	cls_gateway = OutlookGateway("sender@example.com")
 	cls_gateway.download_attachment("acct", "Inbox", "subject~", Path("downloads"))

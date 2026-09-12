@@ -161,7 +161,6 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 
 	def close(self) -> None:
 		"""Release resources (no-op, connections are per-call)."""
-		return None
 
 	def _connect(self) -> Any:
 		"""Create a pyodbc connection using the configured connection string."""

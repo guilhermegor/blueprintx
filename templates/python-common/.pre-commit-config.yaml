@@ -244,6 +244,20 @@ repos:
           - python
         pass_filenames: false
 
+      # Structural gate for the "silent wrong answer" (blueprintx#355): a WHERE-less
+      # DELETE/UPDATE mutates or erases every row with no error, and WITH (NOLOCK) permits
+      # dirty reads / missed rows with no error either — both read as correct code and
+      # behave wrongly, which is exactly the failure shape an AI-written diff is least
+      # likely to catch on review. Escape hatch: "# sql-guard-ok: <reason>".
+      - id: check-sql-guards
+        name: SQL guards (WHERE-less mutations, NOLOCK)
+        entry: bash bin/poetry_exec.sh run python bin/check_sql_guards.py
+        language: system
+        # Both surfaces SQL reaches this codebase through: a .py file (the AST checks) and
+        # a raw .sql file under src/config/queries/ (the NOLOCK text scan).
+        files: \.(py|sql)$
+        pass_filenames: false
+
       # Structural gate for the canonical docs skeleton — every canonical page (English slug)
       # exists AND is registered in mkdocs.yml nav; MkDocs builds an unregistered page anyway,
       # so it silently vanishes from navigation. Keys on slugs, never localized nav titles.
