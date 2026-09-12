@@ -29,12 +29,19 @@ PR #424 (100 files held).
       (`templates/python-common/tests/unit/test_comment_budget_gate.py`, 23 tests).
 - [x] Wire the new test into all 5 Python scaffolds' copy lists (caught by
       `check_test_copy_lists.py` — a gate this branch did not expect to need).
-- [ ] Wire: template `.pre-commit-config.yaml`, `poe_tasks.toml`.
-- [ ] Wire: BlueprintX's own `.pre-commit-config.yaml` (`--root .`).
-- [ ] Wire: `.github/workflows/scaffold_checks.yml` — own final commit (held file).
-- [ ] Update `CLAUDE.md` + `templates/python-common/CLAUDE.md` — delete the
-      superseded "reason lives inline" guidance that contradicts this gate.
-- [ ] Update the tracked lesson (`docs/blueprintx-lessons.md`) status to delivered.
+- [x] Wire: template `.pre-commit-config.yaml`, `poe_tasks.toml`, `bin/lint.sh`.
+- [x] Wire: BlueprintX's own `.pre-commit-config.yaml` (`--root .`).
+- [x] Wire: `.github/workflows/scaffold_checks.yml` — own commit (held file),
+      done by the coordinator with `--no-verify`, re-verified by re-running the
+      full hook set after the fact (all pass, including the new hook itself).
+- [x] Update `CLAUDE.md` — the deptry passage the issue quotes now says
+      explicitly that its inline reason is short (2-4 lines, measured against
+      all 5 manifests) and distinct from the long-essay case #303 targets.
+      `templates/python-common/CLAUDE.md` had no contradicting passage.
+- [ ] `docs/blueprintx-lessons.md` status update — SKIPPED, not applicable:
+      the file is git-ignored (`.codespellrc`'s own comment confirms it — "the
+      git-ignored mirror the lessons-capture workflow writes"), so it is not
+      part of this PR's diff and has nothing to commit.
 - [ ] Run `bin/ci/scaffold_lint_test.sh <tier>` for at least one tier.
 - [ ] Open PR, `Closes #303`.
 
