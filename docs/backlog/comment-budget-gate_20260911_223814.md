@@ -52,7 +52,8 @@ PR #424 (100 files held).
       `shfmt -w` collapsed it on the scaffold's own `poe lint`, which the
       harness treats as a failure (same class as the #458 ruff-format
       warning). Fixed; re-ran the tier verification green.
-- [ ] Open PR, `Closes #303`.
+- [x] Open PR, `Closes #303`. -> PR #460, verified via GraphQL
+      closingIssuesReferences returns [303].
 
 Session-limit note: killed once holding 2 uncommitted files (the gate fix +
 23-test suite); coordinator committed them with `--no-verify` and pushed.
