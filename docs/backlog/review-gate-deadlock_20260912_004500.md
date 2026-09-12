@@ -33,8 +33,9 @@ notices at 238 then 241 files, each CI-fixing push making the PR *less* reviewab
       (84 passed) — all green with hooks actually running (not `--no-verify`).
 - [x] Commit + push at each coherent point (rescued once by the coordinator after a session-limit
       kill; committed and pushed twice more since).
-- [ ] Open the PR against `main` with `Closes #433`, following the PR template, arguing the
-      three-option design choice in the body.
+- [x] Open the PR against `main` with `Closes #433`, following the PR template, arguing the
+      three-option design choice in the body. PR #458 — verified via GraphQL
+      `closingIssuesReferences` that it actually registers 433, not just links it.
 - [ ] Confirm CI is green on the PR and address any review feedback.
 
 Completed — kept as a record once every box above is ticked (CLAUDE.md backlog discipline).
