@@ -1272,6 +1272,50 @@ def test_print_missing_review_json_carries_the_file_cap_classification(
 	assert dict_out["notice_classification"] == cls_gate.NOTICE_FILE_CAP_EXCEEDED
 
 
+# --------------------------
+# A second, unrelated "Review skipped" reason must not be conflated with the file cap (#433)
+# --------------------------
+
+# The REAL fragment measured on PR #400 (a one-file, bot-authored PR) — clearable simply by
+# asking, unlike the structural cap above. Sharing the bare "Review skipped" prefix with the
+# file-cap notice is exactly what makes this a genuine negative control rather than a strawman.
+_BOT_DETECTED_NOTICE = "Review skipped — Bot user detected."
+
+
+def test_a_bot_detected_notice_does_not_classify_as_file_cap() -> None:
+	"""The shared 'Review skipped' prefix must not make two unrelated reasons collide."""
+	cls_gate = _load_gate()
+	assert cls_gate.classify_reviewer_notice(_BOT_DETECTED_NOTICE) == cls_gate.NOTICE_OK
+
+
+def test_a_bot_detected_decline_gets_the_generic_remedy_not_split_advice() -> None:
+	"""Splitting a one-file PR is nonsense advice — this reason clears by asking, not splitting."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", _BOT_DETECTED_NOTICE)],
+	)
+	assert "Split this PR" not in str_problem
+
+
+def test_a_bot_detected_decline_still_fails_the_gate() -> None:
+	"""Same hard constraint as the file cap: a stated reason is still not a pass."""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.find_missing_review_problem(
+			[],
+			_ROSTER,
+			"h",
+			str_head_oid=_HEAD,
+			list_notices=[_notice("coderabbitai", _BOT_DETECTED_NOTICE)],
+		)
+		is not None
+	)
+
+
 def test_parse_declared_wait_reads_277_seconds_from_the_real_chat_body() -> None:
 	"""Pinned exactly on the number blueprintx#364 measured the loop stalling on: 4m37s."""
 	cls_gate = _load_gate()

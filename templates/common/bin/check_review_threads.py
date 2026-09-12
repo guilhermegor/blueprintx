@@ -622,6 +622,16 @@ _RE_ANY_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 # Anchored on "Review skipped:" as well as the file/limit wording so an unrelated sentence that
 # merely mentions "files" and "limit" does not match — this is untrusted third-party text, and a
 # loose pattern here would misclassify silently rather than loudly.
+#
+# ⚠️ "Review skipped" IS NOT ITSELF THE DISCRIMINATOR. CodeRabbit reuses that exact bare prefix
+# for at least one other, unrelated refusal — "Review skipped — Bot user detected" (measured on
+# #400), which is clearable simply by asking (the notice names the command itself) and is
+# nothing like a structural cap. Matching on the shared prefix alone would conflate the two and
+# tell a bot-authored one-file PR to split itself — caught before it shipped by re-checking the
+# measurement against a second real PR, the same discipline the rate-limit block above already
+# paid for once. The pattern below requires the FULL sentence ("N files exceed the limit of M"),
+# so "Bot user detected" and every other "Review skipped" reason fall through to NOTICE_OK and
+# get the generic "trigger a review" remedy, which is the correct one for them.
 _RE_FILE_CAP = re.compile(
 	r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+", re.IGNORECASE
 )
