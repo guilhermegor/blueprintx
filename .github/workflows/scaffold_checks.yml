@@ -462,7 +462,7 @@ jobs:
 
       - name: Assemble typecheck workspace
         run: |
-          mkdir -p /tmp/ts-typecheck/src
+          mkdir -p /tmp/ts-typecheck/src/shared/utils
           export PROJECT_NAME="ci-typecheck"
           export PROJECT_DESCRIPTION="CI typecheck workspace"
           envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
@@ -471,12 +471,10 @@ jobs:
           cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
           cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
           # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
-          # the real scaffold overlays ts-common/src/ onto src/shared/ after the skeleton's
-          # own src/ is in place. Skipping this step left src/shared/utils/log-emitter.ts
-          # (blueprintx#441) missing here, so this job typechecked a workspace the real
-          # scaffold never produces (context.tsx imports it, TS2307 not-found).
-          mkdir -p /tmp/ts-typecheck/src/shared/utils
-          cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared/
+          # the real scaffold copies ts-common/src/ into the project's src/shared/, which is
+          # where `@/shared/utils/log-emitter` resolves. This workspace is a hand-assembled
+          # stand-in for that scaffold and drifted from it when #436 added the shared source.
+          cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared
 
       - name: Install npm dependencies
         working-directory: /tmp/ts-typecheck
