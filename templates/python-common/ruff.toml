@@ -44,7 +44,7 @@ exclude = [
     ".vscode",
 
     # project-specific generated / chassis
-    "alembic",
+    "migrations",
     # ⚠️ `src/chassis` and `src/capabilities/example_feature` were BOTH excluded here until
     # blueprintx#203, mirroring #190's mypy fix one tool later. Same argument, measured
     # separately: these files ship verbatim into every generated DDD project, so a defect in
