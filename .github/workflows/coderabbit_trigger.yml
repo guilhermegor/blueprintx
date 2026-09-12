@@ -168,14 +168,18 @@ jobs:
               echo "::warning::GitHub SECONDARY rate limit (HTTP ${str_http_status:-403/429})" \
                 "hit for the PAT's user — not a bad token, and not CodeRabbit's review quota." \
                 "Retry after ${str_retry_after}s (~${int_wait_min}m). Skipping the review" \
-                "request this run; the next push will ask again." >&2
+                "request this run. A later push will NOT retry — this workflow no longer" \
+                "listens for \`synchronize\` (#454). Recovery is review_retry.yml: its" \
+                "schedule, or \`gh workflow run review_retry.yml\` to ask immediately." >&2
             elif [ -n "$str_reset_epoch" ]; then
               str_reset_utc="$(date -u -d "@$str_reset_epoch" '+%Y-%m-%d %H:%M:%S UTC')"
               int_wait_min=$(( (str_reset_epoch - $(date -u +%s) + 59) / 60 ))
               echo "::warning::GitHub API rate limit (HTTP ${str_http_status:-403}) hit for the" \
                 "PAT's user — not a bad token. This is the GitHub API's own limit, not" \
                 "CodeRabbit's review quota. Quota resets at $str_reset_utc (~${int_wait_min}m)." \
-                "Skipping the review request this run; the next push will ask again." >&2
+                "Skipping the review request this run. A later push will NOT retry — this" \
+                "workflow no longer listens for \`synchronize\` (#454). Recovery is" \
+                "review_retry.yml: its schedule, or \`gh workflow run review_retry.yml\`." >&2
             else
               echo "::warning::GitHub rate limit (HTTP ${str_http_status:-unknown}) hit for the" \
                 "PAT's user, but neither retry-after nor x-ratelimit-reset was present to say" \
