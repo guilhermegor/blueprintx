@@ -42,7 +42,16 @@ PR #424 (100 files held).
       the file is git-ignored (`.codespellrc`'s own comment confirms it — "the
       git-ignored mirror the lessons-capture workflow writes"), so it is not
       part of this PR's diff and has nothing to commit.
-- [ ] Run `bin/ci/scaffold_lint_test.sh <tier>` for at least one tier.
+- [x] Run `bin/ci/scaffold_lint_test.sh <tier>` for at least one tier —
+      `lib-minimal`: scaffold clean, `poe lint` clean (including the new
+      hook), 441 unit tests + 85 integration tests pass, including the new
+      `test_comment_budget_gate.py` (23 tests) running inside the real
+      scaffolded project.
+- [x] Found and fixed a real regression along the way: the banner-deletion
+      commit left a stray blank line in both `bin/lib/common.sh` copies;
+      `shfmt -w` collapsed it on the scaffold's own `poe lint`, which the
+      harness treats as a failure (same class as the #458 ruff-format
+      warning). Fixed; re-ran the tier verification green.
 - [ ] Open PR, `Closes #303`.
 
 Session-limit note: killed once holding 2 uncommitted files (the gate fix +
