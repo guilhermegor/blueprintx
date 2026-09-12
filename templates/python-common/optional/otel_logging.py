@@ -52,6 +52,40 @@ _TUPLE_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 
 @type_checker
+def _signal_override(str_signal_var: str, str_generic_var: str) -> str:
+	"""Resolve a signal-specific OTLP variable over its generic fallback.
+
+	⚠️ Presence decides, never truthiness. ``OTLPLogExporter`` reads the environment when it
+	is constructed and honours a signal-specific variable that is SET BUT EMPTY — an `or`
+	chain does not, because ``""`` is falsy, so it silently falls through to the generic
+	value. That divergence is the whole defect: the caller would then vet an endpoint the
+	exporter is not using, and could report credentials as safe that are in fact sent
+	nowhere, or unsafe when they are not sent at all.
+
+	Parameters
+	----------
+	str_signal_var : str
+		Name of the signal-specific variable (``OTEL_EXPORTER_OTLP_LOGS_*``).
+	str_generic_var : str
+		Name of the generic fallback variable (``OTEL_EXPORTER_OTLP_*``).
+
+	Returns
+	-------
+	str
+		The effective value, stripped; ``""`` when neither variable is set.
+
+	Examples
+	--------
+	>>> isinstance(_signal_override("A_MISSING_VAR", "ANOTHER_MISSING_VAR"), str)
+	True
+	"""
+	str_signal = os.getenv(str_signal_var)
+	if str_signal is not None:
+		return str_signal.strip()
+	return (os.getenv(str_generic_var) or "").strip()
+
+
+@type_checker
 def _effective_otlp_logs_config() -> tuple[str, bool]:
 	"""Resolve the endpoint and whether credential headers are set, honouring precedence.
 
@@ -59,7 +93,8 @@ def _effective_otlp_logs_config() -> tuple[str, bool]:
 	``OTEL_EXPORTER_OTLP_ENDPOINT``/``_HEADERS`` therefore answers about a configuration the
 	SDK may not be using — it would miss a project that sets only ``..._LOGS_...``, and the
 	miss is silent in both directions: no export where one was configured, or no TLS check
-	where credentials are in fact being sent.
+	where credentials are in fact being sent. Precedence is resolved by ``_signal_override``,
+	which keys on PRESENCE so a set-but-empty override is preserved rather than skipped.
 
 	Returns
 	-------
@@ -71,16 +106,10 @@ def _effective_otlp_logs_config() -> tuple[str, bool]:
 	>>> isinstance(_effective_otlp_logs_config(), tuple)
 	True
 	"""
-	str_endpoint = (
-		os.getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")
-		or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-		or ""
-	).strip()
-	str_headers = (
-		os.getenv("OTEL_EXPORTER_OTLP_LOGS_HEADERS")
-		or os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
-		or ""
-	).strip()
+	str_endpoint = _signal_override(
+		"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "OTEL_EXPORTER_OTLP_ENDPOINT"
+	)
+	str_headers = _signal_override("OTEL_EXPORTER_OTLP_LOGS_HEADERS", "OTEL_EXPORTER_OTLP_HEADERS")
 	return str_endpoint, bool(str_headers)
 
 
@@ -156,6 +185,42 @@ def _exportable_endpoint(logger: logging.Logger) -> str:
 	return str_endpoint
 
 
+# CWE-319, and the reason it is not covered by the cleartext guard above: that guard vets the
+# CONFIGURED endpoint, while `requests` follows a 3xx on its own and re-sends the OTLP headers —
+# the API key — to whatever host the hop names, over http:// if it says so. So the credential can
+# leave in the clear via an endpoint no check ever saw. `max_redirects = 0` makes requests raise
+# TooManyRedirects on the first hop instead of forwarding it.
+# ⚠️ `_session` is a vendor internal. It is read through getattr and its ABSENCE is fatal on
+# purpose: if a future opentelemetry release renames it, the right outcome is "no export", never
+# "export with credentials unprotected" — a silent downgrade is the failure this repo writes
+# guards to prevent. The raise is caught by the fire-and-forget handler in the caller.
+@type_checker
+def _reject_credential_forwarding_redirects(cls_exporter: object) -> None:
+	"""Refuse to follow redirects, so credential headers cannot reach another host.
+
+	Parameters
+	----------
+	cls_exporter : object
+		The ``OTLPLogExporter`` whose underlying ``requests`` session is hardened.
+
+	Returns
+	-------
+	None
+
+	Raises
+	------
+	RuntimeError
+		When the exporter exposes no session to harden — see the note above the function.
+	"""
+	cls_session = getattr(cls_exporter, "_session", None)
+	if cls_session is None:
+		raise RuntimeError(
+			"OTLPLogExporter exposes no _session, so redirect-based credential forwarding "
+			"(CWE-319) cannot be blocked; refusing to start the exporter"
+		)
+	cls_session.max_redirects = 0
+
+
 @type_checker
 def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one guard, one sink
 	"""Build the OTLP logger provider and attach its handler to ``logger``.
@@ -188,8 +253,10 @@ def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one
 		# endpoint, headers, service name and resource attributes on their own, so none of
 		# that is passed explicitly — reimplementing the lookup would be a second, driftable
 		# copy of it.
+		cls_exporter = OTLPLogExporter()
+		_reject_credential_forwarding_redirects(cls_exporter)
 		cls_provider = LoggerProvider(resource=Resource.create())
-		cls_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+		cls_provider.add_log_record_processor(BatchLogRecordProcessor(cls_exporter))
 		set_logger_provider(cls_provider)
 		logger.addHandler(LoggingHandler(logger_provider=cls_provider))
 	except Exception as cls_exc:  # noqa: BLE001 — see the fire-and-forget note above

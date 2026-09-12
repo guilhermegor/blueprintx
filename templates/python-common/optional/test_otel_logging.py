@@ -10,9 +10,57 @@ import pytest
 
 
 try:
-	from utils.otel_logging import configure_otel_logging
+	from utils.otel_logging import (
+		_reject_credential_forwarding_redirects,
+		_signal_override,
+		configure_otel_logging,
+	)
 except ModuleNotFoundError:  # DDD ships the module as chassis.otel_logging
-	from chassis.otel_logging import configure_otel_logging
+	from chassis.otel_logging import (
+		_reject_credential_forwarding_redirects,
+		_signal_override,
+		configure_otel_logging,
+	)
+
+
+def test_signal_override_prefers_a_set_but_empty_signal_variable(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	"""A present-but-empty signal variable wins over the generic one.
+
+	The negative control for the `or`-chain defect: `""` is falsy, so an `or` fell through to
+	the generic value while the SDK — which keys on presence — used the empty override. The
+	two then disagreed about which endpoint was in play.
+	"""
+	monkeypatch.setenv("BX_TEST_SIGNAL", "")
+	monkeypatch.setenv("BX_TEST_GENERIC", "http://generic.example:4318")
+
+	assert _signal_override("BX_TEST_SIGNAL", "BX_TEST_GENERIC") == ""
+
+
+def test_signal_override_falls_back_when_the_signal_variable_is_absent(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	"""An absent signal variable defers to the generic one."""
+	monkeypatch.delenv("BX_TEST_SIGNAL", raising=False)
+	monkeypatch.setenv("BX_TEST_GENERIC", "http://generic.example:4318")
+
+	assert _signal_override("BX_TEST_SIGNAL", "BX_TEST_GENERIC") == "http://generic.example:4318"
+
+
+def test_reject_redirects_sets_max_redirects_to_zero() -> None:
+	"""The exporter's session is hardened so a 3xx cannot forward credential headers."""
+	cls_exporter = type("FakeExporter", (), {"_session": type("FakeSession", (), {})()})()
+
+	_reject_credential_forwarding_redirects(cls_exporter)
+
+	assert cls_exporter._session.max_redirects == 0
+
+
+def test_reject_redirects_raises_when_the_session_is_absent() -> None:
+	"""A renamed vendor internal must fail closed, never export unprotected."""
+	with pytest.raises(RuntimeError, match="CWE-319"):
+		_reject_credential_forwarding_redirects(object())
 
 
 def test_configure_otel_logging_no_endpoint_sends_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -22,7 +70,10 @@ def test_configure_otel_logging_no_endpoint_sends_nothing(monkeypatch: pytest.Mo
 	that never opted into a collector must run — and stay silent over the network — exactly
 	as it did before this seam existed.
 	"""
+	# Clear BOTH. The signal-specific variable OVERRIDES the generic one, so clearing only the
+	# generic one leaves this test passing or failing on the developer's own environment.
 	monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+	monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", raising=False)
 	cls_logger = logging.getLogger("test_otel_logging_no_endpoint")
 	cls_logger.handlers.clear()
 
