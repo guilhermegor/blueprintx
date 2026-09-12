@@ -236,6 +236,24 @@ export default [
         },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
+      // No bare numeric HTTP status / magic-number literals (#453). Measured against real
+      // express/NestJS shapes: catches `res.status(404)`, `res.sendStatus(204)`,
+      // `if (res.statusCode === 409)`, `@HttpCode(204)`, `throw new HttpException(msg, 403)`
+      // and `return { statusCode: 201 }` — every common status-code idiom in both frameworks —
+      // while a named constant (`StatusCodes.NOT_FOUND`, `HttpStatus.NO_CONTENT`) stays clean.
+      // `detectObjects: true` is load-bearing, not cosmetic: without it, the object-property
+      // form (`{ statusCode: 201 }`, the Fastify/NestJS response shape) is silent.
+      '@typescript-eslint/no-magic-numbers': [
+        'error',
+        {
+          detectObjects: true,
+          ignoreArrayIndexes: true,
+          ignoreEnums: true,
+          ignoreNumericLiteralTypes: true,
+          ignoreReadonlyClassProperties: true,
+          ignore: [-1, 0, 1, 2],
+        },
+      ],
       // Catch-safety, type-aware half of #440. `strict: true` (tsconfig.json)
       // already forces `useUnknownInCatchVariables`, so a `catch (err)`
       // clause's variable is `unknown` — but that compiler flag does NOT
