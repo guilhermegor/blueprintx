@@ -1182,9 +1182,7 @@ _FILE_CAP_NOTICE = "Review skipped: 241 files exceed the limit of 100."
 def test_classify_reviewer_notice_reads_the_real_file_cap_body_as_file_cap_exceeded() -> None:
 	"""The should-fail witness this issue exists for: a stated file cap is its own state."""
 	cls_gate = _load_gate()
-	assert (
-		cls_gate.classify_reviewer_notice(_FILE_CAP_NOTICE) == cls_gate.NOTICE_FILE_CAP_EXCEEDED
-	)
+	assert cls_gate.classify_reviewer_notice(_FILE_CAP_NOTICE) == cls_gate.NOTICE_FILE_CAP_EXCEEDED
 
 
 def test_a_reworded_file_cap_notice_does_not_classify_as_file_cap() -> None:
