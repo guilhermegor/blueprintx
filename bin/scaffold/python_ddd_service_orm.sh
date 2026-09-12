@@ -553,13 +553,13 @@ commit_and_push_github_assets() {
     apply_branch_protection "$project_path"
 }
 
-copy_alembic_templates() {
+copy_migration_templates() {
     local project_path="$1"
-    print_status "info" "Copying Alembic templates..."
+    print_status "info" "Copying migration templates..."
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/alembic.ini" "$project_path/alembic.ini"
-    mkdir -p "$project_path/alembic/versions"
-    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/alembic/." "$project_path/alembic"
-    print_status "success" "Alembic templates copied"
+    mkdir -p "$project_path/migrations/versions"
+    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/migrations/." "$project_path/migrations"
+    print_status "success" "Migration templates copied"
 }
 
 conditional_copy_docker_compose() {
@@ -835,7 +835,7 @@ main() {
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     conditional_prune_optin_deps "$PROJECT_PATH"
-    copy_alembic_templates "$PROJECT_PATH"
+    copy_migration_templates "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_copy_storage "$PROJECT_PATH"
     patch_pyproject_db_driver "$PROJECT_PATH"

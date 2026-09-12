@@ -1,4 +1,4 @@
-# CLAUDE.md — alembic/
+# CLAUDE.md — migrations/
 
 Migration conventions for this project.
 
@@ -9,9 +9,10 @@ Migration slugs follow `verb_subject_detail` in snake_case, e.g.:
 - `add_status_column_to_users`
 - `drop_legacy_sessions`
 
-The `file_template` in `alembic.ini` prepends a sortable datetime prefix
-(`YYYYMMDD_HHMM`) for readability. Migration order is always determined by
-`down_revision`, never by filename.
+The `file_template` in `alembic.ini` prepends a sortable date prefix
+(`YYYYMMDD`) for readability — no time component, since `rev` is already
+unique and two migrations in the same day cannot collide on filename.
+Migration order is always determined by `down_revision`, never by filename.
 
 ## Autogenerate vs manual
 

@@ -76,7 +76,7 @@ def run_migrations_offline() -> None:
 	"""
 	url = config.get_main_option("sqlalchemy.url")
 	# A batch_alter_table migration still cannot run here without copy_from — the
-	# constraint is the migration's, not this config's. See alembic/CLAUDE.md rule 5.
+	# constraint is the migration's, not this config's. See migrations/CLAUDE.md rule 5.
 	context.configure(
 		url=url,
 		target_metadata=target_metadata,
