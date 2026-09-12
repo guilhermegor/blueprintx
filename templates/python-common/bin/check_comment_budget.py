@@ -342,7 +342,12 @@ def has_valid_escape(list_lines: list) -> bool:
 	str_joined = "\n".join(list_lines)
 	if STR_ESCAPE not in str_joined:
 		return False
-	str_reason = str_joined.split(STR_ESCAPE, 1)[1].splitlines()[0].strip()
+	# `.splitlines()` on the tail after the marker is EMPTY, not `[""]`, when the
+	# marker is the very last text in the block — a bare `# comment-budget-ok:`
+	# with no trailing newline and no reason. `[0]` on that crashed the first
+	# draft instead of doing what a bare marker must do: fail the exemption.
+	list_after_marker = str_joined.split(STR_ESCAPE, 1)[1].splitlines()
+	str_reason = list_after_marker[0].strip() if list_after_marker else ""
 	return bool(str_reason)
 
 
