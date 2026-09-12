@@ -1169,6 +1169,109 @@ def test_classify_reviewer_notice_a_clean_completion_is_ok() -> None:
 	assert cls_gate.classify_reviewer_notice(str_notice) == cls_gate.NOTICE_OK
 
 
+# --------------------------
+# classify_reviewer_notice / find_missing_review_problem — the file-cap third state (#433)
+# --------------------------
+
+# The REAL notice body, reproduced live on PR #424, 2026-09-11 (quoted verbatim in the issue
+# rather than retyped — the same discipline as `_CHAT_NOTICE`/`_REVIEW_NOTICE` above, since a
+# retyped approximation is exactly the gap a reworded notice would exploit).
+_FILE_CAP_NOTICE = "Review skipped: 241 files exceed the limit of 100."
+
+
+def test_classify_reviewer_notice_reads_the_real_file_cap_body_as_file_cap_exceeded() -> None:
+	"""The should-fail witness this issue exists for: a stated file cap is its own state."""
+	cls_gate = _load_gate()
+	assert (
+		cls_gate.classify_reviewer_notice(_FILE_CAP_NOTICE) == cls_gate.NOTICE_FILE_CAP_EXCEEDED
+	)
+
+
+def test_a_reworded_file_cap_notice_does_not_classify_as_file_cap() -> None:
+	"""Defensive parsing: prose that only RESEMBLES the vendor's wording must not match.
+
+	The notice is untrusted third-party text — over-matching a paraphrase is as much a defect
+	as missing the real one, because it would let an unrelated notice borrow this state.
+	"""
+	cls_gate = _load_gate()
+	str_notice = "This PR has too many files for a comfortable review, please consider splitting."
+	assert cls_gate.classify_reviewer_notice(str_notice) == cls_gate.NOTICE_OK
+
+
+def test_a_file_cap_decline_is_still_a_failure() -> None:
+	"""🔴 THE HARD CONSTRAINT: a structural decline must never read as a pass.
+
+	Treating any reviewer refusal as a pass would reopen the #213 hole this gate exists to
+	keep closed — a PR merging with nothing looked at, just spelled a different way.
+	"""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", _FILE_CAP_NOTICE)],
+	)
+	assert str_problem is not None
+
+
+def test_a_file_cap_decline_message_tells_the_author_to_split_the_pr() -> None:
+	"""The remedy differs from every other zero-review state: retrying cannot fix a file cap."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", _FILE_CAP_NOTICE)],
+	)
+	assert "Split this PR" in str_problem
+
+
+def test_a_file_cap_decline_message_does_not_read_like_a_missing_reviewer() -> None:
+	"""The discrimination this issue exists for: two different sentences, not one collapsed."""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", _FILE_CAP_NOTICE)],
+	)
+	assert "never ran" not in str_problem
+
+
+def test_a_reworded_notice_still_fails_rather_than_silently_passing() -> None:
+	"""An unrecognised notice must fall back to the generic failure, never to a pass.
+
+	This is the other half of the hard constraint: parsing defensively must not become an
+	excuse to skip the check when the vendor's wording drifts.
+	"""
+	cls_gate = _load_gate()
+	str_problem = cls_gate.find_missing_review_problem(
+		[],
+		_ROSTER,
+		"h",
+		str_head_oid=_HEAD,
+		list_notices=[_notice("coderabbitai", "too many files, sorry")],
+	)
+	assert str_problem is not None
+
+
+def test_print_missing_review_json_carries_the_file_cap_classification(
+	capsys: pytest.CaptureFixture[str],
+) -> None:
+	"""The third state must be visible in machine-readable output too, not only in prose."""
+	cls_gate = _load_gate()
+	list_notices = [{"author": {"login": "coderabbitai[bot]"}, "body": _FILE_CAP_NOTICE}]
+	set_roster = {cls_gate.normalise_login(str_login) for str_login in _ROSTER}
+	cls_gate._print_missing_review(
+		True, "no declared reviewer ever reported", list_notices, set_roster
+	)
+	dict_out = json.loads(capsys.readouterr().out)
+	assert dict_out["notice_classification"] == cls_gate.NOTICE_FILE_CAP_EXCEEDED
+
+
 def test_parse_declared_wait_reads_277_seconds_from_the_real_chat_body() -> None:
 	"""Pinned exactly on the number blueprintx#364 measured the loop stalling on: 4m37s."""
 	cls_gate = _load_gate()

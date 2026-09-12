@@ -610,14 +610,31 @@ _RE_CHAT_LIMIT = re.compile(
 _RE_REVIEW_LIMIT = re.compile(r"review\s+rate\s+limited", re.IGNORECASE)
 _RE_ANY_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 
+# ⚠️ A FILE-COUNT CAP IS A THIRD STATE, NOT A SYNONYM FOR "NO REVIEWER RAN" (blueprintx#433).
+#
+# CodeRabbit refuses any PR over its file cap outright — no formal review, no thread, just this
+# ISSUE comment: "Review skipped: 241 files exceed the limit of 100." That collapses onto the
+# exact same reviews=0/threads=0 shape as "nobody ever ran", which is the discrimination this
+# gate could not make before: a reviewer that was ASKED and gave a structural reason looks
+# identical to an outage. Confirmed live on #424, monotonically — 238 files, then 241, the
+# second push made necessary by an unrelated CI fix and landing further past the cap.
+#
+# Anchored on "Review skipped:" as well as the file/limit wording so an unrelated sentence that
+# merely mentions "files" and "limit" does not match — this is untrusted third-party text, and a
+# loose pattern here would misclassify silently rather than loudly.
+_RE_FILE_CAP = re.compile(
+	r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+", re.IGNORECASE
+)
+
 NOTICE_REVIEW_LIMITED = "REVIEW_LIMITED"
 NOTICE_CHAT_LIMITED = "CHAT_LIMITED"
+NOTICE_FILE_CAP_EXCEEDED = "FILE_CAP_EXCEEDED"
 NOTICE_OK = "OK"
 NOTICE_UNKNOWN = "UNKNOWN"
 
 
 def classify_reviewer_notice(str_notice: str) -> str:
-	"""Classify a reviewer's notice by which quota (if any) it reports.
+	"""Classify a reviewer's notice by which quota or refusal (if any) it reports.
 
 	Parameters
 	----------
@@ -627,10 +644,13 @@ def classify_reviewer_notice(str_notice: str) -> str:
 	Returns
 	-------
 	str
-		One of :data:`NOTICE_CHAT_LIMITED`, :data:`NOTICE_REVIEW_LIMITED`, :data:`NOTICE_OK`
-		(no rate-limit wording at all — including an empty notice), or :data:`NOTICE_UNKNOWN`
-		(mentions a rate limit in neither recognised shape — see the block above).
+		One of :data:`NOTICE_FILE_CAP_EXCEEDED` (a stated file-count refusal — see the block
+		above), :data:`NOTICE_CHAT_LIMITED`, :data:`NOTICE_REVIEW_LIMITED`, :data:`NOTICE_OK`
+		(no rate-limit or cap wording at all — including an empty notice), or
+		:data:`NOTICE_UNKNOWN` (mentions a rate limit in neither recognised shape).
 	"""
+	if _RE_FILE_CAP.search(str_notice):
+		return NOTICE_FILE_CAP_EXCEEDED
 	if _RE_CHAT_LIMIT.search(str_notice):
 		return NOTICE_CHAT_LIMITED
 	if _RE_REVIEW_LIMIT.search(str_notice):
@@ -758,6 +778,59 @@ def reviewer_declared_completion(
 	return bool(str_when) and str_when >= str_head_date
 
 
+# ⚠️ THE FILE-CAP MESSAGE IS A THIRD SENTENCE, NOT A THIRD VERDICT (blueprintx#433).
+#
+# Both branches below are FAILURES — a file-cap decline must never read as a pass, or the
+# #213 hole reopens under a different name: a PR merging because a bot said "too big to look
+# at" is exactly as unreviewed as one that merged because the bot never ran at all. What
+# differs is the REMEDY: "trigger a review" fixes "nobody ran"; only "split the PR" fixes a
+# structural cap, and telling an author to retry a review that can never run wastes the same
+# trigger #208 already measured being wasted by the wrong sentence.
+#
+# Deliberately does NOT unblock the PR by any means (no opt-out label, no bypass) — see the
+# module docstring's file-cap block for why an opt-out label was considered and rejected: it
+# would let any collaborator silently satisfy this gate on a PR that only LOOKS capped, which
+# is a differently-shaped version of the exact hole #213 closed.
+def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: list[dict]) -> str:
+	"""Return the message for a PR with zero reviews submitted by the roster.
+
+	Parameters
+	----------
+	str_quote : str
+		The "reviewer's most recent notice" suffix the caller already built, or ``""``.
+	set_roster : set of str
+		Already-normalised logins that can submit a review, named in the generic message.
+	list_notices : list of dict
+		The PR's issue comments, oldest first — read again to classify the SAME notice
+		``str_quote`` already quotes, so the sentence and the quote never disagree.
+
+	Returns
+	-------
+	str
+		The file-cap sentence when the reviewer's newest notice states that structural reason;
+		the generic "never ran" sentence otherwise. Both are failures — never a pass.
+	"""
+	str_notice = newest_roster_notice(list_notices, set_roster)
+	if classify_reviewer_notice(str_notice) == NOTICE_FILE_CAP_EXCEEDED:
+		return (
+			"a declared reviewer DECLINED this PR for a STRUCTURAL reason it stated: the diff "
+			"exceeds the reviewer's file-count cap. This is NOT 'no reviewer ever ran' — "
+			"retrying or waiting will not change the file count.\n"
+			"Split this PR into smaller PRs, each under the cap, so each part can actually be "
+			"reviewed and merged." + str_quote
+		)
+	return (
+		f"no declared reviewer ever reported on this PR — expected one of "
+		f"{', '.join(sorted(set_roster))} to submit a review, and none did. "
+		"This is NOT 'the reviewer found nothing': a reviewer that ran and found nothing "
+		"still submits a review, so zero threads would be fine. Zero REVIEWS means the "
+		"reviewer never ran, and nothing on this PR has been looked at.\n"
+		"Trigger it with '@coderabbitai full review' from a user account. ⚠️ Prefer FULL over "
+		"a plain 'review': an incremental reviewer answers 'already reviewed' on commits it has "
+		"seen on another PR (a reopen, a rebase, a re-PR), and a full review does not." + str_quote
+	)
+
+
 # ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
 # #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
 # ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
@@ -840,16 +913,7 @@ def find_missing_review_problem(
 			+ str_quote
 		)
 
-	return (
-		f"no declared reviewer ever reported on this PR — expected one of "
-		f"{', '.join(sorted(set_roster))} to submit a review, and none did. "
-		"This is NOT 'the reviewer found nothing': a reviewer that ran and found nothing "
-		"still submits a review, so zero threads would be fine. Zero REVIEWS means the "
-		"reviewer never ran, and nothing on this PR has been looked at.\n"
-		"Trigger it with '@coderabbitai full review' from a user account. ⚠️ Prefer FULL over "
-		"a plain 'review': an incremental reviewer answers 'already reviewed' on commits it has "
-		"seen on another PR (a reopen, a rebase, a re-PR), and a full review does not." + str_quote
-	)
+	return _zero_review_message(str_quote, set_roster, list_notices or [])
 
 
 #
