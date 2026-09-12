@@ -462,7 +462,7 @@ jobs:
 
       - name: Assemble typecheck workspace
         run: |
-          mkdir -p /tmp/ts-typecheck/src
+          mkdir -p /tmp/ts-typecheck/src/shared/utils
           export PROJECT_NAME="ci-typecheck"
           export PROJECT_DESCRIPTION="CI typecheck workspace"
           envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
@@ -471,11 +471,9 @@ jobs:
           cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
           cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
           # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
-          # a real scaffold lands templates/ts-common/src/ under src/shared/, which is where
-          # @/shared/* imports (e.g. the LogEmitter port, blueprintx#441) resolve from. This
-          # workspace assembly skipped that copy, so tsc could not find a module every real
-          # scaffolded project has.
-          mkdir -p /tmp/ts-typecheck/src/shared
+          # the real scaffold copies ts-common/src/ into the project's src/shared/, which is
+          # where `@/shared/utils/log-emitter` resolves. This workspace is a hand-assembled
+          # stand-in for that scaffold and drifted from it when #436 added the shared source.
           cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared
 
       - name: Install npm dependencies

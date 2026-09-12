@@ -489,6 +489,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_layer_imports_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
+        "$project_path/tests/unit/test_sql_guards_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
         "$project_path/tests/unit/test_gate_integrity_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
@@ -505,6 +507,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_assertion_weakening_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_rmw_race_gate.py" \
         "$project_path/tests/unit/test_rmw_race_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
+        "$project_path/tests/unit/test_ruff_ret_rule.py"
 }
 
 lib_minimal_copy_project_scaffolding() {

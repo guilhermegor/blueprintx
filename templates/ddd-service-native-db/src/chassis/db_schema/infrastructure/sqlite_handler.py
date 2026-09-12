@@ -127,7 +127,6 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 
 	def close(self) -> None:
 		"""No-op because connections are short-lived per operation."""
-		return None
 
 	def _connect(self) -> sqlite3.Connection:
 		"""Create a new SQLite connection.
