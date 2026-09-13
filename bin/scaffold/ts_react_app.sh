@@ -21,9 +21,6 @@ SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -603,9 +600,6 @@ apply_offline_mode() {
     print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
