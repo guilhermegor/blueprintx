@@ -91,6 +91,9 @@ def test_configure_otel_logging_with_endpoint_adds_handler_without_removing_exis
 	installed), and the project's existing local logger handler is untouched — OTel adds,
 	it never replaces.
 	"""
+	# Clear the signal-specific variable: it OVERRIDES the generic one, so an inherited value
+	# would silently decide this test's endpoint. Same reason as the sibling tests above.
+	monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", raising=False)
 	monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 	cls_logger = logging.getLogger("test_otel_logging_with_endpoint")
 	cls_logger.handlers.clear()
@@ -169,3 +172,26 @@ def test_signal_specific_endpoint_alone_enables_export(monkeypatch: pytest.Monke
 	configure_otel_logging(cls_logger)
 
 	assert cls_logger.handlers != []
+
+
+def test_unparseable_endpoint_with_credentials_is_refused_not_raised(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	"""🔴 The should-fail witness: a malformed endpoint must be REFUSED, never raise.
+
+	`urlsplit("http://[").hostname` raises ValueError ("Invalid IPv6 URL"), and this guard runs
+	BEFORE `_install_otel_handler`'s own exception handler — so the crash reached
+	`configure_otel_logging`'s callers, which the generated startup code invokes directly.
+	Refusing (no handler) is the safe direction: credentials must never ride an endpoint we
+	could not even parse.
+	"""
+	monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", raising=False)
+	monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_HEADERS", raising=False)
+	monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://[")
+	monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-token")
+	cls_logger = logging.getLogger("test_otel_logging_unparseable_endpoint")
+	cls_logger.handlers.clear()
+
+	configure_otel_logging(cls_logger)
+
+	assert cls_logger.handlers == []

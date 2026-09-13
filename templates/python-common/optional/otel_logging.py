@@ -138,12 +138,14 @@ def _is_cleartext_with_credentials(str_endpoint: str, bool_has_headers: bool) ->
 	>>> _is_cleartext_with_credentials("http://collector.example:4318", False)
 	False
 	"""
-	return (
-		bool_has_headers
-		and bool(str_endpoint)
-		and not str_endpoint.startswith("https://")
-		and urlsplit(str_endpoint).hostname not in _TUPLE_LOOPBACK_HOSTS
-	)
+	if not bool_has_headers or not str_endpoint:
+		return False
+	try:
+		str_hostname = urlsplit(str_endpoint).hostname
+	except ValueError:
+		# Unparseable endpoint + credentials: refuse. See docs/observability.md.
+		return True
+	return not str_endpoint.startswith("https://") and str_hostname not in _TUPLE_LOOPBACK_HOSTS
 
 
 @type_checker
