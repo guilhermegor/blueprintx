@@ -23,9 +23,6 @@ if [ -n "${_BX_COMMON_LOADED:-}" ]; then
 fi
 _BX_COMMON_LOADED=1
 
-# ============================================================================
-# COLOR VARIABLES
-# ============================================================================
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,9 +32,6 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-# ============================================================================
-# PROMPT HIERARCHY + CANCEL COLOURS (blueprintx#251, blueprintx#253)
-# ============================================================================
 #
 # The six colours above are already each bound to one print_status level
 # (RED=error, GREEN=success, YELLOW=warning, BLUE=info, CYAN=config,
@@ -84,9 +78,6 @@ prompt_sub() {
     printf "    ${PROMPT_SUB}└${NC} %s" "$1"
 }
 
-# ============================================================================
-# print_status — standard status-keyword API
-# ============================================================================
 #
 # Usage:
 #   print_status <level> <message>
@@ -142,9 +133,6 @@ print_status() {
     fi
 }
 
-# ============================================================================
-# print_section — banner separating major phases
-# ============================================================================
 #
 # Usage:
 #   print_section <title>
@@ -156,9 +144,6 @@ print_section() {
     print_status "section" "$title"
 }
 
-# ============================================================================
-# exit_error — print an error and exit
-# ============================================================================
 #
 # Usage:
 #   exit_error <message> [exit_code]
@@ -173,9 +158,6 @@ exit_error() {
     exit "$code"
 }
 
-# ============================================================================
-# resolve_default_branch — find the repo's default branch
-# ============================================================================
 #
 # Usage:
 #   target="$(resolve_default_branch [explicit_name])"
@@ -210,9 +192,6 @@ resolve_default_branch() {
     echo "master"
 }
 
-# ============================================================================
-# Env-wise config prompt + apply (shared by every Python service scaffold)
-# ============================================================================
 #
 # A project's config can ship as a single inputs.yaml/outputs.yaml (default) or
 # as env-suffixed pairs (inputs_dev.yaml/inputs_prd.yaml, …) that `ENV` selects
@@ -241,10 +220,6 @@ prompt_env_wise_config() {
     esac
 }
 
-# ============================================================================
-# ============================================================================
-# strip_bump_version — remove the hand-bump task from the copied poe_tasks.toml
-# ============================================================================
 #
 # Usage:
 #   strip_bump_version "$project_path"
@@ -292,9 +267,6 @@ with open(path_tasks, "w", encoding="utf-8") as fh:
 PY
 }
 
-# ============================================================================
-# add_poe_include — wire a conditional poe task file into poe_tasks.toml
-# ============================================================================
 #
 # Usage:
 #   add_poe_include "$project_path" "poe_tasks.offline.toml"

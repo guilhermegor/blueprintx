@@ -25,9 +25,6 @@ SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -388,9 +385,6 @@ commit_offline_artifacts() {
     git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"

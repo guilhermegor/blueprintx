@@ -1,6 +1,3 @@
-# -------------------
-# BLUEPRINTX SCRIPTS
-# -------------------
 .PHONY: new install preview dev dev_clean dry_run dev-clean dry-run
 
 new:
@@ -37,9 +34,6 @@ dry_run:
 dev-clean: dev_clean
 dry-run: dry_run
 
-# -------------------
-# VIRTUAL ENVIRONMENT
-# -------------------
 .PHONY: init venv update_venv precommit
 
 init: venv precommit
@@ -55,9 +49,6 @@ precommit:
 	@poetry run pre-commit install
 	@poetry run pre-commit install --hook-type commit-msg
 
-# -------------------
-# LINTING
-# -------------------
 .PHONY: lint check_function_length verify_tiers
 
 lint:
@@ -75,9 +66,6 @@ verify_tiers:
 check_function_length:
 	@python3 templates/python-common/bin/check_function_length.py --root .
 
-# -------------------
-# DOCS
-# -------------------
 .PHONY: mkdocs_serve mkdocs_server changelog
 
 mkdocs_serve:
@@ -98,17 +86,11 @@ changelog:
 	@poetry run cz changelog
 	@echo "Regenerated CHANGELOG.md"
 
-# -------------------
-# LICENSES
-# -------------------
 .PHONY: update_licenses
 
 update_licenses:
 	@bash bin/update_licenses.sh
 
-# -------------------
-# HELP
-# -------------------
 .PHONY: help
 
 help:
