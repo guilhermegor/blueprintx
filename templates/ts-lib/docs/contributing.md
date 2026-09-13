@@ -26,6 +26,12 @@ npm run pack:smoke     # npm pack -> install tarball -> require()/import() it (e
 run on every pull request — they catch a broken `exports` map, a missing `files` entry,
 or an unpublished dependency before either reaches the real npm registry.
 
+`npm test` runs Jest in a **randomised order** (`randomize: true` in `jest.config.cjs`) so
+a test that only passes because an earlier one ran first fails instead of passing silently.
+Every run prints the seed used; a failing run also prints the exact re-run command
+(`jest --seed=<N>`). **A test that fails only under a particular seed is a real defect,
+never flakiness to re-run away** — report the seed and the failing test instead of retrying.
+
 ## Releasing (npm OIDC trusted publishing)
 
 Releases publish through **OIDC trusted publishing** — no long-lived `NPM_TOKEN` is
