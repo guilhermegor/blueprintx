@@ -1196,6 +1196,17 @@ def test_a_reworded_file_cap_notice_does_not_classify_as_file_cap() -> None:
 	assert cls_gate.classify_reviewer_notice(str_notice) == cls_gate.NOTICE_OK
 
 
+def test_a_file_cap_near_match_with_a_trailing_suffix_does_not_classify_as_file_cap() -> None:
+	"""The limit number needs its own sentence boundary, not just the words around it.
+
+	An unterminated digit run matches its own prefix inside a longer token — "100x" reads as
+	"100" followed by an unmatched "x", which used to satisfy the pattern anyway.
+	"""
+	cls_gate = _load_gate()
+	str_notice = "Review skipped: 241 files exceed the limit of 100x, contact support."
+	assert cls_gate.classify_reviewer_notice(str_notice) == cls_gate.NOTICE_OK
+
+
 def test_a_file_cap_decline_is_still_a_failure() -> None:
 	"""🔴 THE HARD CONSTRAINT: a structural decline must never read as a pass.
 

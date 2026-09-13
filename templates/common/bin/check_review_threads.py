@@ -632,8 +632,13 @@ _RE_ANY_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 # paid for once. The pattern below requires the FULL sentence ("N files exceed the limit of M"),
 # so "Bot user detected" and every other "Review skipped" reason fall through to NOTICE_OK and
 # get the generic "trigger a review" remedy, which is the correct one for them.
+#
+# The trailing limit number needs its OWN sentence boundary too (blueprintx#458 review) — bare
+# `\d+` with no terminator matches its digit prefix inside a longer token ("100x", "100,000"),
+# so require the vendor's period or end-of-string right after it rather than trusting `\s` to
+# already be there.
 _RE_FILE_CAP = re.compile(
-	r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+", re.IGNORECASE
+	r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+(?:\.|$)", re.IGNORECASE
 )
 
 NOTICE_REVIEW_LIMITED = "REVIEW_LIMITED"
