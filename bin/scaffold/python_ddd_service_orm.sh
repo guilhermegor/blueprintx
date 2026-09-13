@@ -396,6 +396,8 @@ copy_global_config() {
     if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" ]; then
         cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" "$project_path/tests/unit/test_env_config.py"
     fi
+    # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
