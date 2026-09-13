@@ -558,3 +558,27 @@ jobs:
       # generated project, so the script lives at bin/, not templates/python-common/bin/.
       - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
         run: bash bin/check_makefile_pairing.sh
+
+  markdown-lint:
+    name: markdownlint — measured rule set (blueprintx#383)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pymarkdownlnt
+        run: pip install pymarkdownlnt
+
+      # Resolve, don't install, is the wrapper's own contract; here we DO install it, so
+      # the skip path is unreachable and the REQUIRED flag only guards against pymarkdown
+      # silently vanishing from PATH between the step above and this one.
+      - name: Lint every tracked .md file (root + templates/) with the measured rule set
+        env:
+          MARKDOWNLINT_REQUIRED: "1"
+        run: bash bin/ci/check_markdown.sh
