@@ -10,22 +10,22 @@ from capabilities.example_feature.domain.ports import NoteRepository
 
 
 class CreateNote:
-	"""Persist a new note via the repository port."""
+    """Persist a new note via the repository port."""
 
-	def __init__(self, cls_repo: NoteRepository) -> None:
-		self._cls_repo = cls_repo
+    def __init__(self, cls_repo: NoteRepository) -> None:
+        self._cls_repo = cls_repo
 
-	def execute(self, cls_note: Note) -> Note:
-		"""Save and return the persisted note."""
-		return self._cls_repo.add(cls_note)
+    def execute(self, cls_note: Note) -> Note:
+        """Save and return the persisted note."""
+        return self._cls_repo.add(cls_note)
 
 
 class ListNotes:
-	"""Retrieve all notes from the repository."""
+    """Retrieve all notes from the repository."""
 
-	def __init__(self, cls_repo: NoteRepository) -> None:
-		self._cls_repo = cls_repo
+    def __init__(self, cls_repo: NoteRepository) -> None:
+        self._cls_repo = cls_repo
 
-	def execute(self) -> list[Note]:
-		"""Return all stored notes."""
-		return list(self._cls_repo.list())
+    def execute(self) -> list[Note]:
+        """Return all stored notes."""
+        return list(self._cls_repo.list())

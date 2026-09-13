@@ -17,27 +17,27 @@ from .ports import BrowserStepError
 
 
 def resolve_placeholders(str_value: str) -> str:
-	"""Substitute every ``${ENV_VAR}`` reference in ``str_value`` from the environment.
+    """Substitute every ``${ENV_VAR}`` reference in ``str_value`` from the environment.
 
-	Parameters
-	----------
-	str_value : str
-		A single step field value, e.g. ``"${VENDOR_PASSWORD}"``.
+    Parameters
+    ----------
+    str_value : str
+            A single step field value, e.g. ``"${VENDOR_PASSWORD}"``.
 
-	Returns
-	-------
-	str
-		``str_value`` with every ``${ENV_VAR}`` reference replaced.
+    Returns
+    -------
+    str
+            ``str_value`` with every ``${ENV_VAR}`` reference replaced.
 
-	Raises
-	------
-	BrowserStepError
-		If ``str_value`` references an environment variable that is not set.
-	"""
-	try:
-		return Template(str_value).substitute(os.environ)
-	except KeyError as exc:
-		raise BrowserStepError(
-			f"Browser step references unset environment variable {exc.args[0]!r}; "
-			"set it before running this browser-steps flow."
-		) from exc
+    Raises
+    ------
+    BrowserStepError
+            If ``str_value`` references an environment variable that is not set.
+    """
+    try:
+        return Template(str_value).substitute(os.environ)
+    except KeyError as exc:
+        raise BrowserStepError(
+            f"Browser step references unset environment variable {exc.args[0]!r}; "
+            "set it before running this browser-steps flow."
+        ) from exc

@@ -29,18 +29,18 @@ import unicodedata
 # flags the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from collections.abc import Callable
-	from typing import TypeVar
+    from collections.abc import Callable
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 # Accepted ENV values -> config-file suffix (English + pt-BR + short forms). Keys MUST be in
@@ -49,13 +49,13 @@ else:
 # listed value resolves (e.g. "PROD", " prd ", "produção", "Desenvolvimento") without an
 # entry per casing/accent. Anything still unmatched in env-wise mode is a typo and fails loud.
 ENV_TO_SUFFIX: dict[str, str] = {
-	"development": "dev",
-	"desenvolvimento": "dev",
-	"dev": "dev",
-	"production": "prd",
-	"producao": "prd",
-	"prod": "prd",
-	"prd": "prd",
+    "development": "dev",
+    "desenvolvimento": "dev",
+    "dev": "dev",
+    "production": "prd",
+    "producao": "prd",
+    "prod": "prd",
+    "prd": "prd",
 }
 
 _RE_SEPARATORS: re.Pattern[str] = re.compile(r"[\s-]+")
@@ -63,84 +63,84 @@ _RE_SEPARATORS: re.Pattern[str] = re.compile(r"[\s-]+")
 
 @type_checker
 def resolve_config_path(  # complexity-ok: each branch is a distinct, documented config failure
-	str_env: str, str_kind: str, path_dir: Path
+    str_env: str, str_kind: str, path_dir: Path
 ) -> Path:
-	"""Resolve the config file for ``str_kind``, preferring the plain file when present.
+    """Resolve the config file for ``str_kind``, preferring the plain file when present.
 
-	Plain mode (a ``<kind>.yaml`` exists) returns that file regardless of ``str_env``.
-	Otherwise env-wise mode resolves ``<kind>_<suffix>.yaml`` for ``str_env`` and aborts
-	loudly when ``str_env`` maps to no suffix or the resolved file is absent.
+    Plain mode (a ``<kind>.yaml`` exists) returns that file regardless of ``str_env``.
+    Otherwise env-wise mode resolves ``<kind>_<suffix>.yaml`` for ``str_env`` and aborts
+    loudly when ``str_env`` maps to no suffix or the resolved file is absent.
 
-	Parameters
-	----------
-	str_env : str
-		The environment name (``ENV``). Normalised internally (diacritics/case/spacing), so
-		any reasonable spelling of a known value resolves.
-	str_kind : str
-		Config kind (``"inputs"`` / ``"outputs"``).
-	path_dir : pathlib.Path
-		Directory holding the config files.
+    Parameters
+    ----------
+    str_env : str
+            The environment name (``ENV``). Normalised internally (diacritics/case/spacing), so
+            any reasonable spelling of a known value resolves.
+    str_kind : str
+            Config kind (``"inputs"`` / ``"outputs"``).
+    path_dir : pathlib.Path
+            Directory holding the config files.
 
-	Returns
-	-------
-	pathlib.Path
-		The resolved, existing config-file path.
+    Returns
+    -------
+    pathlib.Path
+            The resolved, existing config-file path.
 
-	Raises
-	------
-	SystemExit
-		In env-wise mode, when ``str_env`` maps to no known suffix or the resolved file is
-		absent — after printing a clear error to stderr (exit code 2).
-	"""
-	path_plain = path_dir / f"{str_kind}.yaml"
-	if path_plain.exists():
-		return path_plain
-	str_suffix = ENV_TO_SUFFIX.get(_normalise_keyword(str_env))
-	if str_suffix is None:
-		_abort(f"invalid ENV {str_env!r}; expected one of: {sorted(set(ENV_TO_SUFFIX))}")
-	path_cfg = path_dir / f"{str_kind}_{str_suffix}.yaml"
-	if not path_cfg.exists():
-		_abort(f"missing config file: {path_cfg}")
-	return path_cfg
+    Raises
+    ------
+    SystemExit
+            In env-wise mode, when ``str_env`` maps to no known suffix or the resolved file is
+            absent — after printing a clear error to stderr (exit code 2).
+    """
+    path_plain = path_dir / f"{str_kind}.yaml"
+    if path_plain.exists():
+        return path_plain
+    str_suffix = ENV_TO_SUFFIX.get(_normalise_keyword(str_env))
+    if str_suffix is None:
+        _abort(f"invalid ENV {str_env!r}; expected one of: {sorted(set(ENV_TO_SUFFIX))}")
+    path_cfg = path_dir / f"{str_kind}_{str_suffix}.yaml"
+    if not path_cfg.exists():
+        _abort(f"missing config file: {path_cfg}")
+    return path_cfg
 
 
 @type_checker
 def _normalise_keyword(str_raw: str) -> str:
-	"""Normalise a config keyword for spelling-tolerant matching.
+    """Normalise a config keyword for spelling-tolerant matching.
 
-	Strips diacritics (NFKD + drop combining marks), lower-cases, trims, and folds runs of
-	internal spaces/hyphens to a single ``_`` — so ``"Produção"``, ``"PROD"``, ``" prd "`` and
-	``"mes anterior"`` all reduce to a single canonical token. A literal/ISO value with no
-	letters is returned unchanged save for trimming, so normalisation never collides with one.
+    Strips diacritics (NFKD + drop combining marks), lower-cases, trims, and folds runs of
+    internal spaces/hyphens to a single ``_`` — so ``"Produção"``, ``"PROD"``, ``" prd "`` and
+    ``"mes anterior"`` all reduce to a single canonical token. A literal/ISO value with no
+    letters is returned unchanged save for trimming, so normalisation never collides with one.
 
-	Parameters
-	----------
-	str_raw : str
-		The raw keyword as typed by the operator (e.g. the ``ENV`` value).
+    Parameters
+    ----------
+    str_raw : str
+            The raw keyword as typed by the operator (e.g. the ``ENV`` value).
 
-	Returns
-	-------
-	str
-		The normalised token to test against a canonical set.
-	"""
-	str_decomposed = unicodedata.normalize("NFKD", str_raw)
-	str_ascii = "".join(ch for ch in str_decomposed if not unicodedata.combining(ch))
-	return _RE_SEPARATORS.sub("_", str_ascii.strip().lower())
+    Returns
+    -------
+    str
+            The normalised token to test against a canonical set.
+    """
+    str_decomposed = unicodedata.normalize("NFKD", str_raw)
+    str_ascii = "".join(ch for ch in str_decomposed if not unicodedata.combining(ch))
+    return _RE_SEPARATORS.sub("_", str_ascii.strip().lower())
 
 
 @type_checker
 def _abort(str_reason: str) -> NoReturn:
-	"""Print a startup error to stderr and abort the process (``SystemExit`` code 2).
+    """Print a startup error to stderr and abort the process (``SystemExit`` code 2).
 
-	Parameters
-	----------
-	str_reason : str
-		The reason shown to the operator.
+    Parameters
+    ----------
+    str_reason : str
+            The reason shown to the operator.
 
-	Raises
-	------
-	SystemExit
-		Always (exit code 2).
-	"""
-	print(f"[startup][ERROR] {str_reason}", file=sys.stderr)
-	raise SystemExit(2)
+    Raises
+    ------
+    SystemExit
+            Always (exit code 2).
+    """
+    print(f"[startup][ERROR] {str_reason}", file=sys.stderr)
+    raise SystemExit(2)

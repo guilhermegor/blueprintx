@@ -11,10 +11,10 @@ _ProtocolMeta = type(Protocol)
 
 
 class ProtocolTypeCheckerMeta(_ProtocolMeta, TypeChecker):
-	"""Metaclass for ``Protocol`` classes with runtime type checking.
+    """Metaclass for ``Protocol`` classes with runtime type checking.
 
-	Combines Python's internal ``Protocol`` metaclass (structural subtyping) with
-	:class:`~chassis.typing.type_checker.TypeChecker`. Use as
-	``metaclass=ProtocolTypeCheckerMeta`` on a Protocol port to enforce annotated
-	argument types on direct calls to the stub.
-	"""
+    Combines Python's internal ``Protocol`` metaclass (structural subtyping) with
+    :class:`~chassis.typing.type_checker.TypeChecker`. Use as
+    ``metaclass=ProtocolTypeCheckerMeta`` on a Protocol port to enforce annotated
+    argument types on direct calls to the stub.
+    """

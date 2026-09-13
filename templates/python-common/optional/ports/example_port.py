@@ -29,35 +29,35 @@ _T = TypeVar("_T")
 
 
 class ExamplePort(Generic[_T], metaclass=ABCTypeCheckerMeta):
-	"""Contract for one behavioural operation shared across a macro-section's adapters.
+    """Contract for one behavioural operation shared across a macro-section's adapters.
 
-	``ABCTypeCheckerMeta`` gives both abstract-method enforcement (a partial adapter fails at
-	instantiation) and runtime type checking of every call. Concrete adapters inherit the port
-	and its metaclass — do **not** redeclare ``metaclass`` on a subclass; Python inherits it.
+    ``ABCTypeCheckerMeta`` gives both abstract-method enforcement (a partial adapter fails at
+    instantiation) and runtime type checking of every call. Concrete adapters inherit the port
+    and its metaclass — do **not** redeclare ``metaclass`` on a subclass; Python inherits it.
 
-	Methods
-	-------
-	handle(item)
-		Perform the port's single operation on ``item`` and return the result.
-	"""
+    Methods
+    -------
+    handle(item)
+            Perform the port's single operation on ``item`` and return the result.
+    """
 
-	@abstractmethod
-	def handle(self, item: _T) -> _T:
-		"""Perform the operation on ``item`` and return the result.
+    @abstractmethod
+    def handle(self, item: _T) -> _T:
+        """Perform the operation on ``item`` and return the result.
 
-		Parameters
-		----------
-		item : _T
-			The value the concrete adapter operates on.
+        Parameters
+        ----------
+        item : _T
+                The value the concrete adapter operates on.
 
-		Returns
-		-------
-		_T
-			The operation's result.
+        Returns
+        -------
+        _T
+                The operation's result.
 
-		Raises
-		------
-		NotImplementedError
-			Always — a concrete adapter must override this method.
-		"""
-		raise NotImplementedError
+        Raises
+        ------
+        NotImplementedError
+                Always — a concrete adapter must override this method.
+        """
+        raise NotImplementedError

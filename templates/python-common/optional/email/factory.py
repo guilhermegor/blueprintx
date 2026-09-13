@@ -26,55 +26,55 @@ _TRUE_TOKENS = frozenset({"1", "true", "yes", "on", "y", "t"})
 
 
 def build_email_handler(
-	str_backend: str = "",
-	str_sender: str = "",
-	path_signatures_dir: Path | None = None,
-	logger: Logger | None = None,
+    str_backend: str = "",
+    str_sender: str = "",
+    path_signatures_dir: Path | None = None,
+    logger: Logger | None = None,
 ) -> EmailHandler:
-	"""Build an e-mail handler for the configured backend, returning the port.
+    """Build an e-mail handler for the configured backend, returning the port.
 
-	Parameters
-	----------
-	str_backend : str, optional
-		Backend key (``outlook`` / ``smtp`` / ``none``). When blank, ``EMAIL_BACKEND`` is read
-		(default ``outlook``). A ``none``/blank backend returns a :class:`NullEmailHandler`.
-	str_sender : str, optional
-		The sending account. When blank, ``SENDER_EMAIL`` is read. Used by both backends.
-	path_signatures_dir : pathlib.Path | None, optional
-		Signatures directory passed to the Outlook gateway (ignored by SMTP).
-	logger : logging.Logger | None, optional
-		Run logger passed to the Outlook gateway.
+    Parameters
+    ----------
+    str_backend : str, optional
+            Backend key (``outlook`` / ``smtp`` / ``none``). When blank, ``EMAIL_BACKEND`` is read
+            (default ``outlook``). A ``none``/blank backend returns a :class:`NullEmailHandler`.
+    str_sender : str, optional
+            The sending account. When blank, ``SENDER_EMAIL`` is read. Used by both backends.
+    path_signatures_dir : pathlib.Path | None, optional
+            Signatures directory passed to the Outlook gateway (ignored by SMTP).
+    logger : logging.Logger | None, optional
+            Run logger passed to the Outlook gateway.
 
-	Returns
-	-------
-	EmailHandler
-		An adapter satisfying the port (Outlook, SMTP, or no-op ``NullEmailHandler``).
+    Returns
+    -------
+    EmailHandler
+            An adapter satisfying the port (Outlook, SMTP, or no-op ``NullEmailHandler``).
 
-	Raises
-	------
-	ValueError
-		If ``str_backend`` is a non-blank, unknown key.
+    Raises
+    ------
+    ValueError
+            If ``str_backend`` is a non-blank, unknown key.
 
-	Examples
-	--------
-	>>> cls_email = build_email_handler("outlook", str_sender="ops@example.com")
-	>>> cls_email.send_email("Done", ["team@example.com"], [], "Run finished", [])
-	"""
-	str_resolved = (str_backend or os.getenv("EMAIL_BACKEND", "outlook")).strip().lower()
-	str_from = str_sender or os.getenv("SENDER_EMAIL", "")
-	if str_resolved in _SET_NONE:
-		return NullEmailHandler()
-	if str_resolved == "outlook":
-		return OutlookEmailHandler(
-			OutlookGateway(str_from, path_signatures_dir=path_signatures_dir, logger=logger)
-		)
-	if str_resolved == "smtp":
-		return SmtpEmailHandler(
-			str_host=os.getenv("SMTP_HOST", ""),
-			int_port=int(os.getenv("SMTP_PORT", "587") or "587"),
-			str_sender=str_from,
-			str_user=os.getenv("SMTP_USER", ""),
-			str_password=os.getenv("SMTP_PASSWORD", ""),
-			bool_use_tls=os.getenv("SMTP_USE_TLS", "true").strip().lower() in _TRUE_TOKENS,
-		)
-	raise ValueError(f"Unsupported EMAIL_BACKEND {str_resolved!r}. Use: outlook, smtp, none.")
+    Examples
+    --------
+    >>> cls_email = build_email_handler("outlook", str_sender="ops@example.com")
+    >>> cls_email.send_email("Done", ["team@example.com"], [], "Run finished", [])
+    """
+    str_resolved = (str_backend or os.getenv("EMAIL_BACKEND", "outlook")).strip().lower()
+    str_from = str_sender or os.getenv("SENDER_EMAIL", "")
+    if str_resolved in _SET_NONE:
+        return NullEmailHandler()
+    if str_resolved == "outlook":
+        return OutlookEmailHandler(
+            OutlookGateway(str_from, path_signatures_dir=path_signatures_dir, logger=logger)
+        )
+    if str_resolved == "smtp":
+        return SmtpEmailHandler(
+            str_host=os.getenv("SMTP_HOST", ""),
+            int_port=int(os.getenv("SMTP_PORT", "587") or "587"),
+            str_sender=str_from,
+            str_user=os.getenv("SMTP_USER", ""),
+            str_password=os.getenv("SMTP_PASSWORD", ""),
+            bool_use_tls=os.getenv("SMTP_USE_TLS", "true").strip().lower() in _TRUE_TOKENS,
+        )
+    raise ValueError(f"Unsupported EMAIL_BACKEND {str_resolved!r}. Use: outlook, smtp, none.")

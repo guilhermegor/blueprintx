@@ -68,65 +68,65 @@ import tokenize
 # word, so one hit is enough signal. Deliberately absent: "ver" and "dar", which collide with the
 # abbreviations "ver"(sion) and a Danish/Dutch reading, and every 1-2 letter word.
 SET_PT_WORDS = frozenset(
-	{
-		"ainda",
-		"antes",
-		"apenas",
-		"aqui",
-		"cada",
-		"com",
-		"das",
-		"depois",
-		"dos",
-		"então",
-		"entre",
-		"essa",
-		"esse",
-		"esta",
-		"está",
-		"estão",
-		"este",
-		"exige",
-		"faz",
-		"fica",
-		"foi",
-		"isso",
-		"isto",
-		"já",
-		"mais",
-		"menos",
-		"mesmo",
-		"muito",
-		"não",
-		"nunca",
-		"onde",
-		"para",
-		"pela",
-		"pelo",
-		"pode",
-		"pois",
-		"porque",
-		"precisa",
-		"quais",
-		"qual",
-		"quando",
-		"que",
-		"quem",
-		"seja",
-		"sem",
-		"ser",
-		"sobre",
-		"são",
-		"tem",
-		"têm",
-		"toda",
-		"todas",
-		"todo",
-		"todos",
-		"também",
-		"uma",
-		"vai",
-	}
+    {
+        "ainda",
+        "antes",
+        "apenas",
+        "aqui",
+        "cada",
+        "com",
+        "das",
+        "depois",
+        "dos",
+        "então",
+        "entre",
+        "essa",
+        "esse",
+        "esta",
+        "está",
+        "estão",
+        "este",
+        "exige",
+        "faz",
+        "fica",
+        "foi",
+        "isso",
+        "isto",
+        "já",
+        "mais",
+        "menos",
+        "mesmo",
+        "muito",
+        "não",
+        "nunca",
+        "onde",
+        "para",
+        "pela",
+        "pelo",
+        "pode",
+        "pois",
+        "porque",
+        "precisa",
+        "quais",
+        "qual",
+        "quando",
+        "que",
+        "quem",
+        "seja",
+        "sem",
+        "ser",
+        "sobre",
+        "são",
+        "tem",
+        "têm",
+        "toda",
+        "todas",
+        "todo",
+        "todos",
+        "também",
+        "uma",
+        "vai",
+    }
 )
 
 STR_ESCAPE = "lang:pt-ok"
@@ -147,15 +147,15 @@ TUPLE_TERMS_OF_ART: tuple = ()
 
 # File types whose full-line comments are read, by comment marker.
 DICT_MARKERS = {
-	".cfg": "#",
-	".env": "#",
-	".example": "#",
-	".ini": "#",
-	".sh": "#",
-	".sql": "--",
-	".toml": "#",
-	".yaml": "#",
-	".yml": "#",
+    ".cfg": "#",
+    ".env": "#",
+    ".example": "#",
+    ".ini": "#",
+    ".sh": "#",
+    ".sql": "--",
+    ".toml": "#",
+    ".yaml": "#",
+    ".yml": "#",
 }
 
 # Audit mode is DENY-BY-DEFAULT: every file whose extension appears in DICT_MARKERS (plus
@@ -179,22 +179,22 @@ DICT_MARKERS = {
 # purpose (locale, verbatim bytes) — everything else here is defense against a build artifact
 # someone force-added by mistake, since `git ls-files` would otherwise surface it too.
 TUPLE_SKIP_DIRS = (
-	".git",
-	".venv",
-	".mypy_cache",
-	".pytest_cache",
-	".ruff_cache",
-	"__pycache__",
-	"node_modules",
-	"htmlcov",
-	"dist",
-	"build",
-	"site",
-	# The published documentation is written in the project's locale ON PURPOSE — that is the
-	# other half of the boundary this gate enforces, so it must never be scanned.
-	"docs",
-	# Verbatim external bytes; normalising or judging a captured oracle corrupts its purpose.
-	"fixtures",
+    ".git",
+    ".venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "node_modules",
+    "htmlcov",
+    "dist",
+    "build",
+    "site",
+    # The published documentation is written in the project's locale ON PURPOSE — that is the
+    # other half of the boundary this gate enforces, so it must never be scanned.
+    "docs",
+    # Verbatim external bytes; normalising or judging a captured oracle corrupts its purpose.
+    "fixtures",
 )
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -203,432 +203,434 @@ PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 # ALL-CAPS acronyms. The acronym rule is what stops Microsoft `COM` from reading as the
 # Portuguese preposition "com" — five hits across the Outlook gateway alone.
 TUPLE_REDACTIONS = (
-	re.compile(r"``[^`]+``"),
-	re.compile(r"`[^`]*`"),
-	re.compile(r"\"[^\"]*\""),
-	re.compile(r"'[^']*'"),
-	re.compile(r"https?://\S+"),
-	re.compile(r"\S+\.\S+"),
-	re.compile(r"\b[A-ZÀ-Ý0-9]{2,}\b"),
+    re.compile(r"``[^`]+``"),
+    re.compile(r"`[^`]*`"),
+    re.compile(r"\"[^\"]*\""),
+    re.compile(r"'[^']*'"),
+    re.compile(r"https?://\S+"),
+    re.compile(r"\S+\.\S+"),
+    re.compile(r"\b[A-ZÀ-Ý0-9]{2,}\b"),
 )
 
 RE_WORD = re.compile(r"[0-9A-Za-zÀ-ÿ_]+")
 
 
 def _blank(cls_match: re.Match) -> str:
-	"""Return as many spaces as the match consumed.
+    """Return as many spaces as the match consumed.
 
-	Parameters
-	----------
-	cls_match : re.Match
-		The span being redacted.
+    Parameters
+    ----------
+    cls_match : re.Match
+            The span being redacted.
 
-	Returns
-	-------
-	str
-		A run of spaces the same length as the match, so line and column offsets survive.
-	"""
-	return " " * len(cls_match.group(0))
+    Returns
+    -------
+    str
+            A run of spaces the same length as the match, so line and column offsets survive.
+    """
+    return " " * len(cls_match.group(0))
 
 
 def redact(str_text: str) -> str:
-	"""Blank out every span whose language is not the comment's own, preserving text geometry.
+    """Blank out every span whose language is not the comment's own, preserving text geometry.
 
-	Each substitution writes back **as many spaces as it removed**, so the result stays aligned
-	with the input line for line and column for column. That is what lets a finding name the line
-	the offending word is really on, rather than the line the comment block happens to start at.
+    Each substitution writes back **as many spaces as it removed**, so the result stays aligned
+    with the input line for line and column for column. That is what lets a finding name the line
+    the offending word is really on, rather than the line the comment block happens to start at.
 
-	Parameters
-	----------
-	str_text : str
-		A comment block, markers already stripped.
+    Parameters
+    ----------
+    str_text : str
+            A comment block, markers already stripped.
 
-	Returns
-	-------
-	str
-		The same text with escaped lines, terms of art, quoted/backticked spans, URLs, dotted
-		tokens and ALL-CAPS acronyms replaced by spaces.
-	"""
-	# The escape works one line at a time and never per block, because a block is joined from
-	# consecutive comment lines — letting one escaped line silence its neighbours would quietly
-	# exempt whole headers.
-	list_lines = [
-		" " * len(str_line) if STR_ESCAPE in str_line else str_line
-		for str_line in str_text.splitlines()
-	]
-	str_clean = "\n".join(list_lines)
-	for str_term in TUPLE_TERMS_OF_ART:
-		str_clean = re.sub(re.escape(str_term), _blank, str_clean, flags=re.IGNORECASE)
-	for re_span in TUPLE_REDACTIONS:
-		str_clean = re_span.sub(_blank, str_clean)
-	return str_clean
+    Returns
+    -------
+    str
+            The same text with escaped lines, terms of art, quoted/backticked spans, URLs, dotted
+            tokens and ALL-CAPS acronyms replaced by spaces.
+    """
+    # The escape works one line at a time and never per block, because a block is joined from
+    # consecutive comment lines — letting one escaped line silence its neighbours would quietly
+    # exempt whole headers.
+    list_lines = [
+        " " * len(str_line) if STR_ESCAPE in str_line else str_line
+        for str_line in str_text.splitlines()
+    ]
+    str_clean = "\n".join(list_lines)
+    for str_term in TUPLE_TERMS_OF_ART:
+        str_clean = re.sub(re.escape(str_term), _blank, str_clean, flags=re.IGNORECASE)
+    for re_span in TUPLE_REDACTIONS:
+        str_clean = re_span.sub(_blank, str_clean)
+    return str_clean
 
 
 def portuguese_words(str_text: str) -> list:
-	"""Return the Portuguese function words a comment carries, once redaction has run.
+    """Return the Portuguese function words a comment carries, once redaction has run.
 
-	Parameters
-	----------
-	str_text : str
-		One comment block's text, markers already stripped.
+    Parameters
+    ----------
+    str_text : str
+            One comment block's text, markers already stripped.
 
-	Returns
-	-------
-	list of str
-		The matched words in order of appearance, de-duplicated; empty when the text reads as
-		English, quotes its Portuguese, or carries the escape marker.
-	"""
-	list_hits = []
-	for str_word in RE_WORD.findall(redact(str_text).lower()):
-		if str_word in SET_PT_WORDS and str_word not in list_hits:
-			list_hits.append(str_word)
-	return list_hits
+    Returns
+    -------
+    list of str
+            The matched words in order of appearance, de-duplicated; empty when the text reads as
+            English, quotes its Portuguese, or carries the escape marker.
+    """
+    list_hits = []
+    for str_word in RE_WORD.findall(redact(str_text).lower()):
+        if str_word in SET_PT_WORDS and str_word not in list_hits:
+            list_hits.append(str_word)
+    return list_hits
 
 
 def marker_comments(str_source: str, str_marker: str) -> list:
-	"""Return the comment BLOCKS of a marker-delimited file.
+    """Return the comment BLOCKS of a marker-delimited file.
 
-	Only lines whose first non-space characters are the marker count, so a marker appearing
-	inside a quoted value is never mistaken for a comment.
+    Only lines whose first non-space characters are the marker count, so a marker appearing
+    inside a quoted value is never mistaken for a comment.
 
-	⚠️ **Consecutive comment lines are joined into one block, and that is load-bearing** — a
-	sentence, and above all a *quotation*, routinely spans several comment lines. Redacting line
-	by line sees an opening quote with no closing one, so the quoted span survives redaction and
-	the quotation's own language is charged to the comment around it. Measured: the verbatim
-	user decision quoted across two lines in ``view/recon_email_body.py`` was reported as a
-	violation, which it is not.
+    ⚠️ **Consecutive comment lines are joined into one block, and that is load-bearing** — a
+    sentence, and above all a *quotation*, routinely spans several comment lines. Redacting line
+    by line sees an opening quote with no closing one, so the quoted span survives redaction and
+    the quotation's own language is charged to the comment around it. Measured: the verbatim
+    user decision quoted across two lines in ``view/recon_email_body.py`` was reported as a
+    violation, which it is not.
 
-	Parameters
-	----------
-	str_source : str
-		The file's text.
-	str_marker : str
-		The comment marker (``#`` or ``--``).
+    Parameters
+    ----------
+    str_source : str
+            The file's text.
+    str_marker : str
+            The comment marker (``#`` or ``--``).
 
-	Returns
-	-------
-	list of tuple
-		One ``(int_line, str_text)`` pair per block, the line being where the block starts.
-	"""
-	list_out = []
-	list_block: list = []
-	int_start = 0
-	for int_line, str_line in enumerate(str_source.splitlines(), 1):
-		str_stripped = str_line.lstrip()
-		if str_stripped.startswith(str_marker):
-			if not list_block:
-				int_start = int_line
-			list_block.append(str_stripped[len(str_marker) :])
-			continue
-		if list_block:
-			list_out.append((int_start, "\n".join(list_block)))
-			list_block = []
-	if list_block:
-		list_out.append((int_start, "\n".join(list_block)))
-	return list_out
+    Returns
+    -------
+    list of tuple
+            One ``(int_line, str_text)`` pair per block, the line being where the block starts.
+    """
+    list_out = []
+    list_block: list = []
+    int_start = 0
+    for int_line, str_line in enumerate(str_source.splitlines(), 1):
+        str_stripped = str_line.lstrip()
+        if str_stripped.startswith(str_marker):
+            if not list_block:
+                int_start = int_line
+            list_block.append(str_stripped[len(str_marker) :])
+            continue
+        if list_block:
+            list_out.append((int_start, "\n".join(list_block)))
+            list_block = []
+    if list_block:
+        list_out.append((int_start, "\n".join(list_block)))
+    return list_out
 
 
 def python_comments(str_source: str) -> list:
-	"""Return a Python file's comments and docstrings.
+    """Return a Python file's comments and docstrings.
 
-	``tokenize`` is what makes this exact — a ``#`` inside a string literal is a string, not a
-	comment, and only the tokenizer knows the difference. Docstrings come from ``ast`` for the
-	same reason: they are the other place English prose lives in a module.
+    ``tokenize`` is what makes this exact — a ``#`` inside a string literal is a string, not a
+    comment, and only the tokenizer knows the difference. Docstrings come from ``ast`` for the
+    same reason: they are the other place English prose lives in a module.
 
-	Parameters
-	----------
-	str_source : str
-		The file's text.
+    Parameters
+    ----------
+    str_source : str
+            The file's text.
 
-	Returns
-	-------
-	list of tuple
-		One ``(int_line, str_text)`` pair per comment and per docstring, 1-indexed. A file that
-		does not parse yields nothing — a syntax error is ruff's finding to report, not this
-		gate's.
-	"""
-	# Two independent extractions, each with its own parser and its own failure mode: `#`
-	# comments come from tokenize, docstrings from the AST. They were one body, so a tokenize
-	# failure returned early and silently skipped the docstrings as well.
-	return _comment_blocks(str_source) + _docstring_blocks(str_source)
+    Returns
+    -------
+    list of tuple
+            One ``(int_line, str_text)`` pair per comment and per docstring, 1-indexed. A file that
+            does not parse yields nothing — a syntax error is ruff's finding to report, not this
+            gate's.
+    """
+    # Two independent extractions, each with its own parser and its own failure mode: `#`
+    # comments come from tokenize, docstrings from the AST. They were one body, so a tokenize
+    # failure returned early and silently skipped the docstrings as well.
+    return _comment_blocks(str_source) + _docstring_blocks(str_source)
 
 
 def _comment_blocks(str_source: str) -> list:
-	"""Group consecutive ``#`` comment lines into blocks, keyed by the block's first line.
+    """Group consecutive ``#`` comment lines into blocks, keyed by the block's first line.
 
-	⚠️ BLOCKS, not lines. A quotation or an example spanning several comment lines otherwise
-	has its language charged to whichever line it lands on, which was measured as a large
-	share of this gate's first-draft false positives.
+    ⚠️ BLOCKS, not lines. A quotation or an example spanning several comment lines otherwise
+    has its language charged to whichever line it lands on, which was measured as a large
+    share of this gate's first-draft false positives.
 
-	Parameters
-	----------
-	str_source : str
-		Python source text.
+    Parameters
+    ----------
+    str_source : str
+            Python source text.
 
-	Returns
-	-------
-	list
-		``(first_line, block_text)`` pairs; empty when the source cannot be tokenised.
-	"""
-	list_out: list = []
-	list_block: list = []
-	int_start = 0
-	int_previous = -2
-	try:
-		for cls_token in tokenize.generate_tokens(iter(str_source.splitlines(True)).__next__):
-			if cls_token.type != tokenize.COMMENT:
-				continue
-			int_line = cls_token.start[0]
-			if int_line != int_previous + 1 and list_block:
-				list_out.append((int_start, "\n".join(list_block)))
-				list_block = []
-			if not list_block:
-				int_start = int_line
-			list_block.append(cls_token.string.lstrip("#"))
-			int_previous = int_line
-	except (tokenize.TokenError, IndentationError, SyntaxError):
-		return []
-	if list_block:
-		list_out.append((int_start, "\n".join(list_block)))
-	return list_out
+    Returns
+    -------
+    list
+            ``(first_line, block_text)`` pairs; empty when the source cannot be tokenised.
+    """
+    list_out: list = []
+    list_block: list = []
+    int_start = 0
+    int_previous = -2
+    try:
+        for cls_token in tokenize.generate_tokens(iter(str_source.splitlines(True)).__next__):
+            if cls_token.type != tokenize.COMMENT:
+                continue
+            int_line = cls_token.start[0]
+            if int_line != int_previous + 1 and list_block:
+                list_out.append((int_start, "\n".join(list_block)))
+                list_block = []
+            if not list_block:
+                int_start = int_line
+            list_block.append(cls_token.string.lstrip("#"))
+            int_previous = int_line
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return []
+    if list_block:
+        list_out.append((int_start, "\n".join(list_block)))
+    return list_out
 
 
 def _docstring_blocks(str_source: str) -> list:
-	"""Collect every module, class and function docstring, keyed by its own first line.
+    """Collect every module, class and function docstring, keyed by its own first line.
 
-	Parameters
-	----------
-	str_source : str
-		Python source text.
+    Parameters
+    ----------
+    str_source : str
+            Python source text.
 
-	Returns
-	-------
-	list
-		``(line, docstring)`` pairs; empty when the source cannot be parsed.
-	"""
-	try:
-		cls_tree = ast.parse(str_source)
-	except SyntaxError:
-		return []
-	tuple_holders = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
-	return [
-		(cls_node.body[0].lineno, ast.get_docstring(cls_node, clean=False))
-		for cls_node in ast.walk(cls_tree)
-		if isinstance(cls_node, tuple_holders) and ast.get_docstring(cls_node, clean=False)
-	]
+    Returns
+    -------
+    list
+            ``(line, docstring)`` pairs; empty when the source cannot be parsed.
+    """
+    try:
+        cls_tree = ast.parse(str_source)
+    except SyntaxError:
+        return []
+    tuple_holders = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    return [
+        (cls_node.body[0].lineno, ast.get_docstring(cls_node, clean=False))
+        for cls_node in ast.walk(cls_tree)
+        if isinstance(cls_node, tuple_holders) and ast.get_docstring(cls_node, clean=False)
+    ]
 
 
 def _line_offset(str_text: str, str_word: str) -> int:
-	"""Return how many lines into a block the first occurrence of a word sits.
+    """Return how many lines into a block the first occurrence of a word sits.
 
-	Parameters
-	----------
-	str_text : str
-		The whole comment block.
-	str_word : str
-		The matched word.
+    Parameters
+    ----------
+    str_text : str
+            The whole comment block.
+    str_word : str
+            The matched word.
 
-	Returns
-	-------
-	int
-		The 0-based line offset, found in the **redacted** block so a quoted occurrence earlier in
-		the block cannot win the race against the real one. 0 when it cannot be located.
-	"""
-	re_word = re.compile(rf"\b{re.escape(str_word)}\b", re.IGNORECASE)
-	for int_offset, str_line in enumerate(redact(str_text).splitlines()):
-		if re_word.search(str_line):
-			return int_offset
-	return 0
+    Returns
+    -------
+    int
+            The 0-based line offset, found in the **redacted** block so a quoted
+            occurrence earlier in
+            the block cannot win the race against the real one. 0 when it cannot be located.
+    """
+    re_word = re.compile(rf"\b{re.escape(str_word)}\b", re.IGNORECASE)
+    for int_offset, str_line in enumerate(redact(str_text).splitlines()):
+        if re_word.search(str_line):
+            return int_offset
+    return 0
 
 
 def _excerpt_around(str_text: str, str_word: str) -> str:
-	"""Return the offending word in its immediate context.
+    """Return the offending word in its immediate context.
 
-	A block can be forty lines long, so quoting its opening is useless — the reader needs the
-	sentence the word is actually in.
+    A block can be forty lines long, so quoting its opening is useless — the reader needs the
+    sentence the word is actually in.
 
-	Parameters
-	----------
-	str_text : str
-		The whole comment block.
-	str_word : str
-		The first matched word.
+    Parameters
+    ----------
+    str_text : str
+            The whole comment block.
+    str_word : str
+            The first matched word.
 
-	Returns
-	-------
-	str
-		Up to ~35 characters either side of the match, whitespace collapsed.
-	"""
-	str_flat = " ".join(str_text.split())
-	int_at = str_flat.lower().find(str_word)
-	if int_at < 0:
-		return str_flat[:80]
-	int_from = max(0, int_at - 35)
-	str_slice = str_flat[int_from : int_at + len(str_word) + 35]
-	return f"…{str_slice}…" if int_from else f"{str_slice}…"
+    Returns
+    -------
+    str
+            Up to ~35 characters either side of the match, whitespace collapsed.
+    """
+    str_flat = " ".join(str_text.split())
+    int_at = str_flat.lower().find(str_word)
+    if int_at < 0:
+        return str_flat[:80]
+    int_from = max(0, int_at - 35)
+    str_slice = str_flat[int_from : int_at + len(str_word) + 35]
+    return f"…{str_slice}…" if int_from else f"{str_slice}…"
 
 
 def _display_path(path_file: pathlib.Path) -> str:
-	"""Return the shortest readable form of a path for a message.
+    """Return the shortest readable form of a path for a message.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		The file being reported.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+            The file being reported.
 
-	Returns
-	-------
-	str
-		Repo-relative when the file lives inside the repository, absolute otherwise. A file
-		outside the repo is legitimate (a test invoking the gate on a temp file), so this must
-		never raise.
-	"""
-	try:
-		return str(path_file.relative_to(PATH_ROOT))
-	except ValueError:
-		return str(path_file)
+    Returns
+    -------
+    str
+            Repo-relative when the file lives inside the repository, absolute otherwise. A file
+            outside the repo is legitimate (a test invoking the gate on a temp file), so this must
+            never raise.
+    """
+    try:
+        return str(path_file.relative_to(PATH_ROOT))
+    except ValueError:
+        return str(path_file)
 
 
 def file_problems(path_file: pathlib.Path) -> list:
-	"""Return the Portuguese comment lines of one file.
+    """Return the Portuguese comment lines of one file.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		The file to read. An unsupported extension yields nothing.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+            The file to read. An unsupported extension yields nothing.
 
-	Returns
-	-------
-	list of str
-		One ``path:line: words -- text`` message per offending comment.
-	"""
-	bool_python = path_file.suffix == ".py"
-	str_marker = DICT_MARKERS.get(path_file.suffix, "")
-	if not bool_python and not str_marker:
-		return []
-	try:
-		str_source = path_file.read_text(encoding="utf-8")
-	except (OSError, UnicodeDecodeError):
-		return []
-	list_comments = (
-		python_comments(str_source) if bool_python else marker_comments(str_source, str_marker)
-	)
-	list_out = []
-	for int_line, str_text in list_comments:
-		list_hits = portuguese_words(str_text)
-		if list_hits:
-			int_at = int_line + _line_offset(str_text, list_hits[0])
-			list_out.append(
-				f"❌ {_display_path(path_file)}:{int_at}: reads as Portuguese "
-				f"[{', '.join(list_hits)}] -- {_excerpt_around(str_text, list_hits[0])}"
-			)
-	return list_out
+    Returns
+    -------
+    list of str
+            One ``path:line: words -- text`` message per offending comment.
+    """
+    bool_python = path_file.suffix == ".py"
+    str_marker = DICT_MARKERS.get(path_file.suffix, "")
+    if not bool_python and not str_marker:
+        return []
+    try:
+        str_source = path_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    list_comments = (
+        python_comments(str_source) if bool_python else marker_comments(str_source, str_marker)
+    )
+    list_out = []
+    for int_line, str_text in list_comments:
+        list_hits = portuguese_words(str_text)
+        if list_hits:
+            int_at = int_line + _line_offset(str_text, list_hits[0])
+            list_out.append(
+                f"❌ {_display_path(path_file)}:{int_at}: reads as Portuguese "
+                f"[{', '.join(list_hits)}] -- {_excerpt_around(str_text, list_hits[0])}"
+            )
+    return list_out
 
 
 def tracked_files() -> list:
-	"""Return every file ``git`` tracks under ``PATH_ROOT``, relative to it.
+    """Return every file ``git`` tracks under ``PATH_ROOT``, relative to it.
 
-	`git ls-files` scopes to the cwd it is run in and returns paths already relative to that
-	cwd — exactly the shape the old ``rglob`` + ``relative_to(PATH_ROOT)`` walk produced, with
-	no skip-list needed for anything a worktree or a cache directory could contain: neither is
-	ever tracked by the main working tree.
+    `git ls-files` scopes to the cwd it is run in and returns paths already relative to that
+    cwd — exactly the shape the old ``rglob`` + ``relative_to(PATH_ROOT)`` walk produced, with
+    no skip-list needed for anything a worktree or a cache directory could contain: neither is
+    ever tracked by the main working tree.
 
-	Returns
-	-------
-	list of pathlib.Path
-		Tracked paths, relative to ``PATH_ROOT``. Empty when `git` is unavailable or
-		``PATH_ROOT`` is not inside a work tree — the caller's zero-discovery guard turns that
-		into a failure rather than a silent pass.
-	"""
-	try:
-		# Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
-		# resolution BY DESIGN: this must use the `git` the developer's PATH selects — the one
-		# their shell, pre-commit and CI all use — not a path this file hardcodes.
-		cls_result = subprocess.run(  # noqa: S603
-			["git", "ls-files"],  # noqa: S607
-			cwd=PATH_ROOT,
-			capture_output=True,
-			text=True,
-			check=True,
-		)
-	except (OSError, subprocess.CalledProcessError) as cls_error:
-		print(f"❌ `git ls-files` failed under {PATH_ROOT}: {cls_error}", file=sys.stderr)
-		return []
-	return [pathlib.Path(str_line) for str_line in cls_result.stdout.splitlines() if str_line]
+    Returns
+    -------
+    list of pathlib.Path
+            Tracked paths, relative to ``PATH_ROOT``. Empty when `git` is unavailable or
+            ``PATH_ROOT`` is not inside a work tree — the caller's zero-discovery guard turns that
+            into a failure rather than a silent pass.
+    """
+    try:
+        # Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
+        # resolution BY DESIGN: this must use the `git` the developer's PATH selects — the one
+        # their shell, pre-commit and CI all use — not a path this file hardcodes.
+        cls_result = subprocess.run(  # noqa: S603
+            ["git", "ls-files"],  # noqa: S607
+            cwd=PATH_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as cls_error:
+        print(f"❌ `git ls-files` failed under {PATH_ROOT}: {cls_error}", file=sys.stderr)
+        return []
+    return [pathlib.Path(str_line) for str_line in cls_result.stdout.splitlines() if str_line]
 
 
 def audit_paths() -> list:
-	"""Return the files scanned when no filenames are passed.
+    """Return the files scanned when no filenames are passed.
 
-	Returns
-	-------
-	list of pathlib.Path
-		Every TRACKED file carrying a supported extension, minus the skipped directories, sorted.
-	"""
-	set_supported = set(DICT_MARKERS) | {".py"}
-	list_paths = [
-		PATH_ROOT / path_rel
-		for path_rel in tracked_files()
-		if path_rel.suffix in set_supported
-		# `.env.example` carries `#` comments but its suffix is `.example`, already in
-		# DICT_MARKERS, so it is picked up above with no special case.
-		and not any(str_part in TUPLE_SKIP_DIRS for str_part in path_rel.parts)
-	]
-	return sorted(set(list_paths))
+    Returns
+    -------
+    list of pathlib.Path
+            Every TRACKED file carrying a supported extension, minus the skipped
+            directories, sorted.
+    """
+    set_supported = set(DICT_MARKERS) | {".py"}
+    list_paths = [
+        PATH_ROOT / path_rel
+        for path_rel in tracked_files()
+        if path_rel.suffix in set_supported
+        # `.env.example` carries `#` comments but its suffix is `.example`, already in
+        # DICT_MARKERS, so it is picked up above with no special case.
+        and not any(str_part in TUPLE_SKIP_DIRS for str_part in path_rel.parts)
+    ]
+    return sorted(set(list_paths))
 
 
 def main(list_argv: list) -> int:
-	"""Check every named file's comments for Portuguese prose.
+    """Check every named file's comments for Portuguese prose.
 
-	Parameters
-	----------
-	list_argv : list of str
-		Filenames, as pre-commit passes them. Empty means audit the whole repository.
+    Parameters
+    ----------
+    list_argv : list of str
+            Filenames, as pre-commit passes them. Empty means audit the whole repository.
 
-	Returns
-	-------
-	int
-		0 when every comment reads as English, 1 on a violation.
-	"""
-	bool_audit = not list_argv
-	list_paths = (
-		[pathlib.Path(str_name).resolve() for str_name in list_argv]
-		if list_argv
-		else audit_paths()
-	)
+    Returns
+    -------
+    int
+            0 when every comment reads as English, 1 on a violation.
+    """
+    bool_audit = not list_argv
+    list_paths = (
+        [pathlib.Path(str_name).resolve() for str_name in list_argv]
+        if list_argv
+        else audit_paths()
+    )
 
-	# ⚠️ In audit mode, ZERO discovered files is a failure, not a pass. Scanning nothing
-	# produces no findings, so a gate whose globs stopped matching — a renamed layout, a
-	# scaffold that puts sources elsewhere — reports success forever, and is green precisely
-	# because it checks nothing. When filenames are passed in, the hook is driving, and receiving
-	# none of them simply means nothing matching was staged — so there is nothing to check.
-	if bool_audit and not list_paths:
-		print(
-			f"❌ no supported file found under {PATH_ROOT} — this gate would pass vacuously. "
-			f"Check DICT_MARKERS and TUPLE_SKIP_DIRS against the layout."
-		)
-		return 1
+    # ⚠️ In audit mode, ZERO discovered files is a failure, not a pass. Scanning nothing
+    # produces no findings, so a gate whose globs stopped matching — a renamed layout, a
+    # scaffold that puts sources elsewhere — reports success forever, and is green precisely
+    # because it checks nothing. When filenames are passed in, the hook is driving, and receiving
+    # none of them simply means nothing matching was staged — so there is nothing to check.
+    if bool_audit and not list_paths:
+        print(
+            f"❌ no supported file found under {PATH_ROOT} — this gate would pass vacuously. "
+            f"Check DICT_MARKERS and TUPLE_SKIP_DIRS against the layout."
+        )
+        return 1
 
-	list_problems = []
-	for path_file in list_paths:
-		list_problems.extend(file_problems(path_file))
-	for str_problem in list_problems:
-		print(str_problem)
+    list_problems = []
+    for path_file in list_paths:
+        list_problems.extend(file_problems(path_file))
+    for str_problem in list_problems:
+        print(str_problem)
 
-	if not list_problems:
-		# Report the FILE COUNT on success, not just silence. A gate that prints nothing when
-		# clean is indistinguishable from a gate that did not run — and this whole file exists
-		# because an unenforced convention looked identical to an enforced one.
-		print(f"✅ documentation-language boundary OK ({len(list_paths)} file(s) checked)")
-	if list_problems:
-		print(
-			f"\n{len(list_problems)} comment(s) read as Portuguese. Comments, docstrings and "
-			f"symbol names are English (root CLAUDE.md, 'Documentation language'); README.md and "
-			f"docs/ are Portuguese. If a flagged line is genuinely English and merely quotes "
-			f"Portuguese text, add {STR_ESCAPE} to it rather than rewording the sentence."
-		)
-	return 1 if list_problems else 0
+    if not list_problems:
+        # Report the FILE COUNT on success, not just silence. A gate that prints nothing when
+        # clean is indistinguishable from a gate that did not run — and this whole file exists
+        # because an unenforced convention looked identical to an enforced one.
+        print(f"✅ documentation-language boundary OK ({len(list_paths)} file(s) checked)")
+    if list_problems:
+        print(
+            f"\n{len(list_problems)} comment(s) read as Portuguese. Comments, docstrings and "
+            f"symbol names are English (root CLAUDE.md, 'Documentation language'); README.md and "
+            f"docs/ are Portuguese. If a flagged line is genuinely English and merely quotes "
+            f"Portuguese text, add {STR_ESCAPE} to it rather than rewording the sentence."
+        )
+    return 1 if list_problems else 0
 
 
 if __name__ == "__main__":
-	sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:]))
