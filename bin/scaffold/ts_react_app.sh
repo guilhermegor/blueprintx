@@ -328,23 +328,11 @@ copy_shared_ts_source() {
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src/shared"
 }
 
-copy_common_templates() {
+# Static ts-common assets that need no envsubst rendering. Split out of
+# copy_common_templates() (#464) to keep that function under the 60-line
+# function-length gate once it grew a package-lock.json copy line.
+copy_static_ts_common_files() {
     local project_path="$1"
-
-    print_status "info" "Applying common TypeScript templates..."
-
-    PROJECT_LICENSE="${LICENSE_CHOICE}"
-    export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME \
-           STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
-        < "$COMMON_TEMPLATE_ROOT/package.json" \
-        > "$project_path/package.json"
-    envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
-        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
-        > "$project_path/CLAUDE.md"
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
-        < "$SKELETON_TEMPLATE_ROOT/README.md" \
-        > "$project_path/README.md"
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.nvmrc" "$project_path/.nvmrc"
@@ -363,6 +351,28 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+}
+
+copy_common_templates() {
+    local project_path="$1"
+
+    print_status "info" "Applying common TypeScript templates..."
+
+    PROJECT_LICENSE="${LICENSE_CHOICE}"
+    export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME \
+           STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
+        < "$COMMON_TEMPLATE_ROOT/package.json" \
+        > "$project_path/package.json"
+    cp "$COMMON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
+    envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
+        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
+        > "$project_path/CLAUDE.md"
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
+        < "$SKELETON_TEMPLATE_ROOT/README.md" \
+        > "$project_path/README.md"
+
+    copy_static_ts_common_files "$project_path"
     # Overlay react-spa-webpack-specific .github contents (e.g. deploy-spa.yml)
     # on top of the universal ts-common .github. Skeleton overlays win on
     # name collision; ts-common files survive when the skeleton is silent.
