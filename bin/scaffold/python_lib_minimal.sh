@@ -34,9 +34,6 @@ PUBLISH_PYPI=true
 PUBLISH_TEST_PYPI=true
 CONSUME_PRIVATE=false
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -497,6 +494,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_coverage_floor_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
         "$project_path/tests/unit/test_function_length_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
+        "$project_path/tests/unit/test_comment_budget_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
         "$project_path/tests/unit/test_review_threads_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
@@ -1037,9 +1036,6 @@ conditional_copy_docker_compose() {
     print_status "success" "docker-compose.yml (${DB_COMPOSE_BACKEND}) copied"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
