@@ -227,6 +227,13 @@ def test_a_section_title_alone_is_not_a_banner() -> None:
 	assert gate.banner_findings(1, ["a", "b", "c"]) == []
 
 
+def test_is_exempt_section_banner_matches_the_full_triple_only() -> None:
+	"""Only the exact mandated triple is exempt — a shorter rule is not."""
+	list_lines = [" --------------------------", " Tests", " --------------------------"]
+	assert gate.is_exempt_section_banner(list_lines, 0) is True
+	assert gate.is_exempt_section_banner([" -------", " LINTING", " -------"], 0) is False
+
+
 # --------------------------
 # Structural exemptions — positional, not textual
 # --------------------------
@@ -344,8 +351,8 @@ def test_the_mandated_test_section_banner_is_exempt(tmp_path: Path) -> None:
 
 	This is the shape ``tests/CLAUDE.md`` mandates for structuring every test
 	module in this repo (272 occurrences across 31 files, measured). It is not
-	the essay/decorative-banner defect this gate polices — see the allowlist's
-	own "structural exemptions" entry for the reasoning — so once ``.py`` files
+	the essay/decorative-banner defect this gate polices — see
+	``is_exempt_section_banner`` for the reasoning — so once ``.py`` files
 	are actually checked (the fix above), this exact convention must stay clean.
 
 	Parameters
@@ -363,6 +370,56 @@ def test_the_mandated_test_section_banner_is_exempt(tmp_path: Path) -> None:
 	)
 	path_file.write_text(str_source, encoding="utf-8")
 	assert gate.file_problems(path_file) == []
+
+
+def test_the_exempt_banner_does_not_split_an_oversized_run(tmp_path: Path) -> None:
+	"""Should-fail witness for blueprintx#479: the exemption must not be a pragma.
+
+	``comment_budget_allowlist.txt`` is read by ``is_pragma_line``, and
+	``line_breaks_run`` makes a pragma BREAK the current run — correct for a
+	QA suppression, wrong for a banner: listing the test-section rule line
+	there let one dash line split an 89-line block into two 44-line halves,
+	each under ``INT_MAX_RUN``, so the whole file passed clean. A lone rule
+	line (no title, no closing rule after it) is not the exempt triple, so it
+	must both stay IN the run's line count and be flagged as its own
+	decorative banner.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_file = tmp_path / "probe.py"
+	list_lines = ["# filler"] * 44 + ["# --------------------------"] + ["# filler"] * 44
+	path_file.write_text("\n".join(list_lines) + "\n", encoding="utf-8")
+	list_problems = gate.file_problems(path_file)
+	assert len(list_problems) == 2
+	assert any("89 lines" in str_problem for str_problem in list_problems)
+	assert any("decorative banner" in str_problem for str_problem in list_problems)
+
+
+def test_the_exempt_triple_still_counts_toward_an_oversized_run(tmp_path: Path) -> None:
+	"""The exemption suppresses the BANNER finding, never the run-length one.
+
+	A full, valid section-banner triple wrapped inside an otherwise-oversized
+	block must not disappear from the run's line count — only the triple
+	itself must go unreported as a banner.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_file = tmp_path / "probe.py"
+	list_lines = (
+		["# filler"] * 44
+		+ ["# --------------------------", "# Tests", "# --------------------------"]
+		+ ["# filler"] * 44
+	)
+	path_file.write_text("\n".join(list_lines) + "\n", encoding="utf-8")
+	list_problems = gate.file_problems(path_file)
+	assert len(list_problems) == 1
+	assert "91 lines" in list_problems[0]
 
 
 # --------------------------

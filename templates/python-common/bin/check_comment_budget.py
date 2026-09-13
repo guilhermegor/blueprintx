@@ -129,6 +129,17 @@ RE_ENCODING_DECL = re.compile(r"coding[:=]\s*[-\w.]+")
 # decorative banner the issue names by example (`# -------`).
 RE_BANNER_LINE = re.compile(r"^[-=*#~_\s]{3,}$")
 
+# The exact rule line of tests/CLAUDE.md's mandated test-section-banner
+# convention ("# --------------------------" / "# <section>" /
+# "# --------------------------") — measured (blueprintx#466) to occur
+# NOWHERE else in the tree, always this shape, only in `.py` files. Matched
+# structurally in banner_findings, NOT via the pragma allowlist: a pragma
+# BREAKS a run (line_breaks_run), so listing this string there would let one
+# dash line split an oversized block into two under-ceiling halves
+# (blueprintx#479). The two rule lines still count toward the block's
+# length — only the banner FINDING is suppressed, never the run.
+STR_TEST_SECTION_RULE = "--------------------------"
+
 
 def load_allowlist() -> tuple:
 	"""Read the QA-suppression allowlist data file.
@@ -358,12 +369,40 @@ def has_valid_escape(list_lines: list) -> bool:
 	return bool(str_reason)
 
 
+def is_exempt_section_banner(list_lines: list, int_index: int) -> bool:
+	"""Return whether a triple at ``int_index`` is the mandated test-section banner.
+
+	Matched on the FULL triple, not on any line containing 26 dashes, so a
+	lone rule line elsewhere gets no special treatment. The lines still count
+	toward the block's run length (see ``banner_findings`` — this only
+	suppresses the FINDING, never the block accumulation).
+
+	Parameters
+	----------
+	list_lines : list of str
+		The block's content lines.
+	int_index : int
+		Index of the triple's opening rule line.
+
+	Returns
+	-------
+	bool
+		True when both outer lines are exactly ``STR_TEST_SECTION_RULE``.
+	"""
+	return (
+		list_lines[int_index].strip() == STR_TEST_SECTION_RULE
+		and list_lines[int_index + 2].strip() == STR_TEST_SECTION_RULE
+	)
+
+
 def banner_findings(int_start: int, list_lines: list) -> list:
 	"""Return the decorative-banner defects inside one comment block.
 
 	A punctuation-only line is a banner on its own; one flanked by two banner
 	lines is the ``rule / SECTION NAME / rule`` triple the issue names by
-	example, reported as a single three-line finding.
+	example, reported as a single three-line finding — except the exact
+	tests/CLAUDE.md test-section-banner triple, which is exempt (see
+	``is_exempt_section_banner``).
 
 	Parameters
 	----------
@@ -389,7 +428,8 @@ def banner_findings(int_start: int, list_lines: list) -> list:
 			and bool(RE_BANNER_LINE.match(list_lines[int_index + 2]))
 		)
 		if bool_triple:
-			list_out.append((int_start + int_index, INT_BANNER_TRIPLE))
+			if not is_exempt_section_banner(list_lines, int_index):
+				list_out.append((int_start + int_index, INT_BANNER_TRIPLE))
 			int_index += INT_BANNER_TRIPLE
 			continue
 		if bool_this:

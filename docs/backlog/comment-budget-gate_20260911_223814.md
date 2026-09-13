@@ -108,17 +108,36 @@ carries the PR #460 review-thread fix above via squash-merge, commit `8c00d15`).
       **144** real findings. All resolved, gate now reports
       `✅ comment budget OK (501 file(s) checked)`.
 - [x] **The banner-policy decision, made explicitly** (gate and
-      `tests/CLAUDE.md` must agree): **exempted**, not dropped. Added the
-      mandated 26-dash test-section-banner string to
-      `comment_budget_allowlist.txt` as a structural exemption (same mechanism
-      as the SPDX/generated-file banners already there) — 128 of the 144
+      `tests/CLAUDE.md` must agree): **exempted**, not dropped — 128 of the 144
       findings were exactly this convention, measured to occur NOWHERE else in
       the tree (272 occurrences, always this one shape, only in `.py` files).
-      Rationale in the allowlist entry itself: unlike a Makefile's
-      rule/title/rule restating the ONE block beneath it, this title names a
-      GROUP of tests, so it is not "documentation in disguise" — ripping it out
-      of 31 files would have meant rewriting `tests/CLAUDE.md` too, for no
-      functional gain.
+      Unlike a Makefile's rule/title/rule restating the ONE block beneath it,
+      this title names a GROUP of tests, so it is not "documentation in
+      disguise" — ripping it out of 31 files would have meant rewriting
+      `tests/CLAUDE.md` too, for no functional gain.
+- [x] **First mechanism was wrong — caught in review, fixed (2026-09-13,
+      PR #479).** Initially implemented the exemption by adding the 26-dash
+      string to `comment_budget_allowlist.txt`. That file is read by
+      `is_pragma_line`, and `line_breaks_run` makes a pragma BREAK the current
+      comment run — correct for a QA suppression, but it reopened the exact
+      #460 thread-1 defect through a new door: one dash line inside an
+      oversized block split it into two under-ceiling halves. Reproduced
+      against the pushed head: 89 lines with no dash → 1 finding; 44 + one
+      dash line + 44 → `✅ comment budget OK`. Fixed by reverting the
+      allowlist entry and matching the exemption structurally instead:
+      `STR_TEST_SECTION_RULE` + `is_exempt_section_banner` in
+      `check_comment_budget.py` itself, checked inside `banner_findings` —
+      the two rule lines stay in the block (still counted toward
+      `INT_MAX_RUN`, still able to end a run at the ratchet) and only the
+      TRIPLE finding is suppressed, matched on the full triple (not any line
+      of 26 dashes), so a lone rule line elsewhere gets no special treatment.
+      Re-measured after the fix: still 501 files, 0 findings (no real
+      oversized block had been hiding behind a dash line in this tree). Added
+      3 more should-fail witnesses: 44+dash+44 → finding (both a long-run AND
+      a lone-banner finding, since the dash no longer breaks the run and isn't
+      part of a clean triple), a full triple wrapped in an oversized block →
+      still a long-run finding (banner suppressed, length not), and
+      `is_exempt_section_banner` matches the full triple only.
 - [x] Remaining 16 findings, two distinct real defects found along the way:
       4 were section titles quoting a gate marker's own name in backticks
       (`` `# complexity-ok:` ``), which `is_pragma_line`'s substring match
@@ -132,9 +151,9 @@ carries the PR #460 review-thread fix above via squash-merge, commit `8c00d15`).
 - [x] Added 4 should-fail witnesses: `.py` banner defect now caught, `.py`
       long-run defect now caught, the mandated section-banner shape stays
       exempt end-to-end via `file_problems`, `marker_for(".py") == "#"`.
-      29 → 29 unit tests in `test_comment_budget_gate.py` (net: kept 25,
-      replaced 2 reworded titles, added 4 new = 29); 131 passed across the
-      4 touched test modules; full `python-common` gate: 501 files, 0 findings.
+      `test_comment_budget_gate.py`: 25 → 29 → **32** (the mechanism-fix round
+      above added 3 more); 131 passed across the 4 touched test modules; full
+      `python-common` gate: 501 files, 0 findings.
 - [x] Real verification: `bin/ci/scaffold_lint_test.sh lib-minimal` —
       scaffold clean, `poe lint` clean (comment-budget hook included),
       458 unit tests + 85 integration tests pass in the real generated project.
@@ -142,10 +161,11 @@ carries the PR #460 review-thread fix above via squash-merge, commit `8c00d15`).
       coordinator rescued via `git add -A` (staged, not committed) and a
       byte-exact backup patch. Resumed, verified the staged diff matched intent,
       committed (`273808e`, gitlint required a body-line rewrap first), pushed.
-- [ ] Open PR, `Closes #466`, verify via GraphQL `closingIssuesReferences`,
-      arm auto-merge — pending (GitHub API rate-limited earlier in the session,
-      window reopened by the time of push).
-- [x] Rebase check: `origin/main` — PR head was already up to date, no merge
-      needed.
-- [x] `poe unit_tests` scoped to the gate: `test_comment_budget_gate.py`, 25/25
-      pass (23 existing + 2 new).
+- [x] Opened PR #479, `Closes #466` verified via GraphQL
+      `closingIssuesReferences` returns `[466]`.
+- [x] Team-lead caught the split-run bypass in review before merge (see
+      above) — auto-merge disarmed, PR converted to DRAFT so the hold could
+      not be undone by accident (a bare disarm reads as residue to the
+      standing "PR without auto-merge → arm it" sweep rule). Mechanism fixed,
+      re-verified (32 tests, 501 files/0 findings, `scaffold_lint_test.sh
+      lib-minimal` green) — ready to un-draft and re-arm.
