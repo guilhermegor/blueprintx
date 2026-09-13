@@ -1,0 +1,19 @@
+services:
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      # ⚠️ Bound to 127.0.0.1, NOT published on every host interface. These OTLP receivers
+      # are UNAUTHENTICATED, and this file is copied into every project that opts in — so a
+      # bare "4318:4318" would not expose one dev box, it would make an open log sink the
+      # default for every generated project, on whatever network that box sits on. A
+      # local-dev collector has no reason to accept off-host traffic; a deployed one belongs
+      # behind a real ingress with credentials, not behind this file.
+      # OTLP/HTTP — the port OTEL_EXPORTER_OTLP_ENDPOINT points at.
+      - "127.0.0.1:${OTEL_COLLECTOR_HTTP_PORT:-4318}:4318"
+      # OTLP/gRPC — unused by this seam's HTTP exporter, kept for a gRPC one.
+      - "127.0.0.1:${OTEL_COLLECTOR_GRPC_PORT:-4317}:4317"
