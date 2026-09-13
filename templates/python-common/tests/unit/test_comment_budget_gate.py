@@ -111,7 +111,7 @@ def test_a_qa_pragma_line_is_never_itself_a_finding(tmp_path: Path) -> None:
 
 
 # --------------------------
-# The escape hatch — mirrors `# complexity-ok:`
+# The escape hatch — mirrors this repo's other gate escape-hatch markers
 # --------------------------
 
 
@@ -272,6 +272,19 @@ def test_marker_for_rejects_an_unsupported_extension() -> None:
 	assert gate.marker_for(Path("image.png")) == ""
 
 
+def test_marker_for_recognizes_python_files() -> None:
+	"""``.py`` gets a marker too, even though its blocks are extracted elsewhere.
+
+	``.py`` is deliberately absent from ``DICT_HASH_SUFFIXES`` (its blocks are
+	extracted via ``tokenize`` instead) but ``marker_for`` must still return a
+	marker for it — should-fail witness for blueprintx#466: without this,
+	``file_problems`` returns ``[]`` for every ``.py`` file before ever reaching
+	the ``python_blocks`` branch, so ``audit_paths`` reports files "checked"
+	that were never actually inspected.
+	"""
+	assert gate.marker_for(Path("probe.py")) == "#"
+
+
 def test_audit_discovers_an_extensionless_makefile(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -287,6 +300,69 @@ def test_audit_discovers_an_extensionless_makefile(
 	(tmp_path / "Makefile").write_text("build:\n\techo hi\n", encoding="utf-8")
 	monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 	assert tmp_path / "Makefile" in gate.audit_paths()
+
+
+# --------------------------
+# Python files are actually checked (blueprintx#466)
+# --------------------------
+
+
+def test_a_python_file_with_a_decorative_banner_is_flagged(tmp_path: Path) -> None:
+	"""Should-fail witness: a ``.py`` file's own banner defect must surface.
+
+	Before blueprintx#466, ``marker_for`` never recognized ``.py``, so
+	``file_problems`` returned ``[]`` for every Python file regardless of
+	content — this is the case that must now fail.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_file = tmp_path / "probe.py"
+	str_source = "# -------\n# LINTING\n# -------\ndef f() -> None:\n\tpass\n"
+	path_file.write_text(str_source, encoding="utf-8")
+	assert len(gate.file_problems(path_file)) == 1
+
+
+def test_a_python_file_with_an_oversized_comment_run_is_flagged(tmp_path: Path) -> None:
+	"""Should-fail witness: a ``.py`` file's long-run defect must surface too.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_file = tmp_path / "probe.py"
+	list_lines = ["# filler"] * (gate.INT_MAX_RUN + 1)
+	path_file.write_text("\n".join(list_lines) + "\ndef f() -> None:\n\tpass\n", encoding="utf-8")
+	assert len(gate.file_problems(path_file)) == 1
+
+
+def test_the_mandated_test_section_banner_is_exempt(tmp_path: Path) -> None:
+	"""``tests/CLAUDE.md``'s rule/title/rule test-section banner is not a finding.
+
+	This is the shape ``tests/CLAUDE.md`` mandates for structuring every test
+	module in this repo (272 occurrences across 31 files, measured). It is not
+	the essay/decorative-banner defect this gate polices — see the allowlist's
+	own "structural exemptions" entry for the reasoning — so once ``.py`` files
+	are actually checked (the fix above), this exact convention must stay clean.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_file = tmp_path / "probe.py"
+	str_source = (
+		"# --------------------------\n"
+		"# Tests\n"
+		"# --------------------------\n"
+		"def test_something() -> None:\n"
+		"\tassert True\n"
+	)
+	path_file.write_text(str_source, encoding="utf-8")
+	assert gate.file_problems(path_file) == []
 
 
 # --------------------------

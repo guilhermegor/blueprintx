@@ -82,11 +82,17 @@ INT_STRUCTURAL_LINE_LIMIT = 2
 # A decorative banner "sandwich" is exactly rule / title / rule — three lines.
 INT_BANNER_TRIPLE = 3
 
-# `#`-comment file types, by suffix. `.py` is handled separately via `tokenize`
-# because a `#` inside a string literal is not a comment and only the tokenizer
-# knows the difference. `Makefile` (no suffix) and `.mk` are matched by name in
-# `audit_paths`/`marker_for`, not here — the issue's own table missed Makefile
-# for exactly this reason.
+# `#`-comment file types, by suffix. `.py` is deliberately NOT in this tuple —
+# its BLOCKS are extracted separately via `tokenize` (a `#` inside a string
+# literal is not a comment and only the tokenizer knows the difference) — but
+# `marker_for` below still must recognize `.py` explicitly, or `file_problems`
+# short-circuits on its `not str_marker` guard before ever reaching the
+# `.py`-specific branch, and every Python file goes unchecked while `audit_paths`
+# reports it "checked" (blueprintx#466 — measured: 228/499 files "checked", 0
+# findings, discovery non-zero and looking like coverage while checking nothing).
+# `Makefile` (no suffix) and `.mk` are matched by name in `audit_paths`/
+# `marker_for`, not here — the issue's own table missed Makefile for exactly
+# this reason.
 DICT_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
 
 # `//`-comment file types. Block comments (`/* */`) are a known ceiling, not a
@@ -226,7 +232,8 @@ def marker_for(path_file: pathlib.Path) -> str:
 	str
 		``"#"`` or ``"//"``; empty when nothing here budgets this file's type.
 	"""
-	if path_file.name == "Makefile" or path_file.suffix in DICT_HASH_SUFFIXES:
+	bool_hash_file = path_file.name == "Makefile" or path_file.suffix in DICT_HASH_SUFFIXES
+	if bool_hash_file or path_file.suffix == ".py":
 		return "#"
 	if path_file.suffix in DICT_SLASH_SUFFIXES:
 		return "//"
