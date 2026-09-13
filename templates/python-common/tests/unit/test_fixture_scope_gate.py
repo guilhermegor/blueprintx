@@ -105,9 +105,7 @@ def test_a_bare_fixture_decorator_is_accepted() -> None:
 
 def test_the_default_function_scope_is_accepted(tmp_path: Path) -> None:
 	"""No `scope=` kwarg at all — the pytest default — passes clean."""
-	path_file = _test_file(
-		tmp_path, "import pytest\n\n\n@pytest.fixture\ndef f():\n\treturn {}\n"
-	)
+	path_file = _test_file(tmp_path, "import pytest\n\n\n@pytest.fixture\ndef f():\n\treturn {}\n")
 
 	assert gate.file_problems(path_file) == []
 
@@ -127,7 +125,7 @@ def test_a_written_justification_on_the_decorator_line_is_accepted(tmp_path: Pat
 	path_file = _test_file(
 		tmp_path,
 		'import pytest\n\n\n@pytest.fixture(scope="module")  '
-		'# fixture-scope-ok: read-only, never mutated\ndef shared():\n\treturn {}\n',
+		"# fixture-scope-ok: read-only, never mutated\ndef shared():\n\treturn {}\n",
 	)
 
 	assert gate.file_problems(path_file) == []
