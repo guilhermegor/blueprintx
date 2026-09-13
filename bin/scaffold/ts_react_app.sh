@@ -615,6 +615,7 @@ main() {
 
     validate_inputs
     resolve_github_username
+    scaffold_prompt_review_bot_roster
     prompt_state_management
     prompt_deploy_target
     prompt_module_federation
@@ -625,6 +626,7 @@ main() {
     apply_docker_files "$PROJECT_PATH"
     apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    scaffold_prune_review_bot_roster "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
     apply_js_copy_delivery "$PROJECT_PATH"
     # Every `cp -r` above copies whatever sits in templates/, caches included (#205).

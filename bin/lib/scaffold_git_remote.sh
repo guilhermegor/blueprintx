@@ -64,6 +64,15 @@ scaffold_prompt_review_bot_roster() {
 	esac
 }
 
+# TS scaffolds copy ts-common/.github wholesale (no per-file skip point like the Python
+# scaffolds' scaffold_copy_tooling_configs), so the roster is removed after the fact
+# instead. blueprintx#374 — rationale in docs/faq.md.
+scaffold_prune_review_bot_roster() {
+	local str_project_path="$1"
+	[[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] ||
+		rm -f "$str_project_path/.github/.review-bots.yaml"
+}
+
 # Set BY this lib, read by the caller's `main`: 1 only once `origin` has been verified to be
 # the repository this scaffold names.
 #
