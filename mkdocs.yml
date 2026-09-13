@@ -15,6 +15,7 @@ nav:
   - Examples: examples.md
   - CLI Reference: cli-reference.md
   - FAQ: faq.md
+  - Complexity Ceilings Measured: complexity-ceilings-measured.md
   - Troubleshooting: troubleshooting.md
   - Contributing: contributing.md
   - Changelog: changelog.md
