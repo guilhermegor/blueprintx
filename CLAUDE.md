@@ -212,7 +212,8 @@ BlueprintX/
 │       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold logic
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold logic
 │       ├── ts_react_app.sh            # React SPA (Webpack) scaffold logic
-│       └── ts_react_capability.sh     # helper: add a capability to an existing React SPA
+│       ├── ts_react_capability.sh     # helper: add a capability to an existing React SPA
+│       └── ts_lib.sh                  # publishable TS library scaffold logic
 ├── templates/
 │   ├── common/                     # language-agnostic assets copied into EVERY skeleton
 │   │                               #   (CODEOWNERS, PR template, bin/ git-diff scripts + export_repo_content.sh + lib/common.sh, make/git_diff.mk)
@@ -229,6 +230,8 @@ BlueprintX/
 │   ├── lib-minimal/                # minimal library skeleton
 │   │   └── skeleton.meta
 │   ├── react-spa-webpack/          # React 19 + TypeScript + Webpack 5 SPA skeleton
+│   │   └── skeleton.meta
+│   ├── ts-lib/                     # publishable TypeScript library skeleton
 │   │   └── skeleton.meta
 │   └── licenses/                   # license text files (MIT, Apache-2.0, GPL-3.0, …)
 ├── docs/                           # MkDocs source pages
@@ -255,6 +258,14 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 
 ## How scaffolding works
 
+**Seven skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
+`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`) and two TypeScript
+(`react-spa-webpack`, `ts-lib`), one `skeleton.meta` each (see "Repo architecture" above and
+"Discovery system" below). `bin/ci/validate_meta.sh` enforces that every one of these
+directory names is also named here — this count is a should-fail witness in its own right:
+add or remove a skeleton without updating it and the number goes stale before the paragraph
+does (blueprintx#478).
+
 ### Python skeletons (`python_ddd_service.sh`, `python_ddd_service_orm.sh`, `python_mvc_service.sh`, `python_mvc_service_orm.sh`, `python_lib_minimal.sh`)
 
 1. `validate_inputs` — checks required args.
@@ -266,7 +277,9 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 7. `prompt_git_remote_setup` — optionally initialises git, creates GitHub repo via `gh`, and applies branch protection.
 8. `apply_offline_mode` — when the user **declines** a GitHub remote, GitHub-only assets are skipped and the offline git-diff workflow (`bin/git_diff_*.sh` + `make/git_diff.mk`) is copied from `templates/common/` instead.
 
-### TypeScript skeletons (`ts_react_app.sh`)
+### TypeScript skeletons (`ts_react_app.sh`, `ts_lib.sh`)
+
+**`ts_react_app.sh`** (React SPA):
 
 1. `validate_inputs` — checks required args.
 2. `resolve_github_username` — env var → `gh` CLI → interactive prompt.
@@ -277,6 +290,17 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 7. `apply_offline_mode` — same offline git-diff fallback as the Python skeletons when no GitHub remote is connected.
 
 `bin/scaffold/ts_react_capability.sh` is a standalone helper (not a skeleton): run it against an existing React SPA to scaffold a new `src/capabilities/<name>/` with its `domain/application/infrastructure/ui` layers wired in.
+
+**`ts_lib.sh`** (publishable TS library — dual ESM + CJS + `.d.ts`, `tsc` only, no bundler):
+mechanically the same shape (`validate_inputs` → `resolve_github_username` →
+`create_directory_structure` → `copy_skeleton_files` → `copy_common_templates` →
+`prompt_git_remote_setup` → `apply_offline_mode`), with two differences `ts_react_app.sh`
+has no analogue for: `render_package_json`/`render_docusaurus_config` render `package.json`
+and the skeleton's own Docusaurus docs site through Python's `json.dumps` rather than
+`envsubst` — a description containing a quote or apostrophe would otherwise produce invalid
+JSON (`package.json`) or break the single-quoted `tagline:` value (`docusaurus.config.js`);
+and it ships its own `.github/workflows/{docs,docs-deploy,pack-smoke,release-npm}.yml` for
+the docs site and npm publish flow, none of which `ts_react_app.sh` needs.
 
 The `templates/python-common/` directory is the **single source of truth** for shared Python tooling. The `templates/ts-common/` directory is the **single source of truth** for shared TypeScript tooling, and `templates/common/` for language-agnostic assets (CODEOWNERS, PR template, offline git-diff workflow). Changes to any of them propagate to all relevant skeletons on the next scaffold run.
 
