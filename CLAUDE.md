@@ -86,7 +86,11 @@ exact failure the gate family exists to prevent. Its verification is
 per-tier in each `pyproject.toml` and **cannot** be single-sourced into a shared `deptry.toml`:
 `--config <file>` re-points deptry at that file as the *manifest* as well, so it stops reading
 the tier's dependency table. That is the one-implementation rule losing to a measured
-constraint, which is why the reason is written into all five manifests rather than remembered.
+constraint, which is why the reason is written into all five manifests rather than remembered
+— a short, few-line technical note, not the long rationale block blueprintx#303 bounds. An
+inline comment stays inline only while it fits that gate's ratchet; a longer explanation
+belongs in `docs/`, `README.md` or `CONTRIBUTING.md`, with one line at the code site pointing
+at it.
 
 The **review-thread gate** follows the same rule, reached from the other direction: it *did* have
 two 543-line copies, and `.github/workflows/review_threads.yml` now runs the shared
