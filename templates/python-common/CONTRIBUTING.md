@@ -130,6 +130,20 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
    - Maintain test fixtures for complex scenarios
    - Recommended to use UNIT_TEST_TEMPLATE.md for AI generation of unit tests, in order to implement test-driven development best practices and follow project standards
 
+5. **Test order and seed-specific failures**:
+   - `pytest-randomly` shuffles test order on every run and prints the seed used, pass or
+     fail — a hidden dependency between tests (a `get` test relying on state a `post` test
+     left behind) fails instead of passing silently forever.
+   - A failing run prints the exact re-run command (`pytest -p randomly
+     --randomly-seed=<N>`).
+   - **A test that fails only under a particular seed is a real defect, never flakiness to
+     re-run away.** Re-running until it goes green hides the exact bug this exists to catch
+     — report the seed and the failing test instead of retrying.
+   - A test fixture with `scope="module"`/`"class"`/`"session"` shares its instance across
+     tests, which is exactly the shape an order dependency takes. `check_fixture_scope.py`
+     (a proxy, not a detector — see its module docstring) requires a written
+     `# fixture-scope-ok: <reason>` comment before it accepts one.
+
 ## Pull Request Process
 
 1. **Create an Issue First**:
