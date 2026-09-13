@@ -127,6 +127,46 @@ def test_a_bare_escape_marker_with_no_reason_does_not_exempt() -> None:
 	assert gate.has_valid_escape([" comment-budget-ok:"]) is False
 
 
+def test_the_escape_hatch_exempts_a_real_oversized_block(tmp_path: Path) -> None:
+	"""A valid marker inside a real over-ceiling block exempts the whole file.
+
+	Should-fail witness for blueprintx#303's own follow-up defect: the marker's
+	text must NOT be in ``comment_budget_allowlist.txt``, because a pragma line
+	BREAKS a run (``line_breaks_run``) before ``has_valid_escape`` ever sees it —
+	so a listed escape hatch could never exempt the block it opens.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_file = tmp_path / "probe.sh"
+	list_lines = ["# comment-budget-ok: pinned oracle, see docs/decisions/x.md"]
+	list_lines += ["# filler"] * (gate.INT_MAX_RUN + 1)
+	path_file.write_text("\n".join(list_lines) + "\n", encoding="utf-8")
+	assert gate.file_problems(path_file) == []
+
+
+def test_a_bare_marker_inside_a_real_oversized_block_still_fails(tmp_path: Path) -> None:
+	"""A reasonless marker mid-block must not silently split or exempt the run.
+
+	Same defect from the other side: if the marker were still in the allowlist
+	it would BREAK the run in two, each half under the ceiling, so a bare
+	marker with no reason would silently pass — exactly the bypass
+	``has_valid_escape`` exists to reject.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_file = tmp_path / "probe.sh"
+	list_lines = ["# filler"] * (gate.INT_MAX_RUN + 1)
+	list_lines.insert(len(list_lines) // 2, "# comment-budget-ok:")
+	path_file.write_text("\n".join(list_lines) + "\n", encoding="utf-8")
+	assert len(gate.file_problems(path_file)) == 1
+
+
 # --------------------------
 # Pragma lines break a run, they never extend it
 # --------------------------

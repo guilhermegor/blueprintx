@@ -62,3 +62,37 @@ fix), re-ran the full hook set (all pass), verified the banner-deletion commit
 removed zero QA suppressions (`git show <sha> | grep '^-' | grep -iE
 'noqa|codespell:ignore|complexity-ok|type: ?ignore|lang:pt-ok|...'` — no
 matches), and fixed the copy-list gap found by `check_test_copy_lists.py`.
+
+## PR #460 review threads (2026-09-13)
+
+- [x] CodeRabbit Major: escape hatch listed in its own allowlist. **Valid, fixed.**
+      `comment_budget_allowlist.txt` listed `comment-budget-ok:` itself, so
+      `line_breaks_run` treated the marker as a pragma and BROKE the run before
+      `has_valid_escape` ever saw it — the escape hatch could never exempt a
+      block it opened, and a bare (reasonless) marker mid-block silently split
+      one oversized run into two under-ceiling ones instead of failing
+      validation. Removed the entry; added two should-fail-witness tests
+      (`test_the_escape_hatch_exempts_a_real_oversized_block`,
+      `test_a_bare_marker_inside_a_real_oversized_block_still_fails`) exercising
+      the fix through `file_problems`, not just `has_valid_escape` in isolation.
+- [x] CodeRabbit Major: decorative banners in the gate's own test file trip the
+      audit. **Verified INVALID as stated — but led to a real, separate,
+      bigger bug.** `marker_for()` never returns a marker for `.py` (`".py"` is
+      in neither `DICT_HASH_SUFFIXES` nor `DICT_SLASH_SUFFIXES`), so
+      `file_problems()` returns `[]` for every Python file before reaching the
+      `.py`-specific `python_blocks()` branch — confirmed by running the gate
+      directly (0 findings on 228/499 files "checked"). The 7 banner triples
+      CodeRabbit named do exist in `test_comment_budget_gate.py` but currently
+      trip nothing. Patching `marker_for` to cover `.py` in-process surfaces
+      **142** findings tree-wide, the bulk being the exact `rule/title/rule`
+      shape `tests/CLAUDE.md` **mandates** for test-file section banners (32
+      files use it across python-common + both mvc-* tiers) — a real policy
+      conflict (structural exemption vs. dropping the convention), not a
+      mechanical cleanup, and out of scope for this already-wide PR (touches
+      all 5 scaffolds + shared libs, collision risk with other in-flight PRs).
+      Filed **blueprintx#466** to track; replied on the thread explaining why,
+      resolved it.
+- [x] Rebase check: `origin/main` — PR head was already up to date, no merge
+      needed.
+- [x] `poe unit_tests` scoped to the gate: `test_comment_budget_gate.py`, 25/25
+      pass (23 existing + 2 new).

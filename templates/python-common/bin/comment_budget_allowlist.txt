@@ -81,9 +81,6 @@ depcheck-ignore
 renovate:
 dependabot
 
-# this gate's own escape hatch
-comment-budget-ok:
-
 # ponytail
 ponytail:
 
