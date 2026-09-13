@@ -27,7 +27,10 @@ declare -a GATE_PATHS=(
 	".github/workflows/scaffold_checks.yml"
 )
 
-git fetch origin main --quiet
+if ! git fetch origin main --quiet; then
+	echo "::warning::could not fetch origin/main — skipping staleness check"
+	exit 0
+fi
 
 int_stale=0
 int_examined=0
@@ -36,7 +39,11 @@ while IFS=$'\t' read -r str_number str_head_ref; do
 	[ -n "$str_number" ] || continue
 	int_examined=$((int_examined + 1))
 
-	if ! git fetch origin "$str_head_ref" --quiet 2>/dev/null; then
+	# Fetch the PR's own head ref, not headRefName: headRefName is the branch name in the
+	# HEAD repo, which for a fork PR does not exist on `origin` (the base repo's remote) —
+	# fetching it there either fails or, worse, silently resolves an unrelated same-named
+	# base-repo branch. refs/pull/<n>/head always resolves to the exact PR head, fork or not.
+	if ! git fetch origin "refs/pull/${str_number}/head" --quiet 2>/dev/null; then
 		echo "::warning::PR #${str_number} (${str_head_ref}): could not fetch — skipping"
 		continue
 	fi
@@ -58,7 +65,7 @@ while IFS=$'\t' read -r str_number str_head_ref; do
 	else
 		echo "PR #${str_number} (${str_head_ref}): up to date with main."
 	fi
-done < <(gh pr list --state open --json number,headRefName -q '.[] | [.number, .headRefName] | @tsv')
+done < <(gh pr list --state open --limit 1000 --json number,headRefName -q '.[] | [.number, .headRefName] | @tsv')
 
 echo
 echo "${int_stale} of ${int_examined} open PR(s) behind base AND judged by a stale gate."
