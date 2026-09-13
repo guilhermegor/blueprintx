@@ -397,8 +397,7 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     # Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
     # review tools is a row here rather than an edit to the gate. Skipped when the
-    # scaffold answered "no reviewer bot" (blueprintx#374) — see the flag's own
-    # comment in scaffold_git_remote.sh for why an empty roster is not the opt-out.
+    # scaffold answered "no reviewer bot" (blueprintx#374 — rationale in docs/faq.md).
     if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
         cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
     fi

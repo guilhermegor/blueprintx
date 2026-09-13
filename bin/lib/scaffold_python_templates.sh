@@ -74,10 +74,7 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$str_project_path/.codespellrc"
 	# Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
 	# review tools is a row here rather than an edit to the gate. Skipped when the
-	# scaffold answered "no reviewer bot" (blueprintx#374): shipping the file with an
-	# empty `reviewers:` list is NOT the opt-out (load_roster raises on that, #262) —
-	# not copying it at all is, since load_roster then reads "never adopted" and the
-	# gate self-skips instead of failing a required check forever.
+	# scaffold answered "no reviewer bot" (blueprintx#374 — rationale in docs/faq.md).
 	if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
 		cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$str_project_path/.review-bots.yaml"
 	fi
