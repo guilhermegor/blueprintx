@@ -1,0 +1,41 @@
+name: Behind-Base Gate Report
+
+# Reports, does not fix (blueprintx#368). A PR runs every gate script from ITS OWN checkout, so
+# a branch behind `main` runs an OLD copy of a gate and can fail — or wrongly pass — for a
+# reason that has nothing to do with the PR's own diff. `gh pr update-branch` fixes the gate
+# version but moves the head commit, which can flip an already-clean review to SUPERSEDED (a
+# review is pinned to the commit it was written against and nothing re-pins it) — measured
+# directly on #444 during this issue's own investigation. Spending a review-quota unit on any
+# one PR is a judgment call, so it stays with a human: this workflow only pairs "behind base"
+# with "a gate file it is judged by changed on main since merge-base" and prints the result. See
+# `bin/ci/check_gate_staleness.sh` for the full reasoning.
+on:
+  workflow_dispatch: {}
+  schedule:
+    # ⚠️ COARSE ON PURPOSE — see `review_retry.yml`'s own measurement: a `*/10` schedule fired
+    # only 6 times in 21 hours on this repo, because GitHub throttles scheduled workflows
+    # hardest on low-activity repos. That janitor needs the tight interval anyway (it is
+    # racing a reviewer's rate-limit window); this report is advisory-only and nothing waits
+    # on any one tick, so a coarse interval that mostly survives the throttle beats a tight one
+    # that mostly doesn't.
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  report:
+    name: Pair behind-base with gate staleness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Report open PRs behind base AND judged by a stale gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash bin/ci/check_gate_staleness.sh
