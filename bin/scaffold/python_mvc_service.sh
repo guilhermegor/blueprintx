@@ -859,6 +859,7 @@ main() {
     prompt_email
     prompt_pipeline_intent
     prompt_env_wise_config
+    scaffold_prompt_review_bot_roster
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
     copy_global_config "$PROJECT_PATH"

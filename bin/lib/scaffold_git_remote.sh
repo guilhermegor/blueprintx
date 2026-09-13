@@ -35,6 +35,50 @@
 # Set by the caller before scaffold_prompt_git_remote_setup; empty means no --homepage.
 : "${SCAFFOLD_REPO_HOMEPAGE:=}"
 
+# Set BY scaffold_prompt_review_bot_roster below, read by each Python scaffold's copy step
+# (scaffold_copy_tooling_configs / python_lib_minimal.sh) to decide whether .review-bots.yaml
+# ships. Defaults to "true" — matching every project scaffolded before this flag existed —
+# because the roster IS the recommended setup (coderabbit_trigger.yaml, review_retry.yaml and
+# pr-gate.yaml already assume a reviewer bot is coming). blueprintx#374. Same `:`
+# default-assignment idiom as SCAFFOLD_REPO_HOMEPAGE above, so shellcheck sees the value
+# as read rather than flagging it SC2034 for a cross-file consumer it cannot follow.
+: "${INCLUDE_REVIEW_BOT_ROSTER:=true}"
+
+# blueprintx#374: a generated project without CodeRabbit (or another `posts: threads`
+# reviewer) has a required check — "Review threads answered" — that can NEVER pass.
+# `find_missing_review_problem` in check_review_threads.py fails whenever no roster
+# member ever submits a review, and a roster member that does not exist never will. That
+# is not "the reviewer found nothing" (which passes); it is a permanent required-check
+# block on a solo maintainer's own repo.
+#
+# ⚠️ The fix is "do not ship the roster", never "ship it empty". `load_roster` in
+# check_review_threads.py deliberately RAISES on `reviewers: []` (blueprintx#262) — an
+# empty list is treated as the gate being switched off from inside the very PR it
+# polices, which is a worse failure than the one this fixes. The file's own self-skip
+# path ("Delete this file to opt out") is what a "no reviewer" answer must take: when
+# .review-bots.yaml was NEVER copied, `load_roster` returns {} (never having been
+# present, so the default-branch deletion guard cannot fire either) and the gate prints
+# "the review-thread gate is not adopted here" and exits 0 — the required check still
+# RUNS AND REPORTS on every PR (the workflow trigger is unconditional `on: pull_request`),
+# it just reports success instead of an unsatisfiable failure. Visible in the job's own
+# log, which is where every other self-skip in this gate family reports too (#364).
+scaffold_prompt_review_bot_roster() {
+	local str_answer
+	read -r -p "$(prompt_main "Do you have (or will you install) a PR review bot such as CodeRabbit on this repo? [Y/n]: ")" str_answer || true
+	case "$str_answer" in
+	n | N)
+		# Read by each scaffold's copy step (a different file), which shellcheck cannot follow.
+		# shellcheck disable=SC2034
+		INCLUDE_REVIEW_BOT_ROSTER=false
+		print_status "config" ".review-bots.yaml: not shipped — the review-thread required check will self-skip (pass) until a reviewer is declared"
+		;;
+	*)
+		# shellcheck disable=SC2034
+		INCLUDE_REVIEW_BOT_ROSTER=true
+		;;
+	esac
+}
+
 # Set BY this lib, read by the caller's `main`: 1 only once `origin` has been verified to be
 # the repository this scaffold names.
 #

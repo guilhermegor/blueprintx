@@ -396,8 +396,12 @@ lib_minimal_copy_tooling_configs() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     # Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
-    # review tools is a row here rather than an edit to the gate.
-    cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
+    # review tools is a row here rather than an edit to the gate. Skipped when the
+    # scaffold answered "no reviewer bot" (blueprintx#374) — see the flag's own
+    # comment in scaffold_git_remote.sh for why an empty roster is not the opt-out.
+    if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
+        cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
+    fi
     cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$project_path/mypy.ini"
     cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$project_path/.sqlfluff"
     cp "$COMMON_TEMPLATE_ROOT/.sqlfluffignore" "$project_path/.sqlfluffignore"
@@ -1052,6 +1056,7 @@ main() {
     prompt_logs
     prompt_docker_compose
     prompt_publish_targets
+    scaffold_prompt_review_bot_roster
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
