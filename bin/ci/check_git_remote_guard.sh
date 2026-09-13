@@ -10,6 +10,8 @@
 # Usage:  bash bin/ci/check_git_remote_guard.sh
 
 set -euo pipefail
+# Run as a git hook, GIT_DIR points at the host repo and every `git -C <tmp>` below writes there.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=bin/lib/common.sh

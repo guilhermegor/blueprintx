@@ -32,9 +32,6 @@ INCLUDE_EMAIL=false
 EMAIL_BACKEND="outlook"
 INCLUDE_MULTI_PIPELINE=false
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -840,9 +837,6 @@ PY
     print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"

@@ -111,6 +111,14 @@ repos:
         pass_filenames: false
         files: \.(py|sh)$
 
+      - id: check-comment-budget
+        name: comment budget (long runs + decorative banners, blueprintx#303)
+        # Same ONE-implementation treatment as function-length above: run over this repo
+        # via --root rather than keeping a second copy.
+        entry: python3 templates/python-common/bin/check_comment_budget.py --root .
+        language: system
+        pass_filenames: false
+
       - id: check-complexity
         name: cyclomatic complexity (tests 1, src 2, bin 8)
         # Same treatment as function-length above: ONE implementation, run over this repo via

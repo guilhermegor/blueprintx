@@ -38,9 +38,6 @@
 # ⚠️ Do NOT reach for `[tool.poetry.requires-plugins]` to make these runnable via poe — it
 # breaks `poetry install`. The measurement lives in blueprintx#232.
 
-# ---------------------------------------------------------------------------
-# VIRTUAL ENVIRONMENT
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.init]
 sequence = ["ensure_env", "venv", "precommit", "enable_pages", "enable_repo_rules", "enable_security"]
@@ -104,17 +101,11 @@ sequence = [
 ]
 help = "Regenerate CHANGELOG.md from git tags (preview only)"
 
-# ---------------------------------------------------------------------------
-# CORPORATE CA
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.get_corporate_ca]
 cmd = "bash bin/get_corporate_ca.sh"
 help = "Extract a TLS-inspecting proxy's CA into bin/corporate_ca.pem (manual, never automatic)"
 
-# ---------------------------------------------------------------------------
-# TESTING
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.unit_tests]
 cmd = "pytest tests/unit/"
@@ -167,9 +158,6 @@ help = "Validate the URLs appearing in docstrings (1-week cache)"
 cmd = "bash bin/fix_playwright.sh"
 help = "Reinstall the Playwright browsers (OS-aware)"
 
-# ---------------------------------------------------------------------------
-# LINTING
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.lint]
 cmd = "bash bin/lint.sh"
@@ -194,6 +182,10 @@ help = "Cap a function at 60 lines of code (docstring excluded)"
 [tool.poe.tasks.check_complexity]
 cmd = "bash bin/check_complexity.sh"
 help = "Cyclomatic-complexity ceiling per tree (tests 1, src 2, bin 8)"
+
+[tool.poe.tasks.check_comment_budget]
+cmd = "python bin/check_comment_budget.py"
+help = "Bound comment volume (long runs + decorative banners), QA pragmas exempt"
 
 [tool.poe.tasks.check_secrets]
 cmd = "bash bin/check_secrets.sh"
@@ -225,9 +217,6 @@ help = "Pre-flight a commit message file against the project's own commit-msg ho
 	required = true
 	help = "path to the commit message file"
 
-# ---------------------------------------------------------------------------
-# DATABASE
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.db_up]
 cmd = "bash bin/db.sh up"
@@ -241,17 +230,11 @@ help = "Back the database up (pg_dump)"
 cmd = "bash bin/db.sh restore"
 help = "Restore the database from a backup (pg_restore)"
 
-# ---------------------------------------------------------------------------
-# RUN
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.run]
 cmd = "bash bin/run.sh"
 help = "Run the project entrypoint"
 
-# ---------------------------------------------------------------------------
-# CONTEXT
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.export_context]
 cmd = "bash bin/export_repo_content.sh"
@@ -261,17 +244,11 @@ help = "Flatten the repo into repo_context.txt for pasting into a web-UI LLM"
 cmd = "bash bin/export_deps.sh"
 help = "Export the locked set to requirements-lock.txt (hosts that can pip but not Poetry)"
 
-# ---------------------------------------------------------------------------
-# SHIP
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.ship]
 cmd = "bash bin/ship.sh"
 help = "Package the committed default-branch tree into dist/<repo>_<timestamp>.zip"
 
-# ---------------------------------------------------------------------------
-# DOCS
-# ---------------------------------------------------------------------------
 
 [tool.poe.tasks.docs_server]
 sequence = [
@@ -280,9 +257,6 @@ sequence = [
 ]
 help = "Install the docs deps and serve the site at http://0.0.0.0:8000"
 
-# ---------------------------------------------------------------------------
-# CONDITIONAL TASK SETS — wired by the SCAFFOLD, deliberately not declared here
-# ---------------------------------------------------------------------------
 # Two task sets ship conditionally:
 #
 #   poe_tasks.library.toml — install_dist_locally; only the lib-minimal scaffold copies it
