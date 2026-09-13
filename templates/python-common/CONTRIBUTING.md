@@ -96,6 +96,11 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 - `fix(calculations): correct rounding errors in tax computation`
 - `docs(readme): add installation instructions`
 
+**Pre-flight before committing:** `poe check_commit_msg <file>` runs the same gitlint +
+commitizen checks the `commit-msg` hook enforces, in seconds — catching a too-long title or
+a wrong type before it is rediscovered after the full pre-commit gate (lint, tests, coverage)
+has already run.
+
 ## Development Setup
 
 1. **Dependency Management**:
