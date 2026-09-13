@@ -35,9 +35,6 @@ LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 PROJECT_DISPLAY_NAME=""
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -593,13 +590,13 @@ commit_and_push_github_assets() {
     apply_branch_protection "$project_path"
 }
 
-copy_alembic_templates() {
+copy_migration_templates() {
     local project_path="$1"
-    print_status "info" "Copying Alembic templates..."
+    print_status "info" "Copying migration templates..."
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/alembic.ini" "$project_path/alembic.ini"
-    mkdir -p "$project_path/alembic/versions"
-    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/alembic/." "$project_path/alembic"
-    print_status "success" "Alembic templates copied"
+    mkdir -p "$project_path/migrations/versions"
+    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/migrations/." "$project_path/migrations"
+    print_status "success" "Migration templates copied"
 }
 
 conditional_copy_docker_compose() {
@@ -608,6 +605,12 @@ conditional_copy_docker_compose() {
     local src="$COMMON_TEMPLATE_ROOT/docker-compose.${DB_COMPOSE_BACKEND}.yml"
     cp "$src" "$project_path/docker-compose.yml"
     print_status "success" "docker-compose.yml (${DB_COMPOSE_BACKEND}) copied"
+}
+
+provision_migrations() {
+    local project_path="$1"
+    copy_migration_templates "$project_path"
+    patch_pyproject_db_driver "$project_path"
 }
 
 patch_pyproject_db_driver() {
@@ -638,12 +641,6 @@ patch_pyproject_db_driver() {
 # DB_COMPOSE_BACKEND), split out here rather than adding a second line to main() (blueprintx#438
 # pushed main() over the function-length ceiling; these two calls were always sequential and
 # never meant to be reordered independently).
-provision_alembic() {
-    local project_path="$1"
-    copy_alembic_templates "$project_path"
-    patch_pyproject_db_driver "$project_path"
-}
-
 # Output directory is data-driven from inputs.yaml (no startup.py patching).
 conditional_patch_inputs_yaml() {
     local project_path="$1"
@@ -868,9 +865,6 @@ PY
     print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
@@ -896,7 +890,7 @@ main() {
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     conditional_prune_optin_deps "$PROJECT_PATH"
-    provision_alembic "$PROJECT_PATH"
+    provision_migrations "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_copy_storage "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"

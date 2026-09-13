@@ -303,6 +303,16 @@ repos:
         files: \.(py|ya?ml|sql|sh|toml|cfg|ini)$|\.env\.example$
         exclude: ^docs/
 
+      # Bounds comment volume in every code format, QA suppression pragmas (noqa,
+      # complexity-ok, type: ignore, codespell:ignore, ...) explicitly exempt via
+      # an anticipatory allowlist (bin/comment_budget_allowlist.txt). Escape
+      # hatch: `# comment-budget-ok: <reason>`.
+      - id: check-comment-budget
+        name: comment budget (long runs + decorative banners)
+        entry: bash bin/poetry_exec.sh run python bin/check_comment_budget.py
+        language: system
+        pass_filenames: false
+
       - id: mypy
         name: mypy (static type check)
         # Run from src/ so it is the single package base (bare config.x/utils.x imports
