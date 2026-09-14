@@ -73,8 +73,11 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$str_project_path/requirements.txt"
 	cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$str_project_path/.codespellrc"
 	# Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
-	# review tools is a row here rather than an edit to the gate.
-	cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$str_project_path/.review-bots.yaml"
+	# review tools is a row here rather than an edit to the gate. Skipped when the
+	# scaffold answered "no reviewer bot" (blueprintx#374 — rationale in docs/faq.md).
+	if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
+		cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$str_project_path/.review-bots.yaml"
+	fi
 	cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$str_project_path/mypy.ini"
 	cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$str_project_path/.sqlfluff"
 	cp "$COMMON_TEMPLATE_ROOT/.sqlfluffignore" "$str_project_path/.sqlfluffignore"

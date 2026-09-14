@@ -394,9 +394,11 @@ main() {
 
     validate_inputs
     resolve_github_username
+    scaffold_prompt_review_bot_roster
     create_directory_structure "$PROJECT_PATH"
     copy_skeleton_files "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    scaffold_prune_review_bot_roster "$PROJECT_PATH"
     # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
