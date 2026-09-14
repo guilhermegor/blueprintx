@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from types import MappingProxyType
 
 import pytest
@@ -2271,3 +2272,101 @@ def test_deps_gate_hard_fails_when_deptry_is_unresolvable_instead_of_skipping(
 	assert cls_result.returncode != 0, f"an absent gate reported success: {str_all}"
 	assert "not resolvable" in str_all
 	assert "skip" not in str_all.lower()
+
+
+# --------------------------
+# run.sh — blueprintx#252: an argument passed to `poe run <x>` must reach the entrypoint
+# --------------------------
+
+
+def _materialise_run_sh(path_root: Path) -> Path:
+	"""Build a throwaway project tree with ``run.sh`` + its libs, ready to invoke.
+
+	Seeds the pieces ``run.sh`` needs before it reaches ``run_entrypoint``: a ``src/main.py``
+	entrypoint and an executable, up-to-date stub project venv, so ``ensure_runtime_env``
+	short-circuits ("using existing virtualenv") without touching Poetry or pip. The stub
+	venv "python" just echoes its own argv, which is what makes a forwarded token observable.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		Project root to build.
+
+	Returns
+	-------
+	pathlib.Path
+		Path to the copied ``run.sh`` inside the throwaway tree.
+	"""
+	path_script = _materialise_gate_tree(path_root, "run.sh")
+	_write(path_root / "pyproject.toml", "[tool.poetry]\n")
+	_write(path_root / "src" / "main.py", '"""Entrypoint stub."""\n')
+
+	path_python = path_root / ".venv" / "bin" / "python"
+	_write(path_python, '#!/bin/sh\necho "PYTHON_ARGV:$*"\n')
+	path_python.chmod(0o755)
+	# Newer than pyproject.toml with a margin, so the `-nt` mtime check in
+	# runtime_env_needs_bootstrap is unambiguous regardless of filesystem mtime resolution.
+	float_future = time.time() + 60
+	os.utime(path_python, (float_future, float_future))
+	return path_script
+
+
+def _run_run_sh(path_script: Path, list_args: list[str]) -> subprocess.CompletedProcess:
+	"""Invoke the materialised ``run.sh`` with extra CLI arguments.
+
+	Parameters
+	----------
+	path_script : pathlib.Path
+		The copied ``run.sh``, as returned by ``_materialise_run_sh``.
+	list_args : list[str]
+		Extra tokens to pass, mimicking ``poe run <these>``.
+
+	Returns
+	-------
+	subprocess.CompletedProcess
+		The completed run.
+	"""
+	dict_env = dict(os.environ)
+	dict_env.pop("FORCE_COLOR", None)
+	dict_env.pop("CLICOLOR_FORCE", None)
+	dict_env.pop("NO_COLOR", None)
+	dict_env.pop("LC_ALL", None)
+	dict_env.pop("COLUMNS", None)
+	dict_env.pop("TZ", None)
+	# Constant, trusted argv built from repo-internal paths — no user input reaches it.
+	return subprocess.run(  # noqa: S603
+		[_STR_BASH, str(path_script), *list_args],
+		capture_output=True,
+		text=True,
+		check=False,
+		env=dict_env,
+	)
+
+
+def test_run_forwards_an_argument_to_the_entrypoint(tmp_path: Path) -> None:
+	"""The should-fail control for blueprintx#252.
+
+	Before the fix, ``run_entrypoint`` invoked ``python -m <module>`` on all three resolution
+	branches with no ``"$@"`` — a token like ``poe run reconcile`` reached ``main()`` and was
+	silently dropped two hops later, so the default pipeline ran instead of failing or
+	selecting anything. The stub venv python echoes its own argv, so the forwarded token is
+	directly observable.
+	"""
+	path_script = _materialise_run_sh(tmp_path)
+
+	cls_result = _run_run_sh(path_script, ["reconcile"])
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
+	assert "PYTHON_ARGV:-m src.main reconcile" in str_all, str_all
+
+
+def test_run_with_no_extra_argument_still_calls_the_entrypoint(tmp_path: Path) -> None:
+	"""Forwarding ``"$@"`` must not break the existing zero-argument invocation."""
+	path_script = _materialise_run_sh(tmp_path)
+
+	cls_result = _run_run_sh(path_script, [])
+	str_all = cls_result.stdout + cls_result.stderr
+
+	assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
+	assert "PYTHON_ARGV:-m src.main" in str_all, str_all
