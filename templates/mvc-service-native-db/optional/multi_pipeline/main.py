@@ -17,15 +17,15 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from config.connection_db import build_connection  # noqa: E402
 from config.startup import (  # noqa: E402
-	APP_NAME,
-	ENVIRONMENT,
-	HOSTNAME,
-	LOGGER,
-	PATH_JSON,
-	PATH_LOG,
-	USER,
-	YAML_INPUTS,
-	output_path,
+    APP_NAME,
+    ENVIRONMENT,
+    HOSTNAME,
+    LOGGER,
+    PATH_JSON,
+    PATH_LOG,
+    USER,
+    YAML_INPUTS,
+    output_path,
 )
 from controller.pipeline_dispatch import build_pipeline, resolve_intent  # noqa: E402
 
@@ -42,20 +42,20 @@ CLS_EMAIL_HANDLER = None
 STR_INTENT = resolve_intent(os.getenv("PIPELINE_INTENT", "send"))
 
 build_pipeline(
-	STR_INTENT,
-	logger=LOGGER,
-	fn_build_connection=build_connection,
-	fn_output_path=output_path,
-	path_json=PATH_JSON,
-	dict_context={
-		"App": APP_NAME,
-		"Operator": USER,
-		"Hostname": HOSTNAME,
-		"Environment": ENVIRONMENT,
-		"Pipeline intent": STR_INTENT,
-		"Inputs config in memory": YAML_INPUTS,
-		"Log path": PATH_LOG,
-		"JSON export path": PATH_JSON,
-	},
-	cls_email_handler=CLS_EMAIL_HANDLER,
+    STR_INTENT,
+    logger=LOGGER,
+    fn_build_connection=build_connection,
+    fn_output_path=output_path,
+    path_json=PATH_JSON,
+    dict_context={
+        "App": APP_NAME,
+        "Operator": USER,
+        "Hostname": HOSTNAME,
+        "Environment": ENVIRONMENT,
+        "Pipeline intent": STR_INTENT,
+        "Inputs config in memory": YAML_INPUTS,
+        "Log path": PATH_LOG,
+        "JSON export path": PATH_JSON,
+    },
+    cls_email_handler=CLS_EMAIL_HANDLER,
 ).run()

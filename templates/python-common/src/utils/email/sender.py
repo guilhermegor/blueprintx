@@ -30,70 +30,70 @@ from utils.logs import log_message
 # the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from typing import TypeVar
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 @type_checker
 def send_email_block(  # noqa: PLR0913 — one orchestration call, each argument a real option
-	fn_send_email: Callable[[str, list[str], list[str], str, list[str], bool], bool],
-	str_block_key: str,
-	str_subject: str,
-	list_to: list[str],
-	list_cc: list[str],
-	str_body: str,
-	list_attachments: list[str] | None = None,
-	logger: Logger | None = None,
+    fn_send_email: Callable[[str, list[str], list[str], str, list[str], bool], bool],
+    str_block_key: str,
+    str_subject: str,
+    list_to: list[str],
+    list_cc: list[str],
+    str_body: str,
+    list_attachments: list[str] | None = None,
+    logger: Logger | None = None,
 ) -> bool:
-	"""Send one e-mail block, gated by :func:`utils.email.dispatch.resolve_dispatch`.
+    """Send one e-mail block, gated by :func:`utils.email.dispatch.resolve_dispatch`.
 
-	Parameters
-	----------
-	fn_send_email : Callable[[str, list of str, list of str, str, list of str, bool], bool]
-		The concrete sender, matching ``EmailHandler.send_email``'s signature — pass a bound
-		method such as ``cls_handler.send_email``.
-	str_block_key : str
-		The ``emails.yaml`` block key controlling this send's dispatch policy.
-	str_subject : str
-		Subject line.
-	list_to : list of str
-		Primary recipients.
-	list_cc : list of str
-		Carbon-copy recipients.
-	str_body : str
-		Plain-text (or HTML) body; converted via :func:`utils.email.html_body.to_html_body`.
-	list_attachments : list of str | None, optional
-		File paths to attach; ``None`` sends none.
-	logger : logging.Logger | None, optional
-		Run logger, forwarded to :func:`~utils.email.dispatch.resolve_dispatch` and used for
-		the skip line.
+    Parameters
+    ----------
+    fn_send_email : Callable[[str, list of str, list of str, str, list of str, bool], bool]
+            The concrete sender, matching ``EmailHandler.send_email``'s signature — pass a bound
+            method such as ``cls_handler.send_email``.
+    str_block_key : str
+            The ``emails.yaml`` block key controlling this send's dispatch policy.
+    str_subject : str
+            Subject line.
+    list_to : list of str
+            Primary recipients.
+    list_cc : list of str
+            Carbon-copy recipients.
+    str_body : str
+            Plain-text (or HTML) body; converted via :func:`utils.email.html_body.to_html_body`.
+    list_attachments : list of str | None, optional
+            File paths to attach; ``None`` sends none.
+    logger : logging.Logger | None, optional
+            Run logger, forwarded to :func:`~utils.email.dispatch.resolve_dispatch` and used for
+            the skip line.
 
-	Returns
-	-------
-	bool
-		``True`` when ``fn_send_email`` was called and dispatched; ``False`` when the block's
-		dispatch policy skipped the send.
-	"""
-	bool_send, bool_auto_send = resolve_dispatch(str_block_key, logger)
-	if not bool_send:
-		log_message(
-			logger, f"[email] block '{str_block_key}' skipped (EMAIL_SEND resolved off)", "info"
-		)
-		return False
-	return fn_send_email(
-		str_subject,
-		list_to,
-		list_cc,
-		to_html_body(str_body),
-		list_attachments or [],
-		bool_auto_send,
-	)
+    Returns
+    -------
+    bool
+            ``True`` when ``fn_send_email`` was called and dispatched; ``False`` when the block's
+            dispatch policy skipped the send.
+    """
+    bool_send, bool_auto_send = resolve_dispatch(str_block_key, logger)
+    if not bool_send:
+        log_message(
+            logger, f"[email] block '{str_block_key}' skipped (EMAIL_SEND resolved off)", "info"
+        )
+        return False
+    return fn_send_email(
+        str_subject,
+        list_to,
+        list_cc,
+        to_html_body(str_body),
+        list_attachments or [],
+        bool_auto_send,
+    )

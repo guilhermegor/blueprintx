@@ -19,93 +19,93 @@ Record = dict[str, Any]
 
 
 class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
-	"""Abstract handler exposing CRUD operations for any storage backend.
+    """Abstract handler exposing CRUD operations for any storage backend.
 
-	Attributes
-	----------
-	id_field : str
-		Name of the identifier field used across backends.
-	"""
+    Attributes
+    ----------
+    id_field : str
+            Name of the identifier field used across backends.
+    """
 
-	id_field: str = "id"
+    id_field: str = "id"
 
-	@abstractmethod
-	def create(self, record: Record) -> str:
-		"""Persist a record and return its identifier.
+    @abstractmethod
+    def create(self, record: Record) -> str:
+        """Persist a record and return its identifier.
 
-		Parameters
-		----------
-		record : Record
-			Data to store.
+        Parameters
+        ----------
+        record : Record
+                Data to store.
 
-		Returns
-		-------
-		str
-			Identifier assigned to the stored record.
-		"""
+        Returns
+        -------
+        str
+                Identifier assigned to the stored record.
+        """
 
-	@abstractmethod
-	def read(self, record_id: str) -> Record | None:
-		"""Fetch a record by identifier.
+    @abstractmethod
+    def read(self, record_id: str) -> Record | None:
+        """Fetch a record by identifier.
 
-		Parameters
-		----------
-		record_id : str
-			Identifier to look up.
+        Parameters
+        ----------
+        record_id : str
+                Identifier to look up.
 
-		Returns
-		-------
-		Record or None
-			Stored record when found, otherwise ``None``.
-		"""
+        Returns
+        -------
+        Record or None
+                Stored record when found, otherwise ``None``.
+        """
 
-	@abstractmethod
-	def update(self, record_id: str, updates: Record) -> Record | None:
-		"""Update a record and return the new value if it exists.
+    @abstractmethod
+    def update(self, record_id: str, updates: Record) -> Record | None:
+        """Update a record and return the new value if it exists.
 
-		Parameters
-		----------
-		record_id : str
-			Identifier of the record to update.
-		updates : Record
-			Partial payload containing fields to override.
+        Parameters
+        ----------
+        record_id : str
+                Identifier of the record to update.
+        updates : Record
+                Partial payload containing fields to override.
 
-		Returns
-		-------
-		Record or None
-			Updated record when it exists, otherwise ``None``.
-		"""
+        Returns
+        -------
+        Record or None
+                Updated record when it exists, otherwise ``None``.
+        """
 
-	@abstractmethod
-	def delete(self, record_id: str) -> bool:
-		"""Remove a record by identifier.
+    @abstractmethod
+    def delete(self, record_id: str) -> bool:
+        """Remove a record by identifier.
 
-		Parameters
-		----------
-		record_id : str
-			Identifier of the record to remove.
+        Parameters
+        ----------
+        record_id : str
+                Identifier of the record to remove.
 
-		Returns
-		-------
-		bool
-			``True`` when a row was deleted, ``False`` otherwise.
-		"""
+        Returns
+        -------
+        bool
+                ``True`` when a row was deleted, ``False`` otherwise.
+        """
 
-	@abstractmethod
-	def backup(self, target_path: str | Path) -> Path:
-		"""Create a backup of all stored data.
+    @abstractmethod
+    def backup(self, target_path: str | Path) -> Path:
+        """Create a backup of all stored data.
 
-		Parameters
-		----------
-		target_path : str or Path
-			Destination file path for the backup artifact.
+        Parameters
+        ----------
+        target_path : str or Path
+                Destination file path for the backup artifact.
 
-		Returns
-		-------
-		Path
-			Path to the created backup artifact.
-		"""
+        Returns
+        -------
+        Path
+                Path to the created backup artifact.
+        """
 
-	@abstractmethod
-	def close(self) -> None:
-		"""Release any resources held by the handler."""
+    @abstractmethod
+    def close(self) -> None:
+        """Release any resources held by the handler."""
