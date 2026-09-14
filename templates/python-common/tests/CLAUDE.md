@@ -143,10 +143,25 @@ Use comment-banner sections in this order (omit a section if empty):
 
 - **Name**: `test_<unit>_<scenario>_<expected_outcome>` — e.g.
   `test_render_missing_parent_dir_creates_it`.
-- **One behaviour per test.** Assert a single outcome; split scenarios into separate tests.
+- **One BEHAVIOUR per test — not one assert.** Several asserts pinning different facets of the
+  **same** behaviour (a value and its dtype; a rendered message and the absence of a secret in
+  it) are one behaviour and belong in one test — splitting them duplicates the whole *arrange*
+  to prove nothing new. Two asserts exercising two **independent** code paths are two tests.
+  The test to apply: **if this test fails, does its name say what broke?** If yes, the asserts
+  are angles on one fact. If a reader has to open the test body to find out which of several
+  unrelated things failed, split it.
+
   This is not only prose: `bin/check_complexity.sh` caps `tests/` at cyclomatic complexity
-  **1**, which is the mechanical form of the same rule. A test with a branch tests two paths
-  and the green never says which one ran.
+  **1** — the same argument one level up. A test with a *branch* tests two paths and the green
+  never says which one ran; a test with several asserts on one behaviour has no branch, so it
+  stays under the cap. Measured 2026-09-14 (AST assert-count over this tree): 768 tests, 205
+  (27%) with more than one assert — confirms the rule people actually follow is BEHAVIOUR, not
+  assert count, and corrects blueprintx#429's own "554 / 31%" as stale. The one narrow,
+  decidable slice of "one assert hides two facts" — `assert a and b`, where a failure can't say
+  which half broke — is already caught by ruff's `PT018` (0 violations in this tree); that is
+  the linter's job, not this paragraph's. See blueprintx#429/#431 before adding a hand-rolled
+  assert-counting gate: a ceiling on assert count would fail the legitimate multi-facet case
+  above.
 - **Mock at the boundary, not inside business logic.** Patch the filesystem, DB cursor/session,
   HTTP client, or webhook — never the function under test. Use `pytest-mock`'s `mocker`
   (`mocker.patch`, `mocker.patch.object`); use `tmp_path` for real-but-disposable files.
