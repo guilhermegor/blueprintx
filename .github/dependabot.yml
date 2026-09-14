@@ -1,0 +1,76 @@
+# Dependabot — ordinary VERSION updates for BlueprintX's OWN repo (blueprintx#471).
+#
+# Distinct from Dependabot SECURITY updates (auto-PRs for known vulnerabilities), which are a
+# repo-wide toggle already enabled here regardless of this file — that is why PR #400
+# (`dependabot/pip/pip-…`, touching only `poetry.lock`) exists despite this file's absence until
+# now. This file adds routine, non-urgent bumps on top; it is not what makes security patches show
+# up.
+#
+# Reuses the reasoning already written in templates/python-common/.github/dependabot.yml rather
+# than re-deriving it (lockfile-only versioning, minor+patch grouped into one PR, majors solo), but
+# the CADENCE deliberately differs: MONTHLY here, not weekly.
+#
+# WHY monthly: this repo's own review queue (CodeRabbit, rate-limited) already carries ~15 open
+# PRs. The three ecosystems below ship no runtime product code of this repo's own — a docs-site
+# venv, ts-common's shared React/Webpack toolchain (consumed by every generated project, not run
+# here), and the Actions runners — so a bump sitting one extra week is not a live risk; a real
+# vulnerability is already caught by the security-update toggle above on its own schedule,
+# independent of this file. Grouping already caps ordinary noise to at most one PR per ecosystem
+# per interval; monthly caps it further, to at most 3 PRs/month instead of up to 3/week, which is
+# the actual lever being pulled here.
+#
+# ⚠️ `npm` below targets templates/ts-common, whose package-lock.json is being added by #468
+# (open, not yet merged as of this writing). Until that lockfile lands on main, this ecosystem's
+# scheduled run has nothing to lock against — expect it to report a config/resolution error on the
+# Dependabot dashboard (not a repo check, so it blocks nothing) until #468 merges.
+#
+# ⚠️ NO `labels:` HERE ON PURPOSE, same reason as the template file: bin/pr_gate.py already labels
+# every PR by changed path (risk:*/size:*/gate:*), and Dependabot posts an ERROR COMMENT on every
+# PR it opens when a declared label does not exist in the repo.
+version: 2
+
+updates:
+  - package-ecosystem: "npm" # templates/ts-common — the React/Webpack toolchain every TS scaffold copies
+    directory: "/templates/ts-common"
+    schedule:
+      interval: "monthly"
+    versioning-strategy: "lockfile-only"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pip" # the root pyproject.toml/poetry.lock exist only to drive the MkDocs docs site
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    versioning-strategy: "lockfile-only"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Keeps this repo's own CI off deprecated Actions runtimes. #369 (pinning by SHA) is Dependabot's
+  # usual companion — pinning alone doesn't self-update, this does.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"
