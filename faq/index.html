@@ -472,6 +472,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#i-dont-use-a-pr-review-bot-will-the-generated-projects-required-check-ever-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I don't use a PR review bot — will the generated project's required check ever pass?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-is-blueprintx-itself-versioned" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1344,6 +1355,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#i-dont-use-a-pr-review-bot-will-the-generated-projects-required-check-ever-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I don't use a PR review bot — will the generated project's required check ever pass?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-is-blueprintx-itself-versioned" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1408,6 +1430,18 @@ copied into scaffolded projects.</p>
 CODEOWNERS, PR template). Without one, it ships an offline git-diff workflow instead. Library
 projects also switch versioning: online = tag-driven, offline = a local <code>poe bump_version</code>
 (<code>cz bump</code>, run inside the generated project — not a BlueprintX <code>make</code> target).</p>
+<h2 id="i-dont-use-a-pr-review-bot-will-the-generated-projects-required-check-ever-pass">I don't use a PR review bot — will the generated project's required check ever pass?<a class="headerlink" href="#i-dont-use-a-pr-review-bot-will-the-generated-projects-required-check-ever-pass" title="Permanent link">&para;</a></h2>
+<p>The scaffolder asks <em>"Do you have (or will you install) a PR review bot such as CodeRabbit
+on this repo?"</em>. Answer <strong>no</strong> and it skips copying <code>.review-bots.yaml</code> instead of shipping
+it empty — <code>reviewers: []</code> is treated by the gate as "switched off from inside the very PR
+it polices" and raises, which is worse than never having adopted the gate at all. With the
+file absent, <code>check_review_threads.py</code> reads "the review-thread gate is not adopted here"
+and exits 0: the required check still runs on every PR (nothing else changes in <code>.github/</code>),
+it just reports success instead of demanding a reviewer that will never exist. Answer <strong>yes</strong>
+later and re-adding the roster turns the gate back on — at the path the gate reads, which differs
+by language: for Python copy <code>templates/python-common/.review-bots.yaml</code> to the project root; for
+TypeScript copy <code>templates/ts-common/.github/.review-bots.yaml</code> to <code>.github/.review-bots.yaml</code>. See blueprintx#374 (why this needed
+a fix) and blueprintx#262 (why an empty roster is not the opt-out).</p>
 <h2 id="how-is-blueprintx-itself-versioned">How is BlueprintX itself versioned?<a class="headerlink" href="#how-is-blueprintx-itself-versioned" title="Permanent link">&para;</a></h2>
 <p>The version is the git tag. Cut a release from the <strong>Release</strong> GitHub Action (enter the version
 once); <code>blueprintx --version</code> resolves it via <code>git describe</code> from a checkout, or a stamped
