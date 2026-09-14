@@ -353,6 +353,36 @@ copy_static_ts_common_files() {
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
 }
 
+# Refresh the lockfile after apply_package_variants (blueprintx#468 review).
+# copy_common_templates ships the BASE lockfile, and apply_package_variants then adds the
+# variant's dependencies to package.json — so a zustand/redux project would carry a lockfile
+# that no longer matches its manifest. The generated project runs `npm ci` in five workflows,
+# and `npm ci` fails hard on exactly that mismatch: the pinning #464 introduced would have
+# turned into a red first push for two of the three supported variants.
+refresh_lockfile_for_variants() {
+	local project_path="$1"
+	# The base variant never diverges from the shipped lockfile.
+	if [[ "$STATE_MANAGEMENT" == "none" ]]; then
+		return
+	fi
+	if ! command -v npm >/dev/null 2>&1; then
+		# Ship no lockfile rather than a wrong one: `npm install` regenerates a correct one,
+		# while a stale file fails in CI, far from here, naming neither the variant nor this step.
+		rm -f "$project_path/package-lock.json"
+		print_status "warning" \
+			"npm not found: package-lock.json omitted for the '$STATE_MANAGEMENT' variant — run 'npm install' before the first push"
+		return
+	fi
+	print_status "info" "Refreshing package-lock.json for the '$STATE_MANAGEMENT' variant..."
+	if (cd "$project_path" && npm install --package-lock-only --silent >/dev/null 2>&1); then
+		print_status "success" "package-lock.json matches the patched package.json"
+	else
+		rm -f "$project_path/package-lock.json"
+		print_status "warning" \
+			"lockfile refresh failed (offline?): package-lock.json omitted — run 'npm install' before the first push"
+	fi
+}
+
 copy_common_templates() {
     local project_path="$1"
 
@@ -636,6 +666,7 @@ main() {
     apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
+    refresh_lockfile_for_variants "$PROJECT_PATH"
     apply_js_copy_delivery "$PROJECT_PATH"
     # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"
