@@ -157,6 +157,17 @@ repos:
         files: \.(py|sh)$
         pass_filenames: false
 
+      # A PROXY, not a detector (blueprintx#442) — see the module docstring. The real
+      # detector is pytest-randomly (pytest.ini has no config for it; it self-activates
+      # once installed). This gate only pins today's zero-shared-state baseline so the
+      # first `scope="module"` fixture does not remove it silently.
+      - id: fixture-scope
+        name: fixture scope (non-function scope needs a written reason)
+        entry: bash bin/poetry_exec.sh run python bin/check_fixture_scope.py
+        language: system
+        files: ^tests/.*\.py$
+        pass_filenames: false
+
       # Diff-scoped against merge-base(HEAD, main) — unlike every OTHER hook here, this one
       # checks a DELTA, not a whole-tree property: a hook/rule/exclude that was never added is
       # not a violation, but one that WAS there and got REMOVED without a `gate-change-ok:
