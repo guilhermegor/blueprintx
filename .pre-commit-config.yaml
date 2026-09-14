@@ -243,3 +243,10 @@ repos:
         language: system
         pass_filenames: false
         files: \.(py|md)$
+
+      - id: check-markdown
+        name: markdownlint (pymarkdownlnt, measured rule set — blueprintx#383)
+        entry: bash bin/ci/check_markdown.sh
+        language: system
+        pass_filenames: false
+        files: \.md$
