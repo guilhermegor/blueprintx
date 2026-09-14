@@ -99,7 +99,7 @@ repos:
         entry: bash bin/ci/check_review_bot_roster_optout.sh
         language: system
         pass_filenames: false
-        files: ^bin/(lib/scaffold_(git_remote|python_templates)\.sh|scaffold/(ts_lib|ts_react_app)\.sh|ci/check_review_bot_roster_optout\.sh)$
+        files: ^(bin/(lib/scaffold_(git_remote|python_templates)\.sh|scaffold/(ts_lib|ts_react_app|python_lib_minimal)\.sh|ci/check_review_bot_roster_optout\.sh)|templates/(python-common/\.review-bots\.yaml|ts-common/\.github/\.review-bots\.yaml))$
 
       - id: lint-actions
         name: actionlint (workflows, repo + templates)

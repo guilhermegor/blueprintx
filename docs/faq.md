@@ -40,8 +40,9 @@ it polices" and raises, which is worse than never having adopted the gate at all
 file absent, `check_review_threads.py` reads "the review-thread gate is not adopted here"
 and exits 0: the required check still runs on every PR (nothing else changes in `.github/`),
 it just reports success instead of demanding a reviewer that will never exist. Answer **yes**
-later and re-adding `.review-bots.yaml` (copy it from a sibling scaffolded project, or from
-`templates/*/.review-bots.yaml`) turns the gate back on. See blueprintx#374 (why this needed
+later and re-adding the roster turns the gate back on — at the path the gate reads, which differs
+by language: for Python copy `templates/python-common/.review-bots.yaml` to the project root; for
+TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
 ## How is BlueprintX itself versioned?
