@@ -494,7 +494,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: templates/ts-common/package.json
+          cache-dependency-path: templates/ts-common/package-lock.json
 
       - name: Assemble typecheck workspace
         run: |
@@ -504,6 +504,10 @@ jobs:
           envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
             < templates/ts-common/package.json \
             > /tmp/ts-typecheck/package.json
+          # package-lock.json's root "name"/"version" don't need to match the
+          # envsubst-rendered package.json above -- npm ci only validates the
+          # dependency trees (verified locally, blueprintx#464).
+          cp templates/ts-common/package-lock.json /tmp/ts-typecheck/package-lock.json
           cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
           cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
           # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
@@ -512,9 +516,9 @@ jobs:
           # stand-in for that scaffold and drifted from it when #436 added the shared source.
           cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared
 
-      - name: Install npm dependencies
+      - name: Install npm dependencies (npm ci enforces the committed lockfile, #464)
         working-directory: /tmp/ts-typecheck
-        run: npm install
+        run: npm ci
 
       - name: Run tsc --noEmit (type errors only, no output files)
         working-directory: /tmp/ts-typecheck

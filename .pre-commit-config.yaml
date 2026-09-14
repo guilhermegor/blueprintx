@@ -43,8 +43,11 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
       - id: check-added-large-files
+        # 700: templates/ts-common/package-lock.json (~596 KB, ~1160 resolved
+        # packages) is a real committed lockfile, not an accidental binary --
+        # the default 500 KB cap rejected it outright (#464).
         args:
-          - --maxkb=500
+          - --maxkb=700
       - id: no-commit-to-branch  # protects main, matches CONTRIBUTING.md
 
   # Layer 2 — Conventional Commits enforcement (commit-msg stage).
