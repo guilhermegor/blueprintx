@@ -115,6 +115,18 @@ select = [
     # (blueprintx#360). Measured 2 findings there; enabling strict-checking would put a gate
     # violation on deliberate, correct design, which is how a gate teaches everyone to disable it.
     "A",
+    # BLE - flake8-blind-except - flags `except Exception:` / `except BaseException:`.
+    # `E722` (already selected via `E`) only catches bare `except:`; BLE001 is the gap above
+    # it. Measured 2026-09-16 (ruff 0.11.13): `--select BLE --statistics templates/` → 2
+    # findings, both `_pipeline.py` (mvc-service-native-db, mvc-service-orm-db, byte-identical
+    # files), a documented five-mode degradation, now `# noqa: BLE001`. 9 other broad handlers
+    # in the tree already carried a `# noqa: BLE001` that this rule was not yet selected to
+    # enforce — selecting it is what makes those suppressions real (blueprintx#440). `RUF` was
+    # measured in the same pass and NOT adopted: `--select RUF --statistics templates/` → 150
+    # findings (138 RUF100 unused-noqa alone, mostly noqa comments anticipating rule families
+    # not yet selected, e.g. `N-` ahead of blueprintx#486) — real cost, not zero, so it is a
+    # separate decision left for a follow-up issue rather than bundled here.
+    "BLE",
 ]
 ignore = [
     "D206",  # docstring should be indented with spaces, not tabs
