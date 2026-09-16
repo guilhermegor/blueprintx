@@ -7,8 +7,15 @@
 # up.
 #
 # Reuses the reasoning already written in templates/python-common/.github/dependabot.yml rather
-# than re-deriving it (lockfile-only versioning, minor+patch grouped into one PR, majors solo), but
-# the CADENCE deliberately differs: MONTHLY here, not weekly.
+# than re-deriving it (minor+patch grouped into one PR, majors solo), but the CADENCE deliberately
+# differs: MONTHLY here, not weekly.
+#
+# ⚠️ `increase-if-necessary`, NOT `lockfile-only`, and the two are not interchangeable here:
+# `lockfile-only` refuses any update that needs a manifest edit, and both manifests use caret
+# ranges, so every MAJOR bump requires one. Under `lockfile-only` the "majors solo" half of the
+# policy above silently never happens — no major PR is ever opened, and nothing reports that.
+# `increase-if-necessary` edits the manifest only when the range genuinely cannot express the new
+# version, which is exactly the major case (blueprintx#484).
 #
 # WHY monthly: this repo's own review queue (CodeRabbit, rate-limited) already carries ~15 open
 # PRs. The three ecosystems below ship no runtime product code of this repo's own — a docs-site
@@ -34,7 +41,7 @@ updates:
     directory: "/templates/ts-common"
     schedule:
       interval: "monthly"
-    versioning-strategy: "lockfile-only"
+    versioning-strategy: "increase-if-necessary"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
@@ -50,7 +57,7 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-    versioning-strategy: "lockfile-only"
+    versioning-strategy: "increase-if-necessary"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
@@ -71,6 +78,12 @@ updates:
     commit-message:
       prefix: "chore(ci)"
     groups:
+      # minor+patch only, matching the two ecosystems above: a group with no `update-types`
+      # includes MAJORS, which would bundle an incompatible runtime bump in with routine
+      # ones instead of leaving it solo and reviewable (blueprintx#484).
       actions:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
