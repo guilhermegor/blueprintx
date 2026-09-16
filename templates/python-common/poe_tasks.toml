@@ -179,6 +179,10 @@ help = "Verify NumPy docstrings against their signatures"
 cmd = "python bin/check_function_length.py"
 help = "Cap a function at 60 lines of code (docstring excluded)"
 
+[tool.poe.tasks.check_fixture_scope]
+cmd = "python bin/check_fixture_scope.py"
+help = "Proxy: flag a non-function-scope test fixture with no written reason (#442)"
+
 [tool.poe.tasks.check_complexity]
 cmd = "bash bin/check_complexity.sh"
 help = "Cyclomatic-complexity ceiling per tree (tests 1, src 2, bin 8)"

@@ -61,6 +61,9 @@ $POETRY run python bin/check_comment_budget.py
 print_status info "function length"
 $POETRY run python bin/check_function_length.py
 
+print_status info "fixture scope (proxy — pair with pytest-randomly, blueprintx#442)"
+$POETRY run python bin/check_fixture_scope.py
+
 print_status info "cyclomatic complexity"
 bash bin/check_complexity.sh
 
