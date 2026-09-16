@@ -31,6 +31,22 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  sed-portability:
+    name: sed portability — no bare sed -i (blueprintx#459)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # GNU sed's -i takes no argument; BSD/macOS sed's -i REQUIRES one, so a bare `sed -i`
+      # aborts a scaffold partway through on the platform the README advertises. This gate
+      # rejects the GNU-only form under bin/ and templates/**/bin/ — sed_inplace()
+      # (bin/lib/common.sh) is the portable replacement.
+      - name: Reject a bare sed -i under bin/ and templates/**/bin/
+        run: bash bin/ci/check_sed_portability.sh
+
   git-remote-guard:
     name: Scaffold origin verification — mismatched remote must fail
     runs-on: ubuntu-latest

@@ -160,6 +160,29 @@ exit_error() {
 
 #
 # Usage:
+#   sed_inplace <sed-args...> <file>
+#
+# Portable "sed -i": GNU sed's `-i` takes no argument, BSD/macOS sed's `-i` REQUIRES one —
+# the README claims macOS support but every scaffold used the GNU-only form, aborting
+# partway through a scaffold on that platform (blueprintx#459). `-i.bak` satisfies both sed
+# implementations identically; the backup this creates is removed immediately after.
+#
+# Drop-in for a direct `sed -i <script...> <file>` call — replace `sed -i` with `sed_inplace`
+# and keep everything else. NOT usable under `xargs` (xargs execs a binary by name and cannot
+# invoke a shell function) — convert an `... | xargs -r sed -i <script>` site to a
+# `while read -r file; do sed_inplace <script> "$file"; done < <(...)` loop instead (see
+# conditional_copy_webhooks_yaml in bin/scaffold/python_mvc_service.sh for the pattern).
+
+sed_inplace() {
+    sed -i.bak "$@"
+    local str_arg
+    for str_arg in "$@"; do
+        [[ -f "${str_arg}.bak" ]] && rm -f "${str_arg}.bak"
+    done
+}
+
+#
+# Usage:
 #   target="$(resolve_default_branch [explicit_name])"
 #
 # Resolution order: explicit argument, then $DEFAULT_BRANCH, then the remote's
