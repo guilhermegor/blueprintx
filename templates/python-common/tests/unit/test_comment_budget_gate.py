@@ -360,7 +360,9 @@ def test_the_mandated_test_section_banner_is_exempt(tmp_path: Path) -> None:
 	tmp_path : pathlib.Path
 		A throwaway directory pytest provides per test.
 	"""
-	path_file = tmp_path / "probe.py"
+	path_dir = tmp_path / "tests"
+	path_dir.mkdir()
+	path_file = path_dir / "probe.py"
 	str_source = (
 		"# --------------------------\n"
 		"# Tests\n"
@@ -370,6 +372,94 @@ def test_the_mandated_test_section_banner_is_exempt(tmp_path: Path) -> None:
 	)
 	path_file.write_text(str_source, encoding="utf-8")
 	assert gate.file_problems(path_file) == []
+
+
+def test_a_test_module_outside_a_tests_dir_is_still_exempt(tmp_path: Path) -> None:
+	"""Scoping the exemption by directory alone was measured wrong.
+
+	``templates/*/optional/multi_pipeline/test_pipeline.py`` are real test
+	modules shipped outside any ``tests/`` tree. A directory-only rule flagged
+	6 mandated banners across those four files, so ``is_test_module`` follows
+	pytest's own discovery convention and accepts the ``test_`` filename
+	prefix too (blueprintx#479).
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_dir = tmp_path / "optional" / "multi_pipeline"
+	path_dir.mkdir(parents=True)
+	path_file = path_dir / "test_pipeline.py"
+	str_source = (
+		"# --------------------------\n"
+		"# Tests\n"
+		"# --------------------------\n"
+		"def test_something() -> None:\n"
+		"\tassert True\n"
+	)
+	path_file.write_text(str_source, encoding="utf-8")
+	assert gate.file_problems(path_file) == []
+
+
+def test_a_production_python_file_gets_no_section_banner_exemption(
+	tmp_path: Path,
+) -> None:
+	"""The exemption is scoped to test modules, not to every ``.py`` file.
+
+	``tests/CLAUDE.md`` mandates the rule/title/rule triple for structuring
+	TEST modules. The same three lines in a production ``.py`` are the plain
+	decorative banner this gate exists to police, so the exemption must not
+	reach them — see ``is_test_module`` (blueprintx#479).
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_dir = tmp_path / "src"
+	path_dir.mkdir()
+	path_file = path_dir / "service.py"
+	str_source = (
+		"# --------------------------\n"
+		"# Helpers\n"
+		"# --------------------------\n"
+		"def run() -> None:\n"
+		"\treturn None\n"
+	)
+	path_file.write_text(str_source, encoding="utf-8")
+	list_problems = gate.file_problems(path_file)
+	assert len(list_problems) == 1
+	assert "decorative banner (rule/title/rule)" in list_problems[0]
+
+
+def test_a_non_python_file_gets_no_section_banner_exemption(tmp_path: Path) -> None:
+	"""A shell file under ``tests/`` carrying the triple is still a banner.
+
+	Guards the other half of the scope: ``is_test_module`` requires BOTH a
+	``.py`` suffix and a ``tests`` path segment, so living under ``tests/`` is
+	not on its own enough to earn the exemption. The convention was measured
+	(blueprintx#466) to occur only in ``.py`` files.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		A throwaway directory pytest provides per test.
+	"""
+	path_dir = tmp_path / "tests"
+	path_dir.mkdir()
+	path_file = path_dir / "probe.sh"
+	str_source = (
+		"#!/bin/bash\n"
+		"# --------------------------\n"
+		"# Fixtures\n"
+		"# --------------------------\n"
+		"echo hi\n"
+	)
+	path_file.write_text(str_source, encoding="utf-8")
+	list_problems = gate.file_problems(path_file)
+	assert len(list_problems) == 1
+	assert "decorative banner (rule/title/rule)" in list_problems[0]
 
 
 def test_the_exempt_banner_does_not_split_an_oversized_run(tmp_path: Path) -> None:
@@ -410,7 +500,9 @@ def test_the_exempt_triple_still_counts_toward_an_oversized_run(tmp_path: Path) 
 	tmp_path : pathlib.Path
 		A throwaway directory pytest provides per test.
 	"""
-	path_file = tmp_path / "probe.py"
+	path_dir = tmp_path / "tests"
+	path_dir.mkdir()
+	path_file = path_dir / "probe.py"
 	list_lines = (
 		["# filler"] * 44
 		+ ["# --------------------------", "# Tests", "# --------------------------"]

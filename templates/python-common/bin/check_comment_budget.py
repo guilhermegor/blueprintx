@@ -137,7 +137,9 @@ RE_BANNER_LINE = re.compile(r"^[-=*#~_\s]{3,}$")
 # BREAKS a run (line_breaks_run), so listing this string there would let one
 # dash line split an oversized block into two under-ceiling halves
 # (blueprintx#479). The two rule lines still count toward the block's
-# length — only the banner FINDING is suppressed, never the run.
+# length — only the banner FINDING is suppressed, never the run. Scoped to
+# Python test modules by is_test_module: the same triple in a production
+# .py, a Makefile, a shell or a .ts file is a plain decorative banner.
 STR_TEST_SECTION_RULE = "--------------------------"
 
 
@@ -369,6 +371,38 @@ def has_valid_escape(list_lines: list) -> bool:
 	return bool(str_reason)
 
 
+def is_test_module(path_file: pathlib.Path) -> bool:
+	"""Return whether a path is a Python test module.
+
+	The test-section-banner exemption is scoped to these files and no others:
+	the convention comes from ``tests/CLAUDE.md`` and was measured
+	(blueprintx#466) to occur only in ``.py`` test modules. A production
+	``.py``, a Makefile, a shell script or a ``.ts`` file carrying the same
+	triple is a decorative banner, not a mandated section header
+	(blueprintx#479).
+
+	Identified by pytest's OWN discovery convention — a ``tests`` path segment
+	or a ``test_`` filename prefix — not by directory alone. Directory alone
+	was the first draft and it was wrong: the four
+	``optional/multi_pipeline/test_pipeline.py`` templates are real test
+	modules shipped outside any ``tests/`` tree, and scoping to the directory
+	flagged 6 mandated banners in them.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The file being checked.
+
+	Returns
+	-------
+	bool
+		True for a ``.py`` file pytest would collect as a test module.
+	"""
+	if path_file.suffix != ".py":
+		return False
+	return "tests" in path_file.parts or path_file.name.startswith("test_")
+
+
 def is_exempt_section_banner(list_lines: list, int_index: int) -> bool:
 	"""Return whether a triple at ``int_index`` is the mandated test-section banner.
 
@@ -395,14 +429,16 @@ def is_exempt_section_banner(list_lines: list, int_index: int) -> bool:
 	)
 
 
-def banner_findings(int_start: int, list_lines: list) -> list:
+def banner_findings(
+	int_start: int, list_lines: list, bool_allow_section_banner: bool = False
+) -> list:
 	"""Return the decorative-banner defects inside one comment block.
 
 	A punctuation-only line is a banner on its own; one flanked by two banner
 	lines is the ``rule / SECTION NAME / rule`` triple the issue names by
 	example, reported as a single three-line finding — except the exact
-	tests/CLAUDE.md test-section-banner triple, which is exempt (see
-	``is_exempt_section_banner``).
+	tests/CLAUDE.md test-section-banner triple in a Python test module,
+	which is exempt (see ``is_exempt_section_banner`` and ``is_test_module``).
 
 	Parameters
 	----------
@@ -410,6 +446,10 @@ def banner_findings(int_start: int, list_lines: list) -> list:
 		The block's first line number.
 	list_lines : list of str
 		The block's content lines.
+	bool_allow_section_banner : bool, optional
+		Whether the ``tests/CLAUDE.md`` section-banner exemption applies to this
+		file. Defaults to False so an unclassified caller gets the strict
+		behaviour: the exemption is opt-in per file type, never the fallback.
 
 	Returns
 	-------
@@ -428,7 +468,10 @@ def banner_findings(int_start: int, list_lines: list) -> list:
 			and bool(RE_BANNER_LINE.match(list_lines[int_index + 2]))
 		)
 		if bool_triple:
-			if not is_exempt_section_banner(list_lines, int_index):
+			bool_exempt = bool_allow_section_banner and is_exempt_section_banner(
+				list_lines, int_index
+			)
+			if not bool_exempt:
 				list_out.append((int_start + int_index, INT_BANNER_TRIPLE))
 			int_index += INT_BANNER_TRIPLE
 			continue
@@ -482,7 +525,9 @@ def file_problems(path_file: pathlib.Path) -> list:
 				f"# {STR_ESCAPE} <reason>"
 			)
 		if not bool_hatched:
-			for int_line, int_span in banner_findings(int_start, list_lines):
+			for int_line, int_span in banner_findings(
+				int_start, list_lines, is_test_module(path_file)
+			):
 				str_shape = (
 					"rule/title/rule" if int_span == INT_BANNER_TRIPLE else "punctuation-only line"
 				)
