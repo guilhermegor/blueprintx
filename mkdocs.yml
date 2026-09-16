@@ -17,6 +17,7 @@ nav:
   - FAQ: faq.md
   - Troubleshooting: troubleshooting.md
   - Contributing: contributing.md
+  - Quality Rules: quality-rules.md
   - Changelog: changelog.md
   - Versioning: versioning.md
   - Python:

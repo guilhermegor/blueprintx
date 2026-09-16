@@ -243,3 +243,16 @@ repos:
         language: system
         pass_filenames: false
         files: \.(py|md)$
+
+      - id: quality-rules
+        name: quality-rules.yaml validation (blueprintx#432)
+        # Same treatment as function-length/check-complexity/docs-code-refs above: ONE
+        # implementation, run over this repo via --root rather than kept as a second copy.
+        # always_run because the gate cross-references quality-rules.yaml against config
+        # files scattered across templates/ (ruff.toml, eslint.config.js, ...) plus every
+        # templates/*/skeleton.meta — narrower to a `files:` glob than that combination is
+        # worth staying correct for.
+        entry: python3 templates/python-common/bin/check_quality_rules.py --root .
+        language: system
+        pass_filenames: false
+        always_run: true
