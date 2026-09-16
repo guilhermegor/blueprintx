@@ -134,8 +134,9 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
    - `pytest-randomly` shuffles test order on every run and prints the seed used, pass or
      fail — a hidden dependency between tests (a `get` test relying on state a `post` test
      left behind) fails instead of passing silently forever.
-   - A failing run prints the exact re-run command (`pytest -p randomly
-     --randomly-seed=<N>`).
+   - The seed is reported in the session header as `Using --randomly-seed=<N>`, on every
+     run rather than only on failure. To reproduce an order, build the command from that
+     number yourself: `pytest -p randomly --randomly-seed=<N>`.
    - **A test that fails only under a particular seed is a real defect, never flakiness to
      re-run away.** Re-running until it goes green hides the exact bug this exists to catch
      — report the seed and the failing test instead of retrying.

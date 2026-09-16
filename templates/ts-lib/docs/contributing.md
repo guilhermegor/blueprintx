@@ -28,8 +28,8 @@ or an unpublished dependency before either reaches the real npm registry.
 
 `npm test` runs Jest in a **randomised order** (`randomize: true` in `jest.config.cjs`) so
 a test that only passes because an earlier one ran first fails instead of passing silently.
-Every run prints the seed used; a failing run also prints the exact re-run command
-(`jest --seed=<N>`). **A test that fails only under a particular seed is a real defect,
+Every run reports the seed used; reproduce that order by passing the number back yourself
+as `jest --seed=<N>` — Jest reports the seed, not a ready-made re-run command. **A test that fails only under a particular seed is a real defect,
 never flakiness to re-run away** — report the seed and the failing test instead of retrying.
 
 ## Releasing (npm OIDC trusted publishing)

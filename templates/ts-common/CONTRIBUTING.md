@@ -37,8 +37,8 @@ docs: update README setup steps
 
 Jest runs tests in a **randomised order** (`randomize: true` in `jest.config.cjs`) so a test
 that only passes because an earlier one ran first fails instead of passing silently. Every
-run prints the seed it used; a failing run also prints the exact re-run command
-(`jest --seed=<N>`).
+run reports the seed it used; reproduce that order by passing the number back yourself as
+`jest --seed=<N>`. Jest reports the seed, not a ready-made re-run command.
 
 **A test that fails only under a particular seed is a real defect, never flakiness to
 re-run away.** Re-running until it goes green hides the exact bug this exists to catch —
