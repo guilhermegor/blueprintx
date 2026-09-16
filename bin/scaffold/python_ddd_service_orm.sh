@@ -514,7 +514,7 @@ conditional_copy_otel() {
     # constraint that LETS that land silently on the next `poetry update`, which is what the
     # rest of this comment exists to prevent. Do not "fix" these back to a range without
     # first re-checking that upstream status.
-    sed -i '/^python-dotenv = ">=1.0.0"/a\
+    sed_inplace '/^python-dotenv = ">=1.0.0"/a\
 # OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
 # "Development" status upstream (see chassis/otel_logging.py for the measured source).\
 opentelemetry-api = "==1.44.0"\
@@ -619,20 +619,20 @@ patch_pyproject_db_driver() {
     local project_path="$1"
     if [[ "$INCLUDE_DOCKER_COMPOSE" != "true" ]]; then
         # Remove the comment block about conditional driver from pyproject.toml
-        sed -i '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
+        sed_inplace '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
         return
     fi
     # Remove comment block and inject the chosen driver
-    sed -i '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
+    sed_inplace '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
     case "$DB_COMPOSE_BACKEND" in
         postgresql)
-            sed -i '/^alembic/a psycopg = {version = ">=3.2.4", extras = ["binary"]}' "$project_path/pyproject.toml"
+            sed_inplace '/^alembic/a psycopg = {version = ">=3.2.4", extras = ["binary"]}' "$project_path/pyproject.toml"
             ;;
         mysql)
-            sed -i '/^alembic/a pymysql = ">=1.1.0"' "$project_path/pyproject.toml"
+            sed_inplace '/^alembic/a pymysql = ">=1.1.0"' "$project_path/pyproject.toml"
             ;;
         mariadb)
-            sed -i '/^alembic/a mariadb = ">=1.1.0"' "$project_path/pyproject.toml"
+            sed_inplace '/^alembic/a mariadb = ">=1.1.0"' "$project_path/pyproject.toml"
             ;;
     esac
     print_status "success" "DB driver ($DB_COMPOSE_BACKEND) added to pyproject.toml"
@@ -648,8 +648,8 @@ conditional_patch_inputs_yaml() {
     local project_path="$1"
     if [[ "$INCLUDE_DATA_DIR" != "true" ]]; then return; fi
     local f="$project_path/src/config/inputs.yaml"
-    sed -i "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
-    sed -i "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
+    sed_inplace "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
+    sed_inplace "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
     print_status "success" "Output directory configured in inputs.yaml"
 }
 
