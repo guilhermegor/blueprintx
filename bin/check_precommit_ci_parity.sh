@@ -55,7 +55,10 @@ ci_dir_scripts() {
 # Does $1 (a script basename) appear anywhere in any workflow file's text? Broad on purpose:
 # a multi-line `run: |` block scalar is still plain text, and this must not miss it.
 script_in_any_workflow() {
-	grep -rlF -- "$1" "$WORKFLOWS_DIR"/*.yml "$WORKFLOWS_DIR"/*.yaml >/dev/null 2>&1
+	local -a list_files
+	mapfile -t list_files < <(find "$WORKFLOWS_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \))
+	[ "${#list_files[@]}" -gt 0 ] || return 1
+	grep -lF -- "$1" "${list_files[@]}" >/dev/null 2>&1
 }
 
 # $1 = script basename, $2 = "precommit_only" | "ci_only". Prints the reason on a match,
@@ -85,10 +88,15 @@ main() {
 	mapfile -t list_precommit < <(precommit_scripts)
 	mapfile -t list_candidates < <(
 		{
-			printf '%s\n' "${list_precommit[@]}"
+			# ⚠️ `printf '%s\n' "${arr[@]}"` with an EMPTY array still runs the format once,
+			# printing one blank line — guard it, or an empty pre-commit config silently
+			# manufactures one phantom candidate and the zero-discovery check below never
+			# fires against a genuinely empty tree.
+			[ "${#list_precommit[@]}" -gt 0 ] && printf '%s\n' "${list_precommit[@]}"
 			ci_dir_scripts
-			echo "check_makefile_pairing.sh"
-		} | sort -u
+			[ -f "$REPO_ROOT/bin/check_makefile_pairing.sh" ] && echo "check_makefile_pairing.sh"
+			true
+		} | sort -u | sed '/^$/d'
 	)
 
 	if [ "${#list_candidates[@]}" -eq 0 ]; then
