@@ -18,6 +18,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, release) |
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
+| `sonarqube-evaluation.md` | Utility page | Decision record — SonarQube audited against the gates already running here (ruff, `check_*` family, ESLint, gitleaks, Dependabot, CodeQL); recommendation and why |
 | `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
 | `py-mvc-service-native-db.md` | Skeleton overview | Layered MVC scaffold using native DB drivers (script/pipeline style) |
@@ -148,6 +149,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `index.md` | Landing page / hub | Logo, tagline, Python scaffolds overview, local docs instructions, scaffold quick reference |
 | `get-started.md` | First-run guide | Numbered setup steps, requirements, feature highlights |
 | `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
+| `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
