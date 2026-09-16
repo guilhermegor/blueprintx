@@ -562,3 +562,15 @@ jobs:
       # generated project, so the script lives at bin/, not templates/python-common/bin/.
       - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
         run: bash bin/check_makefile_pairing.sh
+
+  precommit-ci-parity:
+    name: Pre-commit and CI run the same checks, both directions (blueprintx#384)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Every script wired into one side is wired into the other, or exempted with a reason
+        run: bash bin/check_precommit_ci_parity.sh

@@ -232,6 +232,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(Makefile|tasks\.sh|bin/help\.sh|bin/check_makefile_pairing\.sh)$
+
+      - id: precommit-ci-parity
+        name: pre-commit and CI run the same checks, both directions (blueprintx#384)
+        entry: bash bin/check_precommit_ci_parity.sh
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: docs-code-refs
         name: docs code references (symbols + import paths, blueprintx#159)
         # Same treatment as function-length/check-complexity above: ONE implementation, run
