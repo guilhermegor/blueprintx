@@ -312,7 +312,9 @@ def config_pattern_problems(list_rules: list, path_root: pathlib.Path) -> list:
 				continue
 			path_file = path_root / dict_entry["file"]
 			if not path_file.is_file():
-				list_problems.append(f"{str_id}: {str_lang!r} file not found: {dict_entry['file']}")
+				list_problems.append(
+					f"{str_id}: {str_lang!r} file not found: {dict_entry['file']}"
+				)
 			elif dict_entry.get("pattern", "") not in path_file.read_text(encoding="utf-8"):
 				list_problems.append(
 					f"{str_id}: {str_lang!r} pattern {dict_entry['pattern']!r} not found in "
