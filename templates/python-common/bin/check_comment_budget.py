@@ -82,11 +82,17 @@ INT_STRUCTURAL_LINE_LIMIT = 2
 # A decorative banner "sandwich" is exactly rule / title / rule — three lines.
 INT_BANNER_TRIPLE = 3
 
-# `#`-comment file types, by suffix. `.py` is handled separately via `tokenize`
-# because a `#` inside a string literal is not a comment and only the tokenizer
-# knows the difference. `Makefile` (no suffix) and `.mk` are matched by name in
-# `audit_paths`/`marker_for`, not here — the issue's own table missed Makefile
-# for exactly this reason.
+# `#`-comment file types, by suffix. `.py` is deliberately NOT in this tuple —
+# its BLOCKS are extracted separately via `tokenize` (a `#` inside a string
+# literal is not a comment and only the tokenizer knows the difference) — but
+# `marker_for` below still must recognize `.py` explicitly, or `file_problems`
+# short-circuits on its `not str_marker` guard before ever reaching the
+# `.py`-specific branch, and every Python file goes unchecked while `audit_paths`
+# reports it "checked" (blueprintx#466 — measured: 228/499 files "checked", 0
+# findings, discovery non-zero and looking like coverage while checking nothing).
+# `Makefile` (no suffix) and `.mk` are matched by name in `audit_paths`/
+# `marker_for`, not here — the issue's own table missed Makefile for exactly
+# this reason.
 DICT_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
 
 # `//`-comment file types. Block comments (`/* */`) are a known ceiling, not a
@@ -122,6 +128,19 @@ RE_ENCODING_DECL = re.compile(r"coding[:=]\s*[-\w.]+")
 # A comment whose stripped content is nothing but rule punctuation — the
 # decorative banner the issue names by example (`# -------`).
 RE_BANNER_LINE = re.compile(r"^[-=*#~_\s]{3,}$")
+
+# The exact rule line of tests/CLAUDE.md's mandated test-section-banner
+# convention ("# --------------------------" / "# <section>" /
+# "# --------------------------") — measured (blueprintx#466) to occur
+# NOWHERE else in the tree, always this shape, only in `.py` files. Matched
+# structurally in banner_findings, NOT via the pragma allowlist: a pragma
+# BREAKS a run (line_breaks_run), so listing this string there would let one
+# dash line split an oversized block into two under-ceiling halves
+# (blueprintx#479). The two rule lines still count toward the block's
+# length — only the banner FINDING is suppressed, never the run. Scoped to
+# Python test modules by is_test_module: the same triple in a production
+# .py, a Makefile, a shell or a .ts file is a plain decorative banner.
+STR_TEST_SECTION_RULE = "--------------------------"
 
 
 def load_allowlist() -> tuple:
@@ -226,7 +245,8 @@ def marker_for(path_file: pathlib.Path) -> str:
 	str
 		``"#"`` or ``"//"``; empty when nothing here budgets this file's type.
 	"""
-	if path_file.name == "Makefile" or path_file.suffix in DICT_HASH_SUFFIXES:
+	bool_hash_file = path_file.name == "Makefile" or path_file.suffix in DICT_HASH_SUFFIXES
+	if bool_hash_file or path_file.suffix == ".py":
 		return "#"
 	if path_file.suffix in DICT_SLASH_SUFFIXES:
 		return "//"
@@ -351,12 +371,74 @@ def has_valid_escape(list_lines: list) -> bool:
 	return bool(str_reason)
 
 
-def banner_findings(int_start: int, list_lines: list) -> list:
+def is_test_module(path_file: pathlib.Path) -> bool:
+	"""Return whether a path is a Python test module.
+
+	The test-section-banner exemption is scoped to these files and no others:
+	the convention comes from ``tests/CLAUDE.md`` and was measured
+	(blueprintx#466) to occur only in ``.py`` test modules. A production
+	``.py``, a Makefile, a shell script or a ``.ts`` file carrying the same
+	triple is a decorative banner, not a mandated section header
+	(blueprintx#479).
+
+	Identified by pytest's OWN discovery convention — a ``tests`` path segment
+	or a ``test_`` filename prefix — not by directory alone. Directory alone
+	was the first draft and it was wrong: the four
+	``optional/multi_pipeline/test_pipeline.py`` templates are real test
+	modules shipped outside any ``tests/`` tree, and scoping to the directory
+	flagged 6 mandated banners in them.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The file being checked.
+
+	Returns
+	-------
+	bool
+		True for a ``.py`` file pytest would collect as a test module.
+	"""
+	if path_file.suffix != ".py":
+		return False
+	return "tests" in path_file.parts or path_file.name.startswith("test_")
+
+
+def is_exempt_section_banner(list_lines: list, int_index: int) -> bool:
+	"""Return whether a triple at ``int_index`` is the mandated test-section banner.
+
+	Matched on the FULL triple, not on any line containing 26 dashes, so a
+	lone rule line elsewhere gets no special treatment. The lines still count
+	toward the block's run length (see ``banner_findings`` — this only
+	suppresses the FINDING, never the block accumulation).
+
+	Parameters
+	----------
+	list_lines : list of str
+		The block's content lines.
+	int_index : int
+		Index of the triple's opening rule line.
+
+	Returns
+	-------
+	bool
+		True when both outer lines are exactly ``STR_TEST_SECTION_RULE``.
+	"""
+	return (
+		list_lines[int_index].strip() == STR_TEST_SECTION_RULE
+		and list_lines[int_index + 2].strip() == STR_TEST_SECTION_RULE
+	)
+
+
+def banner_findings(
+	int_start: int, list_lines: list, bool_allow_section_banner: bool = False
+) -> list:
 	"""Return the decorative-banner defects inside one comment block.
 
 	A punctuation-only line is a banner on its own; one flanked by two banner
 	lines is the ``rule / SECTION NAME / rule`` triple the issue names by
-	example, reported as a single three-line finding.
+	example, reported as a single three-line finding — except the exact
+	tests/CLAUDE.md test-section-banner triple in a Python test module,
+	which is exempt (see ``is_exempt_section_banner`` and ``is_test_module``).
 
 	Parameters
 	----------
@@ -364,6 +446,10 @@ def banner_findings(int_start: int, list_lines: list) -> list:
 		The block's first line number.
 	list_lines : list of str
 		The block's content lines.
+	bool_allow_section_banner : bool, optional
+		Whether the ``tests/CLAUDE.md`` section-banner exemption applies to this
+		file. Defaults to False so an unclassified caller gets the strict
+		behaviour: the exemption is opt-in per file type, never the fallback.
 
 	Returns
 	-------
@@ -382,7 +468,11 @@ def banner_findings(int_start: int, list_lines: list) -> list:
 			and bool(RE_BANNER_LINE.match(list_lines[int_index + 2]))
 		)
 		if bool_triple:
-			list_out.append((int_start + int_index, INT_BANNER_TRIPLE))
+			bool_exempt = bool_allow_section_banner and is_exempt_section_banner(
+				list_lines, int_index
+			)
+			if not bool_exempt:
+				list_out.append((int_start + int_index, INT_BANNER_TRIPLE))
 			int_index += INT_BANNER_TRIPLE
 			continue
 		if bool_this:
@@ -435,7 +525,9 @@ def file_problems(path_file: pathlib.Path) -> list:
 				f"# {STR_ESCAPE} <reason>"
 			)
 		if not bool_hatched:
-			for int_line, int_span in banner_findings(int_start, list_lines):
+			for int_line, int_span in banner_findings(
+				int_start, list_lines, is_test_module(path_file)
+			):
 				str_shape = (
 					"rule/title/rule" if int_span == INT_BANNER_TRIPLE else "punctuation-only line"
 				)
