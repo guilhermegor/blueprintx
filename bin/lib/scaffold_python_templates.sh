@@ -195,6 +195,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_sql_guards_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
 		"$str_project_path/tests/unit/test_ruff_ret_rule.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
+		"$str_project_path/tests/unit/test_migration_slug_gate.py"
 }
 
 scaffold_copy_executables_and_vscode() {
