@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so `cz changelog` sees the tags when regenerating CHANGELOG.md.
           fetch-depth: 0
@@ -36,7 +36,7 @@ jobs:
       - run: cz changelog
       - run: mkdocs build
       - name: Checkout gh-pages
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: gh-pages
           path: gh-pages-docs
