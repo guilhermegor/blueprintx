@@ -17,23 +17,29 @@
  * (which reads `OTEL_EXPORTER_OTLP_*` env vars itself, same as the Python SDK), the BROWSER
  * build takes NO env-var fallback at all (`@opentelemetry/otlp-exporter-base`'s
  * `convertLegacyBrowserHttpOptions` passes "no fallback for browser case") — a real browser
- * has no `process.env`. So this file resolves the endpoint and headers itself
- * (`resolveSignalOverride`, mirroring the Python port's precedence) and passes them EXPLICITLY
- * to the exporter, rather than leaving the SDK to read them — the opposite of what
+ * has no `process.env`. So this file resolves the endpoint (`resolveOtlpLogsUrl`) and headers
+ * (`resolveSignalOverride`) itself, mirroring the Python port's precedence, and passes them
+ * EXPLICITLY to the exporter, rather than leaving the SDK to read them — the opposite of what
  * `otel_logging.py` does, and deliberately so: relying on the SDK's own read would silently do
  * nothing in the browser. `process.env.<KEY>` is written as a literal member access (never a
  * computed lookup) because that is the exact shape react-spa-webpack's `webpack.config.js`
  * already replaces at build time via `DefinePlugin`, one entry per `.env` key — ts-lib reads
  * the same literal from the real `process.env` at runtime. One resolution path, both runtimes.
  *
- * ⚠️ THIRD, a known ceiling (ponytail): `otel_logging.py` hardens its `requests` session
- * against a credential-forwarding redirect (CWE-319, `max_redirects = 0`). This module cannot
- * do the equivalent for the BROWSER transport — it sends via `fetch`, which follows redirects
- * by default, and the exporter exposes no option to disable that. Node's own transport
- * (`http`/`https` core modules) does not auto-follow redirects, so the gap is browser-only.
- * The cleartext-credentials guard below (`isCleartextWithCredentials`) is the primary defence
- * in both runtimes; re-check the browser transport for a `redirect: 'error'` knob before
- * relying on this seam to carry a real credential across an origin that might redirect.
+ * ⚠️ THIRD: `otel_logging.py` hardens its `requests` session against a credential-forwarding
+ * redirect (CWE-319, `max_redirects = 0`). This module CANNOT do the equivalent for the
+ * BROWSER transport — it sends via `fetch`, which follows redirects by default, and
+ * `OTLPExporterConfigBase` (the exporter's own config type, verified against its `.d.ts`)
+ * exposes no `redirect` option to disable that. There is also no way to intercept it without
+ * monkey-patching the GLOBAL `fetch`, which would affect requests this module does not own.
+ * Node's transport (`http`/`https` core modules) does not auto-follow redirects, so the hazard
+ * is browser-only — and because it cannot be closed at the transport, `isCleartextWithCredentials`
+ * below refuses EVERY credentialed request in a browser runtime, not only cleartext ones: an
+ * https:// or loopback endpoint can still 3xx to an attacker-controlled cleartext host, and
+ * `fetch` would resend the headers there. This is also what `otel.env.fragment` already tells
+ * react-spa-webpack projects to do architecturally (route through a same-origin collector PROXY
+ * that injects the real credential server-side) — this guard enforces it instead of merely
+ * documenting it.
  */
 import type { LogEmitter } from './log-emitter';
 
@@ -72,15 +78,60 @@ export function resolveSignalOverride(
 }
 
 /**
- * Report whether credentials would be sent over an unencrypted, off-host connection.
+ * Resolve the LOGS OTLP endpoint as the exact URL the exporter must request.
  *
- * @param endpoint - The effective OTLP logs endpoint.
+ * Per the OTel spec, `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` (signal-specific) is used VERBATIM as
+ * the full request URL, while `OTEL_EXPORTER_OTLP_ENDPOINT` (generic) is a BASE the signal
+ * path must be appended to — the SDK does this itself when it reads the variable, but this
+ * module passes `url` explicitly (see the module docstring's SECOND measurement), so it has
+ * to replicate that one step or a generic-only endpoint silently exports to `/` instead of
+ * `/v1/logs` (CodeRabbit finding, PR #505).
+ *
+ * @param signalValue - `process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`.
+ * @param genericValue - `process.env.OTEL_EXPORTER_OTLP_ENDPOINT`.
+ * @returns The exporter-ready URL; `''` when neither is set.
+ */
+export function resolveOtlpLogsUrl(
+  signalValue: string | undefined,
+  genericValue: string | undefined,
+): string {
+  if (signalValue !== undefined) {
+    return signalValue.trim();
+  }
+  const generic = (genericValue ?? '').trim();
+  if (!generic) {
+    return '';
+  }
+  return `${generic.replace(/\/+$/, '')}/v1/logs`;
+}
+
+// Evaluated per call, not frozen at module load, so a test can simulate "browser" by
+// setting `globalThis.window` before calling `isCleartextWithCredentials` — a module-level
+// `const` snapshot taken at import time would not see that mutation.
+function isBrowserRuntime(): boolean {
+  return typeof window !== 'undefined';
+}
+
+/**
+ * Report whether credentials would be sent somewhere a redirect could leak them.
+ *
+ * In a BROWSER runtime this refuses every credentialed request outright, cleartext or not
+ * (see the module docstring's THIRD measurement) — `fetch` follows redirects with no way to
+ * disable it here, so even an https:// or loopback endpoint cannot be proven safe. In Node,
+ * where the transport does not auto-follow redirects, the narrower cleartext-off-host check
+ * applies, same as `otel_logging.py`'s `_is_cleartext_with_credentials`.
+ *
+ * @param endpoint - The effective OTLP logs endpoint (path already appended, if applicable —
+ *   see `resolveOtlpLogsUrl`; a path suffix does not change the scheme/host this checks).
  * @param hasHeaders - Whether `OTEL_EXPORTER_OTLP_[LOGS_]HEADERS` carries anything.
  * @returns `true` when the exporter must not be started.
  */
 export function isCleartextWithCredentials(endpoint: string, hasHeaders: boolean): boolean {
   if (!hasHeaders || !endpoint) {
     return false;
+  }
+  if (isBrowserRuntime()) {
+    return true;
   }
   let hostname: string;
   try {
@@ -105,7 +156,7 @@ function parseOtlpHeaders(raw: string): Record<string, string> {
   return headers;
 }
 
-interface OtelLoggerLike {
+export interface OtelLoggerLike {
   emit(record: {
     severityText: string;
     severityNumber: number;
@@ -114,14 +165,24 @@ interface OtelLoggerLike {
   }): void;
 }
 
+/** The shape `withOtelLogExport` needs from its installer — real or injected for a test. */
+export type OtelLoggerInstaller = (
+  endpoint: string,
+  headers: Record<string, string>,
+) => Promise<OtelLoggerLike>;
+
 /**
  * Build the OTel logger provider and return a minimal emit-capable logger.
  *
  * Split out of `withOtelLogExport` so the dynamic import — the one place this package touches
  * `@opentelemetry/*` — is a single, separately awaitable async function, never inlined into
- * the fire-and-forget wrapper below.
+ * the fire-and-forget wrapper below. Exported (not just passed as `withOtelLogExport`'s
+ * default `install` parameter) so a test can exercise real `@opentelemetry/*` construction —
+ * which performs no network I/O; only a later batch flush from the returned logger would —
+ * separately from `withOtelLogExport`'s own contract, which a test instead verifies with an
+ * INJECTED installer (see that function's `install` parameter).
  */
-async function installOtelLogger(
+export async function installOtelLogger(
   endpoint: string,
   headers: Record<string, string>,
 ): Promise<OtelLoggerLike> {
@@ -162,11 +223,18 @@ async function installOtelLogger(
  *
  * @param baseEmitter - The emitter every call still reaches (`CONSOLE_EMITTER`, `NULL_EMITTER`,
  *   or a host's own `LogEmitter`).
+ * @param install - Builds the real OTel logger; overridable so a test can inject a
+ *   deterministic fake instead of relying on `@opentelemetry/*` being resolvable (it is not,
+ *   inside `ts-common` itself — see `installOtelLogger`'s own docstring). Defaults to the real
+ *   `installOtelLogger`.
  * @returns `baseEmitter` itself when export is not configured or is refused; otherwise a new
  *   `LogEmitter` that forwards to both.
  */
-export function withOtelLogExport(baseEmitter: LogEmitter): LogEmitter {
-  const endpoint = resolveSignalOverride(
+export function withOtelLogExport(
+  baseEmitter: LogEmitter,
+  install: OtelLoggerInstaller = installOtelLogger,
+): LogEmitter {
+  const endpoint = resolveOtlpLogsUrl(
     process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
   );
@@ -180,18 +248,22 @@ export function withOtelLogExport(baseEmitter: LogEmitter): LogEmitter {
   );
   if (isCleartextWithCredentials(endpoint, headersRaw !== '')) {
     // The endpoint is named because the fix is to change it; the header VALUES never are —
-    // they are the credential this guard exists to protect.
+    // they are the credential this guard exists to protect. The reason text covers both
+    // refusal paths isCleartextWithCredentials can take (browser: any credentials at all;
+    // Node: only a cleartext off-host endpoint) rather than naming just one.
     baseEmitter.warn(
-      'OTel log export refused: OTLP headers are set but the endpoint is neither https:// ' +
-        'nor loopback, so credentials would cross the network in cleartext. Use an https:// ' +
-        'endpoint, or drop the headers for a local collector.',
+      'OTel log export refused: OTLP headers are set, and either this is a browser runtime ' +
+        '(fetch follows redirects with no way to disable it here, so no credentialed request ' +
+        'is safe) or the endpoint is neither https:// nor loopback (credentials would cross ' +
+        'the network in cleartext). Route through a same-origin collector proxy instead, use ' +
+        'an https:// endpoint, or drop the headers for a local collector.',
       { endpoint },
     );
     return baseEmitter;
   }
 
   let otelLogger: OtelLoggerLike | undefined;
-  void installOtelLogger(endpoint, parseOtlpHeaders(headersRaw))
+  void install(endpoint, parseOtlpHeaders(headersRaw))
     .then((logger) => {
       otelLogger = logger;
     })
