@@ -57,7 +57,11 @@ spec_get() {
     local file="$1" key="$2" default="${3:-}"
     local value=""
     if [ -n "$file" ] && [ -f "$file" ]; then
-        value=$(grep "^${key}=" "$file" | tail -n1 | cut -d= -f2-)
+        # A caller running under `pipefail` (bin/ci/scaffold_lint_test.sh does)
+        # sees THIS pipeline's status as grep's when the key is absent — the
+        # normal, expected case of "fall back to default" — not tail/cut's own
+        # (always 0) status. `|| true` keeps that from reading as a failure.
+        value=$(grep "^${key}=" "$file" | tail -n1 | cut -d= -f2-) || true
     fi
     printf '%s' "${value:-$default}"
 }
@@ -89,7 +93,15 @@ _spec_answer_docker_compose() {
     local file="$1" ans
     ans="$(spec_yn "$file" docker_compose n)"
     echo "$ans"
-    [ "$ans" = y ] && spec_get "$file" docker_db_backend postgresql
+    # `&&` alone resolves to the FAILED test's status (1) when ans != y, and a
+    # caller running under `set -e` (bin/ci/scaffold_lint_test.sh does) aborts
+    # right there — even though "no second line to emit" is success here.
+    # `|| true` keeps this statement's own exit status at 0 either way.
+    # echo "$(spec_get ...)" — not a bare spec_get — because spec_get itself
+    # prints via `printf '%s'` (no trailing newline, so it composes cleanly
+    # under command substitution); as a raw stdin LINE that would glue onto
+    # the next emitter's answer with no line break between them.
+    [ "$ans" = y ] && echo "$(spec_get "$file" docker_db_backend postgresql)" || true
 }
 
 _spec_answer_storage() {
@@ -101,7 +113,7 @@ _spec_answer_data_dir() {
     ans="$(spec_yn "$file" data_dir n)"
     echo "$ans"
     if [ "$ans" = y ]; then
-        spec_get "$file" data_dir_base logs
+        echo "$(spec_get "$file" data_dir_base logs)"
         spec_yn "$file" data_dir_dated n
     fi
 }
@@ -110,7 +122,8 @@ _spec_answer_webhook() {
     local file="$1" ans
     ans="$(spec_yn "$file" webhook n)"
     echo "$ans"
-    [ "$ans" = y ] && spec_get "$file" webhook_platform teams
+    # See _spec_answer_docker_compose above for `|| true` and the echo wrap.
+    [ "$ans" = y ] && echo "$(spec_get "$file" webhook_platform teams)" || true
 }
 
 _spec_answer_otel() {
@@ -121,7 +134,8 @@ _spec_answer_email() {
     local file="$1" ans
     ans="$(spec_yn "$file" email n)"
     echo "$ans"
-    [ "$ans" = y ] && spec_get "$file" email_backend outlook
+    # See _spec_answer_docker_compose above for `|| true` and the echo wrap.
+    [ "$ans" = y ] && echo "$(spec_get "$file" email_backend outlook)" || true
 }
 
 _spec_answer_pipeline_intent() {
