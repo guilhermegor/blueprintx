@@ -45,7 +45,7 @@ main() {
 
 	echo "pymarkdownlnt: ${#list_files[@]} tracked .md file(s)"
 
-	if ! pymarkdown --config "$CONFIG_FILE" scan "${list_files[@]}"; then
+	if ! pymarkdown --strict-config --config "$CONFIG_FILE" scan "${list_files[@]}"; then
 		echo "pymarkdownlnt found markdown problems (see above) — only MD018/019/020/021/023, MD047, MD009 are enabled; see .pymarkdown.json" >&2
 		exit 1
 	fi
