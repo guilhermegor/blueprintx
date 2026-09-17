@@ -85,8 +85,7 @@ def test_bitwise_or_inside_filter_is_reported(tmp_path: Path) -> None:
 	"""``|`` inside ``.filter(...)`` is the same hazard as ``&`` inside ``.where(...)``."""
 	path_file = _python_file(
 		tmp_path,
-		"from sqlalchemy.orm import Session\n\n"
-		"session.query(User).filter(User.a | User.b)\n",
+		"from sqlalchemy.orm import Session\n\nsession.query(User).filter(User.a | User.b)\n",
 	)
 
 	assert len(gate.check_python_file(path_file)[0]) == 1
