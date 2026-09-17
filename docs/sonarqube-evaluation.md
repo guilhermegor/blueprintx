@@ -31,7 +31,7 @@ types plus two categories of aggregate metrics:
 
 | SonarQube category | Already covered here | By what |
 |---|---|---|
-| Bug / Code Smell (general lint) | **Yes** | `ruff` — 17 rule families enabled in `templates/python-common/ruff.toml` (`UP`, `E`, `F`, `ANN`, `B`, `SIM`, `I`, `AIR`, `ERA`, `S`, `PD`, `D`, `TID`, `W`, `PL`, `PT`, `RET`, `A`), plus ESLint (`eslint.config.js`/`.mjs`) with `@eslint/js` + `typescript-eslint` recommended sets, React/hooks/a11y/import/jest/boundaries plugins in the TS skeletons |
+| Bug / Code Smell (general lint) | **Yes** | `ruff` — 19 rule families enabled in `templates/python-common/ruff.toml` (`UP`, `E`, `F`, `ANN`, `B`, `SIM`, `I`, `AIR`, `ERA`, `S`, `PD`, `D`, `TID`, `W`, `PL`, `PT`, `RET`, `A`, `N`), plus ESLint (`eslint.config.js`/`.mjs`) with `@eslint/js` + `typescript-eslint` recommended sets, React/hooks/a11y/import/jest/boundaries plugins in the TS skeletons |
 | Vulnerability (SAST) | **Partial** | GitHub CodeQL default setup is enabled on this repo (`actions`, `javascript`, `javascript-typescript`, `python`, `ruby`, `typescript` — confirmed via `gh api .../code-scanning/default-setup`); `ruff`'s `S` (flake8-bandit) rule family also catches a subset (SQL built by string concat, `eval`, weak hashes, etc.) |
 | Security Hotspot / secrets | **Yes** | `gitleaks` in `.github/workflows/secret_scan.yml` — scans full repo history (root + `templates/`). ⚠️ The issue's own table names GitGuardian/`ggshield`; the actual tool wired in this repo is `gitleaks`, verified by reading the workflow — corrected here rather than restated |
 | Vulnerable dependencies | **Yes** | Dependabot: security updates are a repo-wide toggle already enabled independent of any config file; `.github/dependabot.yml` additionally adds routine, non-urgent version-update PRs (blueprintx#471) |
@@ -47,7 +47,7 @@ types plus two categories of aggregate metrics:
 | CI workflow correctness | **Yes** | `actionlint` (`bin/ci/check_actions.sh`), plus `check_job_timeouts` |
 | Spelling | **Yes** | `codespell`, synced root ↔ `templates/python-common/` by `check_codespell_sync.sh` |
 
-`ruff`'s 17 rule families plus the 20+ purpose-built `check_*` gates in
+`ruff`'s 19 rule families plus the 20+ purpose-built `check_*` gates in
 `templates/python-common/bin/` cover materially more ground than SonarQube's default rule set —
 most of those gates enforce architectural invariants (hexagonal layer boundaries, SQL-guard
 patterns, read-modify-write races, provenance, DDD contract drift) that no generic static
