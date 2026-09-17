@@ -62,7 +62,7 @@ scaffold_prune_optin_dependency() {
 	local str_project_path="$1" str_flag_value="$2" str_sed_pattern="$3"
 
 	[[ "$str_flag_value" == "true" ]] && return
-	sed -i "$str_sed_pattern" "$str_project_path/pyproject.toml"
+	sed_inplace "$str_sed_pattern" "$str_project_path/pyproject.toml"
 }
 
 scaffold_copy_tooling_configs() {

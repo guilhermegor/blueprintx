@@ -419,9 +419,10 @@ conditional_copy_email() {
     mv "$project_path/src/utils/email/tests/unit/test_email_handlers.py" \
         "$project_path/tests/unit/test_email_handlers.py"
     rm -rf "$project_path/src/utils/email/tests"
-    grep -rl "chassis.email" "$project_path/src/utils/email" \
-        "$project_path/tests/unit/test_email_handlers.py" \
-        | xargs -r sed -i "s|chassis\.email|utils.email|g"
+    while IFS= read -r str_file; do
+        sed_inplace "s|chassis\.email|utils.email|g" "$str_file"
+    done < <(grep -rl "chassis.email" "$project_path/src/utils/email" \
+        "$project_path/tests/unit/test_email_handlers.py")
     local main_path="$project_path/src/controller/main.py"
     # Inject the two first-party imports into the controller import block (keeps isort happy:
     # controller < utils.email < utils.paths), and replace the CLS_EMAIL_HANDLER sentinel with
@@ -476,7 +477,7 @@ conditional_apply_multi_pipeline() {
     cp "$mp_root/test_pipeline.py" "$project_path/tests/unit/test_pipeline.py"
     rm -f "$project_path/tests/unit/test_pipeline_enrichment.py"
     rm -f "$controller_dir/_pipeline.py"
-    sed -i 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
+    sed_inplace 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
     local intent_env
     intent_env=$'\n# Pipeline intent (multi-intent mode): which purpose to run.\n# Accepts send | reconcile (case/accent/spacing-insensitive); fails loud on a typo.\nPIPELINE_INTENT=send\n'
     printf '%s' "$intent_env" >> "$project_path/.env"
@@ -572,8 +573,9 @@ copy_typing_chassis() {
     local project_path="$1"
     mkdir -p "$project_path/src/utils/typing" "$project_path/tests/unit"
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$project_path/src/utils/typing"
-    grep -rl "chassis.typing" "$project_path/src/utils/typing" \
-        | xargs -r sed -i "s|chassis\.typing|utils.typing|g"
+    while IFS= read -r str_file; do
+        sed_inplace "s|chassis\.typing|utils.typing|g" "$str_file"
+    done < <(grep -rl "chassis.typing" "$project_path/src/utils/typing")
     # The engine's unit test resolves the layout through its own import shim, so the
     # same file serves the utils (MVC) and chassis (DDD) placements.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_typing.py" "$project_path/tests/unit/test_typing.py"
@@ -585,8 +587,8 @@ conditional_patch_inputs_yaml() {
     local project_path="$1"
     if [[ "$INCLUDE_DATA_DIR" != "true" ]]; then return; fi
     local f="$project_path/src/config/inputs.yaml"
-    sed -i "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
-    sed -i "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
+    sed_inplace "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
+    sed_inplace "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
     print_status "success" "Output directory configured in inputs.yaml"
 }
 
@@ -599,8 +601,9 @@ conditional_copy_webhooks_yaml() {
     if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
     cp "$COMMON_TEMPLATE_ROOT/optional/webhooks.yaml" "$project_path/src/config/webhooks.yaml"
     cp -r "$COMMON_TEMPLATE_ROOT/optional/webhook" "$project_path/src/utils/webhook"
-    grep -rl "chassis.webhook" "$project_path/src/utils/webhook" \
-        | xargs -r sed -i "s|chassis\.webhook|utils.webhook|g"
+    while IFS= read -r str_file; do
+        sed_inplace "s|chassis\.webhook|utils.webhook|g" "$str_file"
+    done < <(grep -rl "chassis.webhook" "$project_path/src/utils/webhook")
     local webhook_env
     webhook_env=$'\n# Webhook — platform auto-detected from the URL; fires only when ENV is a\n# production value (prod/production/...). Leave WEBHOOK_URL empty to opt out.\nWEBHOOK_URL=\n'
     printf '%s' "$webhook_env" >> "$project_path/.env"
@@ -689,7 +692,7 @@ conditional_copy_otel() {
     # constraint that LETS that land silently on the next `poetry update`, which is what the
     # rest of this comment exists to prevent. Do not "fix" these back to a range without
     # first re-checking that upstream status.
-    sed -i '/^python-dotenv = ">=1.0.0"/a\
+    sed_inplace '/^python-dotenv = ">=1.0.0"/a\
 # OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
 # "Development" status upstream (see utils/otel_logging.py for the measured source).\
 opentelemetry-api = "==1.44.0"\
