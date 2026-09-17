@@ -16,9 +16,11 @@ cd "$REPO_ROOT"
 # shellcheck source=bin/lib/common.sh
 source "bin/lib/common.sh"
 
-# A real invocation always has whitespace right after -i (the script or the next flag).
-# sed -i.bak (sed_inplace's own portable form) has no whitespace there, so it never matches.
-str_pattern='sed[[:space:]]+-i[[:space:]]'
+# A real invocation has whitespace right after -i (the script or the next flag), OR an empty
+# quoted suffix: shell quote removal turns `sed -i''` and `sed -i""` into a bare `-i`, which
+# GNU sed accepts and BSD/macOS sed rejects — the exact portability break this gate exists to
+# catch (blueprintx#502). sed -i.bak (sed_inplace's own portable form) matches neither branch.
+str_pattern='sed[[:space:]]+-i([[:space:]]|'\'''\''|"")'
 
 mapfile -t arr_files < <(
     {
