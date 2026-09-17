@@ -221,3 +221,29 @@ def test_main_skips_when_src_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 	monkeypatch.chdir(tmp_path)
 
 	assert gate.main() == 0
+
+
+def test_main_scans_a_sql_only_src_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+	"""A tree holding only ``.sql`` files is scanned, not reported as nothing-scanned."""
+	path_src = tmp_path / "src"
+	path_src.mkdir()
+	(path_src / "query.sql").write_text(
+		"SELECT * FROM users WHERE cpf = '123.456.789-01'\n", encoding="utf-8"
+	)
+	monkeypatch.chdir(tmp_path)
+
+	assert gate.main() == 1
+
+
+def test_main_passes_on_a_compliant_sql_only_src_tree(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""The same tree with no masked comparison passes: zero Python files is not a failure."""
+	path_src = tmp_path / "src"
+	path_src.mkdir()
+	(path_src / "query.sql").write_text(
+		"SELECT * FROM users WHERE cpf = '12345678901'\n", encoding="utf-8"
+	)
+	monkeypatch.chdir(tmp_path)
+
+	assert gate.main() == 0

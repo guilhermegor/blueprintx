@@ -388,9 +388,9 @@ def main() -> int:
 		return 0
 
 	list_py, list_sql = _discovered_files()
-	if not list_py:
+	if not list_py and not list_sql:
 		print(
-			f"❌ 0 Python files discovered under {_SRC_ROOT}/ — the identifier masking "
+			f"❌ 0 Python and 0 .sql files discovered under {_SRC_ROOT}/ — the identifier masking "
 			f"check checked NOTHING. A wrong working directory or a broken glob reporting "
 			f"success for having checked nothing is the exact failure this gate exists to "
 			f"prevent."
