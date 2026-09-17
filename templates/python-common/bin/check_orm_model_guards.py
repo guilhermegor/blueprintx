@@ -145,7 +145,7 @@ def _find_bitwise_nodes(cls_node: ast.AST) -> list[ast.AST]:
 	list of ast.AST
 		Zero or more ``BinOp``/``UnaryOp`` nodes using ``&``/``|``/``~``.
 	"""
-	if isinstance(cls_node, ast.BinOp) and isinstance(cls_node.op, (ast.BitAnd, ast.BitOr)):
+	if isinstance(cls_node, ast.BinOp) and isinstance(cls_node.op, ast.BitAnd | ast.BitOr):
 		return [cls_node]
 	if isinstance(cls_node, ast.UnaryOp) and isinstance(cls_node.op, ast.Invert):
 		return [cls_node]
@@ -364,7 +364,7 @@ def _module_scope_create_all_problems(
 			):
 				list_problems.append(_create_all_message(path_file, cls_child.lineno))
 			bool_child_in_function = bool_in_function or isinstance(
-				cls_child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+				cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
 			)
 			_walk(cls_child, bool_child_in_function)
 
