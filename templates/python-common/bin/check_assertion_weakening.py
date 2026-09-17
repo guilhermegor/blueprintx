@@ -75,6 +75,14 @@ RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
 # identical constant for why this serves both a local pre-commit run and CI.
 STR_INDEX_REF = ""
 
+# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
+# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields. Module-scoped
+# (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as a
+# constant while behaving like a plain variable — moved here to be what it says it is.
+_INT_MIN_FIELDS = 2
+# Minimum positional-arg count for `assertEqual(a, b)` — same N806 shape as above.
+_MIN_EQ_ARGS = 2
+
 # Comparison operators weaker than `==` — blueprintx#289's `in` example, plus the issue's
 # `>=` example. `Gt`/`Lt` are excluded: swapping equality for a strict inequality is not
 # obviously weaker (it still excludes the old value), so it stays out of the decidable core.
@@ -190,8 +198,6 @@ def changed_paths(str_base: str) -> list:
 	list of tuple
 		``(status_letter, path)``.
 	"""
-	_INT_MIN_FIELDS = 2
-
 	str_out = _git(["diff", "--cached", "--name-status", str_base])
 	list_rows = []
 	for str_line in str_out.splitlines():
@@ -596,7 +602,6 @@ def _compare_call(old_node: ast.Call, new_node: ast.Call, bool_prod_changed: boo
 		return ""
 	if str_new_attr in _WEAKER_ASSERT_CALLS.get(str_old_attr, frozenset()):
 		return f"{str_old_attr}() weakened to {str_new_attr}()"
-	_MIN_EQ_ARGS = 2
 	if (
 		str_old_attr == str_new_attr == "assertEqual"
 		and bool_prod_changed
