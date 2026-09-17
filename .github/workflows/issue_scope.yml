@@ -1,0 +1,35 @@
+name: Issue Scope
+
+# Full design + declaration format + UNKNOWN/undeclared/no-linked-issue behaviour: docs/issue-scope.md
+# and bin/ci/check_issue_scope.py's module docstring. Kept as its OWN workflow (not folded into
+# scaffold_checks.yml) so an edit to a PR's linked issues re-runs this one job, not the 29-job
+# scaffold matrix — same reasoning as review_threads.yml.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  issue-scope:
+    name: PR files within declared issue scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Changed files must stay inside the linked issue's declared surface
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 bin/ci/check_issue_scope.py
