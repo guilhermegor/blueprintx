@@ -396,6 +396,7 @@ jobs:
           - mvc-service-orm-db
           - lib-minimal
           - react-spa-webpack
+          - bash-cli
     steps:
       - uses: actions/checkout@v4
         with:

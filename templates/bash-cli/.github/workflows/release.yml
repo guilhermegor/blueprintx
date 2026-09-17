@@ -1,0 +1,67 @@
+name: Release
+
+# Mirrors BlueprintX's own release.yml (single workflow_dispatch entry point + a tag
+# job) trimmed to the one channel v1 of this skeleton ships: a GitHub Release
+# carrying a version-stamped tarball. Other package-manager channels (Homebrew, apt,
+# Snap, Chocolatey — see BlueprintX's release_*.yml) are deliberately deferred; see
+# docs/skeletons/bash-cli.md in the BlueprintX repo for the backlog.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "release: v${VERSION}"
+          git push origin "v${VERSION}"
+
+  github_release:
+    needs: tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ github.event.inputs.version }}
+          persist-credentials: false
+
+      # No .git in the eventual tarball, so `git describe` can't resolve a version
+      # at runtime — stamp the tag's version into the entrypoint before packaging,
+      # same as BlueprintX's own install/release_*.yml jobs stamp BLUEPRINTX_VERSION.
+      - name: Stamp version and build the release tarball
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          sed -i "s/^CLI_VERSION=\".*\"/CLI_VERSION=\"${VERSION}\"/" "bin/${PROJECT_NAME}"
+          tar -czf "${PROJECT_NAME}-${VERSION}.tar.gz" bin lib
+          sha256sum "${PROJECT_NAME}-${VERSION}.tar.gz" > "${PROJECT_NAME}-${VERSION}.tar.gz.sha256"
+
+      - name: Publish GitHub Release
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${VERSION}" \
+            "${PROJECT_NAME}-${VERSION}.tar.gz" \
+            "${PROJECT_NAME}-${VERSION}.tar.gz.sha256" \
+            --title "v${VERSION}" \
+            --generate-notes
