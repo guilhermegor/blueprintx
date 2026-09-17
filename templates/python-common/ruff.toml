@@ -345,3 +345,6 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 # why (defusedxml, not stdlib `xml.etree.ElementTree`, is the trust-boundary-safe parser).
 # Renaming to satisfy the rule would only make the alias harder to read (blueprintx#422).
 "src/utils/xml_reader.py" = ["N813"]
+# Same file under lib-minimal's private-package layout (see the mirror note above): without
+# this the exemption never matches there and only that tier goes red (blueprintx#486).
+"src/*/_internal/utils/xml_reader.py" = ["N813"]
