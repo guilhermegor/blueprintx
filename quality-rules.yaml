@@ -31,13 +31,18 @@
     tool: ruff
     rule: C901
     file: templates/python-common/bin/check_complexity.sh
-    pattern: "[\"src\"]=2"
+    patterns:
+      - "[\"tests\"]=1"
+      - "[\"src\"]=2"
+      - "[\"bin\"]=8"
     note: "Ceiling differs by tree (tests 1, src 2, bin 8); ruff per-file-ignores cannot vary max-complexity, so the ceiling lives in check_complexity.sh's per-tree invocation, not ruff.toml."
   typescript:
     tool: eslint
     rule: complexity
     file: templates/react-spa-webpack/eslint.config.js
-    pattern: "complexity: ['error', 3]"
+    patterns:
+      - "complexity: ['error', 3]"
+      - "complexity: ['error', 2]"
     note: "Measured independently against this template's own source (src 3, tests 2) — not copied by symmetry from the Python ceiling, since ESLint's complexity counts &&/|| and mccabe does not (blueprintx#425)."
 
 - id: function-length
@@ -53,7 +58,9 @@
     tool: eslint
     rule: max-lines-per-function
     file: templates/react-spa-webpack/eslint.config.js
-    pattern: "max: 60, skipBlankLines: false"
+    patterns:
+      - "max: 60, skipBlankLines: false"
+      - "max: 100, skipBlankLines: false"
     note: "60 for src/**/*.ts (logic, mirrors Python); a separate 100 ceiling applies to .tsx (markup) — settled as two blocks, never merged (blueprintx#439). skipComments is the nearest ESLint has to 'docstring excluded' but is not equivalent (it skips every comment, not just a leading doc block) — the gap is accepted, not compensated."
 
 - id: magic-numbers
@@ -69,7 +76,9 @@
     tool: eslint
     rule: "@typescript-eslint/no-magic-numbers"
     file: templates/react-spa-webpack/eslint.config.js
-    pattern: "@typescript-eslint/no-magic-numbers"
+    patterns:
+      - "@typescript-eslint/no-magic-numbers"
+      - "detectObjects: true"
     note: "detectObjects: true is load-bearing — without it the Fastify/NestJS object-response shape ({ statusCode: 201 }) is silent (blueprintx#453)."
 
 - id: one-assert-per-test

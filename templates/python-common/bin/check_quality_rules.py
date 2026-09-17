@@ -51,9 +51,19 @@ PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _RE_TOP_ID = re.compile(r"^- id:\s*(\S+)\s*$")
 _RE_KEY2 = re.compile(r"^ {2}(\w+):\s*(.*)$")
 _RE_KEY4 = re.compile(r"^ {4}(\w+):\s*(.*)$")
+_RE_ITEM6 = re.compile(r"^ {6}- (.+)$")
 _RE_HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$")
 _RE_SLUG_STRIP = re.compile(r"[^a-z0-9\s-]")
 _RE_SLUG_SPACE = re.compile(r"[\s]+")
+
+
+class RegistryError(Exception):
+	"""Raised when the registry holds content this restricted parser cannot consume.
+
+	Silently skipping an unrecognised line is what made a valid-looking
+	``- id: rule # comment`` parse to nothing, leaving ``main`` to check zero rules
+	and report success (blueprintx#503).
+	"""
 
 
 def slugify(str_text: str) -> str:
@@ -141,7 +151,7 @@ def _meaningful_lines(path_yaml: pathlib.Path) -> list:
 	]
 
 
-def _apply_line(dict_rule: dict, str_lang_key: str, str_line: str) -> str:
+def _apply_line(dict_rule: dict, tuple_state: tuple, str_line: str) -> tuple:
 	"""Fold one registry line into the rule dict being built; return the active language key.
 
 	Parameters
@@ -159,22 +169,34 @@ def _apply_line(dict_rule: dict, str_lang_key: str, str_line: str) -> str:
 		The language key still open after this line — unchanged unless this line opened
 		or closed a nested ``python:``/``typescript:`` block.
 	"""
+	str_lang_key, str_list_key = tuple_state
+
+	cls_item = _RE_ITEM6.match(str_line)
+	if cls_item and str_lang_key and str_list_key:
+		dict_rule[str_lang_key][str_list_key].append(_parse_scalar(cls_item.group(1)))
+		return (str_lang_key, str_list_key)
+
 	cls_k4 = _RE_KEY4.match(str_line)
 	if cls_k4 and str_lang_key:
-		dict_rule[str_lang_key][cls_k4.group(1)] = _parse_scalar(cls_k4.group(2))
-		return str_lang_key
+		str_key, str_val = cls_k4.group(1), cls_k4.group(2)
+		if str_val:
+			dict_rule[str_lang_key][str_key] = _parse_scalar(str_val)
+			return (str_lang_key, "")
+		# An empty value inside a language block opens a list (`patterns:`).
+		dict_rule[str_lang_key][str_key] = []
+		return (str_lang_key, str_key)
 
 	cls_k2 = _RE_KEY2.match(str_line)
 	if not cls_k2:
-		return str_lang_key
+		raise RegistryError(f"unparsable line: {str_line!r}")
 	str_key, str_val = cls_k2.group(1), cls_k2.group(2)
 	if str_val:
 		dict_rule[str_key] = _parse_scalar(str_val)
-		return ""
+		return ("", "")
 	# An empty value after `key:` only ever opens a nested language block in this file's
 	# restricted schema (`python:` / `typescript:`) — see the module docstring.
 	dict_rule[str_key] = {}
-	return str_key
+	return (str_key, "")
 
 
 def parse_registry(path_yaml: pathlib.Path) -> list:
@@ -193,16 +215,19 @@ def parse_registry(path_yaml: pathlib.Path) -> list:
 	"""
 	list_rules = []
 	dict_rule = None
-	str_lang_key = ""
+	tuple_state = ("", "")
 	for str_line in _meaningful_lines(path_yaml):
 		cls_top = _RE_TOP_ID.match(str_line)
 		if cls_top:
 			dict_rule = {"id": cls_top.group(1)}
 			list_rules.append(dict_rule)
-			str_lang_key = ""
+			tuple_state = ("", "")
 			continue
-		if dict_rule is not None:
-			str_lang_key = _apply_line(dict_rule, str_lang_key, str_line)
+		if dict_rule is None:
+			raise RegistryError(f"content before the first '- id:' entry: {str_line!r}")
+		tuple_state = _apply_line(dict_rule, tuple_state, str_line)
+	if not list_rules:
+		raise RegistryError("no rules parsed — the registry is empty or unreadable")
 	return list_rules
 
 
@@ -251,12 +276,20 @@ def language_coverage_problems(list_rules: list, set_languages: set) -> list:
 		str_id = dict_rule.get("id", "?")
 		for str_lang in sorted(set_languages):
 			dict_entry = dict_rule.get(str_lang)
-			if not isinstance(dict_entry, dict) or not (
-				dict_entry.get("tool") and dict_entry.get("rule")
-			):
+			# An entry is covered by a real implementation (tool + rule) OR by an explicit
+			# exception — `status: not-implemented` / `overridden_by:`, both permitted by
+			# CONTRIBUTING.md and neither of which requires tool/rule. The `note` those
+			# exceptions owe is reason_required_problems' job, not this one (blueprintx#503).
+			bool_covered = isinstance(dict_entry, dict) and (
+				bool(dict_entry.get("tool") and dict_entry.get("rule"))
+				or bool(dict_entry.get("status"))
+				or bool(dict_entry.get("overridden_by"))
+			)
+			if not bool_covered:
 				list_problems.append(
-					f"{str_id}: no {str_lang!r} entry (or missing tool/rule) — a rule "
-					f"missing a language is an error, not an omission (blueprintx#430)"
+					f"{str_id}: no {str_lang!r} entry (needs tool+rule, or an explicit "
+					f"status/overridden_by) — a rule missing a language is an error, not "
+					f"an omission (blueprintx#430)"
 				)
 	return list_problems
 
@@ -288,6 +321,31 @@ def reason_required_problems(list_rules: list) -> list:
 	return list_problems
 
 
+def _declared_patterns(dict_entry: dict) -> list:
+	"""Return every config assertion an entry declares, single or multiple.
+
+	One `pattern:` checked only one value per entry, so the other documented ceilings in
+	the same file (tests/bin, the .tsx length, detectObjects) could drift with nothing
+	reporting it — the registry asserted one number and vouched for four (blueprintx#503).
+
+	Parameters
+	----------
+	dict_entry : dict
+		One language block.
+
+	Returns
+	-------
+	list of str
+		``patterns:`` items plus any single ``pattern:``; empty when the entry declares
+		a file but no assertion, which checks only that the file exists.
+	"""
+	list_patterns = [str_p for str_p in dict_entry.get("patterns", []) if str_p]
+	str_single = dict_entry.get("pattern", "")
+	if str_single:
+		list_patterns.append(str_single)
+	return list_patterns
+
+
 def config_pattern_problems(list_rules: list, path_root: pathlib.Path) -> list:
 	"""Return findings where a declared ``file``/``pattern`` no longer matches reality.
 
@@ -315,11 +373,14 @@ def config_pattern_problems(list_rules: list, path_root: pathlib.Path) -> list:
 				list_problems.append(
 					f"{str_id}: {str_lang!r} file not found: {dict_entry['file']}"
 				)
-			elif dict_entry.get("pattern", "") not in path_file.read_text(encoding="utf-8"):
-				list_problems.append(
-					f"{str_id}: {str_lang!r} pattern {dict_entry['pattern']!r} not found in "
-					f"{dict_entry['file']} — the registry and the real config have drifted"
-				)
+				continue
+			str_text = path_file.read_text(encoding="utf-8")
+			for str_pattern in _declared_patterns(dict_entry):
+				if str_pattern not in str_text:
+					list_problems.append(
+						f"{str_id}: {str_lang!r} pattern {str_pattern!r} not found in "
+						f"{dict_entry['file']} — the registry and the real config have drifted"
+					)
 	return list_problems
 
 
@@ -421,7 +482,12 @@ def main(list_argv: list) -> int:
 		print("No quality-rules.yaml at this root — skipping quality-rules check.")
 		return 0
 
-	list_rules = parse_registry(path_yaml)
+	try:
+		list_rules = parse_registry(path_yaml)
+	except RegistryError as cls_error:
+		print(f"quality-rules.yaml: {cls_error}")
+		print("\n1 finding(s) in quality-rules.yaml.")
+		return 1
 	set_languages = discovered_languages(PATH_ROOT)
 	list_problems = [
 		*structure_problems(list_rules),
