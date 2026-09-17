@@ -281,6 +281,22 @@ repos:
           - python
         pass_filenames: false
 
+      # Structural gate for the SILENT WRONG ANSWER at ORM model-DECLARATION time
+      # (blueprintx#361, the model-side sibling of #355 above): bitwise &/|/~ inside
+      # .where()/.filter() (Python binds them tighter than ==, so a valid-looking filter
+      # returns wrong rows), two Base/module-scope create_all (create_all then SUCCEEDS
+      # having created nothing), and a constraint name= duplicated across a mixin MRO
+      # (SQLAlchemy silently overwrites one, not an error). Escape hatch: "# orm-guard-ok:
+      # <reason>". Python/SQLAlchemy-only by construction — see the gate's module docstring
+      # for why each TS/Prisma equivalent does not apply.
+      - id: check-orm-model-guards
+        name: ORM model-definition guards (bitwise filter, two Base, duplicate constraint)
+        entry: bash bin/poetry_exec.sh run python bin/check_orm_model_guards.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
       # Structural gate for the canonical docs skeleton — every canonical page (English slug)
       # exists AND is registered in mkdocs.yml nav; MkDocs builds an unregistered page anyway,
       # so it silently vanishes from navigation. Keys on slugs, never localized nav titles.

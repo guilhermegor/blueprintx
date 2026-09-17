@@ -52,6 +52,9 @@ $POETRY run python bin/check_docstrings.py
 print_status info "layer import policy"
 $POETRY run python bin/check_layer_imports.py
 
+print_status info "ORM model-definition guards"
+$POETRY run python bin/check_orm_model_guards.py
+
 print_status info "comment language boundary"
 $POETRY run python bin/check_comment_language.py
 
