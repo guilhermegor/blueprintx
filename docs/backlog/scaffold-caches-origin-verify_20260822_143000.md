@@ -69,7 +69,7 @@ branch, a review and a verification run — not because they share a cause.
 ## Not done here, deliberately
 
 - The six copies of `initialize_git_repo` are still six copies. Deduping them is the
-  #189-shaped refactor, and folding it into a two-defect fix would bury both.
+  `#189`-shaped refactor, and folding it into a two-defect fix would bury both.
 - `bin/blueprintx.sh` was left alone: CI invokes the scaffold scripts **directly**
   (`scaffold_lint_test.sh` reads `scaffold=` from the meta), so a purge placed in the
   dispatcher would be a gate CI can never exercise — the same blindness #205 is about.
