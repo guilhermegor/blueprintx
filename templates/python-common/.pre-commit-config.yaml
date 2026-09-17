@@ -157,6 +157,16 @@ repos:
         files: \.(py|sh)$
         pass_filenames: false
 
+      # A masked CPF/CNPJ compared against a stored unmasked column matches ZERO rows and
+      # raises nothing: the query is valid, the answer is silently empty. Scans .py and .sql
+      # alike, since SQL reaches the database through both.
+      - id: identifier-masking
+        name: identifier masking (masked CPF/CNPJ in a comparison)
+        entry: bash bin/poetry_exec.sh run python bin/check_identifier_masking.py
+        language: system
+        files: \.(py|sql)$
+        pass_filenames: false
+
       # A PROXY, not a detector (blueprintx#442) — see the module docstring. The real
       # detector is pytest-randomly (pytest.ini has no config for it; it self-activates
       # once installed). This gate only pins today's zero-shared-state baseline so the
