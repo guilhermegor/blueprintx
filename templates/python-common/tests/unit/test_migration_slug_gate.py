@@ -144,6 +144,19 @@ def test_a_bare_escape_hatch_with_no_reason_is_rejected(tmp_path: Path) -> None:
 	assert gate.check_file(path_file) == 1
 
 
+def test_a_bare_escape_hatch_cannot_borrow_a_reason_from_the_next_line(
+	tmp_path: Path,
+) -> None:
+	"""A bare pragma must not scavenge non-whitespace content off a later line as its reason."""
+	path_file = _migration_file(
+		tmp_path,
+		"20260913_a1b2c3d4e5f6_merge_heads.py",
+		'# migration-slug-ok:\n"""merge migration heads"""\n',
+	)
+
+	assert gate.check_file(path_file) == 1
+
+
 # --------------------------
 # Directory-level behaviour — the self-skip and the whole-run verdict
 # --------------------------

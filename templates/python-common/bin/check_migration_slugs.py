@@ -34,7 +34,7 @@ _ALLOWED_VERBS = frozenset(
 )
 
 _RE_FILENAME = re.compile(r"^\d{8}_[0-9a-f]+_(?P<slug>.+)\.py$")
-_RE_ESCAPE = re.compile(r"migration-slug-ok:\s*(\S.*)")
+_RE_ESCAPE = re.compile(r"migration-slug-ok:[ \t]*(\S[^\r\n]*)")
 _INT_ESCAPE_SCAN_LINES = 5
 
 _PATH_MIGRATIONS = pathlib.Path("migrations/versions")
