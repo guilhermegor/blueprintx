@@ -174,9 +174,12 @@ machine-decidable — it is a review question, so it stays prose reviewed by a h
 | Early-return shape | 🔧 in flight — ruff `RET` (blueprintx#426) | ❌ none |
 | Nesting-depth ceiling | ❌ none — `PLR1702` is preview-gated and preview is off (blueprintx#434); `C901` bounds nesting only as a side effect | ❌ none — no `max-depth` |
 | Coverage floor | ✅ `fail_under = 80` (`.coveragerc`) | ❌ no Jest `coverageThreshold` configured |
+| Casing convention (functions/variables/import aliases) — row re-measured 2026-09-13 | ✅ ruff `N`, minus `N802` in `tests/**` (blueprintx#422, closes #422) | ❌ none configured — `@typescript-eslint/naming-convention` exists but is unused. No like-for-like gap: a JS/TS test name is a **string literal** passed to `it()`/`describe()`, not a function identifier, so the one real N802 collision this issue measured (a test name using upper-case for semantic emphasis) has no TS equivalent to conflict with in the first place. TypeScript also has no analogue to the type-prefix convention that would otherwise fight a constant-casing rule — this repo's Python house convention is Python-only |
 
 Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
-Update the date in this heading when re-measured, so the next reader knows whether the gap
+The heading date covers the table as a whole; a row re-measured later carries its own date in
+its first cell, so one fresh row never implies the other rows were re-measured with it.
+Update the date in this heading when the WHOLE table is re-measured, so the next reader knows whether the gap
 narrowed or widened.
 
 ## Pull Request Process
@@ -249,6 +252,46 @@ implicit `None`) — not narrowed to only `RET505` (the "unnecessary `else` afte
   function (the `None` is the result the caller consumes, not leftover
   boilerplate), the right fix is a line-scoped `# noqa: RET501` **with a reason**,
   not deletion — an unreasoned `noqa` is the same debt as an unreasoned comment.
+
+### `N` (pep8-naming) — blueprintx#422
+
+Adopted with two per-file-ignores, not whole. Re-measured 2026-09-13 (ruff 0.11.13):
+`ruff check --select N --statistics src/ bin/ tests/ optional/` → 9 findings across 3
+rules (an earlier count in the issue read 6 — stale; re-measuring is what the issue asked
+for, not trusting the number it opened with).
+
+- **`N802` (function name should be lowercase) — 5 findings, all false positives, ignored
+  in `tests/**` only.** Every one is a test name that uses upper-case for **semantic
+  emphasis** on the exact behaviour under test:
+  `test_modules_with_no_policy_file_FAIL_rather_than_pass_silently`,
+  `test_a_glob_governs_packages_NESTED_below_the_sublayer`,
+  `test_a_dotted_deny_also_catches_the_RELATIVE_form`,
+  `test_account_blocked_until_takes_the_LATEST_deadline_not_the_latest_notice`,
+  `test_no_threads_is_not_a_THREAD_problem`. `tests/CLAUDE.md` asks a test name to
+  describe the *behaviour*, not the function under test — the upper-case word is that
+  description, not a casing slip. Renaming to satisfy N802 would erase the one thing the
+  name is for. `N802` stays active everywhere else; only `tests/**` is exempt.
+- **`N806` (non-lowercase variable in function) — 3 findings, all true positives, fixed by
+  moving the constant to module scope.** All three are the same shape: a local `_ALL_CAPS`
+  name assigned inside a function body — exactly PEP-8's "constants are module-level and
+  upper-case" rule seen from the other side, since a local variable that *looks* like a
+  constant is really just a plain variable wearing constant casing.
+  `bin/check_assertion_weakening.py::changed_paths` (`_INT_MIN_FIELDS`) and
+  `::_compare_call` (`_MIN_EQ_ARGS`), plus `bin/check_gate_integrity.py::changed_paths`
+  (`_INT_MIN_FIELDS`, a near-duplicate of the first — same shape, separate file, out of
+  scope for this issue). Fixed by hoisting each to a module-level `_NAME = value` beside
+  the file's existing module constants; no behaviour change.
+- **`N813` (camelcase module imported as lowercase) — 1 finding, evaluated and kept via a
+  per-file-ignore.** `src/utils/xml_reader.py` imports `defusedxml.ElementTree as
+  defused_et`. The lowercase alias is deliberate, not accidental: the file's own module
+  docstring already states why `defusedxml`, not stdlib `xml.etree.ElementTree`, is the
+  trust-boundary-safe parser, and the alias's job is to read as "the defused one" at every
+  call site. Renaming it to satisfy N813 (e.g. `DefusedElementTree`) would only make that
+  signal harder to read for no defect fixed, so this one file is ignored for `N813` rather
+  than renamed.
+
+See the cross-language parity table above for the TypeScript side of this decision — no
+like-for-like gap, since a JS/TS test name is a string literal, not a function identifier.
 
 ## Best Practices
 

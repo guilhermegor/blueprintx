@@ -90,6 +90,13 @@ repos:
         pass_filenames: false
         files: ^bin/.*\.sh$
 
+      - id: sed-portability
+        name: sed portability (no bare sed -i, blueprintx#459)
+        entry: bash bin/ci/check_sed_portability.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/.*\.sh|templates/.*/bin/.*\.sh)$
+
       - id: git-remote-guard
         name: scaffold origin verification (mismatched remote must fail)
         entry: bash bin/ci/check_git_remote_guard.sh
@@ -256,3 +263,10 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+      - id: check-markdown
+        name: markdownlint (pymarkdownlnt, measured rule set — blueprintx#383)
+        entry: bash bin/ci/check_markdown.sh
+        language: system
+        pass_filenames: false
+        files: \.md$
