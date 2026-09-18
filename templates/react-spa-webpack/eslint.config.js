@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import prettierConfig from 'eslint-config-prettier';
 import boundaries from 'eslint-plugin-boundaries';
 import importPlugin from 'eslint-plugin-import';
+import jest from 'eslint-plugin-jest';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -72,8 +73,13 @@ export default [
   // 4. Overrides for test files
   {
     files: ['**/*.{test,spec}.{ts,tsx,js,jsx}'],
+    plugins: { jest },
     rules: {
       'no-console': 'off',
+      // A test file that EXPORTS something is sharing state across files — the proxy half
+      // of blueprintx#442 (pytest-randomly is the other half). Neither proves order
+      // independence; this only makes the cheapest way to break it visible at lint time.
+      'jest/no-export': 'error',
     },
   },
 

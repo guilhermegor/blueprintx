@@ -25,6 +25,7 @@ DATA_DIR_BASE="logs"
 DATA_DIR_DATED=false
 INCLUDE_WEBHOOK=false
 WEBHOOK_PLATFORM="teams"
+INCLUDE_OTEL=false
 INCLUDE_EMAIL=false
 EMAIL_BACKEND="outlook"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/python-common"
@@ -396,6 +397,8 @@ copy_global_config() {
     if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" ]; then
         cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" "$project_path/tests/unit/test_env_config.py"
     fi
+    # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
@@ -490,13 +493,55 @@ conditional_copy_storage() {
     print_status "success" "Schema-less storage (chassis/db + db_wschema) added"
 }
 
+# OTLP log export (opt-in, blueprintx#438): the module (imports opentelemetry — the ONLY
+# place it is imported, per .layer-policy.yaml), its unit test, the .env block, the pinned
+# pyproject.toml dependencies (declared only here, so an opt-out never installs them), a
+# local-dev collector compose fragment (separate from docker-compose.yml, which the DB prompt
+# already claims), and the startup.py wiring — one function, since a bare copy with no wiring
+# (or vice versa) is not a state either side of this opt-in should ever be in.
+conditional_copy_otel() {
+    local project_path="$1"
+    if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
+    cp "$COMMON_TEMPLATE_ROOT/optional/otel_logging.py" "$project_path/src/chassis/otel_logging.py"
+    cp "$COMMON_TEMPLATE_ROOT/optional/test_otel_logging.py" "$project_path/tests/unit/test_otel_logging.py"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
+    cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
+    cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
+    # EXACT pins, deliberately against this repo's own house style of ranges
+    # (`beartype = ">=0.22"`). The Logs signal is still "Development" status upstream (see
+    # chassis/otel_logging.py), so a minor bump may change behaviour; `>=1.27,<2.0` is the
+    # constraint that LETS that land silently on the next `poetry update`, which is what the
+    # rest of this comment exists to prevent. Do not "fix" these back to a range without
+    # first re-checking that upstream status.
+    sed_inplace '/^python-dotenv = ">=1.0.0"/a\
+# OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
+# "Development" status upstream (see chassis/otel_logging.py for the measured source).\
+opentelemetry-api = "==1.44.0"\
+opentelemetry-sdk = "==1.44.0"\
+opentelemetry-exporter-otlp-proto-http = "==1.44.0"' "$project_path/pyproject.toml"
+    cat >> "$project_path/src/config/startup.py" <<'PYBLOCK'
+
+# OTLP log export (opt-in) — ADDS a handler to LOGGER; never replaces the FileHandler
+# above. A no-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset (see chassis/otel_logging.py).
+from chassis.otel_logging import configure_otel_logging  # noqa: E402
+
+
+configure_otel_logging(LOGGER)
+PYBLOCK
+    print_status "success" "OTLP log export (chassis/otel_logging.py) wired into startup.py + collector compose added"
+}
+
 # GitHub-only assets are copied only when a GitHub remote is established (see main()).
 copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
-    # GitGuardian secret-scanning gate (blueprintx#153). GitHub-only, like tests.yaml.
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
+    # GitGuardian secret-scanning gate (blueprintx#153), OPT-IN (blueprintx#287): only when
+    # GITGUARDIAN_API_KEY was exported at scaffold time — see scaffold_set_secret_scan_key.
+    if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
+        cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
+    fi
     # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
     # after the last push is still checked — a push-only trigger goes stale exactly then.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
@@ -550,13 +595,13 @@ commit_and_push_github_assets() {
     apply_branch_protection "$project_path"
 }
 
-copy_alembic_templates() {
+copy_migration_templates() {
     local project_path="$1"
-    print_status "info" "Copying Alembic templates..."
+    print_status "info" "Copying migration templates..."
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/alembic.ini" "$project_path/alembic.ini"
-    mkdir -p "$project_path/alembic/versions"
-    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/alembic/." "$project_path/alembic"
-    print_status "success" "Alembic templates copied"
+    mkdir -p "$project_path/migrations/versions"
+    cp -r "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/migrations/." "$project_path/migrations"
+    print_status "success" "Migration templates copied"
 }
 
 conditional_copy_docker_compose() {
@@ -567,36 +612,47 @@ conditional_copy_docker_compose() {
     print_status "success" "docker-compose.yml (${DB_COMPOSE_BACKEND}) copied"
 }
 
+provision_migrations() {
+    local project_path="$1"
+    copy_migration_templates "$project_path"
+    patch_pyproject_db_driver "$project_path"
+}
+
 patch_pyproject_db_driver() {
     local project_path="$1"
     if [[ "$INCLUDE_DOCKER_COMPOSE" != "true" ]]; then
         # Remove the comment block about conditional driver from pyproject.toml
-        sed -i '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
+        sed_inplace '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
         return
     fi
     # Remove comment block and inject the chosen driver
-    sed -i '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
+    sed_inplace '/^# DB driver is added/,/^$/d' "$project_path/pyproject.toml"
     case "$DB_COMPOSE_BACKEND" in
         postgresql)
-            sed -i '/^alembic/a psycopg = {version = ">=3.2.4", extras = ["binary"]}' "$project_path/pyproject.toml"
+            sed_inplace '/^alembic/a psycopg = {version = ">=3.2.4", extras = ["binary"]}' "$project_path/pyproject.toml"
             ;;
         mysql)
-            sed -i '/^alembic/a pymysql = ">=1.1.0"' "$project_path/pyproject.toml"
+            sed_inplace '/^alembic/a pymysql = ">=1.1.0"' "$project_path/pyproject.toml"
             ;;
         mariadb)
-            sed -i '/^alembic/a mariadb = ">=1.1.0"' "$project_path/pyproject.toml"
+            sed_inplace '/^alembic/a mariadb = ">=1.1.0"' "$project_path/pyproject.toml"
             ;;
     esac
     print_status "success" "DB driver ($DB_COMPOSE_BACKEND) added to pyproject.toml"
 }
 
+# Alembic's own templates plus the pyproject.toml driver entry they need to run — one call
+# site in main() for what is really one concern (provisioning migrations for the chosen
+# DB_COMPOSE_BACKEND), split out here rather than adding a second line to main() (blueprintx#438
+# pushed main() over the function-length ceiling; these two calls were always sequential and
+# never meant to be reordered independently).
 # Output directory is data-driven from inputs.yaml (no startup.py patching).
 conditional_patch_inputs_yaml() {
     local project_path="$1"
     if [[ "$INCLUDE_DATA_DIR" != "true" ]]; then return; fi
     local f="$project_path/src/config/inputs.yaml"
-    sed -i "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
-    sed -i "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
+    sed_inplace "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
+    sed_inplace "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
     print_status "success" "Output directory configured in inputs.yaml"
 }
 
@@ -675,6 +731,15 @@ conditional_copy_webhooks_yaml() {
     printf '%s' "$webhook_env" >> "$project_path/.env"
     printf '%s' "$webhook_env" >> "$project_path/.env.example"
     print_status "success" "Webhook provider (chassis/webhook) + webhooks.yaml added"
+}
+
+prompt_otel() {
+    local answer
+    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    case "$answer" in
+        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
+        *) INCLUDE_OTEL=false ;;
+    esac
 }
 
 prompt_email() {
@@ -806,6 +871,28 @@ PY
 }
 
 
+# GitHub-only assets exist iff a GitHub remote was established. With an upstream
+# tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
+# ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
+# for a pre-existing clone whose origin points elsewhere, and this branch pushes to it.
+# SCAFFOLD_REMOTE_VERIFIED is the missing half (#212, raised by review on #215).
+finalize_github_or_offline() {
+    local project_path="$1"
+
+    if [ "$SCAFFOLD_REMOTE_VERIFIED" = "1" ] \
+        && git -C "$project_path" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        copy_github_assets "$project_path"
+        # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
+        # make bump_version (cz bump). Strip BEFORE the assets commit so its Makefile/tasks.sh
+        # edits are swept into the same commit+push (no leftover uncommitted files).
+        strip_bump_version "$project_path"
+        commit_and_push_github_assets "$project_path"
+    else
+        apply_offline_mode "$project_path"
+    fi
+}
+
+
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
 
@@ -819,8 +906,10 @@ main() {
     prompt_storage
     prompt_data_dir
     prompt_webhook
+    prompt_otel
     prompt_email
     prompt_env_wise_config
+    scaffold_prompt_review_bot_roster
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"
     copy_global_config "$PROJECT_PATH"
@@ -829,14 +918,14 @@ main() {
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     conditional_prune_optin_deps "$PROJECT_PATH"
-    copy_alembic_templates "$PROJECT_PATH"
+    provision_migrations "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     conditional_copy_storage "$PROJECT_PATH"
-    patch_pyproject_db_driver "$PROJECT_PATH"
     conditional_patch_inputs_yaml "$PROJECT_PATH"
     apply_env_wise_config "$PROJECT_PATH"
     conditional_copy_webhooks_yaml "$PROJECT_PATH"
     conditional_copy_email "$PROJECT_PATH"
+    conditional_copy_otel "$PROJECT_PATH"
     conditional_patch_startup "$PROJECT_PATH"
     conditional_patch_main_py "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
@@ -844,23 +933,7 @@ main() {
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
-
-    # GitHub-only assets exist iff a GitHub remote was established. With an upstream
-    # tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
-    # ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
-    # for a pre-existing clone whose origin points elsewhere, and this branch pushes to it.
-    # SCAFFOLD_REMOTE_VERIFIED is the missing half (#212, raised by review on #215).
-    if [ "$SCAFFOLD_REMOTE_VERIFIED" = "1" ] \
-        && git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-        copy_github_assets "$PROJECT_PATH"
-        # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
-        # make bump_version (cz bump). Strip BEFORE the assets commit so its Makefile/tasks.sh
-        # edits are swept into the same commit+push (no leftover uncommitted files).
-        strip_bump_version "$PROJECT_PATH"
-        commit_and_push_github_assets "$PROJECT_PATH"
-    else
-        apply_offline_mode "$PROJECT_PATH"
-    fi
+    finalize_github_or_offline "$PROJECT_PATH"
 
     print_status "success" "Hex-service scaffold complete!"
     print_status "info" "Project path: $PROJECT_PATH"

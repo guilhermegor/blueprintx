@@ -76,16 +76,12 @@ RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
 STR_INDEX_REF = ""
 
 # A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
-# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields.
-INT_MIN_FIELDS = 2
-# `assertEqual(actual, expected)` — the two positional args the #323 shape compares.
-INT_MIN_EQ_ARGS = 2
-
-# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
-# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields.
-INT_MIN_FIELDS = 2
-# `assertEqual(actual, expected)` — the two positional args the #323 shape compares.
-INT_MIN_EQ_ARGS = 2
+# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields. Module-scoped
+# (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as a
+# constant while behaving like a plain variable — moved here to be what it says it is.
+_INT_MIN_FIELDS = 2
+# Minimum positional-arg count for `assertEqual(a, b)` — same N806 shape as above.
+_MIN_EQ_ARGS = 2
 
 # Comparison operators weaker than `==` — blueprintx#289's `in` example, plus the issue's
 # `>=` example. `Gt`/`Lt` are excluded: swapping equality for a strict inequality is not
@@ -118,12 +114,12 @@ def _git(list_args: list) -> str:
     Parameters
     ----------
     list_args : list of str
-            Arguments after ``git``.
+        Arguments after ``git``.
 
     Returns
     -------
     str
-            Captured stdout, stripped.
+        Captured stdout, stripped.
     """
     try:
         cls_proc = subprocess.run(  # noqa: S603
@@ -144,16 +140,16 @@ def show(str_ref: str, str_path: str) -> str | None:
     Parameters
     ----------
     str_ref : str
-            A commit-ish, or ``""`` for the index (``STR_INDEX_REF``).
+        A commit-ish, or ``""`` for the index (``STR_INDEX_REF``).
     str_path : str
-            Repository-relative path.
+        Repository-relative path.
 
     Returns
     -------
     str or None
-            The blob's content; ``None`` when the path does not exist there or is not valid
-            UTF-8 (mirrors ``check_gate_integrity.py::show`` — a binary defines nothing to
-            compare, and decoding by extension is the wrong fix, see that file's own note).
+        The blob's content; ``None`` when the path does not exist there or is not valid
+        UTF-8 (mirrors ``check_gate_integrity.py::show`` — a binary defines nothing to
+        compare, and decoding by extension is the wrong fix, see that file's own note).
     """
     cls_proc = subprocess.run(  # noqa: S603
         ["git", "show", f"{str_ref}:{str_path}"],  # noqa: S607
@@ -174,10 +170,10 @@ def default_branch() -> str:
     Returns
     -------
     str
-            ``origin/<name>`` when only the remote-tracking branch exists, else a local
-            ``<name>``; falls back to the literal ``"main"``. See
-            ``check_gate_integrity.py::default_branch`` (blueprintx#313) for why the remote
-            prefix is kept rather than stripped.
+        ``origin/<name>`` when only the remote-tracking branch exists, else a local
+        ``<name>``; falls back to the literal ``"main"``. See
+        ``check_gate_integrity.py::default_branch`` (blueprintx#313) for why the remote
+        prefix is kept rather than stripped.
     """
     str_ref = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).strip()
     if str_ref:
@@ -195,18 +191,18 @@ def changed_paths(str_base: str) -> list:
     Parameters
     ----------
     str_base : str
-            The merge-base commit to diff against.
+        The merge-base commit to diff against.
 
     Returns
     -------
     list of tuple
-            ``(status_letter, path)``.
+        ``(status_letter, path)``.
     """
     str_out = _git(["diff", "--cached", "--name-status", str_base])
     list_rows = []
     for str_line in str_out.splitlines():
         list_parts = str_line.split("\t")
-        if len(list_parts) >= INT_MIN_FIELDS:
+        if len(list_parts) >= _INT_MIN_FIELDS:
             list_rows.append((list_parts[0][0], list_parts[-1]))
     return list_rows
 
@@ -217,7 +213,7 @@ def pr_body_text() -> str:
     Returns
     -------
     str
-            The PR body, or ``""`` outside a ``pull_request`` workflow run.
+        The PR body, or ``""`` outside a ``pull_request`` workflow run.
     """
     str_event_path = os.environ.get("GITHUB_EVENT_PATH", "")
     if not str_event_path:
@@ -236,12 +232,12 @@ def justification_reason(str_base: str) -> str:
     Parameters
     ----------
     str_base : str
-            The merge-base commit — commit messages since it are searched for a trailer.
+        The merge-base commit — commit messages since it are searched for a trailer.
 
     Returns
     -------
     str
-            The non-empty reason text, or ``""`` when no valid justification is present.
+        The non-empty reason text, or ``""`` when no valid justification is present.
     """
     str_trailers = _git(["log", f"{str_base}..HEAD", "--format=%B"])
     for str_text in (pr_body_text(), str_trailers):
@@ -257,12 +253,12 @@ def apply_root_flag(list_argv: list) -> bool:
     Parameters
     ----------
     list_argv : list of str
-            The raw argv tail.
+        The raw argv tail.
 
     Returns
     -------
     bool
-            ``False`` on bad usage (already reported to stdout); ``True`` otherwise.
+        ``False`` on bad usage (already reported to stdout); ``True`` otherwise.
     """
     global PATH_ROOT  # noqa: PLW0603
     if list_argv[:1] != ["--root"]:
@@ -280,9 +276,9 @@ def resolve_base() -> str | None:
     Returns
     -------
     str or None
-            ``None`` means a real skip: HEAD already IS the resolved ref. An empty string means
-            no ref could be resolved at all, and is never treated as a skip — ``main()`` fails
-            the run on it instead of passing it silently (mirrors blueprintx#313).
+        ``None`` means a real skip: HEAD already IS the resolved ref. An empty string means
+        no ref could be resolved at all, and is never treated as a skip — ``main()`` fails
+        the run on it instead of passing it silently (mirrors blueprintx#313).
     """
     str_ref = default_branch()
     str_base = _git(["merge-base", "HEAD", str_ref]).strip()
@@ -302,13 +298,13 @@ def _dump(node: ast.AST) -> str:
     Parameters
     ----------
     node : ast.AST
-            Any expression node.
+        Any expression node.
 
     Returns
     -------
     str
-            ``ast.dump`` output with no line/column noise, so two structurally identical
-            expressions compare equal regardless of where they sit in the file.
+        ``ast.dump`` output with no line/column noise, so two structurally identical
+        expressions compare equal regardless of where they sit in the file.
     """
     return ast.dump(node, annotate_fields=False, include_attributes=False)
 
@@ -319,12 +315,12 @@ def _is_trivial_assert_test(node_test: ast.expr) -> bool:
     Parameters
     ----------
     node_test : ast.expr
-            The expression after ``assert``.
+        The expression after ``assert``.
 
     Returns
     -------
     bool
-            ``True`` only for a truthy ``ast.Constant`` — an assertion that can never fail.
+        ``True`` only for a truthy ``ast.Constant`` — an assertion that can never fail.
     """
     return isinstance(node_test, ast.Constant) and bool(node_test.value)
 
@@ -335,12 +331,12 @@ def _call_attr(node_call: ast.Call) -> str | None:
     Parameters
     ----------
     node_call : ast.Call
-            The call node.
+        The call node.
 
     Returns
     -------
     str or None
-            The attribute name, or ``None`` for a bare-name call.
+        The attribute name, or ``None`` for a bare-name call.
     """
     func = node_call.func
     return func.attr if isinstance(func, ast.Attribute) else None
@@ -352,12 +348,12 @@ def _is_assert_call(node_call: ast.Call) -> bool:
     Parameters
     ----------
     node_call : ast.Call
-            The call node.
+        The call node.
 
     Returns
     -------
     bool
-            ``True`` when the attribute name starts with ``assert``.
+        ``True`` when the attribute name starts with ``assert``.
     """
     str_attr = _call_attr(node_call)
     return str_attr is not None and str_attr.startswith("assert")
@@ -369,12 +365,12 @@ def _raises_func_name(node_call: ast.Call) -> str | None:
     Parameters
     ----------
     node_call : ast.Call
-            A ``with`` item's context expression.
+        A ``with`` item's context expression.
 
     Returns
     -------
     str or None
-            ``"raises"`` when matched, else ``None``.
+        ``"raises"`` when matched, else ``None``.
     """
     func = node_call.func
     if isinstance(func, ast.Attribute):
@@ -390,12 +386,12 @@ def _is_raises_with(node_with: ast.With) -> bool:
     Parameters
     ----------
     node_with : ast.With
-            The ``with`` statement.
+        The ``with`` statement.
 
     Returns
     -------
     bool
-            ``True`` when any item's context expression calls ``raises``.
+        ``True`` when any item's context expression calls ``raises``.
     """
     for item in node_with.items:
         expr = item.context_expr
@@ -410,13 +406,13 @@ def _raises_exception_name(node_with: ast.With) -> str | None:
     Parameters
     ----------
     node_with : ast.With
-            A ``with`` statement already known to be a ``raises`` context.
+        A ``with`` statement already known to be a ``raises`` context.
 
     Returns
     -------
     str or None
-            The exception name (``"tuple"`` for a multi-type tuple), or ``None`` when
-            ``raises`` was called with no positional exception type.
+        The exception name (``"tuple"`` for a multi-type tuple), or ``None`` when
+        ``raises`` was called with no positional exception type.
     """
     for item in node_with.items:
         expr = item.context_expr
@@ -441,13 +437,13 @@ def _function_checks(node_fn: ast.FunctionDef) -> list:
     Parameters
     ----------
     node_fn : ast.FunctionDef
-            The test function (or method).
+        The test function (or method).
 
     Returns
     -------
     list of tuple
-            ``("assert" | "call" | "raises", ast.AST)``, in source order. Does not descend
-            into nested function/lambda definitions — those are their own unit.
+        ``("assert" | "call" | "raises", ast.AST)``, in source order. Does not descend
+        into nested function/lambda definitions — those are their own unit.
     """
     list_checks: list = []
 
@@ -477,12 +473,12 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
     Parameters
     ----------
     node_fn : ast.FunctionDef
-            The test function.
+        The test function.
 
     Returns
     -------
     set of str
-            Subset of ``{"skip", "xfail"}`` present as ``@pytest.mark.<name>`` decorators.
+        Subset of ``{"skip", "xfail"}`` present as ``@pytest.mark.<name>`` decorators.
     """
     set_out = set()
     for dec in node_fn.decorator_list:
@@ -498,17 +494,17 @@ def _is_literal_ish(node: ast.expr) -> bool:
     Parameters
     ----------
     node : ast.expr
-            An expression to classify.
+        An expression to classify.
 
     Returns
     -------
     bool
-            ``True`` for ``ast.Constant``, a signed constant, a tuple/list/set of literals,
-            or a call (``Decimal("1.99")``, ``date(2026, 6, 8)``) whose every argument is
-            itself literal-ish. ``False`` for anything referencing a name, attribute value,
-            or subscript — those are CODE, not an expected value, and conflating the two is
-            a measured false positive (a rewritten call-under-test wrongly read as a
-            tampered expectation; see the module docstring's PR history note).
+        ``True`` for ``ast.Constant``, a signed constant, a tuple/list/set of literals,
+        or a call (``Decimal("1.99")``, ``date(2026, 6, 8)``) whose every argument is
+        itself literal-ish. ``False`` for anything referencing a name, attribute value,
+        or subscript — those are CODE, not an expected value, and conflating the two is
+        a measured false positive (a rewritten call-under-test wrongly read as a
+        tampered expectation; see the module docstring's PR history note).
     """
     if isinstance(node, ast.Constant):
         return True
@@ -529,18 +525,18 @@ def _value_side_changed(cmp_old: ast.Compare, cmp_new: ast.Compare) -> bool:
     Parameters
     ----------
     cmp_old : ast.Compare
-            The comparison at the merge-base.
+        The comparison at the merge-base.
     cmp_new : ast.Compare
-            The comparison in this change.
+        The comparison in this change.
 
     Returns
     -------
     bool
-            ``True`` only when one side is unchanged CODE and the other side is a literal
-            in both versions with a different value — an expected-value edit, never a
-            rewrite of the call/expression under test (measured: ``dict_calls["n"]`` ->
-            ``cls_call.call_count`` on an unchanged ``== 1`` must NOT fire; ``Decimal("1.99")``
-            -> ``Decimal("2.00")`` on an unchanged left side MUST).
+        ``True`` only when one side is unchanged CODE and the other side is a literal
+        in both versions with a different value — an expected-value edit, never a
+        rewrite of the call/expression under test (measured: ``dict_calls["n"]`` ->
+        ``cls_call.call_count`` on an unchanged ``== 1`` must NOT fire; ``Decimal("1.99")``
+        -> ``Decimal("2.00")`` on an unchanged left side MUST).
     """
     str_ol, str_nl = _dump(cmp_old.left), _dump(cmp_new.left)
     str_or, str_nr = _dump(cmp_old.comparators[0]), _dump(cmp_new.comparators[0])
@@ -557,16 +553,16 @@ def _compare_assert(old_node: ast.Assert, new_node: ast.Assert, bool_prod_change
     Parameters
     ----------
     old_node : ast.Assert
-            The assertion at the merge-base.
+        The assertion at the merge-base.
     new_node : ast.Assert
-            The assertion in this change.
+        The assertion in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff — gates the value-changed rule.
+        Whether a non-test file also changed in this diff — gates the value-changed rule.
 
     Returns
     -------
     str
-            A human-readable finding, or ``""`` when nothing decidable weakened.
+        A human-readable finding, or ``""`` when nothing decidable weakened.
     """
     cmp_old, cmp_new = old_node.test, new_node.test
     if _is_trivial_assert_test(cmp_new) and not _is_trivial_assert_test(cmp_old):
@@ -590,16 +586,16 @@ def _compare_call(old_node: ast.Call, new_node: ast.Call, bool_prod_changed: boo
     Parameters
     ----------
     old_node : ast.Call
-            The ``self.assertX(...)`` call at the merge-base.
+        The ``self.assertX(...)`` call at the merge-base.
     new_node : ast.Call
-            The call in this change.
+        The call in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff.
+        Whether a non-test file also changed in this diff.
 
     Returns
     -------
     str
-            A human-readable finding, or ``""``.
+        A human-readable finding, or ``""``.
     """
     str_old_attr, str_new_attr = _call_attr(old_node), _call_attr(new_node)
     if str_old_attr is None or str_new_attr is None:
@@ -609,8 +605,8 @@ def _compare_call(old_node: ast.Call, new_node: ast.Call, bool_prod_changed: boo
     if (
         str_old_attr == str_new_attr == "assertEqual"
         and bool_prod_changed
-        and len(old_node.args) >= INT_MIN_EQ_ARGS
-        and len(new_node.args) >= INT_MIN_EQ_ARGS
+        and len(old_node.args) >= _MIN_EQ_ARGS
+        and len(new_node.args) >= _MIN_EQ_ARGS
     ):
         str_oa0, str_na0 = _dump(old_node.args[0]), _dump(new_node.args[0])
         str_oa1, str_na1 = _dump(old_node.args[1]), _dump(new_node.args[1])
@@ -637,14 +633,14 @@ def _compare_raises(old_node: ast.With, new_node: ast.With) -> str:
     Parameters
     ----------
     old_node : ast.With
-            The ``raises`` block at the merge-base.
+        The ``raises`` block at the merge-base.
     new_node : ast.With
-            The ``raises`` block in this change.
+        The ``raises`` block in this change.
 
     Returns
     -------
     str
-            A human-readable finding, or ``""``.
+        A human-readable finding, or ``""``.
     """
     str_old_exc = _raises_exception_name(old_node)
     str_new_exc = _raises_exception_name(new_node)
@@ -661,17 +657,17 @@ def _compare_pair(tuple_old: tuple, tuple_new: tuple, bool_prod_changed: bool) -
     Parameters
     ----------
     tuple_old : tuple
-            ``(kind, node)`` at the merge-base.
+        ``(kind, node)`` at the merge-base.
     tuple_new : tuple
-            ``(kind, node)`` in this change.
+        ``(kind, node)`` in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff.
+        Whether a non-test file also changed in this diff.
 
     Returns
     -------
     str
-            A human-readable finding, or ``""`` when the pair carries no decidable weakening
-            (including every kind-mismatch other than a ``raises`` block replaced outright).
+        A human-readable finding, or ``""`` when the pair carries no decidable weakening
+        (including every kind-mismatch other than a ``raises`` block replaced outright).
     """
     old_kind, old_node = tuple_old
     new_kind, new_node = tuple_new
@@ -711,16 +707,16 @@ def _compare_call_to_assert(old_node: ast.Call, new_node: ast.Assert) -> str:
     Parameters
     ----------
     old_node : ast.Call
-            The ``self.assertX(...)`` call at the merge-base.
+        The ``self.assertX(...)`` call at the merge-base.
     new_node : ast.Assert
-            The bare ``assert`` statement on the branch. Its ``.test`` carries the comparison --
-            the checks list stores the statement, not the expression.
+        The bare ``assert`` statement on the branch. Its ``.test`` carries the comparison --
+        the checks list stores the statement, not the expression.
 
     Returns
     -------
     str
-            A human-readable finding, or ``""`` when the rewrite is not a decidable weakening
-            (an unlisted call, or a new form that is not a simple comparison).
+        A human-readable finding, or ``""`` when the rewrite is not a decidable weakening
+        (an unlisted call, or a new form that is not a simple comparison).
     """
     if not isinstance(old_node.func, ast.Attribute):
         return ""
@@ -745,14 +741,14 @@ def parse_functions(str_source: str) -> dict | None:
     Parameters
     ----------
     str_source : str
-            Full file content.
+        Full file content.
 
     Returns
     -------
     dict or None
-            ``{name: ast.FunctionDef}``, or ``None`` when the source does not parse — a
-            distinct state from "parses clean with zero tests" (three states: flagged /
-            clean / could not parse).
+        ``{name: ast.FunctionDef}``, or ``None`` when the source does not parse — a
+        distinct state from "parses clean with zero tests" (three states: flagged /
+        clean / could not parse).
     """
     try:
         cls_tree = ast.parse(str_source)
@@ -773,12 +769,12 @@ def _index_tests(node_parent: ast.AST, str_prefix: str, dict_funcs: dict) -> Non
     Parameters
     ----------
     node_parent : ast.AST
-            Module or class body to walk. Only direct children are visited; nested classes
-            recurse with an extended prefix.
+        Module or class body to walk. Only direct children are visited; nested classes
+        recurse with an extended prefix.
     str_prefix : str
-            Dotted prefix accumulated from enclosing classes, ``""`` at module level.
+        Dotted prefix accumulated from enclosing classes, ``""`` at module level.
     dict_funcs : dict
-            Accumulator, mutated in place: qualified name to AST node.
+        Accumulator, mutated in place: qualified name to AST node.
     """
     for node in ast.iter_child_nodes(node_parent):
         if isinstance(node, ast.ClassDef):
@@ -801,20 +797,20 @@ def _function_findings(
     Parameters
     ----------
     str_path : str
-            Repository-relative path, for message prefixing.
+        Repository-relative path, for message prefixing.
     str_name : str
-            The test function's name.
+        The test function's name.
     node_old : ast.FunctionDef
-            The function at the merge-base.
+        The function at the merge-base.
     node_new : ast.FunctionDef
-            The function in this change.
+        The function in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff.
+        Whether a non-test file also changed in this diff.
 
     Returns
     -------
     list of str
-            Findings, in the order the underlying checks appear.
+        Findings, in the order the underlying checks appear.
     """
     list_problems = []
     set_new_markers = _skip_or_xfail_markers(node_new) - _skip_or_xfail_markers(node_old)
@@ -844,20 +840,20 @@ def _file_findings(
     Parameters
     ----------
     str_path : str
-            Repository-relative path.
+        Repository-relative path.
     str_old_text : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new_text : str
-            Content in this change.
+        Content in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff.
+        Whether a non-test file also changed in this diff.
 
     Returns
     -------
     list of str
-            One ``could not parse`` finding when either version fails to parse (a file not
-            checked is a finding in its own right, never read as clean); otherwise the
-            combined per-function findings.
+        One ``could not parse`` finding when either version fails to parse (a file not
+        checked is a finding in its own right, never read as clean); otherwise the
+        combined per-function findings.
     """
     dict_old_funcs = parse_functions(str_old_text)
     dict_new_funcs = parse_functions(str_new_text)
@@ -881,13 +877,13 @@ def _touches_production_code(list_changed: list) -> bool:
     Parameters
     ----------
     list_changed : list of tuple
-            ``(status_letter, path)`` rows from ``changed_paths``.
+        ``(status_letter, path)`` rows from ``changed_paths``.
 
     Returns
     -------
     bool
-            ``True`` when at least one changed path is neither a test file nor
-            documentation — the signal that gates the expected-value-changed rule.
+        ``True`` when at least one changed path is neither a test file nor
+        documentation — the signal that gates the expected-value-changed rule.
     """
     for _str_status, str_path in list_changed:
         if RE_TEST_PATH.search(str_path) or RE_DOC_PATH.search(str_path):
@@ -902,14 +898,14 @@ def collect_problems(list_changed: list, str_base: str) -> list:
     Parameters
     ----------
     list_changed : list of tuple
-            ``(status_letter, path)`` rows from ``changed_paths``.
+        ``(status_letter, path)`` rows from ``changed_paths``.
     str_base : str
-            The merge-base commit.
+        The merge-base commit.
 
     Returns
     -------
     list of str
-            Combined findings from deleted test files and modified ones.
+        Combined findings from deleted test files and modified ones.
     """
     list_problems = []
     bool_prod_changed = _touches_production_code(list_changed)
@@ -942,16 +938,16 @@ def report(list_problems: list, str_base: str, int_changed_count: int) -> int:
     Parameters
     ----------
     list_problems : list of str
-            Findings from ``collect_problems``.
+        Findings from ``collect_problems``.
     str_base : str
-            The merge-base commit — passed through to ``justification_reason``.
+        The merge-base commit — passed through to ``justification_reason``.
     int_changed_count : int
-            Total changed-path count, shown on a clean pass.
+        Total changed-path count, shown on a clean pass.
 
     Returns
     -------
     int
-            0 when clean or justified, 1 on an unjustified weakening.
+        0 when clean or justified, 1 on an unjustified weakening.
     """
     if not list_problems:
         print(f"✅ assertion-weakening check OK ({int_changed_count} changed file(s) checked)")
@@ -979,12 +975,12 @@ def main(list_argv: list) -> int:
     Parameters
     ----------
     list_argv : list of str
-            ``["--root", <dir>]`` or empty.
+        ``["--root", <dir>]`` or empty.
 
     Returns
     -------
     int
-            0 when clean or justified, 1 on an unjustified weakening.
+        0 when clean or justified, 1 on an unjustified weakening.
     """
     if not apply_root_flag(list_argv):
         return 1

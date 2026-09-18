@@ -151,6 +151,12 @@ _SET_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 # code path serve pre-commit and CI without branching on which one is running.
 STR_INDEX_REF = ""
 
+# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
+# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields. Module-scoped
+# (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as a
+# constant while behaving like a plain variable — moved here to be what it says it is.
+_INT_MIN_FIELDS = 2
+
 
 def _git(list_args: list) -> str:
     """Run a read-only git command and return stdout (empty string on failure).
@@ -158,12 +164,12 @@ def _git(list_args: list) -> str:
     Parameters
     ----------
     list_args : list of str
-            Arguments after ``git``.
+        Arguments after ``git``.
 
     Returns
     -------
     str
-            Captured stdout, stripped.
+        Captured stdout, stripped.
     """
     try:
         # Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
@@ -185,13 +191,13 @@ def default_branch() -> str:
     Returns
     -------
     str
-            ``origin/<name>`` when only the remote-tracking branch exists — the common CI shape,
-            a checkout with no local ``main`` — else a local ``<name>``. Previously this stripped
-            the remote prefix (``origin/main`` -> ``main``), which is unresolvable by itself when
-            no local branch backs it; ``git merge-base`` then failed silently and ``resolve_base``
-            read that as "nothing to diff" instead of "could not check" (blueprintx#313). Falls
-            back to the literal ``"main"`` only when nothing resolves at all, so ``resolve_base``
-            can tell a real skip apart from an unresolvable baseline.
+        ``origin/<name>`` when only the remote-tracking branch exists — the common CI shape,
+        a checkout with no local ``main`` — else a local ``<name>``. Previously this stripped
+        the remote prefix (``origin/main`` -> ``main``), which is unresolvable by itself when
+        no local branch backs it; ``git merge-base`` then failed silently and ``resolve_base``
+        read that as "nothing to diff" instead of "could not check" (blueprintx#313). Falls
+        back to the literal ``"main"`` only when nothing resolves at all, so ``resolve_base``
+        can tell a real skip apart from an unresolvable baseline.
     """
     str_ref = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).strip()
     if str_ref:
@@ -209,16 +215,16 @@ def show(str_ref: str, str_path: str) -> str | None:
     Parameters
     ----------
     str_ref : str
-            A commit-ish, or ``""`` for the index (``STR_INDEX_REF``).
+        A commit-ish, or ``""`` for the index (``STR_INDEX_REF``).
     str_path : str
-            Repository-relative path.
+        Repository-relative path.
 
     Returns
     -------
     str or None
-            The blob's content, ``None`` when the path does not exist at that ref, and ``None``
-            when the blob is not valid UTF-8 — a binary cannot define a gate, so there is nothing
-            here to assert about it.
+        The blob's content, ``None`` when the path does not exist at that ref, and ``None``
+        when the blob is not valid UTF-8 — a binary cannot define a gate, so there is nothing
+        here to assert about it.
     """
     # ⚠️ BYTES, NOT text=True. `text=True` decodes whatever git emits, so ONE binary path in the
     # diff raised UnicodeDecodeError and took the whole gate down — not a finding, a crash, and
@@ -251,17 +257,13 @@ def changed_paths(str_base: str) -> list:
     Parameters
     ----------
     str_base : str
-            The merge-base commit to diff against.
+        The merge-base commit to diff against.
 
     Returns
     -------
     list of tuple
-            ``(status_letter, path)``, e.g. ``("D", "bin/ci/check_actions.sh")``.
+        ``(status_letter, path)``, e.g. ``("D", "bin/ci/check_actions.sh")``.
     """
-    # A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
-    # "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields.
-    _INT_MIN_FIELDS = 2
-
     str_out = _git(["diff", "--cached", "--name-status", str_base])
     list_rows = []
     for str_line in str_out.splitlines():
@@ -284,12 +286,12 @@ def strip_toml_comments(str_text: str) -> str:
     Parameters
     ----------
     str_text : str
-            Raw file content.
+        Raw file content.
 
     Returns
     -------
     str
-            The same text with every comment's tail removed.
+        The same text with every comment's tail removed.
     """
     list_out = []
     for str_line in str_text.splitlines():
@@ -311,14 +313,14 @@ def toml_top_array(str_text: str, str_key: str) -> set:
     Parameters
     ----------
     str_text : str
-            Full file content.
+        Full file content.
     str_key : str
-            The array's key, e.g. ``"select"``.
+        The array's key, e.g. ``"select"``.
 
     Returns
     -------
     set of str
-            Every quoted entry inside the array.
+        Every quoted entry inside the array.
     """
     str_text = strip_toml_comments(str_text)
     cls_match = re.search(rf"(?m)^{re.escape(str_key)}\s*=\s*\[", str_text)
@@ -336,12 +338,12 @@ def toml_per_file_ignores(str_text: str) -> dict:
     Parameters
     ----------
     str_text : str
-            Full ``ruff.toml`` content.
+        Full ``ruff.toml`` content.
 
     Returns
     -------
     dict
-            Glob key to its set of rule codes; empty when the section is absent.
+        Glob key to its set of rule codes; empty when the section is absent.
     """
     str_text = strip_toml_comments(str_text)
     cls_section = re.search(r"(?m)^\[lint\.per-file-ignores\]\s*$(.*?)(?=^\[|\Z)", str_text, re.S)
@@ -359,16 +361,16 @@ def ruff_toml_problems(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per weakening found.
+        One message per weakening found.
     """
     list_problems = []
     for str_rule in sorted(toml_top_array(str_old, "select") - toml_top_array(str_new, "select")):
@@ -400,13 +402,13 @@ def parsed_ini(str_text: str) -> configparser.ConfigParser | None:
     Parameters
     ----------
     str_text : str
-            Raw file content (``mypy.ini`` or ``pytest.ini`` shape).
+        Raw file content (``mypy.ini`` or ``pytest.ini`` shape).
 
     Returns
     -------
     configparser.ConfigParser or None
-            The parsed config, or ``None`` on a syntax error — this gate is not the place to
-            validate a config file's syntax, only to compare two versions of a valid one.
+        The parsed config, or ``None`` on a syntax error — this gate is not the place to
+        validate a config file's syntax, only to compare two versions of a valid one.
     """
     cls_parser = configparser.ConfigParser()
     try:
@@ -422,16 +424,16 @@ def mypy_ini_problems(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per weakening found.
+        One message per weakening found.
     """
     cls_old = parsed_ini(str_old)
     cls_new = parsed_ini(str_new)
@@ -465,16 +467,16 @@ def pytest_ini_problems(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per ``error:``-escalated ``filterwarnings`` entry that was removed.
+        One message per ``error:``-escalated ``filterwarnings`` entry that was removed.
     """
     cls_old = parsed_ini(str_old)
     cls_new = parsed_ini(str_new)
@@ -501,16 +503,16 @@ def precommit_problems(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per removed hook id.
+        One message per removed hook id.
     """
     set_removed = set(RE_HOOK_ID.findall(str_old)) - set(RE_HOOK_ID.findall(str_new))
     return [f"{str_shown}: pre-commit hook {str_id!r} removed" for str_id in sorted(set_removed)]
@@ -522,14 +524,14 @@ def workflow_jobs(str_text: str) -> set:
     Parameters
     ----------
     str_text : str
-            Full workflow YAML content.
+        Full workflow YAML content.
 
     Returns
     -------
     set of str
-            Job ids, read as 2-space-indented ``name:`` keys directly under ``jobs:`` — the
-            indentation this repo's workflows consistently use (avoids a YAML dependency these
-            scripts otherwise have no reason to carry; see the module docstring).
+        Job ids, read as 2-space-indented ``name:`` keys directly under ``jobs:`` — the
+        indentation this repo's workflows consistently use (avoids a YAML dependency these
+        scripts otherwise have no reason to carry; see the module docstring).
     """
     cls_match = re.search(r"(?m)^jobs:\s*$", str_text)
     if not cls_match:
@@ -552,16 +554,16 @@ def workflow_problems(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per removed job.
+        One message per removed job.
     """
     set_removed = workflow_jobs(str_old) - workflow_jobs(str_new)
     return [f"{str_shown}: workflow job {str_id!r} removed" for str_id in sorted(set_removed)]
@@ -573,16 +575,16 @@ def required_checks_problems(str_old: str, str_new: str, str_shown: str) -> list
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per removed context.
+        One message per removed context.
     """
 
     def contexts(str_text: str) -> set:
@@ -602,14 +604,14 @@ def touched_code_stems(list_changed: list) -> frozenset:
     Parameters
     ----------
     list_changed : list of tuple
-            ``(status_letter, path)`` rows from ``changed_paths`` — every status counts, including
-            a deletion, since removing the implementation is as much "touching" it as editing it.
+        ``(status_letter, path)`` rows from ``changed_paths`` — every status counts, including
+        a deletion, since removing the implementation is as much "touching" it as editing it.
 
     Returns
     -------
     frozenset of str
-            e.g. ``{"decimals"}`` for a branch that touches ``src/utils/decimals.py``. This is the
-            correlation half of blueprintx#324's combination signal.
+        e.g. ``{"decimals"}`` for a branch that touches ``src/utils/decimals.py``. This is the
+        correlation half of blueprintx#324's combination signal.
     """
     return frozenset(
         pathlib.Path(str_path).stem
@@ -624,12 +626,12 @@ def test_module_stem(str_test_path: str) -> str:
     Parameters
     ----------
     str_test_path : str
-            A path matching ``RE_TEST_PATH``.
+        A path matching ``RE_TEST_PATH``.
 
     Returns
     -------
     str
-            ``"decimals"`` for ``tests/unit/test_decimals.py``.
+        ``"decimals"`` for ``tests/unit/test_decimals.py``.
     """
     str_stem = pathlib.Path(str_test_path).stem
     return str_stem[len("test_") :] if str_stem.startswith("test_") else str_stem
@@ -641,13 +643,13 @@ def test_functions(str_text: str) -> dict:
     Parameters
     ----------
     str_text : str
-            Full test-file content.
+        Full test-file content.
 
     Returns
     -------
     dict
-            Empty when the text does not parse — this gate compares two versions of valid Python,
-            it does not validate syntax.
+        Empty when the text does not parse — this gate compares two versions of valid Python,
+        it does not validate syntax.
     """
     try:
         cls_tree = ast.parse(str_text)
@@ -666,12 +668,12 @@ def is_gutted_body(cls_node: ast.FunctionDef) -> bool:
     Parameters
     ----------
     cls_node : ast.FunctionDef
-            The function to inspect.
+        The function to inspect.
 
     Returns
     -------
     bool
-            ``True`` for a body reduced to nothing but a docstring plus ``pass``/``assert True``.
+        ``True`` for a body reduced to nothing but a docstring plus ``pass``/``assert True``.
     """
     list_stmts = [
         cls_stmt
@@ -704,12 +706,12 @@ def skip_marks(cls_node: ast.FunctionDef) -> frozenset:
     Parameters
     ----------
     cls_node : ast.FunctionDef
-            The function to inspect.
+        The function to inspect.
 
     Returns
     -------
     frozenset of str
-            e.g. ``{"skip"}``. Empty when undecorated or decorated with something else.
+        e.g. ``{"skip"}``. Empty when undecorated or decorated with something else.
     """
     # ⚠️ The OUTER chain only, never a walk. `@pytest.mark.skipif(platform.skip, …)` contains
     # an Attribute named `skip` in its ARGUMENTS, so walking the decorator reported a `skip`
@@ -729,13 +731,12 @@ def _outer_pytest_mark(cls_dec: ast.expr) -> str:
     Parameters
     ----------
     cls_dec : ast.expr
-            One entry of a ``decorator_list``.
+        One entry of a ``decorator_list``.
 
     Returns
     -------
     str
-            The mark name for ``@pytest.mark.<name>`` and ``@pytest.mark.<name>(...)``, else
-            ``""``.
+        The mark name for ``@pytest.mark.<name>`` and ``@pytest.mark.<name>(...)``, else ``""``.
     """
     cls_target = cls_dec.func if isinstance(cls_dec, ast.Call) else cls_dec
     if not isinstance(cls_target, ast.Attribute):
@@ -752,16 +753,16 @@ def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per deleted or gutted test.
+        One message per deleted or gutted test.
     """
     dict_old, dict_new = test_functions(str_old), test_functions(str_new)
     list_problems = [
@@ -781,16 +782,16 @@ def newly_skipped_tests(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per test newly decorated.
+        One message per test newly decorated.
     """
     dict_old, dict_new = test_functions(str_old), test_functions(str_new)
     list_problems = []
@@ -811,16 +812,16 @@ def diff_replace_pairs(str_old: str, str_new: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
 
     Returns
     -------
     list of tuple
-            ``new_lineno`` is 1-based, so it can be matched back against ``ast`` node line numbers.
-            Only equal-length replace blocks are read pairwise — an insertion/deletion tangled into
-            the same hunk is not a like-for-like replacement and carries no comparable pair.
+        ``new_lineno`` is 1-based, so it can be matched back against ``ast`` node line numbers.
+        Only equal-length replace blocks are read pairwise — an insertion/deletion tangled into
+        the same hunk is not a like-for-like replacement and carries no comparable pair.
     """
     list_old, list_new = str_old.splitlines(), str_new.splitlines()
     list_pairs = []
@@ -841,16 +842,16 @@ def assertion_value_or_operator_change(str_old_line: str, str_new_line: str) -> 
     Parameters
     ----------
     str_old_line : str
-            The line at the merge-base.
+        The line at the merge-base.
     str_new_line : str
-            The replacing line.
+        The replacing line.
 
     Returns
     -------
     str or None
-            Describes the weakening (expected-value change, or an operator/method weakened) —
-            only when the left-hand expression is unchanged, so an unrelated rewrite of the whole
-            line is not mistaken for the same assertion pinned to a new value.
+        Describes the weakening (expected-value change, or an operator/method weakened) —
+        only when the left-hand expression is unchanged, so an unrelated rewrite of the whole
+        line is not mistaken for the same assertion pinned to a new value.
     """
     cls_old, cls_new = RE_ASSERT_CMP.match(str_old_line), RE_ASSERT_CMP.match(str_new_line)
     if cls_old and cls_new and cls_old.group(2).strip() == cls_new.group(2).strip():
@@ -885,14 +886,14 @@ def raises_broadened_or_removed(str_old_line: str, str_new_line: str) -> str | N
     Parameters
     ----------
     str_old_line : str
-            The line at the merge-base.
+        The line at the merge-base.
     str_new_line : str
-            The replacing line.
+        The replacing line.
 
     Returns
     -------
     str or None
-            Describes the broadening/removal, else ``None``.
+        Describes the broadening/removal, else ``None``.
     """
     cls_old, cls_new = RE_PYTEST_RAISES.search(str_old_line), RE_PYTEST_RAISES.search(str_new_line)
     if cls_old and not cls_new:
@@ -918,16 +919,16 @@ def raises_count_decreased(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            A single finding when the count dropped, else empty.
+        A single finding when the count dropped, else empty.
     """
     int_old = count_pytest_raises_calls(str_old)
     int_new = count_pytest_raises_calls(str_new)
@@ -942,12 +943,12 @@ def count_pytest_raises_calls(str_source: str) -> int:
     Parameters
     ----------
     str_source : str
-            Python source to parse.
+        Python source to parse.
 
     Returns
     -------
     int
-            The number of call nodes, or the regex count when the source does not parse.
+        The number of call nodes, or the regex count when the source does not parse.
 
     Notes
     -----
@@ -977,12 +978,12 @@ def _is_pytest_raises_target(cls_func: ast.expr) -> bool:
     Parameters
     ----------
     cls_func : ast.expr
-            The ``func`` of an ``ast.Call``.
+        The ``func`` of an ``ast.Call``.
 
     Returns
     -------
     bool
-            ``True`` for ``pytest.raises`` and for ``raises`` imported directly.
+        ``True`` for ``pytest.raises`` and for ``raises`` imported directly.
     """
     if isinstance(cls_func, ast.Attribute):
         return cls_func.attr == "raises"
@@ -995,14 +996,14 @@ def enclosing_test_name(str_new: str, int_lineno: int) -> str:
     Parameters
     ----------
     str_new : str
-            Content to parse.
+        Content to parse.
     int_lineno : int
-            1-based line number.
+        1-based line number.
 
     Returns
     -------
     str
-            The function name, or ``""`` when the line falls outside any ``test_*`` function.
+        The function name, or ``""`` when the line falls outside any ``test_*`` function.
     """
     for str_name, cls_node in test_functions(str_new).items():
         if cls_node.lineno <= int_lineno <= (cls_node.end_lineno or cls_node.lineno):
@@ -1016,16 +1017,16 @@ def replaced_assertion_problems(str_old: str, str_new: str, str_shown: str) -> l
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            One message per weakened replaced line, naming its enclosing test where resolvable.
+        One message per weakened replaced line, naming its enclosing test where resolvable.
     """
     list_problems = []
     for str_old_line, str_new_line, int_lineno in diff_replace_pairs(str_old, str_new):
@@ -1046,18 +1047,18 @@ def test_assertion_problems(str_old: str, str_new: str, str_shown: str) -> list:
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     str_shown : str
-            Path to show in messages.
+        Path to show in messages.
 
     Returns
     -------
     list of str
-            Combined findings — deleted/gutted tests, newly skipped tests, and weakened
-            assertions/``raises`` — for a file already known to clear the correlation signal
-            (see ``file_problems``, which is the only caller and gates on ``touched_code_stems``).
+        Combined findings — deleted/gutted tests, newly skipped tests, and weakened
+        assertions/``raises`` — for a file already known to clear the correlation signal
+        (see ``file_problems``, which is the only caller and gates on ``touched_code_stems``).
     """
     return [
         *deleted_or_gutted_tests(str_old, str_new, str_shown),
@@ -1086,18 +1087,18 @@ def file_problems(
     Parameters
     ----------
     str_path : str
-            Repository-relative path, as reported by ``changed_paths``.
+        Repository-relative path, as reported by ``changed_paths``.
     str_base : str
-            The merge-base commit.
+        The merge-base commit.
     set_touched_stems : frozenset of str
-            Module stems the branch also touches (``touched_code_stems``) — gates the assertion
-            checks on blueprintx#324's correlation signal.
+        Module stems the branch also touches (``touched_code_stems``) — gates the assertion
+        checks on blueprintx#324's correlation signal.
 
     Returns
     -------
     list of str
-            Findings for this path; empty when it is not a watched config/test file, is newly
-            added (nothing to weaken), or carries no weakening.
+        Findings for this path; empty when it is not a watched config/test file, is newly
+        added (nothing to weaken), or carries no weakening.
     """
     str_new = show(STR_INDEX_REF, str_path)
     str_old = show(str_base, str_path)
@@ -1125,16 +1126,16 @@ def deletion_problems(list_changed: list, set_touched_stems: frozenset = frozens
     Parameters
     ----------
     list_changed : list of tuple
-            ``(status_letter, path)`` rows from ``changed_paths``.
+        ``(status_letter, path)`` rows from ``changed_paths``.
     set_touched_stems : frozenset of str
-            Module stems the branch also touches — gates the test-file-deletion finding on the
-            same correlation signal as ``file_problems``.
+        Module stems the branch also touches — gates the test-file-deletion finding on the
+        same correlation signal as ``file_problems``.
 
     Returns
     -------
     list of str
-            One message per deleted quality-check script, deleted watched config file, or test
-            file deleted while its code under test changed.
+        One message per deleted quality-check script, deleted watched config file, or test
+        file deleted while its code under test changed.
     """
     list_problems = []
     for str_status, str_path in list_changed:
@@ -1157,7 +1158,7 @@ def pr_body_text() -> str:
     Returns
     -------
     str
-            The PR body, or ``""`` outside a ``pull_request`` workflow run.
+        The PR body, or ``""`` outside a ``pull_request`` workflow run.
     """
     str_event_path = os.environ.get("GITHUB_EVENT_PATH", "")
     if not str_event_path:
@@ -1181,12 +1182,12 @@ def env_reason() -> str:
     Returns
     -------
     str
-            The non-empty, stripped value of ``GATE_CHANGE_OK`` — the one escape hatch reachable
-            at local ``pre-commit`` time (blueprintx#354); see the module docstring for why the
-            PR body and the commit trailer are not. No ``gate-change-ok:`` prefix is expected
-            here, unlike the other two sources — the variable name already carries the meaning.
-            ``""`` under CI: the hatch is LOCAL-ONLY, so a workflow ``env:`` line or a repo
-            variable cannot stand in for a justification a PR reviewer can actually read.
+        The non-empty, stripped value of ``GATE_CHANGE_OK`` — the one escape hatch reachable
+        at local ``pre-commit`` time (blueprintx#354); see the module docstring for why the
+        PR body and the commit trailer are not. No ``gate-change-ok:`` prefix is expected
+        here, unlike the other two sources — the variable name already carries the meaning.
+        ``""`` under CI: the hatch is LOCAL-ONLY, so a workflow ``env:`` line or a repo
+        variable cannot stand in for a justification a PR reviewer can actually read.
     """
     if any(os.environ.get(str_marker) for str_marker in TUPLE_CI_MARKERS):
         return ""
@@ -1199,14 +1200,14 @@ def justification_reason(str_base: str) -> str:
     Parameters
     ----------
     str_base : str
-            The merge-base commit — commit messages since it are searched for a trailer.
+        The merge-base commit — commit messages since it are searched for a trailer.
 
     Returns
     -------
     str
-            The non-empty reason text, or ``""`` when no valid justification is present. Checked
-            in the order a LOCAL run can actually satisfy them: ``GATE_CHANGE_OK`` first (needs
-            neither a finished commit nor a PR), then the PR body, then a commit trailer.
+        The non-empty reason text, or ``""`` when no valid justification is present. Checked
+        in the order a LOCAL run can actually satisfy them: ``GATE_CHANGE_OK`` first (needs
+        neither a finished commit nor a PR), then the PR body, then a commit trailer.
     """
     str_env = env_reason()
     if str_env:
@@ -1225,13 +1226,13 @@ def apply_root_flag(list_argv: list) -> bool:
     Parameters
     ----------
     list_argv : list of str
-            The raw argv tail.
+        The raw argv tail.
 
     Returns
     -------
     bool
-            ``False`` on bad usage (already reported to stdout); ``True`` otherwise, including
-            when no ``--root`` flag was given at all.
+        ``False`` on bad usage (already reported to stdout); ``True`` otherwise, including
+        when no ``--root`` flag was given at all.
     """
     global PATH_ROOT  # noqa: PLW0603
     if list_argv[:1] != ["--root"]:
@@ -1249,11 +1250,11 @@ def resolve_base() -> str | None:
     Returns
     -------
     str or None
-            The merge-base commit to diff against. ``None`` means a real skip: a ref resolved
-            and HEAD already IS that commit, so there is genuinely nothing to diff. An empty
-            string means the OPPOSITE — no ref could be resolved at all — and is deliberately
-            never treated as a skip: an absent baseline is not proof of no weakening
-            (blueprintx#313); ``main()`` fails the run on it instead of passing it silently.
+        The merge-base commit to diff against. ``None`` means a real skip: a ref resolved
+        and HEAD already IS that commit, so there is genuinely nothing to diff. An empty
+        string means the OPPOSITE — no ref could be resolved at all — and is deliberately
+        never treated as a skip: an absent baseline is not proof of no weakening
+        (blueprintx#313); ``main()`` fails the run on it instead of passing it silently.
     """
     str_ref = default_branch()
     str_base = _git(["merge-base", "HEAD", str_ref]).strip()
@@ -1273,14 +1274,14 @@ def collect_problems(list_changed: list, str_base: str) -> list:
     Parameters
     ----------
     list_changed : list of tuple
-            ``(status_letter, path)`` rows from ``changed_paths``.
+        ``(status_letter, path)`` rows from ``changed_paths``.
     str_base : str
-            The merge-base commit.
+        The merge-base commit.
 
     Returns
     -------
     list of str
-            Combined findings from deletions and from modified watched config/test files.
+        Combined findings from deletions and from modified watched config/test files.
     """
     set_touched_stems = touched_code_stems(list_changed)
     list_problems = deletion_problems(list_changed, set_touched_stems)
@@ -1296,16 +1297,16 @@ def report(list_problems: list, str_base: str, int_changed_count: int) -> int:
     Parameters
     ----------
     list_problems : list of str
-            Findings from ``collect_problems``.
+        Findings from ``collect_problems``.
     str_base : str
-            The merge-base commit — passed through to ``justification_reason``.
+        The merge-base commit — passed through to ``justification_reason``.
     int_changed_count : int
-            Total changed-path count, shown on a clean pass.
+        Total changed-path count, shown on a clean pass.
 
     Returns
     -------
     int
-            0 when clean or justified, 1 on an unjustified weakening.
+        0 when clean or justified, 1 on an unjustified weakening.
     """
     if not list_problems:
         print(f"✅ gate integrity OK ({int_changed_count} changed file(s) checked)")
@@ -1335,15 +1336,15 @@ def main(list_argv: list) -> int:
     Parameters
     ----------
     list_argv : list of str
-            ``["--root", <dir>]`` or empty. ``--root`` is accepted for interface parity with
-            ``check_function_length.py`` / ``check_complexity.sh`` (this repo runs every shared
-            gate over BlueprintX via ``--root .``); the diff itself is always repo-wide, since
-            ``git diff`` paths are already repository-relative regardless of cwd.
+        ``["--root", <dir>]`` or empty. ``--root`` is accepted for interface parity with
+        ``check_function_length.py`` / ``check_complexity.sh`` (this repo runs every shared
+        gate over BlueprintX via ``--root .``); the diff itself is always repo-wide, since
+        ``git diff`` paths are already repository-relative regardless of cwd.
 
     Returns
     -------
     int
-            0 when clean or justified, 1 on an unjustified weakening.
+        0 when clean or justified, 1 on an unjustified weakening.
     """
     if not apply_root_flag(list_argv):
         return 1

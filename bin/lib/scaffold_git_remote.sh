@@ -35,6 +35,44 @@
 # Set by the caller before scaffold_prompt_git_remote_setup; empty means no --homepage.
 : "${SCAFFOLD_REPO_HOMEPAGE:=}"
 
+# Set BY scaffold_prompt_review_bot_roster below, read by each scaffold's copy step to
+# decide whether .review-bots.yaml ships. Defaults to "true" (every project scaffolded
+# before this flag existed shipped it). blueprintx#374 — rationale in docs/faq.md
+# ("I don't use a PR review bot..."). Same `:` default-assignment idiom as
+# SCAFFOLD_REPO_HOMEPAGE above, so shellcheck sees the value as read rather than
+# flagging it SC2034 for a cross-file consumer it cannot follow.
+: "${INCLUDE_REVIEW_BOT_ROSTER:=true}"
+
+# blueprintx#374: without a roster, a generated project's "Review threads answered"
+# required check can never pass. See docs/faq.md for the full rationale — in short,
+# omitting .review-bots.yaml (never shipping it empty, blueprintx#262) makes the gate
+# self-skip (report success) instead of demanding a reviewer that will never exist.
+scaffold_prompt_review_bot_roster() {
+	local str_answer
+	read -r -p "$(prompt_main "Do you have (or will you install) a PR review bot such as CodeRabbit on this repo? [Y/n]: ")" str_answer || true
+	case "$str_answer" in
+	n | N)
+		# Read by each scaffold's copy step (a different file), which shellcheck cannot follow.
+		# shellcheck disable=SC2034
+		INCLUDE_REVIEW_BOT_ROSTER=false
+		print_status "config" ".review-bots.yaml: not shipped — the review-thread required check will self-skip (pass) until a reviewer is declared"
+		;;
+	*)
+		# shellcheck disable=SC2034
+		INCLUDE_REVIEW_BOT_ROSTER=true
+		;;
+	esac
+}
+
+# TS scaffolds copy ts-common/.github wholesale (no per-file skip point like the Python
+# scaffolds' scaffold_copy_tooling_configs), so the roster is removed after the fact
+# instead. blueprintx#374 — rationale in docs/faq.md.
+scaffold_prune_review_bot_roster() {
+	local str_project_path="$1"
+	[[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] ||
+		rm -f "$str_project_path/.github/.review-bots.yaml"
+}
+
 # Set BY this lib, read by the caller's `main`: 1 only once `origin` has been verified to be
 # the repository this scaffold names.
 #
@@ -226,6 +264,47 @@ scaffold_set_review_trigger_secret() {
 	fi
 }
 
+scaffold_set_secret_scan_key() {
+	# Give the new repo the GitGuardian key its (opt-in) secret_scan.yaml workflow needs, from
+	# the environment. Sibling of scaffold_set_review_trigger_secret — same reasoning, same
+	# never-persist-locally rule, applied to blueprintx#287's key instead of #155's PAT.
+	#
+	# ⚠️ THE PRESENCE OF THIS VARIABLE IS ALSO THE OPT-IN SIGNAL. Each scaffold's
+	# copy_github_assets copies .github/workflows/secret_scan.yaml only when
+	# GITGUARDIAN_API_KEY is set at scaffold time — so a project that never exported it never
+	# receives a workflow it has no key for, and this function has nothing to propagate.
+	local str_slug
+	str_slug="$(scaffold_repo_slug)"
+
+	if [ -z "${GITGUARDIAN_API_KEY:-}" ]; then
+		return 0
+	fi
+	# ⚠️ WITHDRAW THE OPT-IN WHENEVER THE KEY CANNOT BE PROPAGATED, here and nowhere else.
+	# The variable IS the opt-in signal (see above), so leaving it set after a failed
+	# propagation ships secret_scan.yaml to a repo that has no secret to run it with, and
+	# ggshield exits 3 on the first non-bot scan — a workflow that fails for a reason the
+	# project never chose. Unsetting it at this single boundary makes every scaffold's
+	# copy_github_assets skip the workflow without repeating the check in each one.
+	if ! command -v gh >/dev/null 2>&1; then
+		print_status "warning" "gh unavailable — skipping the secret-scan workflow (no key can be set)"
+		unset GITGUARDIAN_API_KEY
+		return 0
+	fi
+	# Pipe on stdin, never `--body` and never a redirect: `--body` puts the key in gh's
+	# process arguments, readable by any same-host process for the life of the call
+	# (CWE-200), while a file redirect reintroduces the trailing-newline hazard that
+	# GH_PAT_REVIEW_TRIGGER above documents. `printf '%s'` appends no newline, so this
+	# form avoids both.
+	if printf '%s' "$GITGUARDIAN_API_KEY" |
+		gh secret set GITGUARDIAN_API_KEY --repo "$str_slug" >/dev/null 2>&1; then
+		print_status "success" "GitGuardian secret-scan key set on ${str_slug}"
+	else
+		print_status "warning" \
+			"Could not set GITGUARDIAN_API_KEY on ${str_slug} — skipping the secret-scan workflow"
+		unset GITGUARDIAN_API_KEY
+	fi
+}
+
 scaffold_prompt_git_remote_setup() {
 	# Returns 0 only when `origin` is present AND verified to be the repository this
 	# scaffold names — so a caller can gate branch protection / Pages on the remote
@@ -255,5 +334,6 @@ scaffold_prompt_git_remote_setup() {
 		scaffold_push_initial_commit "$str_project_path"
 	fi
 	scaffold_set_review_trigger_secret
+	scaffold_set_secret_scan_key
 	print_status "success" "Git repo initialized."
 }

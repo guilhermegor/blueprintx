@@ -192,10 +192,8 @@ def test_report_rejects_a_ci_set_gate_change_ok(monkeypatch: pytest.MonkeyPatch)
     assert gate.report(["ruff.toml: rule 'S608' added to [lint] ignore"], "base", 1) == 1
 
 
-# --------------------------
 # Fixtures — minimal wiring-file shapes, real anchors from this repo's own files
 # (blueprintx#359 — gate-count-never-decreases regression)
-# --------------------------
 
 _STR_PRECOMMIT_BASE = (
     "repos:\n"

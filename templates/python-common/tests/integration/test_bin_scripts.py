@@ -1282,7 +1282,6 @@ def test_check_urls_stops_scanning_after_a_closing_delimiter(tmp_path: Path) -> 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
 
 
-# --------------------------
 # Every gate needs a should-fail witness (blueprintx#111)
 #
 # ⚠️ A gate with no test that has SEEN IT FAIL is indistinguishable from a gate that is not
@@ -1291,7 +1290,6 @@ def test_check_urls_stops_scanning_after_a_closing_delimiter(tmp_path: Path) -> 
 # `check_provenance.py` and `check_docstrings.py` both exited 0 printing NOTHING when their
 # cwd-relative globs matched nothing, and `lint_actions.sh` accepted any file named
 # `actionlint` on PATH as a working one.
-# --------------------------
 
 
 def _run_py_gate(str_gate: str, path_root: Path) -> subprocess.CompletedProcess:
@@ -1447,14 +1445,12 @@ def test_docs_sections_gate_announces_its_skip_rather_than_passing_silently(
     assert "skipping" in cls_result.stdout
 
 
-# --------------------------
 # check_docs_code_refs.py — docs-cited symbols/import paths vs real src/ (blueprintx#159)
 #
 # ⚠️ Unlike check_docs_sections.py (cwd-relative), this gate's default PATH_ROOT is derived
 # from `__file__` (same seam as check_function_length.py, so BlueprintX can run it via
 # `--root .`), which means `_run_py_gate`'s `cwd=` alone does not point it at a throwaway
 # tree — the real repo would be scanned instead. Every test below passes `--root` explicitly.
-# --------------------------
 
 
 def _run_docs_code_refs_gate(path_root: Path) -> subprocess.CompletedProcess:
@@ -1570,12 +1566,10 @@ def test_docs_code_refs_gate_treats_zero_in_scope_candidates_as_legitimate(
     assert "0 first-party candidate" in cls_result.stdout
 
 
-# --------------------------
 # The lint_*.sh wrappers — their failure mode is distinct (blueprintx#111)
 #
 # "the tool was not found" and "the tool ran and passed" are indistinguishable from outside,
 # so these need a witness for BOTH the missing-tool branch and the zero-discovery branch.
-# --------------------------
 
 
 def _materialise_gate_tree(path_root: Path, str_script: str) -> Path:

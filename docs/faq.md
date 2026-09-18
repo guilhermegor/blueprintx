@@ -31,6 +31,20 @@ CODEOWNERS, PR template). Without one, it ships an offline git-diff workflow ins
 projects also switch versioning: online = tag-driven, offline = a local `poe bump_version`
 (`cz bump`, run inside the generated project — not a BlueprintX `make` target).
 
+## I don't use a PR review bot — will the generated project's required check ever pass?
+
+The scaffolder asks *"Do you have (or will you install) a PR review bot such as CodeRabbit
+on this repo?"*. Answer **no** and it skips copying `.review-bots.yaml` instead of shipping
+it empty — `reviewers: []` is treated by the gate as "switched off from inside the very PR
+it polices" and raises, which is worse than never having adopted the gate at all. With the
+file absent, `check_review_threads.py` reads "the review-thread gate is not adopted here"
+and exits 0: the required check still runs on every PR (nothing else changes in `.github/`),
+it just reports success instead of demanding a reviewer that will never exist. Answer **yes**
+later and re-adding the roster turns the gate back on — at the path the gate reads, which differs
+by language: for Python copy `templates/python-common/.review-bots.yaml` to the project root; for
+TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
+a fix) and blueprintx#262 (why an empty roster is not the opt-out).
+
 ## How is BlueprintX itself versioned?
 
 The version is the git tag. Cut a release from the **Release** GitHub Action (enter the version

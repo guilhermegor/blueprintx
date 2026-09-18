@@ -236,10 +236,8 @@ def test_local_run_has_no_author_and_stays_enforced(monkeypatch: pytest.MonkeyPa
     assert ledger.is_bot_author(ledger.pr_author_login()) is False
 
 
-# --------------------------
 # Gate integrity (#309) — pure logic only, offline (no git; see the module docstring for why
 # check_backlog_ledger's own tests above stop at the same boundary).
-# --------------------------
 
 _RUFF_BASE = """
 select = [
@@ -458,10 +456,8 @@ def test_bare_marker_with_no_reason_does_not_satisfy() -> None:
     assert gate_integrity.RE_JUSTIFICATION.search("gate-change-ok:   \n") is None
 
 
-# --------------------------
 # Assertion integrity (#324) — the sharper half of #309: a test's expected value edited to
 # match a bug, rather than the bug fixed. Pure logic only, offline (same boundary as above).
-# --------------------------
 
 
 def test_module_stem_strips_the_test_prefix() -> None:
