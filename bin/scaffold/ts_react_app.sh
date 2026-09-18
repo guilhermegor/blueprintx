@@ -214,12 +214,12 @@ apply_js_copy_delivery() {
     # (once on src/, once on a copy nobody can edit).
     printf '\n# js-copy delivery script output (npm run js-copy:build)\n/js-copy/\n' \
         >> "$project_path/.gitignore"
-    sed -i "s#'\*\*/dist/\*\*',#'**/dist/**',\n      '**/js-copy/**',#" \
+    sed_inplace "s#'\*\*/dist/\*\*',#'**/dist/**',\n      '**/js-copy/**',#" \
         "$project_path/eslint.config.js"
     # scripts/*.mjs are Node CLI tooling, not app code — they fall outside every
     # `files:` block that grants browser/node globals, so process/console read
     # as undefined without this.
-    sed -i "s#  // 9. Prettier config#  // 9. scripts/ (js-copy delivery tooling) — Node CLI, not app code\n  {\n    files: ['scripts/**/*.mjs'],\n    languageOptions: { globals: { ...globals.node } },\n  },\n\n  // 10. Prettier config#" \
+    sed_inplace "s#  // 9. Prettier config#  // 9. scripts/ (js-copy delivery tooling) — Node CLI, not app code\n  {\n    files: ['scripts/**/*.mjs'],\n    languageOptions: { globals: { ...globals.node } },\n  },\n\n  // 10. Prettier config#" \
         "$project_path/eslint.config.js"
 
     print_status "success" "JS-copy delivery scripts added"
@@ -271,7 +271,7 @@ apply_file_variants() {
     if [ "$USE_MODULE_FEDERATION" -eq 1 ]; then
         print_status "info" "Applying Module Federation webpack config..."
         cp "$SKELETON_TEMPLATE_ROOT/webpack.mf.config.js" "$project_path/webpack.config.js"
-        sed -i "s/__APP_NAME__/$PROJECT_NAME/g" "$project_path/webpack.config.js"
+        sed_inplace "s/__APP_NAME__/$PROJECT_NAME/g" "$project_path/webpack.config.js"
     fi
 
     print_status "success" "File variants applied"

@@ -33,6 +33,17 @@ docs: update README setup steps
   promise `.catch(cb)` parameter, which `strict` mode alone leaves as `any` —
   see `CLAUDE.md`'s "Function length" / "Catch safety" sections for the reasoning
 
+## Test order and seed-specific failures
+
+Jest runs tests in a **randomised order** (`randomize: true` in `jest.config.cjs`) so a test
+that only passes because an earlier one ran first fails instead of passing silently. Every
+run reports the seed it used; reproduce that order by passing the number back yourself as
+`jest --seed=<N>`. Jest reports the seed, not a ready-made re-run command.
+
+**A test that fails only under a particular seed is a real defect, never flakiness to
+re-run away.** Re-running until it goes green hides the exact bug this exists to catch —
+report the seed and the failing test instead of retrying.
+
 ## Pull requests
 
 - Keep PRs focused: one logical change per PR.
