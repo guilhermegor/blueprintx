@@ -17,6 +17,7 @@ nav:
   - FAQ: faq.md
   - Troubleshooting: troubleshooting.md
   - Offline Wheelhouse: offline-wheelhouse.md
+  - Secret Scanning: secret-scanning.md
   - Contributing: contributing.md
   - Changelog: changelog.md
   - Versioning: versioning.md
