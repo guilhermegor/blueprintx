@@ -11,7 +11,7 @@ BlueprintX chose GitGuardian (#155, PR #286). Its `GITGUARDIAN_API_KEY` measurab
 into every scaffolded project — correctly, since BlueprintX is public. gitleaks needs no API
 key and no account, so it becomes the shipped default for generated projects; GitGuardian
 stays available for anyone who wants the hosted product. Additive, not a replacement — PR
-#286's files are untouched.
+`#286`'s files are untouched.
 
 ## Scope
 
