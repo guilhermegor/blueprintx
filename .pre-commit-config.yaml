@@ -217,6 +217,13 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
 
+      - id: promote-offline-to-online-tests
+        name: promote_offline_to_online.sh refusal-path tests (blueprintx#382)
+        entry: bash tests/test_promote_offline_to_online.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/promote_offline_to_online\.sh|tests/test_promote_offline_to_online\.sh)$
+
       - id: version-sync
         name: version sync (pyproject vs CLI)
         entry: bash bin/ci/check_version_sync.sh
