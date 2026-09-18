@@ -58,11 +58,55 @@ script_in_any_workflow() {
 	local -a list_files
 	mapfile -t list_files < <(find "$WORKFLOWS_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \))
 	[ "${#list_files[@]}" -gt 0 ] || return 1
-	grep -lF -- "$1" "${list_files[@]}" >/dev/null 2>&1
+	# INVOCATION, never mere presence: strip YAML comments first, then require the name
+	# to sit at a command position. A workflow comment naming a script used to set
+	# is_ci=true and pass the parity check for a script CI never runs — and this repo's
+	# workflows are full of such prose, including a comment about parity itself.
+	# Stripping can only ever hide a match, so the failure direction stays closed.
+	local str_escaped str_body
+	str_escaped="$(printf '%s' "$1" | sed 's/[][\.*^$(){}?+|/]/\\&/g')"
+	# ⚠️ Read into a variable and match with a HERE-STRING, never `sed … | grep -q`.
+	# `grep -q` exits at the first match and closes the pipe, `sed` then dies of SIGPIPE,
+	# and `set -o pipefail` reports the pipeline as 141 — so a script that IS invoked
+	# reads as absent. It only shows up on inputs big enough that sed is still writing:
+	# a small fixture passes and the real workflow file fails (measured, 17 false
+	# mismatches across 24 scripts).
+	str_body="$(sed 's/#.*//' "${list_files[@]}")"
+	grep -qE "(^|[[:space:]]|[;&|(]|/)${str_escaped}([[:space:]]|[;&|)]|$)" <<<"$str_body"
 }
 
 # $1 = script basename, $2 = "precommit_only" | "ci_only". Prints the reason on a match,
 # nothing on no match. Fails loudly on a reason-less entry — a bare name is not an exemption.
+# Validate the WHOLE exemptions file up front, independently of whether any entry is
+# needed this run. exemption_reason() below is only reached on a current mismatch, so a
+# malformed or stale entry sits unread for as long as the mismatch it excuses does not
+# occur — reading as deliberate policy while doing nothing, until the day it matches the
+# wrong thing. An exemption list consulted only on the failure path is never validated.
+validate_exemptions() {
+	[ -f "$EXEMPTIONS_FILE" ] || return 0
+	local str_script str_side str_reason int_line=0 int_bad=0
+	while IFS='|' read -r str_script str_side str_reason; do
+		int_line=$((int_line + 1))
+		[[ "$str_script" =~ ^[[:space:]]*(#.*)?$ ]] && continue
+		if [ -z "$str_reason" ]; then
+			# Same wording the per-entry path used, so the assertion that this is
+			# REJECTED (rather than silently skipped) keeps testing the behaviour
+			# regardless of which path now catches it.
+			print_status "error" "exemption for '$str_script' ($str_side) has no reason — rejected"
+			int_bad=$((int_bad + 1))
+			continue
+		fi
+		case "$str_side" in
+		precommit_only | ci_only) ;;
+		*)
+			print_status "error" "exemptions line $int_line: invalid side '$str_side' (expected precommit_only|ci_only)"
+			int_bad=$((int_bad + 1))
+			;;
+		esac
+	done <"$EXEMPTIONS_FILE"
+	[ "$int_bad" -eq 0 ] || exit 1
+}
+
 exemption_reason() {
 	local str_script="$1" str_side="$2"
 	[ -f "$EXEMPTIONS_FILE" ] || return 0
@@ -80,31 +124,62 @@ exemption_reason() {
 	return 0
 }
 
+discover_candidates() {
+	local -a list_precommit
+	mapfile -t list_precommit < <(precommit_scripts)
+	{
+		# ⚠️ `printf '%s\n' "${arr[@]}"` with an EMPTY array still runs the format once,
+		# printing one blank line — guard it, or an empty pre-commit config silently
+		# manufactures one phantom candidate and the zero-discovery check never fires
+		# against a genuinely empty tree.
+		[ "${#list_precommit[@]}" -gt 0 ] && printf '%s\n' "${list_precommit[@]}"
+		ci_dir_scripts
+		[ -f "$REPO_ROOT/bin/check_makefile_pairing.sh" ] && echo "check_makefile_pairing.sh"
+		true
+	} | sort -u | sed '/^$/d'
+}
+
+# Classify ONE script. Echoes "ok", "exempt <reason>" or "fail <message>"; the caller
+# keeps the counters, so this stays a pure decision about a single name.
+classify_script() {
+	local str_script="$1" is_precommit="$2" is_ci str_reason str_side str_msg
+	is_ci=false
+	script_in_any_workflow "$str_script" && is_ci=true
+
+	if [ "$is_precommit" = true ] && [ "$is_ci" = false ]; then
+		str_side="precommit_only"
+		str_msg="$str_script runs in pre-commit but no CI workflow references it"
+	elif [ "$is_precommit" = false ] && [ "$is_ci" = true ]; then
+		str_side="ci_only"
+		str_msg="$str_script runs in CI but no pre-commit hook references it"
+	else
+		echo "ok"
+		return 0
+	fi
+
+	str_reason="$(exemption_reason "$str_script" "$str_side")"
+	if [ -n "$str_reason" ]; then
+		echo "exempt $str_reason"
+	else
+		echo "fail $str_msg"
+	fi
+}
+
 main() {
 	[ -f "$PRECOMMIT_FILE" ] || { print_status "error" "missing $PRECOMMIT_FILE"; exit 1; }
 	[ -d "$WORKFLOWS_DIR" ] || { print_status "error" "missing $WORKFLOWS_DIR"; exit 1; }
+	validate_exemptions
 
 	local -a list_precommit list_candidates
 	mapfile -t list_precommit < <(precommit_scripts)
-	mapfile -t list_candidates < <(
-		{
-			# ⚠️ `printf '%s\n' "${arr[@]}"` with an EMPTY array still runs the format once,
-			# printing one blank line — guard it, or an empty pre-commit config silently
-			# manufactures one phantom candidate and the zero-discovery check below never
-			# fires against a genuinely empty tree.
-			[ "${#list_precommit[@]}" -gt 0 ] && printf '%s\n' "${list_precommit[@]}"
-			ci_dir_scripts
-			[ -f "$REPO_ROOT/bin/check_makefile_pairing.sh" ] && echo "check_makefile_pairing.sh"
-			true
-		} | sort -u | sed '/^$/d'
-	)
+	mapfile -t list_candidates < <(discover_candidates)
 
 	if [ "${#list_candidates[@]}" -eq 0 ]; then
 		print_status "error" "discovered ZERO candidate scripts — discovery is broken, not the tree"
 		exit 1
 	fi
 
-	local str_script is_precommit is_ci str_reason str_p
+	local str_script is_precommit str_p str_verdict
 	local int_checked=0 int_exempted=0 int_failures=0
 
 	for str_script in "${list_candidates[@]}"; do
@@ -113,28 +188,18 @@ main() {
 		for str_p in "${list_precommit[@]}"; do
 			[ "$str_p" = "$str_script" ] && is_precommit=true && break
 		done
-		is_ci=false
-		script_in_any_workflow "$str_script" && is_ci=true
 
-		if [ "$is_precommit" = true ] && [ "$is_ci" = false ]; then
-			str_reason="$(exemption_reason "$str_script" "precommit_only")"
-			if [ -n "$str_reason" ]; then
-				int_exempted=$((int_exempted + 1))
-				print_status "info" "exempted (pre-commit only): $str_script — $str_reason"
-			else
-				int_failures=$((int_failures + 1))
-				print_status "error" "$str_script runs in pre-commit but no CI workflow references it"
-			fi
-		elif [ "$is_precommit" = false ] && [ "$is_ci" = true ]; then
-			str_reason="$(exemption_reason "$str_script" "ci_only")"
-			if [ -n "$str_reason" ]; then
-				int_exempted=$((int_exempted + 1))
-				print_status "info" "exempted (CI only): $str_script — $str_reason"
-			else
-				int_failures=$((int_failures + 1))
-				print_status "error" "$str_script runs in CI but no pre-commit hook references it"
-			fi
-		fi
+		str_verdict="$(classify_script "$str_script" "$is_precommit")"
+		case "$str_verdict" in
+		exempt\ *)
+			int_exempted=$((int_exempted + 1))
+			print_status "info" "exempted: $str_script — ${str_verdict#exempt }"
+			;;
+		fail\ *)
+			int_failures=$((int_failures + 1))
+			print_status "error" "${str_verdict#fail }"
+			;;
+		esac
 	done
 
 	if [ "$int_failures" -ne 0 ]; then

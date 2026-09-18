@@ -163,6 +163,38 @@ test_secret_scan_style_cross_workflow_match_passes() {
 	expect_gate "a script found only in the SECOND workflow file" "$str_root" "pass"
 }
 
+test_comment_mention_is_not_invocation() {
+	# The false-PASS this suite exists to catch, in its most likely form: the workflow
+	# MENTIONS check_foo.sh in a comment but never runs it. Matching the filename anywhere
+	# in the file read that as CI coverage and passed a script CI never invokes. This repo's
+	# workflows carry exactly that kind of prose — including a comment about parity itself.
+	local str_root
+	str_root="$(make_sandbox)"
+	: >"$str_root/bin/ci/check_foo.sh"
+	write_precommit "$str_root" "entry: bash bin/ci/check_foo.sh"
+	write_workflow "$str_root" "checks.yml" "run: echo noop"
+	printf '        # see bin/ci/check_foo.sh for the rationale\n' \
+		>>"$str_root/.github/workflows/checks.yml"
+	expect_gate "a script named only in a workflow COMMENT" "$str_root" "fail" \
+		"check_foo.sh runs in pre-commit but no CI workflow references it"
+}
+
+test_malformed_exemption_rejected_even_when_unused() {
+	# Both sides match, so no mismatch is evaluated and the exemption file is never
+	# consulted on the failure path. A stale entry with an invalid side must STILL be
+	# rejected: an exemption list validated only when it happens to be needed is not
+	# validated at all, and reads as deliberate policy while doing nothing.
+	local str_root
+	str_root="$(make_sandbox)"
+	: >"$str_root/bin/ci/check_foo.sh"
+	write_precommit "$str_root" "entry: bash bin/ci/check_foo.sh"
+	write_workflow "$str_root" "checks.yml" "run: bash bin/ci/check_foo.sh"
+	echo "stale.sh|unexpected|a side that is neither precommit_only nor ci_only" \
+		>"$str_root/bin/precommit_ci_parity_exemptions.txt"
+	expect_gate "a malformed exemption entry no candidate needs" "$str_root" "fail" \
+		"invalid side 'unexpected'"
+}
+
 main() {
 	test_matched_on_both_sides_passes
 	test_precommit_only_fails
@@ -171,6 +203,8 @@ main() {
 	test_exemption_without_reason_rejected
 	test_zero_discovery_fails
 	test_secret_scan_style_cross_workflow_match_passes
+	test_comment_mention_is_not_invocation
+	test_malformed_exemption_rejected_even_when_unused
 
 	if [ "$int_failures" -ne 0 ]; then
 		print_status "error" "$int_failures check_precommit_ci_parity.sh regression assertion(s) failed"

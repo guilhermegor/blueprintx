@@ -20,7 +20,7 @@ semantics in `bin/lib/common.sh` and `bin/blueprintx.sh` / `bin/scaffold/*.sh`).
 - Hierarchy is carried primarily by the `[?]` / indented `└` glyph
   (`prompt_main` / `prompt_sub` helpers), colour only reinforces — so it
   survives `NO_COLOR` / a non-TTY pipe with the colour stripped.
-- #256 (two-tone logo palette) is explicitly OUT of scope — not touched.
+- `#256` (two-tone logo palette) is explicitly OUT of scope — not touched.
 
 ## Scope
 
