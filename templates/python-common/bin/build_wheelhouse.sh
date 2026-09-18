@@ -137,15 +137,15 @@ assemble_wheelhouse() {
 main() {
 	bootstrap_init
 	case "${1:-build}" in
-		build) build_wheelhouse ;;
-		assemble)
-			shift
-			assemble_wheelhouse "$@"
-			;;
-		*)
-			print_status "error" "Usage: build_wheelhouse.sh [build|assemble [source] [wheels-out]]"
-			return 2
-			;;
+	build) build_wheelhouse ;;
+	assemble)
+		shift
+		assemble_wheelhouse "$@"
+		;;
+	*)
+		print_status "error" "Usage: build_wheelhouse.sh [build|assemble [source] [wheels-out]]"
+		return 2
+		;;
 	esac
 }
 
