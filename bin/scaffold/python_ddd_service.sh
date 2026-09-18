@@ -397,6 +397,8 @@ copy_global_config() {
     if [ -f "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" ]; then
         cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" "$project_path/tests/unit/test_env_config.py"
     fi
+    # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
@@ -516,7 +518,7 @@ conditional_copy_otel() {
     # constraint that LETS that land silently on the next `poetry update`, which is what the
     # rest of this comment exists to prevent. Do not "fix" these back to a range without
     # first re-checking that upstream status.
-    sed -i '/^python-dotenv = ">=1.0.0"/a\
+    sed_inplace '/^python-dotenv = ">=1.0.0"/a\
 # OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
 # "Development" status upstream (see chassis/otel_logging.py for the measured source).\
 opentelemetry-api = "==1.44.0"\
@@ -608,8 +610,8 @@ conditional_patch_inputs_yaml() {
     local project_path="$1"
     if [[ "$INCLUDE_DATA_DIR" != "true" ]]; then return; fi
     local f="$project_path/src/config/inputs.yaml"
-    sed -i "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
-    sed -i "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
+    sed_inplace "s|^daily_infos_base_path:.*|daily_infos_base_path: \"${DATA_DIR_BASE}\"|" "$f"
+    sed_inplace "s|^daily_infos_dated:.*|daily_infos_dated: ${DATA_DIR_DATED}|" "$f"
     print_status "success" "Output directory configured in inputs.yaml"
 }
 
@@ -828,6 +830,28 @@ PY
 }
 
 
+# GitHub-only assets exist iff a GitHub remote was established. With an upstream
+# tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
+# ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
+# for a pre-existing clone whose origin points elsewhere, and this branch pushes to it.
+# SCAFFOLD_REMOTE_VERIFIED is the missing half (#212, raised by review on #215).
+finalize_github_or_offline() {
+    local project_path="$1"
+
+    if [ "$SCAFFOLD_REMOTE_VERIFIED" = "1" ] \
+        && git -C "$project_path" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        copy_github_assets "$project_path"
+        # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
+        # make bump_version (cz bump). Strip BEFORE the assets commit so its Makefile/tasks.sh
+        # edits are swept into the same commit+push (no leftover uncommitted files).
+        strip_bump_version "$project_path"
+        commit_and_push_github_assets "$project_path"
+    else
+        apply_offline_mode "$project_path"
+    fi
+}
+
+
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
 
@@ -868,23 +892,7 @@ main() {
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
-
-    # GitHub-only assets exist iff a GitHub remote was established. With an upstream
-    # tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
-    # ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
-    # for a pre-existing clone whose origin points elsewhere, and this branch pushes to it.
-    # SCAFFOLD_REMOTE_VERIFIED is the missing half (#212, raised by review on #215).
-    if [ "$SCAFFOLD_REMOTE_VERIFIED" = "1" ] \
-        && git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-        copy_github_assets "$PROJECT_PATH"
-        # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
-        # make bump_version (cz bump). Strip BEFORE the assets commit so its Makefile/tasks.sh
-        # edits are swept into the same commit+push (no leftover uncommitted files).
-        strip_bump_version "$PROJECT_PATH"
-        commit_and_push_github_assets "$PROJECT_PATH"
-    else
-        apply_offline_mode "$PROJECT_PATH"
-    fi
+    finalize_github_or_offline "$PROJECT_PATH"
 
     print_status "success" "Hex-service scaffold complete!"
     print_status "info" "Project path: $PROJECT_PATH"
