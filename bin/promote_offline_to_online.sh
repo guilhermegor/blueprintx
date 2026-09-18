@@ -467,4 +467,8 @@ main() {
     print_final_summary
 }
 
-main "$@"
+# Guarded so tests/test_promote_offline_to_online.sh can `source` this file (to exercise
+# individual mutation functions against a fixture) without triggering a real run.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
