@@ -62,7 +62,7 @@ scaffold_prune_optin_dependency() {
 	local str_project_path="$1" str_flag_value="$2" str_sed_pattern="$3"
 
 	[[ "$str_flag_value" == "true" ]] && return
-	sed -i "$str_sed_pattern" "$str_project_path/pyproject.toml"
+	sed_inplace "$str_sed_pattern" "$str_project_path/pyproject.toml"
 }
 
 scaffold_copy_tooling_configs() {
@@ -193,8 +193,12 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_rmw_race_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
 		"$str_project_path/tests/unit/test_sql_guards_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_identifier_masking_gate.py" \
+		"$str_project_path/tests/unit/test_identifier_masking_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
 		"$str_project_path/tests/unit/test_ruff_ret_rule.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
+		"$str_project_path/tests/unit/test_migration_slug_gate.py"
 }
 
 scaffold_copy_executables_and_vscode() {
