@@ -208,6 +208,28 @@ unreadable whether the lines are code or commentary, and a gate that excludes co
 defeated by commenting out the body. The ceiling is about what one reader holds in their
 head at once, and a comment is something they read.
 
+### Decision records move to docs, not a changelog inside the comment
+
+(blueprintx#239.) This repo's comments are unusually load-bearing, and most long ones
+earn their place — length alone is not the signal. The signal is a `SUPERSEDED …` block: a
+comment that narrates what the line *used to* say and why that reasoning was replaced,
+i.e. a changelog living inside the file. Git, the issue, and the PR body already keep that
+history rigorously, which is exactly why the comment is redundant rather than precious.
+
+The test: a comment earns its inline place if removing it would let someone make a
+*wrong edit to this line*. If removing it only loses history, move the narrative to
+`docs/decision-records.md` (BlueprintX's own repo) and leave a **one-line** pointer in
+its place — `# do not re-add X, see blueprintx#N` — keeping any part of the block that is
+still live guidance (why the current shape is safe/required) inline. A file that ships
+into generated projects (anything under `templates/`) must point at the issue number,
+never at a BlueprintX-only doc path that would not exist in the generated repo.
+
+This does **not** apply to a measurement that justifies why the code is shaped the way it
+is *today*, with nothing superseded or rejected (e.g. a dated "measured N on PR #M" backing
+a live constant) — deleting that turns a justified value into a magic one, so it stays
+inline. It also does not apply to QA-suppression comments (`noqa`, `complexity-ok`,
+`type: ignore`, `codespell:ignore`), which keep their inline reason unconditionally.
+
 ## Status output
 
 Use `print_status <level> <message>` (from `lib/common.sh`) for all
