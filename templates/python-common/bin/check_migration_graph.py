@@ -40,6 +40,14 @@ import sys
 _PATH_MIGRATIONS = pathlib.Path("migrations/versions")
 _HEADER_NAMES = frozenset({"revision", "down_revision"})
 
+# Three states a `down_revision` can be in, and the gate must not collapse them: a genuine
+# root (`None`), the key absent from the file, and a value this reader cannot evaluate (a
+# name, a call, an f-string). `.get()` returns None for all three, which reads as "root" —
+# so an unverifiable file would silently become a head and the head count would be wrong
+# in either direction. Distinct sentinels keep them distinguishable (blueprintx#308).
+_MISSING = object()
+_UNSUPPORTED = object()
+
 
 def _literal(node: ast.expr | None) -> object:
 	"""Return the literal Python value of a simple AST expression.
@@ -56,12 +64,12 @@ def _literal(node: ast.expr | None) -> object:
 		when the node is not one of the literal shapes Alembic itself generates.
 	"""
 	if node is None:
-		return None
+		return _UNSUPPORTED
 	if isinstance(node, ast.Constant):
 		return node.value
 	if isinstance(node, ast.Tuple | ast.List):
 		return tuple(_literal(cls_elt) for cls_elt in node.elts)
-	return None
+	return _UNSUPPORTED
 
 
 def _revision_header(path_file: pathlib.Path) -> dict[str, object]:
@@ -111,15 +119,23 @@ def _parent_revisions(value: object) -> tuple[str, ...]:
 
 	Returns
 	-------
-	tuple of str
-		Empty for a root revision (``None``); one entry for a normal migration; more than
-		one for a merge revision.
+	tuple
+		``(parents, reason)`` — ``parents`` is empty for a root revision (``None``), one
+		entry for a normal migration, more than one for a merge revision. ``reason`` is
+		``None`` when the value was valid, otherwise a description of why it could not be
+		trusted; the caller must report it rather than treating the file as a root.
 	"""
+	if value is None:
+		return (), None
 	if isinstance(value, str):
-		return (value,)
+		return (value,), None
 	if isinstance(value, tuple):
-		return tuple(str_item for str_item in value if isinstance(str_item, str))
-	return ()
+		if all(isinstance(str_item, str) for str_item in value):
+			return tuple(value), None
+		return (), "a tuple whose elements are not all strings"
+	if value is _UNSUPPORTED:
+		return (), "not a literal this reader can evaluate (a name, call, or f-string)"
+	return (), f"an unsupported {type(value).__name__} value"
 
 
 def _version_files() -> list[pathlib.Path]:
@@ -174,9 +190,66 @@ def build_graph(
 			)
 			continue
 		dict_rev_to_file[str_revision] = path_file
-		for str_parent in _parent_revisions(dict_header.get("down_revision")):
+		obj_down = dict_header.get("down_revision", _MISSING)
+		if obj_down is _MISSING:
+			list_problems.append(
+				f"{path_file}: no 'down_revision' assignment — cannot verify (a root "
+				f"revision must say so explicitly with 'down_revision = None')"
+			)
+			continue
+		tuple_parents, str_reason = _parent_revisions(obj_down)
+		if str_reason is not None:
+			list_problems.append(f"{path_file}: down_revision is {str_reason} — cannot verify")
+			continue
+		for str_parent in tuple_parents:
 			list_edges.append((str_parent, str_revision, path_file))
 	return dict_rev_to_file, list_edges, list_problems
+
+
+def cycle_problems(
+	dict_rev_to_file: dict[str, pathlib.Path], list_edges: list[_TupleGraphEdge]
+) -> list[str]:
+	"""Return one problem per revision that sits on a cycle, in any component.
+
+	Head-counting alone cannot find a cycle that shares the graph with a valid chain: the
+	chain still supplies a head, the count reads 1, and the cycle is invisible. Kahn's
+	algorithm peels every revision reachable from a root; whatever will not peel is on a
+	cycle or downstream of one (blueprintx#308).
+
+	Parameters
+	----------
+	dict_rev_to_file : dict of str to pathlib.Path
+		Every revision id found, mapped to its file.
+	list_edges : list of tuple
+		``(parent_revision, child_revision, file)`` for every ``down_revision`` reference.
+
+	Returns
+	-------
+	list of str
+		A single message naming the revisions that never resolve to a root, or empty.
+	"""
+	dict_indegree = {str_rev: 0 for str_rev in dict_rev_to_file}
+	dict_children: dict[str, list[str]] = {str_rev: [] for str_rev in dict_rev_to_file}
+	for str_parent, str_child, _ in list_edges:
+		if str_parent in dict_rev_to_file and str_child in dict_rev_to_file:
+			dict_indegree[str_child] += 1
+			dict_children[str_parent].append(str_child)
+	list_queue = [str_rev for str_rev, int_deg in dict_indegree.items() if int_deg == 0]
+	int_peeled = 0
+	while list_queue:
+		str_rev = list_queue.pop()
+		int_peeled += 1
+		for str_child in dict_children[str_rev]:
+			dict_indegree[str_child] -= 1
+			if dict_indegree[str_child] == 0:
+				list_queue.append(str_child)
+	if int_peeled == len(dict_rev_to_file):
+		return []
+	list_stuck = sorted(str_rev for str_rev, int_deg in dict_indegree.items() if int_deg > 0)
+	return [
+		f"cycle in the revision graph: {', '.join(list_stuck)} never resolve to a root — "
+		f"a down_revision chain loops back on itself"
+	]
 
 
 def graph_problems(
@@ -217,6 +290,7 @@ def graph_problems(
 		list_problems.append(
 			"no head revision found — every revision is referenced as a parent (a cycle)"
 		)
+	list_problems.extend(cycle_problems(dict_rev_to_file, list_edges))
 	return list_problems
 
 

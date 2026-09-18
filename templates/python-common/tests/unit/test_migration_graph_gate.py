@@ -228,3 +228,92 @@ def test_main_fails_on_a_file_missing_the_revision_assignment(
 	monkeypatch.chdir(tmp_path)
 
 	assert gate.main() == 1
+
+
+# ------------------------------------------------------
+# Unverifiable metadata must not read as a root revision
+# ------------------------------------------------------
+
+
+def test_main_fails_on_a_non_literal_down_revision(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+	"""A down_revision this reader cannot evaluate is unverifiable, never a root.
+
+	``_literal`` returned ``None`` for a name/call/f-string, which is byte-identical to a
+	genuine ``down_revision = None`` — so the file silently became a head and the head
+	count was wrong in whichever direction happened to apply.
+	"""
+	path_versions = tmp_path / "migrations" / "versions"
+	path_versions.mkdir(parents=True)
+	_migration_file(path_versions, "20260901_root.py", "root", "None")
+	_migration_file(path_versions, "20260902_child.py", "child", "PREVIOUS_REVISION")
+	monkeypatch.chdir(tmp_path)
+
+	assert gate.main() == 1
+	# The exit code alone is not the assertion: the OLD code also exited 1 here, but via
+	# "2 head revisions present" -- it had silently promoted the unverifiable file to a
+	# root and then complained about the consequence. Assert the cause is named.
+	str_err = capsys.readouterr().err
+	assert "cannot verify" in str_err
+	assert "20260902_child.py" in str_err
+
+
+def test_main_fails_when_down_revision_is_absent_entirely(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+	"""A missing key is 'cannot verify', not 'this is a root' — a root says so explicitly."""
+	path_versions = tmp_path / "migrations" / "versions"
+	path_versions.mkdir(parents=True)
+	_migration_file(path_versions, "20260901_root.py", "root", "None")
+	(path_versions / "20260902_child.py").write_text(
+		'"""synthetic migration"""\n\nrevision: str = "child"\n', encoding="utf-8"
+	)
+	monkeypatch.chdir(tmp_path)
+
+	assert gate.main() == 1
+	# Same as above: the old code exited 1 for the wrong reason (an extra head). The
+	# finding must name the file whose metadata could not be read.
+	str_err = capsys.readouterr().err
+	assert "no 'down_revision' assignment" in str_err
+
+
+def test_main_fails_on_a_tuple_with_a_non_string_element(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""A merge tuple holding a non-string had that element silently dropped."""
+	path_versions = tmp_path / "migrations" / "versions"
+	path_versions.mkdir(parents=True)
+	_migration_file(path_versions, "20260901_a.py", "a", "None")
+	_migration_file(path_versions, "20260902_merge.py", "merge", '("a", 123)')
+	monkeypatch.chdir(tmp_path)
+
+	assert gate.main() == 1
+
+
+# --------------------------------------------------
+# A cycle beside a valid chain still has to be found
+# --------------------------------------------------
+
+
+def test_main_fails_on_a_cycle_that_coexists_with_a_valid_chain(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+	"""Head-counting alone cannot see this: the valid chain supplies the one head.
+
+	Two components — a 2-node cycle (loop_a <-> loop_b) and a root->child chain. The head
+	count is exactly 1, so the head check passes and the cycle went unreported.
+	"""
+	path_versions = tmp_path / "migrations" / "versions"
+	path_versions.mkdir(parents=True)
+	_migration_file(path_versions, "20260901_root.py", "root", "None")
+	_migration_file(path_versions, "20260902_child.py", "child", '"root"')
+	_migration_file(path_versions, "20260903_loop_a.py", "loop_a", '"loop_b"')
+	_migration_file(path_versions, "20260904_loop_b.py", "loop_b", '"loop_a"')
+	monkeypatch.chdir(tmp_path)
+
+	assert gate.main() == 1
+	str_err = capsys.readouterr().err
+	assert "cycle" in str_err
+	assert "loop_a" in str_err
+	assert "loop_b" in str_err
