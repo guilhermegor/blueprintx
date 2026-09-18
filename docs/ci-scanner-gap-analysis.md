@@ -160,6 +160,239 @@ ignore is a permanent silence, the exact failure mode this gate exists to preven
 
 ---
 
-*(Sections 3–6 — jscpd, semgrep, EXCEPTIONS.md, baseline histograms, and Proposed follow-up
-PRs — in progress; this file is committed and pushed after every section so no measurement is
-ever held only in an uncommitted working tree.)*
+## 3. jscpd — the tool works; a curated ignore config is the real remaining work
+
+**Status on `origin/main`: absent.** No `.jscpd.json`, no `jscpd` workflow step, no
+pre-commit hook (`grep -rn "jscpd"` over the tree returns nothing outside this doc).
+
+**Environment note:** the `jscpd` npm package resolved by `npx jscpd`/`npx jscpd@5.2.1` in this
+sandbox turned out to be a Rust-rewrite CLI (reports `jscpd 5.2.1`, ships `--baseline`,
+`--baseline-from-ref`, `--blame`, SARIF/codeclimate reporters) with a different flag surface
+than the classic `kucherenko/jscpd` (no `--gitignore`/`--reporters`-style long form ambiguity,
+`.gitignore` respected by default, disabled via `--no-gitignore`). `npx` itself was flaky in
+this shell (intermittently resolved to printing the local `npm` version instead of running the
+package — a pre-existing asdf/npx quirk, not a jscpd issue); the fix was a scratch global
+install: `npm install --global jscpd@5.2.1 --prefix <scratch>/npm-global`, then invoking the
+binary directly. Recorded here so the adoption PR doesn't rediscover the same detour.
+
+**Measured — BlueprintX itself, ditto's config shape, zero exclusions**
+(`--min-tokens 50 --min-lines 5 --mode strict --reporters console .`):
+
+```
+$ jscpd --min-tokens 50 --min-lines 5 --mode strict --reporters console .
+...
+Total: 735 files, 139990 lines, 1115137 tokens, 968 clones,
+       18293 duplicated lines (13.07%), 138472 duplicated tokens (12.42%)
+time: 268.133ms
+```
+
+By format, the two largest contributors are `python` (459 clones, 14.17% duplicated lines) and
+`json` (175 clones, 13.83% duplicated lines) — `markdown` (101 clones) and `yaml` (102 clones)
+follow.
+
+**Manual classification of a sample (real vs by-design vs generated-noise)** — this is exactly
+the distinction the issue calls out as "the work," not an afterthought:
+
+| Bucket | Sample evidence | Verdict |
+|---|---|---|
+| **Generated-file noise** | All 175 `json` clones are internal repeats inside `templates/ts-common/package-lock.json` (npm's own dependency-tree structure repeating itself) | Not actionable — needs a standard `--ignore "**/package-lock.json,**/poetry.lock"` |
+| **Intended twins (by design)** | `templates/ddd-service-native-db/src/capabilities/example_feature/{application,domain,infrastructure}/*.py` byte-identical against the same paths under `templates/ddd-service-orm-db/` — `bootstrap.py`, `container.py`, `factories.py`, `use_cases.py`, `dto.py`, `entities.py`, `ports.py`, `repositories.py`, plus `docs/architecture.md` fenced examples | Real duplication, **deliberate** — the two DDD tiers share the same example-feature scaffold on purpose (only the infra layer swaps DB driver). A blind gate would flag this every time; it needs the same kind of reasoned, path-scoped allowlist gitleaks already has, not a blanket exclusion of `templates/` (that would blind the gate to real drift between the tiers too) |
+| **Doc self-repetition** | `docs/py-ddd-service-native-db.md:python` clones against itself at several line ranges (a fenced code example repeated within one page) | Low-value signal for an architecture gate — markdown fenced-code dedup is a documentation-style question, not a code-drift one |
+| **Real, actionable** | `templates/common/bin/check_review_threads.py` shares a ~14-line block with FOUR different `templates/python-common/bin/check_*.py` scripts (`check_dtypes.py`, `check_provenance.py`, `check_backlog_ledger.py`, `check_docstrings.py`) at the same relative offset — looks like a repeated CLI-entrypoint/error-reporting boilerplate pattern across the `check_*` gate family | Genuine candidate for extraction into a shared helper — the kind of finding the issue's `check_codespell_sync.sh` analogy predicts jscpd would generalize |
+
+**Measured — generated project** (`ci-scanner-probe`, same command, no config):
+
+```
+$ jscpd --min-tokens 50 --min-lines 5 --mode strict --reporters console <probe>/ci-scanner-probe
+Total: 178 files, 40030 lines, 324085 tokens, 221 clones,
+       2405 duplicated lines (6.01%), 16476 duplicated tokens (5.08%)
+time: 193.977ms
+```
+
+Sampling the `python` clones (213 of 221) surfaced a **real, single-project** finding: within
+this one freshly scaffolded project's own `bin/`, `check_assertion_weakening.py` shares over a
+dozen 6–20-line blocks with `check_gate_integrity.py` (and a smaller set with
+`check_backlog_ledger.py`) — not a cross-tier twin, not a lockfile, not a doc fence. This is
+duplication inside a single generated project's shipped gate scripts, present from the moment
+`make new` finishes, before a user writes a line of their own code.
+
+**What it catches that existing gates don't:** `check_codespell_sync.sh` is a hand-rolled,
+single-case duplication detector (do these two specific `.codespellrc` files match?). Nothing
+in the stack answers the general form — "do any two files/blocks anywhere in the tree say the
+same thing?" — for arbitrary code, not just one named config pair. ruff/mypy operate per-file
+and have no cross-file view; CodeQL and Semgrep (below) match *patterns*, not *literal repeated
+text*.
+
+**Recommendation: adopt, budgeting real time for config.** The tool itself installed and ran in
+under 300ms on the whole repo and found a real, actionable, single-file-pair-worthy duplication
+even inside one freshly generated project's `bin/`. But the raw signal (968 clones, 13%) is
+dominated by lockfiles and deliberate template twins — shipping it as a blocking gate on day
+one, unconfigured, would be false-alarm-fatigue by volume, not by detection accuracy (every
+flagged clone IS a literal duplicate; the question is only whether it's *wanted*). The adoption
+PR's real work is the `.jscpd.json` ignore list (lockfiles, `docs/**/*.md` fenced examples) plus
+a documented, reasoned exception for the five-tier `example_feature` twins — mirroring how
+`.gitleaks.toml`'s allowlist is narrow and commented rather than a blanket path exclusion.
+
+## 4. semgrep — the off-the-shelf packs mostly re-find what ruff S already caught
+
+**Status on `origin/main`: absent.** No `.semgrep.yml`, no `semgrep` workflow step, no
+pre-commit hook.
+
+**Installed successfully:** `pipx install semgrep` (first attempt hit a stale-pipx-metadata
+error from a pre-existing unrelated venv on this machine; `pipx install semgrep --force`
+fixed it). Confirmed with `semgrep --version` → `1.177.0`. `--config auto` requires metrics
+enabled (`[ERROR]: Cannot create auto config when metrics are off`), so both runs below use
+named public registry packs instead (`p/python`, `p/security-audit`) with `--metrics off` — no
+telemetry sent. `p/bash` does not exist as a registry pack (`HTTP 404`), so there is no
+semgrep-side bash coverage to compare against `bin/check_shell.sh`'s shellcheck gate.
+
+**Measured — BlueprintX itself** (`bin/ci/`, `templates/python-common/bin/`,
+`templates/common/bin/` — the hand-written gate scripts, the most likely place for the
+injection/subprocess/deserialization patterns the issue names):
+
+```
+$ semgrep --config p/python --config p/security-audit --metrics off \
+    bin/ci/ templates/python-common/bin/ templates/common/bin/
+Ran 200 rules on 89 files: 1 finding.
+
+templates/python-common/bin/pr_gate.py
+  python.lang.security.audit.dynamic-urllib-use-detected
+  316┆ with urllib.request.urlopen(cls_req) as cls_resp:  # noqa: S310
+```
+
+**Measured — generated project** (`ci-scanner-probe`, same two packs, whole tree):
+
+```
+$ semgrep --config p/python --config p/security-audit --metrics off ci-scanner-probe
+Ran 201 rules on 157 files: 2 findings.
+
+bin/pr_gate.py
+  python.lang.security.audit.dynamic-urllib-use-detected
+  316┆ with urllib.request.urlopen(cls_req) as cls_resp:  # noqa: S310
+
+src/ci_scanner_probe/_internal/utils/xml_reader.py
+  python.lang.security.use-defused-xml
+  40┆ from xml.etree.ElementTree import Element  # noqa: S405 — annotation only; parsing uses defusedxml
+```
+
+**Real vs false positive, both runs:** 3 total findings across both targets, **0 new** — every
+one is a pattern ruff's bandit-equivalent `S` rules already flag (`S310`
+dynamic-urlopen-scheme, `S405` `xml.etree` import), already carries a `# noqa: S3xx`/`S405`
+suppression, and in the XML case the suppression comment states the exact reason semgrep would
+otherwise need a human to discover (the import is type-only; actual parsing already goes
+through `defusedxml`). Zero of the 3 are a genuinely new category of finding, and zero are
+semgrep mis-firing — they're real hits on code the existing gate already reviewed and cleared.
+
+**What it catches that existing gates don't:** on this measurement, for the *stock* rule packs,
+nothing — this directly confirms the issue's own framing ("ruff already runs
+PL/ERA/SIM/B/S/C901" for Python). Semgrep's actual marginal value is structural, not
+this measurement: `check_layer_imports.py`, `check_all_exports.py`, and `check_dtypes.py` are
+each a hand-parsed AST/regex walk enforcing one project-specific rule (no domain→infrastructure
+import, no untyped DataFrame load, …). ditto's `tools/quality-gate/` ships that same *shape* of
+rule (`no-direct-child-process-exec.yaml`, `no-process-env-outside-config.yaml`) as a ~15-line
+Semgrep YAML pattern instead of a bespoke parser with its own test file — the leverage is for
+the *next* rule of this kind, never demonstrated by running the stock packs, only by writing
+one custom rule and comparing its line count to `check_dtypes.py`'s.
+
+**Recommendation: defer.** Not a "couldn't measure" defer — both runs completed and are real
+data — but a "the stock packs add nothing beyond what's already caught" result, while the
+argument in #305 for adopting semgrep specifically rests on custom-rule leverage that requires
+writing and comparing at least one custom rule against its hand-written equivalent, which
+belongs in the adoption PR (see §6) rather than being asserted here without that comparison.
+
+## 5. EXCEPTIONS.md and baseline histograms — process artefacts, no tool to measure
+
+Both are documentation/tooling proposals from #305, not scanners — nothing to install or run
+locally. Recorded as adopt/defer calls based on reading the existing suppression surface:
+
+- **`EXCEPTIONS.md`**: this repo already has four QA-suppression families exempted from the
+  comment-budget gate (`noqa`, `complexity-ok`, `type: ignore`, `codespell:ignore` —
+  blueprintx#303) and a `.gitleaks.toml` allowlist that already follows ditto's own
+  discipline (narrow, path-scoped, reasoned — see §1). What's missing is the single document
+  stating the *policy* those exceptions already follow ad hoc. **Recommend: adopt** — no new
+  dependency, directly extends #303, and the four principles ditto states explicitly are
+  already this repo's unwritten practice.
+- **Baseline histogram tooling** (`complexity-histogram`, `function-size-histogram`,
+  `jscpd-baseline`, …): the pain this solves is real and dated — #168 and #303 both needed a
+  hand-written throwaway script to produce a violations-per-threshold table before a ceiling
+  could be justified with a number instead of a guess. jscpd 5.2.1 (§3) already ships
+  `--baseline`/`--update-baseline`/`--baseline-from-ref` natively, which covers the
+  duplication-specific case for free once §3 is adopted. **Recommend: adopt the general
+  histogram idea, scoped small** — one shared script under `templates/python-common/bin/`
+  that both `check_complexity.sh` and `check_function_length.py` can call with a
+  `--histogram` flag, rather than a new standalone tool family.
+
+---
+
+## 6. Proposed follow-up PRs
+
+This PR adds **no** workflow, pre-commit hook, or config file — every file listed below is
+untouched here, so these can be dispatched as separate, non-colliding PRs. `gitleaks` is
+omitted: it is already shipped (§1), so no follow-up PR is needed for it. `semgrep` is omitted
+too, per §4's defer verdict — its adoption case needs one custom rule written and measured
+against its hand-written equivalent before a PR is worth opening; that spike is a to-do
+against #305, not a PR yet.
+
+### PR 1 — adopt osv-scanner
+
+- `templates/python-common/bin/check_vulnerabilities.sh` (new) — the ONE implementation,
+  `osv-scanner scan --lockfile <path>` per lockfile found under `--root`, resolve-don't-install
+  like `check_secrets.sh` (graceful local skip, `OSV_SCANNER_REQUIRED=1` in CI).
+- `osv-scanner.toml` (new, repo root) + `templates/python-common/osv-scanner.toml` (new,
+  shipped copy) — ditto's ignore-with-expiry shape: `id` + `reason` + `ignoreUntil` capped at
+  30 days.
+- `.pre-commit-config.yaml` (edit — new `check-vulnerabilities` hook) +
+  `templates/python-common/.pre-commit-config.yaml` (edit, same hook, shipped copy).
+- `.github/workflows/dependency_scan.yml` (new, root) +
+  `templates/python-common/.github/workflows/dependency_scan.yaml` (new, shipped copy) —
+  pinned + checksum-verified `osv-scanner` install, mirroring `secret_scan.yml`.
+- `docs/dependency-scanning.md` (new) + `docs/CLAUDE.md` (edit — file index row) +
+  `mkdocs.yml` (edit — nav entry), per this repo's own docs registration rule.
+- `docs/backlog/osv-scanner-adoption-305_<timestamp>.md` (new, tracking file per the
+  Backlog discipline rule in root `CLAUDE.md`).
+
+### PR 2 — adopt jscpd
+
+- `templates/common/bin/check_duplication.sh` (new) — ONE implementation in `templates/common/`
+  (not `python-common/`, matching `check_review_threads.py`'s precedent for a tool that spans
+  every language family), resolve-don't-install, `JSCPD_REQUIRED=1` in CI.
+- `.jscpd.json` (new, repo root) — reasoned allowlist for the intended `ddd-service-native-db`
+  ↔ `ddd-service-orm-db` twin (§3), plus lockfile/doc-fence ignores.
+- `templates/common/.jscpd.json` (new, shipped into every skeleton by every
+  `bin/scaffold/{python,ts}_*.sh`, same copy mechanism as the rest of `templates/common/`).
+- `.pre-commit-config.yaml` (edit) + `templates/python-common/.pre-commit-config.yaml` (edit)
+  + `templates/ts-common/.pre-commit-config.yaml` or its ESLint-equivalent config (edit) — one
+  hook entry per family.
+- `.github/workflows/duplication_scan.yml` (new, root) +
+  `templates/common/.github/workflows/duplication_scan.yml` (new, shipped copy).
+- `docs/duplication-detection.md` (new) + `docs/CLAUDE.md` (edit) + `mkdocs.yml` (edit).
+- `docs/backlog/jscpd-duplication-305_<timestamp>.md` (new, tracking file).
+
+### PR 3 — adopt EXCEPTIONS.md
+
+- `EXCEPTIONS.md` (new, repo root) — ditto's four principles + a per-check table of the ~250
+  existing suppressions (`# noqa`, `# complexity-ok:`, layer-policy, deptry ignores,
+  `# pragma: no cover`, `# type: ignore`, …) and whether each mandates a reason.
+- `templates/python-common/EXCEPTIONS.md` (new, shipped copy, scoped to the generated
+  project's own suppression surface).
+- `CONTRIBUTING.md` (edit — one-line pointer to `EXCEPTIONS.md`, same treatment `docs/`
+  cross-references already get elsewhere in this repo).
+- No code, no config, no pre-commit hook — pure documentation, so no `docs/backlog/` tracking
+  file is required by the letter of the rule, though a short one costs little given this PR
+  touches three files across two directories.
+
+### PR 4 — adopt baseline histograms (scoped small, per §5)
+
+- `templates/python-common/bin/check_complexity.sh` (edit — add `--histogram` flag, reusing
+  the existing mccabe/ruff `C901` data source rather than a second counter).
+- `templates/python-common/bin/check_function_length.py` (edit — add `--histogram` flag).
+- `templates/python-common/bin/lib/histogram.sh` (new, small shared formatter both scripts
+  call, avoiding a third copy of the same table-printing logic — the same one-implementation
+  rule this whole doc keeps citing).
+- `docs/backlog/baseline-histograms-305_<timestamp>.md` (new, tracking file).
+
+### Not proposed as a PR
+
+- **semgrep** — deferred per §4; the next step is a spike (one custom rule, e.g. a Semgrep
+  equivalent of `check_layer_imports.py`'s core check, measured against the hand-written
+  version's line count and false-positive rate) before an adoption PR is worth writing.
