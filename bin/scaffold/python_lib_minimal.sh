@@ -135,6 +135,9 @@ create_python_files() {
     # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
     # package that still scaffolds without error. The heredoc this replaced used shell
     # interpolation, which sees unexported variables; envsubst does not.
+    # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_main.py.tmpl" \
         > "$project_path/tests/unit/test_main.py"
@@ -165,7 +168,7 @@ rewrite_internal_imports() {
     local pkg_prefix="${PROJECT_PKG_NAME}._internal"
     local file
     while IFS= read -r file; do
-        sed -i -E \
+        sed_inplace -E \
             -e "s@^([[:space:]]*)(from|import) utils\.@\1\2 ${pkg_prefix}.utils.@" \
             -e "s@^([[:space:]]*)(from|import) config\.@\1\2 ${pkg_prefix}.config.@" \
             -e "s@^([[:space:]]*)(from|import) ports\.@\1\2 ${pkg_prefix}.config.ports.@" \
@@ -491,6 +494,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
         "$project_path/tests/unit/test_sql_guards_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_identifier_masking_gate.py" \
+        "$project_path/tests/unit/test_identifier_masking_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
         "$project_path/tests/unit/test_gate_integrity_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
@@ -511,6 +516,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_rmw_race_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
         "$project_path/tests/unit/test_ruff_ret_rule.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
+        "$project_path/tests/unit/test_migration_slug_gate.py"
 }
 
 lib_minimal_copy_project_scaffolding() {
