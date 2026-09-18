@@ -152,22 +152,24 @@ def _meaningful_lines(path_yaml: pathlib.Path) -> list:
 
 
 def _apply_line(dict_rule: dict, tuple_state: tuple, str_line: str) -> tuple:
-	"""Fold one registry line into the rule dict being built; return the active language key.
+	"""Fold one registry line into the rule dict being built; return the parser state.
 
 	Parameters
 	----------
 	dict_rule : dict
 		The rule currently being assembled — mutated in place.
-	str_lang_key : str
-		The nested language block currently open (``""`` when at top level).
+	tuple_state : tuple
+		``(str_lang_key, str_list_key)`` carried between lines: the nested language block
+		currently open (``""`` at top level), and the list key currently accepting items
+		(``""`` when no list is open).
 	str_line : str
 		One non-blank, non-comment source line.
 
 	Returns
 	-------
-	str
-		The language key still open after this line — unchanged unless this line opened
-		or closed a nested ``python:``/``typescript:`` block.
+	tuple
+		The ``(str_lang_key, str_list_key)`` still open after this line — unchanged unless
+		this line opened or closed a nested ``python:``/``typescript:`` block or a list.
 	"""
 	str_lang_key, str_list_key = tuple_state
 
