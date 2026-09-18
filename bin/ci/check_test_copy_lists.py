@@ -131,6 +131,12 @@ DICT_EXPECTED_ABSENT = {
     "python_ddd_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
     },
+    # fastapi pulls pydantic in transitively, but that is not the same claim as #267's "declare
+    # it as a direct dependency" — and the module the test imports (src/config/schemas/, #267)
+    # is not shipped by this tier either, same as the four sibling service scaffolds.
+    "python_api_service.sh": {
+        "test_config_schemas_example.py": "schemas/ seam not yet wired (#267); no src/config/schemas/ module",
+    },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
     },
