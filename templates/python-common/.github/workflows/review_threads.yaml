@@ -37,28 +37,19 @@ name: Review Threads
 # the manual step that was measured to flip the PR to CLEAN. The hand re-run after a resolve is
 # still needed once — but it now cleans up all the others instead of being repeated per run.
 #
-# ⚠️ SUPERSEDED 2026-08-17 (blueprintx#173). This block used to conclude "that is why this must
-# NOT be a required check". That conclusion was WRONG, and it was load-bearing: while it stood,
-# `REQUIRED_CHECKS` in bin/enable_repo_rules.sh shipped EMPTY, so a generated project ran its CI
-# and blocked nothing. Measured upstream: a PR merged with 32 of 47 checks passed.
+# ⚠️ Do not mark this job non-required (blueprintx#173 — an empty REQUIRED_CHECKS once
+# blocked nothing and a PR merged with 32 of 47 checks passed).
 #
-# The reasoning was only half right. The ceiling above is real — resolution cannot re-trigger a
+# The ceiling above is real — resolution cannot re-trigger a
 # workflow — but this job did not ASSERT resolution: it ran with
 # `REVIEW_THREADS_REQUIRE_RESOLVED=0` and asserted only that every thread got a REPLY, and a reply
 # DOES re-trigger it via `pull_request_review_comment`. It also runs `on: pull_request`, so it
 # reports on every PR from the moment it opens — the property a required check must have. That is
 # why `bin/enable_repo_rules.sh` now seeds REQUIRED_CHECKS with this job's `name:`.
 #
-# ⚠️ SUPERSEDED 2026-08-24 (blueprintx#196). `REVIEW_THREADS_REQUIRE_RESOLVED` IS NOW `1`.
-#
-# The split below handed the RESOLVE half to the ruleset's `required_review_thread_resolution`
-# (`required_conversation_resolution` on classic branch protection) on the reasoning that a
-# merge-time setting cannot go stale. True — and it does not check what it was given: GitHub
-# DROPS AN OUTDATED THREAD from the blocking set. Measured upstream: the merge button was ENABLED
-# over a thread reading `resolved=False outdated=True`, with 29 of 29 checks green and the
-# setting confirmed `enabled`. A thread outdates when the author's own commit rewrites the lines
-# it points at, so the reachable sequence is: reply thinly, rewrite those lines, merge. The half
-# nobody could re-evaluate was also the half nobody was checking.
+# ⚠️ `REVIEW_THREADS_REQUIRE_RESOLVED` MUST STAY `1` — the merge-button setting alone DROPS
+# an OUTDATED thread from its blocking set, so the RESOLVE half needs this job too, not only
+# `required_review_thread_resolution` (blueprintx#196).
 #
 # So this job now asserts BOTH halves and pays the ceiling above in full: after you resolve, this
 # check stays RED until the run is re-run by hand. That is a deliberate trade, not an oversight.
@@ -71,14 +62,8 @@ name: Review Threads
 #   - the local `pr_merge_threads_guard.sh` PreToolUse hook: both halves, queried live at the
 #     moment of `gh pr merge`.
 #
-# ⚠️ SUPERSEDED 2026-08-22 (#216). This block used to say `cancel-in-progress` must stay
-# **false** below because a cancelled run publishes a `cancelled` conclusion. There is no
-# concurrency block at all now, and the reason is worse than that: see the note above `jobs:`.
-# `false` does not stop a QUEUED run being cancelled by the next one, and a run cancelled before
-# it starts publishes NOTHING — leaving the required context `Expected — Waiting for status to
-# be reported`, which no re-run clears.
-# Closing this properly inside Actions needs a webhook receiver or GitHub App dispatching a
-# `repository_dispatch` on `resolved`; not worth a always-on listener for this repo.
+# ⚠️ Do not re-add a `concurrency:` block, not even `cancel-in-progress: false` — see the
+# "NO concurrency: BLOCK" note above `jobs:` below for why (blueprintx#216).
 on:
   pull_request:
   pull_request_review:
