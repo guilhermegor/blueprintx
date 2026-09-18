@@ -25,7 +25,7 @@ job never actually runs: `ggshield` exits 3 with `Invalid GitGuardian API key`.
 
 ## Relationship to #155 / #287
 
-- #155 is the parent "ship GitGuardian everywhere" epic; this repo's own CI + pre-commit slice
+- `#155` is the parent "ship GitGuardian everywhere" epic; this repo's own CI + pre-commit slice
   of it is done (the key exists, human PRs pass). #457 is a gap #155 did not anticipate:
   Dependabot's separate secret store.
 - #287 is about **scaffolded-project** GitGuardian wiring (the key never reaches a newly
