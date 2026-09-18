@@ -38,6 +38,7 @@ nav:
       - Lib Minimal: py-lib-minimal.md
   - TypeScript:
       - React SPA (Webpack): ts-react-spa-webpack.md
+      - Library (TS, npm-ready): ts-lib.md
 theme:
   name: material
   logo: assets/logo.png

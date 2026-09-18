@@ -61,6 +61,10 @@ layers:
         numpy integers where int is annotated when WIDEN_INT_TO_NUMPY is on, probed with a
         guarded import so a tier without numpy still loads. Legitimate here precisely
         because utils/ IS the seam layer.
+      opentelemetry: >-
+        OTLP log export behind utils/otel_logging.py (opt-in, blueprintx#438). The ONLY
+        place this vendor is imported — application code calls configure_otel_logging(logger),
+        never opentelemetry directly, so a later exporter swap touches one adapter.
 
     # Direction. utils/ is imported BY the layers, never the reverse — a cycle here is a
     # design error, and it was prose only (src/utils/CLAUDE.md) until this entry existed.

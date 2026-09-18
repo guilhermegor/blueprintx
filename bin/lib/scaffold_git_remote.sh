@@ -35,6 +35,44 @@
 # Set by the caller before scaffold_prompt_git_remote_setup; empty means no --homepage.
 : "${SCAFFOLD_REPO_HOMEPAGE:=}"
 
+# Set BY scaffold_prompt_review_bot_roster below, read by each scaffold's copy step to
+# decide whether .review-bots.yaml ships. Defaults to "true" (every project scaffolded
+# before this flag existed shipped it). blueprintx#374 — rationale in docs/faq.md
+# ("I don't use a PR review bot..."). Same `:` default-assignment idiom as
+# SCAFFOLD_REPO_HOMEPAGE above, so shellcheck sees the value as read rather than
+# flagging it SC2034 for a cross-file consumer it cannot follow.
+: "${INCLUDE_REVIEW_BOT_ROSTER:=true}"
+
+# blueprintx#374: without a roster, a generated project's "Review threads answered"
+# required check can never pass. See docs/faq.md for the full rationale — in short,
+# omitting .review-bots.yaml (never shipping it empty, blueprintx#262) makes the gate
+# self-skip (report success) instead of demanding a reviewer that will never exist.
+scaffold_prompt_review_bot_roster() {
+	local str_answer
+	read -r -p "$(prompt_main "Do you have (or will you install) a PR review bot such as CodeRabbit on this repo? [Y/n]: ")" str_answer || true
+	case "$str_answer" in
+	n | N)
+		# Read by each scaffold's copy step (a different file), which shellcheck cannot follow.
+		# shellcheck disable=SC2034
+		INCLUDE_REVIEW_BOT_ROSTER=false
+		print_status "config" ".review-bots.yaml: not shipped — the review-thread required check will self-skip (pass) until a reviewer is declared"
+		;;
+	*)
+		# shellcheck disable=SC2034
+		INCLUDE_REVIEW_BOT_ROSTER=true
+		;;
+	esac
+}
+
+# TS scaffolds copy ts-common/.github wholesale (no per-file skip point like the Python
+# scaffolds' scaffold_copy_tooling_configs), so the roster is removed after the fact
+# instead. blueprintx#374 — rationale in docs/faq.md.
+scaffold_prune_review_bot_roster() {
+	local str_project_path="$1"
+	[[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] ||
+		rm -f "$str_project_path/.github/.review-bots.yaml"
+}
+
 # Set BY this lib, read by the caller's `main`: 1 only once `origin` has been verified to be
 # the repository this scaffold names.
 #
