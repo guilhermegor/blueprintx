@@ -62,7 +62,7 @@ scaffold_prune_optin_dependency() {
 	local str_project_path="$1" str_flag_value="$2" str_sed_pattern="$3"
 
 	[[ "$str_flag_value" == "true" ]] && return
-	sed -i "$str_sed_pattern" "$str_project_path/pyproject.toml"
+	sed_inplace "$str_sed_pattern" "$str_project_path/pyproject.toml"
 }
 
 scaffold_copy_tooling_configs() {
@@ -73,8 +73,11 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$str_project_path/requirements.txt"
 	cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$str_project_path/.codespellrc"
 	# Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
-	# review tools is a row here rather than an edit to the gate.
-	cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$str_project_path/.review-bots.yaml"
+	# review tools is a row here rather than an edit to the gate. Skipped when the
+	# scaffold answered "no reviewer bot" (blueprintx#374 — rationale in docs/faq.md).
+	if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
+		cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$str_project_path/.review-bots.yaml"
+	fi
 	cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$str_project_path/mypy.ini"
 	cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$str_project_path/.sqlfluff"
 	cp "$COMMON_TEMPLATE_ROOT/.sqlfluffignore" "$str_project_path/.sqlfluffignore"
@@ -174,6 +177,8 @@ scaffold_copy_gate_tests() {
 
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
 		"$str_project_path/tests/unit/test_function_length_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
+		"$str_project_path/tests/unit/test_comment_budget_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
 		"$str_project_path/tests/unit/test_gate_integrity_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
@@ -188,8 +193,12 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_rmw_race_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
 		"$str_project_path/tests/unit/test_sql_guards_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_identifier_masking_gate.py" \
+		"$str_project_path/tests/unit/test_identifier_masking_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
 		"$str_project_path/tests/unit/test_ruff_ret_rule.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
+		"$str_project_path/tests/unit/test_migration_slug_gate.py"
 }
 
 scaffold_copy_executables_and_vscode() {

@@ -21,9 +21,6 @@ SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -217,12 +214,12 @@ apply_js_copy_delivery() {
     # (once on src/, once on a copy nobody can edit).
     printf '\n# js-copy delivery script output (npm run js-copy:build)\n/js-copy/\n' \
         >> "$project_path/.gitignore"
-    sed -i "s#'\*\*/dist/\*\*',#'**/dist/**',\n      '**/js-copy/**',#" \
+    sed_inplace "s#'\*\*/dist/\*\*',#'**/dist/**',\n      '**/js-copy/**',#" \
         "$project_path/eslint.config.js"
     # scripts/*.mjs are Node CLI tooling, not app code — they fall outside every
     # `files:` block that grants browser/node globals, so process/console read
     # as undefined without this.
-    sed -i "s#  // 9. Prettier config#  // 9. scripts/ (js-copy delivery tooling) — Node CLI, not app code\n  {\n    files: ['scripts/**/*.mjs'],\n    languageOptions: { globals: { ...globals.node } },\n  },\n\n  // 10. Prettier config#" \
+    sed_inplace "s#  // 9. Prettier config#  // 9. scripts/ (js-copy delivery tooling) — Node CLI, not app code\n  {\n    files: ['scripts/**/*.mjs'],\n    languageOptions: { globals: { ...globals.node } },\n  },\n\n  // 10. Prettier config#" \
         "$project_path/eslint.config.js"
 
     print_status "success" "JS-copy delivery scripts added"
@@ -274,7 +271,7 @@ apply_file_variants() {
     if [ "$USE_MODULE_FEDERATION" -eq 1 ]; then
         print_status "info" "Applying Module Federation webpack config..."
         cp "$SKELETON_TEMPLATE_ROOT/webpack.mf.config.js" "$project_path/webpack.config.js"
-        sed -i "s/__APP_NAME__/$PROJECT_NAME/g" "$project_path/webpack.config.js"
+        sed_inplace "s/__APP_NAME__/$PROJECT_NAME/g" "$project_path/webpack.config.js"
     fi
 
     print_status "success" "File variants applied"
@@ -328,23 +325,11 @@ copy_shared_ts_source() {
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src/shared"
 }
 
-copy_common_templates() {
+# Static ts-common assets that need no envsubst rendering. Split out of
+# copy_common_templates() (#464) to keep that function under the 60-line
+# function-length gate once it grew a package-lock.json copy line.
+copy_static_ts_common_files() {
     local project_path="$1"
-
-    print_status "info" "Applying common TypeScript templates..."
-
-    PROJECT_LICENSE="${LICENSE_CHOICE}"
-    export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME \
-           STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
-        < "$COMMON_TEMPLATE_ROOT/package.json" \
-        > "$project_path/package.json"
-    envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
-        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
-        > "$project_path/CLAUDE.md"
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
-        < "$SKELETON_TEMPLATE_ROOT/README.md" \
-        > "$project_path/README.md"
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.nvmrc" "$project_path/.nvmrc"
@@ -363,6 +348,58 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+}
+
+# Refresh the lockfile after apply_package_variants (blueprintx#468 review).
+# copy_common_templates ships the BASE lockfile, and apply_package_variants then adds the
+# variant's dependencies to package.json — so a zustand/redux project would carry a lockfile
+# that no longer matches its manifest. The generated project runs `npm ci` in five workflows,
+# and `npm ci` fails hard on exactly that mismatch: the pinning #464 introduced would have
+# turned into a red first push for two of the three supported variants.
+refresh_lockfile_for_variants() {
+	local project_path="$1"
+	# The base variant never diverges from the shipped lockfile.
+	if [[ "$STATE_MANAGEMENT" == "none" ]]; then
+		return
+	fi
+	if ! command -v npm >/dev/null 2>&1; then
+		# Ship no lockfile rather than a wrong one: `npm install` regenerates a correct one,
+		# while a stale file fails in CI, far from here, naming neither the variant nor this step.
+		rm -f "$project_path/package-lock.json"
+		print_status "warning" \
+			"npm not found: package-lock.json omitted for the '$STATE_MANAGEMENT' variant — run 'npm install' before the first push"
+		return
+	fi
+	print_status "info" "Refreshing package-lock.json for the '$STATE_MANAGEMENT' variant..."
+	if (cd "$project_path" && npm install --package-lock-only --silent >/dev/null 2>&1); then
+		print_status "success" "package-lock.json matches the patched package.json"
+	else
+		rm -f "$project_path/package-lock.json"
+		print_status "warning" \
+			"lockfile refresh failed (offline?): package-lock.json omitted — run 'npm install' before the first push"
+	fi
+}
+
+copy_common_templates() {
+    local project_path="$1"
+
+    print_status "info" "Applying common TypeScript templates..."
+
+    PROJECT_LICENSE="${LICENSE_CHOICE}"
+    export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME \
+           STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
+        < "$COMMON_TEMPLATE_ROOT/package.json" \
+        > "$project_path/package.json"
+    cp "$COMMON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
+    envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
+        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
+        > "$project_path/CLAUDE.md"
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
+        < "$SKELETON_TEMPLATE_ROOT/README.md" \
+        > "$project_path/README.md"
+
+    copy_static_ts_common_files "$project_path"
     # Overlay react-spa-webpack-specific .github contents (e.g. deploy-spa.yml)
     # on top of the universal ts-common .github. Skeleton overlays win on
     # name collision; ts-common files survive when the skeleton is silent.
@@ -603,9 +640,6 @@ apply_offline_mode() {
     print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
@@ -615,6 +649,7 @@ main() {
 
     validate_inputs
     resolve_github_username
+    scaffold_prompt_review_bot_roster
     prompt_state_management
     prompt_deploy_target
     prompt_module_federation
@@ -625,7 +660,9 @@ main() {
     apply_docker_files "$PROJECT_PATH"
     apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    scaffold_prune_review_bot_roster "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
+    refresh_lockfile_for_variants "$PROJECT_PATH"
     apply_js_copy_delivery "$PROJECT_PATH"
     # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"

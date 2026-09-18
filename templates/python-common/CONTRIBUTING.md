@@ -96,6 +96,11 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 - `fix(calculations): correct rounding errors in tax computation`
 - `docs(readme): add installation instructions`
 
+**Pre-flight before committing:** `poe check_commit_msg <file>` runs the same gitlint +
+commitizen checks the `commit-msg` hook enforces, in seconds — catching a too-long title or
+a wrong type before it is rediscovered after the full pre-commit gate (lint, tests, coverage)
+has already run.
+
 ## Development Setup
 
 1. **Dependency Management**:
@@ -129,6 +134,21 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
    - Include normal operations, edge cases, error conditions, type validation, and checks for examples in docstrings
    - Maintain test fixtures for complex scenarios
    - Recommended to use UNIT_TEST_TEMPLATE.md for AI generation of unit tests, in order to implement test-driven development best practices and follow project standards
+
+5. **Test order and seed-specific failures**:
+   - `pytest-randomly` shuffles test order on every run and prints the seed used, pass or
+     fail — a hidden dependency between tests (a `get` test relying on state a `post` test
+     left behind) fails instead of passing silently forever.
+   - The seed is reported in the session header as `Using --randomly-seed=<N>`, on every
+     run rather than only on failure. To reproduce an order, build the command from that
+     number yourself: `pytest -p randomly --randomly-seed=<N>`.
+   - **A test that fails only under a particular seed is a real defect, never flakiness to
+     re-run away.** Re-running until it goes green hides the exact bug this exists to catch
+     — report the seed and the failing test instead of retrying.
+   - A test fixture with `scope="module"`/`"class"`/`"session"` shares its instance across
+     tests, which is exactly the shape an order dependency takes. `check_fixture_scope.py`
+     (a proxy, not a detector — see its module docstring) requires a written
+     `# fixture-scope-ok: <reason>` comment before it accepts one.
 
 ## Pull Request Process
 
