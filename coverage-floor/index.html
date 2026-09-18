@@ -10,9 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/CLAUDE/">
+        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/coverage-floor/">
       
       
+        <link rel="prev" href="../versioning/">
+      
+      
+        <link rel="next" href="../py-ddd-service-native-db/">
       
       
         
@@ -23,7 +27,7 @@
     
     
       
-        <title>CLAUDE.md — docs/ - BlueprintX</title>
+        <title>Coverage Floor - BlueprintX</title>
       
     
     
@@ -76,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#claudemd-docs" class="md-skip">
+        <a href="#coverage-floor-design-record" class="md-skip">
           Skip to content
         </a>
       
@@ -111,7 +115,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CLAUDE.md — docs/
+              Coverage Floor
             
           </span>
         </div>
@@ -523,10 +527,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../coverage-floor/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Floor
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -542,6 +573,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-floor-is-code-derived-not-a-second-hand-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The floor is code-derived, not a second hand list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deliberately-coarse-and-that-is-the-decision-not-a-lapse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deliberately coarse — and that is the decision, not a lapse
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exemptions-that-are-not-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exemptions that are not findings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wired-on-both-sides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wired on both sides
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope-the-publisher-index-half-of-149" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope: the publisher-index half of #149
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1265,10 +1382,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-file-index" class="md-nav__link">
+  <a href="#the-problem" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. File index
+        The problem
       
     </span>
   </a>
@@ -1276,121 +1393,54 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-naming-and-nav-rules" class="md-nav__link">
+  <a href="#the-floor-is-code-derived-not-a-second-hand-list" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Naming and nav rules
+        The floor is code-derived, not a second hand list
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="2. Naming and nav rules">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#file-naming" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        File naming
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#subdirectory-pattern" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Subdirectory pattern
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#non-published-docs-never-at-the-docs-root" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Non-published docs — never at the docs/ root
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mkdocs-nav-coupling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        MkDocs nav coupling
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-content-structure-per-document-type" class="md-nav__link">
+  <a href="#deliberately-coarse-and-that-is-the-decision-not-a-lapse" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Content structure per document type
+        Deliberately coarse — and that is the decision, not a lapse
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="3. Content structure per document type">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#type-a-skeleton-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Type A: Skeleton overview
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#type-b-example-walkthrough" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Type B: Example walkthrough
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#type-c-utility-page" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Type C: Utility page
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-maintenance-rules" class="md-nav__link">
+  <a href="#exemptions-that-are-not-findings" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Maintenance rules
+        Exemptions that are not findings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wired-on-both-sides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wired on both sides
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope-the-publisher-index-half-of-149" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope: the publisher-index half of #149
       
     </span>
   </a>
@@ -1417,317 +1467,86 @@
   
 
 
-<h1 id="claudemd-docs">CLAUDE.md — docs/<a class="headerlink" href="#claudemd-docs" title="Permanent link">&para;</a></h1>
-<p>This file guides Claude Code when working inside the <code>docs/</code> directory.
-It must be updated whenever a new file is added, a file is removed, or a major structural change is made to any document.</p>
+<h1 id="coverage-floor-design-record"><strong>Coverage Floor — Design Record</strong><a class="headerlink" href="#coverage-floor-design-record" title="Permanent link">&para;</a></h1>
+<p>Explains <code>bin/check_coverage_floor.py</code>, shipped in <code>templates/python-common/</code>. Tracked as
+<a href="https://github.com/guilhermegor/blueprintx/issues/149">issue #149</a>.</p>
+<blockquote>
+<p><strong>See also:</strong> <a href="../contributing/">Contributing</a> · <a href="../troubleshooting/">Troubleshooting</a>.</p>
+</blockquote>
 <hr />
-<h2 id="1-file-index">1. File index<a class="headerlink" href="#1-file-index" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Path</th>
-<th>Type</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>index.md</code></td>
-<td>Utility page</td>
-<td>Site home — logo, tagline, scaffold quick reference, links to all sections</td>
-</tr>
-<tr>
-<td><code>get-started.md</code></td>
-<td>Utility page</td>
-<td>Installation and first-run instructions, requirements, key highlights</td>
-</tr>
-<tr>
-<td><code>examples.md</code></td>
-<td>Utility page</td>
-<td>Examples hub — links the per-skeleton example walkthroughs</td>
-</tr>
-<tr>
-<td><code>cli-reference.md</code></td>
-<td>Utility page</td>
-<td>Every BlueprintX command: <code>make</code> targets + <code>blueprintx</code> CLI flags</td>
-</tr>
-<tr>
-<td><code>faq.md</code></td>
-<td>Utility page</td>
-<td>Common questions about using and extending BlueprintX</td>
-</tr>
-<tr>
-<td><code>troubleshooting.md</code></td>
-<td>Utility page</td>
-<td>What broke while wiring this site's brand assets/routing, the cause, the fix, and which of those fixes were decided against scaffolding into <code>templates/</code></td>
-</tr>
-<tr>
-<td><code>secret-scanning.md</code></td>
-<td>Utility page</td>
-<td>GitGuardian (<code>ggshield</code>) secret-scan workflow opt-in — how to enable it at scaffold time, how it propagates the key, and how to opt in after the fact</td>
-</tr>
-<tr>
-<td><code>contributing.md</code></td>
-<td>Utility page</td>
-<td>How to contribute to BlueprintX (setup, adding a skeleton, PR, release)</td>
-</tr>
-<tr>
-<td><code>changelog.md</code></td>
-<td>Utility page</td>
-<td>Release history — single-sources the root <code>CHANGELOG.md</code> (cz-generated) via a snippets include; also links to GitHub Releases</td>
-</tr>
-<tr>
-<td><code>versioning.md</code></td>
-<td>Utility page</td>
-<td>The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy</td>
-</tr>
-<tr>
-<td><code>coverage-floor.md</code></td>
-<td>Utility page</td>
-<td>Design record for <code>bin/check_coverage_floor.py</code> (blueprintx#149) — why <code>.coveragerc</code>'s <code>omit</code> list needed a code-derived floor, how it derives one, and why it stays deliberately coarse</td>
-</tr>
-<tr>
-<td><code>py-ddd-service-native-db.md</code></td>
-<td>Skeleton overview</td>
-<td>DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.)</td>
-</tr>
-<tr>
-<td><code>py-ddd-service-orm-db.md</code></td>
-<td>Skeleton overview</td>
-<td>DDD hexagonal scaffold using SQLAlchemy ORM</td>
-</tr>
-<tr>
-<td><code>py-mvc-service-native-db.md</code></td>
-<td>Skeleton overview</td>
-<td>Layered MVC scaffold using native DB drivers (script/pipeline style)</td>
-</tr>
-<tr>
-<td><code>py-mvc-service-orm-db.md</code></td>
-<td>Skeleton overview</td>
-<td>Layered MVC scaffold using SQLAlchemy ORM (script/pipeline style)</td>
-</tr>
-<tr>
-<td><code>py-lib-minimal.md</code></td>
-<td>Skeleton overview</td>
-<td>Lean Python library starter with packaging, tests, and CI</td>
-</tr>
-<tr>
-<td><code>ts-react-spa-webpack.md</code></td>
-<td>Skeleton overview</td>
-<td>React 19 + TypeScript 6 + Webpack 5 SPA skeleton</td>
-</tr>
-<tr>
-<td><code>ts-lib.md</code></td>
-<td>Skeleton overview</td>
-<td>Publishable TypeScript library — dual ESM+CJS+<code>.d.ts</code>, Jest, ESLint, npm OIDC publish</td>
-</tr>
-<tr>
-<td><code>py-examples/ddd-usage-examples.md</code></td>
-<td>Example walkthrough</td>
-<td>Wiring DDD layers end-to-end; FastAPI integration; swapping implementations</td>
-</tr>
-<tr>
-<td><code>py-examples/ddd-external-api.md</code></td>
-<td>Example walkthrough</td>
-<td>Consuming external APIs (stock exchange); swapping providers via ports</td>
-</tr>
-<tr>
-<td><code>py-examples/ddd-bank-balance-alert.md</code></td>
-<td>Example walkthrough</td>
-<td>Complete multi-port DDD example (native DB)</td>
-</tr>
-<tr>
-<td><code>py-examples-orm/ddd-orm-usage-examples.md</code></td>
-<td>Example walkthrough</td>
-<td>Wiring DDD layers with SQLAlchemy ORM; session management</td>
-</tr>
-<tr>
-<td><code>py-examples-orm/ddd-orm-external-api.md</code></td>
-<td>Example walkthrough</td>
-<td>Consuming external APIs in an ORM-based DDD service</td>
-</tr>
-<tr>
-<td><code>py-examples-orm/ddd-orm-bank-balance-alert.md</code></td>
-<td>Example walkthrough</td>
-<td>Complete multi-port DDD example (ORM)</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="2-naming-and-nav-rules">2. Naming and nav rules<a class="headerlink" href="#2-naming-and-nav-rules" title="Permanent link">&para;</a></h2>
-<h3 id="file-naming">File naming<a class="headerlink" href="#file-naming" title="Permanent link">&para;</a></h3>
+<h2 id="the-problem">The problem<a class="headerlink" href="#the-problem" title="Permanent link">&para;</a></h2>
+<p><code>.coveragerc</code>'s <code>[report] fail_under = 80</code> is the coverage floor every scaffolded Python
+project ships with, read by <code>pytest-cov</code> in both the pre-commit <code>coverage-check</code> hook and
+the CI coverage gate. That number is only honest if the <code>[run] omit</code> list beside it is
+accurate — and <code>omit</code> is exactly the shape of hand-declared list this repo distrusts
+everywhere else (the same failure class <code>check_layer_imports.py</code>'s <code>.layer-policy.yaml</code> and
+<code>check_docs_sections.py</code>'s required-page list both guard against): a plain list of glob
+patterns nobody's test can contradict.</p>
+<p>Widen one glob — turn <code>src/capabilities/*/infrastructure/*</code> into <code>src/capabilities/*</code> — and a
+whole new capability's <code>domain/</code>/<code>application/</code> logic silently drops out of the coverage
+denominator. <code>fail_under</code> still reads <code>80</code>, the suite is still green, and the layer
+<code>CLAUDE.md</code>'s promise that <code>domain/</code>/<code>application/</code> are "pure Python, no I/O" is no longer
+measured at all. Green, silent, wrong — nothing short of reading every capability's <code>omit</code>
+entry by hand would have caught it.</p>
+<h2 id="the-floor-is-code-derived-not-a-second-hand-list">The floor is code-derived, not a second hand list<a class="headerlink" href="#the-floor-is-code-derived-not-a-second-hand-list" title="Permanent link">&para;</a></h2>
+<p><code>bin/check_coverage_floor.py</code> walks <code>src/capabilities/*/{domain,application}/</code> via <code>ast</code>
+(never source text) and collects every module that defines at least one function or method —
+that structural fact is what "real logic" means here. An enum-only file
+(<code>domain/enums.py</code>, already excluded by name in <code>.coveragerc</code>) defines classes but no
+functions, so it is excluded correctly without a second hand rule about it.</p>
+<p>Any such module that an <code>omit</code> pattern still matches is a finding — unless its <strong>whole</strong>
+capability is named outright by a non-wildcard pattern (today <code>src/capabilities/example_feature/*</code>,
+the shipped example). That exception set is read back out of the <em>same</em> <code>omit</code> list at
+run time, never hardcoded, so a future named exception is picked up the same way
+<code>example_feature</code> is today.</p>
+<h2 id="deliberately-coarse-and-that-is-the-decision-not-a-lapse">Deliberately coarse — and that is the decision, not a lapse<a class="headerlink" href="#deliberately-coarse-and-that-is-the-decision-not-a-lapse" title="Permanent link">&para;</a></h2>
+<p>⚠️ <strong>The coarse boundary is the EXEMPTION granularity, not the detection granularity</strong> — two
+different things, and conflating them understates what the gate does.</p>
 <ul>
-<li>All filenames must be <strong>kebab-case</strong> with a <code>.md</code> extension.</li>
-<li>Skeleton overview files are prefixed with the language (<code>py-</code> or <code>ts-</code>) followed by the skeleton name: <code>py-ddd-service-native-db.md</code>, <code>py-lib-minimal.md</code>, <code>ts-react-spa-webpack.md</code>.</li>
-<li>Example files are prefixed with the skeleton they illustrate (no language prefix — the parent directory carries it): <code>ddd-external-api.md</code>, <code>ddd-orm-bank-balance-alert.md</code>.</li>
+<li><strong>Exemptions are capability-root and literal.</strong> <code>whole_capability_exclusions()</code> reads back
+  only non-glob, whole-capability patterns (today <code>example_feature</code>), and
+  <code>must_stay_covered()</code> skips exactly those capabilities. A capability carrying merely a
+  <em>narrower</em> exclusion (<code>src/capabilities/*/infrastructure/*</code>) is <strong>not</strong> exempt — it stays
+  in scope.</li>
+<li><strong>Detection is per module.</strong> For every non-exempt capability, <code>swallowed_by_omit()</code> checks
+  each logic-bearing <code>domain/</code>/<code>application/</code> module against every <code>omit</code> pattern. <strong>A single
+  mis-omitted file inside a capability that already has narrower, legitimate exclusions IS
+  caught</strong>, and the failure names that file.</li>
 </ul>
-<h3 id="subdirectory-pattern">Subdirectory pattern<a class="headerlink" href="#subdirectory-pattern" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Directory</th>
-<th>Contents</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>py-examples/</code></td>
-<td>Example walkthroughs for the <strong>native-DB</strong> DDD skeleton</td>
-</tr>
-<tr>
-<td><code>py-examples-orm/</code></td>
-<td>Example walkthroughs for the <strong>ORM</strong> DDD skeleton</td>
-</tr>
-<tr>
-<td><code>backlog/</code></td>
-<td><strong>Non-published</strong> work-to-do backlogs (e.g. template backport notes). Excluded from the built site — see below.</td>
-</tr>
-<tr>
-<td><code>superpowers/</code></td>
-<td><strong>Non-published</strong> internal specs and plans. Excluded from the built site — see below.</td>
-</tr>
-</tbody>
-</table>
-<p>Future skeletons follow the same pattern: <code>&lt;lang&gt;-examples-&lt;skeleton-name&gt;/</code>.</p>
-<h3 id="non-published-docs-never-at-the-docs-root">Non-published docs — never at the <code>docs/</code> root<a class="headerlink" href="#non-published-docs-never-at-the-docs-root" title="Permanent link">&para;</a></h3>
-<p>MkDocs <strong>builds every <code>.md</code> under <code>docs/</code> into the site</strong>, even files absent from
-<code>nav:</code> (they are merely unlisted, still reachable by URL). So a backlog, spec, or
-internal note dropped at the <code>docs/</code> root <em>will</em> ship to users and misguide them.
-Such files live under a dedicated folder that is excluded from the build via
-<code>exclude_docs</code> in <code>mkdocs.yml</code>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">exclude_docs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="no">backlog/        # work-to-do backlogs (template backport notes, follow-ups)</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="no">superpowers/    # internal specs and plans</span>
+<p>Measured 2026-09-18 against this PR's head, with a capability holding both a legitimate
+<code>infrastructure/*</code> exclusion and one mis-omitted domain module:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>❌ src/capabilities/orders/domain/service.py: defines a function but is matched by
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>   omit pattern 'src/capabilities/orders/domain/service.py' — dropped out of the
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>   coverage floor's denominator
 </span></code></pre></div>
-<p>Non-published docs are <strong>NOT</strong> added to the file index (Section 1), <strong>NOT</strong>
-registered in <code>mkdocs.yml</code> <code>nav:</code>, and <strong>NOT</strong> subject to the Type A/B/C content
-templates — they are working documents, not published pages. Any new
-non-published folder must be added to <code>exclude_docs</code> in the same commit.</p>
-<h3 id="mkdocs-nav-coupling">MkDocs nav coupling<a class="headerlink" href="#mkdocs-nav-coupling" title="Permanent link">&para;</a></h3>
-<p>Every new file <strong>must</strong> be registered in <code>mkdocs.yml</code> under <code>nav:</code> in the same commit it is created. Never leave a file unregistered — MkDocs will silently omit it from navigation.</p>
-<p>Current nav shape for reference:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">nav</span><span class="p">:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Home</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">index.md</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Get Started</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">get-started.md</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Examples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">examples.md</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">CLI Reference</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cli-reference.md</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">FAQ</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">faq.md</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Troubleshooting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">troubleshooting.md</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Contributing</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">contributing.md</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Changelog</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">changelog.md</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Python</span><span class="p">:</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">DDD Service (Native DB)</span><span class="p">:</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Overview</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-ddd-service-native-db.md</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Example - &lt;title&gt;</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-examples/&lt;filename&gt;.md</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">DDD Service (ORM DB)</span><span class="p">:</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Overview</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-ddd-service-orm-db.md</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Example - &lt;title&gt;</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-examples-orm/&lt;filename&gt;.md</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Lib Minimal</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">py-lib-minimal.md</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">TypeScript</span><span class="p">:</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">React SPA (Webpack)</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ts-react-spa-webpack.md</span>
-</span></code></pre></div>
-<p>When adding a new Python skeleton, add a new group under <code>Python:</code> and name the file <code>py-&lt;skeleton&gt;.md</code>. When adding a new TypeScript skeleton, add a new entry under <code>TypeScript:</code> and name the file <code>ts-&lt;skeleton&gt;.md</code>. When adding a new example, append it under the relevant skeleton group. TypeScript example walkthroughs follow the same <code>ts-examples-&lt;skeleton-name&gt;/</code> subdirectory pattern as Python examples.</p>
-<hr />
-<h2 id="3-content-structure-per-document-type">3. Content structure per document type<a class="headerlink" href="#3-content-structure-per-document-type" title="Permanent link">&para;</a></h2>
-<h3 id="type-a-skeleton-overview">Type A: Skeleton overview<a class="headerlink" href="#type-a-skeleton-overview" title="Permanent link">&para;</a></h3>
-<p>Files: <code>ddd-service-native-db.md</code>, <code>ddd-service-orm-db.md</code>, <code>lib-minimal.md</code></p>
-<p>Required sections in order:</p>
-<ol>
-<li><strong>H1 title</strong> — bold, descriptive: <code># **Skeleton Name (subtitle)**</code></li>
-<li><strong>Intro blurb</strong> — 1-2 paragraphs: what the skeleton is, its design philosophy, and the key technology it uses.</li>
-<li><strong>Key differences table</strong> <em>(optional)</em> — used when a skeleton is a variant of another (e.g., ORM vs native). Columns: Aspect | Native DB | This template.</li>
-<li><strong>Expected layout</strong> — fenced code block (<code>bash</code>) showing the full directory tree after scaffolding.</li>
-<li><strong>Folder descriptions</strong> — table with columns: <code>Folder | Purpose | Expected Content</code>. Cover every top-level directory in the layout.</li>
-<li><strong>Layers</strong> — one <code>###</code> subsection per DDD layer (Domain, Application, Infrastructure, Modules). Each subsection includes:</li>
-<li>Bold "What goes here:" sentence.</li>
-<li>At least one annotated Python code snippet.</li>
-<li><strong>Rules of thumb</strong> — table with columns: <code>Layer | Responsibility</code>. Summarises each layer in one line.</li>
-<li><strong>Learn more</strong> — bulleted list of links to the skeleton's example walkthroughs, each with a one-line description.</li>
-<li><strong>Acknowledgments</strong> <em>(optional)</em> — credit to foundational works (e.g., Eric Evans for DDD skeletons).</li>
-</ol>
-<h3 id="type-b-example-walkthrough">Type B: Example walkthrough<a class="headerlink" href="#type-b-example-walkthrough" title="Permanent link">&para;</a></h3>
-<p>Files: <code>examples/*.md</code>, <code>examples-orm/*.md</code></p>
-<p>Required sections in order:</p>
-<ol>
-<li><strong>H1 title</strong> — bold, descriptive: <code># **Skeleton — Example Title**</code></li>
-<li><strong>Intro line</strong> — one sentence describing what this example demonstrates, followed by a <code>&gt; **See also:**</code> blockquote linking back to the overview and sibling examples.</li>
-<li><strong>Scenario sections</strong> — one <code>##</code> section per scenario or concept demonstrated. Each section contains:</li>
-<li>A brief context sentence (what problem this solves or pattern it shows).</li>
-<li>One or more annotated code blocks. Comments in code must explain <em>why</em>, not just what.</li>
-<li><strong>No standalone "Key takeaways" section</strong> — insights should be embedded naturally as comments or brief prose within each scenario section.</li>
-</ol>
-<h3 id="type-c-utility-page">Type C: Utility page<a class="headerlink" href="#type-c-utility-page" title="Permanent link">&para;</a></h3>
-<p>Files: <code>index.md</code>, <code>get-started.md</code>, <code>troubleshooting.md</code></p>
-<p>No fixed section template — these pages serve different purposes. Preserve the intent of each:</p>
-<table>
-<thead>
-<tr>
-<th>File</th>
-<th>Intent</th>
-<th>Key sections to maintain</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>index.md</code></td>
-<td>Landing page / hub</td>
-<td>Logo, tagline, Python scaffolds overview, local docs instructions, scaffold quick reference</td>
-</tr>
-<tr>
-<td><code>get-started.md</code></td>
-<td>First-run guide</td>
-<td>Numbered setup steps, requirements, feature highlights</td>
-</tr>
-<tr>
-<td><code>troubleshooting.md</code></td>
-<td>What-broke record</td>
-<td>Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into <code>templates/</code></td>
-</tr>
-<tr>
-<td><code>coverage-floor.md</code></td>
-<td>Gate design record</td>
-<td>What the gate enforces, why <code>fail_under</code> alone is insufficient, the coarse-by-design boundary, and what stays out of scope</td>
-</tr>
-</tbody>
-</table>
-<p>When adding a new utility page, document its intent and key sections in the table above.</p>
-<hr />
-<h2 id="4-maintenance-rules">4. Maintenance rules<a class="headerlink" href="#4-maintenance-rules" title="Permanent link">&para;</a></h2>
-<p>Apply these rules every time a change is made to the <code>docs/</code> directory:</p>
-<table>
-<thead>
-<tr>
-<th>Event</th>
-<th>Required actions</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>New file added</td>
-<td>1. Add a row to the <strong>file index</strong> (Section 1). 2. Register the file in <code>mkdocs.yml</code> nav. Both changes go in the same commit.</td>
-</tr>
-<tr>
-<td>Non-published doc added</td>
-<td>Place it under a non-published folder (<code>docs/backlog/</code>, <code>docs/superpowers/</code>), never the <code>docs/</code> root. Ensure that folder is in <code>exclude_docs</code>. Do NOT add it to the file index or <code>mkdocs.yml</code> nav.</td>
-</tr>
-<tr>
-<td>File removed</td>
-<td>1. Remove its row from the <strong>file index</strong>. 2. Remove its entry from <code>mkdocs.yml</code> nav. Fix any cross-links in other docs that pointed to it.</td>
-</tr>
-<tr>
-<td>File renamed</td>
-<td>Update the file index path, the <code>mkdocs.yml</code> nav entry, and all internal cross-links.</td>
-</tr>
-<tr>
-<td>New skeleton added</td>
-<td>1. Create its overview file following Type A structure. 2. Create its <code>examples-&lt;skeleton&gt;/</code> subdirectory and at least one example following Type B. 3. Add both to the nav under a new group. 4. Update Sections 1, 2, and 3 of this CLAUDE.md.</td>
-</tr>
-<tr>
-<td>Major content restructure</td>
-<td>Update the relevant content structure description in Section 3 to reflect the new pattern.</td>
-</tr>
-</tbody>
-</table>
+<p>What the floor genuinely does <strong>not</strong> do is derive coverage expectations file-by-file — it
+never asserts that a given module <em>should</em> exist or be covered, only that a module which
+exists and defines a function must not be omitted. That is the fragile, hand-maintained map
+this gate exists to avoid needing: a coarser floor that stays code-derived beats a finer one
+that degrades back into a second hand-written list.</p>
+<h2 id="exemptions-that-are-not-findings">Exemptions that are not findings<a class="headerlink" href="#exemptions-that-are-not-findings" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No <code>src/capabilities/</code> at all</strong> (the MVC layouts) — the gate has nothing to check and
+  exits 0 with an explanatory message.</li>
+<li><strong>A fresh scaffold</strong> — only the shipped, already-excluded <code>example_feature</code> capability
+  exists, so the derived "must stay covered" set is legitimately empty. This is the expected
+  result on <code>make new</code>, not a broken detector; the gate's own test suite proves discovery
+  works via a synthetic second capability.</li>
+</ul>
+<p>It refuses to report success, however, when <code>.coveragerc</code> is missing, its <code>omit</code> list is
+empty, or <code>src/</code> has zero <code>.py</code> files — those are "discovery is broken," never "nothing to
+check."</p>
+<h2 id="wired-on-both-sides">Wired on both sides<a class="headerlink" href="#wired-on-both-sides" title="Permanent link">&para;</a></h2>
+<p>Pre-commit hook <code>coverage-floor</code> and the CI step "Run Coverage Floor Gate" in
+<code>.github/workflows/tests.yaml</code> both run <code>bin/check_coverage_floor.py</code> — one implementation,
+both surfaces, the same rule every <code>check_*.py</code> gate in this repo follows.</p>
+<h2 id="out-of-scope-the-publisher-index-half-of-149">Out of scope: the publisher-index half of #149<a class="headerlink" href="#out-of-scope-the-publisher-index-half-of-149" title="Permanent link">&para;</a></h2>
+<p>Issue #149 bundles a second, unrelated lesson: auditing a backlog seeded from a proxy (an
+external index or vendor SDK's own coverage) against the real publisher's data, so an item the
+proxy never covered doesn't silently vanish. That lesson is about <strong>issue trackers and a data
+publisher's catalog</strong> — it has no natural home beside a coverage gate over <code>src/</code>, does not
+touch this template, and is not a BlueprintX code change. It stays a documented follow-up
+rather than being force-fit into this gate.</p>
 
 
 
