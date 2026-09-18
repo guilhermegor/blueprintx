@@ -31,6 +31,22 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  sed-portability:
+    name: sed portability — no bare sed -i (blueprintx#459)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # GNU sed's -i takes no argument; BSD/macOS sed's -i REQUIRES one, so a bare `sed -i`
+      # aborts a scaffold partway through on the platform the README advertises. This gate
+      # rejects the GNU-only form under bin/ and templates/**/bin/ — sed_inplace()
+      # (bin/lib/common.sh) is the portable replacement.
+      - name: Reject a bare sed -i under bin/ and templates/**/bin/
+        run: bash bin/ci/check_sed_portability.sh
+
   git-remote-guard:
     name: Scaffold origin verification — mismatched remote must fail
     runs-on: ubuntu-latest
@@ -494,7 +510,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: templates/ts-common/package.json
+          cache-dependency-path: templates/ts-common/package-lock.json
 
       - name: Assemble typecheck workspace
         run: |
@@ -504,6 +520,10 @@ jobs:
           envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
             < templates/ts-common/package.json \
             > /tmp/ts-typecheck/package.json
+          # package-lock.json's root "name"/"version" don't need to match the
+          # envsubst-rendered package.json above -- npm ci only validates the
+          # dependency trees (verified locally, blueprintx#464).
+          cp templates/ts-common/package-lock.json /tmp/ts-typecheck/package-lock.json
           cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
           cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
           # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
@@ -512,9 +532,9 @@ jobs:
           # stand-in for that scaffold and drifted from it when #436 added the shared source.
           cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared
 
-      - name: Install npm dependencies
+      - name: Install npm dependencies (npm ci enforces the committed lockfile, #464)
         working-directory: /tmp/ts-typecheck
-        run: npm install
+        run: npm ci
 
       - name: Run tsc --noEmit (type errors only, no output files)
         working-directory: /tmp/ts-typecheck
@@ -558,3 +578,27 @@ jobs:
       # generated project, so the script lives at bin/, not templates/python-common/bin/.
       - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
         run: bash bin/check_makefile_pairing.sh
+
+  markdown-lint:
+    name: markdownlint — measured rule set (blueprintx#383)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pymarkdownlnt
+        run: pip install pymarkdownlnt
+
+      # Resolve, don't install, is the wrapper's own contract; here we DO install it, so
+      # the skip path is unreachable and the REQUIRED flag only guards against pymarkdown
+      # silently vanishing from PATH between the step above and this one.
+      - name: Lint every tracked .md file (root + templates/) with the measured rule set
+        env:
+          MARKDOWNLINT_REQUIRED: "1"
+        run: bash bin/ci/check_markdown.sh
