@@ -40,12 +40,33 @@ run time, never hardcoded, so a future named exception is picked up the same way
 
 ## Deliberately coarse — and that is the decision, not a lapse
 
-The floor works at the **capability root**. It catches a new capability's logic being
-wildcard-omitted wholesale. It does **not** catch a single mis-omitted file inside a
-capability that already has narrower, legitimate exclusions. Closing that gap would mean
-deriving coverage expectations file-by-file — precisely the fragile, hand-maintained map this
-gate exists to avoid needing. A coarser floor that stays code-derived beats a finer one that
-degrades back into a second hand-written list.
+⚠️ **The coarse boundary is the EXEMPTION granularity, not the detection granularity** — two
+different things, and conflating them understates what the gate does.
+
+- **Exemptions are capability-root and literal.** `whole_capability_exclusions()` reads back
+  only non-glob, whole-capability patterns (today `example_feature`), and
+  `must_stay_covered()` skips exactly those capabilities. A capability carrying merely a
+  *narrower* exclusion (`src/capabilities/*/infrastructure/*`) is **not** exempt — it stays
+  in scope.
+- **Detection is per module.** For every non-exempt capability, `swallowed_by_omit()` checks
+  each logic-bearing `domain/`/`application/` module against every `omit` pattern. **A single
+  mis-omitted file inside a capability that already has narrower, legitimate exclusions IS
+  caught**, and the failure names that file.
+
+Measured 2026-09-18 against this PR's head, with a capability holding both a legitimate
+`infrastructure/*` exclusion and one mis-omitted domain module:
+
+```text
+❌ src/capabilities/orders/domain/service.py: defines a function but is matched by
+   omit pattern 'src/capabilities/orders/domain/service.py' — dropped out of the
+   coverage floor's denominator
+```
+
+What the floor genuinely does **not** do is derive coverage expectations file-by-file — it
+never asserts that a given module *should* exist or be covered, only that a module which
+exists and defines a function must not be omitted. That is the fragile, hand-maintained map
+this gate exists to avoid needing: a coarser floor that stays code-derived beats a finer one
+that degrades back into a second hand-written list.
 
 ## Exemptions that are not findings
 
