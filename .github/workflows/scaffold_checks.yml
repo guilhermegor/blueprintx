@@ -593,7 +593,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install pymarkdownlnt
-        run: pip install pymarkdownlnt
+        # PINNED on purpose. `.pymarkdown.json` enumerates rules one by one, so any rule a
+        # NEW pymarkdownlnt release adds is enabled by default and silently joins the gate —
+        # measured 2026-09-18: 0.9.40 added MD049/MD050/MD051 and turned 9 open PRs red for
+        # rules the gate's own message says are not part of the measured set. Bump this
+        # deliberately, re-measuring the rule set (blueprintx#383), never implicitly.
+        run: pip install pymarkdownlnt==0.9.40
 
       # Resolve, don't install, is the wrapper's own contract; here we DO install it, so
       # the skip path is unreachable and the REQUIRED flag only guards against pymarkdown
