@@ -209,6 +209,14 @@ jobs:
         # was staged, and FAILS when discovery matches zero files.
         run: poetry run python bin/check_function_length.py
 
+      - name: Run Fixture Scope Gate
+        if: runner.os == 'Linux'
+        # Mirrors the `fixture-scope` pre-commit hook. A PROXY (blueprintx#442), not a
+        # detector — see the gate's module docstring. CI runs its gates as explicit steps,
+        # not via pre-commit, so this must be listed here or a hook-skipping contributor
+        # bypasses it. Audit mode FAILS when discovery matches zero files.
+        run: poetry run python bin/check_fixture_scope.py
+
       - name: Run Complexity Gate
         if: runner.os == 'Linux'
         # Mirrors the `check-complexity` pre-commit hook. CI runs its gates as explicit steps,
@@ -217,6 +225,13 @@ jobs:
         # skips) when ruff cannot be resolved — a gate reporting its own blindness as OK is the
         # failure mode this repo writes gates to prevent.
         run: bash bin/check_complexity.sh
+
+      - name: Run Identifier Masking Gate
+        if: runner.os == 'Linux'
+        # Mirrors the `identifier-masking` pre-commit hook. CI runs its gates as explicit
+        # steps, not via pre-commit, so this must be listed here or a hook-skipping
+        # contributor bypasses it. The gate FAILS when discovery matches zero files.
+        run: poetry run python bin/check_identifier_masking.py
 
       - name: Run Secret Scan (gitleaks)
         if: runner.os == 'Linux'
