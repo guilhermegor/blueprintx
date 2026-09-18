@@ -24,6 +24,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `py-mvc-service-orm-db.md` | Skeleton overview | Layered MVC scaffold using SQLAlchemy ORM (script/pipeline style) |
 | `py-lib-minimal.md` | Skeleton overview | Lean Python library starter with packaging, tests, and CI |
 | `ts-react-spa-webpack.md` | Skeleton overview | React 19 + TypeScript 6 + Webpack 5 SPA skeleton |
+| `ts-lib.md` | Skeleton overview | Publishable TypeScript library — dual ESM+CJS+`.d.ts`, Jest, ESLint, npm OIDC publish |
 | `py-examples/ddd-usage-examples.md` | Example walkthrough | Wiring DDD layers end-to-end; FastAPI integration; swapping implementations |
 | `py-examples/ddd-external-api.md` | Example walkthrough | Consuming external APIs (stock exchange); swapping providers via ports |
 | `py-examples/ddd-bank-balance-alert.md` | Example walkthrough | Complete multi-port DDD example (native DB) |

@@ -217,7 +217,7 @@ def test_sql_side_update_where_form_is_never_flagged(tmp_path: Path) -> None:
 
 
 # --------------------------
-# Escape hatch — required reason, matching `complexity-ok:`/`dtype-ok:`
+# Escape hatch — required reason, matching this repo's other gate markers
 # --------------------------
 
 

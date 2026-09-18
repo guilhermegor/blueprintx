@@ -299,6 +299,37 @@ project/
 
 After scaffolding, run `npm install && npm start` to launch the dev server on `http://localhost:3000`.
 
+### Library (TS, npm-ready) (templates/ts-lib)
+Publishable TypeScript library: dual **ESM + CommonJS** output plus bundled `.d.ts` declarations, built with `tsc` alone — no bundler, no framework. Ships its own **Docusaurus** docs site and an npm OIDC trusted-publishing release workflow.
+
+```
+project/
+    src/
+        index.ts                     # public barrel — only what this re-exports is public API
+        example.ts
+        example.test.ts
+        utils/
+            log-emitter.ts            # injectable LogEmitter port (shared TS source)
+    bin/
+        write_esm_package_json.sh    # postbuild:esm — stamps dist/esm's own package.json
+        smoke_pack.sh                # npm pack smoke test
+    docs/                            # Docusaurus site source
+    .github/
+        workflows/
+            docs.yml · docs-deploy.yml · pack-smoke.yml · release-npm.yml
+    tsconfig.json · tsconfig.esm.json · tsconfig.cjs.json · tsconfig.types.json
+    eslint.config.mjs                # vendor allowlist + function-length + catch-safety
+    jest.config.cjs
+    docusaurus.config.js
+    package.json
+    .gitignore
+    .vscode/
+    CONTRIBUTING.md
+    LICENSE
+```
+
+After scaffolding, run `npm install && npm run build && npm test` to build all three targets (`dist/esm`, `dist/cjs`, `dist/types`) and run the test suite.
+
 ## 🔁 Offline git-diff sync
 
 When you scaffold a project and **decline** connecting it to a GitHub remote, BlueprintX adds a small offline-sync workflow so you can move changes between machines as patch files (e.g. attach to an email) — useful in restricted/air-gapped environments. It is **only** added in this no-GitHub case; projects pushed to GitHub stay clean.
@@ -340,7 +371,8 @@ BlueprintX/
 │       ├── python_mvc_service.sh      # MVC native DB scaffold
 │       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold
-│       └── ts_react_app.sh            # React SPA (Webpack) scaffold
+│       ├── ts_react_app.sh            # React SPA (Webpack) scaffold
+│       └── ts_lib.sh                  # publishable TS library scaffold
 ├── templates/               # skeleton contents + discovery metadata
 │   ├── common/                 # language-agnostic shared assets (CODEOWNERS, PR template,
 │   │   │                       #   bin/ git-diff scripts + lib/common.sh, make/git_diff.mk)
@@ -359,6 +391,8 @@ BlueprintX/
 │   ├── lib-minimal/            # minimal library template
 │   │   └── skeleton.meta
 │   ├── react-spa-webpack/      # React 19 + TypeScript + Webpack 5 SPA
+│   │   └── skeleton.meta
+│   ├── ts-lib/                 # publishable TypeScript library
 │   │   └── skeleton.meta
 │   └── licenses/               # license text files
 ├── docs/                    # mkdocs sources
