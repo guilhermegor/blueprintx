@@ -28,5 +28,5 @@ labels: []
 -->
 
 ```surface
-path/to/file/or/dir/**
+# path/to/file/or/dir/** — replace this line; a commented or empty block means undeclared
 ```

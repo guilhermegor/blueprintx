@@ -134,11 +134,16 @@ def issue_surface(str_repo: str, int_issue: int) -> set[str] | None:
     cls_match = _RE_SURFACE_BLOCK.search(str_body)
     if not cls_match:
         return None
-    return {
+    set_patterns = {
         str_line.strip()
         for str_line in cls_match.group(1).splitlines()
         if str_line.strip() and not str_line.strip().startswith("#")
     }
+    # An empty fence (or one holding only comments) is UNDECLARED, never "declared as nothing".
+    # Returning an empty set here would put every changed file outside the surface and fail the
+    # PR, which is the opposite of the documented non-blocking behaviour for an undeclared
+    # surface — and the issue template ships exactly that shape.
+    return set_patterns or None
 
 
 def path_in_surface(str_path: str, set_patterns: set[str]) -> bool:

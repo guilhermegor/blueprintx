@@ -110,6 +110,24 @@ test_undeclared_surface_warns_not_blocks() {
     expect_gate "linked issue has no declared surface" "pass" "UNDECLARED-SURFACE"
 }
 
+test_empty_surface_block_is_undeclared_not_empty_declaration() {
+    export GITHUB_REPOSITORY="o/r" PR_NUMBER="7"
+    export PR_JSON='{"files":[{"path":"anything.py"}],"closingIssuesReferences":[{"number":314}],"commits":[{"messageBody":""}]}'
+    export ISSUE_JSON='{"body":"```surface\n```"}'
+    unset GH_FAIL_ON || true
+    expect_gate "empty surface fence" "pass" "UNDECLARED-SURFACE"
+}
+
+test_comment_only_surface_block_is_undeclared() {
+    # The shape the ISSUE TEMPLATE ships. An active placeholder pattern here would put every
+    # real file outside the surface and fail every templated issue's PR.
+    export GITHUB_REPOSITORY="o/r" PR_NUMBER="8"
+    export PR_JSON='{"files":[{"path":"anything.py"}],"closingIssuesReferences":[{"number":314}],"commits":[{"messageBody":""}]}'
+    export ISSUE_JSON='{"body":"```surface\n# path/to/file/or/dir/** — replace this line\n```"}'
+    unset GH_FAIL_ON || true
+    expect_gate "comment-only surface fence (template default)" "pass" "UNDECLARED-SURFACE"
+}
+
 test_unreadable_api_fails_loudly() {
     export GITHUB_REPOSITORY="o/r" PR_NUMBER="6"
     export PR_JSON='{}'
@@ -125,6 +143,8 @@ main() {
     test_file_outside_surface_fails
     test_override_trailer_passes
     test_undeclared_surface_warns_not_blocks
+    test_empty_surface_block_is_undeclared_not_empty_declaration
+    test_comment_only_surface_block_is_undeclared
     test_unreadable_api_fails_loudly
 
     if [ "$int_failures" -ne 0 ]; then
