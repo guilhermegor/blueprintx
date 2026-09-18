@@ -4,6 +4,7 @@ import { builtinModules } from 'node:module';
 import js from '@eslint/js';
 import prettierConfig from 'eslint-config-prettier';
 import importPlugin from 'eslint-plugin-import';
+import jest from 'eslint-plugin-jest';
 import tseslint from 'typescript-eslint';
 
 // Deny-by-default vendor allowlist, per layer, each entry carrying a WRITTEN REASON —
@@ -209,8 +210,14 @@ export default [
   // 3. Overrides for test files
   {
     files: ['**/*.{test,spec}.ts'],
+    plugins: { jest },
     rules: {
       'no-console': 'off',
+      // A test file that EXPORTS something is sharing state across files — the proxy half
+      // of blueprintx#442 (pytest-randomly is the other half, mirrored here by
+      // `randomize: true` in jest.config.cjs). Neither proves order independence; this only
+      // makes the cheapest way to break it visible at lint time.
+      'jest/no-export': 'error',
     },
   },
 
