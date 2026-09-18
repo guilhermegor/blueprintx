@@ -537,8 +537,11 @@ copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
-    # GitGuardian secret-scanning gate (blueprintx#153). GitHub-only, like tests.yaml.
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
+    # GitGuardian secret-scanning gate (blueprintx#153), OPT-IN (blueprintx#287): only when
+    # GITGUARDIAN_API_KEY was exported at scaffold time — see scaffold_set_secret_scan_key.
+    if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
+        cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
+    fi
     # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
     # after the last push is still checked — a push-only trigger goes stale exactly then.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
@@ -868,6 +871,28 @@ PY
 }
 
 
+# GitHub-only assets exist iff a GitHub remote was established. With an upstream
+# tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
+# ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
+# for a pre-existing clone whose origin points elsewhere, and this branch pushes to it.
+# SCAFFOLD_REMOTE_VERIFIED is the missing half (#212, raised by review on #215).
+finalize_github_or_offline() {
+    local project_path="$1"
+
+    if [ "$SCAFFOLD_REMOTE_VERIFIED" = "1" ] \
+        && git -C "$project_path" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        copy_github_assets "$project_path"
+        # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
+        # make bump_version (cz bump). Strip BEFORE the assets commit so its Makefile/tasks.sh
+        # edits are swept into the same commit+push (no leftover uncommitted files).
+        strip_bump_version "$project_path"
+        commit_and_push_github_assets "$project_path"
+    else
+        apply_offline_mode "$project_path"
+    fi
+}
+
+
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
 
@@ -908,23 +933,7 @@ main() {
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
-
-    # GitHub-only assets exist iff a GitHub remote was established. With an upstream
-    # tracking branch → copy .github; otherwise switch to the offline git-diff workflow.
-    # ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
-    # for a pre-existing clone whose origin points elsewhere, and this branch pushes to it.
-    # SCAFFOLD_REMOTE_VERIFIED is the missing half (#212, raised by review on #215).
-    if [ "$SCAFFOLD_REMOTE_VERIFIED" = "1" ] \
-        && git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-        copy_github_assets "$PROJECT_PATH"
-        # Online: releases are cut by tagging via release.yaml, not a hand-bump. Offline keeps
-        # make bump_version (cz bump). Strip BEFORE the assets commit so its Makefile/tasks.sh
-        # edits are swept into the same commit+push (no leftover uncommitted files).
-        strip_bump_version "$PROJECT_PATH"
-        commit_and_push_github_assets "$PROJECT_PATH"
-    else
-        apply_offline_mode "$PROJECT_PATH"
-    fi
+    finalize_github_or_offline "$PROJECT_PATH"
 
     print_status "success" "Hex-service scaffold complete!"
     print_status "info" "Project path: $PROJECT_PATH"
