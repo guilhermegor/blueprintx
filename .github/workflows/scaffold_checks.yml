@@ -156,7 +156,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -372,7 +372,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -440,7 +440,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -485,7 +485,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -561,7 +561,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -591,6 +591,18 @@ jobs:
       - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
         run: bash bin/check_makefile_pairing.sh
 
+  precommit-ci-parity:
+    name: Pre-commit and CI run the same checks, both directions (blueprintx#384)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Every script wired into one side is wired into the other, or exempted with a reason
+        run: bash bin/check_precommit_ci_parity.sh
+
   markdown-lint:
     name: markdownlint — measured rule set (blueprintx#383)
     runs-on: ubuntu-latest
@@ -600,7 +612,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
