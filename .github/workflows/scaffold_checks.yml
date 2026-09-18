@@ -31,6 +31,22 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  sed-portability:
+    name: sed portability — no bare sed -i (blueprintx#459)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # GNU sed's -i takes no argument; BSD/macOS sed's -i REQUIRES one, so a bare `sed -i`
+      # aborts a scaffold partway through on the platform the README advertises. This gate
+      # rejects the GNU-only form under bin/ and templates/**/bin/ — sed_inplace()
+      # (bin/lib/common.sh) is the portable replacement.
+      - name: Reject a bare sed -i under bin/ and templates/**/bin/
+        run: bash bin/ci/check_sed_portability.sh
+
   git-remote-guard:
     name: Scaffold origin verification — mismatched remote must fail
     runs-on: ubuntu-latest
@@ -140,7 +156,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -344,7 +360,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -412,7 +428,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -457,7 +473,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -533,7 +549,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -562,3 +578,39 @@ jobs:
       # generated project, so the script lives at bin/, not templates/python-common/bin/.
       - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
         run: bash bin/check_makefile_pairing.sh
+
+  precommit-ci-parity:
+    name: Pre-commit and CI run the same checks, both directions (blueprintx#384)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Every script wired into one side is wired into the other, or exempted with a reason
+        run: bash bin/check_precommit_ci_parity.sh
+
+  markdown-lint:
+    name: markdownlint — measured rule set (blueprintx#383)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install pymarkdownlnt
+        run: pip install pymarkdownlnt
+
+      # Resolve, don't install, is the wrapper's own contract; here we DO install it, so
+      # the skip path is unreachable and the REQUIRED flag only guards against pymarkdown
+      # silently vanishing from PATH between the step above and this one.
+      - name: Lint every tracked .md file (root + templates/) with the measured rule set
+        env:
+          MARKDOWNLINT_REQUIRED: "1"
+        run: bash bin/ci/check_markdown.sh

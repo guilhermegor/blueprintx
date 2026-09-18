@@ -226,6 +226,22 @@ jobs:
         # failure mode this repo writes gates to prevent.
         run: bash bin/check_complexity.sh
 
+      - name: Run Identifier Masking Gate
+        if: runner.os == 'Linux'
+        # Mirrors the `identifier-masking` pre-commit hook. CI runs its gates as explicit
+        # steps, not via pre-commit, so this must be listed here or a hook-skipping
+        # contributor bypasses it. The gate FAILS when discovery matches zero files.
+        run: poetry run python bin/check_identifier_masking.py
+
+      - name: Run Coverage Floor Gate
+        if: runner.os == 'Linux'
+        # Mirrors the `coverage-floor` pre-commit hook. CI runs its gates as explicit steps,
+        # not via pre-commit, so this must be listed here or a hook-skipping contributor
+        # bypasses it. The gate FAILS when `.coveragerc`/`src/` cannot be read at all; it
+        # exits 0 with an explicit message on a tier with no `src/capabilities/` (e.g. MVC)
+        # or on a fresh scaffold with nothing yet to check.
+        run: poetry run python bin/check_coverage_floor.py
+
       - name: Run Secret Scan (gitleaks)
         if: runner.os == 'Linux'
         # Mirrors the `check-secrets` pre-commit hook (blueprintx#305, gitleaks slice).
