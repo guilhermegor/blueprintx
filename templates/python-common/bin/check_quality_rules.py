@@ -48,6 +48,11 @@ import sys
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+# The only `status:` value that waives the tool+rule requirement. Matched exactly, never
+# by truthiness — see language_coverage_problems for why. Add a value here, deliberately,
+# rather than letting an arbitrary string through.
+SET_VALID_STATUSES = frozenset({"not-implemented"})
+
 _RE_TOP_ID = re.compile(r"^- id:\s*(\S+)\s*$")
 _RE_KEY2 = re.compile(r"^ {2}(\w+):\s*(.*)$")
 _RE_KEY4 = re.compile(r"^ {4}(\w+):\s*(.*)$")
@@ -282,16 +287,21 @@ def language_coverage_problems(list_rules: list, set_languages: set) -> list:
 			# exception — `status: not-implemented` / `overridden_by:`, both permitted by
 			# CONTRIBUTING.md and neither of which requires tool/rule. The `note` those
 			# exceptions owe is reason_required_problems' job, not this one (blueprintx#503).
+			# `status` is matched against SET_VALID_STATUSES, never truthiness: any
+			# non-empty string would otherwise satisfy coverage, so a typo (`not_implemented`)
+			# or an invented value (`planned`) would buy an exemption the registry never
+			# granted — the gate failing open on the one field that waives tool+rule.
 			bool_covered = isinstance(dict_entry, dict) and (
 				bool(dict_entry.get("tool") and dict_entry.get("rule"))
-				or bool(dict_entry.get("status"))
+				or dict_entry.get("status") in SET_VALID_STATUSES
 				or bool(dict_entry.get("overridden_by"))
 			)
 			if not bool_covered:
 				list_problems.append(
-					f"{str_id}: no {str_lang!r} entry (needs tool+rule, or an explicit "
-					f"status/overridden_by) — a rule missing a language is an error, not "
-					f"an omission (blueprintx#430)"
+					f"{str_id}: no {str_lang!r} entry (needs tool+rule, "
+					f"status: {'/'.join(sorted(SET_VALID_STATUSES))}, or overridden_by) — "
+					f"a rule missing a language is an error, not an omission "
+					f"(blueprintx#430)"
 				)
 	return list_problems
 

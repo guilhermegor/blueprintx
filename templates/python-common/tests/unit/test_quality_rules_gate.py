@@ -203,6 +203,24 @@ def test_an_exception_only_entry_counts_as_coverage() -> None:
 	assert gate.language_coverage_problems([dict_rule], {"python", "typescript"}) == []
 
 
+def test_an_unrecognised_status_value_does_not_buy_coverage() -> None:
+	"""Only a declared status waives tool+rule; any other string is still an omission.
+
+	The check read ``bool(entry.get("status"))``, so a typo (``not_implemented``) or an
+	invented value (``planned``) satisfied coverage without a tool or a rule — the gate
+	failing open on the one field whose whole job is to grant an exemption.
+	"""
+	for str_bogus in ("planned", "not_implemented", "todo", "wip"):
+		dict_rule = {
+			"id": "r",
+			"python": {"tool": "ruff", "rule": "C901"},
+			"typescript": {"status": str_bogus, "note": "tracked in an issue"},
+		}
+		list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
+		assert len(list_problems) == 1, f"{str_bogus!r} was accepted as coverage"
+		assert "typescript" in list_problems[0]
+
+
 def test_an_entry_with_neither_implementation_nor_exception_is_flagged() -> None:
 	"""The negative control for the test above: a bare note is still an omission."""
 	dict_rule = {
