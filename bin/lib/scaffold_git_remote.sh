@@ -264,6 +264,33 @@ scaffold_set_review_trigger_secret() {
 	fi
 }
 
+scaffold_set_secret_scan_key() {
+	# Give the new repo the GitGuardian key its (opt-in) secret_scan.yaml workflow needs, from
+	# the environment. Sibling of scaffold_set_review_trigger_secret — same reasoning, same
+	# never-persist-locally rule, applied to blueprintx#287's key instead of #155's PAT.
+	#
+	# ⚠️ THE PRESENCE OF THIS VARIABLE IS ALSO THE OPT-IN SIGNAL. Each scaffold's
+	# copy_github_assets copies .github/workflows/secret_scan.yaml only when
+	# GITGUARDIAN_API_KEY is set at scaffold time — so a project that never exported it never
+	# receives a workflow it has no key for, and this function has nothing to propagate.
+	local str_slug
+	str_slug="$(scaffold_repo_slug)"
+
+	if [ -z "${GITGUARDIAN_API_KEY:-}" ]; then
+		return 0
+	fi
+	if ! command -v gh >/dev/null 2>&1; then
+		return 0
+	fi
+	# --body, never a redirect — same trailing-newline hazard as GH_PAT_REVIEW_TRIGGER above.
+	if gh secret set GITGUARDIAN_API_KEY --repo "$str_slug" \
+		--body "$GITGUARDIAN_API_KEY" >/dev/null 2>&1; then
+		print_status "success" "GitGuardian secret-scan key set on ${str_slug}"
+	else
+		print_status "warning" "Could not set GITGUARDIAN_API_KEY on ${str_slug} — set it by hand"
+	fi
+}
+
 scaffold_prompt_git_remote_setup() {
 	# Returns 0 only when `origin` is present AND verified to be the repository this
 	# scaffold names — so a caller can gate branch protection / Pages on the remote
@@ -293,5 +320,6 @@ scaffold_prompt_git_remote_setup() {
 		scaffold_push_initial_commit "$str_project_path"
 	fi
 	scaffold_set_review_trigger_secret
+	scaffold_set_secret_scan_key
 	print_status "success" "Git repo initialized."
 }
