@@ -59,6 +59,15 @@ resolve_github_username() {
     print_status "config" "GitHub username (prompt): $GITHUB_USERNAME"
 }
 
+prompt_otel() {
+    local answer
+    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    case "$answer" in
+        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
+        *) INCLUDE_OTEL=false ;;
+    esac
+}
+
 create_directory_structure() {
     local project_path="$1"
 
@@ -194,6 +203,40 @@ copy_shared_ts_source() {
     local project_path="$1"
     mkdir -p "$project_path/src/utils"
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src"
+}
+
+# OTLP log export (opt-in, blueprintx#438): the emitter (imports @opentelemetry/* — the ONLY
+# place it is imported), its unit test, the pinned package.json dependencies (declared only
+# here, so an opt-out never installs them), a local-dev collector compose fragment, and the
+# public-barrel re-export — one function, mirroring conditional_copy_otel in the Python
+# scaffolds. ts-lib ships no .env file (unlike react-spa-webpack), so the env vars are
+# printed at the end instead of appended to one.
+conditional_copy_otel() {
+    local project_path="$1"
+    if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
+    mkdir -p "$project_path/src/utils"
+    cp "$COMMON_TEMPLATE_ROOT/optional/otel-log-emitter.ts" "$project_path/src/utils/otel-log-emitter.ts"
+    cp "$COMMON_TEMPLATE_ROOT/optional/otel-log-emitter.test.ts" "$project_path/src/utils/otel-log-emitter.test.ts"
+    cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
+    cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
+    # EXACT pins, deliberately against this repo's house style of ranges (^X.0.0) — see
+    # otel-log-emitter.ts's module docstring: the Logs signal is still "not yet stable"
+    # upstream, so a minor bump may change behaviour. Re-check that status before bumping.
+    patch_package_json "$project_path/package.json" dependencies \
+        '@opentelemetry/api=1.9.1' \
+        '@opentelemetry/api-logs=0.222.0' \
+        '@opentelemetry/sdk-logs=0.222.0' \
+        '@opentelemetry/exporter-logs-otlp-http=0.222.0' \
+        '@opentelemetry/resources=2.11.0'
+    cat >> "$project_path/src/index.ts" <<'TSBLOCK'
+
+// OTLP log export (opt-in, blueprintx#438) — an additional LogEmitter implementation a
+// consumer wraps its own base emitter with: withOtelLogExport(NULL_EMITTER). A no-op until
+// OTEL_EXPORTER_OTLP_ENDPOINT is set (see utils/otel-log-emitter.ts).
+export { withOtelLogExport } from './utils/otel-log-emitter.js';
+TSBLOCK
+    print_status "success" "OTLP log export (src/utils/otel-log-emitter.ts) added — re-exported from src/index.ts"
+    print_status "info" "Set OTEL_EXPORTER_OTLP_ENDPOINT (and optionally OTEL_SERVICE_NAME / OTEL_EXPORTER_OTLP_HEADERS) in your host's real environment to enable export"
 }
 
 copy_common_templates() {
@@ -395,9 +438,11 @@ main() {
     validate_inputs
     resolve_github_username
     scaffold_prompt_review_bot_roster
+    prompt_otel
     create_directory_structure "$PROJECT_PATH"
     copy_skeleton_files "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_copy_otel "$PROJECT_PATH"
     scaffold_prune_review_bot_roster "$PROJECT_PATH"
     # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"
