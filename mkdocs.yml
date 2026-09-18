@@ -16,10 +16,12 @@ nav:
   - CLI Reference: cli-reference.md
   - FAQ: faq.md
   - Troubleshooting: troubleshooting.md
+  - Secret Scanning: secret-scanning.md
   - Contributing: contributing.md
   - Quality Rules: quality-rules.md
   - Changelog: changelog.md
   - Versioning: versioning.md
+  - Coverage Floor: coverage-floor.md
   - Python:
       - DDD Service (Native DB):
           - Overview: py-ddd-service-native-db.md

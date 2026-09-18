@@ -716,8 +716,11 @@ copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
-    # GitGuardian secret-scanning gate (blueprintx#153). GitHub-only, like tests.yaml.
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
+    # GitGuardian secret-scanning gate (blueprintx#153), OPT-IN (blueprintx#287): only when
+    # GITGUARDIAN_API_KEY was exported at scaffold time — see scaffold_set_secret_scan_key.
+    if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
+        cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
+    fi
     # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
     # after the last push is still checked — a push-only trigger goes stale exactly then.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
