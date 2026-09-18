@@ -152,6 +152,9 @@ ensure_runtime_env() {
 	bootstrap_runtime_with_pip
 }
 
+# Extra tokens after the entrypoint are the USER's argv and must reach the module:
+# `poe run backfill` forwards "backfill" here, and dropping it makes main.py fall
+# back to PIPELINE_INTENT (or "send") no matter what was asked for (blueprintx#317).
 run_entrypoint() {
 	local str_entrypoint="$1"
 	shift

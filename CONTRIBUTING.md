@@ -168,9 +168,12 @@ machine-decidable — it is a review question, so it stays prose reviewed by a h
 | Early-return shape | 🔧 in flight — ruff `RET` (blueprintx#426) | ❌ none |
 | Nesting-depth ceiling | ❌ none — `PLR1702` is preview-gated and preview is off (blueprintx#434); `C901` bounds nesting only as a side effect | ❌ none — no `max-depth` |
 | Coverage floor | ✅ `fail_under = 80` (`.coveragerc`) | ❌ no Jest `coverageThreshold` configured |
+| Casing convention (functions/variables/import aliases) — row re-measured 2026-09-13 | ✅ ruff `N`, minus `N802` in `tests/**` (blueprintx#422, closes #422) | ❌ none configured — `@typescript-eslint/naming-convention` exists but is unused. No like-for-like gap: a JS/TS test name is a **string literal** passed to `it()`/`describe()`, not a function identifier, so the one real N802 collision this issue measured (a test name using upper-case for semantic emphasis) has no TS equivalent to conflict with in the first place. TypeScript also has no analogue to the type-prefix convention that would otherwise fight a constant-casing rule — this repo's Python house convention is Python-only |
 
 Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
-Update the date in this heading when re-measured, so the next reader knows whether the gap
+The heading date covers the table as a whole; a row re-measured later carries its own date in
+its first cell, so one fresh row never implies the other rows were re-measured with it.
+Update the date in this heading when the WHOLE table is re-measured, so the next reader knows whether the gap
 narrowed or widened.
 
 ## Pull Request Process
@@ -201,6 +204,88 @@ narrowed or widened.
    - All tests must pass
    - Code coverage should not decrease
    - Documentation must be updated
+
+## Ruff Rule Adoption Log
+
+`templates/python-common/ruff.toml` only carries a short pointer comment beside each
+rule-set entry in `[lint].select` — the full measurement and, where a rule needed a
+case-by-case call, the reasoning for each finding lives here.
+
+### `RET` (flake8-return) — blueprintx#426
+
+Adopted whole, including `RET501` (a `return None` that duplicates the function's
+implicit `None`) — not narrowed to only `RET505` (the "unnecessary `else` after
+`return`" early-return check).
+
+- **`RET505` and the rest of the family:** 0 findings measured across
+  `src/ bin/ tests/ optional/` — the codebase already writes early returns
+  everywhere. Adopting it is a zero-cost regression gate: it does not rewrite any
+  existing code, it only stops a future `if: return … else: return …` shape from
+  landing.
+- **`RET501`:** 5 findings in `templates/python-common` (the scope the original
+  measurement covered), all the same shape — a `close()` method (or, in one case,
+  an async `__aexit__`/a YAML-loader callback) annotated `-> None` whose body ends
+  in an explicit `return None`. **`bin/ci/scaffold_lint_test.sh` then surfaced 6
+  more** in `templates/ddd-service-native-db/src/chassis/db_schema/infrastructure/`
+  (one per SQL backend's `close()`) — a skeleton-owned tree `ruff check` from
+  `templates/python-common` never reaches, so the original measurement could not
+  see them; only running `poe lint` inside a real scaffolded project could. In
+  every one of the 11, `None` is the function's *only* possible return value (per
+  the rule's own message, "if it is the only possible return value") — none of
+  them is a `-> X | None` function where a mid-function `return None` is a
+  deliberate distinct outcome the caller consumes. All 11 were therefore residue
+  and the line was deleted (never suppressed with `# noqa`):
+  - `templates/python-common/bin/check_docs_sections.py::_ignore_unknown`
+  - `templates/python-common/optional/browser_steps/tests/test_step_handlers.py::FakeDownloadInfo.__aexit__`
+  - `templates/python-common/optional/chassis/db_wschema/infrastructure/csv_handler.py::CsvHandler.close`
+  - `templates/python-common/optional/chassis/db_wschema/infrastructure/joblib_handler.py::JoblibHandler.close`
+  - `templates/python-common/optional/chassis/db_wschema/infrastructure/json_handler.py::JsonHandler.close`
+  - `templates/ddd-service-native-db/src/chassis/db_schema/infrastructure/{mariadb,mssql,mysql,oracle,postgres,sqlite}_handler.py::*Handler.close`
+
+  If a future `RET501` finding **is** a deliberate `None` branch of a `-> X | None`
+  function (the `None` is the result the caller consumes, not leftover
+  boilerplate), the right fix is a line-scoped `# noqa: RET501` **with a reason**,
+  not deletion — an unreasoned `noqa` is the same debt as an unreasoned comment.
+
+### `N` (pep8-naming) — blueprintx#422
+
+Adopted with two per-file-ignores, not whole. Re-measured 2026-09-13 (ruff 0.11.13):
+`ruff check --select N --statistics src/ bin/ tests/ optional/` → 9 findings across 3
+rules (an earlier count in the issue read 6 — stale; re-measuring is what the issue asked
+for, not trusting the number it opened with).
+
+- **`N802` (function name should be lowercase) — 5 findings, all false positives, ignored
+  in `tests/**` only.** Every one is a test name that uses upper-case for **semantic
+  emphasis** on the exact behaviour under test:
+  `test_modules_with_no_policy_file_FAIL_rather_than_pass_silently`,
+  `test_a_glob_governs_packages_NESTED_below_the_sublayer`,
+  `test_a_dotted_deny_also_catches_the_RELATIVE_form`,
+  `test_account_blocked_until_takes_the_LATEST_deadline_not_the_latest_notice`,
+  `test_no_threads_is_not_a_THREAD_problem`. `tests/CLAUDE.md` asks a test name to
+  describe the *behaviour*, not the function under test — the upper-case word is that
+  description, not a casing slip. Renaming to satisfy N802 would erase the one thing the
+  name is for. `N802` stays active everywhere else; only `tests/**` is exempt.
+- **`N806` (non-lowercase variable in function) — 3 findings, all true positives, fixed by
+  moving the constant to module scope.** All three are the same shape: a local `_ALL_CAPS`
+  name assigned inside a function body — exactly PEP-8's "constants are module-level and
+  upper-case" rule seen from the other side, since a local variable that *looks* like a
+  constant is really just a plain variable wearing constant casing.
+  `bin/check_assertion_weakening.py::changed_paths` (`_INT_MIN_FIELDS`) and
+  `::_compare_call` (`_MIN_EQ_ARGS`), plus `bin/check_gate_integrity.py::changed_paths`
+  (`_INT_MIN_FIELDS`, a near-duplicate of the first — same shape, separate file, out of
+  scope for this issue). Fixed by hoisting each to a module-level `_NAME = value` beside
+  the file's existing module constants; no behaviour change.
+- **`N813` (camelcase module imported as lowercase) — 1 finding, evaluated and kept via a
+  per-file-ignore.** `src/utils/xml_reader.py` imports `defusedxml.ElementTree as
+  defused_et`. The lowercase alias is deliberate, not accidental: the file's own module
+  docstring already states why `defusedxml`, not stdlib `xml.etree.ElementTree`, is the
+  trust-boundary-safe parser, and the alias's job is to read as "the defused one" at every
+  call site. Renaming it to satisfy N813 (e.g. `DefusedElementTree`) would only make that
+  signal harder to read for no defect fixed, so this one file is ignored for `N813` rather
+  than renamed.
+
+See the cross-language parity table above for the TypeScript side of this decision — no
+like-for-like gap, since a JS/TS test name is a string literal, not a function identifier.
 
 ## Best Practices
 

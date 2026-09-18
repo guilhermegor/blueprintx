@@ -44,7 +44,7 @@ exclude = [
     ".vscode",
 
     # project-specific generated / chassis
-    "alembic",
+    "migrations",
     # ⚠️ `src/chassis` and `src/capabilities/example_feature` were BOTH excluded here until
     # blueprintx#203, mirroring #190's mypy fix one tool later. Same argument, measured
     # separately: these files ship verbatim into every generated DDD project, so a defect in
@@ -95,6 +95,14 @@ select = [
     "W",   # pycodestyle warnings - trailing whitespace, invalid regex escapes (see W191 below)
     "PL",  # pylint - magic values, over-wide signatures, module-level global
     "PT",  # flake8-pytest-style - pytest idioms (one assertion per behaviour, etc.)
+    # RET - flake8-return - early-return style (RET505) and superfluous `return None`
+    # (RET501). Measured 2026-09-06 (ruff 0.11.13): 0 RET505 findings (the repo already
+    # practices early return) and 11 RET501 — a trailing `return None` in a `-> None`
+    # function (a no-op `close()`/`__aexit__`, plus one YAML-loader callback), all removed.
+    # Only 5 were reachable from `templates/python-common`; the other 6 needed a real
+    # scaffold to see. See CONTRIBUTING.md "Ruff Rule Adoption Log" for the case-by-case
+    # record, blueprintx#426.
+    "RET",
     # A - flake8-builtins - PEP 8 import rule 4: an import must not shadow a builtin.
     # `from re import compile` shadows compile() with no signal today; the fix is an alias
     # (`from re import compile as re_compile`) or a qualified import (`import re`). Measured
@@ -107,6 +115,12 @@ select = [
     # (blueprintx#360). Measured 2 findings there; enabling strict-checking would put a gate
     # violation on deliberate, correct design, which is how a gate teaches everyone to disable it.
     "A",
+    # N - pep8-naming - PEP 8's casing rules (function/variable/import-alias case). Measured
+    # 2026-09-13 (ruff 0.11.13): `ruff check --select N src/ bin/ tests/ optional/` → 9
+    # findings across 3 rules. Adopted with two narrow per-file-ignores below rather than
+    # whole — see CONTRIBUTING.md "Ruff Rule Adoption Log" for the per-rule verdicts
+    # (blueprintx#422, closes #422).
+    "N",
 ]
 ignore = [
     "D206",  # docstring should be indented with spaces, not tabs
@@ -286,6 +300,13 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
     # 29 findings were in tests/, all of that shape.
     "PLR2004",
     "TID251",  # tests legitimately read back outputs with pd.read_* to assert on them
+    # N802 (function name should be lowercase) fires on a MIXED-case test name where the
+    # upper-case word is the point: `test_..._FAIL_rather_than_pass_silently`,
+    # `test_a_glob_governs_packages_NESTED_below_the_sublayer`. `tests/CLAUDE.md` asks a test
+    # name to describe the behaviour under test, not the function — the emphasis word IS that
+    # description. Renaming to satisfy N802 would erase the signal a lowercase name cannot
+    # carry. 5 findings, all this shape (blueprintx#422).
+    "N802",
 ]
 # The seam itself is the one place allowed to call the bare pandas readers.
 "src/utils/tabular_reader.py" = ["TID251"]
@@ -319,3 +340,11 @@ allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 # typing engine there is fully excluded (see [exclude]), so it needs no per-file rule.
 "src/*/_internal/utils/tabular_reader.py" = ["TID251"]
 "src/*/_internal/config/contracts/*.py" = ["TID251"]
+# N813 (camelcase module imported as lowercase): `import defusedxml.ElementTree as defused_et`
+# is a deliberate alias, not a casing slip — the file's own module docstring already states
+# why (defusedxml, not stdlib `xml.etree.ElementTree`, is the trust-boundary-safe parser).
+# Renaming to satisfy the rule would only make the alias harder to read (blueprintx#422).
+"src/utils/xml_reader.py" = ["N813"]
+# Same file under lib-minimal's private-package layout (see the mirror note above): without
+# this the exemption never matches there and only that tier goes red (blueprintx#486).
+"src/*/_internal/utils/xml_reader.py" = ["N813"]

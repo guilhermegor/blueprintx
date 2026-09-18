@@ -151,6 +151,12 @@ _SET_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 # code path serve pre-commit and CI without branching on which one is running.
 STR_INDEX_REF = ""
 
+# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
+# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields. Module-scoped
+# (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as a
+# constant while behaving like a plain variable — moved here to be what it says it is.
+_INT_MIN_FIELDS = 2
+
 
 def _git(list_args: list) -> str:
 	"""Run a read-only git command and return stdout (empty string on failure).
@@ -258,10 +264,6 @@ def changed_paths(str_base: str) -> list:
 	list of tuple
 		``(status_letter, path)``, e.g. ``("D", "bin/ci/check_actions.sh")``.
 	"""
-	# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
-	# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields.
-	_INT_MIN_FIELDS = 2
-
 	str_out = _git(["diff", "--cached", "--name-status", str_base])
 	list_rows = []
 	for str_line in str_out.splitlines():

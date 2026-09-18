@@ -203,7 +203,6 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 
 	def close(self) -> None:
 		"""Release resources (no-op; connections are per-call)."""
-		return None
 
 	def _connect(self) -> Any:
 		"""Create a mysql-connector connection using the parsed DSN."""

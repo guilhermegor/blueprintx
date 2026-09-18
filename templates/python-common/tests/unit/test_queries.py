@@ -150,7 +150,7 @@ def test_load_query_says_no_engine_carries_a_misspelled_name(tmp_path: Path) -> 
 	_seed_query(tmp_path, "sqlite", "example__select.sql", "SELECT 1;")
 
 	with pytest.raises(FileNotFoundError) as cls_excinfo:
-		load_query("exmaple__select.sql", "sqlite", tmp_path)
+		load_query("exmaple__select.sql", "sqlite", tmp_path)  # codespell:ignore exmaple
 
 	str_message = str(cls_excinfo.value)
 	assert "exists for no engine" in str_message

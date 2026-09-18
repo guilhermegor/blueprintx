@@ -46,7 +46,6 @@ class FakeDownloadInfo:
 
 	async def __aexit__(self, *args: object) -> None:
 		"""Exit the ``async with`` block; nothing to clean up in the fake."""
-		return None
 
 	@property
 	async def value(self) -> FakeDownload:

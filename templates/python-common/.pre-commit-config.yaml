@@ -157,6 +157,27 @@ repos:
         files: \.(py|sh)$
         pass_filenames: false
 
+      # A masked CPF/CNPJ compared against a stored unmasked column matches ZERO rows and
+      # raises nothing: the query is valid, the answer is silently empty. Scans .py and .sql
+      # alike, since SQL reaches the database through both.
+      - id: identifier-masking
+        name: identifier masking (masked CPF/CNPJ in a comparison)
+        entry: bash bin/poetry_exec.sh run python bin/check_identifier_masking.py
+        language: system
+        files: \.(py|sql)$
+        pass_filenames: false
+
+      # A PROXY, not a detector (blueprintx#442) — see the module docstring. The real
+      # detector is pytest-randomly (pytest.ini has no config for it; it self-activates
+      # once installed). This gate only pins today's zero-shared-state baseline so the
+      # first `scope="module"` fixture does not remove it silently.
+      - id: fixture-scope
+        name: fixture scope (non-function scope needs a written reason)
+        entry: bash bin/poetry_exec.sh run python bin/check_fixture_scope.py
+        language: system
+        files: ^tests/.*\.py$
+        pass_filenames: false
+
       # Diff-scoped against merge-base(HEAD, main) — unlike every OTHER hook here, this one
       # checks a DELTA, not a whole-tree property: a hook/rule/exclude that was never added is
       # not a violation, but one that WAS there and got REMOVED without a `gate-change-ok:
@@ -244,6 +265,32 @@ repos:
           - python
         pass_filenames: false
 
+      # Structural gate for the "silent wrong answer" (blueprintx#355): a WHERE-less
+      # DELETE/UPDATE mutates or erases every row with no error, and WITH (NOLOCK) permits
+      # dirty reads / missed rows with no error either — both read as correct code and
+      # behave wrongly, which is exactly the failure shape an AI-written diff is least
+      # likely to catch on review. Escape hatch: "# sql-guard-ok: <reason>".
+      - id: check-sql-guards
+        name: SQL guards (WHERE-less mutations, NOLOCK)
+        entry: bash bin/poetry_exec.sh run python bin/check_sql_guards.py
+        language: system
+        # Both surfaces SQL reaches this codebase through: a .py file (the AST checks) and
+        # a raw .sql file under src/config/queries/ (the NOLOCK text scan).
+        files: \.(py|sql)$
+        pass_filenames: false
+
+      # Migration filenames must lead with a known verb (blueprintx#375) — Rails'
+      # <verb>_<object>[_<qualifier>] shape, so `ls migrations/versions/` sorts by date
+      # and reads as a changelog. Self-skips when migrations/versions/ is absent (only the
+      # ORM tier ships migrations today, #373). Escape hatch: "# migration-slug-ok: <reason>".
+      - id: check-migration-slugs
+        name: migration slug convention (leading verb)
+        entry: bash bin/poetry_exec.sh run python bin/check_migration_slugs.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
       # Structural gate for the canonical docs skeleton — every canonical page (English slug)
       # exists AND is registered in mkdocs.yml nav; MkDocs builds an unregistered page anyway,
       # so it silently vanishes from navigation. Keys on slugs, never localized nav titles.
@@ -288,6 +335,16 @@ repos:
         language: system
         files: \.(py|ya?ml|sql|sh|toml|cfg|ini)$|\.env\.example$
         exclude: ^docs/
+
+      # Bounds comment volume in every code format, QA suppression pragmas (noqa,
+      # complexity-ok, type: ignore, codespell:ignore, ...) explicitly exempt via
+      # an anticipatory allowlist (bin/comment_budget_allowlist.txt). Escape
+      # hatch: `# comment-budget-ok: <reason>`.
+      - id: check-comment-budget
+        name: comment budget (long runs + decorative banners)
+        entry: bash bin/poetry_exec.sh run python bin/check_comment_budget.py
+        language: system
+        pass_filenames: false
 
       - id: mypy
         name: mypy (static type check)

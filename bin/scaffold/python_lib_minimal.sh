@@ -34,9 +34,6 @@ PUBLISH_PYPI=true
 PUBLISH_TEST_PYPI=true
 CONSUME_PRIVATE=false
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
@@ -138,6 +135,9 @@ create_python_files() {
     # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
     # package that still scaffolds without error. The heredoc this replaced used shell
     # interpolation, which sees unexported variables; envsubst does not.
+    # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_main.py.tmpl" \
         > "$project_path/tests/unit/test_main.py"
@@ -168,7 +168,7 @@ rewrite_internal_imports() {
     local pkg_prefix="${PROJECT_PKG_NAME}._internal"
     local file
     while IFS= read -r file; do
-        sed -i -E \
+        sed_inplace -E \
             -e "s@^([[:space:]]*)(from|import) utils\.@\1\2 ${pkg_prefix}.utils.@" \
             -e "s@^([[:space:]]*)(from|import) config\.@\1\2 ${pkg_prefix}.config.@" \
             -e "s@^([[:space:]]*)(from|import) ports\.@\1\2 ${pkg_prefix}.config.ports.@" \
@@ -396,8 +396,11 @@ lib_minimal_copy_tooling_configs() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     # Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
-    # review tools is a row here rather than an edit to the gate.
-    cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
+    # review tools is a row here rather than an edit to the gate. Skipped when the
+    # scaffold answered "no reviewer bot" (blueprintx#374 — rationale in docs/faq.md).
+    if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
+        cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
+    fi
     cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$project_path/mypy.ini"
     cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$project_path/.sqlfluff"
     cp "$COMMON_TEMPLATE_ROOT/.sqlfluffignore" "$project_path/.sqlfluffignore"
@@ -489,12 +492,18 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_layer_imports_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
+        "$project_path/tests/unit/test_sql_guards_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_identifier_masking_gate.py" \
+        "$project_path/tests/unit/test_identifier_masking_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
         "$project_path/tests/unit/test_gate_integrity_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
         "$project_path/tests/unit/test_coverage_floor_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
         "$project_path/tests/unit/test_function_length_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
+        "$project_path/tests/unit/test_comment_budget_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
         "$project_path/tests/unit/test_review_threads_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_retry.py" \
@@ -505,6 +514,10 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_assertion_weakening_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_rmw_race_gate.py" \
         "$project_path/tests/unit/test_rmw_race_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
+        "$project_path/tests/unit/test_ruff_ret_rule.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
+        "$project_path/tests/unit/test_migration_slug_gate.py"
 }
 
 lib_minimal_copy_project_scaffolding() {
@@ -1033,9 +1046,6 @@ conditional_copy_docker_compose() {
     print_status "success" "docker-compose.yml (${DB_COMPOSE_BACKEND}) copied"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
@@ -1048,6 +1058,7 @@ main() {
     prompt_logs
     prompt_docker_compose
     prompt_publish_targets
+    scaffold_prompt_review_bot_roster
     PROJECT_DISPLAY_NAME="$(format_display_name "$PROJECT_NAME")"
     create_directory_structure "$PROJECT_PATH"
     create_python_files "$PROJECT_PATH"

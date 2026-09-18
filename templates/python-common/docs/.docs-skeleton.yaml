@@ -1,0 +1,18 @@
+# Overrides the default required-pages set that
+# templates/python-common/bin/check_docs_sections.py enforces (pre-commit
+# `check-docs-sections` + CI). Single-sourced here and copied into every
+# service tier (DDD/MVC × native/ORM) — lib-minimal ships no architecture.md
+# and is correctly excluded by never receiving this file, so it keeps the
+# gate's own default set.
+#
+# Adds architecture.md: the page describes each service's layer structure and
+# was previously scaffolded but never enforced — see blueprintx#130.
+required_pages:
+  - index.md
+  - usage.md
+  - examples.md
+  - architecture.md
+  - api/index.md
+  - faq.md
+  - contributing.md
+  - changelog.md
