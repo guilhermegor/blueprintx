@@ -150,6 +150,30 @@ def test_widened_omit_swallows_new_capability_logic_is_flagged(
 	assert "orders/domain/service.py" in str_err
 
 
+def test_single_misomitted_file_in_a_narrowly_excluded_capability_is_flagged(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+	"""Detection is per MODULE even when the capability carries narrower exclusions.
+
+	Pins the distinction the design record gets asked about: the capability-root
+	coarseness is the EXEMPTION granularity (only a literal whole-capability pattern
+	exempts), not the detection granularity. ``orders`` below keeps a legitimate
+	``infrastructure/*`` exclusion and is therefore NOT exempt, so its one mis-omitted
+	domain module must still be named. Documented as uncaught until 2026-09-18; it was
+	caught all along, and a doc that understates a gate invites a redundant second one.
+	"""
+	path_root = _project(
+		tmp_path,
+		"    src/capabilities/example_feature/*\n"
+		"    src/capabilities/*/infrastructure/*\n"
+		"    src/capabilities/orders/domain/service.py\n",
+	)
+	_capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+	monkeypatch.chdir(path_root)
+	assert _load_gate().main() == 1
+	assert "orders/domain/service.py" in capsys.readouterr().err
+
+
 def test_enum_only_module_is_never_in_the_must_cover_set(tmp_path: Path) -> None:
 	"""A module with only class/attribute definitions (an enum) defines no function.
 

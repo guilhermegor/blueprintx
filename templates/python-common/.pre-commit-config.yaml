@@ -438,6 +438,16 @@ repos:
         stages:
           - pre-push
 
+      # `fail_under` in `.coveragerc` is only honest if the `omit` list beside it never widens
+      # past a capability's `infrastructure/` layer into `domain/`/`application/` — see the
+      # gate's own module docstring for the "green, silent, wrong" failure mode (blueprintx#149).
+      - id: coverage-floor
+        name: coverage floor (omit list must not swallow capability logic)
+        entry: bash bin/poetry_exec.sh run python bin/check_coverage_floor.py
+        language: system
+        files: ^(\.coveragerc|src/capabilities/.*\.py)$
+        pass_filenames: false
+
       # Coverage is the slow full-suite gate — run it on pre-push, not per-commit,
       # so day-to-day commits stay fast (static gates above still run per-commit).
       - id: coverage-check
