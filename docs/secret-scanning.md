@@ -58,8 +58,12 @@ which is what `secret_scan.yaml`'s own header — and this page — follow.
 Scaffolded without the key and want GitGuardian anyway?
 
 ```bash
-gh secret set GITGUARDIAN_API_KEY --repo <owner>/<repo> --body '<your key>'
+gh secret set GITGUARDIAN_API_KEY --repo <owner>/<repo>
 ```
+
+`gh` prompts for the value when neither `--body` nor stdin supplies one. Prefer that
+prompt over `--body '<your key>'`: an argument is visible to any other process on the
+host for the life of the call, and it lands in your shell history besides.
 
 then copy `templates/python-common/.github/workflows/secret_scan.yaml` from
 a BlueprintX checkout into the project's own `.github/workflows/`.
