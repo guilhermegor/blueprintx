@@ -34,11 +34,17 @@ base_value() {
 
 make_sandbox() {
     # Prints the path of a fresh fake repo root: a copy of the real validate_meta.sh under
-    # bin/ci/, plus an empty templates/ dir for the caller to drop a skeleton.meta into.
+    # bin/ci/, an empty templates/ dir for the caller to drop a skeleton.meta into, and a
+    # root CLAUDE.md that already mentions "fake-skeleton" — every EXISTING test below
+    # writes its skeleton.meta under templates/fake-skeleton/, so without this the new
+    # blueprintx#478 documentation check would fail all of them for an unrelated reason.
+    # test_skeleton_not_documented_in_claude_md is the one test that overwrites this file
+    # with a CLAUDE.md that does NOT mention the skeleton, to prove that check fires.
     local str_root
     str_root="$(mktemp -d)"
     mkdir -p "$str_root/bin/ci" "$str_root/templates"
     cp "$REPO_ROOT/bin/ci/validate_meta.sh" "$str_root/bin/ci/validate_meta.sh"
+    printf '# CLAUDE.md\n\nfake-skeleton is documented here.\n' > "$str_root/CLAUDE.md"
     printf '%s' "$str_root"
 }
 
@@ -140,17 +146,38 @@ test_missing_scaffold_path() {
         "scaffold path does not exist"
 }
 
+test_skeleton_not_documented_in_claude_md() {
+    # blueprintx#478: a skeleton.meta valid on every other axis must still fail if its own
+    # directory name is absent from the root CLAUDE.md — the exact gap ts-lib shipped with.
+    local str_root
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)"
+    # Overwrite make_sandbox's default CLAUDE.md (which names "fake-skeleton") with one
+    # that documents something else entirely.
+    printf '# CLAUDE.md\n\nNothing about this skeleton here.\n' > "$str_root/CLAUDE.md"
+    expect_gate "skeleton undocumented in CLAUDE.md" "$str_root" "fail" \
+        "skeleton 'fake-skeleton' is not mentioned in CLAUDE.md"
+}
+
 main() {
     test_valid_meta_passes
     test_missing_key
     test_empty_value
     test_missing_scaffold_path
+    test_skeleton_not_documented_in_claude_md
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures validate_meta.sh regression assertion(s) failed"
         exit 1
     fi
-    print_status "success" "validate_meta.sh rejects missing keys, empty values, and dead scaffold paths"
+    print_status "success" \
+        "validate_meta.sh rejects missing keys, empty values, dead scaffold paths, and undocumented skeletons"
 }
 
 main "$@"

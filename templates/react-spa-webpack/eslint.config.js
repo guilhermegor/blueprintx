@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import prettierConfig from 'eslint-config-prettier';
 import boundaries from 'eslint-plugin-boundaries';
 import importPlugin from 'eslint-plugin-import';
+import jest from 'eslint-plugin-jest';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -72,8 +73,13 @@ export default [
   // 4. Overrides for test files
   {
     files: ['**/*.{test,spec}.{ts,tsx,js,jsx}'],
+    plugins: { jest },
     rules: {
       'no-console': 'off',
+      // A test file that EXPORTS something is sharing state across files — the proxy half
+      // of blueprintx#442 (pytest-randomly is the other half). Neither proves order
+      // independence; this only makes the cheapest way to break it visible at lint time.
+      'jest/no-export': 'error',
     },
   },
 
@@ -99,6 +105,24 @@ export default [
         },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
+      // No bare numeric HTTP status / magic-number literals (#453). Measured against real
+      // express/NestJS shapes: catches `res.status(404)`, `res.sendStatus(204)`,
+      // `if (res.statusCode === 409)`, `@HttpCode(204)`, `throw new HttpException(msg, 403)`
+      // and `return { statusCode: 201 }` — every common status-code idiom in both frameworks —
+      // while a named constant (`StatusCodes.NOT_FOUND`, `HttpStatus.NO_CONTENT`) stays clean.
+      // `detectObjects: true` is load-bearing, not cosmetic: without it, the object-property
+      // form (`{ statusCode: 201 }`, the Fastify/NestJS response shape) is silent.
+      '@typescript-eslint/no-magic-numbers': [
+        'error',
+        {
+          detectObjects: true,
+          ignoreArrayIndexes: true,
+          ignoreEnums: true,
+          ignoreNumericLiteralTypes: true,
+          ignoreReadonlyClassProperties: true,
+          ignore: [-1, 0, 1, 2],
+        },
+      ],
       // Cyclomatic-complexity ceiling, ESLint's built-in `complexity` rule —
       // mirrors templates/python-common's ruff C901 gate (#167), recalibrated
       // for this tree rather than copied by symmetry: measured against the

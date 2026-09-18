@@ -31,6 +31,22 @@ jobs:
       - name: Lint all shell scripts (severity ≥ warning)
         run: bash bin/ci/check_shell.sh
 
+  sed-portability:
+    name: sed portability — no bare sed -i (blueprintx#459)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # GNU sed's -i takes no argument; BSD/macOS sed's -i REQUIRES one, so a bare `sed -i`
+      # aborts a scaffold partway through on the platform the README advertises. This gate
+      # rejects the GNU-only form under bin/ and templates/**/bin/ — sed_inplace()
+      # (bin/lib/common.sh) is the portable replacement.
+      - name: Reject a bare sed -i under bin/ and templates/**/bin/
+        run: bash bin/ci/check_sed_portability.sh
+
   git-remote-guard:
     name: Scaffold origin verification — mismatched remote must fail
     runs-on: ubuntu-latest
@@ -187,12 +203,29 @@ jobs:
     timeout-minutes: 10
     # ⚠️ NOT wired into bin/enable_repo_rules.sh's REQUIRED_CHECKS (blueprintx#155). Per
     # `measure-a-checks-population-before-requiring-it`, GitGuardian's population here is
-    # unmeasured — GITGUARDIAN_API_KEY is not yet set as a repo secret on BlueprintX, so this job
-    # cannot report at all until an admin runs
-    # `gh secret set GITGUARDIAN_API_KEY --repo <owner>/<repo>`. Absent the key, `ggshield` fails
-    # loud on its own (exit 3, "A GitGuardian API key is needed") rather than silently no-op'ing —
-    # same contract as GH_PAT_REVIEW_TRIGGER in coderabbit_trigger.yml: a scanner that never ran
-    # must not print the same thing as a scanner that found nothing.
+    # unmeasured. GITGUARDIAN_API_KEY **is** set as a repo secret on BlueprintX (since
+    # 2026-08-27) and resolves fine for a human-authored PR (measured: PR #455 SUCCESS) —
+    # but GitHub gives a Dependabot-triggered run a SEPARATE secret store, and this repo has
+    # none there (`gh api repos/<o>/<r>/dependabot/secrets --jq .total_count` == 0). So the
+    # env var below resolves to an EMPTY STRING on that run, not merely absent
+    # (blueprintx#457, measured on PR #400, job 103472359681: `GITGUARDIAN_API_KEY: ` blank
+    # in the log, `Error: Invalid GitGuardian API key.`, exit 3). Absent a usable key,
+    # `ggshield` fails loud on its own rather than silently no-op'ing — same contract as
+    # GH_PAT_REVIEW_TRIGGER in coderabbit_trigger.yml: a scanner that never ran must not
+    # print the same thing as a scanner that found nothing. The actual fix is a human action:
+    # `gh secret set GITGUARDIAN_API_KEY --app dependabot --repo <owner>/<repo>`.
+    #
+    # ⚠️ Until that lands, a Dependabot-authored PR trips this job on EVERY run, permanently —
+    # not a finding, the scan never running at all. Skipping on that signal is normally the
+    # wrong reflex (a gate reporting success for having checked nothing is worse than no gate),
+    # but it is not a silent pass here: `gitleaks` (`.github/workflows/secret_scan.yml`)
+    # already scans this exact push/PR range unconditionally, needs no key, and is unaffected
+    # by the Dependabot secret-store restriction — so the skip below removes a redundant,
+    # structurally-broken SECOND scanner, not the only one. It is keyed on the PR's AUTHOR
+    # from the event payload (`github.event.pull_request.user.login`), the same precedent as
+    # `bin/check_backlog_ledger.py`'s `is_bot_author` — never `github.actor`, which is whoever
+    # *triggered* this run and would un-exempt itself the moment a human re-runs or updates
+    # the bot's PR. A human PR with a genuinely missing/bad key still fails loud, unchanged.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -200,7 +233,25 @@ jobs:
           # ggshield needs the full range to diff, not just the tip.
           fetch-depth: 0
 
+      - name: Report and skip — bot-authored PR, no Dependabot secret store entry
+        if: >-
+          github.event_name == 'pull_request' &&
+          endsWith(github.event.pull_request.user.login, '[bot]')
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          echo "::warning::GitGuardian secret scan did NOT run for this PR (author: $PR_AUTHOR)."
+          echo "GitHub does not expose this repo's Actions secrets to a Dependabot-triggered run"
+          echo "-- only secrets in the separate Dependabot secret store, which this repo has"
+          echo "none of (blueprintx#457). This is NOT 'scanned, found nothing': gitleaks"
+          echo "(secret_scan.yml) already scans this same range unconditionally, no key needed."
+          echo "To close this gap too:"
+          echo "  gh secret set GITGUARDIAN_API_KEY --app dependabot --repo <owner>/<repo>"
+
       - name: Install ggshield
+        if: >-
+          !(github.event_name == 'pull_request' &&
+            endsWith(github.event.pull_request.user.login, '[bot]'))
         run: pipx install ggshield
 
       - name: Scan the push/PR range for secrets
@@ -232,7 +283,8 @@ jobs:
         # the range is empty. The whole repository IS the correct range there — which is
         # exactly the first push of a freshly scaffolded project, the one carrying everything.
         if: >-
-          github.event_name == 'pull_request' ||
+          (github.event_name == 'pull_request' &&
+           !endsWith(github.event.pull_request.user.login, '[bot]')) ||
           (github.event_name == 'push' &&
            github.event.before != '0000000000000000000000000000000000000000')
         env:
@@ -458,7 +510,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: templates/ts-common/package.json
+          cache-dependency-path: templates/ts-common/package-lock.json
 
       - name: Assemble typecheck workspace
         run: |
@@ -468,6 +520,10 @@ jobs:
           envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
             < templates/ts-common/package.json \
             > /tmp/ts-typecheck/package.json
+          # package-lock.json's root "name"/"version" don't need to match the
+          # envsubst-rendered package.json above -- npm ci only validates the
+          # dependency trees (verified locally, blueprintx#464).
+          cp templates/ts-common/package-lock.json /tmp/ts-typecheck/package-lock.json
           cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
           cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
           # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
@@ -476,9 +532,9 @@ jobs:
           # stand-in for that scaffold and drifted from it when #436 added the shared source.
           cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared
 
-      - name: Install npm dependencies
+      - name: Install npm dependencies (npm ci enforces the committed lockfile, #464)
         working-directory: /tmp/ts-typecheck
-        run: npm install
+        run: npm ci
 
       - name: Run tsc --noEmit (type errors only, no output files)
         working-directory: /tmp/ts-typecheck
@@ -522,3 +578,27 @@ jobs:
       # generated project, so the script lives at bin/, not templates/python-common/bin/.
       - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
         run: bash bin/check_makefile_pairing.sh
+
+  markdown-lint:
+    name: markdownlint — measured rule set (blueprintx#383)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pymarkdownlnt
+        run: pip install pymarkdownlnt
+
+      # Resolve, don't install, is the wrapper's own contract; here we DO install it, so
+      # the skip path is unreachable and the REQUIRED flag only guards against pymarkdown
+      # silently vanishing from PATH between the step above and this one.
+      - name: Lint every tracked .md file (root + templates/) with the measured rule set
+        env:
+          MARKDOWNLINT_REQUIRED: "1"
+        run: bash bin/ci/check_markdown.sh

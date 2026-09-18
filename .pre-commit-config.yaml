@@ -43,8 +43,11 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
       - id: check-added-large-files
+        # 700: templates/ts-common/package-lock.json (~596 KB, ~1160 resolved
+        # packages) is a real committed lockfile, not an accidental binary --
+        # the default 500 KB cap rejected it outright (#464).
         args:
-          - --maxkb=500
+          - --maxkb=700
       - id: no-commit-to-branch  # protects main, matches CONTRIBUTING.md
 
   # Layer 2 — Conventional Commits enforcement (commit-msg stage).
@@ -87,12 +90,26 @@ repos:
         pass_filenames: false
         files: ^bin/.*\.sh$
 
+      - id: sed-portability
+        name: sed portability (no bare sed -i, blueprintx#459)
+        entry: bash bin/ci/check_sed_portability.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/.*\.sh|templates/.*/bin/.*\.sh)$
+
       - id: git-remote-guard
         name: scaffold origin verification (mismatched remote must fail)
         entry: bash bin/ci/check_git_remote_guard.sh
         language: system
         pass_filenames: false
         files: ^bin/(lib/scaffold_git_remote\.sh|ci/check_git_remote_guard\.sh)$
+
+      - id: review-bot-roster-optout
+        name: review-bot roster opt-out ("no" must omit .review-bots.yaml)
+        entry: bash bin/ci/check_review_bot_roster_optout.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/(lib/scaffold_(git_remote|python_templates)\.sh|scaffold/(ts_lib|ts_react_app|python_lib_minimal)\.sh|ci/check_review_bot_roster_optout\.sh)|templates/(python-common/\.review-bots\.yaml|ts-common/\.github/\.review-bots\.yaml))$
 
       - id: lint-actions
         name: actionlint (workflows, repo + templates)
@@ -110,6 +127,14 @@ repos:
         language: system
         pass_filenames: false
         files: \.(py|sh)$
+
+      - id: check-comment-budget
+        name: comment budget (long runs + decorative banners, blueprintx#303)
+        # Same ONE-implementation treatment as function-length above: run over this repo
+        # via --root rather than keeping a second copy.
+        entry: python3 templates/python-common/bin/check_comment_budget.py --root .
+        language: system
+        pass_filenames: false
 
       - id: check-complexity
         name: cyclomatic complexity (tests 1, src 2, bin 8)
@@ -225,3 +250,10 @@ repos:
         language: system
         pass_filenames: false
         files: \.(py|md)$
+
+      - id: check-markdown
+        name: markdownlint (pymarkdownlnt, measured rule set — blueprintx#383)
+        entry: bash bin/ci/check_markdown.sh
+        language: system
+        pass_filenames: false
+        files: \.md$

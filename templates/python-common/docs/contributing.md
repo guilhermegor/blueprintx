@@ -84,7 +84,9 @@ This service is deployed, not published to a package index.
 
 **Without a GitHub remote (offline):**
 1. `poe new_branch feat/my-change` — branch off the default branch.
-2. Do the work and commit (Conventional Commits).
+2. Do the work and commit (Conventional Commits). Pre-flight the message first with
+   `poe check_commit_msg <file>` — it runs the same gitlint + commitizen `commit-msg` checks
+   in seconds, instead of a rejected title costing a full pre-commit gate run.
 3. `poe bump_version` — runs `cz bump`: computes the next version from your commits, updates
    `pyproject.toml`, regenerates `CHANGELOG.md`, and creates the `vX.Y.Z` tag.
 4. `poe git_merge_to_main` — merges the branch into the protected default branch locally.

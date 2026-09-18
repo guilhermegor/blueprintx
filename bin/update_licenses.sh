@@ -40,9 +40,6 @@ must obtain a separate commercial license from the copyright holder.
 
 "
 
-# ============================================================================
-# FUNCTIONS
-# ============================================================================
 
 check_dependencies() {
     if ! command -v curl >/dev/null 2>&1; then
@@ -112,9 +109,6 @@ update_all_licenses() {
     print_status "success" "All ${#SPDX_IDS[@]} licenses updated"
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
 main() {
     check_dependencies
