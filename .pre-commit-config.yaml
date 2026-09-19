@@ -217,6 +217,13 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
 
+      - id: specs-structure
+        name: .specs/ structure guard (blueprintx#447)
+        entry: bash bin/ci/check_specs_structure.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: promote-offline-to-online-tests
         name: promote_offline_to_online.sh refusal-path tests (blueprintx#382)
         entry: bash tests/test_promote_offline_to_online.sh
