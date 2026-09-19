@@ -217,6 +217,13 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
 
+      - id: specs-structure
+        name: .specs/ structure guard (blueprintx#447)
+        entry: bash bin/ci/check_specs_structure.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: version-sync
         name: version sync (pyproject vs CLI)
         entry: bash bin/ci/check_version_sync.sh

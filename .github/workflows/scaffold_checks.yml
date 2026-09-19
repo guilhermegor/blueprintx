@@ -353,6 +353,18 @@ jobs:
       - name: Should-fail regression tests for validate_meta.sh
         run: bash tests/test_validate_meta.sh
 
+  specs-structure:
+    name: .specs/ structure guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check .specs/ layout (blueprintx#447)
+        run: bash bin/ci/check_specs_structure.sh
+
   version-sync:
     name: Version sync — pyproject vs CLI
     runs-on: ubuntu-latest
