@@ -33,6 +33,24 @@ jobs:
         if: github.event_name != 'workflow_dispatch' && github.ref_type != 'tag'
         run: echo "This is not a tag or workflow_dispatch; exiting"; exit 1
 
+      # The input is free text and is interpolated into a tag below and, downstream,
+      # into a Test PyPI publish. Reject a malformed value here — before the test
+      # suite, the Test PyPI version-comparison and the build all run for nothing —
+      # rather than let it fail after a tag has already been pushed. PEP 440's own
+      # separator rules are lenient (a1, a.1 and a-1 all normalise to the same
+      # release), so this accepts a bare release plus an optional lowercase-letter
+      # suffix with an optional . / - separator on either side, matching the SUFFIX
+      # extraction below.
+      - name: Validate version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._-]?[a-z]+[._-]?[0-9]+)?$ ]]; then
+            echo "::error::Invalid version '$VERSION' — expected MAJOR.MINOR.PATCH, optionally followed by a PEP 440 pre/post/dev suffix (e.g. rc1, -rc.1, .post1)." >&2
+            exit 1
+          fi
+
       - name: Extract Tag and Details
         id: release
         env:
