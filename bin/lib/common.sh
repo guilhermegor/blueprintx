@@ -78,6 +78,42 @@ prompt_sub() {
     printf "    ${PROMPT_SUB}└${NC} %s" "$1"
 }
 
+# BRAND COLOURS — logo/tagline accent (blueprintx#256)
+#
+# assets/logo.png is two-tone (teal BLUEPRINT + pink X), but the banner in
+# bin/blueprintx.sh painted the whole wordmark CYAN and the whole tagline
+# MAGENTA, losing the pink half of the identity. MAGENTA/CYAN are NOT reused
+# here: MAGENTA already means "debug/section" and CYAN "config" in
+# print_status, and reusing either would give it a second, unrelated meaning
+# (the same defect #253 was filed against). Measured from assets/logo.png:
+#   BLUEPRINT / "Blueprints." -> #4EB8C0 / #3BB2C3 -> xterm-256 73  (#5FAFAF)
+#   X / "Expansible."         -> #A63698 / #CC3DA2 -> xterm-256 169 (#D75FAF)
+#
+# 256-colour has no 4-bit equivalent, so a terminal that lacks it falls back
+# to the existing CYAN/MAGENTA, and NO_COLOR disables all three vars (incl.
+# BRAND_NC, so no bare reset escape leaks into redirected output). Scoped to
+# the brand tokens only — the rest of this file's palette stays unconditional;
+# making that repo-wide is a separate behaviour change (flagged in #256, not
+# done here).
+if [ -n "${NO_COLOR:-}" ]; then
+    BRAND_TEAL=''
+    BRAND_PINK=''
+    BRAND_NC=''
+elif command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null || echo 0)" -ge 256 ]; then
+    BRAND_TEAL='\033[38;5;73m'
+    BRAND_PINK='\033[38;5;169m'
+    BRAND_NC="$NC"
+else
+    # Read by bin/blueprintx.sh (a different file), which shellcheck cannot
+    # follow when it lints this file standalone.
+    # shellcheck disable=SC2034
+    BRAND_TEAL="$CYAN"
+    # shellcheck disable=SC2034
+    BRAND_PINK="$MAGENTA"
+    # shellcheck disable=SC2034
+    BRAND_NC="$NC"
+fi
+
 #
 # Usage:
 #   print_status <level> <message>

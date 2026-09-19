@@ -127,18 +127,28 @@ DICT_EXPECTED_ABSENT = {
         # generated project never installs. Remove this exclusion together with the cp line
         # the day pydantic lands as a dependency.
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        # ⚠️ NOT a clean exclusion — see the identical note under python_ddd_service.sh below.
+        "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
     },
     "python_ddd_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        # ⚠️ NOT a clean exclusion — a known gap, recorded honestly rather than hidden.
+        # check_migration_graph.py (#308) ships in python-common/bin/, copied wholesale, but
+        # its test has no cp line in any scaffold yet: bin/scaffold/*.sh was held by another
+        # open PR when this test landed. Wiring the cp line is a follow-up — see #308's PR body.
+        "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
     },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
     },
     "python_mvc_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
     },
     "python_mvc_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
     },
 }
 
