@@ -53,12 +53,6 @@ Migration order is always determined by `down_revision`, never by filename.
    Table object should be passed to the "copy_from" argument […]
    ```
 
-   Measured on alembic 1.19.1 / SQLAlchemy 2.0.52: the same migration applies cleanly
-   **online** and exits **255** offline, having written a `.sql` file holding only the
-   `alembic_version` table — 8 lines, no `ALTER`. 🔴 **A pipeline that redirects the
-   output and does not check the exit code keeps a truncated script that looks
-   finished.** Always check the status, never just the file.
-
    `copy_from` is an argument to `batch_alter_table()` in the migration itself, so it
    cannot be configured in `env.py`. Either pass a complete `Table` to it, or accept
    that this migration is online-only — and say which, in the migration's docstring.
@@ -87,19 +81,13 @@ Migration order is always determined by `down_revision`, never by filename.
 
 ## Reference: a read-modify-write race, guarded at the schema level
 
-`src/chassis/db_schema/CLAUDE.md`'s "Read-modify-write races" section works through a
-stock concurrency incident (a decrement racing another decrement) and its fix — pushing
-the decision into the `UPDATE`'s own `WHERE` clause. The migration half of that fix
-belongs here: add the invariant as a `CHECK` constraint so the database rejects what
-application code failed to prevent, instead of it landing as a value nobody questions —
+`src/model/CLAUDE.md`'s "Read-modify-write races" section works through a stock
+concurrency incident (a decrement racing another decrement) and its fix — pushing the
+decision into the `UPDATE`'s own `WHERE` clause. The migration half of that fix belongs
+here: add the invariant as a `CHECK` constraint so the database rejects what application
+code failed to prevent, instead of it landing as a value nobody questions —
 `op.create_check_constraint("ck_produto_estoque_non_negative", "produto", "estoque >= 0")`
 in `upgrade()`, `op.drop_constraint(...)` in `downgrade()`.
-
-## Schema search_path (PostgreSQL)
-
-`env.py` reads `DB_SCHEMA` (default `public`) and sets `search_path` on the
-connection. All migrations run inside that schema — qualify table names with
-the schema only when referencing a *different* schema.
 
 ## Workflow
 
@@ -108,7 +96,7 @@ the schema only when referencing a *different* schema.
 poe migrate_new "describe_the_change"
 
 # Apply all pending migrations
-bash bin/db_setup_schema.sh   # or: poe migrate_up
+poe migrate_up
 
 # Roll back one step
 poe migrate_down

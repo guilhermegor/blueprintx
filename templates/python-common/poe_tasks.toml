@@ -235,6 +235,45 @@ cmd = "bash bin/db.sh restore"
 help = "Restore the database from a backup (pg_restore)"
 
 
+# Alembic migration tasks (blueprintx#381) — online AND offline both get a task: online
+# (upgrade/downgrade) is what a developer runs locally and what a deploy runs; offline
+# (--sql) is what goes to a DBA when production access is restricted. `db_up` above already
+# calls `alembic upgrade head` as part of bringing the DB up; these give the individual
+# Alembic verbs their own entry in the command interface, which previously had none
+# (`poe_tasks.toml` mentioned Alembic only inside `db_up`'s help text). No-op (alembic errors
+# loudly) on a tier that ships no `alembic.ini` yet, same as `db_backup`/`db_restore` already
+# do for a non-postgresql backend.
+[tool.poe.tasks.migrate_new]
+cmd = "alembic revision --autogenerate -m $message"
+help = "Create a migration by diffing models against the DB (online — needs a live connection)"
+
+	[[tool.poe.tasks.migrate_new.args]]
+	name = "message"
+	positional = true
+	required = true
+	help = "short description, e.g. add_status_column_to_users"
+
+[tool.poe.tasks.migrate_up]
+cmd = "alembic upgrade head"
+help = "Apply every pending migration (online — needs a live DB connection)"
+
+[tool.poe.tasks.migrate_down]
+cmd = "alembic downgrade -1"
+help = "Roll back the most recent migration (online — needs a live DB connection)"
+
+[tool.poe.tasks.migrate_current]
+cmd = "alembic current"
+help = "Show the revision currently applied to the DB"
+
+[tool.poe.tasks.migrate_history]
+cmd = "alembic history --verbose"
+help = "Show full migration history"
+
+[tool.poe.tasks.migrate_sql]
+cmd = "alembic upgrade head --sql"
+help = "Generate the pending upgrade as offline SQL (no DB connection — for a DBA)"
+
+
 [tool.poe.tasks.run]
 cmd = "bash bin/run.sh"
 help = "Run the project entrypoint"
