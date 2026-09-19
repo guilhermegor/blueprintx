@@ -35,10 +35,14 @@ Three guards ship:
    function, leaves ``Base.metadata`` empty or partial at the moment it runs — and
    ``create_all`` then SUCCEEDS having created nothing (or only part) of the schema, with no
    exception raised.
-3. **Duplicate constraint ``name=`` across a class's own in-file MRO.** SQLAlchemy
-   concatenates ``__table_args__`` from every base class left to right; two constraints
-   sharing a name do not error, the rightmost silently overwrites the other, and the model
-   *looks* like it enforces both. Resolved only across bases defined in the SAME file — a
+3. **Duplicate constraint ``name=`` in the EFFECTIVE ``__table_args__``, and a
+   ``__table_args__`` shadowed by one.** ⚠️ Corrected 2026-09-18: SQLAlchemy does **not**
+   concatenate ``__table_args__`` across bases. It is an ordinary class attribute, so
+   attribute lookup takes the first declaration in the MRO and every later one is
+   discarded whole — mixins do not compose. This check therefore does two things: it
+   looks for duplicate ``name=`` values *within the one declaration that is live*, and it
+   reports a base whose ``__table_args__`` is shadowed, because those constraints are
+   silently absent from the table. Resolved only across bases defined in the SAME file — a
    mixin imported from elsewhere is out of scope for this pass (see the module's own
    ``_base_class_names``).
 
@@ -459,6 +463,26 @@ def _table_args_names(cls_node: ast.ClassDef) -> list[tuple[str, int]]:
 	return _constraint_names_in_expr(_table_args_value(cls_node))
 
 
+def _declares_table_args(cls_node: ast.ClassDef) -> bool:
+	"""Return whether this class assigns ``__table_args__`` at all.
+
+	Separate from :func:`_table_args_names` on purpose: a class declaring
+	``__table_args__ = (UniqueConstraint(...),)`` with no ``name=`` yields an empty name list,
+	which is NOT the same as declaring nothing — it still shadows every base's declaration.
+
+	Parameters
+	----------
+	cls_node : ast.ClassDef
+		The class to inspect.
+
+	Returns
+	-------
+	bool
+		True when the class body assigns ``__table_args__``.
+	"""
+	return _table_args_value(cls_node) is not None
+
+
 def _base_class_names(cls_node: ast.ClassDef) -> list[str]:
 	"""Return this class's base names that are simple identifiers (in-file resolvable).
 
@@ -477,13 +501,16 @@ def _base_class_names(cls_node: ast.ClassDef) -> list[str]:
 	return [cls_base.id for cls_base in cls_node.bases if isinstance(cls_base, ast.Name)]
 
 
-def _mro_table_args(
-	str_name: str,
-	dict_classes: dict[str, ast.ClassDef],
-	dict_own_names: dict[str, list[tuple[str, int]]],
-	set_visited: set[str],
-) -> list[tuple[str, int, str]]:
-	"""Collect ``(constraint_name, lineno, owner_class)`` across the in-file-resolvable MRO.
+def _linearised_bases(
+	str_name: str, dict_classes: dict[str, ast.ClassDef], set_visited: set[str]
+) -> list[str]:
+	"""Return ``str_name`` and its in-file ancestors, depth-first and left to right.
+
+	⚠️ This is not a full C3 linearisation, deliberately. This gate reads a single file with
+	``ast`` and cannot see a base defined elsewhere, so a real MRO is not computable here
+	anyway; depth-first left-to-right agrees with C3 for the single-base-plus-mixins shapes
+	SQLAlchemy models actually take, and disagreeing cases are unreachable without the
+	out-of-file bases this gate already skips.
 
 	Parameters
 	----------
@@ -491,23 +518,62 @@ def _mro_table_args(
 		The class to start from.
 	dict_classes : dict of str to ast.ClassDef
 		Every class defined in this file, by name.
-	dict_own_names : dict of str to list of (str, int)
-		Each class's OWN ``__table_args__`` constraint names (see :func:`_table_args_names`).
 	set_visited : set of str
 		Class names already walked, to guard against a base-name cycle.
 
 	Returns
 	-------
-	list of (str, int, str)
-		Every constraint name contributed by ``str_name`` and its resolvable ancestors.
+	list of str
+		Class names in attribute-lookup order, starting with ``str_name`` itself.
 	"""
 	if str_name in set_visited or str_name not in dict_classes:
 		return []
 	set_visited.add(str_name)
-	list_result = [(n, ln, str_name) for n, ln in dict_own_names.get(str_name, [])]
+	list_order = [str_name]
 	for str_base in _base_class_names(dict_classes[str_name]):
-		list_result += _mro_table_args(str_base, dict_classes, dict_own_names, set_visited)
-	return list_result
+		list_order += _linearised_bases(str_base, dict_classes, set_visited)
+	return list_order
+
+
+def _effective_table_args(
+	str_name: str,
+	dict_classes: dict[str, ast.ClassDef],
+	dict_own_names: dict[str, list[tuple[str, int]]],
+) -> tuple[list[tuple[str, int, str]], list[str]]:
+	"""Return the ONE ``__table_args__`` Python will actually use, plus the shadowed ones.
+
+	🔴 ``__table_args__`` is an ordinary class attribute: attribute lookup stops at the first
+	class in the MRO that defines it, and SQLAlchemy neither concatenates nor merges the
+	rest. Unioning every base's constraint names — which this function replaced — invented
+	collisions between a live declaration and a dead one, and renaming the dead one
+	"resolved" a finding by editing code that never runs.
+
+	Parameters
+	----------
+	str_name : str
+		The class to resolve.
+	dict_classes : dict of str to ast.ClassDef
+		Every class defined in this file, by name.
+	dict_own_names : dict of str to list of (str, int)
+		Each class's OWN ``__table_args__`` constraint names (see :func:`_table_args_names`).
+
+	Returns
+	-------
+	tuple
+		``(effective, shadowed)`` — ``effective`` is ``(constraint_name, lineno, owner)`` from
+		the first declaring class only; ``shadowed`` names the later declaring classes whose
+		``__table_args__`` is silently discarded at runtime.
+	"""
+	list_declarers = [
+		str_cls
+		for str_cls in _linearised_bases(str_name, dict_classes, set())
+		if _declares_table_args(dict_classes[str_cls])
+	]
+	if not list_declarers:
+		return [], []
+	str_owner = list_declarers[0]
+	list_effective = [(n, ln, str_owner) for n, ln in dict_own_names.get(str_owner, [])]
+	return list_effective, list_declarers[1:]
 
 
 def _duplicate_constraint_message(
@@ -542,11 +608,59 @@ def _duplicate_constraint_message(
 	"""
 	return (
 		f"{path_file}:{int_line}: constraint name '{str_name}' declared here on {str_class} "
-		f"duplicates the one on {str_other_class} (line {int_other_line}) — SQLAlchemy "
-		f"CONCATENATES __table_args__ across the MRO left-to-right, so a duplicate name is "
-		f"silently OVERWRITTEN, not merged; the model looks like it enforces both. Rename one "
-		f"of the two, or if deliberate: # {_ALLOW_MARKER} <reason>"
+		f"duplicates the one on {str_other_class} (line {int_other_line}), inside the SAME "
+		f"effective __table_args__ — both reach the table and one silently wins, so the "
+		f"model looks like it enforces both. Rename one of the two, or if deliberate: "
+		f"# {_ALLOW_MARKER} <reason>"
 	)
+
+
+def _shadowed_table_args_problems(
+	path_file: pathlib.Path,
+	str_name: str,
+	list_shadowed: list[str],
+	dict_classes: dict[str, ast.ClassDef],
+	list_lines: list[str],
+) -> list[str]:
+	"""Report each base whose ``__table_args__`` is discarded by attribute lookup.
+
+	This is the finding the old union-everything walk was groping at and getting backwards.
+	Two mixins each declaring ``__table_args__`` do not compose: the first in the MRO wins
+	and the rest vanish, silently, with every constraint they declared. That is a real
+	defect in the model — and it is invisible once the duplicate check stops unioning, so it
+	has to be reported in its own right rather than left out.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The module's path, for the message.
+	str_name : str
+		The class whose MRO was resolved.
+	list_shadowed : list of str
+		Declaring classes after the first, in lookup order.
+	dict_classes : dict of str to ast.ClassDef
+		Every class defined in this file, by name.
+	list_lines : list of str
+		The source, split into lines, for the escape-hatch check.
+
+	Returns
+	-------
+	list of str
+		One finding per shadowed declaration not covered by an escape hatch.
+	"""
+	list_problems = []
+	for str_shadowed in list_shadowed:
+		int_line = dict_classes[str_shadowed].lineno
+		if _line_allowed(list_lines, int_line):
+			continue
+		list_problems.append(
+			f"{path_file}:{int_line}: '{str_name}' inherits '__table_args__' from more than "
+			f"one base — '{str_shadowed}' declares one that Python's attribute lookup "
+			f"discards entirely. SQLAlchemy does not merge them; every constraint declared "
+			f"there is silently absent from the table. Combine them in one explicit "
+			f"'__table_args__' on the model, or if deliberate: # {_ALLOW_MARKER} <reason>"
+		)
+	return list_problems
 
 
 def _duplicate_constraint_name_problems(
@@ -573,10 +687,14 @@ def _duplicate_constraint_name_problems(
 
 	list_problems: list[str] = []
 	for str_name in dict_classes:
+		list_effective, list_shadowed = _effective_table_args(
+			str_name, dict_classes, dict_own_names
+		)
+		list_problems += _shadowed_table_args_problems(
+			path_file, str_name, list_shadowed, dict_classes, list_lines
+		)
 		dict_seen: dict[str, tuple[int, str]] = {}
-		for str_constraint, int_line, str_class in _mro_table_args(
-			str_name, dict_classes, dict_own_names, set()
-		):
+		for str_constraint, int_line, str_class in list_effective:
 			if str_constraint not in dict_seen:
 				dict_seen[str_constraint] = (int_line, str_class)
 				continue

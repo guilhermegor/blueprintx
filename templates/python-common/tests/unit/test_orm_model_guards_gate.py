@@ -114,7 +114,10 @@ def test_bitwise_operator_outside_where_filter_is_not_flagged(tmp_path: Path) ->
 
 def test_no_sqlalchemy_import_skips_the_bitwise_check(tmp_path: Path) -> None:
 	"""A file with no ``sqlalchemy`` import is out of scope (e.g. a pandas ``.filter()``)."""
-	path_file = _python_file(tmp_path, "df.filter(items=a & b)\n")
+	# Positional, not `items=`: `.where()`/`.filter()` take positional criteria, and the
+	# scanner only reads positional args -- with `items=` the fixture passed even with
+	# `_imports_sqlalchemy` deleted, so it proved nothing about the import gate.
+	path_file = _python_file(tmp_path, "df.filter(a & b)\n")
 
 	assert gate.check_python_file(path_file)[0] == []
 
@@ -190,8 +193,16 @@ def test_unrelated_create_all_method_is_not_flagged(tmp_path: Path) -> None:
 # --------------------------
 
 
-def test_duplicate_constraint_name_across_mixins_is_reported(tmp_path: Path) -> None:
-	"""Two mixins sharing a constraint ``name=`` silently overwrite one another in the MRO."""
+def test_two_mixins_declaring_table_args_report_the_shadowing(tmp_path: Path) -> None:
+	"""⚠️ Rewritten 2026-09-18 — the old premise was wrong and the old assertion encoded it.
+
+	This was ``test_duplicate_constraint_name_across_mixins_is_reported`` and asserted a
+	*duplicate* finding, on the belief that SQLAlchemy concatenates ``__table_args__``.
+	It does not: attribute lookup takes ``MixinA``'s and discards ``MixinB``'s whole
+	declaration. The shared ``uq_x`` name never collides at runtime because only one of
+	them exists. The real defect is that ``MixinB``'s constraints are silently gone, so
+	that is what the gate must say.
+	"""
 	path_file = _python_file(
 		tmp_path,
 		"from sqlalchemy import UniqueConstraint\n\n"
@@ -206,12 +217,18 @@ def test_duplicate_constraint_name_across_mixins_is_reported(tmp_path: Path) -> 
 	list_problems, _ = gate.check_python_file(path_file)
 
 	assert len(list_problems) == 1
-	assert "uq_x" in list_problems[0]
+	assert "MixinB" in list_problems[0]
+	assert "discards" in list_problems[0]
 	assert "orm-guard-ok:" in list_problems[0]
 
 
-def test_distinct_constraint_names_across_mixins_pass(tmp_path: Path) -> None:
-	"""Distinctly named constraints across mixins compose without collision."""
+def test_distinct_constraint_names_across_mixins_still_shadow(tmp_path: Path) -> None:
+	"""⚠️ Inverted 2026-09-18 — this used to assert PASS, and that was the bug.
+
+	Distinct names do not save the model: ``uq_y`` is not "composed" with ``uq_x``, it is
+	discarded along with the rest of ``MixinB.__table_args__``. The old test asserting a
+	clean pass here is precisely what let the false premise survive review.
+	"""
 	path_file = _python_file(
 		tmp_path,
 		"from sqlalchemy import UniqueConstraint\n\n"
@@ -223,7 +240,72 @@ def test_distinct_constraint_names_across_mixins_pass(tmp_path: Path) -> None:
 		"\tpass\n",
 	)
 
+	list_problems, _ = gate.check_python_file(path_file)
+
+	assert len(list_problems) == 1
+	assert "MixinB" in list_problems[0]
+
+
+def test_one_mixin_declaring_table_args_is_clean(tmp_path: Path) -> None:
+	"""Only one declaration in the MRO: nothing is shadowed, nothing to report."""
+	path_file = _python_file(
+		tmp_path,
+		"from sqlalchemy import UniqueConstraint\n\n"
+		"class MixinA:\n"
+		"\t__table_args__ = (UniqueConstraint('a', name='uq_x'),)\n\n"
+		"class MixinB:\n"
+		"\tpass\n\n"
+		"class Model(MixinA, MixinB):\n"
+		"\tpass\n",
+	)
+
 	assert gate.check_python_file(path_file)[0] == []
+
+
+def test_duplicate_name_inside_the_effective_declaration_is_reported(tmp_path: Path) -> None:
+	"""The duplicate check survives, narrowed to the one declaration that is live.
+
+	Two constraints sharing a ``name=`` inside a SINGLE ``__table_args__`` is a genuine
+	collision — both are real, both reach the table, and one loses.
+	"""
+	path_file = _python_file(
+		tmp_path,
+		"from sqlalchemy import UniqueConstraint\n\n"
+		"class Model:\n"
+		"\t__table_args__ = (\n"
+		"\t\tUniqueConstraint('a', name='uq_x'),\n"
+		"\t\tUniqueConstraint('b', name='uq_x'),\n"
+		"\t)\n",
+	)
+
+	list_problems, _ = gate.check_python_file(path_file)
+
+	assert len(list_problems) == 1
+	assert "uq_x" in list_problems[0]
+
+
+def test_an_empty_table_args_still_shadows_a_base_declaration(tmp_path: Path) -> None:
+	"""Declaring an empty tuple is a declaration: it shadows, and must be reported.
+
+	This is why declaration presence is tracked separately from the list of names — an
+	empty name list from ``_table_args_names`` is indistinguishable from "no
+	``__table_args__`` at all" unless something else asks the question.
+	"""
+	path_file = _python_file(
+		tmp_path,
+		"from sqlalchemy import UniqueConstraint\n\n"
+		"class MixinA:\n"
+		"\t__table_args__ = ()\n\n"
+		"class MixinB:\n"
+		"\t__table_args__ = (UniqueConstraint('b', name='uq_y'),)\n\n"
+		"class Model(MixinA, MixinB):\n"
+		"\tpass\n",
+	)
+
+	list_problems, _ = gate.check_python_file(path_file)
+
+	assert len(list_problems) == 1
+	assert "MixinB" in list_problems[0]
 
 
 def test_single_class_with_no_bases_never_flags_its_own_constraint(tmp_path: Path) -> None:
