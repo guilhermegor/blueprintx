@@ -392,3 +392,12 @@ the published site (`exclude_docs` in each skeleton's `mkdocs.yml`) but tracked 
 team-reviewable record of what was done and why. When complete, tick the last box and add a
 short "Completed — kept as a record" note instead of removing the file. (Lesson:
 persist-todo-in-docs-backlog.)
+
+## Prose language: en-US everywhere in this repo
+
+This repository's own prose — `CLAUDE.md`, `CONTRIBUTING.md`, `docs/`, `docs/backlog/`,
+commit messages, comments, PR descriptions — is en-US, no exceptions. This is scoped to
+**BlueprintX itself**. It does not extend to a project BlueprintX scaffolds, which may
+legitimately be bilingual — see `templates/python-common/CLAUDE.md`'s description of
+`bin/check_comment_language.py`, whose locale-agnostic design is a feature for a *generated*
+project, not a statement about this one (blueprintx#194).
