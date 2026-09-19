@@ -240,7 +240,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 			return df_report
 		try:
 			df_enriched = LabelEnricher(path_labels).enrich(df_report)
-		except Exception as exc:
+		except Exception as exc:  # noqa: BLE001 - modes 2-5 above, see the docstring
 			log_message(
 				self.logger,
 				f"Label enrichment degraded: LabelEnricher reading {path_labels.name} "
