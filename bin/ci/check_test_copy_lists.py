@@ -129,6 +129,8 @@ DICT_EXPECTED_ABSENT = {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         # ⚠️ NOT a clean exclusion — see the identical note under python_ddd_service.sh below.
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        # ⚠️ NOT a clean exclusion — see the identical note under python_ddd_service.sh below.
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_ddd_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
@@ -137,18 +139,26 @@ DICT_EXPECTED_ABSENT = {
         # its test has no cp line in any scaffold yet: bin/scaffold/*.sh was held by another
         # open PR when this test landed. Wiring the cp line is a follow-up — see #308's PR body.
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        # ⚠️ NOT a clean exclusion — identical shape: check_docs_gap.py (#340) ships in
+        # python-common/bin/, copied wholesale, but its test has no cp line in any scaffold
+        # yet, because bin/scaffold/*.sh was held by another open PR when this test landed.
+        # Wiring the cp line is a follow-up — see #340's PR body.
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_mvc_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_mvc_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
 }
 
@@ -191,7 +201,9 @@ _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
 # Its `for util in … ; do` header, searched INSIDE that body only — and rejected when
 # commented out, exactly like the explicit form above. Both patterns need the guard: adding
 # `(?!#)` to only one of them leaves the other able to satisfy the gate from a comment.
-_RE_UTILS_LOOP = re.compile(r"^[^\S\n]*(?!#)\S*\s*for\s+util\s+in\s+(.*?);\s*do", re.M | re.S)
+_RE_UTILS_LOOP = re.compile(
+    r"^[^\S\n]*(?!#)\S*\s*for\s+util\s+in\s+(.*?);\s*do", re.M | re.S
+)
 # The names may live in the loop header OR in a `local -a utils=( … )` array the loop iterates
 # — the scaffolds declare the array so the step can print a COUNT instead of an enumeration
 # that goes stale. Reading only the header would call every shared test undelivered the moment
@@ -316,7 +328,11 @@ def asset_problems(
     list of str
         One message per problem.
     """
-    str_exclusions = "DICT_EXPECTED_ABSENT" if str_kind == "test" else "DICT_WORKFLOWS_EXPECTED_ABSENT"
+    str_exclusions = (
+        "DICT_EXPECTED_ABSENT"
+        if str_kind == "test"
+        else "DICT_WORKFLOWS_EXPECTED_ABSENT"
+    )
 
     list_problems = []
     for str_asset in sorted(set_shared - set_reachable):
@@ -368,14 +384,18 @@ def scaffold_source_text(path_scaffold: pathlib.Path) -> str:
     """
     str_source = path_scaffold.read_text(encoding="utf-8")
     list_parts = [str_source]
-    for str_lib in re.findall(r'source\s+"\$SCRIPT_DIR/\.\./lib/([A-Za-z0-9_]+\.sh)"', str_source):
+    for str_lib in re.findall(
+        r'source\s+"\$SCRIPT_DIR/\.\./lib/([A-Za-z0-9_]+\.sh)"', str_source
+    ):
         path_lib = _ROOT / "bin/lib" / str_lib
         if path_lib.is_file():
             list_parts.append(path_lib.read_text(encoding="utf-8"))
     return "\n".join(list_parts)
 
 
-def scaffold_problems(path_scaffold: pathlib.Path, set_shared: set, set_workflows: set) -> list:
+def scaffold_problems(
+    path_scaffold: pathlib.Path, set_shared: set, set_workflows: set
+) -> list:
     """Return every copy-list problem for one scaffold, across both asset classes.
 
     Parameters
@@ -426,10 +446,14 @@ def main() -> int:
 
     # Scanning nothing yields no findings, which reads exactly like a clean pass.
     if not set_shared:
-        print(f"❌ no shared tests found under {_SHARED_TESTS} — this gate would pass vacuously")
+        print(
+            f"❌ no shared tests found under {_SHARED_TESTS} — this gate would pass vacuously"
+        )
         return 1
     if not set_workflows:
-        print(f"❌ no workflows found under {_SHARED_WORKFLOWS} — this gate would pass vacuously")
+        print(
+            f"❌ no workflows found under {_SHARED_WORKFLOWS} — this gate would pass vacuously"
+        )
         return 1
 
     list_scaffolds = sorted(_SCAFFOLD_DIR.glob("python_*.sh"))
@@ -439,7 +463,9 @@ def main() -> int:
 
     list_problems = []
     for path_scaffold in list_scaffolds:
-        list_problems.extend(scaffold_problems(path_scaffold, set_shared, set_workflows))
+        list_problems.extend(
+            scaffold_problems(path_scaffold, set_shared, set_workflows)
+        )
 
     for str_problem in list_problems:
         print(str_problem)
