@@ -195,6 +195,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_sql_guards_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_identifier_masking_gate.py" \
 		"$str_project_path/tests/unit/test_identifier_masking_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_orm_model_guards_gate.py" \
+		"$str_project_path/tests/unit/test_orm_model_guards_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
 		"$str_project_path/tests/unit/test_ruff_ret_rule.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
