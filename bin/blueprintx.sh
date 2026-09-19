@@ -91,14 +91,26 @@ done
 
 
 show_banner() {
+    # Column 72 is the exact BLUEPRINT/X glyph boundary on every one of the six
+    # rows below (blueprintx#256, verified against assets/logo.png): it always
+    # falls inside the T glyph or a blank inset column, and the X glyph never
+    # starts before column 73 — one split index works for every row, no
+    # per-row offset needed.
+    local -a rows=(
+        " ██████╗ ██╗     ██╗   ██╗███████╗██████╗ ██████╗ ██╗███╗   ██╗████████╗██╗  ██╗ "
+        " ██╔══██╗██║     ██║   ██║██╔════╝██╔══██╗██╔══██╗██║████╗  ██║╚══██╔══╝╚██╗██╔╝ "
+        " ██████╔╝██║     ██║   ██║█████╗  ██████╔╝██████╔╝██║██╔██╗ ██║   ██║    ╚███╔╝  "
+        " ██╔══██╗██║     ██║   ██║██╔══╝  ██╔═══╝ ██╔══██╗██║██║╚██╗██║   ██║    ██╔██╗  "
+        " ██████╔╝███████╗╚██████╔╝███████╗██║     ██║  ██║██║██║ ╚████║   ██║   ██╔╝ ██╗ "
+        " ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝ "
+    )
+    local row
     echo
-printf "${CYAN} ██████╗ ██╗     ██╗   ██╗███████╗██████╗ ██████╗ ██╗███╗   ██╗████████╗██╗  ██╗ ${NC}\n"
-printf "${CYAN} ██╔══██╗██║     ██║   ██║██╔════╝██╔══██╗██╔══██╗██║████╗  ██║╚══██╔══╝╚██╗██╔╝ ${NC}\n"
-printf "${CYAN} ██████╔╝██║     ██║   ██║█████╗  ██████╔╝██████╔╝██║██╔██╗ ██║   ██║    ╚███╔╝  ${NC}\n"
-printf "${CYAN} ██╔══██╗██║     ██║   ██║██╔══╝  ██╔═══╝ ██╔══██╗██║██║╚██╗██║   ██║    ██╔██╗  ${NC}\n"
-printf "${CYAN} ██████╔╝███████╗╚██████╔╝███████╗██║     ██║  ██║██║██║ ╚████║   ██║   ██╔╝ ██╗ ${NC}\n"
-printf "${CYAN} ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝ ${NC}\n"    echo
-    printf "${MAGENTA}  Blueprints. Expansible.${NC}\n"
+    for row in "${rows[@]}"; do
+        printf "${BRAND_TEAL}%s${BRAND_PINK}%s${BRAND_NC}\n" "${row:0:72}" "${row:72}"
+    done
+    echo
+    printf "  ${BRAND_TEAL}Blueprints.${BRAND_NC} ${BRAND_PINK}Expansible.${BRAND_NC}\n"
     echo
 }
 
