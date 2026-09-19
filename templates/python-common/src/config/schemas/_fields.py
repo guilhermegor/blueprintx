@@ -22,68 +22,68 @@ from utils.br_identifiers import is_valid_cnpj, is_valid_cpf
 # the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from collections.abc import Callable
-	from typing import TypeVar
+    from collections.abc import Callable
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 @type_checker
 def _validate_cnpj(str_value: str) -> str:
-	"""Raise when ``str_value`` is not a valid CNPJ; otherwise pass it through unchanged.
+    """Raise when ``str_value`` is not a valid CNPJ; otherwise pass it through unchanged.
 
-	Parameters
-	----------
-	str_value : str
-		Candidate CNPJ, already coerced to ``str`` by the field's base type.
+    Parameters
+    ----------
+    str_value : str
+            Candidate CNPJ, already coerced to ``str`` by the field's base type.
 
-	Returns
-	-------
-	str
-		``str_value``, once validated.
+    Returns
+    -------
+    str
+            ``str_value``, once validated.
 
-	Raises
-	------
-	ValueError
-		When ``utils.br_identifiers.is_valid_cnpj`` rejects ``str_value`` — Pydantic turns
-		this into a ``ValidationError`` naming the field.
-	"""
-	if not is_valid_cnpj(str_value):
-		raise ValueError(f"invalid CNPJ: {str_value!r}")
-	return str_value
+    Raises
+    ------
+    ValueError
+            When ``utils.br_identifiers.is_valid_cnpj`` rejects ``str_value`` — Pydantic turns
+            this into a ``ValidationError`` naming the field.
+    """
+    if not is_valid_cnpj(str_value):
+        raise ValueError(f"invalid CNPJ: {str_value!r}")
+    return str_value
 
 
 @type_checker
 def _validate_cpf(str_value: str) -> str:
-	"""Raise when ``str_value`` is not a valid CPF; otherwise pass it through unchanged.
+    """Raise when ``str_value`` is not a valid CPF; otherwise pass it through unchanged.
 
-	Parameters
-	----------
-	str_value : str
-		Candidate CPF, already coerced to ``str`` by the field's base type.
+    Parameters
+    ----------
+    str_value : str
+            Candidate CPF, already coerced to ``str`` by the field's base type.
 
-	Returns
-	-------
-	str
-		``str_value``, once validated.
+    Returns
+    -------
+    str
+            ``str_value``, once validated.
 
-	Raises
-	------
-	ValueError
-		When ``utils.br_identifiers.is_valid_cpf`` rejects ``str_value`` — Pydantic turns
-		this into a ``ValidationError`` naming the field.
-	"""
-	if not is_valid_cpf(str_value):
-		raise ValueError(f"invalid CPF: {str_value!r}")
-	return str_value
+    Raises
+    ------
+    ValueError
+            When ``utils.br_identifiers.is_valid_cpf`` rejects ``str_value`` — Pydantic turns
+            this into a ``ValidationError`` naming the field.
+    """
+    if not is_valid_cpf(str_value):
+        raise ValueError(f"invalid CPF: {str_value!r}")
+    return str_value
 
 
 CnpjStr = Annotated[str, AfterValidator(_validate_cnpj)]
