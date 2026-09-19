@@ -12,6 +12,7 @@ nav:
   - FAQ: faq.md
   - Contributing: contributing.md
   - Changelog: changelog.md
+  - Incidents: incidents.md
 
 theme:
   name: material
