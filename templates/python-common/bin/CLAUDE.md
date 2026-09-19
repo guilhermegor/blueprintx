@@ -61,6 +61,7 @@ source "$SCRIPT_DIR/lib/bootstrap.sh"
 |------|-----------|-----------|
 | `lib/ca_bundle.py` | `bootstrap.sh::build_union_ca_bundle` | `BX_CA_CORPORATE` + `BX_CA_OUT` in; certificate count out; non-zero when the union would NARROW the trust store |
 | `lib/pip_requirements.py` | `pip_fallback.sh::pip_fallback_emit_pip_requirements_from_pyproject` | `PROJECT_ROOT` + `BX_GROUPS` in; one pip requirement per line out |
+| `lib/wheelhouse_select.py` | `build_wheelhouse.sh` (`poe wheelhouse` / `poe wheelhouse_assemble`) | subcommands `select`/`pack`/`assemble` — see `docs/offline-wheelhouse.md` |
 
 Both were `"$PYTHON" - <<'PYEOF'` heredocs inside their shell functions — 151 and 66
 lines of Python that **no Python tool could see**: ruff never linted them, mypy never
