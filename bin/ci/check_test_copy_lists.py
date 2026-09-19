@@ -127,18 +127,27 @@ DICT_EXPECTED_ABSENT = {
         # generated project never installs. Remove this exclusion together with the cp line
         # the day pydantic lands as a dependency.
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        # The dead-code GATE itself (bin/check_dead_code.py) is not yet copied by any
+        # scaffold either — it needs vulture as a declared dependency first, priced
+        # separately as the blueprintx#332 follow-up. Remove both exclusions together with
+        # the two cp lines the day that dependency lands.
+        "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
     },
     "python_ddd_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
     },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
     },
     "python_mvc_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
     },
     "python_mvc_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
+        "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
     },
 }
 
