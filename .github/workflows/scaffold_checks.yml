@@ -377,7 +377,7 @@ jobs:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: pip-mkdocs-${{ hashFiles('pyproject.toml') }}
@@ -408,6 +408,7 @@ jobs:
           - mvc-service-orm-db
           - lib-minimal
           - react-spa-webpack
+          - bash-cli
     steps:
       - uses: actions/checkout@v4
         with:
@@ -445,7 +446,7 @@ jobs:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: pip-poetry-${{ hashFiles('templates/*/pyproject.toml') }}
@@ -490,7 +491,7 @@ jobs:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: pip-poetry-${{ hashFiles('templates/*/pyproject.toml') }}
