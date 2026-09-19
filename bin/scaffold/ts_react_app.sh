@@ -130,6 +130,14 @@ prompt_js_copy_delivery() {
 }
 
 prompt_otel() {
+    # `read` happily consumes piped stdin, so a non-interactive run whose input still holds
+    # a `y` line would silently turn OTEL on -- adding dependencies, env vars and a
+    # composition-root edit nobody asked for. An opt-in must never be answered by leftover
+    # input, so with no terminal the answer is the default, not whatever is on the pipe.
+    if [ ! -t 0 ]; then
+        INCLUDE_OTEL=false
+        return
+    fi
     echo ""
     read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
     case "$answer" in
@@ -342,6 +350,31 @@ copy_shared_ts_source() {
 # alongside the committed .env.example (copy_skeleton_files), so the OTel vars are appended to
 # BOTH rather than only printed. Lands in src/shared/utils/ — copy_shared_ts_source's existing
 # home for log-emitter.ts, which this file wraps (see its own module docstring).
+# Wires the OTLP wrapper into the generated composition root. Printing "now go edit
+# context.tsx yourself" left the enabled scaffold exporting NOTHING until a human changed
+# application code by hand -- dependencies installed, env vars set, module present, and no
+# logs leaving the browser. An opt-in that ships inert is worse than one that is absent,
+# because everything visible says it is on (blueprintx#504 review).
+wire_otel_composition_root() {
+    local project_path="$1"
+    local context_file="$project_path/src/capabilities/example/context.tsx"
+
+    if [[ ! -f "$context_file" ]]; then
+        print_status "warning" "OTEL: $context_file not found — composition root NOT wired"
+        return
+    fi
+    if ! grep -q 'new ConsoleNotifier(CONSOLE_EMITTER)' "$context_file"; then
+        print_status "warning" \
+            "OTEL: composition root does not match the expected shape — NOT wired. Wrap it by hand: withOtelLogExport(CONSOLE_EMITTER)"
+        return
+    fi
+    sed_inplace \
+        -e "s#^import { CONSOLE_EMITTER } from '@/shared/utils/log-emitter';#&\\nimport { withOtelLogExport } from '@/shared/utils/otel-log-emitter';#" \
+        -e 's#new ConsoleNotifier(CONSOLE_EMITTER)#new ConsoleNotifier(withOtelLogExport(CONSOLE_EMITTER))#' \
+        "$context_file"
+    print_status "success" "OTEL: composition root wired (withOtelLogExport(CONSOLE_EMITTER))"
+}
+
 conditional_copy_otel() {
     local project_path="$1"
     if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
@@ -364,8 +397,8 @@ conditional_copy_otel() {
     # to reach process.env.<KEY> in the bundle.
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
+    wire_otel_composition_root "$project_path"
     print_status "success" "OTLP log export (src/shared/utils/otel-log-emitter.ts) added"
-    print_status "info" "Wrap your composition root's emitter: withOtelLogExport(CONSOLE_EMITTER) from '@/shared/utils/otel-log-emitter'"
     print_status "info" "Set OTEL_EXPORTER_OTLP_ENDPOINT (and optionally OTEL_SERVICE_NAME) in .env to enable export — leave OTEL_EXPORTER_OTLP_HEADERS blank (see the fragment's warning)"
 }
 
