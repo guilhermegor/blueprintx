@@ -169,6 +169,7 @@ machine-decidable — it is a review question, so it stays prose reviewed by a h
 | Nesting-depth ceiling | ❌ none — `PLR1702` is preview-gated and preview is off (blueprintx#434); `C901` bounds nesting only as a side effect | ❌ none — no `max-depth` |
 | Coverage floor | ✅ `fail_under = 80` (`.coveragerc`) | ❌ no Jest `coverageThreshold` configured |
 | Casing convention (functions/variables/import aliases) — row re-measured 2026-09-13 | ✅ ruff `N`, minus `N802` in `tests/**` (blueprintx#422, closes #422) | ❌ none configured — `@typescript-eslint/naming-convention` exists but is unused. No like-for-like gap: a JS/TS test name is a **string literal** passed to `it()`/`describe()`, not a function identifier, so the one real N802 collision this issue measured (a test name using upper-case for semantic emphasis) has no TS equivalent to conflict with in the first place. TypeScript also has no analogue to the type-prefix convention that would otherwise fight a constant-casing rule — this repo's Python house convention is Python-only |
+| Broad-except / catch-safety | ✅ ruff `BLE` (blueprintx#440) on top of the already-selected `E722`/`S110` | ✅ `@typescript-eslint/use-unknown-in-catch-callback-variable` + `only-throw-error` (blueprintx#440/#443) — by construction, not transcription: JS has no typed catch clause to mirror `BLE`, so the TS side closes the one gap `strict: true`'s `useUnknownInCatchVariables` leaves open (`.catch(cb)` callbacks) instead |
 
 Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
 The heading date covers the table as a whole; a row re-measured later carries its own date in
@@ -286,6 +287,54 @@ for, not trusting the number it opened with).
 
 See the cross-language parity table above for the TypeScript side of this decision — no
 like-for-like gap, since a JS/TS test name is a string literal, not a function identifier.
+### `BLE` (flake8-blind-except) — blueprintx#440
+
+Closes the gap `E722` (bare `except:`, already selected via `E`) leaves open:
+`except Exception:` / `except BaseException:` names a type but says nothing —
+the same class of finding, one layer narrower.
+
+- Measured 2026-09-16 (ruff 0.11.13): `ruff check --select BLE --statistics
+  templates/` → 2 findings, both the SAME line in `_pipeline.py`
+  (mvc-service-native-db and mvc-service-orm-db ship byte-identical files) — a
+  documented five-mode degradation (`PipelineOrchestrator._enrich`) where
+  splitting the `except` by mode would re-create the original defect (one
+  clause remembered, the rest silently fall through). Fixed with `# noqa:
+  BLE001` pointing at the method's own docstring rather than duplicating the
+  five-mode rationale in a second place.
+- 9 other broad handlers in the tree already carried a `# noqa: BLE001`
+  comment that this rule was not yet selected to enforce — a suppression
+  naming a rule that never runs looks identical to one that does, from
+  either side. Selecting `BLE` is what makes those 9 pre-existing
+  suppressions real.
+- **`RUF` was measured in the same pass and NOT adopted.** `ruff check
+  --select RUF --statistics templates/` → 150 findings (138 `RUF100`
+  unused-noqa alone, mostly noqa comments anticipating rule families not yet
+  selected — e.g. `N-` ahead of blueprintx#486 — plus 5 `RUF022`, 4 `RUF046`,
+  3 unicode-ambiguity findings). Unlike `BLE`, this is real cost, not zero,
+  so it is a deliberate separate decision rather than bundled into this
+  issue: left for a follow-up issue to adopt (or narrow) on its own measured
+  merits.
+
+### TypeScript catch-safety — blueprintx#440 (already shipped, blueprintx#443)
+
+JavaScript has no typed catch clause — there is one `catch (err)` per `try`
+and no `catch (e: TypeError)` to require, so `BLE`'s rule cannot be
+transcribed; parity here is by **intent** ("never handle what you cannot
+identify, never swallow it"), not by construct. `templates/react-spa-webpack/
+eslint.config.js` and `templates/ts-lib/eslint.config.mjs` already carry the
+two type-aware rules that close the one gap plain `strict: true`
+(`useUnknownInCatchVariables`) leaves open — a promise `.catch(cb)`
+callback's parameter stays `any` even under strict mode:
+
+- `@typescript-eslint/use-unknown-in-catch-callback-variable` — forces the
+  same `unknown`-and-narrow discipline onto `.catch(cb)` callbacks.
+- `@typescript-eslint/only-throw-error` — only `Error` values may be thrown,
+  so a catch's `instanceof Error` narrowing can actually succeed.
+
+Measured 2026-09-16: 4 `catch (err)` sites across both tiers' `src/`
+(`react-spa-webpack`'s `use-cases.ts` + `use-cases.zustand.ts`, 2 each), no
+`.catch(cb)` callbacks and no non-`Error` `throw` — both rules cost zero
+findings today, same as the Python side.
 
 ## Best Practices
 
