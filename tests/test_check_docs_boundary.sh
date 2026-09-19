@@ -178,6 +178,53 @@ test_every_rejection_names_a_destination() {
     fi
 }
 
+test_directory_symlink_loop_does_not_re_enter_the_tree() {
+    # docs/a/b/loop -> docs. Pre-fix the walk re-entered through the longer path and
+    # reported "163 entries checked" on a 3-file tree, stopping only at the kernel's
+    # ELOOP limit; a denied file inside the loop would also be reported many times.
+    local str_root str_out int_checked
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/docs/a/b"
+    printf '# ok\n' > "$str_root/docs/index.md"
+    ln -s "$str_root/docs" "$str_root/docs/a/b/loop"
+
+    str_out="$(timeout 20 bash "$str_root/bin/ci/check_docs_boundary.sh" 2>&1)" || true
+    rm -rf "$str_root"
+
+    int_checked="$(printf '%s' "$str_out" | sed -n 's/.*(\([0-9]*\) entries checked).*/\1/p')"
+    if [ -z "$int_checked" ] || [ "$int_checked" -gt 10 ]; then
+        print_status "error" \
+            "symlink loop -> ${int_checked:-no} entries checked (a 3-file tree; >10 means it re-entered)"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
+test_unreadable_nested_directory_fails_not_passes() {
+    # docs/secret/ at mode 000, holding a REAL violation (docs/secret/backlog/). Pre-fix
+    # the glob yielded nothing, walk recorded no error, and the gate printed
+    # "boundary is clean" with rc=0 — success for having checked nothing.
+    local str_root str_got="pass" str_out
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/docs/secret/backlog"
+    printf '# ok\n' > "$str_root/docs/index.md"
+    printf 'x\n' > "$str_root/docs/secret/backlog/n.md"
+    chmod 000 "$str_root/docs/secret"
+
+    str_out="$(bash "$str_root/bin/ci/check_docs_boundary.sh" 2>&1)" || str_got="fail"
+    chmod 755 "$str_root/docs/secret" 2>/dev/null || true
+    rm -rf "$str_root"
+
+    if [ "$str_got" != "fail" ]; then
+        print_status "error" "unreadable nested dir -> passed (must fail: contents unchecked)"
+        int_failures=$((int_failures + 1))
+        return
+    fi
+    if ! printf '%s' "$str_out" | grep -qF "not readable/searchable"; then
+        print_status "error" "unreadable nested dir -> failed, but never said why"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 main() {
     test_no_docs_dir_is_a_skip
     test_clean_docs_passes
@@ -187,6 +234,8 @@ main() {
     test_design_md_fails
     test_nested_security_md_fails
     test_every_rejection_names_a_destination
+    test_directory_symlink_loop_does_not_re_enter_the_tree
+    test_unreadable_nested_directory_fails_not_passes
     test_plan_md_fails
     test_empty_docs_dir_fails
     test_unreadable_docs_dir_fails

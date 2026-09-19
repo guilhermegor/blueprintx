@@ -128,7 +128,29 @@ walk() {
             errors=$((errors + 1))
             continue # denied dir: already flagged as a whole, don't enumerate its contents
         fi
+        # A symlink is classified above like any other entry, then treated as a LEAF.
+        # Recursing into one lets a link that points at an ancestor re-enter the tree
+        # through a longer path: measured on a 3-file fixture with docs/a/b/loop -> docs,
+        # the walk reported "163 entries checked" and only stopped because the kernel
+        # hit its ELOOP limit. A denied file inside such a loop is also reported many
+        # times over. The published site is a file tree; nothing here needs to follow
+        # links to classify what lives under docs/.
+        if [ -L "$entry" ]; then
+            continue
+        fi
         if [ -d "$entry" ]; then
+            # 🔴 An unreadable/unsearchable directory must FAIL, never pass quietly.
+            # `"$dir"/*` yields nothing when the directory cannot be read, so walk would
+            # return having recorded no error: measured with docs/secret/ at mode 000
+            # holding docs/secret/backlog/, the gate printed "boundary is clean" and
+            # exited 0 while a real violation sat inside it. That is the one outcome this
+            # gate family forbids — reporting success for having checked nothing.
+            if [ ! -r "$entry" ] || [ ! -x "$entry" ]; then
+                echo "ERROR: docs/$rel — directory is not readable/searchable, so its" \
+                     "contents cannot be checked; this is a broken check, not a clean one" >&2
+                errors=$((errors + 1))
+                continue
+            fi
             walk "$entry"
         fi
     done
