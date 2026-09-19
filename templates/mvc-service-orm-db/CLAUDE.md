@@ -251,7 +251,7 @@ Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYM
 
 ## Tooling (copied from `templates/python-common/`)
 
-- **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings. Config: `ruff.toml`.
+- **Ruff**: linter + formatter. Line-length 99, 4-space indent, double quotes, NumPy docstrings. Config: `ruff.toml`.
 - **Pre-commit**: ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, tests, coverage badge.
 - **Tests**: `pytest` — `pytest tests/unit/`.
 - **Makefile**: `init`, `venv`, `update_venv`, `precommit`, testing, linting, `run`.
