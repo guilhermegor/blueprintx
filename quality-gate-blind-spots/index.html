@@ -1,0 +1,1646 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for BlueprintX scaffolds (Python and TypeScript)">
+      
+      
+      
+        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/quality-gate-blind-spots/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Quality gate blind spots — a measured audit - BlueprintX</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#quality-gate-blind-spots-a-measured-audit" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="BlueprintX" class="md-header__button md-logo" aria-label="BlueprintX" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            BlueprintX
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Quality gate blind spots — a measured audit
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m3.55 19.09 1.41 1.41 1.8-1.79-1.42-1.42M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6c0-3.32-2.69-6-6-6m8 7h3v-2h-3m-2.76 7.71 1.8 1.79 1.41-1.41-1.79-1.8M20.45 5l-1.41-1.4-1.8 1.79 1.42 1.42M13 1h-2v3h2M6.76 5.39 4.96 3.6 3.55 5l1.79 1.81zM1 13h3v-2H1m12 9h-2v3h2"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/guilhermegor/BlueprintX" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="BlueprintX" class="md-nav__button md-logo" aria-label="BlueprintX" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    BlueprintX
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/guilhermegor/BlueprintX" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../secret-scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Versioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage-floor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Floor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_12_1" id="__nav_12_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DDD Service (Native DB)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_12_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DDD Service (Native DB)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-ddd-service-native-db/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples/ddd-external-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - External API Calls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples/ddd-usage-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - Wiring with FastAPI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples/ddd-bank-balance-alert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - Bank Balance Alert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_12_2" id="__nav_12_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DDD Service (ORM DB)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_12_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DDD Service (ORM DB)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-ddd-service-orm-db/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples-orm/ddd-orm-usage-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - Usage with SQLAlchemy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples-orm/ddd-orm-external-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - External API Calls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples-orm/ddd-orm-bank-balance-alert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - Bank Balance Alert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_12_3" id="__nav_12_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MVC Service (Native DB)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_12_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MVC Service (Native DB)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-mvc-service-native-db/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_12_4" id="__nav_12_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MVC Service (ORM DB)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_12_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MVC Service (ORM DB)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-mvc-service-orm-db/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-lib-minimal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lib Minimal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ts-react-spa-webpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    React SPA (Webpack)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ts-lib/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Library (TS, npm-ready)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-1-the-issues-own-ruff-family-audit-re-measured" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 1 — the issue's own ruff-family audit, re-measured
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="quality-gate-blind-spots-a-measured-audit">Quality gate blind spots — a measured audit<a class="headerlink" href="#quality-gate-blind-spots-a-measured-audit" title="Permanent link">&para;</a></h1>
+<p>Resolves #169. <strong>This is an audit only — no gate, config, or template file in this repo is
+changed by this PR.</strong> Every claim below is backed by a command that was actually run in a
+throwaway scratch tree (never committed) and its real output, so this document does not claim
+coverage it did not measure — that is the exact failure #169 exists to catch in the gates
+themselves, and it would be self-defeating to reproduce it here.</p>
+<p>Scratch tree: <code>/tmp/.../scratchpad/gate-audit/</code> (session-local, discarded — not part of this
+repo). Ruff version used: <code>0.11.13</code>, matching the pin in <code>templates/python-common/ruff.toml</code>.</p>
+<h2 id="method">Method<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
+<p>For each gate, a deliberately-bad fixture was written that the gate <em>should</em> catch, the gate
+was run against it, and the result recorded as <strong>CAUGHT</strong> or <strong>MISSED</strong>. Where a fixture needed
+a full tier layout (<code>.layer-policy.yaml</code>, <code>src/capabilities/.../domain/</code>), a minimal scratch
+copy of that layout was built rather than a full <code>make dev</code> scaffold — sufficient because these
+gates read only the files/policy they're pointed at, not the rest of the tree. Two of the runs
+below (<code>check_function_length.py</code>, <code>check_docstrings.py</code>) hit gate-specific CLI quirks worth
+recording alongside the finding: <code>check_function_length.py --root</code> is required or it silently
+scans the <em>script's own</em> tree instead of the target (see its row); <code>check_docstrings.py</code> treats
+parameter/<code>Raises</code> drift as a non-blocking warning by explicit design (its own docstring says
+so), so "CAUGHT" there means "detected and printed," not "exit 1."</p>
+<h2 id="part-1-the-issues-own-ruff-family-audit-re-measured">Part 1 — the issue's own ruff-family audit, re-measured<a class="headerlink" href="#part-1-the-issues-own-ruff-family-audit-re-measured" title="Permanent link">&para;</a></h2>
+<h1 id="169-was-filed-2026-08-16-with-a-table-of-ruff-rule-families-the-lint-select-list-in">169 was filed 2026-08-16 with a table of ruff rule families the <code>[lint] select</code> list in<a class="headerlink" href="#169-was-filed-2026-08-16-with-a-table-of-ruff-rule-families-the-lint-select-list-in" title="Permanent link">&para;</a></h1>
+<p><code>ruff.toml</code> didn't yet cover. A month of work landed in between (ruff select grew from
+<code>UP E F ANN B SIM I AIR ERA S PD D</code> to <code>UP E F ANN B SIM I AIR ERA S PD D TID W PL PT RET A N</code>
+— <code>PL</code>, <code>RET</code>, <code>A</code>, <code>N</code> were adopted since). Re-running the issue's own method against the
+<em>current</em> config, using one fixture covering all eight families at once
+(<code>src/bad_families.py</code>, reproduced below in relevant part):</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">read_flag</span><span class="p">(</span><span class="n">flag</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>        <span class="c1"># FBT — boolean trap</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"on"</span> <span class="k">if</span> <span class="n">flag</span> <span class="k">else</span> <span class="s2">"off"</span><span class="p">)</span>        <span class="c1"># T20 — print as log</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">check_status</span><span class="p">(</span><span class="n">code</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="k">return</span> <span class="n">code</span> <span class="o">==</span> <span class="mi">42</span>                     <span class="c1"># PLR2004 — magic value</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_path</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>             <span class="c1"># PTH118 — os.path instead of pathlib</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">stamp</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">:</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>        <span class="c1"># DTZ005 — naive now()</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">unused_arg_fn</span><span class="p">(</span><span class="n">used</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">unused</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>  <span class="c1"># ARG001 — unused arg</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="k">return</span> <span class="n">used</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">wide_signature</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>  <span class="c1"># PLR0913 — 9 args &gt; max-args=8</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="o">...</span>
+</span></code></pre></div>
+<p><strong>Command 1 — current adopted config:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ruff check --config templates/python-common/ruff.toml --no-cache src/bad_families.py
+</span></code></pre></div>
+<strong>Output:</strong> <code>10 issues</code> — <code>D103 (7x)</code>, <code>PLR2004 (1x)</code>, <code>B904 (1x)</code>, <code>PLR0913 (1x)</code>.</p>
+<p><strong>Command 2 — the families the issue listed as ungated, selected explicitly:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ruff check --isolated --select FBT,PTH,T20,TRY,DTZ,ARG --no-cache src/bad_families.py
+</span></code></pre></div>
+<strong>Output:</strong> <code>7 issues</code> — <code>T201 (2x)</code>, <code>DTZ005</code>, <code>TRY003</code>, <code>ARG001</code>, <code>FBT001</code>, <code>PTH118</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>Issue's 2026-08-16 verdict</th>
+<th>Re-measured 2026-09-17</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PLR2004</code> (magic value)</td>
+<td>real, ungated</td>
+<td><strong>CAUGHT</strong> — <code>PL</code> is now selected</td>
+<td>✅ resolved since filing</td>
+</tr>
+<tr>
+<td><code>PLR0913</code> (too many args)</td>
+<td>real, ungated</td>
+<td><strong>CAUGHT</strong> — <code>PL</code> is now selected, <code>max-args=8</code></td>
+<td>✅ resolved since filing</td>
+</tr>
+<tr>
+<td><code>FBT</code> (boolean trap)</td>
+<td>real, high value</td>
+<td><strong>MISSED</strong> — not in <code>select</code></td>
+<td>still open</td>
+</tr>
+<tr>
+<td><code>T20</code>/<code>T201</code> (print as log)</td>
+<td>real</td>
+<td><strong>MISSED</strong> — not in <code>select</code></td>
+<td>still open</td>
+</tr>
+<tr>
+<td><code>PTH</code> (pathlib)</td>
+<td>real</td>
+<td><strong>MISSED</strong> — not in <code>select</code></td>
+<td>still open</td>
+</tr>
+<tr>
+<td><code>DTZ</code> (naive datetime)</td>
+<td>real, contradicts provenance doctrine</td>
+<td><strong>MISSED</strong> — not in <code>select</code></td>
+<td>still open</td>
+</tr>
+<tr>
+<td><code>ARG</code> (unused arg)</td>
+<td>real</td>
+<td><strong>MISSED</strong> — not in <code>select</code></td>
+<td>still open</td>
+</tr>
+<tr>
+<td><code>TRY004</code>/<code>TRY003</code></td>
+<td>TRY004 real; TRY003 explicitly rejected as noise</td>
+<td><code>TRY003</code> still fires when selected (confirms the issue's own rejection reasoning was correct — it <em>would</em> be noisy)</td>
+<td>no change recommended</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Finding:</strong> the issue's central "what does the gate not catch" claim from 2026-08-16 is
+<strong>half stale</strong>. <code>PLR0913</code>/<code>PLR2004</code> were fixed by unrelated work in the interim (<code>PL</code> family
+adoption). <code>FBT</code>, <code>T20</code>, <code>PTH</code>, <code>DTZ</code>, <code>ARG</code> remain genuinely ungated today, confirmed by direct
+measurement rather than re-assumed from the old table.</p>
+<h2 id="part-2-the-issues-no-linter-rule-at-all-list-re-measured">Part 2 — the issue's "no linter rule at all" list, re-measured<a class="headerlink" href="#part-2-the-issues-no-linter-rule-at-all-list-re-measured" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Claimed gap (issue body)</th>
+<th>Re-measured</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cyclomatic complexity (#167)</td>
+<td><strong>RESOLVED since filing.</strong> <code>templates/python-common/bin/check_complexity.sh</code> now exists (landed via #224).</td>
+<td>See gate test below — CAUGHT.</td>
+</tr>
+<tr>
+<td>Import boundaries (#138/#139)</td>
+<td><strong>RESOLVED since filing.</strong> <code>templates/python-common/bin/check_layer_imports.py</code> now exists with <code>.layer-policy.yaml</code>.</td>
+<td>See gate test below — CAUGHT.</td>
+</tr>
+<tr>
+<td>Dead code (unreferenced function)</td>
+<td><strong>Still a real gap</strong>, confirmed live.</td>
+<td><code>ruff check --isolated --select F</code> on a fixture with an unused, unexported top-level function → <code>All checks passed!</code>. Pyflakes' <code>F401</code>/<code>F841</code> cover unused imports/locals, never an unreferenced top-level def. Already tracked: <strong>#332</strong> "dead-code detection — measured, and the scaffold inverts where it pays off" (open).</td>
+</tr>
+<tr>
+<td>Duplication / copy-paste</td>
+<td><strong>Still a real gap.</strong> No <code>jscpd</code>/<code>pylint</code>-duplicate-code in any tier's dev deps (checked <code>pyproject.toml</code> <code>[tool.poetry.group.dev.dependencies]</code>). Already tracked: <strong>#305</strong> "adopt gitleaks, osv-scanner, jscpd, semgrep" (open, jscpd is the duplication detector).</td>
+<td>dependency audit</td>
+</tr>
+<tr>
+<td>Branch coverage (line-only floor)</td>
+<td><strong>Still a real gap as of this writing, but already being fixed.</strong> <code>.coveragerc</code> <code>[run]</code> has no <code>branch = True</code>. <strong>Open PR</strong> "feat(python-common): branch coverage, floor measured then set" (closes #427) already measures the per-tier delta and lands the fix.</td>
+<td><code>.coveragerc</code> read + open-PR check</td>
+</tr>
+<tr>
+<td>Mutation testing</td>
+<td><strong>Still a real gap, untracked.</strong> No <code>mutmut</code>/<code>cosmic-ray</code> in any tier's dev deps.</td>
+<td>dependency audit</td>
+</tr>
+<tr>
+<td>The "convention has no executor" mechanism (issue's Scope item 4)</td>
+<td><strong>In flight, narrower than the issue asks.</strong> Open PR "feat(quality): machine-readable quality-rule registry + validation gate" (closes #432) adds <code>quality-rules.yaml</code> + <code>check_quality_rules.py</code> — exactly the shape the issue describes (a registry cross-checked against real config). Registered rules today: <code>complexity</code>, <code>function-length</code>, <code>magic-numbers</code>, <code>one-assert-per-test</code> (<code>not-implemented</code>), <code>default-arg-spacing</code>. <strong>None of the 5 ungated ruff families from Part 1, dead code, duplication, or mutation testing are registered in it yet</strong>, and the mechanism is not on <code>main</code> at all — it lands with #432's own open PR, and landing it will not by itself point the registry at this audit's findings.</td>
+<td>PR body read via <code>gh pr list --search</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="part-3-gates-actually-run-against-a-deliberately-bad-fixture">Part 3 — gates actually run against a deliberately-bad fixture<a class="headerlink" href="#part-3-gates-actually-run-against-a-deliberately-bad-fixture" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Gate</th>
+<th>Fixture</th>
+<th>Command</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>check_complexity.sh</code></td>
+<td>3-level nested <code>if</code> (cyclomatic 7) in a scratch <code>src/</code></td>
+<td><code>bash check_complexity.sh --root &lt;scratch&gt;</code></td>
+<td><strong>CAUGHT</strong> — <code>C901 'classify' is too complex (7 &gt; 2)</code>, exit 1</td>
+</tr>
+<tr>
+<td><code>check_layer_imports.py</code></td>
+<td><code>src/capabilities/foo/domain/entities.py</code> importing <code>requests</code> directly, against a copy of <code>ddd-service-native-db/.layer-policy.yaml</code></td>
+<td><code>python3 check_layer_imports.py</code> (cwd = scratch root)</td>
+<td><strong>CAUGHT</strong> — <code>'requests' is not allowed in layer 'capabilities/*/domain'</code>, exit 1</td>
+</tr>
+<tr>
+<td><code>check_function_length.py</code></td>
+<td>72-line function body</td>
+<td><code>python3 check_function_length.py --root &lt;scratch&gt;</code></td>
+<td><strong>CAUGHT</strong> — <code>long_function() is 72 lines (max 60)</code>, exit 1. ⚠️ Run <em>without</em> <code>--root</code> first, by mistake — it silently scanned the real <code>templates/python-common</code> tree (205 files, exit 0) instead of erroring. <code>PATH_ROOT</code> defaults to a path relative to the script's own location (<code>bin/</code>), not to cwd, so a caller that forgets <code>--root</code> gets a false "clean" on a tree it never intended to check. Not a defect in this PR's scope to fix, but worth a one-line note in the script's own <code>--root</code> help text.</td>
+</tr>
+<tr>
+<td><code>check_docstrings.py</code></td>
+<td>function missing the <code>b</code> parameter in its NumPy docstring</td>
+<td><code>python3 check_docstrings.py</code> (cwd = scratch, <code>src/</code> present)</td>
+<td><strong>CAUGHT, non-blocking by design</strong> — printed <code>Missing docstring for parameter b</code>, but exits 0 ("params and raises drift are soft warnings" per the file's own module docstring; only return-type mismatches are hard errors). Confirmed working as documented, not a gap.</td>
+</tr>
+<tr>
+<td><code>check_comment_language.py</code></td>
+<td>a <code>#</code> comment and a one-line PT docstring, both Portuguese</td>
+<td><code>python3 check_comment_language.py &lt;file&gt;</code></td>
+<td><strong>PARTIALLY CAUGHT</strong> — flagged the <code>#</code> comment (<code>reads as Portuguese [esta]</code>) but not the docstring <code>"""Soma dois numeros."""</code> (no accents, no recognized PT function word in that short a string — consistent with the gate's documented function-word heuristic, not re-verified further here). Noted, not filed — would need reading <code>SET_PT_WORDS</code> to confirm whether this is a real gap or working as calibrated.</td>
+</tr>
+<tr>
+<td><code>.pre-commit</code>/<code>bin/ci/check_shell.sh</code>'s shellcheck invocation</td>
+<td><code>local result=$(echo hi)</code> (SC2155) + <code>echo $result</code> (SC2086, unquoted)</td>
+<td><code>shellcheck -x --severity=warning &lt;file&gt;</code> (the exact invocation <code>check_shell.sh</code> uses)</td>
+<td><strong>PARTIALLY CAUGHT</strong> — SC2155 caught (<code>warning</code> severity). SC2086 (unquoted variable expansion — a common real bug class) is <code>info</code> severity, below the <code>--severity=warning</code> floor, and is not one of the two codes (<code>SC2030</code>,<code>SC2031</code>) the script's second targeted pass adds. Confirmed at <code>--severity=info</code> that shellcheck itself reports SC2086 — it is filtered out by the gate's own severity floor, not absent from shellcheck's ruleset.</td>
+</tr>
+<tr>
+<td><code>eslint</code> <code>no-magic-numbers</code> (TS parity check, not a Python gate)</td>
+<td>n/a — config read, not run</td>
+<td><code>grep no-magic-numbers templates/{react-spa-webpack,ts-lib}/eslint.config.*</code></td>
+<td><strong>CAUGHT (already wired)</strong> — landed via PR #456, both TS skeletons. Cited only to confirm the cross-language parity item from #425/#169 is not itself stale.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="gates-not-tested-and-why">Gates NOT tested, and why<a class="headerlink" href="#gates-not-tested-and-why" title="Permanent link">&para;</a></h2>
+<p>Time-boxed to the gates most load-bearing for #169's own claims (ruff select, complexity,
+layer imports — the issue's named examples) plus a representative sample from each remaining
+family (<code>bin/check_*.py</code>, <code>bin/ci/*.sh</code>). Not tested, with reason:</p>
+<ul>
+<li><strong><code>check_all_exports.py</code>, <code>check_assertion_weakening.py</code>, <code>check_backlog_ledger.py</code>,
+  <code>check_comment_budget.py</code>, <code>check_contract_drift.py</code>, <code>check_coverage_floor.py</code>,
+  <code>check_dtypes.py</code>, <code>check_fixture_scope.py</code>, <code>check_migration_slugs.py</code>,
+  <code>check_provenance.py</code>, <code>check_rmw_race.py</code>, <code>check_sql_guards.py</code>, <code>check_typing.py</code>,
+  <code>check_gate_integrity.py</code></strong> — each has its own should-fail negative-control test already
+  living in <code>tests/unit/</code>/<code>tests/integration/</code> per this repo's own "should-fail witness"
+  convention (documented per-gate in <code>templates/python-common/CLAUDE.md</code>); re-deriving a
+  fixture for each here would duplicate coverage that already exists and is CI-enforced,
+  rather than surface a new blind spot. Reading <code>.coveragerc</code> and the dev-dependency list
+  (Part 2) covered the two gaps in this group that mattered for #169 (coverage floor shape,
+  mutation testing absence) without re-running each script.</li>
+<li><strong><code>check_docs_code_refs.py</code>, <code>check_docs_sections.py</code></strong> — documentation-structure gates, out
+  of scope for a <em>code</em>-quality-gate audit; #169's own body is scoped to code conventions.</li>
+<li><strong><code>check_clean_index.sh</code>, <code>check_unix_filenames.sh</code></strong> — simple, single-purpose gates (empty
+  index at push time; filename character set) with low ambiguity about what they catch; skipped
+  for time.</li>
+<li><strong><code>bin/ci/check_actions.sh</code>, <code>check_codespell_sync.sh</code>, <code>check_docs_build.sh</code>,
+  <code>check_gate_staleness.sh</code>, <code>check_git_remote_guard.sh</code>, <code>check_markdown.sh</code>,
+  <code>check_project_name_identities.sh</code>, <code>check_review_bot_roster_optout.sh</code>,
+  <code>check_sed_portability.sh</code>, <code>check_spelling.sh</code>, <code>check_version_sync.sh</code>,
+  <code>validate_meta.sh</code></strong> — these are root-repo-only gates (BlueprintX's own tree, not the
+  scaffolded templates), and #169 is scoped to the <em>scaffolded project's</em> quality gate
+  (<code>ruff.toml</code>'s <code>select</code>, the <code>bin/check_*.py</code> family it ships). Auditing BlueprintX's own
+  CI hygiene is a different, legitimate audit but not this one.</li>
+<li><strong><code>eslint.config.{js,mjs}</code> full rule audit</strong> — the issue is explicitly about the ruff
+  <code>select</code> list; a full ESLint-vs-ruff parity re-measurement is <code>CONTRIBUTING.md</code>'s own
+  documented, dated table (see "Cross-Language Quality Parity") and re-measuring the whole
+  table is a separate task from this one gate.</li>
+<li><strong>A full <code>make dev</code>/<code>scaffold_lint_test.sh</code> scaffold</strong> was not run. Every gate tested above
+  reads only its own target path/policy file, not the rest of a generated project, so a minimal
+  scratch layout was sufficient and faster; nothing here depended on a real Poetry venv or the
+  full pre-commit chain.</li>
+</ul>
+<h2 id="proposed-follow-ups">Proposed follow-ups<a class="headerlink" href="#proposed-follow-ups" title="Permanent link">&para;</a></h2>
+<p>For the owner to file, not filed by this PR:</p>
+<ol>
+<li><strong>Adopt <code>FBT</code>, <code>T20</code>, <code>PTH</code>, <code>DTZ</code>, <code>ARG</code> in <code>ruff.toml</code>'s <code>[lint] select</code></strong>, following the
+   measure-then-adopt pattern the file's own comments already use for <code>RET</code>/<code>A</code>/<code>N</code> (per-family
+   real-finding count across <code>src/</code>+<code>bin/</code>+<code>tests/</code>, per-file-ignores for legitimate exceptions
+   like <code>T20</code> in <code>bin/</code>). <code>DTZ</code> needs its own resolution first — the issue's contradiction with
+   the provenance doctrine's tz-aware <code>updated_at</code> (is a run timestamp deliberately naive, or a
+   bug?) has to be decided before the rule can be turned on without immediately failing.</li>
+<li><strong>Register the five families above (once adopted), dead code (#332), duplication (#305), and
+   mutation testing in <code>quality-rules.yaml</code></strong> (#432's registry) once each lands — that registry is
+   itself still in flight on #432's open PR, so it has to land before anything can be
+   registered in it, and landing it does not by itself cover the gaps this audit measured.</li>
+<li><strong>Add mutation testing</strong> (<code>mutmut</code> is the natural fit — pure Python, no service dependency)
+   to at least one tier as a measured pilot, mirroring how branch coverage was piloted before
+   the floor was set (the open branch-coverage PR closing #427 is the template to follow).</li>
+<li><strong>Widen <code>bin/ci/check_shell.sh</code>'s shellcheck severity, or explicitly allowlist <code>SC2086</code></strong>,
+   with the reasoning written down either way — right now the gap is silent (nothing states
+   that <code>--severity=warning</code> plus a two-code targeted pass deliberately excludes SC2086).</li>
+<li><strong>A one-line note in <code>check_function_length.py</code>'s <code>--root</code> handling</strong> (or its <code>--help</code>
+   text) that omitting <code>--root</code> defaults to the script's <em>own</em> directory, not cwd — the
+   silent-wrong-target trap measured in Part 3.</li>
+<li><strong>Link this document from <code>mkdocs.yml</code> nav</strong> — not done in this PR. Two open PRs already
+   touch <code>mkdocs.yml</code> (<code>quality-rules.yaml</code>'s registry PR, and the complexity-ceiling docs PR);
+   adding a third concurrent edit to that file risks an avoidable merge conflict. File as a
+   trivial follow-up once those land.</li>
+</ol>
+<h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
+<p>This file is the documentation deliverable for #169. <code>mkdocs.yml</code> nav registration is listed
+above as a proposed follow-up (see rationale), not done here.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
