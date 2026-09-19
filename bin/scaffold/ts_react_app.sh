@@ -129,6 +129,23 @@ prompt_js_copy_delivery() {
     esac
 }
 
+prompt_otel() {
+    # `read` happily consumes piped stdin, so a non-interactive run whose input still holds
+    # a `y` line would silently turn OTEL on -- adding dependencies, env vars and a
+    # composition-root edit nobody asked for. An opt-in must never be answered by leftover
+    # input, so with no terminal the answer is the default, not whatever is on the pipe.
+    if [ ! -t 0 ]; then
+        INCLUDE_OTEL=false
+        return
+    fi
+    echo ""
+    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    case "$answer" in
+        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
+        *) INCLUDE_OTEL=false ;;
+    esac
+}
+
 create_directory_structure() {
     local project_path="$1"
 
@@ -323,6 +340,66 @@ copy_shared_ts_source() {
     local project_path="$1"
     mkdir -p "$project_path/src/shared/utils"
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src/shared"
+}
+
+# OTLP log export (opt-in, blueprintx#504 — react-spa-webpack side of blueprintx#438, ts-lib
+# wired by PR #505): the emitter (imports @opentelemetry/* — the ONLY place it is imported),
+# its unit test, the pinned package.json dependencies (declared only here, so an opt-out never
+# installs them), and a local-dev collector compose fragment — one function, mirroring
+# ts_lib.sh's conditional_copy_otel. Unlike ts-lib, this skeleton ships a real .env (git-ignored)
+# alongside the committed .env.example (copy_skeleton_files), so the OTel vars are appended to
+# BOTH rather than only printed. Lands in src/shared/utils/ — copy_shared_ts_source's existing
+# home for log-emitter.ts, which this file wraps (see its own module docstring).
+# Wires the OTLP wrapper into the generated composition root. Printing "now go edit
+# context.tsx yourself" left the enabled scaffold exporting NOTHING until a human changed
+# application code by hand -- dependencies installed, env vars set, module present, and no
+# logs leaving the browser. An opt-in that ships inert is worse than one that is absent,
+# because everything visible says it is on (blueprintx#504 review).
+wire_otel_composition_root() {
+    local project_path="$1"
+    local context_file="$project_path/src/capabilities/example/context.tsx"
+
+    if [[ ! -f "$context_file" ]]; then
+        print_status "warning" "OTEL: $context_file not found — composition root NOT wired"
+        return
+    fi
+    if ! grep -q 'new ConsoleNotifier(CONSOLE_EMITTER)' "$context_file"; then
+        print_status "warning" \
+            "OTEL: composition root does not match the expected shape — NOT wired. Wrap it by hand: withOtelLogExport(CONSOLE_EMITTER)"
+        return
+    fi
+    sed_inplace \
+        -e "s#^import { CONSOLE_EMITTER } from '@/shared/utils/log-emitter';#&\\nimport { withOtelLogExport } from '@/shared/utils/otel-log-emitter';#" \
+        -e 's#new ConsoleNotifier(CONSOLE_EMITTER)#new ConsoleNotifier(withOtelLogExport(CONSOLE_EMITTER))#' \
+        "$context_file"
+    print_status "success" "OTEL: composition root wired (withOtelLogExport(CONSOLE_EMITTER))"
+}
+
+conditional_copy_otel() {
+    local project_path="$1"
+    if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
+    mkdir -p "$project_path/src/shared/utils"
+    cp "$COMMON_TEMPLATE_ROOT/optional/otel-log-emitter.ts" "$project_path/src/shared/utils/otel-log-emitter.ts"
+    cp "$COMMON_TEMPLATE_ROOT/optional/otel-log-emitter.test.ts" "$project_path/src/shared/utils/otel-log-emitter.test.ts"
+    cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
+    cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
+    # EXACT pins, deliberately against this repo's house style of ranges (^X.0.0) — see
+    # otel-log-emitter.ts's module docstring: the Logs signal is still "not yet stable"
+    # upstream, so a minor bump may change behaviour. Re-check that status before bumping.
+    patch_package_json "$project_path/package.json" dependencies \
+        '@opentelemetry/api=1.9.1' \
+        '@opentelemetry/api-logs=0.222.0' \
+        '@opentelemetry/sdk-logs=0.222.0' \
+        '@opentelemetry/exporter-logs-otlp-http=0.222.0' \
+        '@opentelemetry/resources=2.11.0'
+    # webpack.config.js's DefinePlugin inlines every .env key automatically (readEnvFile), so
+    # no webpack.config.js change is needed — the fragment appended here is enough for the vars
+    # to reach process.env.<KEY> in the bundle.
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
+    wire_otel_composition_root "$project_path"
+    print_status "success" "OTLP log export (src/shared/utils/otel-log-emitter.ts) added"
+    print_status "info" "Set OTEL_EXPORTER_OTLP_ENDPOINT (and optionally OTEL_SERVICE_NAME) in .env to enable export — leave OTEL_EXPORTER_OTLP_HEADERS blank (see the fragment's warning)"
 }
 
 # Static ts-common assets that need no envsubst rendering. Split out of
@@ -655,11 +732,13 @@ main() {
     prompt_module_federation
     prompt_docker
     prompt_js_copy_delivery
+    prompt_otel
     create_directory_structure "$PROJECT_PATH"
     copy_skeleton_files "$PROJECT_PATH"
     apply_docker_files "$PROJECT_PATH"
     apply_file_variants "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_copy_otel "$PROJECT_PATH"
     scaffold_prune_review_bot_roster "$PROJECT_PATH"
     apply_package_variants "$PROJECT_PATH"
     refresh_lockfile_for_variants "$PROJECT_PATH"
