@@ -59,6 +59,10 @@ _COMMON_TEMPLATE_RELPATH = pathlib.Path("templates/python-common")
 # the one wholesale `cp -r DIR/. DEST` directory copy (`bin/`). Both destinations are relative
 # to `$str_project_path`, i.e. the scaffolded project's own root.
 _RE_CP_FILE = re.compile(r'cp\s+"\$COMMON_TEMPLATE_ROOT/([^"]+)"\s+"\$str_project_path/([^"]+)"')
+# A backslash-newline is shell line-splicing: one logical command. Spliced out before the
+# cp patterns run, so a wrapped `cp` parses exactly like an unwrapped one.
+_RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
+
 _RE_CP_DIR = re.compile(
 	r'cp\s+-r\s+"\$COMMON_TEMPLATE_ROOT/([^"]+)/\."\s+"\$str_project_path/([^"]+)"'
 )
@@ -87,6 +91,68 @@ def read_tier(path_root: pathlib.Path) -> str | None:
 	return None
 
 
+def conditional_relpaths(str_lib: str) -> set[str]:
+	"""Return destinations copied inside an ``if`` block, which are NOT unconditionally required.
+
+	``.review-bots.yaml`` is copied only when ``INCLUDE_REVIEW_BOT_ROSTER`` is true
+	(blueprintx#374). Treating it as required made the drift check report a missing file on
+	every project that legitimately declined a reviewer bot — a gate crying wolf about a
+	choice the scaffold offered.
+
+	⚠️ Scoped to what this regex can honestly see: a ``cp`` between an ``if`` and its ``fi``,
+	at any nesting. It does not evaluate the condition — that is
+	:func:`review_bot_roster_enabled`'s job, from the provenance stamp.
+
+	Parameters
+	----------
+	str_lib : str
+		The shared scaffold lib source, line-continuations already spliced.
+
+	Returns
+	-------
+	set of str
+		Project-relative destinations whose ``cp`` sits inside a conditional.
+	"""
+	set_conditional: set[str] = set()
+	int_depth = 0
+	for str_line in str_lib.splitlines():
+		str_stripped = str_line.strip()
+		if str_stripped.startswith(("if ", "if[", "if[[")) or str_stripped == "if":
+			int_depth += 1
+		elif str_stripped == "fi" or str_stripped.startswith("fi "):
+			int_depth = max(0, int_depth - 1)
+		elif int_depth > 0:
+			set_conditional.update(d for _, d in _RE_CP_FILE.findall(str_line))
+	return set_conditional
+
+
+def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
+	"""Return the ``review_bot_roster:`` choice stamped at scaffold time, or ``None``.
+
+	Provenance recorded only tier/version/commit/timestamp, so the drift checker could not
+	recover an opt-out and had to guess. It now records the choice; ``None`` means the
+	project predates the stamp, and the caller must not assume either answer.
+
+	Parameters
+	----------
+	path_root : pathlib.Path
+		The project root to inspect.
+
+	Returns
+	-------
+	bool or None
+		The stamped choice, or ``None`` when the stamp is absent or silent on it.
+	"""
+	path_stamp = path_root / _PROVENANCE_FILENAME
+	if not path_stamp.exists():
+		return None
+	for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
+		str_stripped = str_line.strip()
+		if str_stripped.startswith("review_bot_roster:"):
+			return str_stripped.split(":", 1)[1].strip() == "true"
+	return None
+
+
 def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
 	"""Derive every python-common-sourced path a scaffold copies UNCONDITIONALLY.
 
@@ -110,10 +176,17 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
 	path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
 	if not path_lib.exists():
 		return set()
-	str_lib = path_lib.read_text(encoding="utf-8")
+	# Splice shell line-continuations BEFORE matching. A `cp "$SRC/x" \\<newline> "$DST/x"`
+	# is one command to the shell, but `_RE_CP_FILE` stopped at the backslash and skipped
+	# it — measured on this branch: 23 destinations found, 52 actually copied, so the
+	# drift doctor was blind to 29 of the files it exists to police (blueprintx#109).
+	str_lib = _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8"))
 	path_common = path_blueprintx_root / _COMMON_TEMPLATE_RELPATH
 
-	set_required = {str_dst for _, str_dst in _RE_CP_FILE.findall(str_lib)}
+	set_conditional = conditional_relpaths(str_lib)
+	set_required = {
+		str_dst for _, str_dst in _RE_CP_FILE.findall(str_lib) if str_dst not in set_conditional
+	}
 	for str_src_dir, str_dst_dir in _RE_CP_DIR.findall(str_lib):
 		path_src_dir = path_common / str_src_dir
 		for path_file in sorted(path_src_dir.rglob("*")):
@@ -232,6 +305,16 @@ def main(list_argv: list) -> int:
 		return 0
 
 	set_required = required_relpaths(path_blueprintx)
+	# Add back the conditional copies this project actually opted into. Only when the
+	# provenance stamp SAYS so: `None` (a project scaffolded before the stamp recorded the
+	# choice) stays excluded, because reporting a file as missing on a project that
+	# legitimately declined it is the false positive this whole branch exists to avoid.
+	if review_bot_roster_enabled(path_root):
+		set_required = set_required | conditional_relpaths(
+			_RE_LINE_CONTINUATION.sub(
+				" ", (path_blueprintx / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
+			)
+		)
 	if not set_required:
 		print(
 			f"SKIPPED: found no required paths under {path_blueprintx} — "

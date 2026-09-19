@@ -264,6 +264,7 @@ scaffold_stamp_provenance() {
 	# tier and BlueprintX version this project was generated from, so a later
 	# drift check knows what to compare against.
 	tier: ${str_tier}
+	review_bot_roster: ${INCLUDE_REVIEW_BOT_ROSTER:-true}
 	blueprintx_version: ${str_version#v}
 	blueprintx_commit: ${str_commit}
 	scaffolded_at: ${str_scaffolded_at}
