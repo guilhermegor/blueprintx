@@ -9,11 +9,19 @@
 #   3. Every entry directly under .specs/features/ must be a directory.
 #   4. Every .specs/features/<name>/ must contain at least one of design.md or plan.md.
 #   5. _lessons/ has no content requirement — it is machine-populated and git-ignored.
+#   6. <name> is kebab-case, as .specs/CLAUDE.md requires. A gate that states a rule its
+#      own doc makes and then does not check it is worse than one that never claimed to.
 #
 # Root-repo-only: .specs/ is a BlueprintX convention for this repo's own specs/plans, not
 # a scaffolded-project concept, so this script is not part of templates/.
 
 set -euo pipefail
+
+# `*` skips dot-prefixed entries, so a stray `.specs/.notes` or a hidden feature directory
+# walked straight past both loops below — the scans reported clean on exactly the entries
+# a reviewer would least expect to be there. `nullglob` keeps an empty directory from
+# yielding the literal pattern as a filename.
+shopt -s dotglob nullglob
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SPECS_DIR="$REPO_ROOT/.specs"
@@ -49,6 +57,16 @@ if [ -d "$SPECS_DIR/features" ]; then
             echo "ERROR: .specs/features/$name is not a directory" >&2
             errors=$((errors + 1))
             continue
+        fi
+        # Kebab-case AND at least one letter. `[a-z0-9]` alone accepts a bare `447`,
+        # which is the exact case this check was added for — an issue number is not a
+        # feature name. Caught by the fixture, not by reading the pattern.
+        if ! printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$' ||
+            ! printf '%s' "$name" | grep -q '[a-z]'; then
+            echo "ERROR: .specs/features/$name is not kebab-case — .specs/CLAUDE.md" \
+                 "requires lowercase words joined by single hyphens (e.g. 'specs-directory'," \
+                 "not '447' or 'Specs_Directory')" >&2
+            errors=$((errors + 1))
         fi
         if [ ! -f "$entry/design.md" ] && [ ! -f "$entry/plan.md" ]; then
             echo "ERROR: .specs/features/$name has neither design.md nor plan.md" >&2
