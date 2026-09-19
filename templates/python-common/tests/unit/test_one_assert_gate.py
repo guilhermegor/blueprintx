@@ -256,6 +256,28 @@ def test_a_tests_dir_with_zero_matching_files_is_a_failure_not_a_skip(
 	assert "0 test_*.py files" in str_err
 
 
+def test_a_tests_dir_holding_only_non_python_tests_is_a_legitimate_skip(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+	"""A tree testing in another language here is a real skip, not broken discovery.
+
+	BlueprintX's own root ships shell tests under ``tests/``. Mirrors
+	``check_complexity.sh``'s own note about this exact repo: "BlueprintX's own tree
+	has no src/ or tests/ [in the Python sense]". Zero ``test_*.py`` files alongside real
+	``test_*.sh`` files means this tree does not test in Python here — not that discovery is
+	broken.
+	"""
+	path_tests = tmp_path / "tests"
+	path_tests.mkdir()
+	(path_tests / "test_something.sh").write_text("#!/bin/bash\necho ok\n", encoding="utf-8")
+
+	int_code = _run(tmp_path, [])
+
+	str_out = capsys.readouterr().out
+	assert int_code == 0
+	assert "no test_*.py files" in str_out
+
+
 # --------------------------
 # The distribution table (the measurement half of the deliverable)
 # --------------------------

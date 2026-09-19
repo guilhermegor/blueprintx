@@ -109,6 +109,29 @@ def _test_files(path_root: pathlib.Path) -> list:
 	return sorted(path_tests.rglob("test_*.py"))
 
 
+def _has_non_python_tests(path_tests: pathlib.Path) -> bool:
+	"""Return whether ``tests/`` holds a ``test_*`` file in a non-Python language.
+
+	Distinguishes "this tree tests in another language here" — BlueprintX's own root ships
+	``tests/test_check_issue_scope.sh`` and two siblings, zero ``.py`` — from a genuinely
+	empty or broken ``tests/``. Only the latter is a failure; the former is the same
+	legitimate skip ``check_complexity.sh`` already grants this exact repo (its own
+	``CLAUDE.md``: "BlueprintX's own tree has no src/ or tests/ [in the Python sense]").
+
+	Parameters
+	----------
+	path_tests : pathlib.Path
+		The ``tests/`` directory (already known to exist).
+
+	Returns
+	-------
+	bool
+		``True`` when at least one ``test_*.<ext>`` file exists with ``ext`` other than
+		``py``.
+	"""
+	return any(path_file.suffix != ".py" for path_file in path_tests.rglob("test_*.*"))
+
+
 def vacuous_discovery_reason(path_root: pathlib.Path) -> str | None:
 	"""Return why a missing ``tests/`` directory is a legitimate skip, or ``None`` otherwise.
 
@@ -368,9 +391,10 @@ def main(list_argv: list) -> int:
 	Returns
 	-------
 	int
-		0 when ``tests/`` is absent (skip), or every function has at least one assertion
-		site and (when given) stays within the cap; 1 on a broken discovery, an unparsable
-		file, a zero-assertion test, or a cap violation.
+		0 when ``tests/`` is absent, holds only non-Python ``test_*`` files, or every
+		function has at least one assertion site and (when given) stays within the cap; 1 on
+		a broken (empty) discovery, an unparsable file, a zero-assertion test, or a cap
+		violation.
 	"""
 	path_root, int_max, bool_ok = parse_args(list_argv)
 	if not bool_ok:
@@ -383,6 +407,12 @@ def main(list_argv: list) -> int:
 
 	list_files = _test_files(path_root)
 	if not list_files:
+		if _has_non_python_tests(path_root / "tests"):
+			print(
+				"✅ one-assert gate: no test_*.py files under tests/ (non-Python test file(s) "
+				"found instead — this tree does not test in Python here)"
+			)
+			return 0
 		print(
 			"❌ tests/ exists but 0 test_*.py files were found — broken discovery, not a "
 			"legitimate skip",
