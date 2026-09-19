@@ -242,6 +242,15 @@ jobs:
         # or on a fresh scaffold with nothing yet to check.
         run: poetry run python bin/check_coverage_floor.py
 
+      - name: Run Migration Graph Gate
+        if: runner.os == 'Linux'
+        # Mirrors the `migration-graph` pre-commit hook (blueprintx#308): every Alembic
+        # revision/down_revision graph must resolve to exactly one head, with no dangling
+        # or duplicate revisions. CI runs its gates as explicit steps, not via pre-commit,
+        # so this must be listed here or a hook-skipping contributor bypasses it. Self-skips
+        # with a message on a tier with no migrations/versions/ (e.g. MVC, native-DB).
+        run: poetry run python bin/check_migration_graph.py
+
       - name: Run Secret Scan (gitleaks)
         if: runner.os == 'Linux'
         # Mirrors the `check-secrets` pre-commit hook (blueprintx#305, gitleaks slice).
