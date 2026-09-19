@@ -18,50 +18,50 @@ from typing import TYPE_CHECKING
 # the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from collections.abc import Callable
-	from typing import TypeVar
+    from collections.abc import Callable
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 @type_checker
 def to_html_body(str_body: str) -> str:
-	r"""Convert a plain-text e-mail body to HTML so its line breaks survive.
+    r"""Convert a plain-text e-mail body to HTML so its line breaks survive.
 
-	An HTML-body client (Outlook's ``mail.HTMLBody``, an SMTP message sent as ``text/html``)
-	collapses bare newlines and renders the message on a single line. Each newline is turned
-	into a ``<br>`` so paragraph breaks are preserved. A body that already looks like HTML
-	(contains a ``<br`` or ``<p>`` tag) is left untouched — the caller composed real markup on
-	purpose, and escaping it would show the reader literal angle brackets instead of the
-	formatting it asked for.
+    An HTML-body client (Outlook's ``mail.HTMLBody``, an SMTP message sent as ``text/html``)
+    collapses bare newlines and renders the message on a single line. Each newline is turned
+    into a ``<br>`` so paragraph breaks are preserved. A body that already looks like HTML
+    (contains a ``<br`` or ``<p>`` tag) is left untouched — the caller composed real markup on
+    purpose, and escaping it would show the reader literal angle brackets instead of the
+    formatting it asked for.
 
-	A body that does NOT already look like HTML is treated as plain text and **HTML-escaped**
-	before the newline conversion. Without this, a literal ``<``/``&``/``>`` in ordinary
-	content (a filename, a code snippet, a company name pasted from elsewhere) is interpreted
-	as markup by the mail client instead of being shown as the character it is — a value like
-	``report <final>.xlsx`` would silently drop the bracketed text, and a value containing a
-	full tag would render as if the caller had written HTML on purpose.
+    A body that does NOT already look like HTML is treated as plain text and **HTML-escaped**
+    before the newline conversion. Without this, a literal ``<``/``&``/``>`` in ordinary
+    content (a filename, a code snippet, a company name pasted from elsewhere) is interpreted
+    as markup by the mail client instead of being shown as the character it is — a value like
+    ``report <final>.xlsx`` would silently drop the bracketed text, and a value containing a
+    full tag would render as if the caller had written HTML on purpose.
 
-	Parameters
-	----------
-	str_body : str
-		The plain-text body (possibly with ``\n`` / ``\r\n`` line breaks).
+    Parameters
+    ----------
+    str_body : str
+            The plain-text body (possibly with ``\n`` / ``\r\n`` line breaks).
 
-	Returns
-	-------
-	str
-		The body with newlines rendered as ``<br>`` (unchanged when already HTML; otherwise
-		HTML-escaped first).
-	"""
-	str_low = str_body.casefold()
-	if "<br" in str_low or "<p>" in str_low:
-		return str_body
-	return escape(str_body).replace("\r\n", "\n").replace("\n", "<br>\n")
+    Returns
+    -------
+    str
+            The body with newlines rendered as ``<br>`` (unchanged when already HTML; otherwise
+            HTML-escaped first).
+    """
+    str_low = str_body.casefold()
+    if "<br" in str_low or "<p>" in str_low:
+        return str_body
+    return escape(str_body).replace("\r\n", "\n").replace("\n", "<br>\n")
