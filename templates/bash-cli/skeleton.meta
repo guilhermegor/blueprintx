@@ -1,0 +1,4 @@
+language=bash
+display_name=Bash CLI
+description=Standalone Bash CLI with git-tag versioning, make install, bats tests, shellcheck+shfmt
+scaffold=bin/scaffold/bash_cli.sh
