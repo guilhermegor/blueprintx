@@ -112,8 +112,8 @@ passes forever while the shipped gate rots.
 
 ## Formatting (must pass `poe lint`)
 
-- **Tabs, not spaces** — `ruff.toml` sets `indent-style = "tab"`. The most common lint
-  failure is a 4-space-indented test file. Indent every level with one tab.
+- **4-space indent** — `ruff.toml` sets `indent-style = "space"`. Let `ruff format` handle
+  it; a hand-indented test file is the most common source of drift from this rule.
 - **Double quotes** everywhere (`quote-style = "double"`).
 - **Type annotations on every function**, including `-> None` on tests and fixtures
   (flake8-annotations is strict).

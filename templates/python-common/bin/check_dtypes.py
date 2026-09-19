@@ -44,58 +44,58 @@ _EXCLUDED_PARTS = {"typing", "chassis"}
 
 
 def check_file(str_path: str) -> int:
-	"""Report every banned float dtype declaration in one file.
+    """Report every banned float dtype declaration in one file.
 
-	Parameters
-	----------
-	str_path : str
-		Path to the Python source file to scan.
+    Parameters
+    ----------
+    str_path : str
+            Path to the Python source file to scan.
 
-	Returns
-	-------
-	int
-		The number of violations found (0 when clean).
-	"""
-	int_errors = 0
-	for int_no, str_line in enumerate(
-		pathlib.Path(str_path).read_text(encoding="utf-8").splitlines(), start=1
-	):
-		if not _RE_FLOAT_DTYPE.search(str_line):
-			continue
-		if _ALLOW_MARKER in str_line:
-			continue
-		print(
-			f"❌ {str_path}:{int_no}: {str_line.strip()}\n"
-			f"   A binary float loses the source value irreversibly and silently. Use "
-			f"list_decimal_cols (exact Decimal) or text. If the value is genuinely "
-			f"dimensionless, annotate the line:  # {_ALLOW_MARKER} <reason>"
-		)
-		int_errors += 1
-	return int_errors
+    Returns
+    -------
+    int
+            The number of violations found (0 when clean).
+    """
+    int_errors = 0
+    for int_no, str_line in enumerate(
+        pathlib.Path(str_path).read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        if not _RE_FLOAT_DTYPE.search(str_line):
+            continue
+        if _ALLOW_MARKER in str_line:
+            continue
+        print(
+            f"❌ {str_path}:{int_no}: {str_line.strip()}\n"
+            f"   A binary float loses the source value irreversibly and silently. Use "
+            f"list_decimal_cols (exact Decimal) or text. If the value is genuinely "
+            f"dimensionless, annotate the line:  # {_ALLOW_MARKER} <reason>"
+        )
+        int_errors += 1
+    return int_errors
 
 
 def _source_files() -> list[pathlib.Path]:
-	"""Collect every Python file under ``src/`` outside the exempt trees.
+    """Collect every Python file under ``src/`` outside the exempt trees.
 
-	Returns
-	-------
-	list[pathlib.Path]
-		Python source files to check.
-	"""
-	return sorted(
-		p for p in pathlib.Path("src").rglob("*.py") if _EXCLUDED_PARTS.isdisjoint(p.parts)
-	)
+    Returns
+    -------
+    list[pathlib.Path]
+            Python source files to check.
+    """
+    return sorted(
+        p for p in pathlib.Path("src").rglob("*.py") if _EXCLUDED_PARTS.isdisjoint(p.parts)
+    )
 
 
 if __name__ == "__main__":
-	# Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-	# script prints: it would die with UnicodeEncodeError before reporting anything. And
-	# because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-	# a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-	# the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
-	for cls_stream in (sys.stdout, sys.stderr):
-		if hasattr(cls_stream, "reconfigure"):
-			cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
+    # script prints: it would die with UnicodeEncodeError before reporting anything. And
+    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
+    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
+    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
-	total_errors = sum(check_file(str(p)) for p in _source_files())
-	sys.exit(1 if total_errors > 0 else 0)
+    total_errors = sum(check_file(str(p)) for p in _source_files())
+    sys.exit(1 if total_errors > 0 else 0)

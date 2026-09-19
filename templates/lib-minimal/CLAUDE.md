@@ -54,7 +54,7 @@ of your public `__all__`. The internal imports are package-qualified
 
 ## Conventions (inherited from `templates/python-common/`)
 
-- **Ruff**: linter + formatter. Line-length 99, tab indent, double quotes, NumPy docstrings.
+- **Ruff**: linter + formatter. Line-length 99, 4-space indent, double quotes, NumPy docstrings.
 - **Pre-commit**: ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration
   tests, coverage badge.
 - **Tests**: `pytest` — `poe unit_tests`. Write
