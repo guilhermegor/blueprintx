@@ -26,6 +26,12 @@ validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
         exit_error "Usage: $0 <project_root_dir> <project_name>"
     fi
+    # The prompt validates too, but the scaffolds are also callable DIRECTLY
+    # (bin/ci/scaffold_lint_test.sh does exactly that), so a guard living only in
+    # prompt_project_name protects one of the two entry points. blueprintx#113.
+    if ! is_valid_project_name "$PROJECT_NAME"; then
+        exit_error "Invalid project name '$PROJECT_NAME'. Use a letter or underscore first, then letters, digits, '-' or '_'."
+    fi
     print_status "success" "Input validation passed"
 }
 
