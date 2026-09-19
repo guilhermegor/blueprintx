@@ -15,6 +15,8 @@ set -euo pipefail
 
 SKELETON="${1:?skeleton name required}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=bin/lib/spec.sh
+source "$REPO_ROOT/bin/lib/spec.sh"
 META="$REPO_ROOT/templates/$SKELETON/skeleton.meta"
 
 [ -f "$META" ] || { echo "ERROR: skeleton '$SKELETON' not found" >&2; exit 1; }
@@ -92,12 +94,19 @@ done
 }
 
 echo "::group::Scaffold $SKELETON (offline, no opt-ins)"
-# Feed a generous run of "n" answers: declines docker / storage / data-dir /
-# webhook / remote across every tier (extra lines are harmless). With no remote,
-# the scaffold lands in offline mode (local git workflow + protect-branch).
-# A finite printf (not `yes`) avoids SIGPIPE once the scaffold stops reading.
-printf 'n\n%.0s' {1..12} | GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold_rel" \
-    "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
+# Driven by bin/lib/spec.sh (#481) instead of a blind positional `printf`: a
+# stdin stream built from NAMED keys (defaulting to "decline everything, no
+# remote"), so a scaffold script gaining a new prompt fails loudly in
+# spec_stdin_for_skeleton instead of silently shifting every answer after it
+# to the wrong question. SCAFFOLD_SPEC_FILE overrides the (empty, all-default)
+# spec for a one-off probe, mirroring SCAFFOLD_PROJECT_NAME above.
+spec_skeleton_supported "$SKELETON" || {
+    echo "ERROR: bin/lib/spec.sh has no named-key prompt map for '$SKELETON'" >&2
+    exit 1
+}
+spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
+    | GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold_rel" \
+        "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
 
 # The generated project's own .gitignore lists __pycache__/, so a copied cache is invisible
