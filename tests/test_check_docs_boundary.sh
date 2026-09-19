@@ -74,7 +74,7 @@ test_docs_backlog_fails() {
     mkdir -p "$str_root/docs/backlog"
     printf '# Backlog\n' > "$str_root/docs/backlog/wave-1_20260101_000000.md"
     expect_gate "docs/backlog/ present" "$str_root" "fail" \
-        "docs/backlog — under docs/backlog/"
+        "docs/backlog — working material"
 }
 
 test_lessons_file_fails() {
@@ -83,7 +83,7 @@ test_lessons_file_fails() {
     mkdir -p "$str_root/docs/guide"
     printf '# Lessons\n' > "$str_root/docs/guide/session-lessons.md"
     expect_gate "docs/**/*lessons* file" "$str_root" "fail" \
-        "matches *lesson*"
+        "a lessons store"
 }
 
 test_superpowers_segment_fails() {
@@ -92,7 +92,7 @@ test_superpowers_segment_fails() {
     mkdir -p "$str_root/docs/.superpowers"
     printf 'notes\n' > "$str_root/docs/.superpowers/notes.md"
     expect_gate "docs/.superpowers/ segment" "$str_root" "fail" \
-        ".superpowers path segment"
+        "harness/tooling working material"
 }
 
 test_design_md_fails() {
@@ -136,6 +136,48 @@ test_unreadable_docs_dir_fails() {
     expect_gate "unreadable docs/ directory" "$str_root" "fail" "is not readable"
 }
 
+test_nested_security_md_fails() {
+    local str_root
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/docs/policies"
+    printf '# Security Policy\n' > "$str_root/docs/policies/SECURITY.md"
+    expect_gate "nested docs/**/SECURITY.md" "$str_root" "fail" \
+        "root SECURITY.md"
+}
+
+test_every_rejection_names_a_destination() {
+    # The rule is REDIRECT, not merely reject: "this does not belong here" without
+    # "it belongs there" moves the problem to whoever reads the failure. This asserts the
+    # CONTRACT across every rule at once, so a rule added later without a destination
+    # fails here rather than shipping half-done.
+    local str_root str_out int_errors int_directed
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/docs/backlog" "$str_root/docs/f" "$str_root/docs/.superpowers"
+    printf 'x\n' > "$str_root/docs/backlog/note.md"
+    printf 'x\n' > "$str_root/docs/my-lessons.md"
+    printf 'x\n' > "$str_root/docs/f/plan.md"
+    printf 'x\n' > "$str_root/docs/SECURITY.md"
+    printf 'x\n' > "$str_root/docs/.superpowers/x.md"
+
+    str_out="$(bash "$str_root/bin/ci/check_docs_boundary.sh" 2>&1)" || true
+    rm -rf "$str_root"
+
+    int_errors="$(printf '%s\n' "$str_out" | grep -c '^ERROR: docs/' || true)"
+    int_directed="$(printf '%s\n' "$str_out" |
+        grep -cE '^ERROR: docs/.*(belongs|move it|goes to|lessons\* stores|[.]specs/|CONTRIBUTING[.]md|README[.]md|SECURITY[.]md|own home)' || true)"
+
+    if [ "$int_errors" -eq 0 ]; then
+        print_status "error" "redirect contract -> expected rejections, got none"
+        int_failures=$((int_failures + 1))
+        return
+    fi
+    if [ "$int_errors" -ne "$int_directed" ]; then
+        print_status "error" \
+            "redirect contract -> $int_errors rejection(s), only $int_directed named a destination"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 main() {
     test_no_docs_dir_is_a_skip
     test_clean_docs_passes
@@ -143,6 +185,8 @@ main() {
     test_lessons_file_fails
     test_superpowers_segment_fails
     test_design_md_fails
+    test_nested_security_md_fails
+    test_every_rejection_names_a_destination
     test_plan_md_fails
     test_empty_docs_dir_fails
     test_unreadable_docs_dir_fails

@@ -16,12 +16,30 @@
 # Conflating the two would flag an intentional feature as a defect — left to a follow-up
 # issue rather than decided here (see the blueprintx#536 PR body).
 #
-# Deny-list (working material, never published docs):
-#   - docs/backlog/ (the directory itself, and everything under it)
-#   - any path whose basename contains "lesson" (case-insensitive) — a lessons store
-#   - any path with a .superpowers* segment
-#   - any path whose basename is exactly design.md or plan.md — spec/plan artifacts have
-#     their own home since blueprintx#447: .specs/
+# 🔴 THE RULE IS THE PRINCIPLE, THE LIST IS ONLY WHAT WE HAVE MET SO FAR.
+# Everything under docs/ must be published documentation. Anything that is not does not
+# merely get REJECTED — it gets REDIRECTED to the place that owns it. Every rule below
+# therefore names a destination, and a rule that cannot name one is not ready to ship:
+# "this does not belong here" without "it belongs there" just moves the problem to
+# whoever reads the failure.
+#
+# ⚠️ The deny-list is OPEN and expected to grow. It is a list of cases encountered, not a
+# definition of the rule, and the destinations below are examples of the shape — the
+# right home may be .specs/, CONTRIBUTING.md, README.md, SECURITY.md, a tool's own
+# directory, or somewhere nobody has needed yet. When you meet a new kind of
+# working material, add the case AND its destination; do not treat the absence of a rule
+# as permission.
+#
+# Known cases and where each belongs:
+#   - docs/backlog/ → out of docs/: a progress ledger beside the work; reader-facing
+#     content to README.md / CONTRIBUTING.md
+#   - basename contains "lesson" → the operator's ~/.claude/memory/lessons* stores; a
+#     lesson that has hardened into a project rule goes to CONTRIBUTING.md as the RULE
+#   - basename design.md / plan.md → .specs/features/<feature-name>/ (blueprintx#447)
+#   - basename security.md / threat*.md → the ROOT SECURITY.md (GitHub only reads it from
+#     the repo root, .github/ or docs/ root, so a nested copy is invisible to the
+#     advisory UI)
+#   - any .superpowers* path segment → that tool's own home, never the published site
 #
 # A directory that matches the deny-list is reported ONCE and not descended into — the
 # violation is the whole path, not each file under it (the spike that sized this gate
@@ -59,17 +77,28 @@ is_denied() {
     base="$(basename "$rel")"
     case "$rel" in
         backlog | backlog/*)
-            echo "under docs/backlog/ (working material, not published docs)"
+            echo "working material, not published docs — move it OUT of docs/: an in-repo" \
+                 "progress ledger belongs beside the work it tracks, and anything a reader" \
+                 "of the project needs belongs in README.md or CONTRIBUTING.md"
             return 0
             ;;
     esac
     case "${base,,}" in
         *lesson*)
-            echo "basename matches *lesson* (a lessons store, not published docs)"
+            echo "a lessons store, not published docs — lessons live in the operator's" \
+                 "~/.claude/memory/lessons* stores; if a lesson has become a rule this" \
+                 "project follows, state the RULE in CONTRIBUTING.md and drop the narrative"
             return 0
             ;;
         design.md | plan.md)
-            echo "is a spec/plan artifact — belongs in .specs/, not docs/ (blueprintx#447)"
+            echo "a spec/plan artifact — belongs in .specs/features/<feature-name>/," \
+                 "not docs/ (blueprintx#447)"
+            return 0
+            ;;
+        security.md | threat*.md)
+            echo "security policy is not a docs/ page — GitHub reads SECURITY.md from the" \
+                 "repository root, .github/ or docs/ root only, so a nested copy is invisible" \
+                 "to the advisory UI; move it to the root SECURITY.md"
             return 0
             ;;
     esac
@@ -77,7 +106,9 @@ is_denied() {
     for segment in "${parts[@]}"; do
         case "${segment,,}" in
             .superpowers*)
-                echo "has a .superpowers path segment (not published docs)"
+                echo "harness/tooling working material, not published docs — it belongs in" \
+                     "the tool's own home (.superpowers/ at the repo root, or the operator's" \
+                     "~/.claude), never under the published site"
                 return 0
                 ;;
         esac
