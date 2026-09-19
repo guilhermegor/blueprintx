@@ -46,7 +46,11 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    # No terminal on stdin: skip the read entirely rather than let a stray pipe line
+    # answer as a username — falls straight to DEFAULT_GITHUB_USERNAME below (#539).
+    if [ -t 0 ]; then
+        read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    fi
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -61,7 +65,11 @@ prompt_state_management() {
     echo "  1) React Context  (zero deps, default)"
     echo "  2) Zustand        (lightweight store)"
     echo "  3) Redux Toolkit  (enterprise, RTK Query)"
-    read -r -p "$(prompt_main "Choice [1]: ")" sm_choice || true
+    # No terminal on stdin: skip the read so a stray pipe line can't pick a variant nobody
+    # chose — falls straight to the "1" default below (#539).
+    if [ -t 0 ]; then
+        read -r -p "$(prompt_main "Choice [1]: ")" sm_choice || true
+    fi
     STATE_MGMT_CHOICE="${sm_choice:-1}"
     case "$STATE_MGMT_CHOICE" in
         1) print_status "config" "State management: React Context" ;;
@@ -98,52 +106,47 @@ prompt_deploy_target() {
 
 prompt_module_federation() {
     echo ""
-    read -r -p "$(prompt_main "Enable Webpack Module Federation? [y/N]: ")" mf_answer || true
-    case "$mf_answer" in
-        y|Y) USE_MODULE_FEDERATION=1
-             print_status "config" "Module Federation: enabled" ;;
-        *)   USE_MODULE_FEDERATION=0
-             print_status "config" "Module Federation: disabled" ;;
-    esac
+    # default "n": Module Federation reshapes webpack.config.js (see apply_file_variants) —
+    # an unattended run must not silently pick a different build topology (#539).
+    prompt_yes_no USE_MODULE_FEDERATION "$(prompt_main "Enable Webpack Module Federation? [y/N]: ")"
+    if [ "$USE_MODULE_FEDERATION" = "true" ]; then
+        print_status "config" "Module Federation: enabled"
+    else
+        print_status "config" "Module Federation: disabled"
+    fi
 }
 
 prompt_docker() {
     echo ""
-    read -r -p "$(prompt_main "Add a Docker setup (multi-stage build → nginx)? [y/N]: ")" docker_answer || true
-    case "$docker_answer" in
-        y|Y) USE_DOCKER=1
-             print_status "config" "Docker: enabled (Dockerfile + nginx.conf + .dockerignore)" ;;
-        *)   USE_DOCKER=0
-             print_status "config" "Docker: disabled" ;;
-    esac
+    # default "n": adds a Dockerfile/nginx.conf nobody asked for (#539).
+    prompt_yes_no USE_DOCKER "$(prompt_main "Add a Docker setup (multi-stage build → nginx)? [y/N]: ")"
+    if [ "$USE_DOCKER" = "true" ]; then
+        print_status "config" "Docker: enabled (Dockerfile + nginx.conf + .dockerignore)"
+    else
+        print_status "config" "Docker: disabled"
+    fi
 }
 
 prompt_js_copy_delivery() {
     echo ""
-    read -r -p "$(prompt_main "Ship a plain-JavaScript delivery copy script (js-copy)? [y/N]: ")" js_copy_answer || true
-    case "$js_copy_answer" in
-        y|Y) USE_JS_COPY_DELIVERY=1
-             print_status "config" "JS-copy delivery: enabled (npm run js-copy:build / js-copy:verify)" ;;
-        *)   USE_JS_COPY_DELIVERY=0
-             print_status "config" "JS-copy delivery: disabled" ;;
-    esac
+    # default "n": ships an extra delivery script + package.json entries (#539).
+    prompt_yes_no USE_JS_COPY_DELIVERY "$(prompt_main "Ship a plain-JavaScript delivery copy script (js-copy)? [y/N]: ")"
+    if [ "$USE_JS_COPY_DELIVERY" = "true" ]; then
+        print_status "config" "JS-copy delivery: enabled (npm run js-copy:build / js-copy:verify)"
+    else
+        print_status "config" "JS-copy delivery: disabled"
+    fi
 }
 
 prompt_otel() {
-    # `read` happily consumes piped stdin, so a non-interactive run whose input still holds
-    # a `y` line would silently turn OTEL on -- adding dependencies, env vars and a
-    # composition-root edit nobody asked for. An opt-in must never be answered by leftover
-    # input, so with no terminal the answer is the default, not whatever is on the pipe.
-    if [ ! -t 0 ]; then
-        INCLUDE_OTEL=false
-        return
-    fi
     echo ""
-    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
-        *) INCLUDE_OTEL=false ;;
-    esac
+    # default "n": an opt-in that installs @opentelemetry/* deps, writes .env vars and
+    # rewrites the composition root must never be answered by leftover pipe input (#539,
+    # originally fixed inline in #519 — now folded into the shared helper).
+    prompt_yes_no INCLUDE_OTEL "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
+    if [ "$INCLUDE_OTEL" = "true" ]; then
+        print_status "config" "OTLP log export: enabled"
+    fi
 }
 
 create_directory_structure() {
@@ -189,7 +192,7 @@ copy_skeleton_files() {
 apply_docker_files() {
     local project_path="$1"
 
-    if [ "${USE_DOCKER:-0}" -ne 1 ]; then
+    if [ "${USE_DOCKER:-false}" != "true" ]; then
         return
     fi
 
@@ -212,7 +215,7 @@ apply_js_copy_delivery() {
     local project_path="$1"
     local js_copy_root="$SKELETON_TEMPLATE_ROOT/optional/js-copy"
 
-    if [ "${USE_JS_COPY_DELIVERY:-0}" -ne 1 ]; then
+    if [ "${USE_JS_COPY_DELIVERY:-false}" != "true" ]; then
         return
     fi
 
@@ -285,7 +288,7 @@ apply_file_variants() {
             ;;
     esac
 
-    if [ "$USE_MODULE_FEDERATION" -eq 1 ]; then
+    if [ "$USE_MODULE_FEDERATION" = "true" ]; then
         print_status "info" "Applying Module Federation webpack config..."
         cp "$SKELETON_TEMPLATE_ROOT/webpack.mf.config.js" "$project_path/webpack.config.js"
         sed_inplace "s/__APP_NAME__/$PROJECT_NAME/g" "$project_path/webpack.config.js"

@@ -78,6 +78,52 @@ prompt_sub() {
     printf "    ${PROMPT_SUB}└${NC} %s" "$1"
 }
 
+#
+# Usage:
+#   prompt_yes_no <var_name> "$(prompt_main "Question? [y/N]: ")" [default: y|n]
+#
+# Shared guard for every interactive y/n scaffold prompt (blueprintx#539). `read` happily
+# consumes a non-terminal stdin, so a non-interactive run (CI, --dev, a stray piped line
+# left on stdin) would silently answer a question nobody asked — for an opt-in like OTEL
+# that means dependencies installed and files rewritten with no one agreeing to it. With
+# no terminal on stdin, <var_name> is set to the DEFAULT without ever calling `read`, so a
+# leftover "y\n" on the pipe can never flip an unattended run's answer.
+#
+# `default` is "y" or "n" (default: "n") — chosen PER PROMPT by the caller (issue #539
+# item 3): an opt-in defaults "n" (installing deps / sending telemetry must never happen
+# silently), but a prompt whose safe unattended answer is "yes" (e.g. "wait for the first
+# deploy to finish?") passes default="y". Hardcoding one default for every prompt would
+# just trade one silent wrong answer for another.
+#
+# Sets <var_name> to the literal string "true" or "false" — the convention every INCLUDE_*
+# / USE_* flag in this repo already uses (INCLUDE_OTEL, INCLUDE_STORAGE, ...). The second
+# argument is the FULLY RENDERED prompt text (already wrapped in prompt_main or prompt_sub
+# by the caller, exactly as passed to `read -r -p` today) so this helper stays agnostic to
+# which styling a call site wants.
+
+prompt_yes_no() {
+    local var_name="$1"
+    local rendered_prompt="$2"
+    local default="${3:-n}"
+    local answer=""
+
+    if [ -t 0 ]; then
+        read -r -p "$rendered_prompt" answer || true
+    fi
+
+    case "$answer" in
+        y | Y | yes | YES) printf -v "$var_name" 'true' ;;
+        n | N | no | NO) printf -v "$var_name" 'false' ;;
+        *)
+            if [ "$default" = "y" ]; then
+                printf -v "$var_name" 'true'
+            else
+                printf -v "$var_name" 'false'
+            fi
+            ;;
+    esac
+}
+
 # BRAND COLOURS — logo/tagline accent (blueprintx#256)
 #
 # assets/logo.png is two-tone (teal BLUEPRINT + pink X), but the banner in
@@ -283,18 +329,16 @@ resolve_default_branch() {
 #   apply_env_wise_config "$PROJECT_PATH"  # splits them into dev/prd if chosen
 
 prompt_env_wise_config() {
-    local answer
-    read -r -p "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: " answer || true
-    case "${answer:-}" in
-        y | Y | yes | YES)
-            INCLUDE_ENV_WISE=true
-            print_status "config" "Env-wise config: inputs_dev/prd.yaml + outputs_dev/prd.yaml (ENV selects)"
-            ;;
-        *)
-            INCLUDE_ENV_WISE=false
-            print_status "config" "Config: single inputs.yaml + outputs.yaml (default)"
-            ;;
-    esac
+    # default "n": env-wise config only, silently, changes the on-disk shape of the
+    # generated project's config directory — an unattended run must get the single-file
+    # layout it would get by pressing Enter interactively.
+    prompt_yes_no INCLUDE_ENV_WISE \
+        "$(prompt_main "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: ")"
+    if [ "$INCLUDE_ENV_WISE" = "true" ]; then
+        print_status "config" "Env-wise config: inputs_dev/prd.yaml + outputs_dev/prd.yaml (ENV selects)"
+    else
+        print_status "config" "Config: single inputs.yaml + outputs.yaml (default)"
+    fi
 }
 
 #
