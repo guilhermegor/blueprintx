@@ -89,7 +89,11 @@ prompt_deploy_target() {
     echo "  1) GitHub Pages  (no extra secrets; served under /<repo-name>/)"
     echo "  2) Vercel        (needs VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID)"
     echo "  3) None          (no deploy workflow)"
-    read -r -p "$(prompt_main "Choice [1]: ")" deploy_choice || true
+    # No terminal on stdin: skip the read so a stray pipe line can't pick a deploy target
+    # nobody chose — falls straight to the "1" default below (#539).
+    if [ -t 0 ]; then
+        read -r -p "$(prompt_main "Choice [1]: ")" deploy_choice || true
+    fi
     DEPLOY_TARGET_CHOICE="${deploy_choice:-1}"
     case "$DEPLOY_TARGET_CHOICE" in
         1) print_status "config" "Deploy target: GitHub Pages" ;;
@@ -525,28 +529,31 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
-    case "$protect_ans" in
-        y|Y)
-            # A solo maintainer cannot satisfy a required-approving-review
-            # rule — GitHub forbids self-approval, so the first PR's merge
-            # would be permanently blocked. Ask whether human reviewers will
-            # gate merges, and build the protection payload accordingly.
-            local reviews_json
-            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
-            case "$reviews_ans" in
-                y|Y)
-                    reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
-                    ;;
-                *)
-                    # Solo: keep status checks + linear history, drop required reviews.
-                    reviews_json='"required_pull_request_reviews": null,'
-                    ;;
-            esac
-            if gh api --method PUT \
-                -H "Accept: application/vnd.github+json" \
-                "/repos/$repo/branches/$branch/protection" \
-                --input - <<EOF
+    local do_protect reviews_ans reviews_json
+    # default "n": protecting the branch is a GitHub API mutation (enforce_admins, required
+    # checks) — an unattended run must not silently lock down a repo nobody confirmed (#539).
+    prompt_yes_no do_protect "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
+    if [ "$do_protect" != "true" ]; then
+        print_status "info" "Skipped branch protection"
+        return
+    fi
+
+    # A solo maintainer cannot satisfy a required-approving-review
+    # rule — GitHub forbids self-approval, so the first PR's merge
+    # would be permanently blocked. Ask whether human reviewers will
+    # gate merges, and build the protection payload accordingly.
+    # default "n": matches the pre-existing fallback (solo maintainer, no required reviews).
+    prompt_yes_no reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
+    if [ "$reviews_ans" = "true" ]; then
+        reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
+    else
+        # Solo: keep status checks + linear history, drop required reviews.
+        reviews_json='"required_pull_request_reviews": null,'
+    fi
+    if gh api --method PUT \
+        -H "Accept: application/vnd.github+json" \
+        "/repos/$repo/branches/$branch/protection" \
+        --input - <<EOF
 {
   "required_status_checks": { "strict": true, "contexts": [] },
   "enforce_admins": true,
@@ -557,14 +564,11 @@ apply_branch_protection() {
   "required_linear_history": true
 }
 EOF
-            then
-                print_status "success" "Branch '$branch' protected on GitHub."
-            else
-                print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
-            fi
-            ;;
-        *) print_status "info" "Skipped branch protection" ;;
-    esac
+    then
+        print_status "success" "Branch '$branch' protected on GitHub."
+    else
+        print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
+    fi
 }
 
 pages_prerequisites_met() {
@@ -589,14 +593,15 @@ wait_for_gh_pages_branch() {
     gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1 && return 0
 
     print_status "info" "The 'gh-pages' branch doesn't exist yet — the first deploy creates it (~1-3 min)."
-    read -r -p "$(prompt_main "Wait for the first deploy and enable Pages automatically? [Y/n]: ")" wait_ans || true
-    case "$wait_ans" in
-    n | N)
+    # default "y": the only prerequisite already met to reach this point is a confirmed
+    # GitHub Pages setup (prompt_pages_setup); waiting is a passive poll, not a mutation, so
+    # it is the safe unattended answer -- unlike every other prompt in this file (#539).
+    prompt_yes_no wait_ans "$(prompt_main "Wait for the first deploy and enable Pages automatically? [Y/n]: ")" y
+    if [ "$wait_ans" != "true" ]; then
         print_status "info" "After the first deploy finishes, enable Pages with:"
         print_status "info" "  $manual_cmd"
         return 1
-        ;;
-    esac
+    fi
 
     while [ "$attempts" -lt "$max_attempts" ]; do
         sleep 15
@@ -638,14 +643,13 @@ prompt_pages_setup() {
     pages_prerequisites_met "$repo" || return
 
     print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
-    read -r -p "$(prompt_main "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: ")" pages_ans || true
-    case "$pages_ans" in
-    y | Y) ;;
-    *)
+    # default "n": enabling Pages is a GitHub API mutation — an unattended run must not
+    # silently publish a site nobody confirmed (#539).
+    prompt_yes_no pages_ans "$(prompt_main "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: ")"
+    if [ "$pages_ans" != "true" ]; then
         print_status "info" "Skipped GitHub Pages setup"
         return
-        ;;
-    esac
+    fi
 
     wait_for_gh_pages_branch "$repo" "$manual_cmd" || return
     enable_gh_pages "$repo" "$owner" "$manual_cmd"
