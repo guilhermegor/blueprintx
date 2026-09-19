@@ -115,6 +115,11 @@ def heading_slugs(path_md: pathlib.Path) -> set:
 
 _INT_MIN_QUOTED_LEN = 2
 
+# Strips an unquoted YAML comment: a '#' at the start of the value, or one preceded by
+# whitespace. Only applied to the bare-token branch of _parse_scalar, never to a quoted
+# value.
+_RE_TRAILING_COMMENT = re.compile(r"(?:^|\s)#.*$")
+
 
 def _parse_scalar(str_raw: str) -> str:
 	r"""Return a registry value's decoded text — a bare token or a double-quoted string.
@@ -133,7 +138,13 @@ def _parse_scalar(str_raw: str) -> str:
 	str_raw = str_raw.strip()
 	if str_raw[:1] == '"' and str_raw[-1:] == '"' and len(str_raw) >= _INT_MIN_QUOTED_LEN:
 		return str_raw[1:-1].replace('\\"', '"').replace("\\\\", "\\")
-	return str_raw
+	# An UNQUOTED '#' opens a comment in YAML, so `note: # reason` is note-with-no-value,
+	# not a note whose text is "# reason". Returning the raw text made a comment satisfy
+	# the non-empty check that `status:`/`overridden_by:` exceptions owe an explanation to
+	# — the hatch waiving tool+rule could then be taken with the explanation left unwritten.
+	# A quoted value is untouched: `note: "# literal hash"` is a real string.
+	str_uncommented = _RE_TRAILING_COMMENT.sub("", str_raw)
+	return str_uncommented.strip()
 
 
 def _meaningful_lines(path_yaml: pathlib.Path) -> list:

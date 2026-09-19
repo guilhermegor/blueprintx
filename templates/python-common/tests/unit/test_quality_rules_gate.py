@@ -231,3 +231,37 @@ def test_an_entry_with_neither_implementation_nor_exception_is_flagged() -> None
 	list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
 	assert len(list_problems) == 1
 	assert "typescript" in list_problems[0]
+
+
+def test_a_comment_only_note_does_not_satisfy_the_reason_requirement() -> None:
+	"""`note: # reason` is a comment, not a note — the exception still owes an explanation.
+
+	`_parse_scalar` returned the raw `# reason` text, which is non-empty, so a
+	`status:`/`overridden_by:` entry could take the waiver with the reason left unwritten.
+	In YAML the value is empty; the restricted parser disagreed, permissively.
+	"""
+	assert gate._parse_scalar("# reason") == ""
+	assert gate._parse_scalar("  #") == ""
+
+
+def test_a_trailing_comment_is_stripped_from_a_bare_value() -> None:
+	"""Same bug one step along: the comment is not part of the value."""
+	assert gate._parse_scalar("not-implemented  # tracked in #430") == "not-implemented"
+
+
+def test_a_quoted_hash_is_a_real_string_not_a_comment() -> None:
+	"""The negative control: quoting is how you mean a literal '#'."""
+	assert gate._parse_scalar('"# literal hash"') == "# literal hash"
+	assert gate._parse_scalar('"see #430 for why"') == "see #430 for why"
+
+
+def test_a_comment_only_note_is_reported_as_a_missing_reason() -> None:
+	"""End to end: the parser fix must actually reach reason_required_problems."""
+	dict_rule = {
+		"id": "r",
+		"python": {"tool": "ruff", "rule": "C901"},
+		"typescript": {"status": "not-implemented", "note": gate._parse_scalar("# reason")},
+	}
+	list_problems = gate.reason_required_problems([dict_rule])
+	assert len(list_problems) == 1
+	assert "typescript" in list_problems[0]
