@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint — shellcheck + shfmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install shfmt
+        run: command -v shfmt >/dev/null || (sudo snap install shfmt)
+
+      - name: make lint
+        run: make lint
+
+  test:
+    name: Test — bats
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install bats
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends bats
+
+      - name: make test
+        run: make test
