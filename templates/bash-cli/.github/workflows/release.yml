@@ -25,6 +25,20 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # The input is free text. `1.2.3/beta` yields the tag `v1.2.3/beta`, which git
+      # accepts; the packaging job then interpolates it into a `sed` expression where
+      # the `/` breaks the command — leaving a pushed tag and no release artifact.
+      # Reject it before the tag exists, so a bad input is a no-op rather than a
+      # half-done release someone has to unpick.
+      - name: Validate version
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid version '$VERSION' — expected MAJOR.MINOR.PATCH, optionally followed by -<prerelease>." >&2
+            exit 1
+          fi
+
       - name: Create and push tag
         env:
           VERSION: ${{ github.event.inputs.version }}

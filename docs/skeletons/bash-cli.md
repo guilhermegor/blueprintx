@@ -40,15 +40,6 @@ first. Adding the remaining channels as `release_*.yml` sub-workflows (same
 `workflow_call` + `needs: tag` pattern) is tracked in
 `docs/backlog/bash-cli-skeleton_20260917_171817.md`.
 
-## Follow-up needed
-
-`bin/ci/validate_meta.sh` requires every live skeleton's directory name to appear
-in the root `CLAUDE.md` (blueprintx#478's regression guard). Root `CLAUDE.md` is
-held by open PRs at the time this skeleton was added, so it could not be edited
-here — add `bash-cli` to `CLAUDE.md`'s "Repo architecture" tree and "How
-scaffolding works" skeleton count/list in a follow-up PR once those land, or the
-`validate-meta` CI job stays red on this branch.
-
 ## Verification
 
 Dry-run coverage: `bash-cli` is in `dry-run-smoke`'s matrix

@@ -30,9 +30,10 @@ version, `make install` stamping, a `Release` workflow, package-manager channels
       that script is Poetry/pytest-specific today; a bash tier needs its own
       lint+test verification path, not a hunk of that one) or a standalone
       `scaffold-lint-test-bash` CI job that does `scaffold → make lint → make test`.
-- [ ] Add `bash-cli` to the root `CLAUDE.md` "Repo architecture" tree and skeleton
-      count once the PRs currently holding `CLAUDE.md` land (`bin/ci/validate_meta.sh`
-      requires the mention — see `docs/skeletons/bash-cli.md` → "Follow-up needed").
+- [x] Add `bash-cli` to the root `CLAUDE.md` "Repo architecture" tree and skeleton
+      count — done: `CLAUDE.md` names `bash-cli` in both places, so
+      `bin/ci/validate_meta.sh`'s required mention resolves and `validate-meta` is
+      no longer red on this branch.
 
 ## Completed — kept as a record
 
