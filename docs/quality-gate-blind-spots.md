@@ -84,7 +84,7 @@ measurement rather than re-assumed from the old table.
 | Duplication / copy-paste | **Still a real gap.** No `jscpd`/`pylint`-duplicate-code in any tier's dev deps (checked `pyproject.toml` `[tool.poetry.group.dev.dependencies]`). Already tracked: **#305** "adopt gitleaks, osv-scanner, jscpd, semgrep" (open, jscpd is the duplication detector). | dependency audit |
 | Branch coverage (line-only floor) | **Still a real gap as of this writing, but already being fixed.** `.coveragerc` `[run]` has no `branch = True`. **Open PR** "feat(python-common): branch coverage, floor measured then set" (closes #427) already measures the per-tier delta and lands the fix. | `.coveragerc` read + open-PR check |
 | Mutation testing | **Still a real gap, untracked.** No `mutmut`/`cosmic-ray` in any tier's dev deps. | dependency audit |
-| The "convention has no executor" mechanism (issue's Scope item 4) | **In flight, narrower than the issue asks.** Open PR "feat(quality): machine-readable quality-rule registry + validation gate" (closes #432) adds `quality-rules.yaml` + `check_quality_rules.py` — exactly the shape the issue describes (a registry cross-checked against real config). Registered rules today: `complexity`, `function-length`, `magic-numbers`, `one-assert-per-test` (`not-implemented`), `default-arg-spacing`. **None of the 5 ungated ruff families from Part 1, dead code, duplication, or mutation testing are registered in it yet** — the mechanism exists but hasn't been pointed at this audit's findings. | PR body read via `gh pr list --search` |
+| The "convention has no executor" mechanism (issue's Scope item 4) | **In flight, narrower than the issue asks.** Open PR "feat(quality): machine-readable quality-rule registry + validation gate" (closes #432) adds `quality-rules.yaml` + `check_quality_rules.py` — exactly the shape the issue describes (a registry cross-checked against real config). Registered rules today: `complexity`, `function-length`, `magic-numbers`, `one-assert-per-test` (`not-implemented`), `default-arg-spacing`. **None of the 5 ungated ruff families from Part 1, dead code, duplication, or mutation testing are registered in it yet**, and the mechanism is not on `main` at all — it lands with #432's own open PR, and landing it will not by itself point the registry at this audit's findings. | PR body read via `gh pr list --search` |
 
 ## Part 3 — gates actually run against a deliberately-bad fixture
 
@@ -148,8 +148,9 @@ For the owner to file, not filed by this PR:
    the provenance doctrine's tz-aware `updated_at` (is a run timestamp deliberately naive, or a
    bug?) has to be decided before the rule can be turned on without immediately failing.
 2. **Register the five families above (once adopted), dead code (#332), duplication (#305), and
-   mutation testing in `quality-rules.yaml`** (#432's registry) once each lands — the mechanism
-   from #432 already exists; it just doesn't yet know about the gaps this audit measured.
+   mutation testing in `quality-rules.yaml`** (#432's registry) once each lands — that registry is
+   itself still in flight on #432's open PR, so it has to land before anything can be
+   registered in it, and landing it does not by itself cover the gaps this audit measured.
 3. **Add mutation testing** (`mutmut` is the natural fit — pure Python, no service dependency)
    to at least one tier as a measured pilot, mirroring how branch coverage was piloted before
    the floor was set (the open branch-coverage PR closing #427 is the template to follow).
