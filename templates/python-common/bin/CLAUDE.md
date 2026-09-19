@@ -55,7 +55,7 @@ source "$SCRIPT_DIR/lib/bootstrap.sh"
 
 ### The lib's Python companions — and why they are files
 
-`bin/lib/` holds two `.py` helpers beside the shell libs that invoke them:
+`bin/lib/` holds three `.py` helpers beside the shell libs that invoke them:
 
 | File | Invoked by | Interface |
 |------|-----------|-----------|
@@ -63,7 +63,7 @@ source "$SCRIPT_DIR/lib/bootstrap.sh"
 | `lib/pip_requirements.py` | `pip_fallback.sh::pip_fallback_emit_pip_requirements_from_pyproject` | `PROJECT_ROOT` + `BX_GROUPS` in; one pip requirement per line out |
 | `lib/wheelhouse_select.py` | `build_wheelhouse.sh` (`poe wheelhouse` / `poe wheelhouse_assemble`) | subcommands `select`/`pack`/`assemble` — see `docs/offline-wheelhouse.md` |
 
-Both were `"$PYTHON" - <<'PYEOF'` heredocs inside their shell functions — 151 and 66
+`ca_bundle.py` and `pip_requirements.py` were `"$PYTHON" - <<'PYEOF'` heredocs inside their shell functions — 151 and 66
 lines of Python that **no Python tool could see**: ruff never linted them, mypy never
 checked them, pytest could not import them, and an editor rendered them as one long
 string. The 60-line function gate flagged the enclosing shell functions at 155 and 73

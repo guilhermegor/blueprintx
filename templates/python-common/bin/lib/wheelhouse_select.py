@@ -87,6 +87,31 @@ def sha256_of(path_file: Path) -> str:
 	return obj_hash.hexdigest()
 
 
+_IMPLEMENTATION_NAMES = {"cpython": "CPython", "pypy": "PyPy", "jython": "Jython",
+	"ironpython": "IronPython"}
+
+
+def _canonical_implementation(str_implementation: str) -> str:
+	"""Map a lowercase implementation key to the spelling PEP 508 markers compare against.
+
+	``str.capitalize()`` yields ``Cpython``, and ``platform_python_implementation ==
+	"CPython"`` is then False — so every CPython-only requirement silently leaves the
+	wheelhouse. An unknown key is returned unchanged rather than guessed at: a wrong
+	canonical spelling is the same silent-drop failure this function exists to prevent.
+
+	Parameters
+	----------
+	str_implementation : str
+		Implementation key, e.g. ``cpython``.
+
+	Returns
+	-------
+	str
+		The canonical spelling, or the input unchanged when it is not known.
+	"""
+	return _IMPLEMENTATION_NAMES.get(str_implementation.lower(), str_implementation)
+
+
 def target_environment(
 	str_python_version: str,
 	str_sys_platform: str,
@@ -123,7 +148,7 @@ def target_environment(
 		"python_full_version": str_full,
 		"sys_platform": str_sys_platform,
 		"platform_machine": str_platform_machine,
-		"platform_python_implementation": str_implementation.capitalize(),
+		"platform_python_implementation": _canonical_implementation(str_implementation),
 		"implementation_name": str_implementation.lower(),
 		"implementation_version": str_full,
 		"platform_release": "",
@@ -292,6 +317,42 @@ def pack_wheelhouse(args: argparse.Namespace) -> int:
 	return 0
 
 
+def _contained_path(dir_base: Path, str_name: str) -> Path:
+	"""Resolve ``str_name`` under ``dir_base``, refusing anything that escapes it.
+
+	The manifest is transferred alongside the parts it describes, so it is untrusted
+	input: ``Path(base) / "/etc/passwd"`` discards the base entirely, and
+	``"../../x"`` walks out of it. The sha256 fields authenticate CONTENT, never the
+	path, so a crafted manifest could otherwise make the assembler read, overwrite or
+	unlink a file outside the transfer directory.
+
+	Parameters
+	----------
+	dir_base : Path
+		Directory every manifest-named file must stay inside.
+	str_name : str
+		Untrusted file name taken from the manifest.
+
+	Returns
+	-------
+	Path
+		The resolved path, guaranteed to be under ``dir_base``.
+
+	Raises
+	------
+	SystemExit
+		When the name is absolute or resolves outside ``dir_base``.
+	"""
+	path_resolved = (dir_base / str_name).resolve()
+	dir_resolved = dir_base.resolve()
+	if not path_resolved.is_relative_to(dir_resolved):
+		raise SystemExit(
+			f"wheelhouse assemble: manifest entry {str_name!r} escapes {dir_resolved} "
+			f"— REFUSING, a manifest may only name files inside the transfer directory"
+		)
+	return path_resolved
+
+
 def verify_parts(dir_source: Path, dict_manifest: dict) -> list[Path]:
 	"""Verify every manifest-listed part is present with a matching sha256.
 
@@ -314,7 +375,13 @@ def verify_parts(dir_source: Path, dict_manifest: dict) -> list[Path]:
 		than reassembling a truncated or corrupt transfer.
 	"""
 	list_expected = dict_manifest["parts"]
-	list_paths = [dir_source / dict_part["name"] for dict_part in list_expected]
+	int_declared = dict_manifest.get("part_count")
+	if int_declared is not None and int_declared != len(list_expected):
+		raise SystemExit(
+			f"wheelhouse assemble: manifest declares {int_declared} part(s) but lists "
+			f"{len(list_expected)} — REFUSING, the manifest disagrees with itself"
+		)
+	list_paths = [_contained_path(dir_source, dict_part["name"]) for dict_part in list_expected]
 	list_missing = [str(path_part) for path_part in list_paths if not path_part.is_file()]
 	if list_missing:
 		str_names = ", ".join(list_missing)
@@ -420,7 +487,7 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
 	if path_manifest.is_file():
 		dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
 		list_parts = verify_parts(dir_source, dict_manifest)
-		path_zip_tmp = dir_source / (dict_manifest.get("zip_name") or "wheelhouse.zip")
+		path_zip_tmp = _contained_path(dir_source, dict_manifest.get("zip_name") or "wheelhouse.zip")
 		reassemble_zip(list_parts, dict_manifest, path_zip_tmp)
 		int_count = unzip_wheels(path_zip_tmp, dir_out)
 		path_zip_tmp.unlink()

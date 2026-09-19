@@ -152,6 +152,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `get-started.md` | First-run guide | Numbered setup steps, requirements, feature highlights |
 | `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
 | `coverage-floor.md` | Gate design record | What the gate enforces, why `fail_under` alone is insufficient, the coarse-by-design boundary, and what stays out of scope |
+| `offline-wheelhouse.md` | Air-gapped install record | The three subcommands (`select`/`pack`/`assemble`), what the manifest authenticates and what it does not, the part-splitting contract, and the target-triple inputs the selector resolves markers against |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
