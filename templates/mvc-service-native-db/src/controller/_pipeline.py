@@ -76,31 +76,31 @@ class PipelineOrchestrator(metaclass=TypeChecker):
     Parameters
     ----------
     logger : logging.Logger | None
-            The run logger (``None`` prints).
+        The run logger (``None`` prints).
     fn_build_connection : Callable[[], Any]
-            Zero-arg callable opening a DB-API connection (closed after the read).
+        Zero-arg callable opening a DB-API connection (closed after the read).
     fn_output_path : Callable[[str], pathlib.Path]
-            Resolver from an ``outputs.yaml`` key to an output path.
+        Resolver from an ``outputs.yaml`` key to an output path.
     path_json : pathlib.Path
-            Path to write the JSON run summary.
+        Path to write the JSON run summary.
     dict_context : dict
-            Run-context values (app/operator/host/environment/paths) logged so every log file
-            is self-describing. An optional ``"path_labels"`` key (``pathlib.Path``) points
-            :meth:`_enrich` at a ``{id: label}`` JSON lookup; absent or ``None`` means the
-            enrichment is not configured for this project — the first of the five failure modes
-            it degrades on.
+        Run-context values (app/operator/host/environment/paths) logged so every log file
+        is self-describing. An optional ``"path_labels"`` key (``pathlib.Path``) points
+        :meth:`_enrich` at a ``{id: label}`` JSON lookup; absent or ``None`` means the
+        enrichment is not configured for this project — the first of the five failure modes
+        it degrades on.
     cls_email_handler : EmailHandler | None
-            Optional e-mail handler (the ``EmailHandler`` port). Injected by ``main.py`` only when
-            the e-mail opt-in is chosen — Outlook backend by default, SMTP if configured. The
-            reference run does not send; a project adds its own notify phase.
+        Optional e-mail handler (the ``EmailHandler`` port). Injected by ``main.py`` only when
+        the e-mail opt-in is chosen — Outlook backend by default, SMTP if configured. The
+        reference run does not send; a project adds its own notify phase.
     cls_webhook : WebhookNotifier | None
-            Optional outbound webhook notifier (the ``WebhookNotifier`` port). Injected by
-            ``main.py`` only when the webhook opt-in is chosen *and* the environment passes the
-            production gate. When wired, :meth:`run` sends ``str_webhook_message`` as its final
-            phase; when ``None`` the notify phase is a no-op.
+        Optional outbound webhook notifier (the ``WebhookNotifier`` port). Injected by
+        ``main.py`` only when the webhook opt-in is chosen *and* the environment passes the
+        production gate. When wired, :meth:`run` sends ``str_webhook_message`` as its final
+        phase; when ``None`` the notify phase is a no-op.
     str_webhook_message : str
-            The run-summary message sent through ``cls_webhook`` (rendered from ``webhooks.yaml``
-            in ``startup``). Ignored when ``cls_webhook`` is ``None``.
+        The run-summary message sent through ``cls_webhook`` (rendered from ``webhooks.yaml``
+        in ``startup``). Ignored when ``cls_webhook`` is ``None``.
     """
 
     def __init__(
@@ -129,7 +129,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         Returns
         -------
         dict
-                Run summary (rows read, report path).
+            Run summary (rows read, report path).
         """
         float_start = time()
         self._log_context()
@@ -171,7 +171,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         Returns
         -------
         Any
-                The open DB-API 2.0 connection (closed by :meth:`run` in a ``finally``).
+            The open DB-API 2.0 connection (closed by :meth:`run` in a ``finally``).
         """
         log_message(self.logger, "Opening DB connection")
         return self.fn_build_connection()
@@ -182,12 +182,12 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         Parameters
         ----------
         cls_connection : Any
-                The open DB-API connection.
+            The open DB-API connection.
 
         Returns
         -------
         pandas.DataFrame
-                The rows read by the model.
+            The rows read by the model.
         """
         log_message(self.logger, "Starting data-read process")
         cls_example = ExampleEntity(cls_connection)
@@ -226,13 +226,13 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         Parameters
         ----------
         df_report : pandas.DataFrame
-                The already-fetched report (the read phase already succeeded; never re-read here).
+            The already-fetched report (the read phase already succeeded; never re-read here).
 
         Returns
         -------
         pandas.DataFrame
-                ``df_report`` merged with the ``label`` column, or unchanged when enrichment could
-                not run.
+            ``df_report`` merged with the ``label`` column, or unchanged when enrichment could
+            not run.
         """
         path_labels = self.dict_context.get("path_labels")
         if path_labels is None:
@@ -240,7 +240,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
             return df_report
         try:
             df_enriched = LabelEnricher(path_labels).enrich(df_report)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - modes 2-5 above, see the docstring
             log_message(
                 self.logger,
                 f"Label enrichment degraded: LabelEnricher reading {path_labels.name} "
@@ -256,12 +256,12 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         Parameters
         ----------
         df_report : pandas.DataFrame
-                The data to render.
+            The data to render.
 
         Returns
         -------
         pathlib.Path
-                The written report path.
+            The written report path.
         """
         log_message(self.logger, "Starting report-export process")
         path_report = self.fn_output_path("xlsx_name")
@@ -275,7 +275,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         Parameters
         ----------
         dict_summary : dict
-                The run summary to serialise.
+            The run summary to serialise.
         """
         log_message(self.logger, "Starting summary-export process")
         with self.path_json.open("w") as file_write:
@@ -310,7 +310,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         Parameters
         ----------
         float_elapsed : float
-                Elapsed seconds.
+            Elapsed seconds.
         """
         float_hours, float_remainder = divmod(float_elapsed, 3600)
         float_minutes, float_seconds = divmod(float_remainder, 60)
