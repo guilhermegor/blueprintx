@@ -15,7 +15,7 @@ nav:
 
 theme:
   name: material
-  # Locale of the published pages, chosen at scaffold time; see docs/documentation-locale.md.
+  # Locale of the published pages, chosen at scaffold time (BlueprintX docs: CLI Reference, "Documentation locale").
   language: ${DOCS_LOCALE}
   # Placeholder brand icon — swap docs/assets/logo.png for your own (favicon is separate).
   logo: assets/logo.png

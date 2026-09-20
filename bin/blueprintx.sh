@@ -328,7 +328,7 @@ prompt_project_root() {
             return 0
             ;;
         *)
-            print_status "warning" "Invalid option. Try again."
+            print_status "warning" "Invalid option. Try again." >&2
             prompt_project_root
             return
             ;;
@@ -417,7 +417,7 @@ prompt_language() {
         return 0
     fi
 
-    print_status "warning" "Invalid option. Try again."
+    print_status "warning" "Invalid option. Try again." >&2
     prompt_language
 }
 
@@ -450,7 +450,7 @@ prompt_skeleton() {
         return 0
     fi
 
-    print_status "warning" "Invalid option. Try again."
+    print_status "warning" "Invalid option. Try again." >&2
     prompt_skeleton "$lang"
 }
 
@@ -486,7 +486,7 @@ prompt_license() {
         10)   echo "CC0-1.0" ;;
         11)   echo "Unlicense" ;;
         *)
-            print_status "warning" "Invalid option. Try again."
+            print_status "warning" "Invalid option. Try again." >&2
             prompt_license
             return
             ;;
@@ -496,7 +496,7 @@ prompt_license() {
 # The locale of the GENERATED project's published pages only. It says nothing about
 # BlueprintX's own prose, which is en-US with no exceptions (root CLAUDE.md), and nothing
 # about code: comments and docstrings stay English in every locale, enforced in the
-# generated project by bin/check_comment_language.py. See docs/documentation-locale.md.
+# generated project by bin/check_comment_language.py. See docs/cli-reference.md, "Documentation locale".
 prompt_docs_locale() {
     printf "${CYAN}Select documentation locale${NC} (README.md and docs/ pages of the new project)\n" >&2
     printf "  ${BLUE}1) en${NC}    — English (default)\n" >&2
@@ -510,7 +510,7 @@ prompt_docs_locale() {
         1|"") echo "en" ;;
         2)    echo "pt-BR" ;;
         *)
-            print_status "warning" "Invalid option. Try again."
+            print_status "warning" "Invalid option. Try again." >&2
             prompt_docs_locale
             return
             ;;
@@ -660,4 +660,7 @@ main() {
     run_create_flow
 }
 
-main
+# Sourced by tests/test_docs_locale_prompt.sh to reach the prompt helpers without the menu.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main
+fi
