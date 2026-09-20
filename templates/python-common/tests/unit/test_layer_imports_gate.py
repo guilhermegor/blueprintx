@@ -77,6 +77,49 @@ def _problems(tmp_path: Path, str_source: str, str_layer: str = "model") -> list
 	return cls_gate.find_file_problems(path_file, str_layer, _POLICY, _FIRST_PARTY)
 
 
+def _sole(list_problems: list[str]) -> str:
+	"""Return the one problem in a list, asserting there is exactly one.
+
+	The "exactly one finding, not a cascade" claim is asserted HERE rather than in each
+	caller (blueprintx#544). Every fixture below is built to trip exactly one rule, so the
+	count is a precondition of the fixture rather than a per-test behaviour — and hoisting
+	it means every caller now checks it, including the several that previously only indexed
+	``[0]`` and would have passed on a cascade.
+
+	Parameters
+	----------
+	list_problems : list of str
+		Whatever the gate reported.
+
+	Returns
+	-------
+	str
+		The single problem.
+	"""
+	assert len(list_problems) == 1, list_problems
+	return list_problems[0]
+
+
+def _sole_problem(tmp_path: Path, str_source: str, str_layer: str = "model") -> str:
+	"""Run the gate over one synthetic module and return its single problem.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway directory.
+	str_source : str
+		The module source to check.
+	str_layer : str
+		The layer the file is treated as belonging to.
+
+	Returns
+	-------
+	str
+		The one problem the gate reported.
+	"""
+	return _sole(_problems(tmp_path, str_source, str_layer))
+
+
 # --------------------------
 # should-FAIL
 # --------------------------
@@ -87,12 +130,28 @@ def test_vendor_at_the_top_of_a_layer_is_rejected(tmp_path: Path) -> None:
 
 	Measured in two independent projects (blueprintx#171).
 	"""
-	list_problems = _problems(tmp_path, "from filings_cvm.submission import Submission\n")
-	assert len(list_problems) == 1
-	assert "filings_cvm" in list_problems[0]
+	assert "filings_cvm" in _sole_problem(
+		tmp_path, "from filings_cvm.submission import Submission\n"
+	)
 
 
-def test_vendor_deferred_into_a_function_is_still_rejected(tmp_path: Path) -> None:
+_STR_DEFERRED_VENDOR = (
+	"def read_portal() -> None:\n"
+	'\t"""Read."""\n'
+	"\ttry:\n"
+	"\t\tfrom filings_cvm.ingestion import fi\n"
+	"\texcept ImportError:\n"
+	"\t\treturn None\n"
+	"\treturn fi\n"
+)
+
+
+# "inside a function" is the second case, not decoration: the message must name the evasion,
+# since deferring is the form that passed unnoticed in the real project this was measured in.
+@pytest.mark.parametrize("str_fragment", ["filings_cvm", "inside a function"])
+def test_vendor_deferred_into_a_function_is_still_rejected(
+	tmp_path: Path, str_fragment: str
+) -> None:
 	"""Deferring the import buys no exemption, even under an ``ImportError`` guard.
 
 	This is the shape the gate exists for. The guard answers *how to degrade when the vendor
@@ -100,35 +159,24 @@ def test_vendor_deferred_into_a_function_is_still_rejected(tmp_path: Path) -> No
 	coupling is identical to a top-level import. The optional-dependency pattern is fine — in
 	the ``utils/`` seam that owns the dependency, which then returns the degraded result.
 	"""
-	str_source = (
-		"def read_portal() -> None:\n"
-		'\t"""Read."""\n'
-		"\ttry:\n"
-		"\t\tfrom filings_cvm.ingestion import fi\n"
-		"\texcept ImportError:\n"
-		"\t\treturn None\n"
-		"\treturn fi\n"
-	)
-	list_problems = _problems(tmp_path, str_source)
-	assert len(list_problems) == 1
-	assert "filings_cvm" in list_problems[0]
-	# The message must name the evasion, since this is the form that passed unnoticed.
-	assert "inside a function" in list_problems[0]
+	assert str_fragment in _sole_problem(tmp_path, _STR_DEFERRED_VENDOR)
 
 
-def test_annotation_only_vendor_called_as_an_api_is_rejected(tmp_path: Path) -> None:
+_STR_PANDAS_AS_API = (
+	"import pandas as pd\n"
+	"def load() -> pd.DataFrame:\n"
+	'\t"""Load."""\n'
+	'\treturn pd.read_sql("SELECT 1", None)\n'
+)
+
+
+# The remedy travels with the finding, so it is a case here rather than a second assert.
+@pytest.mark.parametrize("str_fragment", ["TYPE only", "utils.frames.from_cursor"])
+def test_annotation_only_vendor_called_as_an_api_is_rejected(
+	tmp_path: Path, str_fragment: str
+) -> None:
 	"""``pandas`` is the layers' vocabulary, not an API they may call."""
-	str_source = (
-		"import pandas as pd\n"
-		"def load() -> pd.DataFrame:\n"
-		'\t"""Load."""\n'
-		'\treturn pd.read_sql("SELECT 1", None)\n'
-	)
-	list_problems = _problems(tmp_path, str_source)
-	assert len(list_problems) == 1
-	assert "TYPE only" in list_problems[0]
-	# The remedy travels with the finding.
-	assert "utils.frames.from_cursor" in list_problems[0]
+	assert str_fragment in _sole_problem(tmp_path, _STR_PANDAS_AS_API)
 
 
 # --------------------------
@@ -213,8 +261,8 @@ def test_a_module_directly_under_src_is_not_skipped(tmp_path: Path) -> None:
 	list_problems = cls_gate.find_file_problems(
 		path_src / "main.py", cls_gate._ROOT_LAYER, dict_policy, {"src"}
 	)
-	assert len(list_problems) == 1
-	assert "filings_cvm" in list_problems[0]
+
+	assert "filings_cvm" in _sole(list_problems)
 
 
 # --------------------------
@@ -250,6 +298,32 @@ def _run_main(path_root: Path) -> tuple[int, str]:
 	return cls_run.returncode, cls_run.stdout + cls_run.stderr
 
 
+def _output_at(tuple_result: tuple[int, str], int_expected: int) -> str:
+	"""Return a run's output, asserting its exit code first.
+
+	"Exited N" and "said the right thing" are two claims that used to sit as two asserts in
+	one test (blueprintx#544). The exit code is the precondition — an output assertion over a
+	run that crashed proves nothing — so it is checked here, and each test keeps the single
+	assertion that names the behaviour. The whole output rides on the assertion message, so a
+	wrong exit code still reports what the gate actually printed.
+
+	Parameters
+	----------
+	tuple_result : tuple of (int, str)
+		The ``(exit code, output)`` pair from ``_run_main``.
+	int_expected : int
+		The exit code the run must have produced.
+
+	Returns
+	-------
+	str
+		Everything the run printed.
+	"""
+	int_code, str_out = tuple_result
+	assert int_code == int_expected, str_out
+	return str_out
+
+
 def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
 	"""Build a minimal project tree holding one module under ``src/model/``.
 
@@ -274,7 +348,10 @@ def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
 _STR_MINIMAL_POLICY = "layers:\n  model:\n    allow: {}\n"
 
 
-def test_modules_with_no_policy_file_FAIL_rather_than_pass_silently(tmp_path: Path) -> None:
+@pytest.mark.parametrize("str_fragment", [".layer-policy.yaml", "no import boundary"])
+def test_modules_with_no_policy_file_FAIL_rather_than_pass_silently(
+	tmp_path: Path, str_fragment: str
+) -> None:
 	"""⚠️ The negative control for the defect this fixed.
 
 	The gate used to ``return 0`` in silence when no policy was present, so three of the five
@@ -283,21 +360,14 @@ def test_modules_with_no_policy_file_FAIL_rather_than_pass_silently(tmp_path: Pa
 	"""
 	_seed_project(tmp_path)
 
-	int_code, str_out = _run_main(tmp_path)
-
-	assert int_code == 1
-	assert ".layer-policy.yaml" in str_out
-	assert "no import boundary" in str_out
+	assert str_fragment in _output_at(_run_main(tmp_path), 1)
 
 
 def test_a_tree_with_no_modules_and_no_policy_is_not_a_failure(tmp_path: Path) -> None:
 	"""The positive control: nothing to check is not the same as failing to check."""
 	(tmp_path / "src").mkdir()
 
-	int_code, str_out = _run_main(tmp_path)
-
-	assert int_code == 0
-	assert "nothing to do" in str_out
+	assert "nothing to do" in _output_at(_run_main(tmp_path), 0)
 
 
 def test_a_clean_tree_prints_what_it_checked(tmp_path: Path) -> None:
@@ -305,10 +375,7 @@ def test_a_clean_tree_prints_what_it_checked(tmp_path: Path) -> None:
 	_seed_project(tmp_path)
 	(tmp_path / ".layer-policy.yaml").write_text(_STR_MINIMAL_POLICY, encoding="utf-8")
 
-	int_code, str_out = _run_main(tmp_path)
-
-	assert int_code == 0
-	assert "module(s) checked" in str_out
+	assert "module(s) checked" in _output_at(_run_main(tmp_path), 0)
 
 
 def test_layers_nested_inside_a_package_resolve_via_src_prefix_depth(tmp_path: Path) -> None:
@@ -325,10 +392,7 @@ def test_layers_nested_inside_a_package_resolve_via_src_prefix_depth(tmp_path: P
 		"src_prefix_depth: 2\n" + _STR_MINIMAL_POLICY, encoding="utf-8"
 	)
 
-	int_code, str_out = _run_main(tmp_path)
-
-	assert int_code == 0, str_out
-	assert "module(s) checked" in str_out
+	assert "module(s) checked" in _output_at(_run_main(tmp_path), 0)
 
 
 def test_the_same_nested_tree_without_the_prefix_is_rejected(tmp_path: Path) -> None:
@@ -423,7 +487,10 @@ def _direction_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
 	return _run_main(tmp_path)
 
 
-def test_a_seam_importing_the_layer_it_serves_is_rejected(tmp_path: Path) -> None:
+@pytest.mark.parametrize("str_fragment", ["must not import", "not a consumer"])
+def test_a_seam_importing_the_layer_it_serves_is_rejected(
+	tmp_path: Path, str_fragment: str
+) -> None:
 	"""⚠️ No vendor is involved, and that is the point.
 
 	The vendor half of this gate asks "may this layer reach OUTSIDE the project?". Direction
@@ -431,11 +498,7 @@ def test_a_seam_importing_the_layer_it_serves_is_rejected(tmp_path: Path) -> Non
 	cycle the vendor rule cannot see. It was prose only (src/utils/CLAUDE.md: "utils/ is
 	imported by them, never the reverse") and prose does not fail a build.
 	"""
-	int_code, str_out = _direction_case(tmp_path, "from model import thing\n")
-
-	assert int_code == 1
-	assert "must not import" in str_out
-	assert "not a consumer" in str_out
+	assert str_fragment in _output_at(_direction_case(tmp_path, "from model import thing\n"), 1)
 
 
 def test_a_wrong_direction_deferred_into_a_function_is_still_rejected(tmp_path: Path) -> None:
@@ -473,7 +536,14 @@ def test_a_layer_declaring_no_direction_is_unrestricted(tmp_path: Path) -> None:
 	assert int_code == 0
 
 
-def test_a_duplicate_policy_key_is_rejected(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+	("str_fragment", "bool_present"),
+	[("duplicate key", True), ("Traceback", False)],
+	ids=["names-the-defect", "readable-in-ci-output"],
+)
+def test_a_duplicate_policy_key_is_rejected(
+	tmp_path: Path, str_fragment: str, bool_present: bool
+) -> None:
 	"""⚠️ A repeated mapping key must FAIL, because YAML keeps only the last one.
 
 	Hit for real while writing this repo's own policies: a second ``deny_layers:`` under one
@@ -488,11 +558,7 @@ def test_a_duplicate_policy_key_is_rejected(tmp_path: Path) -> None:
 		encoding="utf-8",
 	)
 
-	int_code, str_out = _run_main(tmp_path)
-
-	assert int_code == 1
-	assert "duplicate key" in str_out
-	assert "Traceback" not in str_out, "the message must be readable in CI output"
+	assert (str_fragment in _output_at(_run_main(tmp_path), 1)) is bool_present
 
 
 # --------------------------
@@ -536,7 +602,12 @@ def _sublayer_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
 	return _run_main(tmp_path)
 
 
-def test_a_glob_layer_key_governs_a_capability_sublayer(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+	"str_fragment", ["capabilities/*/domain", "names ports, not providers"]
+)
+def test_a_glob_layer_key_governs_a_capability_sublayer(
+	tmp_path: Path, str_fragment: str
+) -> None:
 	"""⚠️ The three DDD sublayers have DIFFERENT rules, and one key cannot hold them.
 
 	The tier's own CLAUDE.md says domain depends on nothing, application on the domain only,
@@ -544,11 +615,9 @@ def test_a_glob_layer_key_governs_a_capability_sublayer(tmp_path: Path) -> None:
 	entry — which is what the first-path-component rule does — that table is documentation
 	nobody can enforce.
 	"""
-	int_code, str_out = _sublayer_case(tmp_path, "from chassis.db_schema import Repo\n")
-
-	assert int_code == 1
-	assert "capabilities/*/domain" in str_out
-	assert "names ports, not providers" in str_out
+	assert str_fragment in _output_at(
+		_sublayer_case(tmp_path, "from chassis.db_schema import Repo\n"), 1
+	)
 
 
 def test_a_dotted_deny_spares_the_sibling_subpackage(tmp_path: Path) -> None:
@@ -579,10 +648,7 @@ def test_a_glob_governs_packages_NESTED_below_the_sublayer(tmp_path: Path) -> No
 	(tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
 	(tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
 
-	int_code, str_out = _run_main(tmp_path)
-
-	assert int_code == 1, str_out
-	assert "capabilities/*/domain" in str_out
+	assert "capabilities/*/domain" in _output_at(_run_main(tmp_path), 1)
 
 
 def test_a_dotted_deny_also_catches_the_RELATIVE_form(tmp_path: Path) -> None:
@@ -602,7 +668,4 @@ def test_a_dotted_deny_also_catches_the_RELATIVE_form(tmp_path: Path) -> None:
 	(tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
 	(tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
 
-	int_code, str_out = _run_main(tmp_path)
-
-	assert int_code == 1, str_out
-	assert "chassis.db_schema" in str_out
+	assert "chassis.db_schema" in _output_at(_run_main(tmp_path), 1)
