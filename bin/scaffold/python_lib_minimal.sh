@@ -502,6 +502,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_sql_guards_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_identifier_masking_gate.py" \
         "$project_path/tests/unit/test_identifier_masking_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_orm_model_guards_gate.py" \
+        "$project_path/tests/unit/test_orm_model_guards_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
         "$project_path/tests/unit/test_gate_integrity_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
