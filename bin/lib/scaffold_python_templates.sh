@@ -239,6 +239,24 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/.vscode/tasks.json"
 }
 
+# The per-directory leaf CLAUDE.md docs. They are the asset class the copy lists kept
+# forgetting: nothing imports a doc, no test fails without it, and the generated project is
+# green precisely because the file is not there — so a doc written in python-common could sit
+# unshipped indefinitely (blueprintx#325). bin/ci/check_test_copy_lists.py now scans this
+# copy list as a third asset class, next to shared tests and shared workflows.
+#
+# src/config/CLAUDE.md is NOT here: each tier copies it in its own copy_global_config, next to
+# the config payload it documents. Moving it would be a behaviour change in five scaffolds for
+# no gain — the gate accepts either home.
+scaffold_copy_leaf_docs() {
+	local str_project_path="$1"
+
+	mkdir -p "$str_project_path/src/config/contracts" "$str_project_path/src/utils"
+	cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/CLAUDE.md" \
+		"$str_project_path/src/config/contracts/CLAUDE.md"
+	cp "$COMMON_TEMPLATE_ROOT/src/utils/CLAUDE.md" "$str_project_path/src/utils/CLAUDE.md"
+}
+
 scaffold_copy_common_templates() {
 	local str_tier="$1"
 	local str_project_path="$2"
@@ -249,5 +267,6 @@ scaffold_copy_common_templates() {
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	scaffold_copy_leaf_docs "$str_project_path"
 	print_status "success" "Common templates applied"
 }
