@@ -128,7 +128,9 @@ publish` (holds the package for a maintainer's 2FA approval — no `npm publish`
 stored `NPM_TOKEN`) → a GitHub release carrying the named `npm pack` tarball. See
 `docs/contributing.md` for the one-time bootstrap (npm has no pending-publisher
 concept, so the package must be published manually once before a trusted publisher
-can be configured for it).
+can be configured for it). The `version` input is validated before anything else
+runs: semver `X.Y.Z`, optionally `-<prerelease>` (`1.2.3`, `1.2.3-rc.1`) — matching
+what `package.json`'s own `version` field must already satisfy.
 
 `.github/workflows/pack-smoke.yml` runs on every PR: `npm run pack:smoke` (tarball
 install + require/import) plus a Verdaccio rehearsal job that publishes to and
