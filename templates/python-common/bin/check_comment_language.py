@@ -579,6 +579,10 @@ def audit_paths() -> list:
 	return sorted(set(list_paths))
 
 
+# `--root <dir>` is two argv entries; anything shorter is a flag with its value missing.
+_INT_FLAG_WITH_VALUE = 2
+
+
 def split_root_option(list_argv: list) -> tuple:
 	"""Peel ``--root <dir>`` off the argv, the same seam ``check_function_length.py`` exposes.
 
@@ -594,8 +598,19 @@ def split_root_option(list_argv: list) -> tuple:
 	-------
 	tuple of (pathlib.Path or None, list of str)
 		The requested root (``None`` when absent) and the remaining filenames.
+
+	Raises
+	------
+	ValueError
+		When ``--root`` is passed with no directory after it. Returning it as a filename
+		instead makes the gate print success for having checked nothing — measured on
+		blueprintx#247: `check_comment_language.py --root` exited 0. `check_function_length.py`,
+		the seam this mirrors, already rejects the same argv.
 	"""
-	if list_argv[:1] == ["--root"] and len(list_argv) > 1:
+	if list_argv[:1] == ["--root"]:
+		if len(list_argv) < _INT_FLAG_WITH_VALUE:
+			msg = "--root needs a directory"
+			raise ValueError(msg)
 		return pathlib.Path(list_argv[1]).resolve(), list_argv[2:]
 	return None, list_argv
 
@@ -615,7 +630,11 @@ def main(list_argv: list) -> int:
 		0 when every comment reads as English, 1 on a violation.
 	"""
 	global PATH_ROOT  # noqa: PLW0603 -- the one rebind point for the module-wide root
-	path_root, list_argv = split_root_option(list_argv)
+	try:
+		path_root, list_argv = split_root_option(list_argv)
+	except ValueError as cls_err:
+		print(f"\u274c {cls_err}")
+		return 1
 	if path_root is not None:
 		PATH_ROOT = path_root
 	bool_audit = not list_argv
