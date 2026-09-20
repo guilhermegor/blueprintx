@@ -3,6 +3,10 @@
 Guidance for Claude Code when working in this repository — a standalone Bash CLI
 scaffolded from BlueprintX's `bash-cli` skeleton.
 
+## Engineering principles
+
+See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+
 ## Layout
 
 - `bin/${PROJECT_NAME}` — the entrypoint. `CLI_VERSION="0.0.0"` is a stub; `make
