@@ -1,38 +1,43 @@
-"""Measure assertion sites per ``test_*`` function, and block only the zero case (blueprintx#431).
+"""Cap assertion sites per ``test_*`` function: zero anywhere, and exactly one under ``tests/unit/``.
 
-BLUEPRINTX#431 asked for a gate that caps every test at ONE assertion, plus the refactor of the
-188 tests (33%) that had more than one, measured 2026-09-06 by counting every assertion SITE —
-``assert``, an ``assert_*()`` call (pandas/mock), and ``pytest.raises``/``pytest.warns`` used as
-a context manager, not bare ``ast.Assert`` alone (a bare count misreads all 42 ``raises``-only
-tests as "zero assertions").
+Counts every assertion SITE — ``assert``, an ``assert_*()`` call (pandas/mock), and
+``pytest.raises``/``pytest.warns`` used as a context manager — never bare ``ast.Assert`` alone,
+which misreads every ``raises``-only test as "zero assertions".
 
-THAT CAP IS NOT BUILT HERE, ON PURPOSE. ``tests/CLAUDE.md`` already settled this question, via
-blueprintx#429, re-measuring the same tree at **554 tests, 205 (27%) with more than one
-assertion** and finding the rule people actually follow is ONE BEHAVIOUR, not one assert: several
-assertions pinning the *same* fact (a value and its dtype; a rendered message and the absence of
-a secret in it) are one behaviour and belong in one test — splitting them duplicates the whole
-*arrange* to prove nothing new. That doc names blueprintx#429/#431 by number and says explicitly:
-"a ceiling on assert count would fail the legitimate multi-facet case above." The one narrow,
-decidable slice of "one assert hides two facts" — ``assert a and b`` — is already ruff's ``PT018``
-(0 violations in this tree); that is the linter's job, this gate's job is not to re-implement it.
+TWO RULES, SCOPED BY PATH, AND THE SPLIT IS THE WHOLE DESIGN.
 
-So a hand-rolled cap wired into pre-commit/CI would be re-litigating a settled, measured
-disagreement with the repo's own documented convention, on a false-positive rate this file's own
-distribution table below can reproduce. What IS still undecided and still worth a gate: a
-``test_*`` function with **zero** assertion sites asserts nothing, under any reading of "one
-behaviour" — there is no legitimate multi-facet exception for zero facets, and nothing else in
-this repo's gate family (``check_complexity.sh``'s tests/ ceiling of 1, ``PT018``) checks for it.
-That is the one finding this gate reports BY DEFAULT.
+**Zero sites fails in every suite** (blueprintx#431). A ``test_*`` that asserts nothing proves
+nothing under any reading of any convention, and nothing else in this repo's gate family
+(``check_complexity.sh``'s tests/ ceiling of 1, ruff's ``PT018``) looks for it.
 
-The full per-test cap the issue asked for still ships, as an OPT-IN ``--max-per-test N`` flag —
-useful for a project that wants the stricter rule with eyes open, or for re-running this file's
-own measurement against a changed tree — but it is never invoked by any wired pre-commit hook or
-CI job in this PR; see the PR body for the population re-measurement and the wiring decision.
+**One site is the ceiling under ``tests/unit/``** (blueprintx#544, owner's decision 2026-09-19:
+enforce immediately, no warning phase, no grandfathering). A unit test with two asserts that
+goes red does not say which behaviour broke — the failure names a line, and the reader
+reconstructs which of two claims the code stopped honouring. Worse, the GREEN never says which
+assert ran: one placed after an early ``return``, a ``raise``, or a ``raises`` block is never
+reached, and the passing suite reports that unexecuted claim as proven.
+
+**``tests/integration/`` stays on zero-only, deliberately.** An integration test asserts a
+SEQUENCE of observable effects of one call — a row written, a status returned, a webhook fired —
+and splitting those re-runs the whole expensive *arrange* to prove no new fact. Measured
+2026-09-20 over ``templates/**``: 828 unit tests with 201 (24%) over the cap, against 68
+integration tests with 52 (76%) over it. At 24% the rule is a finishable remediation; at 76% it
+is a wall, and a gate at a threshold nobody pays is a gate nobody keeps. (This supersedes
+blueprintx#429's "554 / 31%" and #431's "188 / 33%" — both stale, do not re-cite them.)
+
+Scope is decided by PATH (``--unit-dir``, default ``tests/unit``), never by filename: a project
+that renames the suite re-points the flag, and a file named ``test_x.py`` sitting in
+``tests/integration/`` is judged as an integration test, which is what it is.
+
+``--max-per-test N`` overrides the unit cap; ``--max-per-test 0`` disables it, leaving the
+zero-assertion check alone — the measurement mode this file's distribution table was produced in.
+
+The one narrow, decidable slice of "one assert hides two facts" — ``assert a and b`` — is ruff's
+``PT018``; this gate does not re-implement it.
 
 Escape hatch, matching ``# complexity-ok: <reason>`` elsewhere in this repo: a
 ``# one-assert-ok: <reason>`` comment anywhere in a flagged function's source exempts it from
-BOTH checks (zero-assertion and, when passed, the ``--max-per-test`` cap) — the reason is
-required, a bare marker is rejected.
+BOTH checks — the reason is required, a bare marker is rejected.
 
 SELF-SKIPS when ``tests/`` is absent (this repo's own root, per ``CLAUDE.md``: "BlueprintX's own
 tree has no ``src/`` or ``tests/``"). A ``tests/`` directory that exists but yields zero
@@ -48,14 +53,24 @@ import sys
 
 RE_HATCH = re.compile(r"#\s*one-assert-ok:\s*(\S.*)$", re.M)
 
+# The unit suite's ceiling, blocking by default (blueprintx#544). `--max-per-test 0` turns the
+# cap off and leaves the zero-assertion check alone — 0 cannot mean "cap at zero", since a test
+# with zero sites is already the other, unconditional finding.
+DEFAULT_UNIT_MAX = 1
+DEFAULT_UNIT_DIR = "tests/unit"
+
+# Every flag takes a value, so one table handles them all — adding a flag is adding a key, not
+# a branch, and keeps this file under bin/'s complexity ceiling of 8.
+_SET_VALUE_FLAGS = frozenset({"--root", "--max-per-test", "--unit-dir"})
+
 # Call names this gate treats as a `with`-block assertion — pytest.raises/warns is the
 # context-manager form of a check, not the absence of one (blueprintx#431's own measurement
 # note: bare ast.Assert alone misreads these as zero).
 _SET_CTX_ASSERTIONS = frozenset({"raises", "warns"})
 
 
-def parse_args(list_argv: list) -> tuple:
-	"""Parse ``--root <dir>`` and the optional ``--max-per-test <int>`` flag.
+def _split_flags(list_argv: list) -> tuple:
+	"""Split an argv tail of ``--flag value`` pairs into a dict, or report the first error.
 
 	Parameters
 	----------
@@ -65,29 +80,45 @@ def parse_args(list_argv: list) -> tuple:
 	Returns
 	-------
 	tuple
-		``(path_root, int_max, bool_ok)`` — ``int_max`` is ``None`` when the flag was not
-		given (measurement-only mode); ``bool_ok`` is ``False`` on bad usage (already
-		reported to stdout).
+		``(dict_flags, str_error)`` — ``str_error`` is ``""`` when every token parsed.
 	"""
-	path_root = pathlib.Path.cwd()
-	int_max = None
+	dict_flags: dict = {}
 	list_rest = list(list_argv)
 	while list_rest:
 		str_arg = list_rest.pop(0)
-		if str_arg == "--root":
-			if not list_rest:
-				print("❌ --root needs a directory")
-				return path_root, int_max, False
-			path_root = pathlib.Path(list_rest.pop(0)).resolve()
-		elif str_arg == "--max-per-test":
-			if not list_rest or not list_rest[0].isdigit():
-				print("❌ --max-per-test needs a positive integer")
-				return path_root, int_max, False
-			int_max = int(list_rest.pop(0))
-		else:
-			print(f"❌ unrecognised argument: {str_arg}")
-			return path_root, int_max, False
-	return path_root, int_max, True
+		if str_arg not in _SET_VALUE_FLAGS:
+			return dict_flags, f"unrecognised argument: {str_arg}"
+		if not list_rest:
+			return dict_flags, f"{str_arg} needs a value"
+		dict_flags[str_arg] = list_rest.pop(0)
+	return dict_flags, ""
+
+
+def parse_args(list_argv: list) -> tuple:
+	"""Parse ``--root <dir>``, ``--max-per-test <int>`` and ``--unit-dir <relpath>``.
+
+	Parameters
+	----------
+	list_argv : list of str
+		The raw argv tail.
+
+	Returns
+	-------
+	tuple
+		``(path_root, int_max, str_unit_dir, bool_ok)`` — ``int_max`` defaults to
+		``DEFAULT_UNIT_MAX`` and applies only under ``str_unit_dir``; ``0`` disables the cap.
+		``bool_ok`` is ``False`` on bad usage (already reported to stdout).
+	"""
+	dict_flags, str_error = _split_flags(list_argv)
+	path_root = pathlib.Path(dict_flags.get("--root", ".")).resolve()
+	str_unit_dir = dict_flags.get("--unit-dir", DEFAULT_UNIT_DIR)
+	str_max = dict_flags.get("--max-per-test", str(DEFAULT_UNIT_MAX))
+	if not str_error and not str_max.isdigit():
+		str_error = "--max-per-test needs a non-negative integer (0 disables the cap)"
+	if str_error:
+		print(f"❌ {str_error}")
+		return path_root, DEFAULT_UNIT_MAX, str_unit_dir, False
+	return path_root, int(str_max), str_unit_dir, True
 
 
 def _test_files(path_root: pathlib.Path) -> list:
@@ -309,6 +340,39 @@ def _hatch_reason(str_source: str, node_fn: ast.FunctionDef) -> str:
 	return cls_match.group(1).strip() if cls_match and cls_match.group(1).strip() else ""
 
 
+def cap_for_file(
+	path_file: pathlib.Path, path_root: pathlib.Path, str_unit_dir: str, int_max: int
+) -> int | None:
+	"""Return the assertion-site cap that applies to one file, or ``None`` for zero-only.
+
+	Scope is decided by PATH, never by filename: a ``test_x.py`` under ``tests/integration/``
+	is an integration test and keeps the loose rule, while the same name under ``tests/unit/``
+	is capped (blueprintx#544).
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The test file being checked.
+	path_root : pathlib.Path
+		The tree root the file was discovered under.
+	str_unit_dir : str
+		Root-relative directory holding the unit suite (``--unit-dir``).
+	int_max : int
+		The cap to apply inside that directory; ``0`` disables it everywhere.
+
+	Returns
+	-------
+	int or None
+		The cap, or ``None`` when only the zero-assertion check applies to this file.
+	"""
+	if int_max <= 0:
+		return None
+	str_prefix = f"{str_unit_dir.strip('/')}/"
+	if path_file.relative_to(path_root).as_posix().startswith(str_prefix):
+		return int_max
+	return None
+
+
 def _file_findings(path_file: pathlib.Path, path_root: pathlib.Path, int_max: int | None) -> tuple:
 	"""Return the problems and per-function assertion-site counts for one test file.
 
@@ -319,7 +383,8 @@ def _file_findings(path_file: pathlib.Path, path_root: pathlib.Path, int_max: in
 	path_root : pathlib.Path
 		The tree root, for relative message paths.
 	int_max : int or None
-		The ``--max-per-test`` cap, or ``None`` when only the zero-assertion check applies.
+		The cap that applies to THIS file (from ``cap_for_file``), or ``None`` when only the
+		zero-assertion check applies.
 
 	Returns
 	-------
@@ -350,7 +415,9 @@ def _file_findings(path_file: pathlib.Path, path_root: pathlib.Path, int_max: in
 		elif int_max is not None and int_count > int_max:
 			list_problems.append(
 				f"{str_rel}: {str_name}() line {node_fn.lineno}: {int_count} assertion sites, "
-				f"over the --max-per-test cap of {int_max}"
+				f"over the cap of {int_max} — a red test with several asserts does not say "
+				f"which behaviour broke, and the green never says which one ran. Split it with "
+				f"pytest.mark.parametrize or a scoped fixture (tests/CLAUDE.md)"
 			)
 	return list_problems, list_counts
 
@@ -386,17 +453,18 @@ def main(list_argv: list) -> int:
 	Parameters
 	----------
 	list_argv : list of str
-		``["--root", <dir>]`` and/or ``["--max-per-test", <int>]``, in either order.
+		Any of ``--root <dir>``, ``--max-per-test <int>``, ``--unit-dir <relpath>``, in any
+		order.
 
 	Returns
 	-------
 	int
 		0 when ``tests/`` is absent, holds only non-Python ``test_*`` files, or every
-		function has at least one assertion site and (when given) stays within the cap; 1 on
-		a broken (empty) discovery, an unparsable file, a zero-assertion test, or a cap
+		function has at least one assertion site and every unit test stays within the cap; 1
+		on a broken (empty) discovery, an unparsable file, a zero-assertion test, or a cap
 		violation.
 	"""
-	path_root, int_max, bool_ok = parse_args(list_argv)
+	path_root, int_max, str_unit_dir, bool_ok = parse_args(list_argv)
 	if not bool_ok:
 		return 1
 
@@ -423,7 +491,8 @@ def main(list_argv: list) -> int:
 	list_problems: list = []
 	list_all_counts: list = []
 	for path_file in list_files:
-		list_file_problems, list_counts = _file_findings(path_file, path_root, int_max)
+		int_cap = cap_for_file(path_file, path_root, str_unit_dir, int_max)
+		list_file_problems, list_counts = _file_findings(path_file, path_root, int_cap)
 		list_problems.extend(list_file_problems)
 		list_all_counts.extend(list_counts)
 
@@ -440,7 +509,7 @@ def main(list_argv: list) -> int:
 		)
 		return 1
 
-	str_cap = f", --max-per-test {int_max}" if int_max is not None else " (measurement only)"
+	str_cap = f", max {int_max} per test in {str_unit_dir}/" if int_max else " (cap disabled)"
 	print(
 		f"✅ one-assert gate: {len(list_files)} file(s), {len(list_all_counts)} test(s) "
 		f"checked{str_cap}, 0 findings"
