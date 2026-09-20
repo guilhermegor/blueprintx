@@ -219,6 +219,8 @@ BlueprintX/
 │   │                               #   (CODEOWNERS, PR template, bin/ git-diff scripts + export_repo_content.sh + lib/common.sh, make/git_diff.mk)
 │   ├── python-common/              # shared assets copied into ALL Python skeletons
 │   ├── ts-common/                  # shared assets copied into ALL TypeScript skeletons
+│   ├── api-service-native-db/      # Hexagonal API service (FastAPI transport) with native DB drivers
+│   │   └── skeleton.meta
 │   ├── ddd-service-native-db/      # DDD skeleton with native DB drivers
 │   │   └── skeleton.meta           # discovery descriptor (language, display_name, scaffold)
 │   ├── ddd-service-orm-db/         # DDD skeleton with SQLAlchemy ORM
