@@ -133,6 +133,20 @@ jobs:
       - name: Check for an unjustified gate weakening since main
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
 
+  pr-file-count:
+    name: PR file-count ceiling — 90 files (blueprintx#551)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # Merge-base resolution needs full history — a shallow clone has no common ancestor.
+          fetch-depth: 0
+
+      - name: Check the branch's cumulative diff against the file-count ceiling
+        run: python3 bin/ci/check_pr_file_count.py
+
   docs-code-refs:
     name: Docs code references — symbols + import paths (blueprintx#159)
     runs-on: ubuntu-latest
