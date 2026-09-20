@@ -37,6 +37,7 @@ Every finding is a hard error (exit 1), printed to stderr. Fails when ``docs/`` 
 "nothing to check".
 """
 
+import fnmatch
 import pathlib
 import re
 import sys
@@ -143,7 +144,15 @@ def excluded_prefixes(dict_mkdocs: dict) -> tuple[str, ...]:
 		Each non-blank line of ``exclude_docs:``, stripped.
 	"""
 	str_block = dict_mkdocs.get("exclude_docs") or ""
-	return tuple(str_line.strip() for str_line in str_block.splitlines() if str_line.strip())
+	# ⚠️ MkDocs reads this block gitignore-style: `#` starts a comment and a `!` prefix
+	# NEGATES an earlier match, last rule winning. Every shipped template config here
+	# carries comment lines, and keeping them made each one a literal pattern that could
+	# never match — harmless by luck, since no page is named "# work-to-do backlogs".
+	return tuple(
+		str_line.strip()
+		for str_line in str_block.splitlines()
+		if str_line.strip() and not str_line.lstrip().startswith("#")
+	)
 
 
 def is_excluded(str_rel: str, tuple_excluded: tuple[str, ...]) -> bool:
@@ -161,12 +170,22 @@ def is_excluded(str_rel: str, tuple_excluded: tuple[str, ...]) -> bool:
 	bool
 		``True`` when a folder-prefix or exact-name entry matches.
 	"""
-	for str_pattern in tuple_excluded:
-		if str_pattern.endswith("/") and str_rel.startswith(str_pattern):
-			return True
-		if str_rel == str_pattern:
-			return True
-	return False
+	# Gitignore-style, in MkDocs order: later rules win, and a leading `!` re-includes.
+	# `fnmatch` covers the glob forms (`*.tmp`, `draft-*.md`); a trailing `/` is a folder
+	# prefix; a leading `/` anchors to the docs root. Anything MkDocs itself excludes by
+	# default (dotfiles, `templates/`) is handled by the caller's own walk.
+	bool_excluded = False
+	for str_raw in tuple_excluded:
+		bool_negate = str_raw.startswith("!")
+		str_pattern = str_raw[1:] if bool_negate else str_raw
+		str_pattern = str_pattern.removeprefix("/")
+		if str_pattern.endswith("/"):
+			bool_hit = str_rel.startswith(str_pattern)
+		else:
+			bool_hit = str_rel == str_pattern or fnmatch.fnmatch(str_rel, str_pattern)
+		if bool_hit:
+			bool_excluded = not bool_negate
+	return bool_excluded
 
 
 def published_pages(path_docs: pathlib.Path, tuple_excluded: tuple[str, ...]) -> list[str]:
@@ -322,6 +341,15 @@ def main(list_argv: list) -> int:
 
 	tuple_excluded = excluded_prefixes(dict_mkdocs)
 	list_pages = published_pages(path_docs, tuple_excluded)
+	if not list_pages:
+		# Same reason as the empty-mkdocs.yml branch above: a scan that found nothing to
+		# check has not passed, it has failed to run. Reporting 0 errors over 0 pages is
+		# a gate declaring its own blindness as OK.
+		print(
+			"no published documentation pages found — discovery is broken, not clean",
+			file=sys.stderr,
+		)
+		return 1
 	set_nav_files = nav_files(dict_mkdocs.get("nav"))
 	list_errors = check_orphan_pages(list_pages, set_nav_files)
 
