@@ -17,6 +17,22 @@ from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
 
 
+def _read_lob(value: Any) -> str:
+	"""Return the text of an Oracle CLOB, or the value itself when already a string.
+
+	Parameters
+	----------
+	value : Any
+		Column value returned by ``oracledb``; a LOB object or a ``str``.
+
+	Returns
+	-------
+	str
+		Textual payload of the column.
+	"""
+	return value.read() if hasattr(value, "read") else value
+
+
 class OracleDatabaseHandler(DatabaseHandler):
 	"""Oracle handler using oracledb/cx_Oracle.
 
@@ -107,10 +123,14 @@ class OracleDatabaseHandler(DatabaseHandler):
 			row = cur.fetchone()
 		if not row:
 			return None
-		return json.loads(row[0].read() if hasattr(row[0], "read") else row[0])
+		return json.loads(_read_lob(row[0]))
 
 	def update(self, record_id: str, updates: Record) -> Record | None:
-		"""Merge updates into an existing record.
+		"""Merge updates into an existing record atomically.
+
+		The read and the write share one transaction and the row is held by
+		``SELECT … FOR UPDATE``, so a concurrent update cannot be lost. See
+		``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
 
 		Parameters
 		----------
@@ -124,12 +144,23 @@ class OracleDatabaseHandler(DatabaseHandler):
 		Record or None
 			Updated record when found, else ``None``.
 		"""
-		existing = self.read(record_id)
-		if existing is None:
-			return None
-		updated = {**existing, **updates, self.id_field: record_id}
-		self.create(updated)
-		return updated
+		with self._connect() as cls_conn:
+			cls_cur = cls_conn.cursor()
+			cls_cur.execute(
+				f"SELECT data FROM {self.table} WHERE {self.id_field} = :id FOR UPDATE",  # noqa: S608
+				[record_id],
+			)
+			tuple_row = cls_cur.fetchone()
+			if tuple_row is None:
+				return None
+			dict_stored = json.loads(_read_lob(tuple_row[0]))
+			dict_updated = {**dict_stored, **updates, self.id_field: record_id}
+			cls_cur.execute(
+				f"UPDATE {self.table} SET data = :data WHERE {self.id_field} = :id",  # noqa: S608
+				[json.dumps(dict_updated), record_id],
+			)
+			cls_conn.commit()
+		return dict_updated
 
 	def delete(self, record_id: str) -> bool:
 		"""Delete a record by identifier.
@@ -172,7 +203,7 @@ class OracleDatabaseHandler(DatabaseHandler):
 			rows = []
 			for row in cur:
 				cell = row[0]
-				rows.append(json.loads(cell.read() if hasattr(cell, "read") else cell))
+				rows.append(json.loads(_read_lob(cell)))
 			handle.write(json.dumps(rows, indent=2, ensure_ascii=False))
 		return target
 

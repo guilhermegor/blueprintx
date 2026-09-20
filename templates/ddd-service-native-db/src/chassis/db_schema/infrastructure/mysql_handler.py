@@ -111,7 +111,11 @@ class MySQLDatabaseHandler(DatabaseHandler):
 		return json.loads(row[0])
 
 	def update(self, record_id: str, updates: Record) -> Record | None:
-		"""Update an existing record.
+		"""Update an existing record atomically.
+
+		The read and the write share one transaction and the row is held by
+		``SELECT … FOR UPDATE``, so a concurrent update cannot be lost. See
+		``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
 
 		Parameters
 		----------
@@ -125,12 +129,22 @@ class MySQLDatabaseHandler(DatabaseHandler):
 		Record or None
 			Updated record when it exists, otherwise ``None``.
 		"""
-		existing = self.read(record_id)
-		if existing is None:
-			return None
-		updated = {**existing, **updates, self.id_field: record_id}
-		self.create(updated)
-		return updated
+		with self._connect() as cls_conn:
+			cls_cur = cls_conn.cursor()
+			cls_cur.execute(
+				f"SELECT data FROM {self.table} WHERE {self.id_field} = %s FOR UPDATE",  # noqa: S608
+				(record_id,),
+			)
+			tuple_row = cls_cur.fetchone()
+			if tuple_row is None:
+				return None
+			dict_updated = {**json.loads(tuple_row[0]), **updates, self.id_field: record_id}
+			cls_cur.execute(
+				f"UPDATE {self.table} SET data = %s WHERE {self.id_field} = %s",  # noqa: S608
+				(json.dumps(dict_updated), record_id),
+			)
+			cls_conn.commit()
+		return dict_updated
 
 	def delete(self, record_id: str) -> bool:
 		"""Delete a record by identifier.
