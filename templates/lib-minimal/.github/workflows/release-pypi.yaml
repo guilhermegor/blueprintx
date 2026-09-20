@@ -37,16 +37,18 @@ jobs:
       # into a PyPI publish. Reject a malformed value here — before the test suite,
       # the PyPI version-comparison and the build all run for nothing — rather than
       # let it fail after a tag has already been pushed. PEP 440's own separator
-      # rules are lenient (a1, a.1 and a-1 all normalise to the same release), so
-      # this accepts a bare release plus an optional lowercase-letter suffix with an
-      # optional . / - separator on either side, matching the SUFFIX extraction below.
+      # rules are lenient, but this gate is deliberately NOT: it accepts exactly the
+      # forms the SUFFIX extractor below can read back, because a value that validates
+      # and then extracts an EMPTY suffix is published as a final release. Measured on
+      # blueprintx#548: `1.2.3-rc.1` passed the old pattern and extracted '', so a
+      # prerelease would have moved the `latest` docs alias.
       - name: Validate version
         if: github.event_name == 'workflow_dispatch'
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._-]?[a-z]+[._-]?[0-9]+)?$ ]]; then
-            echo "::error::Invalid version '$VERSION' — expected MAJOR.MINOR.PATCH, optionally followed by a PEP 440 pre/post/dev suffix (e.g. rc1, -rc.1, .post1)." >&2
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)((a|b|rc)(0|[1-9][0-9]*)|\.post(0|[1-9][0-9]*)|\.dev(0|[1-9][0-9]*))?$ ]]; then
+            echo "::error::Invalid version '$VERSION' — expected PEP 440 MAJOR.MINOR.PATCH with no leading zeroes, optionally followed by exactly one of a<N>/b<N>/rc<N>, .post<N> or .dev<N> (e.g. 1.2.3, 1.2.3rc1, 1.2.3.post1). Rejected: 1.2.3foo1, 1.2.3-rc.1, 01.2.3." >&2
             exit 1
           fi
 
@@ -58,12 +60,12 @@ jobs:
         run: |
           if [ "$EVENT_NAME" == "workflow_dispatch" ]; then
             NEW_VERSION="$INPUT_VERSION"
-            SUFFIX=$(echo "$NEW_VERSION" | grep -oP '[a-z]+[0-9]+' || echo "")
+            SUFFIX=$(printf '%s' "$NEW_VERSION" | grep -oP '(?<=[0-9])(a|b|rc|\.post|\.dev)[0-9]+$' || echo "")
             TAG_NAME="v$NEW_VERSION"
           else
             TAG_NAME=${GITHUB_REF#refs/tags/}
-            NEW_VERSION=$(echo $TAG_NAME | awk -F'-' '{print $1}')
-            SUFFIX=$(echo $TAG_NAME | grep -oP '[a-z]+[0-9]+' || echo "")
+            NEW_VERSION=$(echo "$TAG_NAME" | awk -F'-' '{print $1}')
+            SUFFIX=$(printf '%s' "$TAG_NAME" | grep -oP '(?<=[0-9])(a|b|rc|\.post|\.dev)[0-9]+$' || echo "")
           fi
 
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"

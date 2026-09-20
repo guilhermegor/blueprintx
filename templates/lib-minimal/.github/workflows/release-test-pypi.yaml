@@ -46,8 +46,8 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._-]?[a-z]+[._-]?[0-9]+)?$ ]]; then
-            echo "::error::Invalid version '$VERSION' — expected MAJOR.MINOR.PATCH, optionally followed by a PEP 440 pre/post/dev suffix (e.g. rc1, -rc.1, .post1)." >&2
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)((a|b|rc)(0|[1-9][0-9]*)|\.post(0|[1-9][0-9]*)|\.dev(0|[1-9][0-9]*))?$ ]]; then
+            echo "::error::Invalid version '$VERSION' — expected PEP 440 MAJOR.MINOR.PATCH with no leading zeroes, optionally followed by exactly one of a<N>/b<N>/rc<N>, .post<N> or .dev<N> (e.g. 1.2.3, 1.2.3rc1, 1.2.3.post1). Rejected: 1.2.3foo1, 1.2.3-rc.1, 01.2.3." >&2
             exit 1
           fi
 
@@ -59,14 +59,14 @@ jobs:
         run: |
           if [ "$EVENT_NAME" == "workflow_dispatch" ]; then
             NEW_VERSION="$INPUT_VERSION"
-            SUFFIX=$(echo "$NEW_VERSION" | grep -oP '[a-z]+[0-9]+' || echo "")
+            SUFFIX=$(printf '%s' "$NEW_VERSION" | grep -oP '(?<=[0-9])(a|b|rc|\.post|\.dev)[0-9]+$' || echo "")
             TAG_NAME="$NEW_VERSION"
           else
             TAG_NAME=${GITHUB_REF#refs/tags/}
             # Remove -test suffix if present
-            CLEAN_TAG=$(echo $TAG_NAME | sed 's/-test$//')
-            NEW_VERSION=$(echo $CLEAN_TAG | awk -F'-' '{print $1}')
-            SUFFIX=$(echo $CLEAN_TAG | grep -oP '[a-z]+[0-9]+' || echo "")
+            CLEAN_TAG=$(echo "$TAG_NAME" | sed 's/-test$//')
+            NEW_VERSION=$(echo "$CLEAN_TAG" | awk -F'-' '{print $1}')
+            SUFFIX=$(printf '%s' "$CLEAN_TAG" | grep -oP '(?<=[0-9])(a|b|rc|\.post|\.dev)[0-9]+$' || echo "")
           fi
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
