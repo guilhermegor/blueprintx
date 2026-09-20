@@ -64,7 +64,12 @@ of your public `__all__`. The internal imports are package-qualified
   inference), route reads through `_internal.utils.tabular_reader`, and use
   `_internal.utils.br_identifiers` for CNPJ/CPF (alphanumeric-aware for the 2026 CNPJ).
 - **No `.env`** — a distributable library has no runtime env to seed (unlike the service
-  tiers), so none is shipped.
+  tiers), so none is shipped. This does not block the opt-in OTLP log exporter
+  (`_internal/utils/otel_logging.py`, blueprintx#438): it reads
+  `OTEL_EXPORTER_OTLP_ENDPOINT` etc. from the **consumer's own process environment** at call
+  time — the same "the host configures the env, the library ships no file" pattern
+  `ts_lib.sh` already uses. `configure_otel_logging(logger)` is injected, never auto-run on
+  import, matching the dependency-injection rule below.
 - **Logging via dependency injection** — never hard-import a logging backend in a helper;
   inject a logger (stdlib default), as `_internal/utils/retry/log_emitter.py`'s `LogEmitter`
   shows. The
