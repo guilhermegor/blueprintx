@@ -126,6 +126,7 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_rules_provisioner "$project_path" "$SKELETON_TEMPLATE_ROOT/bin/required-checks.txt"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
 
     print_status "success" "Common templates applied"

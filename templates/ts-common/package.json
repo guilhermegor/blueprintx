@@ -22,7 +22,9 @@
     "test:e2e:frontend": "playwright test",
     "test:e2e:frontend:update": "playwright test --update-snapshots",
     "test:e2e:frontend:ui": "playwright test --ui",
-    "context:export": "bash bin/export_repo_content.sh"
+    "context:export": "bash bin/export_repo_content.sh",
+    "repo:rules": "bash bin/enable_repo_rules.sh",
+    "repo:rules:verify": "bash bin/enable_repo_rules.sh verify"
   },
   "keywords": [],
   "author": "",
