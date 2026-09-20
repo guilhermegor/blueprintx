@@ -2,6 +2,10 @@
 
 Guidance for Claude Code (or any agent) working in this repository.
 
+## Engineering principles
+
+See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+
 ## What this is
 
 `${PROJECT_NAME}` is a publishable TypeScript library (npm), scaffolded by BlueprintX's

@@ -219,6 +219,8 @@ BlueprintX/
 │   │                               #   (CODEOWNERS, PR template, bin/ git-diff scripts + export_repo_content.sh + lib/common.sh, make/git_diff.mk)
 │   ├── python-common/              # shared assets copied into ALL Python skeletons
 │   ├── ts-common/                  # shared assets copied into ALL TypeScript skeletons
+│   ├── api-service-native-db/      # Hexagonal API service (FastAPI transport) with native DB drivers
+│   │   └── skeleton.meta
 │   ├── ddd-service-native-db/      # DDD skeleton with native DB drivers
 │   │   └── skeleton.meta           # discovery descriptor (language, display_name, scaffold)
 │   ├── ddd-service-orm-db/         # DDD skeleton with SQLAlchemy ORM
@@ -232,6 +234,8 @@ BlueprintX/
 │   ├── react-spa-webpack/          # React 19 + TypeScript + Webpack 5 SPA skeleton
 │   │   └── skeleton.meta
 │   ├── ts-lib/                     # publishable TypeScript library skeleton
+│   │   └── skeleton.meta
+│   ├── bash-cli/                   # standalone Bash CLI, git-tag versioned, bats + shellcheck
 │   │   └── skeleton.meta
 │   └── licenses/                   # license text files (MIT, Apache-2.0, GPL-3.0, …)
 ├── docs/                           # MkDocs source pages
@@ -258,9 +262,9 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 
 ## How scaffolding works
 
-**Seven skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
-`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`) and two TypeScript
-(`react-spa-webpack`, `ts-lib`), one `skeleton.meta` each (see "Repo architecture" above and
+**Eight skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
+`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`), two TypeScript
+(`react-spa-webpack`, `ts-lib`) and one Bash (`bash-cli`), one `skeleton.meta` each (see "Repo architecture" above and
 "Discovery system" below). `bin/ci/validate_meta.sh` enforces that every one of these
 directory names is also named here — this count is a should-fail witness in its own right:
 add or remove a skeleton without updating it and the number goes stale before the paragraph
@@ -390,3 +394,12 @@ the published site (`exclude_docs` in each skeleton's `mkdocs.yml`) but tracked 
 team-reviewable record of what was done and why. When complete, tick the last box and add a
 short "Completed — kept as a record" note instead of removing the file. (Lesson:
 persist-todo-in-docs-backlog.)
+
+## Prose language: en-US everywhere in this repo
+
+This repository's own prose — `CLAUDE.md`, `CONTRIBUTING.md`, `docs/`, `docs/backlog/`,
+commit messages, comments, PR descriptions — is en-US, no exceptions. This is scoped to
+**BlueprintX itself**. It does not extend to a project BlueprintX scaffolds, which may
+legitimately be bilingual — see `templates/python-common/CLAUDE.md`'s description of
+`bin/check_comment_language.py`, whose locale-agnostic design is a feature for a *generated*
+project, not a statement about this one (blueprintx#194).

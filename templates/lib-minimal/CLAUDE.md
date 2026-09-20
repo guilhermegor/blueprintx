@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Engineering principles
+
+See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+
 ## What this template is
 
 A **PyPI-ready Python library starter**. A clean, importable package with CI, pre-commit,
