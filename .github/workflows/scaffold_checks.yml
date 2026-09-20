@@ -61,6 +61,22 @@ jobs:
       - name: Verify an existing origin pointing elsewhere is refused
         run: bash bin/ci/check_git_remote_guard.sh
 
+  review-bot-roster-optout:
+    name: Review-bot roster opt-out — "no" must omit .review-bots.yaml
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # No setup step, same as git-remote-guard above: the check sources the scaffold libs
+      # and drives them against throwaway temp dirs. Nothing to install means no skip path
+      # to inherit, so there is no *_REQUIRED flag here — a missing tool cannot make this
+      # gate report its own blindness as OK.
+      - name: Verify INCLUDE_REVIEW_BOT_ROSTER=false omits the roster on all three scaffold shapes
+        run: bash bin/ci/check_review_bot_roster_optout.sh
+
   function-length:
     name: Function length — 60 lines, docstring excluded
     runs-on: ubuntu-latest
@@ -74,6 +90,21 @@ jobs:
       # the whole reason it is a hand-rolled script rather than another linter to install.
       - name: Check function length across bin/ and templates/
         run: python3 templates/python-common/bin/check_function_length.py --root .
+
+  comment-budget:
+    name: Comment budget — long runs + decorative banners (blueprintx#303)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Same shape as function-length above: ONE implementation, run over this repo via
+      # --root rather than kept as a second copy, and stdlib-only ast/re so there is no
+      # setup step and no graceful-skip path for CI to have to override.
+      - name: Check the comment budget across bin/ and templates/
+        run: python3 templates/python-common/bin/check_comment_budget.py --root .
 
   complexity:
     name: Cyclomatic complexity — tests 1, src 2, bin 8
