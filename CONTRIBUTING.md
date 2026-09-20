@@ -218,6 +218,39 @@ never merge. Over the 100 most recent PRs, exactly **1** exceeded even 90 files,
 largest legitimate PR in that set was 59 files — so 90 leaves headroom on both sides without
 being a rule nobody pays.
 
+### GitHub Actions are pinned by commit SHA — blueprintx#369
+
+Every remote action reference in a workflow — first-party `actions/*` included — is pinned to
+the full 40-character commit SHA of a released tag, with that tag as a trailing comment:
+
+```yaml
+- uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+```
+
+Enforced by `bin/ci/check_actions.sh` (`check_action_pins`) over every workflow shipped in
+`templates/`, in both pre-commit (`lint-actions`) and CI. A tag reference, a branch reference,
+a short SHA, or a SHA without the version comment all fail naming the file and line;
+`tests/test_check_actions_pins.sh` is the should-fail witness for each shape.
+
+Why the SHA and not the tag: a tag is a movable pointer. If `v4` moves — by compromise or a
+maintainer force-push — the workflow runs different code with no diff in the repo and no
+signal anywhere. The sharpest case is `secret_scan.yaml`, which runs `checkout` before
+`gitleaks`: a moved tag rewrites the workspace before the scanner reads it. `actions/*` is
+not exempt, because `actions/cache@v3` — a version GitHub stopped running — already sat in
+three tiers until `check_actions.sh`'s first run found it: the org being trusted is not the
+same as the reference being stable.
+
+Why the trailing `# vX.Y.Z` is mandatory, not decoration: pinning alone stops security patches
+arriving. Dependabot's `github-actions` ecosystem (already configured in
+`templates/python-common/.github/dependabot.yml` and this repo's own) reads that comment to
+know which version a SHA stands for, and rewrites both SHA and comment when it bumps. A bare
+SHA is a pin Dependabot cannot update — worse than the tag it replaced.
+
+Measured 2026-09-20 when the rule was adopted: **83 references across 25 template workflows,
+12 distinct `action@tag` pairs, 0 pinned**. Resolve a new SHA from the real tag
+(`git ls-remote --tags https://github.com/<owner>/<repo>` shows the peeled `^{}` commit of an
+annotated tag), never from memory or another repo's copy.
+
 ## Ruff Rule Adoption Log
 
 `templates/python-common/ruff.toml` only carries a short pointer comment beside each
