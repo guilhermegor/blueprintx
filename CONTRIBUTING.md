@@ -206,6 +206,18 @@ narrowed or widened.
    - Code coverage should not decrease
    - Documentation must be updated
 
+### PR file-count ceiling — blueprintx#551
+
+A PR is capped at **90 cumulative changed files**, enforced by `bin/ci/check_pr_file_count.py`
+in both pre-commit and CI (`pr-file-count` job). Above it, split at a natural seam — by
+capability/tier, or whitespace-only vs content-changed — into PRs of 90 files or fewer each.
+
+The number is measured, not chosen: CodeRabbit hard-refuses to review a PR above **100**
+changed files (`Review skipped: N files exceed the limit of 100`), and a PR in that state can
+never merge. Over the 100 most recent PRs, exactly **1** exceeded even 90 files, and the
+largest legitimate PR in that set was 59 files — so 90 leaves headroom on both sides without
+being a rule nobody pays.
+
 ## Ruff Rule Adoption Log
 
 `templates/python-common/ruff.toml` only carries a short pointer comment beside each

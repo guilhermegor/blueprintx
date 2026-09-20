@@ -178,6 +178,17 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: pr-file-count
+        name: PR file-count ceiling (90 files, blueprintx#551)
+        # Same diff-scoped shape as gate-integrity above: merge-base(HEAD, main), not a
+        # whole-tree audit. CodeRabbit hard-refuses to review a PR above 100 changed
+        # files, so this fails 10 files short of that at a calibrated 1%-of-100
+        # violation rate (see the script's own docstring for the full reasoning).
+        entry: python3 bin/ci/check_pr_file_count.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: check-secrets
         name: secret scan (gitleaks)
         # Same treatment as check-complexity above: ONE implementation, run over this repo via
