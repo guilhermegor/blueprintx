@@ -231,6 +231,26 @@ def shared_workflow_names() -> set:
     return {path_file.name for path_file in _SHARED_WORKFLOWS.glob("*.y*ml")}
 
 
+def _reachable_util_names(str_names: str, cls_array: re.Match | None) -> set:
+    """Return the valid utility names reachable from a copy_shared_utils loop body.
+
+    Parameters
+    ----------
+    str_names : str
+        Whitespace-separated names captured from the loop's own match.
+    cls_array : re.Match or None
+        Optional array-literal match whose group(1) contributes more names.
+
+    Returns
+    -------
+    set of str
+        Names matching ``_RE_UTIL_NAME`` — each yields a ``test_<name>.py``.
+    """
+    if cls_array:
+        str_names = f"{str_names} {cls_array.group(1)}"
+    return {str_util for str_util in str_names.split() if _RE_UTIL_NAME.fullmatch(str_util)}
+
+
 def reachable_tests(str_source: str) -> set:
     """Return the shared tests one scaffold script can deliver, by either mechanism.
 
@@ -253,13 +273,9 @@ def reachable_tests(str_source: str) -> set:
         str_body = cls_fn.group(1)
         cls_loop = _RE_UTILS_LOOP.search(str_body)
         if cls_loop and _RE_UTILS_TEST_CP.search(str_body):
-            str_names = cls_loop.group(1)
             cls_array = _RE_UTILS_ARRAY.search(str_body)
-            if cls_array:
-                str_names = f"{str_names} {cls_array.group(1)}"
-            for str_util in str_names.split():
-                if _RE_UTIL_NAME.fullmatch(str_util):
-                    set_reachable.add(f"test_{str_util}.py")
+            for str_util in _reachable_util_names(cls_loop.group(1), cls_array):
+                set_reachable.add(f"test_{str_util}.py")
 
     return set_reachable
 
