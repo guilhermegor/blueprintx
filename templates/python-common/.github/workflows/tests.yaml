@@ -233,6 +233,15 @@ jobs:
         # contributor bypasses it. The gate FAILS when discovery matches zero files.
         run: poetry run python bin/check_identifier_masking.py
 
+      - name: Run SQL Guards Gate
+        if: runner.os == 'Linux'
+        # Mirrors the `check-sql-guards` pre-commit hook. CI runs its gates as explicit
+        # steps, not via pre-commit, so this must be listed here or a hook-skipping
+        # contributor bypasses it — which is exactly how this gate shipped one-legged
+        # (blueprintx#355): present in pre-commit, absent from CI, so a WHERE-less DELETE
+        # reached main unflagged whenever hooks were skipped.
+        run: poetry run python bin/check_sql_guards.py
+
       - name: Run Coverage Floor Gate
         if: runner.os == 'Linux'
         # Mirrors the `coverage-floor` pre-commit hook. CI runs its gates as explicit steps,
