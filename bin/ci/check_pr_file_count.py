@@ -31,7 +31,9 @@ Three design points, decided rather than assumed:
   or a single commit, so pre-commit sees staged content and CI (clean tree) reduces
   to the branch's cumulative diff. No-op on the default branch or off a feature
   branch with no divergence. CI needs ``fetch-depth: 0`` — a shallow clone has no
-  merge-base to resolve.
+  merge-base to resolve. One deliberate deviation: the merge-base is resolved
+  against ``origin/<branch>``, not a bare local branch name — see
+  ``default_branch_ref``'s own docstring for the measured failure this avoids.
 """
 
 import subprocess
@@ -75,21 +77,36 @@ def _git(list_args: list) -> str:
     return cls_proc.stdout.strip()
 
 
-def default_branch() -> str:
-    """Return the repository's default branch name (``main``/``master``, else ``main``).
+def default_branch_ref() -> str:
+    """Return a ref that resolves to the CURRENT default branch tip.
+
+    ⚠️ Prefers ``origin/<branch>`` over a bare local branch name on purpose. A local
+    ``main`` in a long-lived worktree checkout can sit dozens of commits behind
+    ``origin/main`` without anyone noticing (measured on this very branch during
+    blueprintx#551's own development: local ``main`` was 45 commits stale, which
+    turned this gate's own merge-base into a stranger commit and inflated a 3-file
+    change to a 213-file "violation"). ``origin/<branch>`` is kept current by every
+    ``git fetch`` a checkout or CI run already does, where a local branch is not.
 
     Returns
     -------
     str
-        The default branch name.
+        ``origin/<branch>`` when that ref resolves, else the bare local branch name
+        (offline fixture repos with no ``origin`` remote configured).
     """
-    str_ref = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
-    if str_ref:
-        return str_ref.rsplit("/", 1)[-1]
-    for str_candidate in ("main", "master"):
-        if _git(["rev-parse", "--verify", "--quiet", str_candidate]):
-            return str_candidate
-    return "main"
+    str_branch = "main"
+    str_symbolic = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
+    if str_symbolic:
+        str_branch = str_symbolic.rsplit("/", 1)[-1]
+    elif not _git(["rev-parse", "--verify", "--quiet", "main"]) and _git(
+        ["rev-parse", "--verify", "--quiet", "master"]
+    ):
+        str_branch = "master"
+
+    str_remote_ref = f"origin/{str_branch}"
+    if _git(["rev-parse", "--verify", "--quiet", str_remote_ref]):
+        return str_remote_ref
+    return str_branch
 
 
 def changed_file_count(str_base: str) -> int:
@@ -117,7 +134,7 @@ def main() -> int:
     int
         0 when within the ceiling (or not applicable), 1 on a violation.
     """
-    str_base = _git(["merge-base", "HEAD", default_branch()])
+    str_base = _git(["merge-base", "HEAD", default_branch_ref()])
     str_head = _git(["rev-parse", "HEAD"])
     if not str_base or str_base == str_head:
         # On the default branch (or no merge-base): nothing branch-scoped to check.
