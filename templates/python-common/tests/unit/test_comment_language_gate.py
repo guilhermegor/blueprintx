@@ -50,6 +50,37 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_comment_language")
 
 
+def _sole(list_items: list) -> object:
+	"""Return the one item in a list, asserting there is exactly one.
+
+	"There is exactly one" and "it says the right thing" are two claims (blueprintx#544);
+	the first is a precondition of the second, since indexing ``[0]`` of an empty list
+	raises an ``IndexError`` that names neither the gate nor the input.
+
+	Parameters
+	----------
+	list_items : list
+		Whatever the gate returned.
+
+	Returns
+	-------
+	object
+		The single item.
+	"""
+	assert len(list_items) == 1, list_items
+	return list_items[0]
+
+
+# Two consecutive comment lines: a verbatim quotation opens on the first and closes on the
+# second. Read line by line, the opening quote never finds its closing one, the quoted span
+# survives redaction, and the quotation's language is charged to the English comment.
+_STR_SPANNING_QUOTE = (
+	'# The user decided: "nao vamos usar isso, para nada"\n'
+	"# -- quoted verbatim, so the comment itself stays English.\n"
+	"x = 1\n"
+)
+
+
 # --------------------------
 # True positives — the gate must actually fire
 # --------------------------
@@ -70,23 +101,39 @@ def test_one_function_word_is_enough_signal() -> None:
 # --------------------------
 
 
-def test_accented_data_labels_do_not_trigger() -> None:
+@pytest.mark.parametrize(
+	"str_comment",
+	["The report labels the column Saídas", "Sums the Ativos Líquidos column"],
+)
+def test_accented_data_labels_do_not_trigger(str_comment: str) -> None:
 	"""Accent-hunting was the rejected design: it flags every legitimate data label.
 
 	``Saídas`` and ``Ativos Líquidos`` are column names an English comment may name freely.
 	Matching function words instead is what makes them pass.
+
+	Parameters
+	----------
+	str_comment : str
+		An English comment naming an accented data label.
 	"""
-	assert gate.portuguese_words("The report labels the column Saídas") == []
-	assert gate.portuguese_words("Sums the Ativos Líquidos column") == []
+	assert gate.portuguese_words(str_comment) == []
 
 
-def test_all_caps_acronyms_are_not_read_as_words() -> None:
+# ``NÃO`` is the second case because accented capitals are in the rule too — the same pass
+# has to leave both spellings alone.
+@pytest.mark.parametrize(
+	"str_comment",
+	["Uses the Microsoft COM bridge", "The NAO and NÃO markers are unrelated"],
+)
+def test_all_caps_acronyms_are_not_read_as_words(str_comment: str) -> None:
 	"""Microsoft ``COM`` read as the preposition "com" was **5 findings on its own**.
 
-	Accented capitals are included in the rule, so ``NÃO`` is caught by the same pass.
+	Parameters
+	----------
+	str_comment : str
+		An English comment containing an ALL-CAPS acronym.
 	"""
-	assert gate.portuguese_words("Uses the Microsoft COM bridge") == []
-	assert gate.portuguese_words("The NAO and NÃO markers are unrelated") == []
+	assert gate.portuguese_words(str_comment) == []
 
 
 def test_dotted_tokens_are_redacted() -> None:
@@ -99,10 +146,23 @@ def test_urls_are_redacted() -> None:
 	assert gate.portuguese_words("See https://example.com/para/que/nao for details") == []
 
 
-def test_backticked_and_quoted_spans_are_redacted() -> None:
-	"""An English comment naming a Portuguese identifier or quoting text is correct."""
-	assert gate.portuguese_words("Skips the `saidas_zeradas` block entirely") == []
-	assert gate.portuguese_words('The subject line is "para todos os fundos"') == []
+@pytest.mark.parametrize(
+	"str_comment",
+	[
+		"Skips the `saidas_zeradas` block entirely",
+		'The subject line is "para todos os fundos"',
+	],
+	ids=["backticked-identifier", "quoted-text"],
+)
+def test_backticked_and_quoted_spans_are_redacted(str_comment: str) -> None:
+	"""An English comment naming a Portuguese identifier or quoting text is correct.
+
+	Parameters
+	----------
+	str_comment : str
+		An English comment carrying a redacted span.
+	"""
+	assert gate.portuguese_words(str_comment) == []
 
 
 def test_double_backtick_spans_are_redacted_before_single() -> None:
@@ -119,6 +179,15 @@ def test_double_backtick_spans_are_redacted_before_single() -> None:
 # --------------------------
 
 
+def test_consecutive_comment_lines_join_into_one_block() -> None:
+	"""The MECHANISM, split out rather than left as a second assert (blueprintx#544).
+
+	It is the load-bearing half: if the lines do not join, the sibling test below passes for
+	the wrong reason — a single-line block that happens to hold no function word.
+	"""
+	assert len(gate.marker_comments(_STR_SPANNING_QUOTE, "#")) == 1
+
+
 def test_a_quotation_spanning_lines_does_not_charge_the_comment() -> None:
 	"""Reading comments line by line sees an opening quote and never its closing one.
 
@@ -126,14 +195,7 @@ def test_a_quotation_spanning_lines_does_not_charge_the_comment() -> None:
 	English comment around it. Measured against a verbatim user decision quoted across two
 	lines. Joining consecutive comment lines into one block is what fixes it.
 	"""
-	str_source = (
-		'# The user decided: "nao vamos usar isso, para nada"\n'
-		"# -- quoted verbatim, so the comment itself stays English.\n"
-		"x = 1\n"
-	)
-	list_blocks = gate.marker_comments(str_source, "#")
-	assert len(list_blocks) == 1, "consecutive comment lines must join into ONE block"
-	assert gate.portuguese_words(list_blocks[0][1]) == []
+	assert gate.portuguese_words(_sole(gate.marker_comments(_STR_SPANNING_QUOTE, "#"))[1]) == []
 
 
 def test_a_blank_line_separates_two_blocks() -> None:
@@ -170,9 +232,9 @@ def test_the_reported_line_is_the_word_s_own_line(tmp_path: Path) -> None:
 		"# English line one\n# English line two\n# esta linha nao esta em ingles\nx = 1\n",
 		encoding="utf-8",
 	)
-	list_problems = gate.file_problems(path_file)
-	assert len(list_problems) == 1
-	assert ":3:" in list_problems[0], "must name line 3, not the block start at line 1"
+	assert ":3:" in _sole(gate.file_problems(path_file)), (
+		"must name line 3, not the block start at line 1"
+	)
 
 
 # --------------------------
@@ -201,9 +263,8 @@ def test_a_hash_inside_a_string_literal_is_not_a_comment() -> None:
 def test_docstrings_are_read() -> None:
 	"""Docstrings are the other place prose lives in a module."""
 	str_source = 'def f() -> None:\n\t"""Retorna nada, apenas para o teste."""\n'
-	list_comments = gate.python_comments(str_source)
-	assert list_comments
-	assert gate.portuguese_words(list_comments[0][1])
+
+	assert gate.portuguese_words(_sole(gate.python_comments(str_source))[1])
 
 
 def test_an_unparseable_file_yields_nothing_rather_than_crashing() -> None:
@@ -254,29 +315,42 @@ def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
 	⚠️ Deriving the expectation from ``TUPLE_SKIP_DIRS`` alone would be tautological — adding a
 	directory to the skip list moves both sides of the comparison together and the test keeps
 	passing. (Verified: that version survived a mutation adding ``optional`` to the skips.) So
-	this first names concrete LOCATIONS that must be covered, which a skip-list change genuinely
-	breaks, and only then asserts the general property.
+	this names concrete LOCATIONS that must be covered, which a skip-list change genuinely
+	breaks; its sibling below then asserts the general property.
 	"""
 	set_audited = {path_file.resolve() for path_file in gate.audit_paths()}
 
-	# One representative, long-lived file per location the allow-list used to miss entirely.
+	# One representative, long-lived file per location the allow-list used to miss entirely:
+	# repo-root config, root .ini, workflow, and app code that ships into generated projects.
 	list_required = [
-		gate.PATH_ROOT / ".pre-commit-config.yaml",  # repo-root config
-		gate.PATH_ROOT / "mypy.ini",  # root .ini
-		gate.PATH_ROOT / ".github/workflows/tests.yaml",  # workflow
-		gate.PATH_ROOT / "optional/typing/validate.py",  # app code that ships into projects
+		gate.PATH_ROOT / ".pre-commit-config.yaml",
+		gate.PATH_ROOT / "mypy.ini",
+		gate.PATH_ROOT / ".github/workflows/tests.yaml",
+		gate.PATH_ROOT / "optional/typing/validate.py",
 	]
 	list_missing = [
 		path_file
 		for path_file in list_required
 		if path_file.is_file() and path_file.resolve() not in set_audited
 	]
+
 	assert list_missing == [], f"supported but unaudited: {list_missing}"
 
-	# And the general property, so a NEW location cannot quietly fall outside either. Compared
-	# against TRACKED files, not a raw filesystem walk — discovery now reads `git ls-files`
-	# (blueprintx#331), so an untracked file in a developer's working tree is correctly out of
-	# scope, not a false "missed" here.
+
+def test_no_tracked_supported_file_falls_outside_the_audit() -> None:
+	"""The GENERAL property, so a NEW location cannot quietly fall outside either.
+
+	Split from the named-locations test rather than left as a second assert
+	(blueprintx#544). The two are deliberately different kinds of claim, and the docstring
+	above says so: the named list is the non-tautological half that a skip-list change
+	breaks, this one is the open-ended half that a brand-new directory breaks. Collapsed
+	into one test, a failure could not say which of the two properties had gone.
+
+	Compared against TRACKED files, not a raw filesystem walk — discovery reads
+	``git ls-files`` (blueprintx#331), so an untracked file in a developer's working tree is
+	correctly out of scope rather than a false "missed" here.
+	"""
+	set_audited = {path_file.resolve() for path_file in gate.audit_paths()}
 	set_supported = set(gate.DICT_MARKERS) | {".py"}
 	list_missed = [
 		path_rel
@@ -285,6 +359,7 @@ def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
 		and not any(str_part in gate.TUPLE_SKIP_DIRS for str_part in path_rel.parts)
 		and (gate.PATH_ROOT / path_rel).resolve() not in set_audited
 	]
+
 	assert list_missed == [], f"supported but unaudited: {list_missed[:10]}"
 
 
@@ -294,12 +369,21 @@ def test_published_docs_are_never_audited() -> None:
 	Scanning it would invert the rule the gate exists to enforce, so the exclusion is load-bearing
 	rather than a performance tweak.
 	"""
-	assert "docs" in gate.TUPLE_SKIP_DIRS
 	assert not [
 		path_file
 		for path_file in gate.audit_paths()
 		if "docs" in path_file.relative_to(gate.PATH_ROOT).parts
 	]
+
+
+def test_docs_is_declared_in_the_skip_list() -> None:
+	"""The DECLARATION behind the behaviour above, split out (blueprintx#544).
+
+	Its sibling asserts that no ``docs/`` file is audited, which an empty or broken
+	discovery would also satisfy. This one pins the reason, so the pair cannot both pass
+	vacuously.
+	"""
+	assert "docs" in gate.TUPLE_SKIP_DIRS
 
 
 def _git_init_and_commit(path_repo: Path) -> None:
