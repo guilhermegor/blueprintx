@@ -102,13 +102,32 @@ RULESET_NAME="pr-quality-gate"
 # rule objected, because the only things standing between a red check and `main` were a hook and
 # a habit — and both are probabilistic. A gate nobody can bypass by forgetting is the whole point.
 #
-# blueprintx#164: re-confirmed one entry is enough, not expanded. A generated project's own CI
-# (templates/python-common/.github/workflows/tests.yaml) collapses to ONE check-run name per
-# matrix leg (`Run Automated Tests (<os>, py<version>)`) — same "guessed name that drifts" trap
-# this comment already warns against, and no fresh scaffold + real PR was run to capture the
-# exact leg names, so there is no population evidence (same bar GitGuardian failed, see
-# secret_scan.yaml) to require any of them.
-REQUIRED_CHECKS=("Review threads answered")
+# blueprintx#164/#564: the qualifying set DIFFERS BY TIER — this same script now ships to the
+# TypeScript and Bash skeletons, which emit a different set of check names, so the list is DATA
+# (bin/required-checks.txt, shipped per template family) and no longer a literal here. A name
+# qualifies only if all four hold: it is a literal `jobs.<id>.name:` of a workflow THIS project
+# ships; its `on: pull_request` carries no `types:`/`branches:`/`paths:` filter that can make it
+# absent on an ordinary PR; no job-level `if:` can skip it; and the project actually ships that
+# workflow. `tests.yaml` fails the second rule (a `branches:` filter, plus matrix values that
+# drift into the name) and `coderabbit_trigger.yaml` the third (`if: draft == false`).
+#
+# A MISSING file means an EMPTY list, which is the safe direction: no required_status_checks rule
+# at all, the same state this script had before any name was seeded.
+REQUIRED_CHECKS_FILE="$SCRIPT_DIR/required-checks.txt"
+REQUIRED_CHECKS=()
+
+load_required_checks() {
+	# One check name per line; blank lines and `#` comments ignored. Names are compared to
+	# GitHub's check-run names VERBATIM, so leading/trailing space would silently never match.
+	[ -f "$REQUIRED_CHECKS_FILE" ] || return 0
+	local str_line
+	while IFS= read -r str_line || [ -n "$str_line" ]; do
+		case "$str_line" in '' | '#'*) continue ;; esac
+		REQUIRED_CHECKS+=("$str_line")
+	done <"$REQUIRED_CHECKS_FILE"
+}
+
+load_required_checks
 
 require_gh() {
 	# gh must be installed and authenticated. Missing either is a skip, not a failure.
