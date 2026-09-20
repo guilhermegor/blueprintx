@@ -29,9 +29,10 @@ Three design points, decided rather than assumed:
 * **Reuses ``check_backlog_ledger.py``'s shape** (``templates/python-common/bin/``):
   diff the INDEX (``git diff --cached <merge-base>``) rather than the working tree
   or a single commit, so pre-commit sees staged content and CI (clean tree) reduces
-  to the branch's cumulative diff. No-op on the default branch or off a feature
-  branch with no divergence. CI needs ``fetch-depth: 0`` — a shallow clone has no
-  merge-base to resolve. One deliberate deviation: the merge-base is resolved
+  to the branch's cumulative diff. No-op on the default branch only — see
+  ``is_on_default_branch`` for why "the merge-base equals HEAD" is a different, and
+  wrong, question. CI needs ``fetch-depth: 0`` — a shallow clone has no merge-base
+  to resolve. One deliberate deviation: the merge-base is resolved
   against ``origin/<branch>``, not a bare local branch name — see
   ``default_branch_ref``'s own docstring for the measured failure this avoids.
 """
@@ -109,6 +110,32 @@ def default_branch_ref() -> str:
     return str_branch
 
 
+def is_on_default_branch(str_default_ref: str) -> bool:
+    """Report whether the current checkout IS the default branch.
+
+    ⚠️ ``merge-base(HEAD, <default>) == HEAD`` is a DIFFERENT question, and using it
+    here opened a hole: it is equally true of a feature branch before its first
+    commit, when HEAD still points at the branch point — which is exactly the state
+    pre-commit runs in, with the whole change staged. Reproduced on blueprintx#560:
+    a fresh branch with 91 staged files exited 0.
+
+    Parameters
+    ----------
+    str_default_ref : str
+        The ref returned by ``default_branch_ref``.
+
+    Returns
+    -------
+    bool
+        True when HEAD is on the default branch, or detached at its tip.
+    """
+    str_current = _git(["rev-parse", "--abbrev-ref", "HEAD"])
+    if str_current and str_current != "HEAD":
+        return str_current == str_default_ref.rsplit("/", 1)[-1]
+    # Detached HEAD (a CI checkout of a merge sha): compare tips, names are unavailable.
+    return _git(["rev-parse", "HEAD"]) == _git(["rev-parse", str_default_ref])
+
+
 def changed_file_count(str_base: str) -> int:
     """Return the branch's cumulative changed-file count, INDEX included.
 
@@ -134,10 +161,14 @@ def main() -> int:
     int
         0 when within the ceiling (or not applicable), 1 on a violation.
     """
-    str_base = _git(["merge-base", "HEAD", default_branch_ref()])
-    str_head = _git(["rev-parse", "HEAD"])
-    if not str_base or str_base == str_head:
-        # On the default branch (or no merge-base): nothing branch-scoped to check.
+    str_default_ref = default_branch_ref()
+    if is_on_default_branch(str_default_ref):
+        # Nothing branch-scoped to compare against.
+        return 0
+
+    str_base = _git(["merge-base", "HEAD", str_default_ref])
+    if not str_base:
+        # Unrelated history or a clone too shallow to resolve one: nothing to check.
         return 0
 
     int_count = changed_file_count(str_base)

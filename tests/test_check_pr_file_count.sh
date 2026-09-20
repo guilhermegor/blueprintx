@@ -21,14 +21,15 @@ int_failures=0
 # Builds a repo with `main` at the merge-base, checked out onto a `feature` branch with
 # $1 new staged files — mirroring pre-commit's index-based view (git diff --cached).
 #
-# The empty commit after `checkout -b` is load-bearing, not decoration: the gate's own
-# no-op guard is `merge-base(HEAD, main) == HEAD`, which is also true of a branch's
-# still-uncommitted FIRST commit (HEAD has not moved yet at pre-commit time). Diverging
-# HEAD first is what makes THIS commit — not the one after it — the one under test,
-# matching what CI sees for a real single-commit PR (its one commit already has a
-# parent distinct from itself).
+# $2 ("diverged", the default, or "pre-first-commit") selects WHEN in the branch's life
+# the commit under test happens. Both states are real and they used to behave
+# differently: with an empty commit after `checkout -b`, HEAD has moved off the
+# merge-base, which is what CI sees for a single-commit PR; without one, HEAD still
+# points AT the branch point, which is what pre-commit sees for a branch's very first
+# commit. The gate originally no-op'd on `merge-base(HEAD, main) == HEAD` and therefore
+# waved the second state straight through (blueprintx#560).
 make_repo_with_staged_files() {
-    local int_file_count="$1" str_repo str_i
+    local int_file_count="$1" str_stage="${2:-diverged}" str_repo str_i
     str_repo="$(mktemp -d)"
     git -C "$str_repo" init --quiet --initial-branch=main
     git -C "$str_repo" config user.email "test@example.com"
@@ -37,7 +38,9 @@ make_repo_with_staged_files() {
     git -C "$str_repo" add seed.txt
     git -C "$str_repo" commit --quiet -m "seed"
     git -C "$str_repo" checkout --quiet -b feature
-    git -C "$str_repo" commit --quiet --allow-empty -m "branch setup"
+    if [ "$str_stage" = "diverged" ]; then
+        git -C "$str_repo" commit --quiet --allow-empty -m "branch setup"
+    fi
     for ((str_i = 0; str_i < int_file_count; str_i++)); do
         echo "content" > "$str_repo/file_$str_i.txt"
     done
@@ -76,6 +79,14 @@ test_over_ceiling_fails_naming_the_count() {
         "$(make_repo_with_staged_files 91)"
 }
 
+test_new_branch_before_first_commit_fails() {
+    # The bypass blueprintx#560's review found: on a branch with no commit of its own,
+    # merge-base(HEAD, main) == HEAD, so a merge-base-based no-op exits 0 with the whole
+    # change staged. Same 91 files as the case above, same message expected.
+    expect_gate "91 files staged on a branch with no commit yet" "fail" "91 files" \
+        "$(make_repo_with_staged_files 91 pre-first-commit)"
+}
+
 test_default_branch_is_not_applicable() {
     # On main itself (merge-base == HEAD) the gate is a no-op regardless of file count —
     # there is no branch to compare against.
@@ -94,6 +105,7 @@ main() {
     test_within_ceiling_passes
     test_at_ceiling_passes
     test_over_ceiling_fails_naming_the_count
+    test_new_branch_before_first_commit_fails
     test_default_branch_is_not_applicable
 
     if [ "$int_failures" -ne 0 ]; then
@@ -101,7 +113,7 @@ main() {
         exit 1
     fi
     print_status "success" \
-        "check_pr_file_count.py: within-ceiling, at-ceiling, over-ceiling (message verified), and default-branch no-op all confirmed"
+        "check_pr_file_count.py: within-ceiling, at-ceiling, over-ceiling (message verified), pre-first-commit branch, and default-branch no-op all confirmed"
 }
 
 main "$@"
