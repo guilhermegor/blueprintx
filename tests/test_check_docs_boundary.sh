@@ -225,6 +225,43 @@ test_unreadable_nested_directory_fails_not_passes() {
     fi
 }
 
+test_templates_tree_is_deliberately_not_walked() {
+    # blueprintx#576: the scope decision, asserted rather than left to the header comment.
+    # The sandbox plants BOTH halves of the measured collision — a tier's shipped
+    # docs/backlog/ (a product surface with its own gate) and a violation that WOULD be
+    # rejected under the root tree — and requires the gate to pass, never naming templates/.
+    # A later "just point it at templates/ too" therefore turns this case red instead of
+    # silently condemning five shipped tiers.
+    local str_root str_out str_got="pass" int_checked
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/docs" "$str_root/templates/ddd-service-native-db/docs/backlog"
+    printf '# Hello\n' > "$str_root/docs/index.md"
+    printf '# Ledger\n' \
+        > "$str_root/templates/ddd-service-native-db/docs/backlog/wave_20260101_000000.md"
+    printf '# Lessons\n' > "$str_root/templates/ddd-service-native-db/docs/my-lessons.md"
+
+    str_out="$(bash "$str_root/bin/ci/check_docs_boundary.sh" 2>&1)" || str_got="fail"
+    rm -rf "$str_root"
+
+    if [ "$str_got" != "pass" ]; then
+        print_status "error" "templates/ scope -> failed (the gate must not walk templates/)"
+        int_failures=$((int_failures + 1))
+        return
+    fi
+    if printf '%s' "$str_out" | grep -qF "templates"; then
+        print_status "error" "templates/ scope -> passed, but the output named templates/"
+        int_failures=$((int_failures + 1))
+        return
+    fi
+    # One entry: docs/index.md. Anything more means the walk left docs/.
+    int_checked="$(printf '%s' "$str_out" | sed -n 's/.*(\([0-9]*\) entries checked).*/\1/p')"
+    if [ "${int_checked:-0}" -ne 1 ]; then
+        print_status "error" \
+            "templates/ scope -> ${int_checked:-no} entries checked (docs/ holds exactly 1)"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 main() {
     test_no_docs_dir_is_a_skip
     test_clean_docs_passes
@@ -239,6 +276,7 @@ main() {
     test_plan_md_fails
     test_empty_docs_dir_fails
     test_unreadable_docs_dir_fails
+    test_templates_tree_is_deliberately_not_walked
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures check_docs_boundary.sh regression assertion(s) failed"

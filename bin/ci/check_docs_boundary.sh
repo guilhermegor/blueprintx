@@ -6,15 +6,19 @@
 # any other work related to lessons to other packages/repos/frameworks/ai handling/
 # superpowers — the boundary is to stay here, docs/ is solely for documentation."
 #
-# Root-repo-only for now, unlike the rest of the `--root` gate family. BlueprintX's own
-# docs/ is the published-site source, and the live violation there (docs/backlog/, still
-# MANDATED by the root CLAUDE.md's "Backlog discipline" section) is unambiguous. Running
-# this same deny-list over templates/*/docs/ is a separate, larger question:
-# templates/python-common/ ships its OWN docs/backlog/ *ledger* feature
-# (bin/check_backlog_ledger.py, wired into that tier's pre-commit + CI) as a deliberate,
-# gated product feature for GENERATED projects, not an accidental violation of this rule.
-# Conflating the two would flag an intentional feature as a defect — left to a follow-up
-# issue rather than decided here (see the blueprintx#536 PR body).
+# 🔴 ROOT-REPO-ONLY, DECIDED — NOT "not done yet" (blueprintx#576, the follow-up #536
+# promised). This gate walks BlueprintX's own docs/ and deliberately never walks
+# templates/*/docs/. A generated project's docs/ answers to its own authors, and the same
+# path means opposite things on the two sides: docs/backlog/ here is the violation the rule
+# names, while inside templates/<tier>/ it is a shipped product surface with its own gate
+# (templates/python-common/bin/check_backlog_ledger.py, wired into that tier's pre-commit +
+# CI) present in five tiers today. Same precedent as en-US prose (blueprintx#194): the rule
+# is this repo's, and check_comment_language.py is locale-agnostic precisely because a
+# generated project may legitimately differ. Reasoning in CONTRIBUTING.md → "Rules scoped
+# to BlueprintX, not inherited by scaffolds"; tests/test_check_docs_boundary.sh asserts the
+# scope rather than leaving it to this comment. There is therefore no --root flag: under
+# this decision there is only ever one tree to walk, and a knob nothing turns is an
+# invitation to widen the scope without re-deciding it.
 #
 # 🔴 THE RULE IS THE PRINCIPLE, THE LIST IS ONLY WHAT WE HAVE MET SO FAR.
 # Everything under docs/ must be published documentation. Anything that is not does not
@@ -86,7 +90,7 @@ is_denied() {
     case "${base,,}" in
         *lesson*)
             echo "a lessons store, not published docs — lessons live in the operator's" \
-                 "~/.claude/memory/lessons* stores; if a lesson has become a rule this" \
+                 "$HOME/.claude/memory/lessons* stores; if a lesson has become a rule this" \
                  "project follows, state the RULE in CONTRIBUTING.md and drop the narrative"
             return 0
             ;;
@@ -108,7 +112,7 @@ is_denied() {
             .superpowers*)
                 echo "harness/tooling working material, not published docs — it belongs in" \
                      "the tool's own home (.superpowers/ at the repo root, or the operator's" \
-                     "~/.claude), never under the published site"
+                     "$HOME/.claude), never under the published site"
                 return 0
                 ;;
         esac
