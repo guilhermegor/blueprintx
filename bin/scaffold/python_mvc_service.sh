@@ -184,7 +184,9 @@ copy_mkdocs_templates() {
 
     print_status "info" "Copying MkDocs templates..."
 
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
+    # Falls back to en when a scaffold script is run directly, without the menu.
+    export DOCS_LOCALE="${DOCS_LOCALE:-en}"
+    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \

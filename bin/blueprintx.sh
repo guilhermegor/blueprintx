@@ -493,6 +493,30 @@ prompt_license() {
     esac
 }
 
+# The locale of the GENERATED project's published pages only. It says nothing about
+# BlueprintX's own prose, which is en-US with no exceptions (root CLAUDE.md), and nothing
+# about code: comments and docstrings stay English in every locale, enforced in the
+# generated project by bin/check_comment_language.py. See docs/documentation-locale.md.
+prompt_docs_locale() {
+    printf "${CYAN}Select documentation locale${NC} (README.md and docs/ pages of the new project)\n" >&2
+    printf "  ${BLUE}1) en${NC}    — English (default)\n" >&2
+    printf "  ${BLUE}2) pt-BR${NC} — Brazilian Portuguese\n" >&2
+    printf "        Code comments and docstrings stay English either way.\n" >&2
+    printf "${CYAN}Choice${NC} [1-2, default 1]: " >&2
+    read -r choice
+    printf "\n" >&2
+
+    case "$choice" in
+        1|"") echo "en" ;;
+        2)    echo "pt-BR" ;;
+        *)
+            print_status "warning" "Invalid option. Try again."
+            prompt_docs_locale
+            return
+            ;;
+    esac
+}
+
 create_project() {
     local project_root="$1"
     local project_name="$2"
@@ -500,6 +524,7 @@ create_project() {
     local lang="$4"
     local skeleton="$5"
     local license_choice="$6"
+    local docs_locale="$7"
 
     local full_path="$project_root/$project_name"
 
@@ -519,7 +544,8 @@ create_project() {
         exit_error "Scaffold script not found: $scaffold_script"
     fi
 
-    LICENSE_CHOICE="$license_choice" bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
+    LICENSE_CHOICE="$license_choice" DOCS_LOCALE="$docs_locale" \
+        bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
 }
 
 
@@ -544,6 +570,7 @@ run_create_flow() {
     LANG_CHOICE=$(prompt_language)
     SKELETON_CHOICE=$(prompt_skeleton "$LANG_CHOICE")
     LICENSE_CHOICE=$(prompt_license)
+    DOCS_LOCALE=$(prompt_docs_locale)
 
     if [ "$DRY_RUN" -eq 1 ]; then
         print_status "info" "Dry-run: showing structure for '$SKELETON_CHOICE'"
@@ -551,7 +578,7 @@ run_create_flow() {
         exit 0
     fi
 
-    create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE" "$LICENSE_CHOICE"
+    create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE" "$LICENSE_CHOICE" "$DOCS_LOCALE"
 
     echo
     printf "${GREEN}╔════════════════════════════════════════╗${NC}\n"
@@ -562,6 +589,7 @@ run_create_flow() {
     print_status "config" "Location: $PROJECT_ROOT/$PROJECT_NAME"
     print_status "config" "Skeleton: $SKELETON_CHOICE"
     print_status "config" "License: $LICENSE_CHOICE"
+    print_status "config" "Docs locale: $DOCS_LOCALE"
     if [ "$DEV_MODE" -eq 1 ]; then
         print_status "warning" "Dev mode: project scaffolded in temp directory"
         if [ "$CLEAN_TEMP" -ne 1 ]; then
