@@ -165,6 +165,17 @@ project (`poe_tasks.toml` replaced them there since #236) — so the script live
 `bin/check_makefile_pairing.sh`, not `templates/python-common/bin/`, and never ships as part
 of a scaffold.
 
+The **PR file-count ceiling** (`bin/ci/check_pr_file_count.py`, pre-commit hook
+`pr-file-count`, the `pr-file-count` CI job) fails a branch above **90 cumulative changed
+files** — 10 below the vendor cap where CodeRabbit hard-refuses to review at all
+(`Review skipped: N files exceed the limit of 100`), a state a PR can never merge out of.
+Calibrated over the 100 most recent PRs: **1 violation** (#424, 241 files), and the largest
+legitimate PR in that set is #532 at 59 files — a ceiling with headroom on both sides, not a
+number chosen to match a specific diff. Root-repo-only, like `check_makefile_pairing.sh`
+above: it is BlueprintX's own reviewer-capacity limit, not something a generated project
+inherits. No escape hatch — every real violation measured so far had an honest seam to split
+at, so one has not yet been needed (blueprintx#551).
+
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
 GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes
