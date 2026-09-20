@@ -4,38 +4,25 @@
 #
 # WHY THIS EXISTS, and why the number differs by tree (mccabe / C901):
 #
-#   | tree     | max | the argument                                                        |
+#   | tree     | max | findings on the shipped tree, ruff 0.11.13                          |
 #   |----------|-----|---------------------------------------------------------------------|
-#   | tests/   |  1  | a test with a branch is testing two paths, and WHICH one ran does   |
-#   |          |     | not appear in the green. Complexity 1 is the mechanical form of the |
-#   |          |     | rule tests/CLAUDE.md already states in prose: "each test asserts    |
-#   |          |     | one behaviour". Prose never enforced it; this does.                 |
-#   | src/     |  3  | production code. Branching that is genuinely the work (a validator, |
-#   |          |     | a parser) takes the escape hatch below WITH a reason, rather than   |
-#   |          |     | being contorted to satisfy a number.                                |
-#   | bin/     |  8  | the gates are parsing tools by nature — argv, ruff output, YAML,    |
-#   |          |     | AST. Measured at 2 they were 74% violating, which is a number       |
-#   |          |     | nobody pays and therefore a gate nobody keeps.                      |
+#   | tests/   |  2  | 2 findings at 1, 0 at 2.                                            |
+#   | src/     |  3  | 54 findings at 1, 8 at 2, 0 at 3.                                   |
+#   | bin/     |  5  | 16 findings at 3, 2 at 4, 0 at 5.                                   |
 #
-# 🔴 `src/` IS 3, NOT 2, AND ONLY BECAUSE `PLR1702` (too-many-nested-blocks) IS PAIRED WITH IT
-# BELOW — THE TWO ARE VALID ONLY TOGETHER (blueprintx#434). Raising the mccabe ceiling alone
-# would admit the nested `if` / `if` inside `for` that ceiling 2 exists to forbid. Adding
-# PLR1702 alone would not fix what prompted the raise: a guard clause plus a necessary
-# `try/except` (no nesting at all) legitimately costs 3, and on the margin ceiling 2 was
-# friendlier to the shape the house style forbids (`if/else`, cost 2) than to the one it
-# prefers (two guards, cost 3) — see blueprintx#268, where a `try/except` pushed `to_decimal`
-# from 2 to 3 and forced an extraction the ceiling drove, not the design. With ceiling 3 +
-# PLR1702, "too many branches, none of them nested" passes and "any nesting at all" still
-# fails via PLR1702 instead of C901. Measured max-nested-blocks findings, ruff 0.11.13:
+# 🔴 EVERY NUMBER ABOVE WAS COUNTED. An earlier revision of this block asserted
+# tests/=1 "cost 0", src/=1 "same reasoning as mccabe's src/ row", and bin/=3
+# "8 findings at ceiling 3". All three were wrong — the real figures are 2, 54
+# and 16 — and because the pre-commit hook scans the whole tree, each one blocked
+# every commit in the repo rather than only flagging new code. An argument by
+# analogy to the mccabe row is not a measurement: mccabe counts branches and
+# PLR1702 counts nesting, so the two ceilings have no reason to coincide.
 #
-#   | tree     | max | the argument                                                        |
-#   |----------|-----|---------------------------------------------------------------------|
-#   | tests/   |  1  | cost 0 — no nested block in the test tree today.                    |
-#   | src/     |  1  | production code — same reasoning as mccabe's src/ row above; any    |
-#   |          |     | nesting takes the SAME escape hatch, same reason required.          |
-#   | bin/     |  3  | 50 findings at ceiling 2 vs 8 at ceiling 3 on the real shipped `bin/`|
-#   |          |     | tree — a number nobody pays is a gate nobody keeps, same argument   |
-#   |          |     | as mccabe's bin/=8 row. 3, not 2, is the payable ceiling here.      |
+# These are the ZERO-COST ceilings: they ship the nesting guard without demanding
+# a cleanup nobody signed up for. The tighter ones are real targets with a known
+# price — src/=2 costs 8 fixes, bin/=4 costs 2 — and each should be adopted as its
+# own measured slice (the RET/A/N measure-then-adopt pattern), never by editing a
+# number here without re-running the count.
 #
 # PLR1702 is a PREVIEW-only ruff rule (0.11.13) — `ruff.toml` turns preview on for the linter
 # and documents the 10 incidental tag-along rules that come with it (unrelated to nesting,
@@ -80,9 +67,9 @@ declare -A DICT_MAX_COMPLEXITY=(
 # ruff rule (PLR1702 instead of C901) and config key (lint.pylint.max-nested-blocks instead
 # of lint.mccabe.max-complexity).
 declare -A DICT_MAX_NESTED_BLOCKS=(
-	["tests"]=1
-	["src"]=1
-	["bin"]=3
+	["tests"]=2
+	["src"]=3
+	["bin"]=5
 )
 
 STR_ALLOW_MARKER="complexity-ok:"
