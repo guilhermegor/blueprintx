@@ -399,6 +399,7 @@ copy_global_config() {
     fi
     # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_graph_gate.py" "$project_path/tests/unit/test_migration_graph_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
@@ -473,7 +474,8 @@ copy_typing_chassis() {
 # Native db_schema requires it, so it is always injected here.
 copy_required_chassis_db() {
     local project_path="$1"
-    cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db" "$project_path/src/chassis/db"
+    mkdir -p "$project_path/src/chassis/db"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db/." "$project_path/src/chassis/db/"
     print_status "success" "chassis/db copied (required by db_schema)"
 }
 
@@ -491,7 +493,8 @@ conditional_prune_optin_deps() {
 conditional_copy_storage() {
     local project_path="$1"
     if [[ "$INCLUDE_STORAGE" != "true" ]]; then return; fi
-    cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db_wschema" "$project_path/src/chassis/db_wschema"
+    mkdir -p "$project_path/src/chassis/db_wschema"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db_wschema/." "$project_path/src/chassis/db_wschema/"
     cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env.example"
     print_status "success" "Schema-less storage (chassis/db_wschema) added"
@@ -684,7 +687,8 @@ conditional_copy_webhooks_yaml() {
     local project_path="$1"
     if [[ "$INCLUDE_WEBHOOK" != "true" ]]; then return; fi
     cp "$COMMON_TEMPLATE_ROOT/optional/webhooks.yaml" "$project_path/src/config/webhooks.yaml"
-    cp -r "$COMMON_TEMPLATE_ROOT/optional/webhook" "$project_path/src/chassis/webhook"
+    mkdir -p "$project_path/src/chassis/webhook"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/webhook/." "$project_path/src/chassis/webhook/"
     local webhook_env
     webhook_env=$'\n# Webhook — platform auto-detected from the URL; fires only when ENV is a\n# production value (prod/production/...). Leave WEBHOOK_URL empty to opt out.\nWEBHOOK_URL=\n'
     printf '%s' "$webhook_env" >> "$project_path/.env"
@@ -727,7 +731,8 @@ prompt_email() {
 conditional_copy_email() {
     local project_path="$1"
     if [[ "$INCLUDE_EMAIL" != "true" ]]; then return; fi
-    cp -r "$COMMON_TEMPLATE_ROOT/optional/email" "$project_path/src/chassis/email"
+    mkdir -p "$project_path/src/chassis/email"
+    cp -r "$COMMON_TEMPLATE_ROOT/optional/email/." "$project_path/src/chassis/email/"
     # The seam ships its unit test co-located; relocate it to the project's tests/unit (the
     # canonical chassis.email imports already match the DDD layout, so no rewrite is needed).
     mv "$project_path/src/chassis/email/tests/unit/test_email_handlers.py" \

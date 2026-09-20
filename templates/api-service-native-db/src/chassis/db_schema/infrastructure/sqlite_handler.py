@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import shutil
 import sqlite3
 
 from chassis.db.domain.ports import DatabaseHandler, Record
@@ -119,10 +118,19 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 			return cls_cursor.rowcount > 0
 
 	def backup(self, target_path: str | Path) -> Path:
-		"""Copy the SQLite database file to the destination path."""
+		"""Back up the database through SQLite's online backup API.
+
+		⚠️ NOT ``shutil.copy2``. A file copy does not coordinate with SQLite: the
+		database can be written during the copy, and in WAL mode the committed
+		contents of ``-wal`` are not in the main file at all — so the copy can be
+		torn or simply stale, and neither shows up as an error. ``Connection.backup``
+		takes SQLite's own locks and produces a consistent snapshot of a live
+		database.
+		"""
 		path_target = Path(target_path)
 		path_target.parent.mkdir(parents=True, exist_ok=True)
-		shutil.copy2(self.db_path, path_target)
+		with self._connect() as cls_source, sqlite3.connect(path_target) as cls_dest:
+			cls_source.backup(cls_dest)
 		return path_target
 
 	def close(self) -> None:

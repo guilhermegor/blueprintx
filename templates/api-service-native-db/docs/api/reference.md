@@ -15,7 +15,10 @@ capability's router — `src/main.py` calls it and hands the result to `uvicorn`
 ```python
 from app.api import create_app
 
-app = create_app()  # uvicorn app.api:app  (or  poe run  →  uvicorn src.main:app)
+app = create_app()  # in src/main.py — `app.api` exports create_app() only,
+                    # so `uvicorn app.api:app` fails on attribute lookup.
+                    # Use `uvicorn main:app` (or `poe run`), or factory mode:
+                    # `uvicorn app.api:create_app --factory`
 ```
 
 `GET /health` is always mounted, unconditionally of any capability — a liveness probe with no
@@ -65,6 +68,8 @@ Supported values for `DB_BACKEND`: `sqlite`, `postgresql`, `mariadb`, `mysql`, `
 
 Non-SQLite backends read `DB_DSN` first; if unset they compose a DSN from `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, and `DB_NAME`.
 
+⚠️ **Oracle is the exception: it reads `DB_SERVICE` (default `XEPDB1`), not `DB_NAME`.** Setting `DB_NAME` for an Oracle backend is inert — the value is silently ignored and the connection uses the default service.
+
 ---
 
 ## Schema-less storage factory
@@ -95,18 +100,19 @@ Supported values for `STORAGE_BACKEND`: `json`, `csv`, `joblib`.
 
 <!-- docs-refs-ok: "notes" is the hand-built feature this walkthrough has the reader create following Architecture — it never ships as a generated file, unlike capabilities/example_feature -->
 ```python
-from capabilities.notes.domain.dto import NoteCreateDTO
-from capabilities.notes.infrastructure.repositories import InMemoryNoteRepository
-from capabilities.notes import use_cases
+from capabilities.example_feature.application.use_cases import CreateNote, ListNotes
+from capabilities.example_feature.domain.entities import Note
+from capabilities.example_feature.infrastructure.repositories import InMemoryNoteRepository
 
 cls_repo = InMemoryNoteRepository()
 
-# Create
-cls_note = use_cases.create_note(NoteCreateDTO(title="Hello"), cls_repo)
+# Create — the use case is a class taking the port at construction,
+# and execute() takes the domain entity, not a DTO.
+cls_note = CreateNote(cls_repo).execute(Note(title="Hello"))
 print(cls_note.id, cls_note.title)
 
 # List
-list_notes = use_cases.list_notes(cls_repo)
+list_notes = ListNotes(cls_repo).execute()
 ```
 
 ---

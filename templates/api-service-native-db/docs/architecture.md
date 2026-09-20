@@ -6,7 +6,7 @@ DDD service. Business logic is isolated from I/O — all side effects live in th
 layer (outbound) or the transport layer (inbound); the composition root (`app/`) is the only
 place that knows both.
 
-This skeleton uses **native database libraries** (psycopg2, sqlite3, cx_Oracle, pyodbc, pymysql) for direct database access. For schema-less persistence the same `DatabaseHandler` contract covers JSON, CSV, and joblib backends via `chassis/db_wschema/`.
+This skeleton uses **native database libraries** (psycopg, sqlite3, oracledb, pyodbc, mysql-connector-python) for direct database access. For schema-less persistence the same `DatabaseHandler` contract covers JSON, CSV, and joblib backends via `chassis/db_wschema/`.
 
 ---
 
