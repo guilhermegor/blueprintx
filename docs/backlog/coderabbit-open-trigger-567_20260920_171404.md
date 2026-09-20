@@ -95,6 +95,28 @@ unreviewed merge. The required `Review threads answered` check fails a PR with n
 review, so a PR opened while no session runs would simply **stall**, red, until a human noticed
 it. Visible, not silent — but unbounded, because nothing on a timer would have been watching it.
 
+## The PR that carries this measurement is itself a data point
+
+Opening PR #577 produced the pattern under study, in 13 seconds:
+
+| time (UTC) | who | what |
+|---|---|---|
+| `17:19:58` | CodeRabbit | `Review limit reached — Next included review available in 27 minutes.` |
+| `17:20:05` | `coderabbit_trigger.yml` | `@coderabbitai review` — the on-open ask, 7s after the window was declared shut |
+| `17:20:11` | CodeRabbit | `⚠️ Action not completed — Review rate limited.` |
+
+Read carefully, because the obvious reading is the wrong one. This is **not** a leak and not a
+race lost: the window was already closed at `17:19:58`, before the ask, so the ask took nothing
+from anybody. It is one more row in the `auto / refused` cell — the cell holding 81 of the 111
+on-open asks, the one this measurement shows costs nothing.
+
+What it *is* is the **enrolment step firing live on this very PR**. The `17:20:11` refusal is
+now #577's newest reviewer comment, which is precisely the condition
+`retry_rate_limited_review.py` requires before it will adopt a PR. Had `opened` been dropped,
+PR #577 would have carried no ask, produced no notice, and been invisible to the janitor — it
+would have sat red on `Review threads answered` until a human noticed. The PR arguing to keep
+`opened` demonstrated why within 13 seconds of existing.
+
 ## Not done, deliberately
 
 - **`.coderabbit.yaml` was not touched.** `reviews.auto_review.*` is already a no-op here:
