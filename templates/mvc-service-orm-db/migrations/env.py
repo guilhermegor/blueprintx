@@ -22,7 +22,7 @@ from config.connection_db import build_database_url
 from model.example_entity import Base
 
 
-load_dotenv(override=True)
+load_dotenv()
 
 # ─── ALEMBIC CONFIG ───────────────────────────────────────────────────────────
 

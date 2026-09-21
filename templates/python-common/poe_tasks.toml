@@ -212,7 +212,7 @@ help = "Secret scan via gitleaks — no API key, no account (blueprintx#305)"
 # Poe validates a required arg itself and prints a real usage line, so the guard is deleted
 # rather than ported: a reimplemented check is a check that can disagree with the tool.
 [tool.poe.tasks.check_commit_msg]
-cmd = "pre-commit run --hook-stage commit-msg --commit-msg-filename $file"
+cmd = "pre-commit run --hook-stage commit-msg --commit-msg-filename \"${file}\""
 help = "Pre-flight a commit message file against the project's own commit-msg hooks"
 
 	[[tool.poe.tasks.check_commit_msg.args]]
@@ -244,7 +244,7 @@ help = "Restore the database from a backup (pg_restore)"
 # loudly) on a tier that ships no `alembic.ini` yet, same as `db_backup`/`db_restore` already
 # do for a non-postgresql backend.
 [tool.poe.tasks.migrate_new]
-cmd = "alembic revision --autogenerate -m $message"
+cmd = "alembic revision --autogenerate -m \"${message}\""
 help = "Create a migration by diffing models against the DB (online — needs a live connection)"
 
 	[[tool.poe.tasks.migrate_new.args]]
