@@ -222,6 +222,9 @@ scaffold_copy_executables_and_vscode() {
 	# `python bin/check_review_threads.py` needs no change.
 	cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" \
 		"$str_project_path/bin/check_review_threads.py"
+	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+	# commit, never templated principles. See .specs/spec.md for the id conventions.
+	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
 
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"

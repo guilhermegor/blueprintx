@@ -127,6 +127,9 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
+    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+    # commit, never templated principles. See .specs/spec.md for the id conventions.
+    cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 
     print_status "success" "Common templates applied"
 }

@@ -72,6 +72,9 @@ ${PROJECT_SLUG}/
 │   ├── workflows/
 │   ├── CODEOWNERS
 │   └── PULL_REQUEST_TEMPLATE.md
+├── .specs/
+│   ├── features/       # one subfolder per feature spec
+│   └── spec.md         # spec template — id conventions: US-/AC-/ASM-/Q-XXX
 ├── .vscode/
 ├── bin/
 │   ├── check_unix_filenames.sh
