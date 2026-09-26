@@ -84,27 +84,26 @@ explicitly open. Everything named below is the only thing a major version bump
 
 Every row is decidable — yes/no, not a feeling.
 
-- [ ] **This page is published and linked from `README.md`.** Satisfied by the PR
-      that lands this document.
-- [ ] **`docs/` and `README.md` are audited against the code**
-      ([#242](https://github.com/guilhermegor/blueprintx/issues/242)) — **BLOCKER**.
-      The frozen contract above is worthless if the docs describing it are already
-      stale at the moment of the freeze.
+- [x] **This page is published and linked from `README.md`.** Satisfied by the PR
+      that landed this document; re-measured 2026-09-18 — `README.md` references
+      `versioning`, and this page is in the `mkdocs.yml` nav.
+- [x] **`docs/` and `README.md` are audited against the code**
+      ([#242](https://github.com/guilhermegor/blueprintx/issues/242)) — was a
+      **BLOCKER**; #242 is **closed**. Re-measured 2026-09-18.
 - [x] **Every currently shipped skeleton scaffolds and passes CI from a clean
       checkout**, verified on `main`: the 5 Python tiers via the `scaffold-lint-test`
       matrix (`bin/ci/scaffold_lint_test.sh`), `react-spa-webpack` via
       `typecheck-ts`, and all 6 via `dry-run-smoke`. Measured true on `main` as of
       2026-08-29 (`Scaffold Checks` workflow, latest run: success). **Not a
       blocker — already met; re-verify green at cut time.**
-- [ ] **Every gate that can block a merge carries a should-fail regression test**
+- [x] **Every gate that can block a merge carries a should-fail regression test**
       ([#111](https://github.com/guilhermegor/blueprintx/issues/111), closed in
       Wave A per `docs/backlog/issue-waves_20260823_145527.md`).
-      ⚠️ **Reopened by measurement, 2026-09-04:** the merge-blocking `validate-meta`
-      job runs `bin/ci/validate_meta.sh`, and a search of `tests/` for it returns
-      **nothing** — no case covers a missing key, an empty value, or a `scaffold`
-      path that does not exist. A checklist row that claims full coverage while one
-      blocking gate has none is the same failure this whole page is about: a green
-      that nobody can contradict. Needs those cases before it goes back to `[x]`.
+      Reopened by measurement on 2026-09-04 because the merge-blocking
+      `validate-meta` job had no case in `tests/`. **Closed again by measurement,
+      2026-09-18:** `tests/test_validate_meta.sh` now exists on `main` and is wired
+      as the `validate_meta.sh should-fail regression tests (blueprintx#407)`
+      pre-commit hook — the exact absence the 2026-09-04 note cited is gone.
 - [ ] **Wave C (en-US prose consistency —
       [#194](https://github.com/guilhermegor/blueprintx/issues/194),
       [#195](https://github.com/guilhermegor/blueprintx/issues/195),
@@ -116,13 +115,16 @@ Every row is decidable — yes/no, not a feeling.
       contract, so **not a blocker** by this page's recommendation. **Needs owner
       sign-off**: some may consider a clean prose baseline part of what "1.0"
       signals, independent of the API freeze.
-- [ ] **Wave D (ts-lib skeleton) ships, or its absence is accepted.**
+      Re-measured 2026-09-18: #195, #197, #241 and #245 are **closed**; **#194 and
+      #247 remain open** — so this row stays unchecked on its own terms, and those
+      two are the whole of what it is waiting on.
+- [x] **Wave D (ts-lib skeleton) ships, or its absence is accepted.**
+      Re-measured 2026-09-18: the skeleton **shipped** — `templates/ts-lib/` exists
+      on `main` with its own `skeleton.meta` — and
       [#135](https://github.com/guilhermegor/blueprintx/issues/135) (npm OIDC
-      publishing) is the one issue still open in that wave. Adding a *new*
-      skeleton via `skeleton.meta` is additive by construction — it does not touch
-      either item in the frozen contract — so this page recommends it is **not a
-      blocker**. **Needs owner sign-off**: whether v1.0.0 should imply Python/TypeScript
-      skeleton-count parity is a product call, not a compatibility one.
+      publishing), the one issue the row cited as still open, is **closed**. The
+      owner sign-off this row asked for is moot now that the skeleton ships:
+      skeleton-count parity is met rather than waived.
 - [x] **The template-drift question is answered in one direction, in writing.**
       This page answers it: templates are outside the frozen contract (item 3
       above), so [#109](https://github.com/guilhermegor/blueprintx/issues/109) is

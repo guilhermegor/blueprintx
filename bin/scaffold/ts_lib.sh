@@ -239,6 +239,18 @@ TSBLOCK
     print_status "info" "Set OTEL_EXPORTER_OTLP_ENDPOINT (and optionally OTEL_SERVICE_NAME / OTEL_EXPORTER_OTLP_HEADERS) in your host's real environment to enable export"
 }
 
+# The language-agnostic .github/ overlay every skeleton ships from templates/common — split
+# out of copy_common_templates so that function stays under the 60-line ceiling.
+copy_shared_github_overlay() {
+    local project_path="$1"
+
+    cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
+    cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
+    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
+    cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+}
+
 copy_common_templates() {
     local project_path="$1"
 
@@ -250,6 +262,9 @@ copy_common_templates() {
     envsubst '${PROJECT_NAME}' \
         < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
         > "$project_path/CLAUDE.md"
+    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
+    # file, language-agnostic, so it lives in templates/common not ts-common.
+    cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME}' \
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
         > "$project_path/README.md"
@@ -288,11 +303,7 @@ copy_static_ts_lib_files() {
     chmod +x "$project_path/.husky/pre-commit" "$project_path/.husky/pre-push" 2>/dev/null || true
     cp -r "$COMMON_TEMPLATE_ROOT/.vscode/." "$project_path/.vscode"
     cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
-    cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
-    cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
-    cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_shared_github_overlay "$project_path"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
     # commit, never templated principles. See .specs/spec.md for the id conventions.
