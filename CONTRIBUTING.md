@@ -177,6 +177,37 @@ its first cell, so one fresh row never implies the other rows were re-measured w
 Update the date in this heading when the WHOLE table is re-measured, so the next reader knows whether the gap
 narrowed or widened.
 
+### Rules scoped to BlueprintX, not inherited by scaffolds
+
+Parity is the default, and it is about **languages**, not about the BlueprintX/generated-project
+boundary. A few rules govern how *this repository* is written and deliberately stop at the edge
+of `templates/`. When that is the answer, it is written down here — "we chose not to" has to be
+as visible as "we did", or the next reader re-opens a settled question as if it were an
+oversight.
+
+| Rule | Scope | Why it stops here |
+|---|---|---|
+| **Prose language is en-US** (blueprintx#194) | BlueprintX's own prose | A generated project may legitimately be bilingual. `templates/python-common/bin/check_comment_language.py` is locale-agnostic *by design* — that is a feature of the shipped gate, not an omission. |
+| **The `docs/` boundary** — `bin/ci/check_docs_boundary.sh` (blueprintx#536, scoped by #576) | BlueprintX's own `docs/` | Two reasons, and either alone would be enough. **(1)** The same path means opposite things on the two sides: `docs/backlog/` at this root is the violation the rule names, while inside `templates/<tier>/` it is a shipped product surface with its own gate (`templates/python-common/bin/check_backlog_ledger.py`, wired into that tier's pre-commit + CI), present in five tiers today — `ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`. A guard that cannot tell them apart is worse than no guard: it condemns a feature the repo deliberately ships. **(2)** A generated project's `docs/` answers to its own authors, exactly as its prose language does. |
+
+Two consequences worth stating, because both were live options that were rejected:
+
+- **No carve-out.** "Walk `templates/*/docs/` with `backlog/` exempted" was option (a) and would
+  make BlueprintX the authority over a downstream project's `docs/` layout, for the sake of a
+  rule the downstream project never agreed to. The carve-out list would then have to track every
+  directory a skeleton legitimately ships — a second, drifting copy of the skeletons' contents.
+- **No opt-in knob.** A configurable boundary the generated project inherits was option (c), and
+  `check_docs_boundary.sh` therefore takes **no `--root` flag**, unlike the rest of the gate
+  family. Under this decision there is only ever one tree to walk. A knob nothing turns is an
+  invitation to widen the scope without re-deciding it, and the widening would be invisible in
+  review as a one-word config change.
+
+`tests/test_check_docs_boundary.sh` asserts the scope
+(`test_templates_tree_is_deliberately_not_walked`): a planted violation under
+`templates/<tier>/docs/`, alongside a tier's real `docs/backlog/`, must leave the gate green.
+Re-pointing the gate at `templates/` turns that case red rather than quietly failing the repo
+for a feature it ships.
+
 ## Pull Request Process
 
 1. **Create an Issue First**:
