@@ -248,8 +248,6 @@ BlueprintX/
 │   │   └── skeleton.meta
 │   ├── ts-lib/                     # publishable TypeScript library skeleton
 │   │   └── skeleton.meta
-│   ├── bash-cli/                   # standalone Bash CLI, git-tag versioned, bats + shellcheck
-│   │   └── skeleton.meta
 │   └── licenses/                   # license text files (MIT, Apache-2.0, GPL-3.0, …)
 ├── docs/                           # MkDocs source pages
 └── mkdocs.yml
@@ -275,9 +273,9 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 
 ## How scaffolding works
 
-**Eight skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
-`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`), two TypeScript
-(`react-spa-webpack`, `ts-lib`) and one Bash (`bash-cli`), one `skeleton.meta` each (see "Repo architecture" above and
+**Seven skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
+`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`) and two TypeScript
+(`react-spa-webpack`, `ts-lib`), one `skeleton.meta` each (see "Repo architecture" above and
 "Discovery system" below). `bin/ci/validate_meta.sh` enforces that every one of these
 directory names is also named here — this count is a should-fail witness in its own right:
 add or remove a skeleton without updating it and the number goes stale before the paragraph
@@ -323,7 +321,7 @@ The `templates/python-common/` directory is the **single source of truth** for s
 
 ## Template Python conventions (must be respected in all template files)
 
-- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, tab indent, double quotes, NumPy docstrings.
+- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, 4-space indent, double quotes, NumPy docstrings.
 - **Pre-commit hooks** (`.pre-commit-config.yaml`): ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
 - **Tests**: every skeleton runs `pytest` (`make unit_tests` → `poetry run pytest tests/unit/`; `pytest.ini` is shipped from `templates/python-common/` to all tiers). Tests are pytest-style — plain functions with fixtures (`conftest.py`, `capsys`, `monkeypatch`, `pytest_mock`) — not `unittest.TestCase`. Write new tests as pytest functions regardless of tier.
 - **One class per file**. Ports (ABCs) in `domain/ports.py`, ORM/DB implementations in `infrastructure/`, orchestration in `application/use_cases.py`. Never mix layers in one file.
