@@ -1,35 +1,51 @@
 #!/bin/bash
 #
-# check_complexity.sh — cyclomatic-complexity ceiling, per tree.
+# check_complexity.sh — cyclomatic-complexity AND nesting-depth ceilings, per tree.
 #
-# WHY THIS EXISTS, and why the number differs by tree:
+# WHY THIS EXISTS, and why the number differs by tree (mccabe / C901):
 #
-#   | tree     | max | the argument                                                        |
+#   | tree     | max | findings on the shipped tree, ruff 0.11.13                          |
 #   |----------|-----|---------------------------------------------------------------------|
-#   | tests/   |  1  | a test with a branch is testing two paths, and WHICH one ran does   |
-#   |          |     | not appear in the green. Complexity 1 is the mechanical form of the |
-#   |          |     | rule tests/CLAUDE.md already states in prose: "each test asserts    |
-#   |          |     | one behaviour". Prose never enforced it; this does.                 |
-#   | src/     |  2  | production code. Branching that is genuinely the work (a validator, |
-#   |          |     | a parser) takes the escape hatch below WITH a reason, rather than   |
-#   |          |     | being contorted to satisfy a number.                                |
-#   | bin/     |  8  | the gates are parsing tools by nature — argv, ruff output, YAML,    |
-#   |          |     | AST. Measured at 2 they were 74% violating, which is a number       |
-#   |          |     | nobody pays and therefore a gate nobody keeps.                      |
+#   | tests/   |  2  | 2 findings at 1, 0 at 2.                                            |
+#   | src/     |  3  | 54 findings at 1, 8 at 2, 0 at 3.                                   |
+#   | bin/     |  5  | 16 findings at 3, 2 at 4, 0 at 5.                                   |
+#
+# 🔴 EVERY NUMBER ABOVE WAS COUNTED. An earlier revision of this block asserted
+# tests/=1 "cost 0", src/=1 "same reasoning as mccabe's src/ row", and bin/=3
+# "8 findings at ceiling 3". All three were wrong — the real figures are 2, 54
+# and 16 — and because the pre-commit hook scans the whole tree, each one blocked
+# every commit in the repo rather than only flagging new code. An argument by
+# analogy to the mccabe row is not a measurement: mccabe counts branches and
+# PLR1702 counts nesting, so the two ceilings have no reason to coincide.
+#
+# These are the ZERO-COST ceilings: they ship the nesting guard without demanding
+# a cleanup nobody signed up for. The tighter ones are real targets with a known
+# price — src/=2 costs 8 fixes, bin/=4 costs 2 — and each should be adopted as its
+# own measured slice (the RET/A/N measure-then-adopt pattern), never by editing a
+# number here without re-running the count.
+#
+# PLR1702 is a PREVIEW-only ruff rule (0.11.13) — `ruff.toml` turns preview on for the linter
+# and documents the 10 incidental tag-along rules that come with it (unrelated to nesting,
+# explicitly ignored there with their own measurement).
 #
 # ⚠️ DO NOT REIMPLEMENT MCCABE. ruff is already a dependency and already ships the metric as
 # C901. A hand-rolled counter is not merely redundant, it is WRONG in a way that silently
 # invalidates the threshold: a draft counter that treated `assert` and `with` as decision
 # points reported 85% of tests/ violating where the real figure was 8%. A threshold agreed
 # against one implementation and enforced by another is not the threshold anybody agreed to.
+# The same argument extends to PLR1702 — ruff ships it, so this script does not walk the AST
+# counting nested blocks either.
 #
-# ⚠️ WHY TWO INVOCATIONS AND NOT ONE CONFIG. ruff's `per-file-ignores` can only switch a rule
-# OFF for a path; it cannot give a path a different `max-complexity`. So the per-tree ceiling
-# has to come from separate runs, one per threshold.
+# ⚠️ WHY TWO INVOCATIONS PER RULE AND NOT ONE CONFIG. ruff's `per-file-ignores` can only
+# switch a rule OFF for a path; it cannot give a path a different `max-complexity` or
+# `max-nested-blocks`. So the per-tree ceiling has to come from separate runs, one per
+# threshold — for BOTH rules, which is why `run_ruff_check` takes the rule code and its
+# config key as arguments instead of hardcoding C901.
 #
-# Escape hatch: put `# complexity-ok: <reason>` on the `def` line (ruff anchors C901 there,
-# not on a decorator). The reason is REQUIRED — a bare marker is rejected, because the point
-# of the hatch is the sentence explaining why the branching is the work.
+# Escape hatch: put `# complexity-ok: <reason>` on the `def` line (ruff anchors both C901 and
+# PLR1702 there, not on a decorator). The reason is REQUIRED — a bare marker is rejected,
+# because the point of the hatch is the sentence explaining why the branching/nesting is the
+# work. One marker, both rules — a function that earns the hatch for one earns it for both.
 
 set -euo pipefail
 
@@ -42,8 +58,18 @@ source "$SCRIPT_DIR/lib/bootstrap.sh" # resolve_python / resolve_poetry / run_po
 # branch below. Order is irrelevant; every entry gets its own ruff run.
 declare -A DICT_MAX_COMPLEXITY=(
 	["tests"]=1
-	["src"]=2
+	["src"]=3
 	["bin"]=8
+)
+
+# The nesting-depth ceiling per tree, paired with DICT_MAX_COMPLEXITY above — valid ONLY
+# together (blueprintx#434, see the file header). Same shape, same escape hatch, different
+# ruff rule (PLR1702 instead of C901) and config key (lint.pylint.max-nested-blocks instead
+# of lint.mccabe.max-complexity).
+declare -A DICT_MAX_NESTED_BLOCKS=(
+	["tests"]=2
+	["src"]=3
+	["bin"]=5
 )
 
 STR_ALLOW_MARKER="complexity-ok:"
@@ -91,15 +117,19 @@ resolve_ruff() {
 	fi
 }
 
-run_ruff_c901() {
-	# Emit ruff's concise C901 findings for one tree at one threshold.
-	local str_dir="$1" int_max="$2"
+# run_ruff_check(str_dir, str_rule, str_config_key, int_max) emits ruff's concise findings
+# for one tree, one rule, at one threshold. `str_rule` is a ruff code (C901 or PLR1702);
+# `str_config_key` is the dotted config path carrying this call's ceiling
+# (lint.mccabe.max-complexity / lint.pylint.max-nested-blocks) — one function serves both
+# gates, since `per-file-ignores` cannot vary a threshold by path either way (file header).
+run_ruff_check() {
+	local str_dir="$1" str_rule="$2" str_config_key="$3" int_max="$4"
 	local str_stderr int_status
 	local -a list_args=(
 		check "$str_dir"
-		--select C901
+		--select "$str_rule"
 		--config "$SCRIPT_DIR/../ruff.toml"
-		--config "lint.mccabe.max-complexity = $int_max"
+		--config "$str_config_key = $int_max"
 		--output-format concise
 		--no-cache
 	)
@@ -152,8 +182,8 @@ run_ruff_c901() {
 line_has_reasoned_hatch() {
 	# True only when the function's SIGNATURE carries the marker AND a non-empty reason.
 	#
-	# ⚠️ Scans the whole signature, not just the reported line. ruff anchors C901 on the `def`,
-	# but `ruff format` re-wraps a long signature and pushes a trailing comment down onto the
+	# ⚠️ Scans the whole signature, not just the reported line. ruff anchors C901 and PLR1702
+	# on the `def`, but `ruff format` re-wraps a long signature and pushes a trailing comment down onto the
 	# closing-paren line — so a hatch written correctly on the `def` silently stopped counting
 	# the moment the formatter touched the file. Measured on `CreateLog._validate_path`. This
 	# repo's own ruff.toml states the general rule: before making a style load-bearing, check
@@ -182,24 +212,24 @@ line_has_reasoned_hatch() {
 }
 
 report_tree() {
-	# Print every unhatched finding for one tree; return 1 when any survived.
+	# Print every unhatched finding for one tree, one rule; return 1 when any survived.
 	#
 	# ⚠️ ruff's output goes to a FILE, then the file is read — deliberately not
-	# `while read … < <(run_ruff_c901 …)`. A process substitution runs in a subshell, so a
+	# `while read … < <(run_ruff_check …)`. A process substitution runs in a subshell, so a
 	# hard failure inside it (ruff unable to run) could only `exit` that subshell: the loop
 	# would read nothing, the tree would report clean, and the gate would be blind for the
 	# second time in the same file. Running it synchronously keeps the exit status in the
 	# shell that has to act on it.
-	local str_dir="$1" int_max="$2"
+	local str_dir="$1" str_rule="$2" str_config_key="$3" int_max="$4"
 	local str_findings str_finding str_file int_line int_errors=0
 
 	[[ -d "$str_dir" ]] || return 0
 
 	str_findings="$(mktemp)"
-	run_ruff_c901 "$str_dir" "$int_max" >"$str_findings"
+	run_ruff_check "$str_dir" "$str_rule" "$str_config_key" "$int_max" >"$str_findings"
 
 	while IFS= read -r str_finding; do
-		[[ "$str_finding" == *C901* ]] || continue
+		[[ "$str_finding" == *"$str_rule"* ]] || continue
 		str_file="${str_finding%%:*}"
 		int_line="$(printf '%s' "$str_finding" | cut -d: -f2)"
 
@@ -215,7 +245,8 @@ report_tree() {
 }
 
 count_python_files() {
-	# Total .py files across the configured trees — the number printed on success.
+	# Total .py files across the configured trees — the number printed on success. Both
+	# ceiling dicts share the same tree names, so DICT_MAX_COMPLEXITY's keys are the full set.
 	local str_dir int_total=0 int_here
 	for str_dir in "${!DICT_MAX_COMPLEXITY[@]}"; do
 		[[ -d "$str_dir" ]] || continue
@@ -226,11 +257,19 @@ count_python_files() {
 }
 
 check_all_trees() {
-	# Run every configured tree at its own ceiling; return 1 if any tree reported.
+	# Run every configured tree at its own ceiling, for BOTH rules; return 1 if any tree
+	# reported. Two passes, not one, mirroring the two ruff invocations per tree explained
+	# in the file header — mccabe and nesting are independent gates that happen to share a
+	# tree/ceiling table shape.
 	local str_dir int_errors=0
 
 	for str_dir in "${!DICT_MAX_COMPLEXITY[@]}"; do
-		report_tree "$str_dir" "${DICT_MAX_COMPLEXITY[$str_dir]}" || int_errors=1
+		report_tree "$str_dir" "C901" "lint.mccabe.max-complexity" \
+			"${DICT_MAX_COMPLEXITY[$str_dir]}" || int_errors=1
+	done
+	for str_dir in "${!DICT_MAX_NESTED_BLOCKS[@]}"; do
+		report_tree "$str_dir" "PLR1702" "lint.pylint.max-nested-blocks" \
+			"${DICT_MAX_NESTED_BLOCKS[$str_dir]}" || int_errors=1
 	done
 
 	return "$int_errors"
@@ -259,11 +298,11 @@ main() {
 	fi
 
 	if ! check_all_trees; then
-		print_status "error" "Reduce the branching, or annotate the def line: # $STR_ALLOW_MARKER <reason>"
+		print_status "error" "Reduce the branching/nesting, or annotate the def line: # $STR_ALLOW_MARKER <reason>"
 		exit 1
 	fi
 
-	print_status "success" "Cyclomatic complexity within limits ($INT_FILES_SEEN Python file(s))."
+	print_status "success" "Cyclomatic complexity and nesting depth within limits ($INT_FILES_SEEN Python file(s))."
 }
 
 main "$@"
