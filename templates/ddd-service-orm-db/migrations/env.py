@@ -18,7 +18,7 @@ from chassis.db_schema.infrastructure import Base
 from chassis.db_schema.infrastructure import models as _models  # noqa: F401
 
 
-load_dotenv(override=True)
+load_dotenv()
 
 # ─── READ RUNTIME CONFIG ──────────────────────────────────────────────────────
 
