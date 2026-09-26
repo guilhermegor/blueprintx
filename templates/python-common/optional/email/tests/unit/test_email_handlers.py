@@ -11,16 +11,16 @@ from chassis.email.infrastructure.outlook_email_handler import OutlookEmailHandl
 from chassis.email.infrastructure.smtp_email_handler import SmtpEmailHandler
 
 
-def test_build_email_handler_none_returns_null() -> None:
-	"""A blank/none backend opts out with a NullEmailHandler."""
-	assert isinstance(build_email_handler("none"), NullEmailHandler)
-	assert isinstance(build_email_handler("off"), NullEmailHandler)
+@pytest.mark.parametrize("str_backend", ["none", "off"])
+def test_build_email_handler_opt_out_returns_null(str_backend: str) -> None:
+	"""Every opt-out backend key resolves to a NullEmailHandler."""
+	assert isinstance(build_email_handler(str_backend), NullEmailHandler)
 
 
-def test_build_email_handler_default_is_outlook() -> None:
-	"""An empty backend key resolves to the Outlook handler (the default)."""
-	assert isinstance(build_email_handler(""), OutlookEmailHandler)
-	assert isinstance(build_email_handler("outlook"), OutlookEmailHandler)
+@pytest.mark.parametrize("str_backend", ["", "outlook"])
+def test_build_email_handler_default_is_outlook(str_backend: str) -> None:
+	"""An empty or explicit outlook key resolves to the Outlook handler (the default)."""
+	assert isinstance(build_email_handler(str_backend), OutlookEmailHandler)
 
 
 def test_build_email_handler_smtp_selected() -> None:
