@@ -305,6 +305,7 @@ copy_common_templates() {
     # answered-review-thread predicate (blueprintx#175), same file the Python tiers ship, so
     # the CI job above never fetches or vendors a copy of its own.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+    copy_repo_rules_provisioner "$project_path" "$COMMON_TEMPLATE_ROOT/bin/required-checks.txt"
 
     copy_shared_ts_source "$project_path"
 

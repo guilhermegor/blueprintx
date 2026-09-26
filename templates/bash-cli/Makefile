@@ -1,4 +1,4 @@
-.PHONY: lint test install help
+.PHONY: lint test install repo_rules repo_rules_verify help
 
 # Mirrors BlueprintX's own root Makefile `install` recipe: rsync the tree into a
 # location outside the checkout, then stamp the git-tag version into the installed
@@ -22,7 +22,17 @@ lint:
 test:
 	@bats tests/
 
+# Needs a maintainer's `gh auth` with repo-admin — CI's GITHUB_TOKEN cannot write repo
+# settings. Non-blocking: an unauthenticated or non-admin run warns and exits 0.
+repo_rules:
+	@bash bin/enable_repo_rules.sh
+
+repo_rules_verify:
+	@bash bin/enable_repo_rules.sh verify
+
 help:
-	@echo "make lint     - shellcheck + shfmt"
-	@echo "make test     - bats tests/"
-	@echo "make install  - install to /usr/local/bin/${PROJECT_NAME} (stamps the git-tag version)"
+	@echo "make lint               - shellcheck + shfmt"
+	@echo "make test               - bats tests/"
+	@echo "make install            - install to /usr/local/bin/${PROJECT_NAME} (stamps the git-tag version)"
+	@echo "make repo_rules         - provision the pr-quality-gate ruleset + merge settings"
+	@echo "make repo_rules_verify  - assert required checks are strict (read-only, fails loud)"
