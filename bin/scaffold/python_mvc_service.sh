@@ -74,7 +74,11 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    # No terminal on stdin: skip the read entirely rather than let a stray pipe line
+    # answer as a username — falls straight to DEFAULT_GITHUB_USERNAME below (#539).
+    if [ -t 0 ]; then
+        read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    fi
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -243,27 +247,30 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
-    case "$protect_ans" in
-        y|Y)
-            # A solo maintainer cannot satisfy a required-approving-review
-            # rule — GitHub forbids self-approval, so the first PR's merge
-            # would be permanently blocked. Ask whether human reviewers will
-            # gate merges, and build the protection payload accordingly.
-            local reviews_json
-            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
-            case "$reviews_ans" in
-                y|Y)
-                    reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
-                    ;;
-                *)
-                    reviews_json='"required_pull_request_reviews": null,'
-                    ;;
-            esac
-            if gh api --method PUT \
-                -H "Accept: application/vnd.github+json" \
-                "/repos/$repo/branches/$branch/protection" \
-                --input - <<EOF
+    local do_protect reviews_ans reviews_json
+    # default "n": protecting the branch is a GitHub API mutation (enforce_admins, required
+    # checks) — an unattended run must not silently lock down a repo nobody confirmed (#539).
+    prompt_yes_no do_protect "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
+    if [ "$do_protect" != "true" ]; then
+        print_status "info" "Skipped branch protection"
+        return
+    fi
+
+    # A solo maintainer cannot satisfy a required-approving-review
+    # rule — GitHub forbids self-approval, so the first PR's merge
+    # would be permanently blocked. Ask whether human reviewers will
+    # gate merges, and build the protection payload accordingly.
+    # default "n": matches the pre-existing fallback (solo maintainer, no required reviews).
+    prompt_yes_no reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
+    if [ "$reviews_ans" = "true" ]; then
+        reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
+    else
+        reviews_json='"required_pull_request_reviews": null,'
+    fi
+    if gh api --method PUT \
+        -H "Accept: application/vnd.github+json" \
+        "/repos/$repo/branches/$branch/protection" \
+        --input - <<EOF
 {
   "required_status_checks": { "strict": true, "contexts": [] },
   "enforce_admins": true,
@@ -274,30 +281,24 @@ apply_branch_protection() {
   "required_linear_history": true
 }
 EOF
-            then
-                print_status "success" "Branch '$branch' protected on GitHub."
-            else
-                print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
-            fi
-            ;;
-        *) print_status "info" "Skipped branch protection";;
-    esac
+    then
+        print_status "success" "Branch '$branch' protected on GitHub."
+    else
+        print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
+    fi
 }
 
 prompt_docker_compose() {
-    local ans
-    read -r -p "$(prompt_main "Include Docker Compose for database infrastructure? [y/N] ")" ans
-    if [[ "$ans" =~ ^[Yy]$ ]]; then
-        INCLUDE_DOCKER_COMPOSE=true
-        local db_ans
-        read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans
+    local db_ans
+    # default "n": ships a whole database Compose stack nobody asked for (#539).
+    prompt_yes_no INCLUDE_DOCKER_COMPOSE "$(prompt_main "Include Docker Compose for database infrastructure? [y/N] ")"
+    if [ "$INCLUDE_DOCKER_COMPOSE" = "true" ]; then
+        read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans || true
         case "$db_ans" in
             mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
             *) DB_COMPOSE_BACKEND="postgresql" ;;
         esac
         print_status "config" "Docker Compose backend: $DB_COMPOSE_BACKEND"
-    else
-        INCLUDE_DOCKER_COMPOSE=false
     fi
 }
 
@@ -310,71 +311,55 @@ conditional_copy_docker_compose() {
 }
 
 prompt_data_dir() {
-    local answer base_ans dated_ans
-    read -r -p "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y)
-            INCLUDE_DATA_DIR=true
-            read -r -p "$(prompt_sub "Output base directory [logs]: ")" base_ans || true
-            DATA_DIR_BASE="${base_ans:-logs}"
-            read -r -p "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")" dated_ans || true
-            case "$dated_ans" in
-                y|Y) DATA_DIR_DATED=true ;;
-                *) DATA_DIR_DATED=false ;;
-            esac
-            print_status "config" "Output dir: $DATA_DIR_BASE (date-organised: $DATA_DIR_DATED)"
-            ;;
-        *)
-            INCLUDE_DATA_DIR=false
-            ;;
-    esac
+    local base_ans
+    # default "n": changing the on-disk output layout must never happen silently (#539).
+    prompt_yes_no INCLUDE_DATA_DIR "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")"
+    if [ "$INCLUDE_DATA_DIR" = "true" ]; then
+        read -r -p "$(prompt_sub "Output base directory [logs]: ")" base_ans || true
+        DATA_DIR_BASE="${base_ans:-logs}"
+        # default "n": matches the pre-existing fallback (flat, non-date-organised output).
+        prompt_yes_no DATA_DIR_DATED "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")"
+        print_status "config" "Output dir: $DATA_DIR_BASE (date-organised: $DATA_DIR_DATED)"
+    fi
 }
 
 prompt_webhook() {
-    local answer platform_ans
-    read -r -p "$(prompt_main "Include outbound webhook notifications? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y)
-            INCLUDE_WEBHOOK=true
-            read -r -p "$(prompt_sub "Which platform? [teams/slack] (default: teams): ")" platform_ans || true
-            case "${platform_ans:-teams}" in
-                slack) WEBHOOK_PLATFORM="slack" ;;
-                *) WEBHOOK_PLATFORM="teams" ;;
-            esac
-            print_status "config" "Webhook platform: $WEBHOOK_PLATFORM"
-            ;;
-        *)
-            INCLUDE_WEBHOOK=false
-            ;;
-    esac
+    local platform_ans
+    # default "n": adds outbound webhook notification code — must not silently enable
+    # network calls to a platform nobody named (#539).
+    prompt_yes_no INCLUDE_WEBHOOK "$(prompt_main "Include outbound webhook notifications? [y/N]: ")"
+    if [ "$INCLUDE_WEBHOOK" = "true" ]; then
+        read -r -p "$(prompt_sub "Which platform? [teams/slack] (default: teams): ")" platform_ans || true
+        case "${platform_ans:-teams}" in
+            slack) WEBHOOK_PLATFORM="slack" ;;
+            *) WEBHOOK_PLATFORM="teams" ;;
+        esac
+        print_status "config" "Webhook platform: $WEBHOOK_PLATFORM"
+    fi
 }
 
 prompt_otel() {
-    local answer
-    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
-        *) INCLUDE_OTEL=false ;;
-    esac
+    # default "n": an opt-in that installs telemetry deps and sends data to a collector
+    # must never be answered by leftover pipe input (#539).
+    prompt_yes_no INCLUDE_OTEL "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
+    if [ "$INCLUDE_OTEL" = "true" ]; then
+        print_status "config" "OTLP log export: enabled"
+    fi
 }
 
 prompt_email() {
-    local answer backend_ans
-    read -r -p "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")" answer || true
-    case "$answer" in
-        y | Y)
-            INCLUDE_EMAIL=true
-            read -r -p "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")" backend_ans || true
-            case "${backend_ans:-outlook}" in
-                smtp) EMAIL_BACKEND="smtp" ;;
-                *) EMAIL_BACKEND="outlook" ;;
-            esac
-            print_status "config" "E-mail backend: $EMAIL_BACKEND"
-            ;;
-        *)
-            INCLUDE_EMAIL=false
-            ;;
-    esac
+    local backend_ans
+    # default "n": adds an outbound e-mail sending capability — same reasoning as webhooks,
+    # must not silently enable it (#539).
+    prompt_yes_no INCLUDE_EMAIL "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")"
+    if [ "$INCLUDE_EMAIL" = "true" ]; then
+        read -r -p "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")" backend_ans || true
+        case "${backend_ans:-outlook}" in
+            smtp) EMAIL_BACKEND="smtp" ;;
+            *) EMAIL_BACKEND="outlook" ;;
+        esac
+        print_status "config" "E-mail backend: $EMAIL_BACKEND"
+    fi
 }
 
 # Multi-intent pipeline (opt-in, default No per YAGNI). Yes generates the dispatch trio
@@ -382,22 +367,18 @@ prompt_email() {
 # PIPELINE_INTENT env key, replacing the single _pipeline.py. Env override MULTI_PIPELINE_OPTIN=true
 # forces Yes non-interactively (used by the multi-mode CI job).
 prompt_pipeline_intent() {
-    local answer
     if [[ "${MULTI_PIPELINE_OPTIN:-}" == "true" ]]; then
         INCLUDE_MULTI_PIPELINE=true
         print_status "config" "Pipeline mode: multi-intent (PIPELINE_INTENT dispatch) [env override]"
         return
     fi
-    read -r -p "$(prompt_main "Does this process have multiple run intents (e.g. send/reconcile/notify)? [y/N]: ")" answer || true
-    case "$answer" in
-        y | Y)
-            INCLUDE_MULTI_PIPELINE=true
-            print_status "config" "Pipeline mode: multi-intent (PIPELINE_INTENT dispatch)"
-            ;;
-        *)
-            INCLUDE_MULTI_PIPELINE=false
-            ;;
-    esac
+    # default "n": opt-in, default No per YAGNI — generates a whole dispatch trio nobody
+    # asked for (#539). MULTI_PIPELINE_OPTIN=true above is the sanctioned non-interactive
+    # override; a stray piped "y" must not do the same thing by accident.
+    prompt_yes_no INCLUDE_MULTI_PIPELINE "$(prompt_main "Does this process have multiple run intents (e.g. send/reconcile/notify)? [y/N]: ")"
+    if [ "$INCLUDE_MULTI_PIPELINE" = "true" ]; then
+        print_status "config" "Pipeline mode: multi-intent (PIPELINE_INTENT dispatch)"
+    fi
 }
 
 # E-mail handler seam (opt-in, mirrors the webhook seam): copy optional/email into
