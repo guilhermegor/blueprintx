@@ -1,8 +1,10 @@
-r"""Keep comments and docstrings in English, while published documentation stays Portuguese.
+r"""Keep comments and docstrings in English, whatever locale the published documentation uses.
 
 The root ``CLAUDE.md`` draws the boundary at *documentation for a reader* × *code*: ``README.md``
-and every page under ``docs/`` is Portuguese; docstrings, comments, symbol names, commit messages
-and CI output are English.
+and every page under ``docs/`` are written in the locale chosen at scaffold time (``DOCS_LOCALE``,
+``en`` or ``pt-BR``); docstrings, comments, symbol names, commit messages and CI output are
+English in every locale. The gate never reads ``docs/``, so the choice does not change what it
+checks — it only records which language the pages are allowed to be in.
 
 ⚠️ **This gate enforces only the first two of those** — comments and docstrings. Symbol names,
 commit messages and CI output share the convention but are checked by nothing here, so do not
@@ -577,19 +579,64 @@ def audit_paths() -> list:
 	return sorted(set(list_paths))
 
 
+# `--root <dir>` is two argv entries; anything shorter is a flag with its value missing.
+_INT_FLAG_WITH_VALUE = 2
+
+
+def split_root_option(list_argv: list) -> tuple:
+	"""Peel ``--root <dir>`` off the argv, the same seam ``check_function_length.py`` exposes.
+
+	It lets BlueprintX run this very file over its own tree instead of keeping a second copy:
+	``PATH_ROOT`` otherwise resolves to the directory the script ships in.
+
+	Parameters
+	----------
+	list_argv : list of str
+		Raw argv, minus the program name.
+
+	Returns
+	-------
+	tuple of (pathlib.Path or None, list of str)
+		The requested root (``None`` when absent) and the remaining filenames.
+
+	Raises
+	------
+	ValueError
+		When ``--root`` is passed with no directory after it. Returning it as a filename
+		instead makes the gate print success for having checked nothing — measured on
+		blueprintx#247: `check_comment_language.py --root` exited 0. `check_function_length.py`,
+		the seam this mirrors, already rejects the same argv.
+	"""
+	if list_argv[:1] == ["--root"]:
+		if len(list_argv) < _INT_FLAG_WITH_VALUE:
+			msg = "--root needs a directory"
+			raise ValueError(msg)
+		return pathlib.Path(list_argv[1]).resolve(), list_argv[2:]
+	return None, list_argv
+
+
 def main(list_argv: list) -> int:
 	"""Check every named file's comments for Portuguese prose.
 
 	Parameters
 	----------
 	list_argv : list of str
-		Filenames, as pre-commit passes them. Empty means audit the whole repository.
+		Optional leading ``--root <dir>``, then filenames as pre-commit passes them. No
+		filenames means audit the whole repository under the root.
 
 	Returns
 	-------
 	int
 		0 when every comment reads as English, 1 on a violation.
 	"""
+	global PATH_ROOT  # noqa: PLW0603 -- the one rebind point for the module-wide root
+	try:
+		path_root, list_argv = split_root_option(list_argv)
+	except ValueError as cls_err:
+		print(f"\u274c {cls_err}")
+		return 1
+	if path_root is not None:
+		PATH_ROOT = path_root
 	bool_audit = not list_argv
 	list_paths = (
 		[pathlib.Path(str_name).resolve() for str_name in list_argv]
@@ -623,8 +670,9 @@ def main(list_argv: list) -> int:
 	if list_problems:
 		print(
 			f"\n{len(list_problems)} comment(s) read as Portuguese. Comments, docstrings and "
-			f"symbol names are English (root CLAUDE.md, 'Documentation language'); README.md and "
-			f"docs/ are Portuguese. If a flagged line is genuinely English and merely quotes "
+			f"symbol names are English (root CLAUDE.md, 'Documentation language'); only "
+			f"README.md and docs/ follow the project's locale. If a flagged line is English and "
+			f"merely quotes "
 			f"Portuguese text, add {STR_ESCAPE} to it rather than rewording the sentence."
 		)
 	return 1 if list_problems else 0

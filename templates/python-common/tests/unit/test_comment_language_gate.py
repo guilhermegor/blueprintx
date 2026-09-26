@@ -401,3 +401,28 @@ def test_untracked_files_are_invisible_but_tracked_ones_are_not(
 	assert list_names == ["ok.py"], (
 		f"untracked worktree content leaked into discovery: {list_names}"
 	)
+
+
+def test_bare_root_flag_fails_instead_of_checking_nothing(
+	capsys: pytest.CaptureFixture,
+) -> None:
+	"""``--root`` with no directory must exit non-zero, not report success.
+
+	Before blueprintx#247 the flag fell through to the filename list, `file_problems`
+	ignored its unsupported extension, and the gate printed its success banner having
+	checked nothing. `check_function_length.py` — the seam this one mirrors — already
+	rejected the same argv, so the two had drifted.
+
+	Parameters
+	----------
+	capsys : pytest.CaptureFixture
+		Captures the gate's message, so the assertion names the reason and not only
+		the exit code (a crash also exits non-zero).
+	"""
+	int_status = gate.main(["--root"])
+	str_out = capsys.readouterr().out
+
+	assert int_status == 1, "a bare --root reported success"
+	assert "--root needs a directory" in str_out, (
+		f"failed without naming the reason: {str_out!r}"
+	)
