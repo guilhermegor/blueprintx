@@ -179,6 +179,10 @@ Two workflows ship under `.github/workflows/` (present only when a GitHub remote
   docs** with `mike deploy --update-aliases <X.Y> latest` (skipped for prereleases, so a suffixed
   version never moves `latest`).
 
+Both validate the `version` input before anything else runs: `X.Y.Z`, optionally followed by a
+PEP 440 pre/post/dev suffix (`1.2.3`, `1.2.3rc1`, `1.2.3-rc.1`, `1.2.3.post1`). A rejected value
+means retyping it, not deleting a pushed tag.
+
 **Docs are versioned via [mike](https://github.com/jimporter/mike)** and served from the
 `gh-pages` branch — `docs.yaml` is a strict *build check only* and never deploys. Pages must be
 set to "Deploy from a branch → gh-pages" via `poe enable_pages`, which waits until the first
