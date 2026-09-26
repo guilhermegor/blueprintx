@@ -93,18 +93,18 @@ from pathlib import Path
 
 
 def load_gate(str_name: str) -> object:
-	"""Load a bin/ gate by file path so tests import the shipped file itself."""
-	path_gate = Path(__file__).parents[2] / "bin" / f"{str_name}.py"
-	cls_spec = importlib.util.spec_from_file_location(str_name, path_gate)
-	# Both can be None — a missing file, or a loader-less spec. Without this guard the
-	# failure is `AttributeError: 'NoneType' has no attribute 'exec_module'`, which names
-	# neither the gate nor the path and reads like a bug in the test rather than a renamed
-	# or deleted file.
-	if cls_spec is None or cls_spec.loader is None:
-		raise ImportError(f"cannot load gate from {path_gate}")
-	cls_module = importlib.util.module_from_spec(cls_spec)
-	cls_spec.loader.exec_module(cls_module)
-	return cls_module
+    """Load a bin/ gate by file path so tests import the shipped file itself."""
+    path_gate = Path(__file__).parents[2] / "bin" / f"{str_name}.py"
+    cls_spec = importlib.util.spec_from_file_location(str_name, path_gate)
+    # Both can be None — a missing file, or a loader-less spec. Without this guard the
+    # failure is `AttributeError: 'NoneType' has no attribute 'exec_module'`, which names
+    # neither the gate nor the path and reads like a bug in the test rather than a renamed
+    # or deleted file.
+    if cls_spec is None or cls_spec.loader is None:
+        raise ImportError(f"cannot load gate from {path_gate}")
+    cls_module = importlib.util.module_from_spec(cls_spec)
+    cls_spec.loader.exec_module(cls_module)
+    return cls_module
 ```
 
 Importing the file the project actually ships is the point: a copy pasted into `tests/`
@@ -112,8 +112,8 @@ passes forever while the shipped gate rots.
 
 ## Formatting (must pass `poe lint`)
 
-- **Tabs, not spaces** — `ruff.toml` sets `indent-style = "tab"`. The most common lint
-  failure is a 4-space-indented test file. Indent every level with one tab.
+- **4-space indent** — `ruff.toml` sets `indent-style = "space"`. Let `ruff format` handle
+  it; a hand-indented test file is the most common source of drift from this rule.
 - **Double quotes** everywhere (`quote-style = "double"`).
 - **Type annotations on every function**, including `-> None` on tests and fixtures
   (flake8-annotations is strict).
@@ -218,10 +218,10 @@ module- or session-scoped fixture instead of rebuilding it per test:
 ```python
 @pytest.fixture(scope="module")
 def path_rendered(tmp_path_factory: pytest.TempPathFactory) -> Path:
-	"""Render the report once for the whole module (expensive build shared)."""
-	path_out = tmp_path_factory.mktemp("render") / "report.xlsx"
-	RenderToExcel().write(df_sample(), path_out)
-	return path_out
+    """Render the report once for the whole module (expensive build shared)."""
+    path_out = tmp_path_factory.mktemp("render") / "report.xlsx"
+    RenderToExcel().write(df_sample(), path_out)
+    return path_out
 ```
 
 The smell this fixes is "redundant expensive setup masquerading as independent coverage" —
@@ -314,7 +314,7 @@ import yaml
 
 
 str_digest = hashlib.sha256(
-	json.dumps(yaml.safe_load(str_text), sort_keys=True, default=str).encode()
+    json.dumps(yaml.safe_load(str_text), sort_keys=True, default=str).encode()
 ).hexdigest()
 ```
 
@@ -387,12 +387,12 @@ _MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
 
 
 def _run_gate(path_root: Path, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV) -> ...:
-	dict_env = dict(os.environ)
-	dict_env.pop("FORCE_COLOR", None)      # unrolled: a loop costs complexity, and tests/ is capped at 1
-	dict_env.pop("CLICOLOR_FORCE", None)
-	dict_env.pop("NO_COLOR", None)
-	dict_env.update(dict_extra)
-	return subprocess.run(..., env=dict_env, check=False)
+    dict_env = dict(os.environ)
+    dict_env.pop("FORCE_COLOR", None)      # unrolled: a loop costs complexity, and tests/ is capped at 1
+    dict_env.pop("CLICOLOR_FORCE", None)
+    dict_env.pop("NO_COLOR", None)
+    dict_env.update(dict_extra)
+    return subprocess.run(..., env=dict_env, check=False)
 ```
 
 Measured (blueprintx#254): nine green subprocess tests for `check_complexity.sh` went **red on a
