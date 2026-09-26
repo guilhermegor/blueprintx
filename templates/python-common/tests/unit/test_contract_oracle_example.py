@@ -22,24 +22,24 @@ _FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "example_source
 
 
 def _oracle_columns(path_fixture: Path, str_sep: str = ";") -> tuple[str, ...]:
-	"""Return the committed header fixture's columns (the source-produced oracle).
+    """Return the committed header fixture's columns (the source-produced oracle).
 
-	Parameters
-	----------
-	path_fixture : pathlib.Path
-		Path to the header-only fixture (the verbatim first line of the real artifact).
-	str_sep : str, optional
-		Column delimiter (default ``";"``).
+    Parameters
+    ----------
+    path_fixture : pathlib.Path
+            Path to the header-only fixture (the verbatim first line of the real artifact).
+    str_sep : str, optional
+            Column delimiter (default ``";"``).
 
-	Returns
-	-------
-	tuple of str
-		The oracle columns, in the source's own order.
-	"""
-	str_header = path_fixture.read_text(encoding="utf-8").splitlines()[0]
-	return tuple(cell.strip() for cell in str_header.split(str_sep))
+    Returns
+    -------
+    tuple of str
+            The oracle columns, in the source's own order.
+    """
+    str_header = path_fixture.read_text(encoding="utf-8").splitlines()[0]
+    return tuple(cell.strip() for cell in str_header.split(str_sep))
 
 
 def test_example_contract_matches_its_source_oracle() -> None:
-	"""``EXAMPLE_SOURCE.tuple_required`` equals the committed source header (not itself)."""
-	assert set(EXAMPLE_SOURCE.tuple_required) == set(_oracle_columns(_FIXTURE))
+    """``EXAMPLE_SOURCE.tuple_required`` equals the committed source header (not itself)."""
+    assert set(EXAMPLE_SOURCE.tuple_required) == set(_oracle_columns(_FIXTURE))
