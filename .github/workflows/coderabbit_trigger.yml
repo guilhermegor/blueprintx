@@ -56,6 +56,24 @@ on:
     # finding, 69.6% were rate-limit notices. Net effect of dropping it: one automatic ask per
     # PR at open; pushes afterwards are free, so agents can commit and push for durability
     # without spending account quota. Re-review is now a deliberate `@coderabbitai full review`.
+    #
+    # `opened` was put to the same question in #567 — an open-time ask is a BLIND bid for the
+    # one account-level window, placed on the newest and therefore least starved PR, where the
+    # reviewer-slot tick and review_retry.yml place aimed ones. Measured over 656 comments and
+    # 244 asks, 2026-09-06 → 2026-09-20, paged to exhaustion
+    # (docs/backlog/coderabbit-open-trigger-567_20260920_171404.md): asks on open are 45% of
+    # everything spent but win only 26% of the reviews that happen (23 accepted / 81 refused,
+    # 20.7%), against 45.1% for the tick and 50.6% for the retry janitor.
+    #
+    # KEPT anyway, on the second number. A refused ask costs nothing, so those 81 refusals are
+    # not the leak; the open-time ask's real cost is its 23 wins. What it buys is ENROLMENT —
+    # it was the first ask on 78 of the 95 PRs asked in that window (82%), and
+    # retry_rate_limited_review.py only adopts a PR whose newest reviewer comment IS a
+    # rate-limit notice. A PR nobody ever asks about never produces one, so dropping `opened`
+    # would hide it from the janitor as well as from the tick, and the tick lives only as long
+    # as a Claude session. Nothing would merge unreviewed — the required "Review threads
+    # answered" check blocks that — a PR opened with no session running would simply STALL,
+    # red and unbounded, until a human noticed.
     types: [opened, reopened, ready_for_review]
 
 permissions:
