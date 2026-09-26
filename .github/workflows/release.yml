@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g. 0.2.0)"
+        description: "Version to release (e.g. 0.2.0, or 0.2.0-rc.1)"
         required: true
 
 permissions:
@@ -18,6 +18,19 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The input is free text. A malformed value (a stray `/`, a leading `v`, an
+      # injected `;`) would otherwise reach `git tag` — the irreversible half of this
+      # job — before any package-manager job has a chance to fail loudly. Reject it
+      # here so a bad input is a no-op, not a pushed tag with no matching artifacts.
+      - name: Validate version
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$ ]]; then
+            echo "::error::Invalid version '$VERSION' — expected SemVer MAJOR.MINOR.PATCH with no leading zeroes, optionally followed by a hyphen and dot-separated non-empty prerelease identifiers (e.g. 1.2.3, 1.2.3-rc.1). Rejected: 1.2.3.rc, 1.2.3-rc., 1.2.3-rc..1, 01.2.3, 1.2.3-rc.01." >&2
+            exit 1
+          fi
 
       - name: Create and push tag
         env:

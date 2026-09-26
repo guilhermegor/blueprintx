@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (must match package.json "version")'
+        description: 'Version to release, semver (must match package.json "version"), e.g. 1.2.3 or 1.2.3-rc.1'
         required: true
         type: string
 
@@ -29,6 +29,18 @@ jobs:
     outputs:
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # The input is free text and is interpolated into the tag name below and later
+      # compared against package.json. Reject a malformed value up front rather than
+      # let it drift into a tag or a confusing mismatch error downstream.
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$ ]]; then
+            echo "::error::Invalid version '$VERSION' — expected SemVer MAJOR.MINOR.PATCH with no leading zeroes, optionally followed by a hyphen and dot-separated non-empty prerelease identifiers (e.g. 1.2.3, 1.2.3-rc.1). Rejected: 1.2.3.rc, 1.2.3-rc., 1.2.3-rc..1, 01.2.3, 1.2.3-rc.01." >&2
+            exit 1
+          fi
+
       - name: Extract Tag Name
         id: release
         env:
