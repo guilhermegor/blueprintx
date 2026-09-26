@@ -87,6 +87,36 @@ check_job_timeouts() {
 	echo "job timeouts OK — ${int_bounded} bounded job(s) across $# workflow(s)"
 }
 
+# Every remote action must be pinned to a full 40-hex commit SHA with a trailing `# vX.Y.Z`
+# comment — the exact shape Dependabot's `github-actions` ecosystem keeps current. A tag is a
+# movable pointer: if it moves, the workflow runs different code with no diff here and no
+# signal anywhere. Rule and the measurement behind it: CONTRIBUTING.md → "GitHub Actions are
+# pinned by commit SHA" (blueprintx#369). Local `./` references have no ref to pin.
+check_action_pins() {
+	local str_file str_findings=""
+	for str_file in "$@"; do
+		str_findings+="$(awk '
+			/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*[^.[:space:]]/ {
+				str_ref = $0
+				sub(/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*/, "", str_ref)
+				if (str_ref !~ /^[^@[:space:]]+@[0-9a-f]{40}[[:space:]]+#[[:space:]]*v[0-9]/)
+					printf "%s:%d: not pinned to a commit SHA: %s\n", FILENAME, NR, str_ref
+			}
+		' "$str_file")"$'\n'
+	done
+
+	str_findings="$(printf '%s\n' "$str_findings" | grep -v '^[[:space:]]*$' || true)"
+	if [ -n "$str_findings" ]; then
+		echo "unpinned action references (use <owner>/<repo>@<40-hex sha> # vX.Y.Z):" >&2
+		printf '%s\n' "$str_findings" >&2
+		exit 1
+	fi
+
+	local int_pinned
+	int_pinned="$(grep -cE 'uses:[[:space:]]*[^./[:space:]][^@]*@[0-9a-f]{40}' "$@" | awk -F: '{ int_sum += $NF } END { print int_sum }')"
+	echo "action pins OK — ${int_pinned} SHA-pinned reference(s) across $# workflow(s)"
+}
+
 main() {
 	mapfile -t list_workflows < <(discover_workflows | sort -u)
 
@@ -98,9 +128,13 @@ main() {
 		exit 1
 	fi
 
-	# Runs before the actionlint resolve below: this check needs no external tool, so it
-	# must not inherit actionlint's graceful skip.
+	# Both run before the actionlint resolve below: neither needs an external tool, so
+	# neither may inherit actionlint's graceful skip.
 	check_job_timeouts "${list_workflows[@]}"
+	# Templates only until the follow-up filed from blueprintx#369 pins this repo's own
+	# workflows; then drop the filter and pass the full list.
+	mapfile -t list_template_workflows < <(printf '%s\n' "${list_workflows[@]}" | grep '^templates/')
+	check_action_pins "${list_template_workflows[@]}"
 
 	# Resolve, don't install — same contract as the lint_* wrappers: a constrained box never
 	# hard-fails the commit flow. But a graceful skip is PLACEBO in CI (a gate reporting its
