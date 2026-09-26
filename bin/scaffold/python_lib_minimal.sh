@@ -340,6 +340,9 @@ copy_templates() {
     # No .env / .env.example: a distributable library has no runtime env to seed (unlike the
     # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
+    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
+    # file, language-agnostic, so it lives in templates/common not python-common.
+    cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.coveragerc" "$project_path/.coveragerc"
     # Seed CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
     # release; cz changelog regenerates it from tags at release/docs-build time. Single-sourced
