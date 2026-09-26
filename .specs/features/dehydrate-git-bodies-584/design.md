@@ -27,13 +27,34 @@ own rule that a completed audit is a record, not scratch to delete.
 2. Read every file's full content.
 3. Fetched `gh pr list --state all --limit 400 --json number,title,headRefName`
    and `gh issue list --state all --limit 400 --json number,title` once each
-   (two calls, not one per file) and matched by **content**, never by
-   filename — the naming variants (`pr<N>.md`, `prA.md`, `issue_<topic>.md`,
-   `msg<N>.txt`) do not reliably encode which issue/PR a file belongs to.
-   Three matches were spot-verified by diffing the local file against the
-   live `gh issue view` / `gh pr view` body (issue #583, PR #589, PR #581) —
-   line counts and content matched exactly in all three, which is the basis
-   for trusting the same content-match method on the rest.
+   (two calls, not one per file). **Returned 315 PRs and 280 issues** — both
+   well under the 400-item cap, so neither list was truncated and every open
+   or closed PR/issue at audit time was a candidate.
+4. Matched each file by **topic**, never by filename — the naming variants
+   (`pr<N>.md`, `prA.md`, `issue_<topic>.md`, `msg<N>.txt`) do not reliably
+   encode which issue/PR a file belongs to (`msg521.txt`/`msg522.txt` above
+   are the proof: their numeric suffix names the *wrong* PR). A file's full
+   content was read and cross-referenced against the fetched titles and
+   `Closes #N` / issue-number references, then confirmed by opening the
+   matched PR/issue. **This is a topic match, not a byte-for-byte diff** —
+   re-checked here for two files not already flagged as an exact match:
+   `pr240.md` (this repo's own draft of the incidents-page PR body) reads
+   completely differently from the merged `PR #316` body — the PR was
+   substantially rewritten before it was opened — but both describe the same
+   feature and both say `Closes #240`, so the topic match holds even though
+   the text does not. `msg531.txt` is not PR #531's body at all — it is one
+   commit's message ("fix(wheelhouse): canonical impl names, manifest
+   containment, count check"), confirmed against `gh pr view 531 --json
+   commits` where it appears verbatim as a `messageHeadline` — the match is
+   correct, but only at the commit-message level, not the PR-description
+   level.
+5. Three matches were **additionally** spot-verified by diffing the local
+   file against the live `gh issue view` / `gh pr view` body (issue #583, PR
+   #589, PR #581) — line counts and full content matched exactly in all
+   three. That exact-match tier does not extend to the other 34: it shows
+   the topic-match method above is not producing false positives on the
+   cases checked, not that every remaining file is a verbatim copy of its
+   live counterpart.
 
 ## Inventory and verdict
 
