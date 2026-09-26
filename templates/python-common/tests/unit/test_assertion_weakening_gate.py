@@ -63,21 +63,45 @@ def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) ->
 	return gate._file_findings("tests/unit/test_sample.py", str_old, str_new, bool_prod_changed)
 
 
+def _sole_finding(str_old: str, str_new: str, *, bool_prod_changed: bool = False) -> str:
+	"""Run the comparator and return its single finding, asserting there is exactly one.
+
+	Every fixture in this file is a two-line diff built to trip exactly one rule, so "one
+	finding, not a cascade" is a precondition of the fixture rather than a per-test
+	behaviour (blueprintx#544). Hoisting it here keeps each test at one assertion AND makes
+	every caller check the count, including those that previously only indexed ``[0]``.
+
+	Parameters
+	----------
+	str_old : str
+		Content at the merge-base.
+	str_new : str
+		Content in this change.
+	bool_prod_changed : bool
+		Whether a non-test file also changed in this diff.
+
+	Returns
+	-------
+	str
+		The one finding.
+	"""
+	list_problems = _findings(str_old, str_new, bool_prod_changed=bool_prod_changed)
+	assert len(list_problems) == 1, list_problems
+	return list_problems[0]
+
+
 # --------------------------
 # Deletion — a test or a whole file disappearing
 # --------------------------
 
 
-def test_a_deleted_test_function_is_reported() -> None:
+@pytest.mark.parametrize("str_fragment", ["test_x", "deleted"])
+def test_a_deleted_test_function_is_reported(str_fragment: str) -> None:
 	"""A test present at the merge-base but absent now is a finding."""
-	str_old = "def test_x() -> None:\n\tassert 1 == 1\n"
-	str_new = "def test_other() -> None:\n\tassert 1 == 1\n"
-
-	list_problems = _findings(str_old, str_new)
-
-	assert len(list_problems) == 1
-	assert "test_x" in list_problems[0]
-	assert "deleted" in list_problems[0]
+	assert str_fragment in _sole_finding(
+		"def test_x() -> None:\n\tassert 1 == 1\n",
+		"def test_other() -> None:\n\tassert 1 == 1\n",
+	)
 
 
 def test_an_unrelated_new_test_alongside_the_old_one_is_clean() -> None:
@@ -95,16 +119,13 @@ def test_an_unrelated_new_test_alongside_the_old_one_is_clean() -> None:
 # --------------------------
 
 
-def test_an_assertion_removed_is_reported() -> None:
+@pytest.mark.parametrize("str_fragment", ["test_x", "lost 1 assertion"])
+def test_an_assertion_removed_is_reported(str_fragment: str) -> None:
 	"""A test that had two assertions and now has one is a finding, count-based."""
-	str_old = "def test_x() -> None:\n\tassert 1 == 1\n\tassert 2 == 2\n"
-	str_new = "def test_x() -> None:\n\tassert 1 == 1\n"
-
-	list_problems = _findings(str_old, str_new)
-
-	assert len(list_problems) == 1
-	assert "test_x" in list_problems[0]
-	assert "lost 1 assertion" in list_problems[0]
+	assert str_fragment in _sole_finding(
+		"def test_x() -> None:\n\tassert 1 == 1\n\tassert 2 == 2\n",
+		"def test_x() -> None:\n\tassert 1 == 1\n",
+	)
 
 
 def test_trivialised_to_assert_true_is_reported() -> None:
@@ -122,16 +143,15 @@ def test_trivialised_to_assert_true_is_reported() -> None:
 # --------------------------
 
 
-def test_equality_weakened_to_membership_is_reported() -> None:
+# The line number is the second case, not decoration: a finding that cannot point at the
+# assertion it means is one the author has to go hunting for.
+@pytest.mark.parametrize("str_fragment", ["operator weakened from == to in", "line 2"])
+def test_equality_weakened_to_membership_is_reported(str_fragment: str) -> None:
 	"""``==`` narrowed to ``in`` is exactly the defect blueprintx#289's review caught."""
-	str_old = 'def test_x() -> None:\n\tassert resolve_intent(x) == "send"\n'
-	str_new = 'def test_x() -> None:\n\tassert resolve_intent(x) in {"send", "reconcile"}\n'
-
-	list_problems = _findings(str_old, str_new)
-
-	assert len(list_problems) == 1
-	assert "operator weakened from == to in" in list_problems[0]
-	assert "line 2" in list_problems[0]
+	assert str_fragment in _sole_finding(
+		'def test_x() -> None:\n\tassert resolve_intent(x) == "send"\n',
+		'def test_x() -> None:\n\tassert resolve_intent(x) in {"send", "reconcile"}\n',
+	)
 
 
 def test_a_stricter_operator_swap_is_not_flagged() -> None:
@@ -223,10 +243,9 @@ def test_expected_value_changed_alongside_production_code_is_reported() -> None:
 	str_old = 'def test_x() -> None:\n\tassert to_decimal_strict("1.999", 2) == Decimal("1.99")\n'
 	str_new = 'def test_x() -> None:\n\tassert to_decimal_strict("1.999", 2) == Decimal("2.00")\n'
 
-	list_problems = _findings(str_old, str_new, bool_prod_changed=True)
-
-	assert len(list_problems) == 1
-	assert "expected value changed while production code changed" in list_problems[0]
+	assert "expected value changed while production code changed" in _sole_finding(
+		str_old, str_new, bool_prod_changed=True
+	)
 
 
 def test_expected_value_changed_without_production_code_changing_is_clean() -> None:
@@ -262,13 +281,9 @@ def test_an_unparsable_new_version_is_a_finding_not_a_silent_pass() -> None:
 
 	Mirrors #324's sibling gates: "cannot be checked" and "is clean" are opposite facts.
 	"""
-	str_old = "def test_x() -> None:\n\tassert 1 == 1\n"
-	str_new = "def test_x(:\n"
-
-	list_problems = _findings(str_old, str_new)
-
-	assert len(list_problems) == 1
-	assert "could not parse" in list_problems[0]
+	assert "could not parse" in _sole_finding(
+		"def test_x() -> None:\n\tassert 1 == 1\n", "def test_x(:\n"
+	)
 
 
 def test_a_clean_file_with_no_test_changes_reports_nothing() -> None:
@@ -335,9 +350,7 @@ def test_two_classes_sharing_a_method_name_are_tracked_separately() -> None:
 		'class TestOne:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n\n\n'
 		'class TestTwo:\n\tdef test_v(self) -> None:\n\t\tassert b() == "x"\n'
 	)
-	list_found = _findings(str_old, str_new)
-	assert len(list_found) == 1
-	assert "TestOne.test_v" in list_found[0]
+	assert "TestOne.test_v" in _sole_finding(str_old, str_new)
 
 
 def test_a_unittest_call_rewritten_as_a_weaker_bare_assert_is_reported() -> None:
@@ -347,11 +360,10 @@ def test_a_unittest_call_rewritten_as_a_weaker_bare_assert_is_reported() -> None
 	so a same-kind comparison never sees it. The call is normalised to the operator it is
 	equivalent to before the pair is compared.
 	"""
-	str_old = 'class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), "send")\n'
-	str_new = 'class T:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n'
-	list_found = _findings(str_old, str_new)
-	assert len(list_found) == 1
-	assert "in" in list_found[0]
+	assert "in" in _sole_finding(
+		'class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), "send")\n',
+		'class T:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n',
+	)
 
 
 def test_a_unittest_call_rewritten_as_an_equivalent_bare_assert_is_clean() -> None:
@@ -387,11 +399,10 @@ def test_a_call_trivialised_to_any_truthy_constant_is_reported(str_new_assert: s
 	str_new_assert : str
 		The trivialised assertion replacing the unittest call.
 	"""
-	str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
-	str_new = f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n"
-	list_found = _findings(str_old, str_new)
-	assert len(list_found) == 1
-	assert "truthy constant" in list_found[0]
+	assert "truthy constant" in _sole_finding(
+		"class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n",
+		f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n",
+	)
 
 
 @pytest.mark.parametrize("str_new_assert", ["assert 0", "assert None"])

@@ -114,6 +114,45 @@ def _thread(list_comments: list[tuple[str, str]], *, bool_resolved: bool = True)
 	}
 
 
+def _sole(list_problems: list[str]) -> str:
+	"""Return the one problem reported, asserting there is exactly one.
+
+	"It fired exactly once" and "it said the right thing" are two claims (blueprintx#544).
+	The count is the precondition — indexing ``[0]`` of an empty list raises an
+	``IndexError`` naming neither the gate nor the fixture — so it is checked here and each
+	test keeps the single assertion that names the behaviour.
+
+	Parameters
+	----------
+	list_problems : list of str
+		Whatever the gate reported.
+
+	Returns
+	-------
+	str
+		The single problem.
+	"""
+	assert len(list_problems) == 1, list_problems
+	return list_problems[0]
+
+
+def _reported(str_problem: str | None) -> str:
+	"""Return a problem string, asserting the gate reported one at all.
+
+	Parameters
+	----------
+	str_problem : str or None
+		The gate's single-problem return, where ``None`` means "no finding".
+
+	Returns
+	-------
+	str
+		The finding.
+	"""
+	assert str_problem is not None, "the gate reported no problem at all"
+	return str_problem
+
+
 # --------------------------
 # should-FAIL
 # --------------------------
@@ -135,9 +174,9 @@ def test_a_thread_the_bot_resolved_alone_is_reported() -> None:
 			]
 		)
 	]
-	list_problems = cls_gate.find_thread_problems(list_threads, _ROSTER)
-	assert len(list_problems) == 1
-	assert "nobody outside the reviewer roster answered it" in list_problems[0]
+	assert "nobody outside the reviewer roster answered it" in _sole(
+		cls_gate.find_thread_problems(list_threads, _ROSTER)
+	)
 
 
 def test_a_terse_acknowledgement_is_not_an_answer() -> None:
@@ -201,9 +240,8 @@ def test_an_answered_but_open_thread_is_now_reported() -> None:
 			bool_resolved=False,
 		)
 	]
-	list_problems = cls_gate.find_thread_problems(list_threads, _ROSTER)
-	assert len(list_problems) == 1
-	assert "NOT resolved" in list_problems[0]
+
+	assert "NOT resolved" in _sole(cls_gate.find_thread_problems(list_threads, _ROSTER))
 
 
 def test_no_threads_is_not_a_THREAD_problem() -> None:
@@ -273,10 +311,10 @@ def test_a_pr_nobody_reviewed_fails() -> None:
 	answered.``
 	"""
 	cls_gate = _load_gate()
-	str_problem = cls_gate.find_missing_review_problem(
-		[], _ROSTER, "some-human", str_head_oid=_HEAD
+	str_problem = _reported(
+		cls_gate.find_missing_review_problem([], _ROSTER, "some-human", str_head_oid=_HEAD)
 	)
-	assert str_problem is not None
+
 	assert "never ran" in str_problem, "the message must not read like 'found nothing'"
 
 
@@ -321,7 +359,15 @@ def test_a_review_from_outside_the_roster_is_not_the_declared_review() -> None:
 	)
 
 
-def test_the_query_excludes_unsubmitted_reviews() -> None:
+@pytest.mark.parametrize(
+	("str_fragment", "bool_present"),
+	[
+		("states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]", True),
+		("PENDING", False),
+	],
+	ids=["the-filter-is-present", "and-pending-is-not-in-it"],
+)
+def test_the_query_excludes_unsubmitted_reviews(str_fragment: str, bool_present: bool) -> None:
 	"""A PENDING review must not count as "a reviewer reported".
 
 	Measured on blueprintx#216: opening a draft review and re-querying showed it in the
@@ -331,58 +377,127 @@ def test_the_query_excludes_unsubmitted_reviews() -> None:
 	The filter lives in a GraphQL string that no unit test can execute, so this pins its
 	presence instead: cheap, and it fails the moment someone "simplifies" the query.
 	"""
-	cls_gate = _load_gate()
-	assert "states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]" in cls_gate._QUERY
-	assert "PENDING" not in cls_gate._QUERY
+	assert (str_fragment in _load_gate()._QUERY) is bool_present
 
 
-def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None:
-	"""A PR with more than 100 reviews or threads must not be judged on page one alone.
+# ⚠️ THE PAGINATION CASE IS THE "expensive shared setup" ONE FROM tests/CLAUDE.md.
+#
+# One two-page fetch backs FIVE independent claims, and splitting it into five tests that each
+# re-run the fetch is exactly the mechanical split that rule warns about. So the fetch happens
+# ONCE in a module-scoped fixture and the five tests read its immutable result — the pattern
+# tests/CLAUDE.md prescribes, applied to the case it was written for (blueprintx#544).
+#
+# The two pages are DATA in a side_effect sequence, not a stub that branches on its cursor
+# arguments. The branch put a decision inside the test and the green never said which side ran;
+# the sequence states "page one, then page two" where a reader looks for it. Mock also records
+# the calls for free, so the hand-rolled call list is gone too.
+_DICT_PAGE_ONE = {
+	"author": {"login": "someone"},
+	"reviews": {
+		"pageInfo": {"hasNextPage": True, "endCursor": "R1"},
+		"nodes": [_review("human")],
+	},
+	"reviewThreads": {
+		"pageInfo": {"hasNextPage": True, "endCursor": "T1"},
+		"nodes": [_thread([("coderabbitai", "**A.** " + _LONG)])],
+	},
+}
+_DICT_PAGE_TWO = {
+	"author": {"login": "someone"},
+	"reviews": {
+		"pageInfo": {"hasNextPage": False, "endCursor": None},
+		"nodes": [_review("coderabbitai")],
+	},
+	"reviewThreads": {
+		"pageInfo": {"hasNextPage": False, "endCursor": None},
+		"nodes": [_thread([("coderabbitai", "**B.** " + _LONG)])],
+	},
+}
 
-	``first:100`` is a CAP, not "all". Truncated REVIEWS cause a false failure; truncated
-	THREADS are worse and were not what the review flagged — thread 101 is simply never
-	examined and the gate prints "All 100 ... answered" over unfinished conversations, which is
-	the false pass this whole file exists to eliminate.
 
-	The roster review is served ONLY on page two, so the last two assertions check that the
-	merged data reaches the verdicts — without pagination this PR reads as never reviewed.
+@pytest.fixture(scope="module")
+def tuple_paged_fetch() -> tuple[ModuleType, dict, Mock]:
+	"""Fetch a two-page pull request ONCE and share the gate, the result and the call record.
+
+	Module-scoped because the artifact is immutable and five tests inspect different facets
+	of it. ``pytest.MonkeyPatch.context()`` rather than the ``monkeypatch`` fixture, which is
+	function-scoped and cannot be requested from here.
+
+	Returns
+	-------
+	tuple of (ModuleType, dict, unittest.mock.Mock)
+		The loaded gate, the merged pull request, and the page-fetch mock.
 	"""
 	cls_gate = _load_gate()
-	# The two pages are DATA in a side_effect sequence, not a stub that branches on its cursor
-	# arguments. The branch put a decision inside the test and the green never said which side
-	# ran; the sequence states "page one, then page two" where a reader looks for it. Mock also
-	# records the calls for free, so the hand-rolled call list is gone too.
-	dict_page_one = {
-		"author": {"login": "someone"},
-		"reviews": {
-			"pageInfo": {"hasNextPage": True, "endCursor": "R1"},
-			"nodes": [_review("human")],
-		},
-		"reviewThreads": {
-			"pageInfo": {"hasNextPage": True, "endCursor": "T1"},
-			"nodes": [_thread([("coderabbitai", "**A.** " + _LONG)])],
-		},
-	}
-	dict_page_two = {
-		"author": {"login": "someone"},
-		"reviews": {
-			"pageInfo": {"hasNextPage": False, "endCursor": None},
-			"nodes": [_review("coderabbitai")],
-		},
-		"reviewThreads": {
-			"pageInfo": {"hasNextPage": False, "endCursor": None},
-			"nodes": [_thread([("coderabbitai", "**B.** " + _LONG)])],
-		},
-	}
-	cls_page = Mock(side_effect=[dict_page_one, dict_page_two])
+	cls_page = Mock(side_effect=[_DICT_PAGE_ONE, _DICT_PAGE_TWO])
+	with pytest.MonkeyPatch.context() as cls_patch:
+		cls_patch.setattr(cls_gate, "_fetch_page", cls_page)
+		dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+	return cls_gate, dict_pr, cls_page
 
-	monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
-	dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
 
-	list_calls = [tuple_args[3:5] for tuple_args, _ in cls_page.call_args_list]
-	assert list_calls == [(None, None), ("R1", "T1")], "the second page must be requested"
-	assert len(dict_pr["reviews"]["nodes"]) == 2, "page-two reviews must be merged in"
-	assert len(dict_pr["reviewThreads"]["nodes"]) == 2, "page-two threads must be merged in"
+def test_the_second_page_is_requested_with_both_cursors(
+	tuple_paged_fetch: tuple[ModuleType, dict, Mock],
+) -> None:
+	"""``first:100`` is a CAP, not "all" — page two must actually be asked for.
+
+	Parameters
+	----------
+	tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
+		The shared two-page fetch.
+	"""
+	_, _, cls_page = tuple_paged_fetch
+
+	assert [tuple_args[3:5] for tuple_args, _ in cls_page.call_args_list] == [
+		(None, None),
+		("R1", "T1"),
+	]
+
+
+def test_page_two_reviews_are_merged_in(
+	tuple_paged_fetch: tuple[ModuleType, dict, Mock],
+) -> None:
+	"""Truncated REVIEWS cause a false failure — the merge is what prevents it.
+
+	Parameters
+	----------
+	tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
+		The shared two-page fetch.
+	"""
+	_, dict_pr, _ = tuple_paged_fetch
+
+	assert len(dict_pr["reviews"]["nodes"]) == 2
+
+
+def test_page_two_threads_are_merged_in(
+	tuple_paged_fetch: tuple[ModuleType, dict, Mock],
+) -> None:
+	"""⚠️ Truncated THREADS are the worse half, and not what the review flagged.
+
+	Thread 101 is simply never examined and the gate prints "All 100 ... answered" over
+	unfinished conversations — the false pass this whole file exists to eliminate.
+
+	Parameters
+	----------
+	tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
+		The shared two-page fetch.
+	"""
+	_, dict_pr, _ = tuple_paged_fetch
+
+	assert len(dict_pr["reviewThreads"]["nodes"]) == 2
+
+
+def test_the_merged_reviews_reach_the_missing_review_verdict(
+	tuple_paged_fetch: tuple[ModuleType, dict, Mock],
+) -> None:
+	"""The roster review is served ONLY on page two — unpaginated, this PR reads as unreviewed.
+
+	Parameters
+	----------
+	tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
+		The shared two-page fetch.
+	"""
+	cls_gate, dict_pr, _ = tuple_paged_fetch
 
 	assert (
 		cls_gate.find_missing_review_problem(
@@ -390,6 +505,20 @@ def test_both_connections_are_paginated(monkeypatch: pytest.MonkeyPatch) -> None
 		)
 		is None
 	)
+
+
+def test_the_merged_threads_reach_the_thread_verdict(
+	tuple_paged_fetch: tuple[ModuleType, dict, Mock],
+) -> None:
+	"""Both pages' threads must be judged, not only the first page's.
+
+	Parameters
+	----------
+	tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
+		The shared two-page fetch.
+	"""
+	cls_gate, dict_pr, _ = tuple_paged_fetch
+
 	assert len(cls_gate.find_thread_problems(dict_pr["reviewThreads"]["nodes"], _ROSTER)) == 2
 
 
@@ -415,22 +544,42 @@ def test_an_absent_roster_makes_the_gate_a_no_op(tmp_path: Path) -> None:
 	assert cls_gate.load_roster(tmp_path) == {}
 
 
+_STR_OTHER_ROSTER = "reviewers:\n  - login: some-other-reviewer[bot]\n    posts: threads\n"
+
+
 def test_the_roster_is_read_from_the_declared_file(tmp_path: Path) -> None:
-	"""The roster is data. No reviewer is named in the gate's logic, so swapping tools is a row."""
+	"""The roster is data. No reviewer is named in the gate's logic, so swapping tools is a row.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir holding the roster file.
+	"""
 	cls_gate = _load_gate()
-	(tmp_path / ".review-bots.yaml").write_text(
-		"reviewers:\n  - login: some-other-reviewer[bot]\n    posts: threads\n",
-		encoding="utf-8",
-	)
-	dict_roster = cls_gate.load_roster(tmp_path)
-	assert dict_roster == {"some-other-reviewer": "threads"}, (
+	(tmp_path / ".review-bots.yaml").write_text(_STR_OTHER_ROSTER, encoding="utf-8")
+
+	assert cls_gate.load_roster(tmp_path) == {"some-other-reviewer": "threads"}, (
 		"logins are normalised on load: GraphQL omits the bot-login suffix a declared "
 		"reviewer carries, and comparing those spellings literally made this gate vacuous"
 	)
 
-	# And it behaves the same for that tool as for any other.
+
+def test_a_swapped_in_reviewer_is_policed_like_any_other(tmp_path: Path) -> None:
+	"""Reading the roster is half the claim; behaving the same for its members is the other.
+
+	Split from its sibling rather than folded in (blueprintx#544): a gate that PARSES a
+	swapped-in reviewer but never applies the rule to it would pass the first claim alone.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir holding the roster file.
+	"""
+	cls_gate = _load_gate()
+	(tmp_path / ".review-bots.yaml").write_text(_STR_OTHER_ROSTER, encoding="utf-8")
 	list_threads = [_thread([("some-other-reviewer[bot]", "**Finding.** " + _LONG)])]
-	assert len(cls_gate.find_thread_problems(list_threads, set(dict_roster))) == 1
+
+	assert len(cls_gate.find_thread_problems(list_threads, set(cls_gate.load_roster(tmp_path)))) == 1
 
 
 def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
@@ -469,7 +618,20 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
 # --------------------------
 
 
-def test_graphql_drops_the_bot_suffix_that_the_roster_carries() -> None:
+# The human login is the load-bearing third case, not padding: it must pass through
+# untouched, so nobody is accidentally normalised into looking like a reviewer.
+@pytest.mark.parametrize(
+	("str_login", "str_normalised"),
+	[
+		("coderabbitai[bot]", "coderabbitai"),
+		("coderabbitai", "coderabbitai"),
+		("guilhermegor", "guilhermegor"),
+	],
+	ids=["rest-spelling", "graphql-spelling", "a-human-is-untouched"],
+)
+def test_graphql_drops_the_bot_suffix_that_the_roster_carries(
+	str_login: str, str_normalised: str
+) -> None:
 	"""REST says ``coderabbitai[bot]``; GraphQL's ``author.login`` says ``coderabbitai``.
 
 	The roster is written in the REST spelling because that is what GitHub shows everywhere
@@ -481,11 +643,7 @@ def test_graphql_drops_the_bot_suffix_that_the_roster_carries() -> None:
 	i.e. the test and the code shared the same wrong assumption about the data, and only
 	production disagreed. These fixtures use the spelling GraphQL actually returns.
 	"""
-	cls_gate = _load_gate()
-	assert cls_gate.normalise_login("coderabbitai[bot]") == "coderabbitai"
-	assert cls_gate.normalise_login("coderabbitai") == "coderabbitai"
-	# A human login is untouched, so nobody is accidentally treated as a reviewer.
-	assert cls_gate.normalise_login("guilhermegor") == "guilhermegor"
+	assert _load_gate().normalise_login(str_login) == str_normalised
 
 
 def test_a_reviewer_comment_in_graphql_spelling_is_not_an_answer(tmp_path: Path) -> None:
@@ -553,9 +711,8 @@ def test_an_answered_but_unresolved_thread_is_reported(tmp_path: Path) -> None:
 			bool_resolved=False,
 		)
 	]
-	list_problems = cls_gate.find_thread_problems(list_threads, set_roster)
-	assert len(list_problems) == 1
-	assert "NOT resolved" in list_problems[0]
+
+	assert "NOT resolved" in _sole(cls_gate.find_thread_problems(list_threads, set_roster))
 
 
 def test_deleting_the_roster_is_not_a_silent_opt_out(
@@ -575,47 +732,80 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
 		Used to stub the default-branch probe, so the test needs no real remote.
 	"""
 	cls_gate = _load_gate()
-
-	# Never adopted → still a no-op, which keeps the gate opt-in for other repos.
-	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: False)
-	assert cls_gate.load_roster(tmp_path) == {}
-
-	# Present upstream, absent here → deletion.
 	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
+
 	with pytest.raises(RuntimeError, match="disables this gate"):
 		cls_gate.load_roster(tmp_path)
 
 
-def test_the_resolve_half_can_still_be_switched_off_by_flag() -> None:
-	"""``bool_require_resolved=False`` must keep asserting the REPLY half and only that.
+def test_a_roster_never_adopted_is_still_a_silent_no_op(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""The positive control for the test above — and the reason it needs one.
 
-	⚠️ CI no longer passes ``False`` (#196): delegating the resolve half to
-	``required_conversation_resolution`` looked safe because a merge-time setting cannot go
-	stale, but that setting DROPS AN OUTDATED THREAD — measured on blueprintx#193, merge button
-	enabled over an unresolved outdated thread with 29 of 29 checks green. The flag survives for
-	callers that genuinely cannot re-evaluate a resolve, so the reply-only mode must keep
-	working; dropping the resolve check must not quietly disable the job altogether.
+	"Absent" means two different things depending on the default branch, and a gate that
+	failed on BOTH would stop being opt-in for every other repo. Split out rather than left
+	as a second assert (blueprintx#544): these are opposite verdicts over the same input,
+	which is the clearest case there is for two tests.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir standing in for a checkout with no roster.
+	monkeypatch : pytest.MonkeyPatch
+		Used to stub the default-branch probe, so the test needs no real remote.
 	"""
 	cls_gate = _load_gate()
-	list_open_but_answered = [
-		_thread(
-			[("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
-			bool_resolved=False,
-		)
-	]
-	# CI mode tolerates it — it could not tell you when it was fixed.
+	monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: False)
+
+	assert cls_gate.load_roster(tmp_path) == {}
+
+
+# ⚠️ THE FLAG'S THREE CLAIMS, one test each (blueprintx#544). They are not one assertion over
+# three inputs — they are three different verdicts, and collapsing them hid the third.
+#
+# CI no longer passes ``False`` (#196): delegating the resolve half to
+# ``required_conversation_resolution`` looked safe because a merge-time setting cannot go
+# stale, but that setting DROPS AN OUTDATED THREAD — measured on blueprintx#193, merge button
+# enabled over an unresolved outdated thread with 29 of 29 checks green. The flag survives for
+# callers that genuinely cannot re-evaluate a resolve, so the reply-only mode must keep working
+# AND must not quietly disable the job altogether.
+_LIST_OPEN_BUT_ANSWERED = [
+	_thread(
+		[("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
+		bool_resolved=False,
+	)
+]
+_LIST_UNANSWERED = [_thread([("coderabbitai", "**Finding.** " + _LONG)])]
+
+
+def test_the_resolve_half_can_still_be_switched_off_by_flag() -> None:
+	"""CI mode tolerates an open-but-answered thread — it could not tell you when it was fixed."""
 	assert (
-		cls_gate.find_thread_problems(list_open_but_answered, _ROSTER, bool_require_resolved=False)
+		_load_gate().find_thread_problems(
+			_LIST_OPEN_BUT_ANSWERED, _ROSTER, bool_require_resolved=False
+		)
 		== []
 	)
-	# Local mode still catches it — a local run is always current.
-	assert len(cls_gate.find_thread_problems(list_open_but_answered, _ROSTER)) == 1
 
-	# ⚠️ The half CI DOES own must still fire, or dropping the resolve check would have
-	# quietly disabled the job altogether.
-	list_unanswered = [_thread([("coderabbitai", "**Finding.** " + _LONG)])]
+
+def test_local_mode_still_catches_an_unresolved_thread() -> None:
+	"""A local run is always current, so it keeps the half CI gave up."""
+	assert len(_load_gate().find_thread_problems(_LIST_OPEN_BUT_ANSWERED, _ROSTER)) == 1
+
+
+def test_switching_off_the_resolve_half_does_not_disable_the_reply_half() -> None:
+	"""⚠️ The half CI DOES own must still fire, or the flag silently turns the job off.
+
+	This is the claim a three-assert test hides: the first two say the flag changes
+	something, and only this one says it did not change everything.
+	"""
 	assert (
-		len(cls_gate.find_thread_problems(list_unanswered, _ROSTER, bool_require_resolved=False))
+		len(
+			_load_gate().find_thread_problems(
+				_LIST_UNANSWERED, _ROSTER, bool_require_resolved=False
+			)
+		)
 		== 1
 	)
 

@@ -68,15 +68,20 @@ def test_find_sheet_name_problems_flags_reserved_name() -> None:
 	assert find_sheet_name_problems("HISTORY").list_fatal != []
 
 
-def test_find_sheet_name_problems_accepts_cell_reference_shaped_names() -> None:
+@pytest.mark.parametrize("str_name", ["Q1", "H2"])
+def test_find_sheet_name_problems_accepts_cell_reference_shaped_names(str_name: str) -> None:
 	"""A name shaped like a cell reference is a VALID worksheet name in Excel.
 
 	The "cannot look like a cell reference" rule is real, but it governs *defined names*
 	(the Name Manager), not worksheet tabs — a sheet literally named "Q1" is valid and is
 	referenced as ``Q1!A1`` (verified against Microsoft's own worksheet-rename docs).
+
+	Parameters
+	----------
+	str_name : str
+		A cell-reference-shaped worksheet name.
 	"""
-	assert find_sheet_name_problems("Q1") == _EMPTY_REPORT
-	assert find_sheet_name_problems("H2") == _EMPTY_REPORT
+	assert find_sheet_name_problems(str_name) == _EMPTY_REPORT
 
 
 def test_find_sheet_name_problems_flags_invisible_characters() -> None:

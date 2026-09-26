@@ -72,17 +72,26 @@ def test_non_verb_slug_is_reported(tmp_path: Path) -> None:
 	assert gate.check_file(path_file) == 1
 
 
+@pytest.mark.parametrize("str_which", ["file", "slug"])
 def test_non_verb_slug_names_file_and_slug(
-	tmp_path: Path, capsys: pytest.CaptureFixture[str]
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], str_which: str
 ) -> None:
-	"""The message must name the offending file and slug, not just 'invalid'."""
+	"""The message must name the offending file and slug, not just 'invalid'.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway directory holding the migration.
+	capsys : pytest.CaptureFixture
+		Captures the gate's output.
+	str_which : str
+		Which half of the identification is under test.
+	"""
 	path_file = _migration_file(tmp_path, "20260913_a1b2c3d4e5f6_users_table.py")
-
 	gate.check_file(path_file)
+	dict_expected = {"file": str(path_file), "slug": "users_table"}
 
-	str_out = capsys.readouterr().out
-	assert str(path_file) in str_out
-	assert "users_table" in str_out
+	assert dict_expected[str_which] in capsys.readouterr().out
 
 
 def test_unparsable_filename_shape_is_reported(tmp_path: Path) -> None:

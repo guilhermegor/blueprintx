@@ -55,15 +55,41 @@ def test_classify_path_maps_each_class(str_path: str, str_expected: str) -> None
 	assert gate.classify_path(str_path) == str_expected
 
 
-def test_classify_risk_returns_the_most_dangerous_class() -> None:
-	"""A mixed PR collapses to its most dangerous class — docs never masks src."""
-	assert gate.classify_risk(["docs/a.md", "src/x.py"]) == "src"
-	assert gate.classify_risk(["docs/a.md", "tests/test_x.py"]) == "tests"
+@pytest.mark.parametrize(
+	("list_paths", "str_class"),
+	[
+		(["docs/a.md", "src/x.py"], "src"),
+		(["docs/a.md", "tests/test_x.py"], "tests"),
+	],
+	ids=["docs-never-masks-src", "docs-never-masks-tests"],
+)
+def test_classify_risk_returns_the_most_dangerous_class(
+	list_paths: list[str], str_class: str
+) -> None:
+	"""A mixed PR collapses to its most dangerous class — docs never masks src.
+
+	Parameters
+	----------
+	list_paths : list of str
+		The changed paths.
+	str_class : str
+		The class the mix must collapse to.
+	"""
+	assert gate.classify_risk(list_paths) == str_class
 
 
 def test_classify_risk_treats_an_unknown_path_as_unsafe() -> None:
 	"""An unmatched path outranks the safe classes: unknown is unsafe (default-deny)."""
 	assert gate.classify_risk(["docs/a.md", "weird.bin"]) == "other"
+
+
+def test_an_unknown_path_is_never_auto_mergeable() -> None:
+	"""The CONSEQUENCE of default-deny, split out rather than left as a second assert (#544).
+
+	Its sibling pins the label; this pins what the label costs. A rename of the ``other``
+	class would keep one of the two passing, and only together do they say the class is both
+	assigned and unsafe.
+	"""
 	assert gate.classify_risk(["weird.bin"]) not in gate.AUTO_MERGEABLE
 
 
@@ -86,11 +112,26 @@ def test_classify_size_buckets(int_lines: int, str_bucket: str) -> None:
 	assert gate.classify_size(int_lines) == str_bucket
 
 
-def test_is_lockfile_only_is_narrow() -> None:
-	"""Only a lockfile-ONLY diff qualifies — a hand-edited sibling must not."""
-	assert gate.is_lockfile_only([gate.LOCKFILE]) is True
-	assert gate.is_lockfile_only([gate.LOCKFILE, "pyproject.toml"]) is False
-	assert gate.is_lockfile_only(["pyproject.toml"]) is False
+@pytest.mark.parametrize(
+	("list_paths", "bool_only"),
+	[
+		([gate.LOCKFILE], True),
+		([gate.LOCKFILE, "pyproject.toml"], False),
+		(["pyproject.toml"], False),
+	],
+	ids=["the-lockfile-alone", "lockfile-plus-a-hand-edit", "a-hand-edit-alone"],
+)
+def test_is_lockfile_only_is_narrow(list_paths: list[str], bool_only: bool) -> None:
+	"""Only a lockfile-ONLY diff qualifies — a hand-edited sibling must not.
+
+	Parameters
+	----------
+	list_paths : list of str
+		The changed paths.
+	bool_only : bool
+		Whether the diff is lockfile-only.
+	"""
+	assert gate.is_lockfile_only(list_paths) is bool_only
 
 
 # ⚠️ parametrize, not a `for` in the body. A loop asserts N cases behind ONE green: the report
@@ -113,34 +154,80 @@ def test_block_label_is_the_opt_out() -> None:
 	assert gate.is_auto_mergeable("docs", "S", [gate.BLOCK_LABEL]) is False
 
 
-def test_xl_veto_applies_to_handwritten_but_is_waived_for_a_lockfile() -> None:
+@pytest.mark.parametrize(
+	("bool_lockfile_only", "bool_mergeable"),
+	[(False, False), (True, True)],
+	ids=["hand-written-is-vetoed", "a-regenerated-lockfile-is-exempt"],
+)
+def test_xl_veto_applies_to_handwritten_but_is_waived_for_a_lockfile(
+	bool_lockfile_only: bool, bool_mergeable: bool
+) -> None:
 	"""A huge hand-written diff is vetoed; a regenerated lockfile is exempt.
 
 	The regression this guards: a lockfile's diff size tracks how many dependency hashes moved,
 	not how much risk arrived — so without the exemption, whether the weekly bump self-merges
 	depends on how many packages happened to move that week.
+
+	Parameters
+	----------
+	bool_lockfile_only : bool
+		Whether the diff touches nothing but the lockfile.
+	bool_mergeable : bool
+		Whether the XL veto is waived.
 	"""
-	assert gate.is_auto_mergeable("deps", "XL", []) is False
-	assert gate.is_auto_mergeable("deps", "XL", [], bool_lockfile_only=True) is True
+	assert (
+		gate.is_auto_mergeable("deps", "XL", [], bool_lockfile_only=bool_lockfile_only)
+		is bool_mergeable
+	)
 
 
-def test_gate_state_lets_red_outrank_pending() -> None:
-	"""For DISPLAY, a known failure outranks a still-deciding axis."""
-	assert gate.gate_state({"a": "failure", "b": "pending"}) == "failure"
-	assert gate.gate_state({"a": "pending", "b": "success"}) == "pending"
-	assert gate.gate_state({"a": "success"}) == "success"
+@pytest.mark.parametrize(
+	("dict_axes", "str_state"),
+	[
+		({"a": "failure", "b": "pending"}, "failure"),
+		({"a": "pending", "b": "success"}, "pending"),
+		({"a": "success"}, "success"),
+	],
+	ids=["red-outranks-pending", "pending-outranks-green", "all-green"],
+)
+def test_gate_state_lets_red_outrank_pending(dict_axes: dict, str_state: str) -> None:
+	"""For DISPLAY, a known failure outranks a still-deciding axis.
+
+	Parameters
+	----------
+	dict_axes : dict
+		Axis name to its state.
+	str_state : str
+		The collapsed display state.
+	"""
+	assert gate.gate_state(dict_axes) == str_state
 
 
-def test_terminality_is_separate_from_display_state() -> None:
+# ⚠️ TERMINALITY IS A DIFFERENT QUESTION FROM DISPLAY STATE, and the pair below is the whole
+# point: `{"a": "failure", "b": "pending"}` displays as "failure" (pinned above) while being
+# NOT terminal. Breaking the poll loop on `gate_state() != "pending"` would stop on the first
+# transient red while other checks still run, and nothing re-renders the comment afterwards.
+@pytest.mark.parametrize(
+	("dict_axes", "bool_terminal"),
+	[
+		({"a": "failure", "b": "pending"}, False),
+		({"a": "failure", "b": "success"}, True),
+	],
+	ids=["red-but-still-deciding", "red-and-everything-reported"],
+)
+def test_terminality_is_separate_from_display_state(
+	dict_axes: dict, bool_terminal: bool
+) -> None:
 	"""A red-with-pending set is NOT terminal — conflating the two freezes the sticky comment.
 
-	Breaking the poll loop on ``gate_state() != 'pending'`` would stop on the first transient red
-	while other checks still run, and nothing re-renders the comment afterwards.
+	Parameters
+	----------
+	dict_axes : dict
+		Axis name to its state.
+	bool_terminal : bool
+		Whether every axis has reported.
 	"""
-	dict_axes = {"a": "failure", "b": "pending"}
-	assert gate.gate_state(dict_axes) == "failure"
-	assert gate.axes_are_terminal(dict_axes) is False
-	assert gate.axes_are_terminal({"a": "failure", "b": "success"}) is True
+	assert gate.axes_are_terminal(dict_axes) is bool_terminal
 
 
 def test_axis_with_no_check_run_is_pending_not_failing() -> None:
@@ -159,25 +246,48 @@ def test_collect_axes_matches_the_analysis_not_the_umbrella() -> None:
 	assert dict_axes["code scanning"] == "success"
 
 
-def test_failing_axis_names_its_checks() -> None:
-	"""A failing axis reports WHICH checks failed — a bare count teaches the reader nothing."""
-	list_runs = [
-		{"name": "Run Automated Tests (ubuntu)", "status": "completed", "conclusion": "failure"}
-	]
-	dict_axes, dict_failing = gate.collect_axes(list_runs, {"tests": ("Run Automated Tests",)})
+_LIST_ONE_FAILED_RUN = [
+	{"name": "Run Automated Tests (ubuntu)", "status": "completed", "conclusion": "failure"}
+]
+_DICT_TEST_AXIS = {"tests": ("Run Automated Tests",)}
+
+
+def test_a_failed_run_turns_its_axis_red() -> None:
+	"""The verdict half: one failed run is enough to fail the axis it belongs to."""
+	dict_axes, _ = gate.collect_axes(_LIST_ONE_FAILED_RUN, _DICT_TEST_AXIS)
+
 	assert dict_axes["tests"] == "failure"
+
+
+def test_failing_axis_names_its_checks() -> None:
+	"""A failing axis reports WHICH checks failed — a bare count teaches the reader nothing.
+
+	Split from the verdict above (blueprintx#544): an axis can go red while the failing-name
+	map is empty, and that is precisely the regression worth its own name.
+	"""
+	_, dict_failing = gate.collect_axes(_LIST_ONE_FAILED_RUN, _DICT_TEST_AXIS)
+
 	assert dict_failing["tests"] == ["Run Automated Tests (ubuntu)"]
 
 
-def test_render_comment_carries_the_sticky_marker_and_the_failing_names() -> None:
-	"""The rendered body carries the hidden marker (so it updates in place) and names failures."""
-	str_body = gate.render_comment(
+@pytest.mark.parametrize(
+	"str_fragment",
+	[gate.COMMENT_MARKER, "Run Automated Tests (ubuntu)", "risk:", "deps"],
+	ids=["sticky-marker", "the-failing-check", "the-risk-label", "the-risk-class"],
+)
+def test_render_comment_carries_the_sticky_marker_and_the_failing_names(
+	str_fragment: str,
+) -> None:
+	"""The rendered body carries the hidden marker (so it updates in place) and names failures.
+
+	Parameters
+	----------
+	str_fragment : str
+		A fragment the rendered body must contain.
+	"""
+	assert str_fragment in gate.render_comment(
 		"deps", "L", {"tests": "failure"}, False, {"tests": ["Run Automated Tests (ubuntu)"]}
 	)
-	assert gate.COMMENT_MARKER in str_body
-	assert "Run Automated Tests (ubuntu)" in str_body
-	assert "risk:" in str_body
-	assert "deps" in str_body
 
 
 def test_graphql_reports_a_refused_mutation_to_stderr(
