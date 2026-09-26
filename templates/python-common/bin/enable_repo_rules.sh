@@ -111,10 +111,16 @@ RULESET_NAME="pr-quality-gate"
 # workflow. `tests.yaml` fails the second rule (a `branches:` filter, plus matrix values that
 # drift into the name) and `coderabbit_trigger.yaml` the third (`if: draft == false`).
 #
-# A MISSING file means an EMPTY list, which is the safe direction: no required_status_checks rule
-# at all, the same state this script had before any name was seeded.
+# A MISSING file is UNKNOWN, not a confirmed empty list — same convention as the three-state
+# read contract in report_blocking_checks/assert_branch_protection_strict below (blueprintx#311):
+# absence must never be treated the same as "checked and found nothing". A brand-new repo with
+# no prior ruleset loses nothing either way, but a project that already had one provisioned
+# (this script run before, then the file went missing) must not have its required_status_checks
+# rule silently dropped by the next PUT — see the REQUIRED_CHECKS_FILE_MISSING guard in
+# apply_ruleset below (blueprintx#584 review).
 REQUIRED_CHECKS_FILE="$SCRIPT_DIR/required-checks.txt"
 REQUIRED_CHECKS=()
+REQUIRED_CHECKS_FILE_MISSING=0
 
 load_required_checks() {
 	# One check name per line; blank lines and `#` comments ignored. Names are compared to
@@ -127,6 +133,7 @@ load_required_checks() {
 	done <"$REQUIRED_CHECKS_FILE"
 }
 
+[ -f "$REQUIRED_CHECKS_FILE" ] || REQUIRED_CHECKS_FILE_MISSING=1
 load_required_checks
 
 require_gh() {
@@ -212,6 +219,17 @@ apply_ruleset() {
 	local str_id
 	str_id=$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
+
+	# blueprintx#584 review: never let a MISSING required-checks.txt (unknown, not confirmed
+	# empty — see the header above REQUIRED_CHECKS_FILE) drive a PUT against an EXISTING
+	# ruleset. REQUIRED_CHECKS would read as empty, build_ruleset_json would omit
+	# required_status_checks, and the PUT would silently strip whatever this ruleset already
+	# enforces. A brand-new ruleset (str_id empty) has nothing to lose, so only the update path
+	# is guarded.
+	if [ -n "$str_id" ] && [ "$REQUIRED_CHECKS_FILE_MISSING" = "1" ]; then
+		print_status "warning" "$REQUIRED_CHECKS_FILE is missing and ruleset '$RULESET_NAME' (id $str_id) already exists — skipping the update so its required_status_checks rule is never silently dropped. Restore the file, then re-run 'poe enable_repo_rules'."
+		return 0
+	fi
 
 	# Keep the API's own words: never discard output whose failure you then explain. The old
 	# form swallowed stderr and blamed admin rights for every failure, including the ones that
