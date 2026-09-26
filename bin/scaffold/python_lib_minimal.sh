@@ -340,6 +340,10 @@ copy_templates() {
     # No .env / .env.example: a distributable library has no runtime env to seed (unlike the
     # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
+    # This root CLAUDE.md points at `.claude/CLAUDE.md` for shared conventions
+    # (blueprintx#549) — copy the single source so that pointer resolves.
+    mkdir -p "$project_path/.claude"
+    cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$project_path/.claude/CLAUDE.md"
     # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
     # file, language-agnostic, so it lives in templates/common not python-common.
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"

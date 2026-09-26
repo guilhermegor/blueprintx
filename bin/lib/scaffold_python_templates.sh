@@ -249,5 +249,10 @@ scaffold_copy_common_templates() {
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	# Every skeleton's root CLAUDE.md points readers at `.claude/CLAUDE.md` for the
+	# conventions shared across all skeletons (blueprintx#549) — copy the single
+	# source so that pointer resolves instead of dangling.
+	mkdir -p "$str_project_path/.claude"
+	cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$str_project_path/.claude/CLAUDE.md"
 	print_status "success" "Common templates applied"
 }
