@@ -45,22 +45,31 @@ Each CodeRabbit verdict is attributed to the most recent ask **on the same PR** 
 it. `other` is reported but excluded from the accept rate: it is a property of the diff, not of
 the window.
 
+**Attribution is by content, not by verified provenance — checked, not merely assumed.** The
+PAT-authored on-open ask is `user.type: User`, identical in shape to a comment typed in the
+browser, so a manual `@coderabbitai review` would land in the same bucket. Reconciled against
+`coderabbit_trigger.yml`'s own run history for this window: its `Request the review` step
+shows **109 executions that actually posted** (34 more were skipped on a GitHub API rate limit,
+not CodeRabbit's), against **111** on-open asks classified by content — a 2-comment gap, not a
+systemic one. The content classification holds for this measurement; it would not for a repo
+where more than one human account also types `@coderabbitai review` (without `full`).
+
 ## Result
 
 **2026-09-06 -> 2026-09-20 (15 days), 244 asks, 243 attributed verdicts**
 
 | trigger | accepted | refused | other | total | accept rate | share of accepted |
 |---|---|---|---|---|---|---|
-| `@coderabbitai review`, on open | 23 | 81 | 7 | 111 | 20.7% | 26.4% |
-| `@coderabbitai full review`, tick | 23 | 26 | 2 | 51 | 45.1% | 26.4% |
-| `@coderabbitai full review`, retry | 41 | 38 | 2 | 81 | 50.6% | 47.1% |
+| `@coderabbitai review`, on open | 23 | 81 | 7 | 111 | 22.1% | 26.4% |
+| `@coderabbitai full review`, tick | 23 | 26 | 2 | 51 | 46.9% | 26.4% |
+| `@coderabbitai full review`, retry | 41 | 38 | 2 | 81 | 51.9% | 47.1% |
 
 **2026-09-13 -> 2026-09-20 (last 7 days), 129 attributed verdicts**
 
 | trigger | accepted | refused | other | total | accept rate | share of accepted |
 |---|---|---|---|---|---|---|
-| `@coderabbitai review`, on open | 9 | 47 | 4 | 60 | 15.0% | 17.0% |
-| `@coderabbitai full review`, tick | 18 | 14 | 2 | 34 | 52.9% | 34.0% |
+| `@coderabbitai review`, on open | 9 | 47 | 4 | 60 | 16.1% | 17.0% |
+| `@coderabbitai full review`, tick | 18 | 14 | 2 | 34 | 56.3% | 34.0% |
 | `@coderabbitai full review`, retry | 26 | 9 | 0 | 35 | 74.3% | 49.1% |
 
 The issue's n=10 sample had the open-time ask taking 2 of 3 accepted reviews. At n=244 it takes
@@ -107,8 +116,10 @@ Opening PR #577 produced the pattern under study, in 13 seconds:
 
 Read carefully, because the obvious reading is the wrong one. This is **not** a leak and not a
 race lost: the window was already closed at `17:19:58`, before the ask, so the ask took nothing
-from anybody. It is one more row in the `auto / refused` cell — the cell holding 81 of the 111
-on-open asks, the one this measurement shows costs nothing.
+from anybody. It behaves like one more row in the `auto / refused` cell, but it is **not** one
+of the 81 counted there: the measured comment stream ends at `16:56:03` UTC that day, and this
+refusal landed at `17:20:11`, after the window closed. It is a later, live example of the same
+pattern this measurement shows costs nothing — not another count in it.
 
 What it *is* is the **enrolment step firing live on this very PR**. The `17:20:11` refusal is
 now #577's newest reviewer comment, which is precisely the condition

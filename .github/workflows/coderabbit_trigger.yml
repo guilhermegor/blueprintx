@@ -63,7 +63,7 @@ on:
     # 244 asks, 2026-09-06 → 2026-09-20, paged to exhaustion
     # (docs/backlog/coderabbit-open-trigger-567_20260920_171404.md): asks on open are 45% of
     # everything spent but win only 26% of the reviews that happen (23 accepted / 81 refused,
-    # 20.7%), against 45.1% for the tick and 50.6% for the retry janitor.
+    # 22.1%), against 46.9% for the tick and 51.9% for the retry janitor.
     #
     # KEPT anyway, on the second number. A refused ask costs nothing, so those 81 refusals are
     # not the leak; the open-time ask's real cost is its 23 wins. What it buys is ENROLMENT —
