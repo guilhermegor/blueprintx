@@ -26,6 +26,7 @@ PROJECT_DISPLAY_NAME=""
 INCLUDE_DOCKER_COMPOSE=false
 DB_COMPOSE_BACKEND="postgresql"
 INCLUDE_LOGS=false
+INCLUDE_OTEL=false
 # Publish/consume wiring (scaffold-publish-target-selection). Python resolution of the
 # ecosystem-neutral questions: official public registry = PyPI, staging/sandbox = Test PyPI,
 # private/non-official source = a PEP 503 index or git source. Defaults keep the prior behaviour
@@ -177,6 +178,18 @@ rewrite_internal_imports() {
     done < <(grep -rlE "^[[:space:]]*(from|import) (utils|config|ports|chassis)\." "$internal_dir" 2>/dev/null)
 }
 
+# OTLP log export (opt-in, blueprintx#438) — single source in python-common/optional/, not
+# src/utils/ (unlike copy_internal_utils's modules), so it is vendored separately. Independent
+# of INCLUDE_LOGS: it takes an injected stdlib logging.Logger (configure_otel_logging(logger))
+# rather than importing logs.py, matching this tier's "inject, don't hard-import" convention.
+# No .env is written (lib-minimal ships none) — it reads OTEL_EXPORTER_OTLP_ENDPOINT etc. from
+# the consumer's own process environment at call time, the pattern ts_lib.sh already uses.
+copy_internal_otel() {
+    local internal_dir="$1"
+    if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
+    cp "$COMMON_TEMPLATE_ROOT/optional/otel_logging.py" "$internal_dir/utils/otel_logging.py"
+}
+
 # The curated internal helper set for a distributable library — copied from python-common
 # into a PRIVATE `_internal/utils` package (leading underscore keeps it off the consumer's
 # public import surface, yet it ships inside the wheel). `logs.py` is intentionally absent:
@@ -217,6 +230,7 @@ copy_internal_utils() {
     done
     # Runtime type-checking engine — single source in python-common/optional/typing.
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$internal_dir/utils/typing"
+    copy_internal_otel "$internal_dir"
     # Convention guide for the utils layer (logging → dependency injection). Kept out of the
     # wheel by the `exclude` in pyproject.toml.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
@@ -976,6 +990,38 @@ prompt_logs() {
     esac
 }
 
+# OTLP log export (opt-in, blueprintx#438) — mirrors ts_lib.sh's prompt_otel wording. A
+# distributable library ships no .env (see CLAUDE.md), so this wires an ADDITIONAL,
+# injectable emitter the consumer's own host process configures via its own environment;
+# it never auto-runs on import.
+prompt_otel() {
+    local answer
+    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    case "$answer" in
+        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
+        *)   INCLUDE_OTEL=false ;;
+    esac
+}
+
+# Pinned dependency declaration for the OTLP exporter — deliberately separate from
+# copy_internal_utils (which runs before pyproject.toml exists; see copy_common_templates's
+# envsubst). Mirrors the service tiers' EXACT pins (blueprintx#438): the Logs signal is
+# still "Development" status upstream (see optional/otel_logging.py), so a minor bump may
+# change behaviour — do not "fix" these back to a version range without re-checking that.
+conditional_pyproject_otel() {
+    local project_path="$1"
+    if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
+    local pyproject="$project_path/pyproject.toml"
+    sed_inplace '/^defusedxml = ">=0.7"/a\
+# OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
+# "Development" status upstream (see _internal/utils/otel_logging.py). The consumer'"'"'s own\
+# host process sets OTEL_EXPORTER_OTLP_ENDPOINT — this library ships no .env.\
+opentelemetry-api = "==1.44.0"\
+opentelemetry-sdk = "==1.44.0"\
+opentelemetry-exporter-otlp-proto-http = "==1.44.0"' "$pyproject"
+    print_status "success" "OTLP log export (_internal/utils/otel_logging.py) added — call configure_otel_logging(your_logger) to wire it"
+}
+
 # Q1/Q2/Q3 publish/consume selection (scaffold-publish-target-selection). The ecosystem-neutral
 # questions, resolved for Python: official public registry = PyPI, staging/sandbox = Test PyPI,
 # private/non-official source = a PEP 503 index or git source. Only the selected release workflows
@@ -1062,6 +1108,7 @@ main() {
     validate_inputs
     resolve_github_username
     prompt_logs
+    prompt_otel
     prompt_docker_compose
     prompt_publish_targets
     scaffold_prompt_review_bot_roster
@@ -1073,6 +1120,7 @@ main() {
     copy_internal_ports "$PROJECT_PATH"
     copy_templates "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
+    conditional_pyproject_otel "$PROJECT_PATH"
     apply_private_consumer_source "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
