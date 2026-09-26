@@ -21,9 +21,17 @@ A name belongs in `REQUIRED_CHECKS` only if all four hold:
 
 1. It is the literal `jobs.<id>.name:` (or, absent a `name:`, the job id) of a
    workflow **this template ships**. Not a guess, not a reviewer's own status.
-2. Its workflow triggers on `pull_request` with **no `types:` filter that
-   excludes `opened`** and **no `branches:`/`paths:` filter** — otherwise the
-   check is simply absent on some PRs, which reads as permanently pending.
+   For a job under `strategy: matrix:`, the check-run name GitHub reports is the
+   **interpolated per-leg name** (`${{ matrix.* }}` expanded), never the raw
+   `name:` string — a matrix job qualifies only if every leg's interpolated name
+   is enumerable and stable from a real check-run inventory; absent that
+   inventory, treat it as disqualified rather than assume the raw template
+   string is what gets reported.
+2. Its workflow triggers on `pull_request` with **no `types:` filter**, or with
+   a `types:` list that includes `opened`, `reopened`, and `synchronize`, and
+   with **no `branches:`/`branches-ignore:`/`paths:`/`paths-ignore:` filter** —
+   otherwise the check is simply absent on some PRs, which reads as permanently
+   pending.
 3. No job-level `if:` can skip it on an otherwise ordinary PR.
 4. It is copied **unconditionally** by every scaffold script that also ships
    `enable_repo_rules.sh` — a shared script cannot require a name that only one
@@ -34,7 +42,7 @@ reported yet" from "this check will never report."
 
 ## Measured inventory
 
-Measured 2026-09-20 by reading `jobs.*.name` and `on:` in every
+Measured 2026-09-26 by reading `jobs.*.name` and `on:` in every
 `templates/*/.github/workflows/*.y*ml`. Re-measure before trusting it.
 
 ### Python tiers — `ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`, `api-service`
@@ -55,13 +63,13 @@ Measured 2026-09-20 by reading `jobs.*.name` and `on:` in every
 
 | Emitted check name | Workflow | Trigger | Qualifies? |
 |---|---|---|---|
-| `Review threads answered` | `review-threads.yml` | `pull_request` (+ `_review`, `_review_comment`) | yes |
-| `webpack` | `build.yml` | `push`, `pull_request` | yes |
-| `eslint`, `stylelint` | `lint.yml` | `push`, `pull_request` | yes |
-| `jest` | `test.yml` | `push`, `pull_request` | yes |
-| `type-check` | `type-check.yml` | `push`, `pull_request` | yes |
-| `build` | `docs.yml` (`ts-lib` only) | `push`, `pull_request` | yes, `ts-lib` only |
-| `pack-smoke`, `verdaccio-rehearsal` | `pack-smoke.yml` (`ts-lib` only) | `push`, `pull_request` | yes, `ts-lib` only |
+| `Review threads answered` | `review-threads.yml` | `pull_request` (+ `_review`, `_review_comment`), no filter | **yes** |
+| `webpack` | `build.yml` | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter) |
+| `eslint`, `stylelint` | `lint.yml` | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter) |
+| `jest` | `test.yml` | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter) |
+| `type-check` | `type-check.yml` | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter) |
+| `build` | `docs.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter), `ts-lib` only |
+| `pack-smoke`, `verdaccio-rehearsal` | `pack-smoke.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter), `ts-lib` only |
 
 ### Bash tier — `bash-cli`
 
@@ -79,8 +87,11 @@ Three findings, in descending order of cost:
 
 1. **`enable_repo_rules.sh` exists only at `templates/python-common/bin/`.** The
    three non-Python tiers get no branch-protection provisioning at all — for
-   them `REQUIRED_CHECKS` is not one entry, it is zero, and the six-to-nine
-   qualifying names above are required by nothing. `templates/ts-common/.github/.review-bots.yaml`
+   them `REQUIRED_CHECKS` is not one entry, it is zero, and the one-to-two
+   qualifying names above are required by nothing (`Review threads answered`
+   alone for the TypeScript tiers, since their build/lint/test/type-check/docs/
+   pack-smoke workflows all trigger on `pull_request: branches: [main]` and fail
+   rule 2). `templates/ts-common/.github/.review-bots.yaml`
    already notes in passing that the script is "for the Python tiers"; the gap
    was documented as a property, never as a defect. Tracked as a follow-up.
 2. **Python deserves exactly one more entry: `Classify and gate this PR`.** It
