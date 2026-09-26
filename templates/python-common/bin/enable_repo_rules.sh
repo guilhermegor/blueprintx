@@ -117,7 +117,7 @@ RULESET_NAME="pr-quality-gate"
 # no prior ruleset loses nothing either way, but a project that already had one provisioned
 # (this script run before, then the file went missing) must not have its required_status_checks
 # rule silently dropped by the next PUT — see the REQUIRED_CHECKS_FILE_MISSING guard in
-# apply_ruleset below (blueprintx#584 review).
+# apply_ruleset below (PR #585 review).
 REQUIRED_CHECKS_FILE="$SCRIPT_DIR/required-checks.txt"
 REQUIRED_CHECKS=()
 REQUIRED_CHECKS_FILE_MISSING=0
@@ -220,7 +220,7 @@ apply_ruleset() {
 	str_id=$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
 
-	# blueprintx#584 review: never let a MISSING required-checks.txt (unknown, not confirmed
+	# PR #585 review: never let a MISSING required-checks.txt (unknown, not confirmed
 	# empty — see the header above REQUIRED_CHECKS_FILE) drive a PUT against an EXISTING
 	# ruleset. REQUIRED_CHECKS would read as empty, build_ruleset_json would omit
 	# required_status_checks, and the PUT would silently strip whatever this ruleset already
