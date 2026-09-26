@@ -1,5 +1,7 @@
 """Unit tests for the plain-text-to-HTML e-mail body conversion."""
 
+import pytest
+
 from src.utils.email.html_body import to_html_body
 
 

@@ -96,7 +96,9 @@ def df_from_records() -> object:
 
 
 @pytest.mark.parametrize("str_fixture", ["df_from_cursor", "df_from_records"])
-def test_every_declared_column_is_present(str_fixture: str, request: pytest.FixtureRequest) -> None:
+def test_every_declared_column_is_present(
+	str_fixture: str, request: pytest.FixtureRequest
+) -> None:
 	"""Both seams shape the frame from the DECLARED columns, in declaration order.
 
 	Parameters

@@ -1,5 +1,7 @@
 """Unit tests for Excel worksheet-name validation (utils/ms_office/excel_sheet_names.py)."""
 
+import pytest
+
 from src.utils.ms_office.excel_sheet_names import (
 	find_sheet_name_problems,
 	find_workbook_sheet_name_problems,

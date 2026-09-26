@@ -256,6 +256,21 @@ def test_a_bare_hatch_marker_with_no_reason_does_not_exempt(tmp_path: Path) -> N
 	assert _run(tmp_path, []) == 1
 
 
+def test_a_bare_hatch_marker_mid_function_does_not_exempt(tmp_path: Path) -> None:
+	"""A bare marker must not borrow the next line of code as its reason.
+
+	``RE_HATCH``'s whitespace after the marker must stay intra-line, not span a newline —
+	otherwise a bare marker on any line but the last lets the reason group capture the
+	following line of code, silently exempting the test and breaking the documented
+	"a bare marker is rejected" rule.
+	"""
+	_write_test_file(
+		tmp_path, "def test_x() -> None:\n\tassert 1 == 1  # one-assert-ok:\n\tassert 2 == 2\n"
+	)
+
+	assert _run(tmp_path, []) == 1
+
+
 def test_the_hatch_also_exempts_a_zero_assertion_test(tmp_path: Path) -> None:
 	"""The same hatch covers the zero-assertion check, not only the cap."""
 	_write_test_file(tmp_path, "def test_x() -> None:\n\tpass  # one-assert-ok: smoke test\n")

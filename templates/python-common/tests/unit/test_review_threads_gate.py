@@ -579,7 +579,8 @@ def test_a_swapped_in_reviewer_is_policed_like_any_other(tmp_path: Path) -> None
 	(tmp_path / ".review-bots.yaml").write_text(_STR_OTHER_ROSTER, encoding="utf-8")
 	list_threads = [_thread([("some-other-reviewer[bot]", "**Finding.** " + _LONG)])]
 
-	assert len(cls_gate.find_thread_problems(list_threads, set(cls_gate.load_roster(tmp_path)))) == 1
+	set_roster = set(cls_gate.load_roster(tmp_path))
+	assert len(cls_gate.find_thread_problems(list_threads, set_roster)) == 1
 
 
 def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(

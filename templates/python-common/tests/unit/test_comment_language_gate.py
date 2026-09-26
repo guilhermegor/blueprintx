@@ -320,8 +320,9 @@ def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
 	"""
 	set_audited = {path_file.resolve() for path_file in gate.audit_paths()}
 
-	# One representative, long-lived file per location the allow-list used to miss entirely:
-	# repo-root config, root .ini, workflow, and app code that ships into generated projects.
+	# One representative, long-lived file per location the allow-list used to miss entirely —
+	# a repo-root config file, a root-level mypy config, a workflow, and app code that ships
+	# into generated projects.
 	list_required = [
 		gate.PATH_ROOT / ".pre-commit-config.yaml",
 		gate.PATH_ROOT / "mypy.ini",

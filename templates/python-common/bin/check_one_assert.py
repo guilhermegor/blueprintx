@@ -1,4 +1,4 @@
-"""Cap assertion sites per ``test_*`` function: zero anywhere, and exactly one under ``tests/unit/``.
+"""Cap assertion sites per ``test_*`` function: zero anywhere, one under ``tests/unit/``.
 
 Counts every assertion SITE — ``assert``, an ``assert_*()`` call (pandas/mock), and
 ``pytest.raises``/``pytest.warns`` used as a context manager — never bare ``ast.Assert`` alone,
@@ -51,7 +51,7 @@ import re
 import sys
 
 
-RE_HATCH = re.compile(r"#\s*one-assert-ok:\s*(\S.*)$", re.M)
+RE_HATCH = re.compile(r"#[ \t]*one-assert-ok:[ \t]*(\S.*)$", re.M)
 
 # The unit suite's ceiling, blocking by default (blueprintx#544). `--max-per-test 0` turns the
 # cap off and leaves the zero-assertion check alone — 0 cannot mean "cap at zero", since a test
