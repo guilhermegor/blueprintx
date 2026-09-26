@@ -30,9 +30,34 @@ import sys
 
 
 _ROOT = pathlib.Path(__file__).resolve().parents[2]
-_SHARED_TESTS = _ROOT / "templates/python-common/tests/unit"
-_SHARED_WORKFLOWS = _ROOT / "templates/python-common/.github/workflows"
+_SHARED_ROOT = _ROOT / "templates/python-common"
+_SHARED_TESTS = _SHARED_ROOT / "tests/unit"
+_SHARED_WORKFLOWS = _SHARED_ROOT / ".github/workflows"
 _SCAFFOLD_DIR = _ROOT / "bin/scaffold"
+
+# Leaf CLAUDE.md docs are the THIRD copy list with this defect shape, and the quietest: a test
+# that never ships at least changes a count somewhere, a doc that never ships changes nothing
+# a machine reads. src/config/contracts/CLAUDE.md sat unshipped in python-common until
+# blueprintx#325. Keyed by path relative to python-common, since every one is named CLAUDE.md.
+# lib-minimal ships its own config/utils docs from templates/lib-minimal/ (config_CLAUDE.md,
+# utils_CLAUDE.md) because its _internal/ layout differs from the service tiers'.
+DICT_DOCS_EXPECTED_ABSENT = {
+    "python_lib_minimal.sh": {
+        "src/config/CLAUDE.md": "lib-minimal ships templates/lib-minimal/config_CLAUDE.md",
+        "src/config/contracts/CLAUDE.md": "lib-minimal documents contracts in config_CLAUDE.md",
+        "src/utils/CLAUDE.md": "lib-minimal ships templates/lib-minimal/utils_CLAUDE.md",
+    },
+}
+# The python-common root CLAUDE.md documents the template FAMILY for BlueprintX maintainers —
+# it is the one doc that must never ship, so it is not a shared asset at all.
+_DOCS_NEVER_SHIPPED = {"CLAUDE.md"}
+
+# Which exclusion table a stale-exclusion message should name, per asset class.
+_EXCLUSION_TABLE_NAMES = {
+    "test": "DICT_EXPECTED_ABSENT",
+    "workflow": "DICT_WORKFLOWS_EXPECTED_ABSENT",
+    "doc": "DICT_DOCS_EXPECTED_ABSENT",
+}
 
 # Workflows are the SECOND hand-maintained copy list with exactly this defect shape, and it is
 # worse there: a CI job that no scaffold copies is not a test that silently does not run, it is
@@ -192,6 +217,15 @@ _RE_WORKFLOW_CP = re.compile(
     re.M,
 )
 
+# Any `cp` whose SOURCE operand is under python-common — the same source-operand anchoring as
+# the workflow form. A doc is reachable either by its own cp line or by a wholesale directory
+# copy (`cp -r "$COMMON_TEMPLATE_ROOT/bin/." …`), which is how bin/CLAUDE.md ships.
+_RE_SHARED_SOURCE_CP = re.compile(
+    r"^[^\S\n]*(?!#)\S*\bcp\b(?:\s+-{1,2}[A-Za-z-]+)*\s+"
+    r"[\"']?\$(?:\{)?COMMON_TEMPLATE_ROOT(?:\})?/([A-Za-z0-9_./-]+)",
+    re.M,
+)
+
 # The `copy_shared_utils` function body, from its definition to the closing brace.
 _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
 # Its `for util in … ; do` header, searched INSIDE that body only — and rejected when
@@ -235,6 +269,45 @@ def shared_workflow_names() -> set:
         Filenames like ``tests.yaml`` under ``templates/python-common/.github/workflows/``.
     """
     return {path_file.name for path_file in _SHARED_WORKFLOWS.glob("*.y*ml")}
+
+
+def shared_doc_names() -> set:
+    """Return every shippable leaf doc, as a path relative to python-common.
+
+    Returns
+    -------
+    set of str
+        Paths like ``src/config/contracts/CLAUDE.md``; the family root doc is excluded.
+    """
+    return {
+        path_file.relative_to(_SHARED_ROOT).as_posix()
+        for path_file in _SHARED_ROOT.rglob("CLAUDE.md")
+    } - _DOCS_NEVER_SHIPPED
+
+
+def reachable_docs(str_source: str, set_shared: set) -> set:
+    """Return the shared leaf docs one scaffold script copies, by file or by directory.
+
+    Parameters
+    ----------
+    str_source : str
+        The scaffold script's text.
+    set_shared : set of str
+        Every shippable doc path, so a directory copy can be expanded to the docs under it.
+
+    Returns
+    -------
+    set of str
+        Doc paths delivered by an active ``cp`` from python-common, directly or wholesale.
+    """
+    set_reachable = set()
+    for str_operand in _RE_SHARED_SOURCE_CP.findall(str_source):
+        if str_operand in set_shared:
+            set_reachable.add(str_operand)
+        elif str_operand.endswith("/."):
+            str_prefix = str_operand[:-1]
+            set_reachable.update(str_doc for str_doc in set_shared if str_doc.startswith(str_prefix))
+    return set_reachable
 
 
 def reachable_tests(str_source: str) -> set:
@@ -322,7 +395,7 @@ def asset_problems(
     list of str
         One message per problem.
     """
-    str_exclusions = "DICT_EXPECTED_ABSENT" if str_kind == "test" else "DICT_WORKFLOWS_EXPECTED_ABSENT"
+    str_exclusions = _EXCLUSION_TABLE_NAMES[str_kind]
 
     list_problems = []
     for str_asset in sorted(set_shared - set_reachable):
@@ -381,8 +454,10 @@ def scaffold_source_text(path_scaffold: pathlib.Path) -> str:
     return "\n".join(list_parts)
 
 
-def scaffold_problems(path_scaffold: pathlib.Path, set_shared: set, set_workflows: set) -> list:
-    """Return every copy-list problem for one scaffold, across both asset classes.
+def scaffold_problems(
+    path_scaffold: pathlib.Path, set_shared: set, set_workflows: set, set_docs: set
+) -> list:
+    """Return every copy-list problem for one scaffold, across all three asset classes.
 
     Parameters
     ----------
@@ -392,15 +467,25 @@ def scaffold_problems(path_scaffold: pathlib.Path, set_shared: set, set_workflow
         Every shared test filename.
     set_workflows : set of str
         Every shared workflow filename.
+    set_docs : set of str
+        Every shippable leaf doc path.
 
     Returns
     -------
     list of str
-        One message per problem, tests first.
+        One message per problem — tests, then workflows, then docs.
     """
     str_source = scaffold_source_text(path_scaffold)
 
     return asset_problems(
+        path_scaffold,
+        set_docs,
+        reachable_docs(str_source, set_docs),
+        DICT_DOCS_EXPECTED_ABSENT.get(path_scaffold.name, {}),
+        "doc",
+        "templates/python-common/",
+        "the doc would be written, committed, and never read in any generated project",
+    ) + asset_problems(
         path_scaffold,
         set_shared,
         reachable_tests(str_source),
@@ -429,6 +514,7 @@ def main() -> int:
     """
     set_shared = shared_test_names()
     set_workflows = shared_workflow_names()
+    set_docs = shared_doc_names()
 
     # Scanning nothing yields no findings, which reads exactly like a clean pass.
     if not set_shared:
@@ -436,6 +522,9 @@ def main() -> int:
         return 1
     if not set_workflows:
         print(f"❌ no workflows found under {_SHARED_WORKFLOWS} — this gate would pass vacuously")
+        return 1
+    if not set_docs:
+        print(f"❌ no leaf CLAUDE.md found under {_SHARED_ROOT} — this gate would pass vacuously")
         return 1
 
     list_scaffolds = sorted(_SCAFFOLD_DIR.glob("python_*.sh"))
@@ -445,7 +534,9 @@ def main() -> int:
 
     list_problems = []
     for path_scaffold in list_scaffolds:
-        list_problems.extend(scaffold_problems(path_scaffold, set_shared, set_workflows))
+        list_problems.extend(
+            scaffold_problems(path_scaffold, set_shared, set_workflows, set_docs)
+        )
 
     for str_problem in list_problems:
         print(str_problem)
@@ -460,7 +551,7 @@ def main() -> int:
 
     print(
         f"copy lists OK: {len(set_shared)} shared test(s) + {len(set_workflows)} workflow(s) "
-        f"reachable from all "
+        f"+ {len(set_docs)} leaf doc(s) reachable from all "
         f"{len(list_scaffolds)} Python scaffolds."
     )
     return 0
