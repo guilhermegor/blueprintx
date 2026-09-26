@@ -248,6 +248,17 @@ help = "Flatten the repo into repo_context.txt for pasting into a web-UI LLM"
 cmd = "bash bin/export_deps.sh"
 help = "Export the locked set to requirements-lock.txt (hosts that can pip but not Poetry)"
 
+# Offline wheelhouse (blueprintx#299) — build on a machine WITH internet access, copy the
+# WHEELHOUSE_DIR sibling payload to the offline target, then run wheelhouse_assemble there.
+# See docs/offline-wheelhouse.md.
+[tool.poe.tasks.wheelhouse]
+cmd = "bash bin/build_wheelhouse.sh build"
+help = "Build the offline wheelhouse (../_wheels/<repo>) for a corporate/air-gapped install"
+
+[tool.poe.tasks.wheelhouse_assemble]
+cmd = "bash bin/build_wheelhouse.sh assemble"
+help = "Assemble a transferred wheelhouse payload into installable wheels, refusing a mismatch"
+
 
 [tool.poe.tasks.ship]
 cmd = "bash bin/ship.sh"
