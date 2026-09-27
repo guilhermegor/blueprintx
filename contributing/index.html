@@ -1499,6 +1499,17 @@ Parity" for the full rule, worked examples, and the dated Python-vs-TypeScript g
 <p><code>templates/python-common/</code> (shared Python tooling), <code>templates/ts-common/</code> (shared TypeScript
 tooling), and <code>templates/common/</code> (language-agnostic assets) are the single sources of truth —
 change them there and every skeleton inherits the change on the next scaffold run.</p>
+<p>The per-project Claude Code guidance follows the same rule. <code>templates/common/CLAUDE.md</code> is the
+one home for what every skeleton shares (the boundary rules, data-handling guardrails, naming
+and file-naming conventions, tooling summary, runtime type-checking notes, project-memory
+rule); it ships to a generated project as <code>.claude/CLAUDE.md</code>, and each skeleton's root
+<code>CLAUDE.md</code> keeps only what is specific to that tier plus a pointer. Measured before the split
+(blueprintx#549, shared non-blank lines over the smaller file): <code>mvc-service-native-db</code> vs
+<code>mvc-service-orm-db</code> 89%, <code>ddd-service-native-db</code> vs <code>ddd-service-orm-db</code> 85%, any DDD tier vs
+any MVC tier 60–66%. After it: 65%, 62% and 20–28% — what remains is the architecture each
+pair genuinely shares (layer tables, key abstractions), which the issue classifies as
+per-skeleton. Edit a shared convention in <code>templates/common/CLAUDE.md</code>, never in one skeleton's
+root file, where the change would reach one tier and silently miss the rest.</p>
 <h2 id="pull-requests">Pull requests<a class="headerlink" href="#pull-requests" title="Permanent link">&para;</a></h2>
 <p>Branch off <code>main</code> using the CONTRIBUTING prefix policy (<code>feat/…</code>, <code>fix/…</code>, …), keep <code>make lint</code>
 green, and fill out the PR template. Direct commits to <code>main</code> are blocked by pre-commit.</p>
