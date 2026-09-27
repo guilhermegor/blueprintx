@@ -82,6 +82,9 @@ ${PROJECT_NAME}/
 │   ├── CODEOWNERS
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── .husky/                    # pre-commit / pre-push hooks
+├── .specs/
+│   ├── features/               # one subfolder per feature spec
+│   └── spec.md                 # spec template — id conventions: US-/AC-/ASM-/Q-XXX
 ├── .vscode/
 ├── public/
 │   └── index.html             # ships <meta name="viewport"> — do not remove
