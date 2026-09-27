@@ -9,6 +9,11 @@ bin/${PROJECT_NAME} --help
 bin/${PROJECT_NAME} --version
 ```
 
+## Feature specs
+
+Feature specs live under `.specs/features/` — copy `.specs/spec.md` for the
+template and its `US-`/`AC-`/`ASM-`/`Q-XXX` id conventions.
+
 ## Development
 
 ```bash
