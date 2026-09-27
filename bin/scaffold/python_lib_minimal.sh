@@ -354,6 +354,13 @@ copy_templates() {
     # No .env / .env.example: a distributable library has no runtime env to seed (unlike the
     # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
+    # This root CLAUDE.md points at `.claude/CLAUDE.md` for shared conventions
+    # (blueprintx#549) — copy the single source so that pointer resolves.
+    mkdir -p "$project_path/.claude"
+    cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$project_path/.claude/CLAUDE.md"
+    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
+    # file, language-agnostic, so it lives in templates/common not python-common.
+    cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.coveragerc" "$project_path/.coveragerc"
     # Seed CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
     # release; cz changelog regenerates it from tags at release/docs-build time. Single-sourced
@@ -577,6 +584,9 @@ lib_minimal_copy_project_scaffolding() {
     # copy above no longer reaches it, so it is copied explicitly, same destination as
     # before, so review_threads.yaml's `python bin/check_review_threads.py` needs no change.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+    # commit, never templated principles. See .specs/spec.md for the id conventions.
+    cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).
