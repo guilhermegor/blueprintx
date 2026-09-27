@@ -114,6 +114,47 @@ Most of this directory is *tooling* (ruff, pytest, poe_tasks.toml, bin scripts).
 | `assets/logo_lorem_ipsum.png` | Placeholder logo copied into new projects |
 | `CONTRIBUTING.md` | Contribution guide template |
 
+## DatabaseHandler contract — `update()` is atomic, by row locking
+
+`DatabaseHandler.update()` promises that the read of the current record and the write of the
+merged record happen inside **one transaction, with the row held under a pessimistic lock**.
+Two callers updating *different* fields of the same record both survive; a caller never has to
+retry and never sees a conflict error. Last-writer-wins applies **per field**, never per record.
+
+The original implementation in all six SQL handlers did the opposite — `self.read()` on one
+connection, `self.create()` (an upsert) on another — so the later writer overwrote the earlier
+writer's field with the pre-state it had read. Nothing errored; the update was simply gone
+(blueprintx#561, surfaced by review on PR #532 against two of the six copies).
+
+**Row locking was chosen over an optimistic version column, and the same choice is applied to
+all six handlers.** The two are not equivalent and the decision is recorded here so the next
+backend inherits it rather than re-deciding:
+
+- An optimistic version column needs a **schema change** (`version` beside `data`) in a table
+  that generated projects may already have deployed, and it moves the failure into the
+  caller's lap as a documented retry contract. Every `update()` call site in every capability
+  would have to grow a retry loop, and the ABC's `Record | None` return would need a third
+  outcome for "conflict, try again". That is a contract change paid by every caller to solve a
+  problem the database can solve itself.
+- Row locking keeps the signature, the schema and the caller contract exactly as they were.
+  Its known ceiling is real and accepted: writers serialise on the row, and a caller that locks
+  two records in opposite orders can deadlock. These handlers lock exactly one row per
+  `update()` call, so no lock-ordering cycle is reachable from this seam.
+
+Per-dialect form, because the atomic construct genuinely differs:
+
+| backend | lock taken inside the transaction |
+|---|---|
+| PostgreSQL / MySQL / MariaDB / Oracle | `SELECT … FOR UPDATE` |
+| SQL Server | `SELECT … WITH (UPDLOCK, ROWLOCK)` |
+| SQLite | `BEGIN IMMEDIATE` before the `SELECT` |
+
+⚠️ **SQLite needs `BEGIN IMMEDIATE`, not the driver's implicit transaction.** `sqlite3` opens a
+DEFERRED transaction, which takes only a read lock at the `SELECT` and tries to upgrade at the
+`UPDATE` — an upgrade a second writer already holding RESERVED refuses with `SQLITE_BUSY`, and
+which the busy-timeout cannot wait out because waiting cannot resolve a deadlock. `BEGIN
+IMMEDIATE` takes the write lock up front, so the second writer queues instead of failing.
+
 ## What can leave `pyproject.toml` — and what cannot
 
 Audited in blueprintx#233 across all five Python tiers. **The answer is: nothing else.** This
