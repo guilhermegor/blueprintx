@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#secret-scanning-gitguardian-in-scaffolded-projects" class="md-skip">
+        <a href="#secret-scanning-in-scaffolded-projects" class="md-skip">
           Skip to content
         </a>
       
@@ -482,10 +482,32 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-opt-in" class="md-nav__link">
+  <a href="#what-gitguardian-adds-over-gitleaks-measured" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why opt-in
+        What GitGuardian adds over gitleaks — measured
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-tiers-scan-and-with-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which tiers scan, and with what
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-gitguardian-is-opt-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why GitGuardian is opt-in
       
     </span>
   </a>
@@ -1382,10 +1404,32 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-opt-in" class="md-nav__link">
+  <a href="#what-gitguardian-adds-over-gitleaks-measured" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why opt-in
+        What GitGuardian adds over gitleaks — measured
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-tiers-scan-and-with-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which tiers scan, and with what
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-gitguardian-is-opt-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why GitGuardian is opt-in
       
     </span>
   </a>
@@ -1467,12 +1511,93 @@
   
 
 
-<h1 id="secret-scanning-gitguardian-in-scaffolded-projects">Secret scanning (GitGuardian) in scaffolded projects<a class="headerlink" href="#secret-scanning-gitguardian-in-scaffolded-projects" title="Permanent link">&para;</a></h1>
-<p>Every Python skeleton ships a GitGuardian (<code>ggshield</code>) secret-scan workflow
-(<code>.github/workflows/secret_scan.yaml</code>) — but only when you ask for it. This
-page explains the opt-in, why it exists, and what to do if you scaffolded
-without it and want it later.</p>
-<h2 id="why-opt-in">Why opt-in<a class="headerlink" href="#why-opt-in" title="Permanent link">&para;</a></h2>
+<h1 id="secret-scanning-in-scaffolded-projects">Secret scanning in scaffolded projects<a class="headerlink" href="#secret-scanning-in-scaffolded-projects" title="Permanent link">&para;</a></h1>
+<p>Two scanners, with different defaults:</p>
+<table>
+<thead>
+<tr>
+<th>Scanner</th>
+<th>Needs an API key</th>
+<th>Default</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>gitleaks</strong></td>
+<td>no</td>
+<td><strong>on</strong></td>
+<td>every tier</td>
+</tr>
+<tr>
+<td><strong>GitGuardian</strong> (<code>ggshield</code>)</td>
+<td>yes</td>
+<td>opt-in</td>
+<td>Python tiers</td>
+</tr>
+</tbody>
+</table>
+<p><code>gitleaks</code> is the default because it is the only one that can be. A freshly
+scaffolded project has no GitGuardian account and no key, and <code>ggshield</code>
+with no key exits 3 having scanned nothing — so an unconditional GitGuardian
+job is a project red on its first PR, not a project that is protected.</p>
+<h2 id="what-gitguardian-adds-over-gitleaks-measured">What GitGuardian adds over gitleaks — measured<a class="headerlink" href="#what-gitguardian-adds-over-gitleaks-measured" title="Permanent link">&para;</a></h2>
+<p>Measured on this tree (2026-09-20), not quoted from a vendor page:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>gitleaks 8.30.1</th>
+<th>ggshield 1.54.0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scan of the BlueprintX tree (4.76 MB)</td>
+<td>0 findings, exit 0, 1.52 s</td>
+<td><strong>could not run</strong> — exit 3, no key</td>
+</tr>
+<tr>
+<td>Planted synthetic credentials (GitHub PAT, Slack bot token, AWS secret shapes)</td>
+<td><strong>3 findings, exit 1</strong></td>
+<td>could not run</td>
+</tr>
+<tr>
+<td>API key required</td>
+<td>none</td>
+<td>yes, and BlueprintX's own key fails auth (<code>Invalid GitGuardian API key</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>GitGuardian's measurable delta over the installed gitleaks is currently
+zero</strong>, because it cannot be made to run here at all. Its documented
+advantages — a hosted dashboard, incident history, a larger proprietary
+detector set, and validity checking that confirms a found credential is
+<em>live</em> — are real product features, but none of them are observable from
+this repository without a working paid key. So gitleaks carries the default
+and GitGuardian stays an opt-in for anyone who has an account.</p>
+<p>One finding from that measurement is worth keeping: the first should-fail
+probe used AWS's own documented example access key — the <code>AKIA…EXAMPLE</code>
+value printed throughout the AWS docs — and gitleaks reported <strong>no leaks</strong>.
+It allowlists that value by design, precisely because it appears in so much
+documentation. A should-fail test built on a documented example key proves
+nothing; the fixture has to be a shape a real detector fires on, generated
+at test time rather than checked in.</p>
+<h2 id="which-tiers-scan-and-with-what">Which tiers scan, and with what<a class="headerlink" href="#which-tiers-scan-and-with-what" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Python tiers</strong> — <code>gitleaks</code> via <code>bin/check_secrets.sh</code>, wired as both a
+  pre-commit hook and a CI job, plus the opt-in GitGuardian workflow below.</li>
+<li><strong>TypeScript tiers</strong> (<code>react-spa-webpack</code>, <code>ts-lib</code>) —
+  <code>.github/workflows/secret-scan.yml</code>, <code>gitleaks</code> on every push and PR.</li>
+<li><strong>bash-cli</strong> — the <code>secret-scan</code> job in <code>.github/workflows/ci.yml</code>, same
+  scanner.</li>
+</ul>
+<p>All three use the same pinned, checksum-verified gitleaks install and
+<code>fetch-depth: 0</code>, so history is scanned and not just the tip. The
+non-Python tiers deliberately ship <strong>no</strong> <code>.gitleaks.toml</code>: gitleaks falls
+back to its embedded default ruleset, and an allowlist is added only for a
+measured false positive, never preemptively.</p>
+<h2 id="why-gitguardian-is-opt-in">Why GitGuardian is opt-in<a class="headerlink" href="#why-gitguardian-is-opt-in" title="Permanent link">&para;</a></h2>
 <p><code>secret_scan.yaml</code> reads <code>${{ secrets.GITGUARDIAN_API_KEY }}</code>, and GitHub
 resolves that secret <strong>in the repository where the workflow runs</strong>. A key
 set on <code>guilhermegor/blueprintx</code> never reaches a freshly scaffolded project
