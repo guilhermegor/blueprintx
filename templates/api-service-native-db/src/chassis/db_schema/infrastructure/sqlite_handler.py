@@ -76,7 +76,11 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 		return json.loads(tuple_row[0])
 
 	def update(self, record_id: str, updates: Record) -> Record | None:
-		"""Update an existing record.
+		"""Update an existing record atomically.
+
+		``BEGIN IMMEDIATE`` takes the write lock before the read, so the read and the
+		write share one transaction and a concurrent update cannot be lost. See
+		``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
 
 		Parameters
 		----------
@@ -90,11 +94,21 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 		Record or None
 			Updated record when it exists, otherwise ``None``.
 		"""
-		dict_existing = self.read(record_id)
-		if dict_existing is None:
-			return None
-		dict_updated = {**dict_existing, **updates, self.id_field: record_id}
-		self.create(dict_updated)
+		with self._connect() as cls_conn:
+			cls_conn.execute("BEGIN IMMEDIATE")
+			cls_cursor = cls_conn.execute(
+				f"SELECT data FROM {self.table} WHERE {self.id_field} = ?",  # noqa: S608
+				(record_id,),
+			)
+			tuple_row = cls_cursor.fetchone()
+			if tuple_row is None:
+				return None
+			dict_updated = {**json.loads(tuple_row[0]), **updates, self.id_field: record_id}
+			cls_conn.execute(
+				f"UPDATE {self.table} SET data = ? WHERE {self.id_field} = ?",  # noqa: S608
+				(json.dumps(dict_updated), record_id),
+			)
+			cls_conn.commit()
 		return dict_updated
 
 	def delete(self, record_id: str) -> bool:
