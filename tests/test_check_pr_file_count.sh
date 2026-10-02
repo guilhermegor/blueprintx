@@ -48,6 +48,36 @@ make_repo_with_staged_files() {
     printf '%s' "$str_repo"
 }
 
+# Builds a repo where `feature` carries $1 own committed files, `main` then gains $2 new
+# files, and a merge of main into feature is left IN PROGRESS (--no-commit) — the state
+# pre-commit sees on a "merge main into my branch" commit. The index then holds main's
+# files too, which a base resolved from the pre-merge HEAD would charge to the branch.
+make_repo_mid_merge() {
+    local int_own="$1" int_incoming="$2" str_repo str_i
+    str_repo="$(mktemp -d)"
+    git -C "$str_repo" init --quiet --initial-branch=main
+    git -C "$str_repo" config user.email "test@example.com"
+    git -C "$str_repo" config user.name "Test"
+    echo "seed" > "$str_repo/seed.txt"
+    git -C "$str_repo" add seed.txt
+    git -C "$str_repo" commit --quiet -m "seed"
+    git -C "$str_repo" checkout --quiet -b feature
+    for ((str_i = 0; str_i < int_own; str_i++)); do
+        echo "own" > "$str_repo/own_$str_i.txt"
+    done
+    git -C "$str_repo" add -A
+    git -C "$str_repo" commit --quiet -m "feature work"
+    git -C "$str_repo" checkout --quiet main
+    for ((str_i = 0; str_i < int_incoming; str_i++)); do
+        echo "incoming" > "$str_repo/incoming_$str_i.txt"
+    done
+    git -C "$str_repo" add -A
+    git -C "$str_repo" commit --quiet -m "main moves on"
+    git -C "$str_repo" checkout --quiet feature
+    git -C "$str_repo" merge --quiet --no-commit --no-ff main
+    printf '%s' "$str_repo"
+}
+
 expect_gate() {
     # $1 = description, $2 = expected pass|fail, $3 = needle that must appear in output.
     local str_desc="$1" str_want="$2" str_needle="$3" str_repo="$4" str_got="pass" str_out
@@ -87,6 +117,19 @@ test_new_branch_before_first_commit_fails() {
         "$(make_repo_with_staged_files 91 pre-first-commit)"
 }
 
+test_merge_in_progress_ignores_incoming_delta() {
+    # 10 own files + 100 incoming from main: the index holds 110 mid-merge, but the
+    # branch's real cumulative diff is 10. Charging main's delta here rejected every
+    # "merge main into my branch" commit on a PR of any size (186 reported vs 69 real).
+    expect_gate "mid-merge, 10 own files, 100 incoming from main" "pass" "" \
+        "$(make_repo_mid_merge 10 100)"
+}
+
+test_merge_in_progress_still_fails_real_oversize() {
+    # The fix must not blind the gate: 91 own files stay a violation mid-merge.
+    expect_gate "mid-merge, 91 own files" "fail" "91 files" "$(make_repo_mid_merge 91 5)"
+}
+
 test_default_branch_is_not_applicable() {
     # On main itself (merge-base == HEAD) the gate is a no-op regardless of file count —
     # there is no branch to compare against.
@@ -106,6 +149,8 @@ main() {
     test_at_ceiling_passes
     test_over_ceiling_fails_naming_the_count
     test_new_branch_before_first_commit_fails
+    test_merge_in_progress_ignores_incoming_delta
+    test_merge_in_progress_still_fails_real_oversize
     test_default_branch_is_not_applicable
 
     if [ "$int_failures" -ne 0 ]; then
@@ -113,7 +158,7 @@ main() {
         exit 1
     fi
     print_status "success" \
-        "check_pr_file_count.py: within-ceiling, at-ceiling, over-ceiling (message verified), pre-first-commit branch, and default-branch no-op all confirmed"
+        "check_pr_file_count.py: within-ceiling, at-ceiling, over-ceiling (message verified), pre-first-commit branch, merge-in-progress (both ways), and default-branch no-op all confirmed"
 }
 
 main "$@"
