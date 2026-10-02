@@ -5,12 +5,18 @@
 #
 # Rules (see .specs/CLAUDE.md for the human-facing version):
 #   1. If .specs/ exists, .specs/CLAUDE.md must exist.
-#   2. The only allowed top-level entries under .specs/ are CLAUDE.md, features/, _lessons/.
+#   2. The only allowed top-level entries under .specs/ are CLAUDE.md, features/, backlog/,
+#      _lessons/.
 #   3. Every entry directly under .specs/features/ must be a directory.
-#   4. Every .specs/features/<name>/ must contain at least one of design.md or plan.md.
+#   4. Every .specs/features/<name>/ must contain at least one of design.md, plan.md or
+#      tasks.md. tasks.md is the per-feature slice tracker (blueprintx#575) — a feature can
+#      legitimately be tracked before it has a written design.
 #   5. _lessons/ has no content requirement — it is machine-populated and git-ignored.
 #   6. <name> is kebab-case, as .specs/CLAUDE.md requires. A gate that states a rule its
 #      own doc makes and then does not check it is worse than one that never claimed to.
+#   7. Every file directly under .specs/backlog/ is <kebab-topic>_YYYYMMDD_HHMMSS.md — the
+#      home for a multi-step effort that maps to no single feature. Same reasoning as 6:
+#      .specs/CLAUDE.md states the pattern, so the gate checks it.
 #
 # Root-repo-only: .specs/ is a BlueprintX convention for this repo's own specs/plans, not
 # a scaffolded-project concept, so this script is not part of templates/.
@@ -41,9 +47,9 @@ fi
 for entry in "$SPECS_DIR"/*; do
     name="$(basename "$entry")"
     case "$name" in
-        CLAUDE.md|features|_lessons) ;;
+        CLAUDE.md|features|backlog|_lessons) ;;
         *)
-            echo "ERROR: unexpected top-level entry .specs/$name (only CLAUDE.md, features/, _lessons/ are allowed)" >&2
+            echo "ERROR: unexpected top-level entry .specs/$name (only CLAUDE.md, features/, backlog/, _lessons/ are allowed)" >&2
             errors=$((errors + 1))
             ;;
     esac
@@ -68,8 +74,25 @@ if [ -d "$SPECS_DIR/features" ]; then
                  "not '447' or 'Specs_Directory')" >&2
             errors=$((errors + 1))
         fi
-        if [ ! -f "$entry/design.md" ] && [ ! -f "$entry/plan.md" ]; then
-            echo "ERROR: .specs/features/$name has neither design.md nor plan.md" >&2
+        if [ ! -f "$entry/design.md" ] && [ ! -f "$entry/plan.md" ] &&
+            [ ! -f "$entry/tasks.md" ]; then
+            echo "ERROR: .specs/features/$name has none of design.md, plan.md or tasks.md" >&2
+            errors=$((errors + 1))
+        fi
+    done
+fi
+
+if [ -d "$SPECS_DIR/backlog" ]; then
+    for entry in "$SPECS_DIR/backlog"/*; do
+        name="$(basename "$entry")"
+        if [ ! -f "$entry" ]; then
+            echo "ERROR: .specs/backlog/$name is not a file — .specs/backlog/ is flat" >&2
+            errors=$((errors + 1))
+            continue
+        fi
+        if ! printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*_[0-9]{8}_[0-9]{6}\.md$'; then
+            echo "ERROR: .specs/backlog/$name does not match" \
+                 "<kebab-topic>_YYYYMMDD_HHMMSS.md — .specs/CLAUDE.md" >&2
             errors=$((errors + 1))
         fi
     done
