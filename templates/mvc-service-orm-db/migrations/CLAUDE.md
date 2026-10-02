@@ -38,8 +38,10 @@ Migration order is always determined by `down_revision`, never by filename.
    is hard to diagnose.
 
 4. **Views must be managed manually.** Alembic autogenerate does not detect
-   views. Create them with `op.execute("CREATE OR REPLACE VIEW ...")` in
-   `upgrade()` and `op.execute("DROP VIEW IF EXISTS ...")` in `downgrade()`.
+   views. Create them with `op.execute("CREATE VIEW ...")` in `upgrade()` and
+   `op.execute("DROP VIEW IF EXISTS ...")` in `downgrade()`. To change a view,
+   `DROP VIEW IF EXISTS` then `CREATE VIEW` — `CREATE OR REPLACE VIEW` is not
+   valid on SQLite, which this template supports.
 
 5. ⚠️ **A `batch_alter_table` migration cannot be generated as offline SQL unless it
    passes `copy_from`.** On SQLite, batch mode rewrites the table (create temp → copy →
@@ -74,10 +76,12 @@ Migration order is always determined by `down_revision`, never by filename.
      `nullable=False` — never all three in one migration that would fail
      partway on existing rows.
    - A `downgrade()` for a data migration may legitimately refuse rather than
-     attempt a lossy reconstruction — `raise NotImplementedError("...")` (or
-     `log + pass`) is correct **when the docstring says so and says why**. A
-     silent `pass` with no explanation is not the same thing: rule 2 requires
-     the function to exist, not that it pretend to reverse something it can't.
+     attempt a lossy reconstruction — `raise NotImplementedError("...")` is
+     correct **when the docstring says so and says why**. Never refuse with
+     `log + pass`: Alembic updates its version table after the function returns
+     normally, so the recorded revision would move while the data stays put. A
+     silent `pass` is the same defect: rule 2 requires the function to exist,
+     not that it pretend to reverse something it can't.
 
 ## Reference: a read-modify-write race, guarded at the schema level
 
@@ -107,6 +111,8 @@ poe migrate_current
 # Show full migration history
 poe migrate_history
 
-# Generate the pending upgrade as offline SQL (no DB connection — for a DBA)
+# Generate the FULL base-to-head upgrade as offline SQL (no DB connection).
+# Offline mode cannot read the DB's current revision, so for a DB that already has
+# migrations run `alembic upgrade <current_revision>:head --sql` instead.
 poe migrate_sql
 ```

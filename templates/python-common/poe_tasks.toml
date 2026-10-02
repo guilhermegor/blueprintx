@@ -271,7 +271,7 @@ help = "Show full migration history"
 
 [tool.poe.tasks.migrate_sql]
 cmd = "alembic upgrade head --sql"
-help = "Generate the pending upgrade as offline SQL (no DB connection — for a DBA)"
+help = "Generate the FULL base-to-head upgrade as offline SQL (no DB connection; for a fresh DB)"
 
 
 [tool.poe.tasks.run]

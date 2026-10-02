@@ -9,6 +9,9 @@ this template's CLAUDE.md warns against ("the seam knows the vendor; the callers
 
 from __future__ import annotations
 
+import importlib
+import pkgutil
+
 from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
@@ -19,8 +22,14 @@ from config.connection_db import build_database_url
 # entity" convention: "inherit from a shared Base") so autogenerate sees the full schema
 # through one metadata object — a second `class Base(DeclarativeBase)` elsewhere would give
 # Alembic a metadata object with no models registered on it.
+import model
 from model.example_entity import Base
 
+
+# Import every module under model/ so each entity registers its table on Base.metadata —
+# a new src/model/<entity>.py is then picked up with no edit here.
+for _, str_module_name, _ in pkgutil.iter_modules(model.__path__):
+	importlib.import_module(f"model.{str_module_name}")
 
 load_dotenv()
 
