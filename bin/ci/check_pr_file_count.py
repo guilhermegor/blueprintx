@@ -166,7 +166,14 @@ def main() -> int:
         # Nothing branch-scoped to compare against.
         return 0
 
-    str_base = _git(["merge-base", "HEAD", str_default_ref])
+    # ⚠️ Mid-merge, the INDEX already holds the incoming side's files but HEAD is still the
+    # pre-merge tip, so a base taken from HEAD alone charges the incoming delta to this
+    # branch (measured: 186 files reported for a real 69). With 3+ args git computes the
+    # base against the merge commit about to be created.
+    list_tips = ["HEAD"]
+    if _git(["rev-parse", "-q", "--verify", "MERGE_HEAD"]):
+        list_tips.append("MERGE_HEAD")
+    str_base = _git(["merge-base", str_default_ref, *list_tips])
     if not str_base:
         # Unrelated history or a clone too shallow to resolve one: nothing to check.
         return 0
