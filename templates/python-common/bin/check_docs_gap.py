@@ -17,8 +17,8 @@ Two independent layers, both fail-closed:
 - **Layer 1 — orphan pages (always runs).** Every ``.md`` under ``docs_dir`` (default
   ``docs/``) that MkDocs would build — not dot-pathed, under ``templates/``, nor matched by
   ``exclude_docs:`` / ``draft_docs:``, all via MkDocs' own gitignore engine — and is not
-  ``docs/CLAUDE.md`` itself must be registered somewhere in ``nav:``. Runs identically here and in every generated
-  project — no repo-specific assumption, no fixed slug list.
+  ``docs/CLAUDE.md`` itself must be registered somewhere in ``nav:``. Runs identically here
+  and in every generated project — no repo-specific assumption, no fixed slug list.
 - **Layer 2 — CLAUDE.md file-index sync (optional, repo-owned).** When ``docs/CLAUDE.md``
   carries a ``## 1. File index`` table (this repo's own format — a generated project's
   ``docs/CLAUDE.md`` is prose-only and has none), every path in that table's first column
