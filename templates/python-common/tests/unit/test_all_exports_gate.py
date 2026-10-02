@@ -58,6 +58,27 @@ def _package(tmp_path: Path, str_init: str, str_member: str) -> Path:
 	return path_init
 
 
+def _sole(list_problems: list[str]) -> str:
+	"""Return the one problem reported, asserting there is exactly one.
+
+	The count is a precondition of the content claim (blueprintx#544), not a second
+	behaviour: indexing ``[0]`` of an empty list raises an ``IndexError`` naming neither
+	the gate nor the package.
+
+	Parameters
+	----------
+	list_problems : list of str
+		Whatever the gate reported.
+
+	Returns
+	-------
+	str
+		The single problem.
+	"""
+	assert len(list_problems) == 1, list_problems
+	return list_problems[0]
+
+
 def test_complete_export_list_passes(tmp_path: Path) -> None:
 	"""Every public member named in ``__all__`` → no problems."""
 	path_init = _package(
@@ -73,9 +94,8 @@ def test_member_missing_from_all_is_flagged(tmp_path: Path) -> None:
 	export list just yields one fewer item, so the suite passes by not looking.
 	"""
 	path_init = _package(tmp_path, '__all__ = ["THING"]\n', "THING = 1\nOTHER = 2\n")
-	list_problems = _load_gate().check_package(path_init)
-	assert len(list_problems) == 1
-	assert "OTHER" in list_problems[0]
+
+	assert "OTHER" in _sole(_load_gate().check_package(path_init))
 
 
 def test_a_tuple_all_is_read_like_a_list(tmp_path: Path) -> None:

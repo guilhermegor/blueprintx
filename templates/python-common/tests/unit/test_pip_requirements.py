@@ -133,7 +133,8 @@ def test_empty_result_for_a_requested_group_fails_loudly(
 	monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
 	monkeypatch.setenv("BX_GROUPS", "main,dev")
 
-	with pytest.raises(SystemExit) as cls_excinfo:
+	# One assertion site, not two — pytest.raises is the "it must exit" half, and its match
+	# argument is the "and it must say why" half. Exception type and message are checked
+	# together as one behaviour with one failure mode (blueprintx#544).
+	with pytest.raises(SystemExit, match="No requirements resolved"):
 		MODULE.main()
-
-	assert "No requirements resolved" in str(cls_excinfo.value)

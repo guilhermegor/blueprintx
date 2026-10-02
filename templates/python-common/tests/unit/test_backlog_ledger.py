@@ -41,29 +41,57 @@ ledger = _load("check_backlog_ledger")
 gate_integrity = _load("check_gate_integrity")
 
 
-def test_ledger_required_for_src_and_ci() -> None:
+def _first_problem(list_problems: list[str]) -> str:
+	"""Return the first problem reported, asserting the list is not empty.
+
+	"It fired at all" and "it said the right thing" are two claims (blueprintx#544). The
+	first is a precondition of the second — indexing ``[0]`` of an empty list raises an
+	``IndexError`` that names neither the gate nor the input — so it is checked here and
+	each test keeps the single assertion that names the behaviour.
+
+	Parameters
+	----------
+	list_problems : list of str
+		Whatever the gate reported.
+
+	Returns
+	-------
+	str
+		The first problem.
+	"""
+	assert list_problems, "the gate reported nothing at all"
+	return list_problems[0]
+
+
+@pytest.mark.parametrize("str_path", ["src/model/loader.py", "bin/venv.sh"])
+def test_ledger_required_for_src_and_ci(str_path: str) -> None:
 	"""A branch touching src/ or ci paths must carry a ledger."""
-	assert ledger.needs_ledger(["src/model/loader.py"], gate) is True
-	assert ledger.needs_ledger(["bin/venv.sh"], gate) is True
+	assert ledger.needs_ledger([str_path], gate) is True
 
 
-def test_ledger_not_required_for_routine_classes() -> None:
+@pytest.mark.parametrize("str_path", ["docs/usage.md", "poetry.lock", "tests/unit/test_x.py"])
+def test_ledger_not_required_for_routine_classes(str_path: str) -> None:
 	"""docs/deps/tests-only branches are routine — a ledger there would be noise."""
-	assert ledger.needs_ledger(["docs/usage.md"], gate) is False
-	assert ledger.needs_ledger(["poetry.lock"], gate) is False
-	assert ledger.needs_ledger(["tests/unit/test_x.py"], gate) is False
+	assert ledger.needs_ledger([str_path], gate) is False
+
+
+# ⚠️ The two tests below are the two HALVES of one regression and must be read together:
+# `classify_risk` returns the single most-dangerous class and ranks `tests` above `ci`, so a
+# branch touching both `bin/` and `tests/` collapses to `tests` — not a ledger class. The
+# first test pins the collapse that would let it escape; the second pins that asking per path
+# catches it anyway. Split rather than parametrized because the two assert different
+# functions, not one function over two inputs.
+_LIST_MIXED_BRANCH = ["bin/venv.sh", "tests/unit/test_x.py"]
+
+
+def test_the_whole_list_view_collapses_a_mixed_branch_to_tests() -> None:
+	"""The collapse is real — this is why the whole-list view cannot be the one asked."""
+	assert gate.classify_risk(_LIST_MIXED_BRANCH) == "tests"
 
 
 def test_membership_is_asked_per_path_not_over_the_whole_list() -> None:
-	"""The regression this guards: a mixed branch must NOT escape the ledger requirement.
-
-	``classify_risk`` returns the single most-dangerous class and ranks ``tests`` above ``ci``, so
-	a branch touching both ``bin/`` and ``tests/`` collapses to ``tests`` — which is not a ledger
-	class. Asking per path is what keeps the requirement honest.
-	"""
-	list_mixed = ["bin/venv.sh", "tests/unit/test_x.py"]
-	assert gate.classify_risk(list_mixed) == "tests"  # whole-list view would escape...
-	assert ledger.needs_ledger(list_mixed, gate) is True  # ...per-path view catches it
+	"""The regression this guards: a mixed branch must NOT escape the ledger requirement."""
+	assert ledger.needs_ledger(_LIST_MIXED_BRANCH, gate) is True
 
 
 def test_a_valid_ledger_satisfies_the_branch() -> None:
@@ -75,16 +103,14 @@ def test_a_valid_ledger_satisfies_the_branch() -> None:
 
 def test_missing_ledger_is_reported() -> None:
 	"""A src-touching branch with no ledger fails, and the message says what to create."""
-	list_problems = ledger.find_ledger_problems(["src/a.py"])
-	assert list_problems
-	assert "docs/backlog" in list_problems[0]
+	assert "docs/backlog" in _first_problem(ledger.find_ledger_problems(["src/a.py"]))
 
 
 def test_ledger_name_must_be_kebab_plus_timestamp() -> None:
 	"""A misnamed ledger is rejected — the timestamped kebab name is the convention."""
-	list_problems = ledger.find_ledger_problems(["src/a.py", "docs/backlog/BadName.md"])
-	assert list_problems
-	assert "kebab" in list_problems[0]
+	assert "kebab" in _first_problem(
+		ledger.find_ledger_problems(["src/a.py", "docs/backlog/BadName.md"])
+	)
 
 
 # --------------------------
@@ -96,19 +122,20 @@ def test_ledger_name_must_be_kebab_plus_timestamp() -> None:
 # gate for everyone with the suite still green, so the negative control is the real assertion.
 
 
-def test_bot_login_is_exempt() -> None:
+@pytest.mark.parametrize(
+	"str_login", ["dependabot[bot]", "github-actions[bot]", "renovate[bot]"]
+)
+def test_bot_login_is_exempt(str_login: str) -> None:
 	"""GitHub's own ``[bot]`` suffix identifies the author, with no allow-list to rot."""
-	assert ledger.is_bot_author("dependabot[bot]") is True
-	assert ledger.is_bot_author("github-actions[bot]") is True
-	assert ledger.is_bot_author("renovate[bot]") is True
+	assert ledger.is_bot_author(str_login) is True
 
 
-def test_human_login_is_not_exempt() -> None:
+# `robotics-team` and `dependabot` are the load-bearing cases, not padding: "bot" appearing
+# in the name is not the suffix, and only GitHub's own marker counts.
+@pytest.mark.parametrize("str_login", ["octocat", "robotics-team", "dependabot"])
+def test_human_login_is_not_exempt(str_login: str) -> None:
 	"""NEGATIVE CONTROL: the gate still fires for humans, including bot-ish names."""
-	assert ledger.is_bot_author("octocat") is False
-	# "bot" in the name is not the suffix — only GitHub's own marker counts.
-	assert ledger.is_bot_author("robotics-team") is False
-	assert ledger.is_bot_author("dependabot") is False
+	assert ledger.is_bot_author(str_login) is False
 
 
 def test_unresolved_author_is_treated_as_human() -> None:
@@ -212,8 +239,31 @@ def test_a_missing_event_file_exempts_nobody(
 	monkeypatch.setenv("GITHUB_EVENT_PATH", str(tmp_path / "does_not_exist.json"))
 	monkeypatch.setenv("GITHUB_ACTOR", "dependabot[bot]")
 
-	assert ledger.pr_author_login() == ""
 	assert ledger.is_bot_author(ledger.pr_author_login()) is False
+
+
+def test_a_missing_event_file_resolves_to_no_author_at_all(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""The MECHANISM behind the test above: the resolver returns "", never the actor.
+
+	Split from its sibling rather than dropped (blueprintx#544). The two are genuinely
+	different claims — "nobody is exempted" is the behaviour, and "the resolver returns the
+	empty string" is why. Keeping only the first would let a resolver that returned some
+	other non-bot login pass while the real defect (falling back to ``GITHUB_ACTOR``) went
+	unnamed.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway dir; the payload path deliberately points at nothing.
+	monkeypatch : pytest.MonkeyPatch
+		Used to set the GitHub Actions environment variables.
+	"""
+	monkeypatch.setenv("GITHUB_EVENT_PATH", str(tmp_path / "does_not_exist.json"))
+	monkeypatch.setenv("GITHUB_ACTOR", "dependabot[bot]")
+
+	assert ledger.pr_author_login() == ""
 
 
 def test_unreadable_payload_exempts_nobody(
@@ -434,6 +484,15 @@ def test_ordinary_source_file_is_not_dispatched() -> None:
 	construction rather than by exception list.
 	"""
 	assert Path("src/model/foo.py").name not in gate_integrity._DICT_DISPATCH
+
+
+def test_an_ordinary_source_file_is_not_a_watched_workflow_path() -> None:
+	"""The second half of the should-pass witness: the path regex is blind to it too.
+
+	Split from its sibling rather than folded in (blueprintx#544): the dispatch table and
+	the workflow-path regex are two independent doors, and one assertion covering both
+	cannot say which one opened.
+	"""
 	assert gate_integrity.RE_WORKFLOW_PATH.search("src/model/foo.py") is None
 
 
@@ -450,10 +509,14 @@ def test_justification_reason_reads_the_pr_body(
 	assert gate_integrity.justification_reason("deadbeef") == "dup"
 
 
-def test_bare_marker_with_no_reason_does_not_satisfy() -> None:
+@pytest.mark.parametrize(
+	"str_marker",
+	["gate-change-ok:\n", "gate-change-ok:   \n"],
+	ids=["empty", "whitespace-only"],
+)
+def test_bare_marker_with_no_reason_does_not_satisfy(str_marker: str) -> None:
 	"""The reason is REQUIRED, matching `# complexity-ok: <reason>` elsewhere in this repo."""
-	assert gate_integrity.RE_JUSTIFICATION.search("gate-change-ok:\n") is None
-	assert gate_integrity.RE_JUSTIFICATION.search("gate-change-ok:   \n") is None
+	assert gate_integrity.RE_JUSTIFICATION.search(str_marker) is None
 
 
 # Assertion integrity (#324) — the sharper half of #309: a test's expected value edited to
@@ -492,15 +555,43 @@ _TEST_NEW_WEAKENED = _TEST_OLD.replace(
 )
 
 
-def test_assertion_expected_value_changed_is_detected_and_names_the_test() -> None:
+@pytest.mark.parametrize(
+	("str_fragment", "bool_present"),
+	[
+		("test_to_decimal_strict_truncates_by_default", True),
+		("expected value changed", True),
+		("test_something_unrelated", False),
+	],
+	ids=["names-the-test", "names-the-weakening", "does-not-name-the-innocent-test"],
+)
+def test_assertion_expected_value_changed_is_detected_and_names_the_test(
+	str_fragment: str, bool_present: bool
+) -> None:
 	"""⚠️ THE SHOULD-FAIL WITNESS: the exact #323 shape — same call, new expected value."""
-	list_problems = gate_integrity.test_assertion_problems(
-		_TEST_OLD, _TEST_NEW_WEAKENED, "tests/unit/test_decimals.py"
+	str_problem = _first_problem(
+		gate_integrity.test_assertion_problems(
+			_TEST_OLD, _TEST_NEW_WEAKENED, "tests/unit/test_decimals.py"
+		)
 	)
-	assert len(list_problems) == 1
-	assert "test_to_decimal_strict_truncates_by_default" in list_problems[0]
-	assert "expected value changed" in list_problems[0]
-	assert "test_something_unrelated" not in "".join(list_problems)
+
+	assert (str_fragment in str_problem) is bool_present
+
+
+def test_only_the_weakened_assertion_is_reported_not_a_cascade() -> None:
+	"""Exactly one finding — the count claim, split out rather than dropped (#544).
+
+	Keeping it is what makes the "does-not-name-the-innocent-test" case above meaningful:
+	that case now reads the FIRST problem, so without this test a second problem naming
+	``test_something_unrelated`` could hide behind it.
+	"""
+	assert (
+		len(
+			gate_integrity.test_assertion_problems(
+				_TEST_OLD, _TEST_NEW_WEAKENED, "tests/unit/test_decimals.py"
+			)
+		)
+		== 1
+	)
 
 
 def test_assertion_unrelated_rewrite_is_not_flagged() -> None:
@@ -598,11 +689,20 @@ def test_preexisting_skip_mark_is_not_a_new_weakening() -> None:
 	assert gate_integrity.newly_skipped_tests(str_old, str_new, "x") == []
 
 
-def test_test_path_regex_matches_unit_and_integration_only() -> None:
+@pytest.mark.parametrize(
+	("str_path", "bool_watched"),
+	[
+		("tests/unit/test_decimals.py", True),
+		("templates/python-common/tests/unit/test_x.py", True),
+		("src/utils/decimals.py", False),
+	],
+	ids=["bare-tests-tree", "nested-template-tests-tree", "ordinary-source-file"],
+)
+def test_test_path_regex_matches_unit_and_integration_only(
+	str_path: str, bool_watched: bool
+) -> None:
 	"""Only the shipped test tree is watched — an ordinary source file is invisible to this."""
-	assert gate_integrity.RE_TEST_PATH.search("tests/unit/test_decimals.py")
-	assert gate_integrity.RE_TEST_PATH.search("templates/python-common/tests/unit/test_x.py")
-	assert gate_integrity.RE_TEST_PATH.search("src/utils/decimals.py") is None
+	assert (gate_integrity.RE_TEST_PATH.search(str_path) is not None) is bool_watched
 
 
 def _stub_show(str_ref: str, _str_path: str) -> str:

@@ -88,10 +88,23 @@ def test_arithmetic_write_after_session_get_is_reported(tmp_path: Path) -> None:
 	assert gate.check_file(str(path_file)) == 1
 
 
+# The file:line and the offending SOURCE LINE are the same kind of claim — "the message
+# identifies the defect" — over two fragments, so they are cases rather than two asserts.
+@pytest.mark.parametrize("str_which", ["location", "source"])
 def test_arithmetic_write_after_session_get_names_file_and_line(
-	tmp_path: Path, capsys: pytest.CaptureFixture[str]
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], str_which: str
 ) -> None:
-	"""The message must name the offending file and line — 'possible race' teaches nothing."""
+	"""The message must name the offending file and line — 'possible race' teaches nothing.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest throwaway directory holding the probe module.
+	capsys : pytest.CaptureFixture
+		Captures the gate's output.
+	str_which : str
+		Which half of the identification is under test.
+	"""
 	path_file = _python_file(
 		tmp_path,
 		"class Product:\n"
@@ -104,10 +117,12 @@ def test_arithmetic_write_after_session_get_names_file_and_line(
 	)
 
 	gate.check_file(str(path_file))
+	dict_expected = {
+		"location": f"{path_file}:7",
+		"source": "record.stock = record.stock - quantity",
+	}
 
-	str_out = capsys.readouterr().out
-	assert f"{path_file}:7" in str_out
-	assert "record.stock = record.stock - quantity" in str_out
+	assert dict_expected[str_which] in capsys.readouterr().out
 
 
 def test_augmented_assignment_form_is_also_reported(tmp_path: Path) -> None:

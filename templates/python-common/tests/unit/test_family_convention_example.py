@@ -61,14 +61,22 @@ _FAMILY = tuple(
 # --------------------------
 # Tests
 # --------------------------
-def test_discovery_matches_declared_surface() -> None:
-	"""Guard the discovery itself: every declared name resolves to a member.
+def test_the_discovered_family_is_not_empty() -> None:
+	"""Guard the discovery itself — an empty family makes every per-member test vacuous.
 
-	If ``_FAMILY`` drifts from the declared surface — a name added that is not a
-	family member, or a member dropped — the per-member test below would silently
-	stop covering it, so assert the discovery is complete and non-empty first.
+	This is the half that catches "the sweep found nothing", which is exactly how an
+	introspective convention test passes by not looking.
 	"""
 	assert _FAMILY, "the family must not be empty"
+
+
+def test_discovery_matches_declared_surface() -> None:
+	"""Every declared name resolves to a member, and no member is missing from the surface.
+
+	Split from the non-empty guard above (blueprintx#544): "found something" and "found
+	exactly what was declared" are different failures with different causes — a drifted
+	``_FAMILY`` and a broken discovery — and one assertion covering both cannot say which.
+	"""
 	assert len(_FAMILY) == len(_FAMILY_NAMES)
 
 

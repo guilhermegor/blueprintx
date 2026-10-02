@@ -29,15 +29,20 @@ def test_download_attachment_off_windows_returns_none(
 def test_send_email_hands_com_an_absolute_attachment_path(
 	mocker: MockerFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-	"""A relative attachment reaches Outlook absolute — it does not share our CWD."""
+	"""A relative attachment reaches Outlook absolute — it does not share our CWD.
+
+	⚠️ The separate ``is_absolute()`` and ``name`` assertions are folded into one equality
+	against the resolved path (blueprintx#544), not dropped: that single comparison is
+	strictly stronger, since it pins WHERE the path was anchored as well as that it was.
+	"""
 	monkeypatch.chdir(tmp_path)
 	mocker.patch("src.utils.ms_office.outlook_gateway.running_on_windows", return_value=True)
 	cls_com = mocker.patch("src.utils.ms_office.outlook_gateway._com_send_email")
 	cls_gateway = OutlookGateway("sender@example.com")
 	cls_gateway.send_email("subject", ["to@example.com"], [], "body", ["out/report.xlsx"])
-	list_sent = cls_com.call_args.kwargs["list_attachments"]
-	assert Path(list_sent[0]).is_absolute()
-	assert Path(list_sent[0]).name == "report.xlsx"
+	path_sent = Path(cls_com.call_args.kwargs["list_attachments"][0])
+
+	assert path_sent == (tmp_path / "out" / "report.xlsx").resolve()
 
 
 def test_download_attachment_hands_com_an_absolute_dest_dir(
