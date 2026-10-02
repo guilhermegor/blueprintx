@@ -534,8 +534,13 @@ def main() -> int:
 	Returns
 	-------
 	int
-		Always 0 — the gate reports; the RULESET decides whether a PR may merge. A gate that
-		fails the run would just be a second, redundant blocking signal.
+		0 when every polled axis is green (or still pending after the poll budget — an
+		inconclusive run is not a confirmed failure). Nonzero when an axis is confirmed
+		``"failure"``. blueprintx#564 made "Classify and gate this PR" itself a required
+		status check (see required-checks.txt) — a job that always exits 0 would then be a
+		required check nothing can ever fail, defeating the point of requiring it. The
+		RULESET is still the merge-blocking mechanism; this exit code is what lets the
+		ruleset see a confirmed-red run at all.
 	"""
 	str_repo = os.environ["GITHUB_REPOSITORY"]
 	int_pr = int(os.environ["PR_NUMBER"])
@@ -575,10 +580,9 @@ def main() -> int:
 		int_pr,
 		render_comment(str_risk, str_size, dict_axes, bool_eligible, dict_failing),
 	)
-	print(
-		f"risk={str_risk} size={str_size} eligible={bool_eligible} state={gate_state(dict_axes)}"
-	)
-	return 0
+	str_state = gate_state(dict_axes)
+	print(f"risk={str_risk} size={str_size} eligible={bool_eligible} state={str_state}")
+	return 1 if str_state == "failure" else 0
 
 
 if __name__ == "__main__":
