@@ -1,0 +1,109 @@
+# quality-rules.yaml — machine-readable registry of BlueprintX's quality rules and how
+# each is implemented per scaffolded language. YAML rather than JSON because this file
+# needs comments (blueprintx#432), the same reason `.layer-policy.yaml` and
+# `.docs-skeleton.yaml` are YAML rather than JSON.
+#
+# Read and validated by templates/python-common/bin/check_quality_rules.py — see
+# docs/quality-rules.md for the reasoning behind each entry (the "why", not restated here).
+#
+# Schema, per rule:
+#   id:       stable slug, also the docs anchor and the check-config key
+#   intent:   the CONSTRUCT this rule prohibits/requires — never a specific number, so a
+#             Python ceiling of 2 and a TypeScript ceiling of 3 can both satisfy the same
+#             intent (blueprintx#425: "prohibits the same construct", never "same digit")
+#   docs:     docs/quality-rules.md#<anchor> — must resolve to a real heading
+#   <language>: one block per language templates/*/skeleton.meta declares. Every
+#     scaffolded language MUST have an entry — omission is what this file exists to
+#     forbid (blueprintx#430: TypeScript silently had 0 of 6 Python gates). A language
+#     with no real implementation says so EXPLICITLY via `status: not-implemented`
+#     (never a missing key), or documents why the house rule does not apply via
+#     `overridden_by: <standard>` — both require a `note` explaining why.
+#     `file` + `pattern` are optional: when present, the gate greps `pattern` (a plain
+#     substring, not a regex — decidable without a second parser) inside `file` and fails
+#     if it is not there, so a config drift between this table and the real tool config
+#     is caught rather than silently aging (the defect check_codespell_sync.sh polices
+#     for `.codespellrc`, applied here to the registry describing everything else).
+
+- id: complexity
+  intent: "Cyclomatic complexity per function is capped, per tree, so branching stays reviewable in one read."
+  docs: docs/quality-rules.md#complexity
+  python:
+    tool: ruff
+    rule: C901
+    file: templates/python-common/bin/check_complexity.sh
+    patterns:
+      - "[\"tests\"]=1"
+      - "[\"src\"]=2"
+      - "[\"bin\"]=8"
+    note: "Ceiling differs by tree (tests 1, src 2, bin 8); ruff per-file-ignores cannot vary max-complexity, so the ceiling lives in check_complexity.sh's per-tree invocation, not ruff.toml."
+  typescript:
+    tool: eslint
+    rule: complexity
+    file: templates/react-spa-webpack/eslint.config.js
+    patterns:
+      - "complexity: ['error', 3]"
+      - "complexity: ['error', 2]"
+    note: "Measured independently against this template's own source (src 3, tests 2) — not copied by symmetry from the Python ceiling, since ESLint's complexity counts &&/|| and mccabe does not (blueprintx#425)."
+
+- id: function-length
+  intent: "A function/method body is capped at 60 lines of code so one reader holds the whole thing in their head at once."
+  docs: docs/quality-rules.md#function-length
+  python:
+    tool: custom
+    rule: bin/check_function_length.py
+    file: templates/python-common/bin/check_function_length.py
+    pattern: "INT_MAX_LINES = 60"
+    note: "Docstring lines are subtracted before comparing against the ceiling — this house mandates NumPy docstrings, so a raw span measures documentation, not length."
+  typescript:
+    tool: eslint
+    rule: max-lines-per-function
+    file: templates/react-spa-webpack/eslint.config.js
+    patterns:
+      - "max: 60, skipBlankLines: false"
+      - "max: 100, skipBlankLines: false"
+    note: "60 for src/**/*.ts (logic, mirrors Python); a separate 100 ceiling applies to .tsx (markup) — settled as two blocks, never merged (blueprintx#439). skipComments is the nearest ESLint has to 'docstring excluded' but is not equivalent (it skips every comment, not just a leading doc block) — the gap is accepted, not compensated."
+
+- id: magic-numbers
+  intent: "A bare numeric/string literal standing in for a meaning (a status code, a threshold) is forbidden outside tests; name it instead."
+  docs: docs/quality-rules.md#magic-numbers
+  python:
+    tool: ruff
+    rule: PLR2004
+    file: templates/python-common/ruff.toml
+    pattern: "\"PL\","
+    note: "Ignored in tests/**/*.py per-file-ignores: a literal in a test IS the case under test, not a magic value to name."
+  typescript:
+    tool: eslint
+    rule: "@typescript-eslint/no-magic-numbers"
+    file: templates/react-spa-webpack/eslint.config.js
+    patterns:
+      - "@typescript-eslint/no-magic-numbers"
+      - "detectObjects: true"
+    note: "detectObjects: true is load-bearing — without it the Fastify/NestJS object-response shape ({ statusCode: 201 }) is silent (blueprintx#453)."
+
+- id: one-assert-per-test
+  intent: "A test asserts exactly one behaviour, so a red run says which one broke without inspection."
+  docs: docs/quality-rules.md#one-assert-per-test
+  python:
+    tool: custom
+    rule: bin/check_one_assert_per_test.py
+    status: not-implemented
+    note: "ruff's PT (flake8-pytest-style) does not cover assertion count; complexity-1 in tests/ catches a BRANCHING test but not a test with several sequential asserts on one straight-line path. Tracked in blueprintx#431."
+  typescript:
+    tool: eslint-plugin-jest
+    rule: jest/max-expects
+    status: not-implemented
+    note: "Plugin is already a devDependency for jest/no-export (blueprintx#442); the rule itself is not yet wired into eslint.config.js. Tracked in blueprintx#431."
+
+- id: default-arg-spacing
+  intent: "Space around a default-argument '=' only when the parameter carries a type annotation."
+  docs: docs/quality-rules.md#default-arg-spacing
+  python:
+    tool: ruff-format
+    rule: "(formatter)"
+    overridden_by: PEP-8
+    note: "PEP-8 requires 'x: int = 7' WITH spaces and 'x=7' WITHOUT — ruff-format already enforces exactly this, so no house rule applies on top of it."
+  typescript:
+    tool: prettier
+    rule: "(formatter)"
+    note: "TypeScript has no PEP-8-shaped distinction — a default parameter is always 'x: number = 7' with spaces, annotated or not — so prettier already enforces the only correct spacing, with no house rule to add on top."

@@ -102,6 +102,12 @@ happening silently:
    (`ruff.toml`, `eslint.config.js`) may carry the rule line plus a short pointer comment; the
    long justification belongs in the docs, not inline.
 
+**The rules themselves live in `quality-rules.yaml` at the repo root** (blueprintx#432) — one
+entry per rule, with its per-language `tool`/`rule` (or an explicit `status: not-implemented` /
+`overridden_by:`), validated by `templates/python-common/bin/check_quality_rules.py` so the
+table cannot silently drift from the config it describes. The *reason* behind each entry lives
+in [`docs/quality-rules.md`](docs/quality-rules.md); a new rule enters both, never just one.
+
 **Precedence order when a house rule and a language standard conflict:**
 
 1. The language's own community standard (PEP-8 / PEP-257 for Python, ECMAScript/TC39 for

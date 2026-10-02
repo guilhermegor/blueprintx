@@ -18,6 +18,7 @@ nav:
   - Troubleshooting: troubleshooting.md
   - Secret Scanning: secret-scanning.md
   - Contributing: contributing.md
+  - Quality Rules: quality-rules.md
   - Changelog: changelog.md
   - Versioning: versioning.md
   - Coverage Floor: coverage-floor.md
