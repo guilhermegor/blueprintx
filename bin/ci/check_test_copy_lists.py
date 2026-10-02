@@ -150,6 +150,7 @@ DICT_EXPECTED_ABSENT = {
     # is not shipped by this tier either, same as the four sibling service scaffolds.
     "python_api_service.sh": {
         "test_config_schemas_example.py": "schemas/ seam not yet wired (#267); no src/config/schemas/ module",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",

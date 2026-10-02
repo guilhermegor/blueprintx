@@ -46,6 +46,8 @@ def _build_project(
 	str_nav_yaml: str,
 	str_exclude_docs: str = "",
 	str_claude_index_body: str | None = None,
+	dict_extra_mkdocs: dict | None = None,
+	str_docs_dir: str = "docs",
 ) -> pathlib.Path:  # complexity-ok: fixture builder, branching is the work
 	"""Fabricate a minimal BlueprintX-shaped project (``docs/`` + ``mkdocs.yml``).
 
@@ -61,21 +63,27 @@ def _build_project(
 		The ``exclude_docs:`` block content, one entry per line (default: none).
 	str_claude_index_body : str or None
 		When given, written as ``docs/CLAUDE.md``. When ``None``, no such file is created.
+	dict_extra_mkdocs : dict or None
+		Extra top-level ``mkdocs.yml`` keys (``draft_docs``, ...), merged in as given.
+	str_docs_dir : str
+		The directory the pages are written under; also set as ``docs_dir`` when not ``docs``.
 
 	Returns
 	-------
 	pathlib.Path
 		The project root (``tmp_path`` itself).
 	"""
-	path_docs = tmp_path / "docs"
-	path_docs.mkdir()
+	path_docs = tmp_path / str_docs_dir
+	path_docs.mkdir(parents=True)
 	for str_rel, str_body in dict_pages.items():
 		path_page = path_docs / str_rel
 		path_page.parent.mkdir(parents=True, exist_ok=True)
 		path_page.write_text(str_body, encoding="utf-8")
 	if str_claude_index_body is not None:
 		(path_docs / "CLAUDE.md").write_text(str_claude_index_body, encoding="utf-8")
-	dict_mkdocs = {"nav": yaml.safe_load(str_nav_yaml)}
+	dict_mkdocs = {"nav": yaml.safe_load(str_nav_yaml), **(dict_extra_mkdocs or {})}
+	if str_docs_dir != "docs":
+		dict_mkdocs["docs_dir"] = str_docs_dir
 	if str_exclude_docs:
 		dict_mkdocs["exclude_docs"] = str_exclude_docs
 	(tmp_path / "mkdocs.yml").write_text(yaml.safe_dump(dict_mkdocs), encoding="utf-8")
@@ -138,6 +146,79 @@ def test_excluded_backlog_page_is_not_flagged(tmp_path: pathlib.Path) -> None:
 		"[{Home: index.md}]",
 		str_exclude_docs="backlog/\n",
 	)
+	assert cls_gate.main(["--root", str(path_root)]) == 0
+
+
+def test_basename_exclude_matches_at_any_depth(tmp_path: pathlib.Path) -> None:
+	"""``notes.md`` in ``exclude_docs:`` also drops ``section/notes.md``, as MkDocs does."""
+	path_root = _build_project(
+		tmp_path,
+		{"index.md": "# Home", "section/notes.md": "# WIP"},
+		"[{Home: index.md}]",
+		str_exclude_docs="notes.md\n",
+	)
+	assert cls_gate.main(["--root", str(path_root)]) == 0
+
+
+def test_anchored_exclude_does_not_match_nested_path(
+	tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+	"""``/*.md`` is anchored to the docs root, so it must not hide ``section/orphan.md``."""
+	path_root = _build_project(
+		tmp_path,
+		{"index.md": "# Home", "section/orphan.md": "# Orphan"},
+		"[{Home: index.md}]",
+		str_exclude_docs="/*.md\n",
+	)
+	int_exit = cls_gate.main(["--root", str(path_root)])
+	assert int_exit == 1
+	assert "section/orphan.md" in capsys.readouterr().err
+
+
+def test_implicit_mkdocs_excludes_are_not_published(tmp_path: pathlib.Path) -> None:
+	"""Dot-paths and ``templates/`` are excluded by MkDocs by default, with no config line."""
+	path_root = _build_project(
+		tmp_path,
+		{"index.md": "# Home", ".hidden/page.md": "# H", "templates/layout.md": "# T"},
+		"[{Home: index.md}]",
+	)
+	assert cls_gate.main(["--root", str(path_root)]) == 0
+
+
+def test_draft_docs_pages_are_not_published(tmp_path: pathlib.Path) -> None:
+	"""``draft_docs:`` pages are left out of a build, so they cannot be nav orphans."""
+	path_root = _build_project(
+		tmp_path,
+		{"index.md": "# Home", "drafts/wip.md": "# WIP"},
+		"[{Home: index.md}]",
+		dict_extra_mkdocs={"draft_docs": "drafts/\n"},
+	)
+	assert cls_gate.main(["--root", str(path_root)]) == 0
+
+
+def test_configured_docs_dir_is_scanned(
+	tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+	"""An orphan under a custom ``docs_dir`` is found, not skipped for want of ``docs/``."""
+	path_root = _build_project(
+		tmp_path,
+		{"index.md": "# Home", "orphan.md": "# Orphan"},
+		"[{Home: index.md}]",
+		str_docs_dir="site/pages",
+	)
+	int_exit = cls_gate.main(["--root", str(path_root)])
+	assert int_exit == 1
+	assert "site/pages/orphan.md" in capsys.readouterr().err
+
+
+def test_absolute_docs_dir_is_scanned(tmp_path: pathlib.Path) -> None:
+	"""MkDocs permits an absolute ``docs_dir``; a clean one passes, it is not rejected."""
+	path_root = _build_project(
+		tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]", str_docs_dir="pages"
+	)
+	dict_mkdocs = yaml.safe_load((path_root / "mkdocs.yml").read_text(encoding="utf-8"))
+	dict_mkdocs["docs_dir"] = str(path_root / "pages")
+	(path_root / "mkdocs.yml").write_text(yaml.safe_dump(dict_mkdocs), encoding="utf-8")
 	assert cls_gate.main(["--root", str(path_root)]) == 0
 
 
@@ -204,6 +285,32 @@ def test_prose_only_claude_md_skips_layer_two(tmp_path: pathlib.Path) -> None:
 		str_claude_index_body="# CLAUDE.md — docs/\n\nJust prose, no table here.\n",
 	)
 	assert cls_gate.main(["--root", str(path_root)]) == 0
+
+
+def test_file_index_heading_without_table_skips_layer_two(tmp_path: pathlib.Path) -> None:
+	"""A ``## 1. File index`` heading followed only by prose is not a table — Layer 2 stays off."""
+	path_root = _build_project(
+		tmp_path,
+		{"index.md": "# Home"},
+		"[{Home: index.md}]",
+		str_claude_index_body="# CLAUDE.md\n\n## 1. File index\n\nSee the pages themselves.\n",
+	)
+	assert cls_gate.main(["--root", str(path_root)]) == 0
+
+
+def test_file_index_table_with_no_rows_is_still_enforced(
+	tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+	"""A real table header with zero rows is a table, so every page is missing from it."""
+	path_root = _build_project(
+		tmp_path,
+		{"index.md": "# Home"},
+		"[{Home: index.md}]",
+		str_claude_index_body="## 1. File index\n\n| Path | Purpose |\n|------|---------|\n",
+	)
+	int_exit = cls_gate.main(["--root", str(path_root)])
+	assert int_exit == 1
+	assert "docs/index.md" in capsys.readouterr().err
 
 
 # --------------------------

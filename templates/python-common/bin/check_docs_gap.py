@@ -14,9 +14,10 @@ full measurement and the PR that shipped this gate).
 
 Two independent layers, both fail-closed:
 
-- **Layer 1 — orphan pages (always runs).** Every ``.md`` under ``docs/`` that is not
-  excluded by ``mkdocs.yml`` ``exclude_docs:`` (and is not ``docs/CLAUDE.md`` itself) must
-  be registered somewhere in ``nav:``. Runs identically here and in every generated
+- **Layer 1 — orphan pages (always runs).** Every ``.md`` under ``docs_dir`` (default
+  ``docs/``) that MkDocs would build — not dot-pathed, under ``templates/``, nor matched by
+  ``exclude_docs:`` / ``draft_docs:``, all via MkDocs' own gitignore engine — and is not
+  ``docs/CLAUDE.md`` itself must be registered somewhere in ``nav:``. Runs identically here and in every generated
   project — no repo-specific assumption, no fixed slug list.
 - **Layer 2 — CLAUDE.md file-index sync (optional, repo-owned).** When ``docs/CLAUDE.md``
   carries a ``## 1. File index`` table (this repo's own format — a generated project's
@@ -37,11 +38,11 @@ Every finding is a hard error (exit 1), printed to stderr. Fails when ``docs/`` 
 "nothing to check".
 """
 
-import fnmatch
 import pathlib
 import re
 import sys
 
+import pathspec
 import yaml
 
 
@@ -130,8 +131,8 @@ def nav_files(nav: object) -> set[str]:
 	return set_files
 
 
-def excluded_prefixes(dict_mkdocs: dict) -> tuple[str, ...]:
-	"""Return the ``exclude_docs:`` lines as a tuple of folder-prefixes/exact names.
+def unpublished_specs(dict_mkdocs: dict) -> tuple[pathspec.GitIgnoreSpec, ...]:
+	"""Build the specs MkDocs itself uses to decide a page is NOT in the built site.
 
 	Parameters
 	----------
@@ -140,63 +141,31 @@ def excluded_prefixes(dict_mkdocs: dict) -> tuple[str, ...]:
 
 	Returns
 	-------
-	tuple of str
-		Each non-blank line of ``exclude_docs:``, stripped.
+	tuple of pathspec.GitIgnoreSpec
+		The implicit rules (dot-paths, ``/templates/``), ``exclude_docs:`` and ``draft_docs:``.
+		Kept as separate specs, never concatenated: MkDocs evaluates each on its own, so a
+		``!`` re-include in one must not cancel a match in another.
 	"""
-	str_block = dict_mkdocs.get("exclude_docs") or ""
-	# ⚠️ MkDocs reads this block gitignore-style: `#` starts a comment and a `!` prefix
-	# NEGATES an earlier match, last rule winning. Every shipped template config here
-	# carries comment lines, and keeping them made each one a literal pattern that could
-	# never match — harmless by luck, since no page is named "# work-to-do backlogs".
-	return tuple(
-		str_line.strip()
-		for str_line in str_block.splitlines()
-		if str_line.strip() and not str_line.lstrip().startswith("#")
-	)
+	list_specs = [pathspec.GitIgnoreSpec.from_lines([".*", "/templates/"])]
+	for str_key in ("exclude_docs", "draft_docs"):
+		str_block = dict_mkdocs.get(str_key) or ""
+		# ⚠️ Same engine MkDocs 1.6 builds these with (`mkdocs/structure/files.py`): a
+		# hand-rolled matcher diverged on basename-at-any-depth, anchored `/x`, `**` and `!`.
+		list_specs.append(pathspec.GitIgnoreSpec.from_lines(str_block.splitlines()))
+	return tuple(list_specs)
 
 
-def is_excluded(str_rel: str, tuple_excluded: tuple[str, ...]) -> bool:
-	"""Return whether a docs-relative path is covered by ``exclude_docs:``.
-
-	Parameters
-	----------
-	str_rel : str
-		The page path relative to ``docs/`` (forward slashes).
-	tuple_excluded : tuple of str
-		The ``exclude_docs:`` entries (folder prefixes end with ``/``, else exact names).
-
-	Returns
-	-------
-	bool
-		``True`` when a folder-prefix or exact-name entry matches.
-	"""
-	# Gitignore-style, in MkDocs order: later rules win, and a leading `!` re-includes.
-	# `fnmatch` covers the glob forms (`*.tmp`, `draft-*.md`); a trailing `/` is a folder
-	# prefix; a leading `/` anchors to the docs root. Anything MkDocs itself excludes by
-	# default (dotfiles, `templates/`) is handled by the caller's own walk.
-	bool_excluded = False
-	for str_raw in tuple_excluded:
-		bool_negate = str_raw.startswith("!")
-		str_pattern = str_raw[1:] if bool_negate else str_raw
-		str_pattern = str_pattern.removeprefix("/")
-		if str_pattern.endswith("/"):
-			bool_hit = str_rel.startswith(str_pattern)
-		else:
-			bool_hit = str_rel == str_pattern or fnmatch.fnmatch(str_rel, str_pattern)
-		if bool_hit:
-			bool_excluded = not bool_negate
-	return bool_excluded
-
-
-def published_pages(path_docs: pathlib.Path, tuple_excluded: tuple[str, ...]) -> list[str]:
-	"""List every published (non-excluded, non-``CLAUDE.md``) page under ``docs/``.
+def published_pages(
+	path_docs: pathlib.Path, tuple_specs: tuple[pathspec.GitIgnoreSpec, ...]
+) -> list[str]:
+	"""List every published (not excluded/drafted, non-``CLAUDE.md``) page under the docs dir.
 
 	Parameters
 	----------
 	path_docs : pathlib.Path
-		The project's ``docs/`` directory.
-	tuple_excluded : tuple of str
-		The ``exclude_docs:`` entries.
+		The project's docs directory (``docs_dir``, default ``docs/``).
+	tuple_specs : tuple of pathspec.GitIgnoreSpec
+		From :func:`unpublished_specs`.
 
 	Returns
 	-------
@@ -206,13 +175,15 @@ def published_pages(path_docs: pathlib.Path, tuple_excluded: tuple[str, ...]) ->
 	list_pages = []
 	for path_md in sorted(path_docs.glob("**/*.md")):
 		str_rel = path_md.relative_to(path_docs).as_posix()
-		if str_rel == "CLAUDE.md" or is_excluded(str_rel, tuple_excluded):
+		if str_rel == "CLAUDE.md" or any(spec.match_file(str_rel) for spec in tuple_specs):
 			continue
 		list_pages.append(str_rel)
 	return list_pages
 
 
-def check_orphan_pages(list_pages: list[str], set_nav_files: set[str]) -> list[str]:
+def check_orphan_pages(
+	list_pages: list[str], set_nav_files: set[str], str_docs: str = "docs"
+) -> list[str]:
 	"""Return errors for published pages absent from ``mkdocs.yml`` ``nav:``.
 
 	Parameters
@@ -221,6 +192,8 @@ def check_orphan_pages(list_pages: list[str], set_nav_files: set[str]) -> list[s
 		Every published page, docs-relative.
 	set_nav_files : set of str
 		Every path registered in ``nav:``.
+	str_docs : str
+		The docs directory as written in ``mkdocs.yml`` ``docs_dir`` — for the message only.
 
 	Returns
 	-------
@@ -228,7 +201,7 @@ def check_orphan_pages(list_pages: list[str], set_nav_files: set[str]) -> list[s
 		One message per orphan page.
 	"""
 	return [
-		f"docs/{str_rel}: published page not registered in mkdocs.yml nav "
+		f"{str_docs}/{str_rel}: published page not registered in mkdocs.yml nav "
 		f"(MkDocs builds it anyway, so it silently vanishes from navigation)"
 		for str_rel in list_pages
 		if str_rel not in set_nav_files
@@ -246,31 +219,36 @@ def claude_index_table(path_claude_index: pathlib.Path) -> set[str] | None:
 	Returns
 	-------
 	set of str or None
-		The listed paths, or ``None`` when the file is absent or carries no such
-		heading — Layer 2 is then skipped, never silently passed.
+		The listed paths, or ``None`` when the file is absent or has no such heading
+		followed by a table — Layer 2 is then skipped, never silently passed.
 	"""
 	if not path_claude_index.is_file():
 		return None
 	bool_in_table = False
-	bool_found_heading = False
+	bool_found_table = False
 	set_paths: set[str] = set()
 	for str_line in path_claude_index.read_text(encoding="utf-8").splitlines():
 		str_stripped = str_line.strip()
 		if _INDEX_HEADING_RE.match(str_stripped):
-			bool_found_heading = True
 			bool_in_table = True
 			continue
 		if bool_in_table and str_stripped.startswith("#"):
 			break
 		if bool_in_table:
+			# A heading followed only by prose is NOT a table: enabling Layer 2 on it would
+			# report every published page as missing from an index that was never a table.
+			bool_found_table = bool_found_table or str_stripped.startswith("|")
 			cls_match = _INDEX_ROW_RE.match(str_stripped)
 			if cls_match:
 				set_paths.add(cls_match.group(1))
-	return set_paths if bool_found_heading else None
+	return set_paths if bool_found_table else None
 
 
 def check_claude_index(
-	set_indexed: set[str], list_pages: list[str], path_docs: pathlib.Path
+	set_indexed: set[str],
+	list_pages: list[str],
+	path_docs: pathlib.Path,
+	str_docs: str = "docs",
 ) -> list[str]:
 	"""Return errors where ``docs/CLAUDE.md``'s file index and disk reality disagree.
 
@@ -281,7 +259,9 @@ def check_claude_index(
 	list_pages : list of str
 		Every published page actually on disk.
 	path_docs : pathlib.Path
-		The project's ``docs/`` directory.
+		The project's docs directory.
+	str_docs : str
+		The docs directory as written in ``mkdocs.yml`` ``docs_dir`` — for messages only.
 
 	Returns
 	-------
@@ -289,12 +269,12 @@ def check_claude_index(
 		One message per stale or missing row.
 	"""
 	list_errors = [
-		f"docs/CLAUDE.md file index lists `{str_path}`, which does not exist on disk"
+		f"{str_docs}/CLAUDE.md file index lists `{str_path}`, which does not exist on disk"
 		for str_path in sorted(set_indexed)
 		if not (path_docs / str_path).is_file()
 	]
 	list_errors += [
-		f"docs/{str_rel}: published page missing from the docs/CLAUDE.md file index"
+		f"{str_docs}/{str_rel}: published page missing from the {str_docs}/CLAUDE.md file index"
 		for str_rel in list_pages
 		if str_rel not in set_indexed
 	]
@@ -306,7 +286,7 @@ _INT_FLAG_WITH_VALUE = 2
 
 
 def main(list_argv: list) -> int:
-	"""Run both layers over the project's ``docs/``; return 1 on any violation.
+	"""Run both layers over the project's docs directory; return 1 on any violation.
 
 	Parameters
 	----------
@@ -326,12 +306,14 @@ def main(list_argv: list) -> int:
 			return 1
 		PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
 
-	path_docs = PATH_ROOT / "docs"
-	path_mkdocs = PATH_ROOT / "mkdocs.yml"
+	dict_mkdocs = load_mkdocs(PATH_ROOT / "mkdocs.yml")
+	# MkDocs resolves a relative `docs_dir` against mkdocs.yml's folder; `/` on an absolute
+	# right-hand side keeps the absolute path, so both documented forms land correctly.
+	str_docs = str(dict_mkdocs.get("docs_dir") or "docs")
+	path_docs = PATH_ROOT / str_docs
 	if not path_docs.is_dir():
-		print("no docs/ directory found — discovery is broken, not clean", file=sys.stderr)
+		print(f"no {str_docs}/ directory found — discovery is broken, not clean", file=sys.stderr)
 		return 1
-	dict_mkdocs = load_mkdocs(path_mkdocs)
 	if not dict_mkdocs:
 		print(
 			"no mkdocs.yml found (or it is empty) — discovery is broken, not clean",
@@ -339,8 +321,7 @@ def main(list_argv: list) -> int:
 		)
 		return 1
 
-	tuple_excluded = excluded_prefixes(dict_mkdocs)
-	list_pages = published_pages(path_docs, tuple_excluded)
+	list_pages = published_pages(path_docs, unpublished_specs(dict_mkdocs))
 	if not list_pages:
 		# Same reason as the empty-mkdocs.yml branch above: a scan that found nothing to
 		# check has not passed, it has failed to run. Reporting 0 errors over 0 pages is
@@ -351,11 +332,11 @@ def main(list_argv: list) -> int:
 		)
 		return 1
 	set_nav_files = nav_files(dict_mkdocs.get("nav"))
-	list_errors = check_orphan_pages(list_pages, set_nav_files)
+	list_errors = check_orphan_pages(list_pages, set_nav_files, str_docs)
 
 	set_indexed = claude_index_table(path_docs / "CLAUDE.md")
 	if set_indexed is not None:
-		list_errors += check_claude_index(set_indexed, list_pages, path_docs)
+		list_errors += check_claude_index(set_indexed, list_pages, path_docs, str_docs)
 
 	for str_error in list_errors:
 		print(f"docs-gap: {str_error}", file=sys.stderr)
