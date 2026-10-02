@@ -49,8 +49,8 @@ own rule that a completed audit is a record, not scratch to delete.
    correct, but only at the commit-message level, not the PR-description
    level.
 5. Three matches were **additionally** spot-verified by diffing the local
-   file against the live `gh issue view` / `gh pr view` body (issue #583, PR
-   #589, PR #581) — line counts and full content matched exactly in all
+   file against the live `gh issue view` / `gh pr view` body (issue #583,
+   PR #589, PR #581) — line counts and full content matched exactly in all
    three. That exact-match tier does not extend to the other 34: it shows
    the topic-match method above is not producing false positives on the
    cases checked, not that every remaining file is a verbatim copy of its
