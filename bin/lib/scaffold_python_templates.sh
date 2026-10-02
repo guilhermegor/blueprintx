@@ -95,6 +95,9 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$str_project_path/poetry.toml"
 	cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$str_project_path/.gitlint"
 	cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$str_project_path/.coveragerc"
+	# SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
+	# file, language-agnostic, so it lives in templates/common not python-common.
+	cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$str_project_path/PRINCIPLES.md"
 	# Commitizen config, out of pyproject.toml since blueprintx#233. Losing this copy does
 	# NOT error — cz falls back to defaults and exits 0 — so scaffold_lint_test.sh asserts it.
 	cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$str_project_path/.cz.toml"
@@ -219,6 +222,9 @@ scaffold_copy_executables_and_vscode() {
 	# `python bin/check_review_threads.py` needs no change.
 	cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" \
 		"$str_project_path/bin/check_review_threads.py"
+	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+	# commit, never templated principles. See .specs/spec.md for the id conventions.
+	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
 
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"
@@ -246,5 +252,10 @@ scaffold_copy_common_templates() {
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	# Every skeleton's root CLAUDE.md points readers at `.claude/CLAUDE.md` for the
+	# conventions shared across all skeletons (blueprintx#549) — copy the single
+	# source so that pointer resolves instead of dangling.
+	mkdir -p "$str_project_path/.claude"
+	cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$str_project_path/.claude/CLAUDE.md"
 	print_status "success" "Common templates applied"
 }
