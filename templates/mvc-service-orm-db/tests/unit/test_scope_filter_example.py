@@ -125,5 +125,8 @@ def test_inactive_filter_reports_itself_as_inactive(
 def test_inactive_filter_returns_the_frame_untouched(
 	tuple_inactive_run: tuple[pd.DataFrame, ScopeFilterPrice],
 ) -> None:
-	"""Kill switch off: every input row is still in the returned frame."""
-	assert len(tuple_inactive_run[0]) == 2
+	"""Kill switch off: the returned frame holds every input row, values unchanged."""
+	assert tuple_inactive_run[0].to_dict("list") == {
+		"fund_class": ["FII", "Ações"],
+		"id": [1, 2],
+	}
