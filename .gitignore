@@ -201,10 +201,15 @@ pyrightconfig.json
 !.claude/
 !.claude/release.conf
 
-# BlueprintX internal lessons mirror — kept git-ignored, never ships
-# (see the scaffolding-lessons convention in CLAUDE.md / global memory)
+# Generated lessons mirrors — git-ignored, never hand-edited, never shipped
+# (see the scaffolding-lessons convention in CLAUDE.md / global memory).
+# The generator writes the whole directory, so ignore the directory rather than
+# naming each file: a new backport store would otherwise arrive untracked and
+# unnoticed. .specs/ itself stays tracked — it holds real design docs.
+.specs/_lessons/
+# Previous location, before the generator moved to .specs/_lessons/. Kept so an
+# old checkout that still carries these does not surface them as untracked.
 docs/blueprintx-lessons.md
-# Same convention, dotfiles-dev toolchain half (fixes land in ai_clients/claude/)
 docs/dotfiles-dev-lessons.md
 
 # Cache written by templates/python-common/bin/test_urls_docstrings.sh when run from here.
