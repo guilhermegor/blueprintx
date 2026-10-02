@@ -360,7 +360,7 @@ def test_a_unittest_call_rewritten_as_a_weaker_bare_assert_is_reported() -> None
 	so a same-kind comparison never sees it. The call is normalised to the operator it is
 	equivalent to before the pair is compared.
 	"""
-	assert "in" in _sole_finding(
+	assert "bare assert with in" in _sole_finding(
 		'class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), "send")\n',
 		'class T:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n',
 	)
