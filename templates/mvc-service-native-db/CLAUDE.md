@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Engineering principles
+
+See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+
 ## What this template is
 
 A **layered MVC service skeleton** (Model–View–Controller) using **native database drivers** (sqlite3, psycopg, mysql-connector-python, pyodbc, oracledb). It is scaffolded by BlueprintX into a new project directory — the files here are the authoritative template source, not a running project.

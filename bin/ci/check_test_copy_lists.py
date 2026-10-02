@@ -138,6 +138,12 @@ DICT_EXPECTED_ABSENT = {
         # open PR when this test landed. Wiring the cp line is a follow-up — see #308's PR body.
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
     },
+    # fastapi pulls pydantic in transitively, but that is not the same claim as #267's "declare
+    # it as a direct dependency" — and the module the test imports (src/config/schemas/, #267)
+    # is not shipped by this tier either, same as the four sibling service scaffolds.
+    "python_api_service.sh": {
+        "test_config_schemas_example.py": "schemas/ seam not yet wired (#267); no src/config/schemas/ module",
+    },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
