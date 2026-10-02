@@ -21,7 +21,7 @@ Most of this directory is *tooling* (ruff, pytest, poe_tasks.toml, bin scripts).
 | `ruff.toml` | Ruff lint + format config (line-length 99, tab indent, double quotes, NumPy docstrings, full rule set) |
 | `.pre-commit-config.yaml` | Hooks: ruff, pydocstyle (DAR), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge |
 | `pytest.ini` | Pytest configuration shared by all generated projects. A standalone per-tool file (like `ruff.toml` / `mypy.ini`), **not** a `[tool.pytest.ini_options]` block. `pythonpath = . src` — both, so the app's bare imports (`config.x`, `utils.x`) resolve exactly as they do at runtime. ⚠️ **Never `-p no:warnings`**: that disables the warnings plugin outright, hiding everything including whatever appears next. This file does the opposite — it decides per warning, and even promotes one to a FAILURE (`error:Missing docstring for parameter.*`). By the same rule an ignore names its SOURCE, never a bare class: a blanket `ignore::DeprecationWarning` hides the deprecations aimed at this code, and a template that hides them ships that blindness into every generated project — precisely when a pandas or SQLAlchemy deprecation is what you most want to read. Measured when the four blanket lines were removed: 4 warnings, all from one vendor, so they were hiding almost nothing and costing the signal entirely |
-| `poe_tasks.toml` | **The command interface** (Poe the Poet), replacing the old `Makefile` + `tasks.sh` pair — two hand-maintained implementations of one command list, kept in sync by a written rule that had already been broken (blueprintx#189). Tasks: `init` (`ensure_env` → `venv` → `precommit` → the three GitHub enablers), testing, linting, database, `run`, `export_*`, `ship`, docs. ⚠️ **Tasks run inside the project venv automatically** — poe detects the in-project `.venv` (forced by `poetry.toml`), so a task is a BARE command (`pytest tests/unit/`), never `poetry run pytest`. `bin/poetry_exec.sh` survives only for Poetry MANAGEMENT commands (`update`, `install --with docs`, `version`), which act on the venv instead of running inside it. ⚠️ **No help file**: bare `poe` prints the list from each task's `help =` field, so help and recipe cannot drift. ⚠️ **No `test_feat` task** — poe passes extra CLI tokens through to any task with no declared `args`, so `poe unit_tests -k kw` is the filter for free. Conditional sets (`poe_tasks.offline.toml`, `poe_tasks.library.toml`) are wired by the scaffold via `add_poe_include`, never declared unconditionally: unlike make's silent `-include`, a missing poe include WARNS on every invocation |
+| `poe_tasks.toml` | **The command interface** (Poe the Poet), replacing the old `Makefile` + `tasks.sh` pair — two hand-maintained implementations of one command list, kept in sync by a written rule that had already been broken (blueprintx#189). Tasks: `init` (`ensure_env` → `venv` → `precommit` → the three GitHub enablers), testing, linting, database, migrations (`migrate_new`/`migrate_up`/`migrate_down`/`migrate_current`/`migrate_history`/`migrate_sql`, blueprintx#381), `run`, `export_*`, `ship`, docs. ⚠️ **Tasks run inside the project venv automatically** — poe detects the in-project `.venv` (forced by `poetry.toml`), so a task is a BARE command (`pytest tests/unit/`), never `poetry run pytest`. `bin/poetry_exec.sh` survives only for Poetry MANAGEMENT commands (`update`, `install --with docs`, `version`), which act on the venv instead of running inside it. ⚠️ **No help file**: bare `poe` prints the list from each task's `help =` field, so help and recipe cannot drift. ⚠️ **No `test_feat` task** — poe passes extra CLI tokens through to any task with no declared `args`, so `poe unit_tests -k kw` is the filter for free. Conditional sets (`poe_tasks.offline.toml`, `poe_tasks.library.toml`) are wired by the scaffold via `add_poe_include`, never declared unconditionally: unlike make's silent `-include`, a missing poe include WARNS on every invocation |
 `pyproject.toml` in blueprintx#233): OFFLINE keeps `bump_version` (`cz bump`); ONLINE the scaffold **strips** `bump_version` (`strip_bump_version` in `bin/lib/common.sh`) — releases are cut by the `release.yaml` workflow (services: tag + GitHub Release, no PyPI) or `release-pypi.yaml` (lib). The docs build regenerates `CHANGELOG.md` via `cz changelog`, so the published Changelog page tracks the tags |
 | `.gitlint` | gitlint length limits (title ≤ 72, body line ≤ 80) — made explicit so they are not discovered only on a late hook rejection |
 | `.vscode/settings.json` | Shipped VS Code settings: POSIX interpreter default (Windows path commented), `src` analysis path, pytest, tab-4 Python, INI `files.associations` for `.gitlint`/`.codespellrc`/`.pydocstyle`, poetry env manager. **Static fast-feedback loop:** `python.analysis.typeCheckingMode: strict` (Pylance/pyright flags wrong-typed annotations as-you-type) + Ruff format/autofix/organise-imports on save, scoped to `[python]`. No config is duplicated — `ruff.toml` + `mypy.ini` stay authoritative. Complements the runtime checker (which fires only when code runs) |
@@ -113,6 +113,47 @@ Most of this directory is *tooling* (ruff, pytest, poe_tasks.toml, bin scripts).
 | `bin/test_urls_docstrings.sh` | Pre-commit hook: validate URLs in docstrings (1-week cache) |
 | `assets/logo_lorem_ipsum.png` | Placeholder logo copied into new projects |
 | `CONTRIBUTING.md` | Contribution guide template |
+
+## DatabaseHandler contract — `update()` is atomic, by row locking
+
+`DatabaseHandler.update()` promises that the read of the current record and the write of the
+merged record happen inside **one transaction, with the row held under a pessimistic lock**.
+Two callers updating *different* fields of the same record both survive; a caller never has to
+retry and never sees a conflict error. Last-writer-wins applies **per field**, never per record.
+
+The original implementation in all six SQL handlers did the opposite — `self.read()` on one
+connection, `self.create()` (an upsert) on another — so the later writer overwrote the earlier
+writer's field with the pre-state it had read. Nothing errored; the update was simply gone
+(blueprintx#561, surfaced by review on PR #532 against two of the six copies).
+
+**Row locking was chosen over an optimistic version column, and the same choice is applied to
+all six handlers.** The two are not equivalent and the decision is recorded here so the next
+backend inherits it rather than re-deciding:
+
+- An optimistic version column needs a **schema change** (`version` beside `data`) in a table
+  that generated projects may already have deployed, and it moves the failure into the
+  caller's lap as a documented retry contract. Every `update()` call site in every capability
+  would have to grow a retry loop, and the ABC's `Record | None` return would need a third
+  outcome for "conflict, try again". That is a contract change paid by every caller to solve a
+  problem the database can solve itself.
+- Row locking keeps the signature, the schema and the caller contract exactly as they were.
+  Its known ceiling is real and accepted: writers serialise on the row, and a caller that locks
+  two records in opposite orders can deadlock. These handlers lock exactly one row per
+  `update()` call, so no lock-ordering cycle is reachable from this seam.
+
+Per-dialect form, because the atomic construct genuinely differs:
+
+| backend | lock taken inside the transaction |
+|---|---|
+| PostgreSQL / MySQL / MariaDB / Oracle | `SELECT … FOR UPDATE` |
+| SQL Server | `SELECT … WITH (UPDLOCK, ROWLOCK)` |
+| SQLite | `BEGIN IMMEDIATE` before the `SELECT` |
+
+⚠️ **SQLite needs `BEGIN IMMEDIATE`, not the driver's implicit transaction.** `sqlite3` opens a
+DEFERRED transaction, which takes only a read lock at the `SELECT` and tries to upgrade at the
+`UPDATE` — an upgrade a second writer already holding RESERVED refuses with `SQLITE_BUSY`, and
+which the busy-timeout cannot wait out because waiting cannot resolve a deadlock. `BEGIN
+IMMEDIATE` takes the write lock up front, so the second writer queues instead of failing.
 
 ## What can leave `pyproject.toml` — and what cannot
 
