@@ -21,6 +21,7 @@ nav:
   - Changelog: changelog.md
   - Versioning: versioning.md
   - Coverage Floor: coverage-floor.md
+  - SonarQube Evaluation: sonarqube-evaluation.md
   - Python:
       - DDD Service (Native DB):
           - Overview: py-ddd-service-native-db.md
