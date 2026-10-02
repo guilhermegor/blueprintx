@@ -40,6 +40,18 @@ Parity" for the full rule, worked examples, and the dated Python-vs-TypeScript g
 tooling), and `templates/common/` (language-agnostic assets) are the single sources of truth —
 change them there and every skeleton inherits the change on the next scaffold run.
 
+The per-project Claude Code guidance follows the same rule. `templates/common/CLAUDE.md` is the
+one home for what every skeleton shares (the boundary rules, data-handling guardrails, naming
+and file-naming conventions, tooling summary, runtime type-checking notes, project-memory
+rule); it ships to a generated project as `.claude/CLAUDE.md`, and each skeleton's root
+`CLAUDE.md` keeps only what is specific to that tier plus a pointer. Measured before the split
+(blueprintx#549, shared non-blank lines over the smaller file): `mvc-service-native-db` vs
+`mvc-service-orm-db` 89%, `ddd-service-native-db` vs `ddd-service-orm-db` 85%, any DDD tier vs
+any MVC tier 60–66%. After it: 65%, 62% and 20–28% — what remains is the architecture each
+pair genuinely shares (layer tables, key abstractions), which the issue classifies as
+per-skeleton. Edit a shared convention in `templates/common/CLAUDE.md`, never in one skeleton's
+root file, where the change would reach one tier and silently miss the rest.
+
 ## Pull requests
 
 Branch off `main` using the CONTRIBUTING prefix policy (`feat/…`, `fix/…`, …), keep `make lint`
