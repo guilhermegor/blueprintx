@@ -217,12 +217,14 @@ _RE_WORKFLOW_CP = re.compile(
     re.M,
 )
 
-# Any `cp` whose SOURCE operand is under python-common — the same source-operand anchoring as
-# the workflow form. A doc is reachable either by its own cp line or by a wholesale directory
-# copy (`cp -r "$COMMON_TEMPLATE_ROOT/bin/." …`), which is how bin/CLAUDE.md ships.
+# Any `cp` whose SOURCE operand is under python-common, plus its DESTINATION operand. A doc is
+# reachable either by its own cp line or by a wholesale directory copy (`cp -r
+# "$COMMON_TEMPLATE_ROOT/bin/." …`), which is how bin/CLAUDE.md ships — but only when the
+# destination stays inside the generated project and keeps the source's name (blueprintx#569).
 _RE_SHARED_SOURCE_CP = re.compile(
     r"^[^\S\n]*(?!#)\S*\bcp\b(?:\s+-{1,2}[A-Za-z-]+)*\s+"
-    r"[\"']?\$(?:\{)?COMMON_TEMPLATE_ROOT(?:\})?/([A-Za-z0-9_./-]+)",
+    r"[\"']?\$(?:\{)?COMMON_TEMPLATE_ROOT(?:\})?/([A-Za-z0-9_./-]+)[\"']?"
+    r"(?:\s|\\\n)+[\"']?([^\s\"']+)",
     re.M,
 )
 
@@ -285,6 +287,32 @@ def shared_doc_names() -> set:
     } - _DOCS_NEVER_SHIPPED
 
 
+def dest_stays_in_project(str_operand: str, str_dest: str) -> bool:
+    """Return whether a ``cp`` destination lands inside the project under the source's name.
+
+    Parameters
+    ----------
+    str_operand : str
+        The source operand relative to python-common, e.g. ``src/config/CLAUDE.md`` or ``bin/.``.
+    str_dest : str
+        The raw destination operand, e.g. ``$project_path/src/config/CLAUDE.md``.
+
+    Returns
+    -------
+    bool
+        True when the destination is rooted at a shell variable, has no ``..`` segment, and ends
+        with the source's last segment (a file also needs its parent directory to match).
+    """
+    list_src = [str_seg for str_seg in str_operand.split("/") if str_seg not in ("", ".")]
+    list_dst = [str_seg for str_seg in str_dest.split("/") if str_seg not in ("", ".")]
+    int_tail = 2 if not str_operand.endswith("/.") else 1
+    return (
+        str_dest.startswith("$")
+        and ".." not in list_dst
+        and list_dst[-int_tail:] == list_src[-int_tail:]
+    )
+
+
 def reachable_docs(str_source: str, set_shared: set) -> set:
     """Return the shared leaf docs one scaffold script copies, by file or by directory.
 
@@ -301,7 +329,9 @@ def reachable_docs(str_source: str, set_shared: set) -> set:
         Doc paths delivered by an active ``cp`` from python-common, directly or wholesale.
     """
     set_reachable = set()
-    for str_operand in _RE_SHARED_SOURCE_CP.findall(str_source):
+    for str_operand, str_dest in _RE_SHARED_SOURCE_CP.findall(str_source):
+        if not dest_stays_in_project(str_operand, str_dest):
+            continue
         if str_operand in set_shared:
             set_reachable.add(str_operand)
         elif str_operand.endswith("/."):
