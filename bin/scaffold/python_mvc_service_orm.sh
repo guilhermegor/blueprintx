@@ -168,6 +168,10 @@ copy_templates() {
     # per-tier, not shared: model/ may declare sqlalchemy in the ORM tier and nothing in the
     # native one, so it cannot live in python-common.
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
+    # Alembic config + migrations/ (env.py, script.py.mako, versions/) behind the migrate_* poe tasks.
+    cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/alembic.ini" "$project_path/alembic.ini"
+    mkdir -p "$project_path/migrations/versions"
+    cp -r "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/migrations/." "$project_path/migrations"
 
     print_status "success" "Templates copied and configured"
 }
