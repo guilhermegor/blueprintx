@@ -78,6 +78,14 @@ docstring-code-format = false
 docstring-code-line-length = 79  # original python standard - readability in terminal (help)
 
 [lint]
+# ⚠️ Preview is needed ONLY for PLR1702 (too-many-nested-blocks, below) — it is still a
+# preview-only rule in ruff 0.11.13. Turning preview on ALSO activates 10 tag-along preview
+# rules under families already selected (`PL`, `S`), unrelated to nesting and never
+# individually chosen — they are explicitly ignored below with the measurement that found
+# them (blueprintx#434). Full reasoning for WHY nesting is gated at all lives in
+# check_complexity.sh's header, alongside the mccabe ceiling it is paired with.
+preview = true
+
 select = [
     "UP",  # pyupgrade - flags the use of deprecated Python features
     "E",   # pycodestyle - checks for PEP 8 compliance
@@ -133,6 +141,15 @@ select = [
     # whole — see CONTRIBUTING.md "Ruff Rule Adoption Log" for the per-rule verdicts
     # (blueprintx#422, closes #422).
     "N",
+    # PLR1702 - too-many-nested-blocks. Paired with `max-complexity = 3` for `src/` ONLY —
+    # the two are valid ONLY together (ceiling 3 alone would admit the nested `if`/`for`
+    # ceiling 2 exists to forbid; PLR1702 alone would not solve the guard+try/except case
+    # that prompted this). Ceilings live per-tree in check_complexity.sh, same mechanism as
+    # `max-complexity` — `per-file-ignores` can switch a rule off but cannot give it a
+    # different threshold. Already implied by `PL` above once `preview = true` is set; named
+    # explicitly so the dependency is not silent. Full reasoning: check_complexity.sh header,
+    # blueprintx#434.
+    "PLR1702",
 ]
 ignore = [
     "D206",  # docstring should be indented with spaces, not tabs
@@ -159,6 +176,24 @@ ignore = [
     # a comprehension, `any(...)`, a ternary, dict dispatch) for real concision —
     # the formatter keeps those on one line. General rule: before suppressing a lint
     # rule to enable a style, check whether the FORMATTER already forbids it.
+
+    # ⚠️ The 10 rules below are PREVIEW-ONLY TAG-ALONGS, switched on incidentally by
+    # `preview = true` above (needed only for PLR1702) — none of these was individually
+    # evaluated or adopted. Measured 2026-09 (ruff 0.11.13) on `templates/`: `--preview` alone
+    # raised findings from 21 to 81; ignoring exactly these 10 restores 21 — same rules, zero
+    # net cost (blueprintx#434). 🔴 REVISIT EACH ONE, ON ITS OWN MEASUREMENT, the day PLR1702
+    # leaves preview — this list must not survive unexamined once the reason for its existence
+    # (borrowing preview mode) is gone.
+    "PLR6301",  # no-self-use — 15 findings, unmeasured on its own merits
+    "PLC1901",  # compare-to-empty-string — 14 findings, unmeasured
+    "S404",     # suspicious-subprocess-import — 8 findings, unmeasured
+    "PLC0415",  # import-outside-top-level — 8 findings, unmeasured
+    "PLC2701",  # import-private-name — 5 findings, unmeasured
+    "PLR6201",  # literal-membership — 4 findings, unmeasured
+    "PLC0207",  # missing-maxsplit-arg — 3 findings, unmeasured
+    "PLR0917",  # too-many-positional-arguments — 1 finding, unmeasured
+    "PLR0916",  # too-many-boolean-expressions — 1 finding, unmeasured
+    "PLR0914",  # too-many-locals — 1 finding, unmeasured
 ]
 fixable = ["I"]
 # allow dummy variables to start with an underscore and be followed by alphanumeric
