@@ -87,6 +87,36 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
    - Maintain test fixtures for complex scenarios
    - Recommended to use UNIT_TEST_TEMPLATE.md for AI generation of unit tests, in order to implement test-driven development best practices and follow project standards
 
+## Repository Secrets (Actions)
+
+This repo's own Actions secrets (`gh secret list`) are set by hand and reproducible from
+`.env.example`, not from memory — the pattern `dotfiles-dev` uses for its own credentials.
+`.env.example` (tracked) documents every secret's consumer and minimum scope; `.env`
+(git-ignored, `*.env` in `.gitignore`) holds the real values. **`.env` does NOT feed CI** —
+GitHub Actions cannot read it — it is only the source you `gh secret set` from.
+
+| Secret | Consumer(s) | Minimum scope |
+|---|---|---|
+| `GH_PAT_REVIEW_TRIGGER` | `coderabbit_trigger.yml`, `review_retry.yml`, `verify_branch_protection.yml` | Fine-grained PAT, this repo only, `Pull requests: Read and write` (not `Issues: write`) |
+| `GITGUARDIAN_API_KEY` | `scaffold_checks.yml` (`secret-scan` job) | GitGuardian API key, no elevated scope |
+| `APT_GPG_KEY_ID` | `release_apt.yml`, `release.yml` | GPG key ID of `APT_GPG_PRIVATE_KEY` |
+| `APT_GPG_PASSPHRASE` | `release_apt.yml`, `release.yml` | Passphrase for `APT_GPG_PRIVATE_KEY` |
+| `APT_GPG_PRIVATE_KEY` | `release_apt.yml`, `release.yml` | Armored GPG private key that signs the APT repo |
+
+**Re-provisioning a lost/rotated value:**
+1. Mint the new credential (PAT at github.com/settings/tokens, API key at the vendor, or
+   `gpg --export-secret-keys --armor <key-id>` for the GPG key) with the scope from the
+   table above — never broader.
+2. `cp .env.example .env` if you don't have one yet, then fill in the real value.
+3. `gh secret set <NAME> --repo guilhermegor/blueprintx --body "$<NAME>"`.
+4. Verify: `gh secret list --repo guilhermegor/blueprintx` shows an updated timestamp for
+   `<NAME>`, and the workflow that consumes it succeeds on its next run.
+
+⚠️ `gh secret list` currently also shows `GH_REVIEW_TRIGGER_PAT` — not referenced by any
+workflow in this repo (grepped, no match). It is left out of `.env.example` deliberately:
+documenting an unused secret as if it were required would defeat the reproducibility this
+section exists for. Candidate for `gh secret delete` in a follow-up; out of scope here.
+
 ## Cross-Language Quality Parity
 
 BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality
