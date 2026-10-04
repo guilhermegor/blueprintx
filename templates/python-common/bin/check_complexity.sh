@@ -27,6 +27,8 @@
 # OFF for a path; it cannot give a path a different `max-complexity`. So the per-tree ceiling
 # has to come from separate runs, one per threshold.
 #
+# Per-construct measurements behind 1/2/8: see blueprintx#425.
+#
 # Escape hatch: put `# complexity-ok: <reason>` on the `def` line (ruff anchors C901 there,
 # not on a decorator). The reason is REQUIRED — a bare marker is rejected, because the point
 # of the hatch is the sentence explaining why the branching is the work.
