@@ -123,8 +123,11 @@ repos:
         # Same ONE-implementation treatment as function-length: the shared gate in
         # python-common, run over THIS repo via --root. always_run because removing or
         # renaming a page is exactly the change a files: filter would never see.
-        entry: python3 templates/python-common/bin/check_docs_gap.py --root .
-        language: system
+        # pathspec (mkdocs' exclude_docs matcher) and yaml are not stdlib: an isolated hook
+        # env carries them, so a contributor without them installed does not crash the commit.
+        entry: python templates/python-common/bin/check_docs_gap.py --root .
+        language: python
+        additional_dependencies: [pathspec, pyyaml]
         pass_filenames: false
         always_run: true
 

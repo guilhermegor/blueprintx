@@ -86,8 +86,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # Stdlib-only, same shape as function-length below: ONE implementation run over this
-      # repo via --root (blueprintx#340).
+      # Same shape as function-length below (ONE implementation, run over this repo via
+      # --root, blueprintx#340), except the gate imports pathspec to honour mkdocs'
+      # exclude_docs exactly as mkdocs does, so it must be installed first.
+      - name: Install pathspec and pyyaml
+        run: python3 -m pip install pathspec pyyaml
+
       - name: Check every published docs page reaches mkdocs nav and the docs/CLAUDE.md index
         run: python3 templates/python-common/bin/check_docs_gap.py --root .
 
