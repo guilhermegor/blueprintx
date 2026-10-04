@@ -415,7 +415,7 @@ _DICT_PAGE_TWO = {
 }
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module")  # fixture-scope-ok: immutable fetch result, read-only in 5 tests
 def tuple_paged_fetch() -> tuple[ModuleType, dict, Mock]:
 	"""Fetch a two-page pull request ONCE and share the gate, the result and the call record.
 
