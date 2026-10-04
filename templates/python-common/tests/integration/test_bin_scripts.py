@@ -2345,6 +2345,10 @@ def test_run_forwards_an_argument_to_the_entrypoint(tmp_path: Path) -> None:
 	silently dropped two hops later, so the default pipeline ran instead of failing or
 	selecting anything. The stub venv python echoes its own argv, so the forwarded token is
 	directly observable.
+
+	Only the executable-venv branch is exercised: the Poetry and bare ``$PYTHON`` branches of
+	``run_entrypoint`` are reachable only after a bootstrap that leaves no venv python, and
+	both bootstrap paths return non-zero in that state, so ``main`` never gets there.
 	"""
 	path_script = _materialise_run_sh(tmp_path)
 
