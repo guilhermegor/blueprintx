@@ -190,8 +190,8 @@ TUPLE_SKIP_DIRS = (
 	"dist",
 	"build",
 	"site",
-	# The published documentation is written in the project's locale ON PURPOSE — that is the
-	# other half of the boundary this gate enforces, so it must never be scanned.
+	# The published documentation is written in the generated project's locale ON PURPOSE —
+	# that is the other half of the boundary this gate enforces, so it must never be scanned.
 	"docs",
 	# Verbatim external bytes; normalising or judging a captured oracle corrupts its purpose.
 	"fixtures",

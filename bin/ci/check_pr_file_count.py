@@ -1,0 +1,196 @@
+"""Fail a PR whose cumulative branch diff exceeds CodeRabbit's file-review cap.
+
+CodeRabbit hard-refuses to review above 100 changed files ("Review skipped: N files
+exceed the limit of 100"), and a PR in that state can never merge. The review-thread
+gate (``templates/common/bin/check_review_threads.py``, blueprintx#433) reports that
+refusal clearly once it happens — nothing until now PREVENTED it. Live proof:
+blueprintx#424, open 13+ days at 241 files, selected twice in one hour by the
+reviewer-slot step because it wins on contention and age (dotfiles-dev#420).
+
+Calibrated over the 100 most recent PRs (blueprintx#551): exactly ONE violation
+(#424, 241 files). The largest LEGITIMATE PR in that same set is #532 at 59 files —
+an entire new skeleton tier. MAX_CHANGED_FILES = 90 therefore sits 10 below
+CodeRabbit's vendor cap of 100 and 31 files above the biggest real change this repo
+produces: headroom on both sides, not a number chosen to match today's diff.
+
+Three design points, decided rather than assumed:
+
+* **Fail, not warn.** A gate that cannot fail teaches people to ignore it
+  (dotfiles-dev#250), and at a 1%-of-100 violation rate the cost of failing is near
+  zero. The message below names the remedy (split at a natural seam) rather than
+  only the count.
+* **No escape hatch.** Every other hatch in this family (``# complexity-ok:
+  <reason>``, ``lang:pt-ok``) exists because a real, hard-to-avoid case was found.
+  None has surfaced here, and #424's own honest seam turned out to be
+  whitespace-only vs content-changed, not an indivisible change — with 31 files of
+  headroom before the vendor cap, the split is always available. Add a hatch only
+  when a genuine indivisible case is found, per this repo's own one-implementation
+  rule: build for a measured need, not a hypothetical one.
+* **Reuses ``check_backlog_ledger.py``'s shape** (``templates/python-common/bin/``):
+  diff the INDEX (``git diff --cached <merge-base>``) rather than the working tree
+  or a single commit, so pre-commit sees staged content and CI (clean tree) reduces
+  to the branch's cumulative diff. No-op on the default branch only — see
+  ``is_on_default_branch`` for why "the merge-base equals HEAD" is a different, and
+  wrong, question. CI needs ``fetch-depth: 0`` — a shallow clone has no merge-base
+  to resolve. One deliberate deviation: the merge-base is resolved
+  against ``origin/<branch>``, not a bare local branch name — see
+  ``default_branch_ref``'s own docstring for the measured failure this avoids.
+"""
+
+import subprocess
+import sys
+
+
+# CodeRabbit's own hard limit is 100 ("Review skipped: N files exceed the limit of
+# 100"). This tracks THAT vendor limit, kept 10 below it — a PR that trips the vendor
+# cap exactly is already too late to react to, the review has already failed. Named
+# here rather than inlined in the message below, so a future vendor-limit change is
+# one edit, not a grep-and-replace across every place the number appears.
+MAX_CHANGED_FILES = 90
+
+
+def _git(list_args: list) -> str:
+    """Run a read-only git command and return stdout (empty string on failure).
+
+    Parameters
+    ----------
+    list_args : list of str
+        Arguments after ``git``.
+
+    Returns
+    -------
+    str
+        Captured stdout, stripped.
+    """
+    try:
+        # Constant, trusted argv built in-process; no shell involved. S607 (partial
+        # path) is resolution BY DESIGN — the hook must use the `git` the developer's
+        # PATH selects, the one their shell, hooks and CI all use, not a hardcoded
+        # path. Same precedent as check_backlog_ledger.py's identical helper.
+        cls_proc = subprocess.run(  # noqa: S603
+            ["git", *list_args],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return ""
+    return cls_proc.stdout.strip()
+
+
+def default_branch_ref() -> str:
+    """Return a ref that resolves to the CURRENT default branch tip.
+
+    ⚠️ Prefers ``origin/<branch>`` over a bare local branch name on purpose. A local
+    ``main`` in a long-lived worktree checkout can sit dozens of commits behind
+    ``origin/main`` without anyone noticing (measured on this very branch during
+    blueprintx#551's own development: local ``main`` was 45 commits stale, which
+    turned this gate's own merge-base into a stranger commit and inflated a 3-file
+    change to a 213-file "violation"). ``origin/<branch>`` is kept current by every
+    ``git fetch`` a checkout or CI run already does, where a local branch is not.
+
+    Returns
+    -------
+    str
+        ``origin/<branch>`` when that ref resolves, else the bare local branch name
+        (offline fixture repos with no ``origin`` remote configured).
+    """
+    str_branch = "main"
+    str_symbolic = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
+    if str_symbolic:
+        str_branch = str_symbolic.rsplit("/", 1)[-1]
+    elif not _git(["rev-parse", "--verify", "--quiet", "main"]) and _git(
+        ["rev-parse", "--verify", "--quiet", "master"]
+    ):
+        str_branch = "master"
+
+    str_remote_ref = f"origin/{str_branch}"
+    if _git(["rev-parse", "--verify", "--quiet", str_remote_ref]):
+        return str_remote_ref
+    return str_branch
+
+
+def is_on_default_branch(str_default_ref: str) -> bool:
+    """Report whether the current checkout IS the default branch.
+
+    ⚠️ ``merge-base(HEAD, <default>) == HEAD`` is a DIFFERENT question, and using it
+    here opened a hole: it is equally true of a feature branch before its first
+    commit, when HEAD still points at the branch point — which is exactly the state
+    pre-commit runs in, with the whole change staged. Reproduced on blueprintx#560:
+    a fresh branch with 91 staged files exited 0.
+
+    Parameters
+    ----------
+    str_default_ref : str
+        The ref returned by ``default_branch_ref``.
+
+    Returns
+    -------
+    bool
+        True when HEAD is on the default branch, or detached at its tip.
+    """
+    str_current = _git(["rev-parse", "--abbrev-ref", "HEAD"])
+    if str_current and str_current != "HEAD":
+        return str_current == str_default_ref.rsplit("/", 1)[-1]
+    # Detached HEAD (a CI checkout of a merge sha): compare tips, names are unavailable.
+    return _git(["rev-parse", "HEAD"]) == _git(["rev-parse", str_default_ref])
+
+
+def changed_file_count(str_base: str) -> int:
+    """Return the branch's cumulative changed-file count, INDEX included.
+
+    Parameters
+    ----------
+    str_base : str
+        The merge-base commit to diff against.
+
+    Returns
+    -------
+    int
+        Number of changed paths.
+    """
+    str_out = _git(["diff", "--cached", "--name-only", str_base])
+    return len([p for p in str_out.splitlines() if p])
+
+
+def main() -> int:
+    """Check the branch's cumulative diff against the file-count ceiling.
+
+    Returns
+    -------
+    int
+        0 when within the ceiling (or not applicable), 1 on a violation.
+    """
+    str_default_ref = default_branch_ref()
+    if is_on_default_branch(str_default_ref):
+        # Nothing branch-scoped to compare against.
+        return 0
+
+    str_base = _git(["merge-base", "HEAD", str_default_ref])
+    if not str_base:
+        # Unrelated history or a clone too shallow to resolve one: nothing to check.
+        return 0
+
+    int_count = changed_file_count(str_base)
+    if int_count <= MAX_CHANGED_FILES:
+        return 0
+
+    print(
+        f"❌ this branch changes {int_count} files, over the {MAX_CHANGED_FILES}-file "
+        f"cap (blueprintx#551). CodeRabbit hard-refuses to review above 100 files, so "
+        f"a PR this large can never merge. Split it at a natural seam (e.g. "
+        f"whitespace-only vs content-changed, or by capability/tier) into PRs of "
+        f"{MAX_CHANGED_FILES} files or fewer each."
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    # Same Windows cp1252 guard as check_backlog_ledger.py: this backs an always_run
+    # pre-commit hook, so a UnicodeEncodeError on the status glyphs would block every
+    # commit from a Windows checkout rather than failing the branch under check.
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
+
+    sys.exit(main())
