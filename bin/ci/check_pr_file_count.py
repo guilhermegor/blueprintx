@@ -37,6 +37,7 @@ Three design points, decided rather than assumed:
   ``default_branch_ref``'s own docstring for the measured failure this avoids.
 """
 
+import pathlib
 import subprocess
 import sys
 
@@ -136,6 +137,23 @@ def is_on_default_branch(str_default_ref: str) -> bool:
     return _git(["rev-parse", "HEAD"]) == _git(["rev-parse", str_default_ref])
 
 
+def merge_heads() -> list:
+    """Return every incoming commit of a merge in progress (several for an octopus).
+
+    ``rev-parse MERGE_HEAD`` resolves only the first line of the file, so an octopus
+    merge would leave the other incoming heads' files charged to the branch.
+
+    Returns
+    -------
+    list of str
+        One commit hash per incoming head; empty when no merge is in progress.
+    """
+    str_path = _git(["rev-parse", "--git-path", "MERGE_HEAD"])
+    if not str_path or not pathlib.Path(str_path).is_file():
+        return []
+    return pathlib.Path(str_path).read_text(encoding="utf-8").split()
+
+
 def changed_file_count(str_base: str) -> int:
     """Return the branch's cumulative changed-file count, INDEX included.
 
@@ -170,10 +188,7 @@ def main() -> int:
     # pre-merge tip, so a base taken from HEAD alone charges the incoming delta to this
     # branch (measured: 186 files reported for a real 69). With 3+ args git computes the
     # base against the merge commit about to be created.
-    list_tips = ["HEAD"]
-    if _git(["rev-parse", "-q", "--verify", "MERGE_HEAD"]):
-        list_tips.append("MERGE_HEAD")
-    str_base = _git(["merge-base", str_default_ref, *list_tips])
+    str_base = _git(["merge-base", str_default_ref, "HEAD", *merge_heads()])
     if not str_base:
         # Unrelated history or a clone too shallow to resolve one: nothing to check.
         return 0

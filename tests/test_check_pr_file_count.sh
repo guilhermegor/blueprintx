@@ -78,6 +78,43 @@ make_repo_mid_merge() {
     printf '%s' "$str_repo"
 }
 
+# Same as make_repo_mid_merge, but an OCTOPUS merge of `side` then `main` is left in
+# progress: $1 own files on feature, $2 incoming files on main, $3 files on `side`. MAIN is
+# the LAST MERGE_HEAD line, so resolving only the first line leaves main's delta charged to
+# the branch; side's files are genuinely new to the PR and stay counted.
+make_repo_octopus_mid_merge() {
+    local int_own="$1" int_main="$2" int_side="$3" str_repo str_i
+    str_repo="$(mktemp -d)"
+    git -C "$str_repo" init --quiet --initial-branch=main
+    git -C "$str_repo" config user.email "test@example.com"
+    git -C "$str_repo" config user.name "Test"
+    echo "seed" > "$str_repo/seed.txt"
+    git -C "$str_repo" add seed.txt
+    git -C "$str_repo" commit --quiet -m "seed"
+    git -C "$str_repo" branch side
+    git -C "$str_repo" checkout --quiet -b feature
+    for ((str_i = 0; str_i < int_own; str_i++)); do
+        echo "own" > "$str_repo/own_$str_i.txt"
+    done
+    git -C "$str_repo" add -A
+    git -C "$str_repo" commit --quiet -m "feature work"
+    git -C "$str_repo" checkout --quiet main
+    for ((str_i = 0; str_i < int_main; str_i++)); do
+        echo "main" > "$str_repo/main_$str_i.txt"
+    done
+    git -C "$str_repo" add -A
+    git -C "$str_repo" commit --quiet -m "main moves on"
+    git -C "$str_repo" checkout --quiet side
+    for ((str_i = 0; str_i < int_side; str_i++)); do
+        echo "side" > "$str_repo/side_$str_i.txt"
+    done
+    git -C "$str_repo" add -A
+    git -C "$str_repo" commit --quiet -m "side moves on"
+    git -C "$str_repo" checkout --quiet feature
+    git -C "$str_repo" merge --quiet --no-commit --no-ff side main >/dev/null 2>&1
+    printf '%s' "$str_repo"
+}
+
 expect_gate() {
     # $1 = description, $2 = expected pass|fail, $3 = needle that must appear in output.
     local str_desc="$1" str_want="$2" str_needle="$3" str_repo="$4" str_got="pass" str_out
@@ -130,6 +167,13 @@ test_merge_in_progress_still_fails_real_oversize() {
     expect_gate "mid-merge, 91 own files" "fail" "91 files" "$(make_repo_mid_merge 91 5)"
 }
 
+test_octopus_merge_in_progress_ignores_every_incoming_head() {
+    # 10 own files, 5 on `side`, 100 incoming from main (the second head): only the first
+    # MERGE_HEAD line used to be excluded, so main's 100 files were charged to the branch.
+    expect_gate "octopus mid-merge, main's 100 files on the second head" "pass" "" \
+        "$(make_repo_octopus_mid_merge 10 100 5)"
+}
+
 test_default_branch_is_not_applicable() {
     # On main itself (merge-base == HEAD) the gate is a no-op regardless of file count —
     # there is no branch to compare against.
@@ -151,6 +195,7 @@ main() {
     test_new_branch_before_first_commit_fails
     test_merge_in_progress_ignores_incoming_delta
     test_merge_in_progress_still_fails_real_oversize
+    test_octopus_merge_in_progress_ignores_every_incoming_head
     test_default_branch_is_not_applicable
 
     if [ "$int_failures" -ne 0 ]; then
