@@ -45,6 +45,7 @@ currently in flight across several PRs) — a narrower, honest MVP over a wider 
 would risk false positives on conditional tier files it cannot see.
 """
 
+import argparse
 import os
 import pathlib
 import re
@@ -91,6 +92,25 @@ def read_tier(path_root: pathlib.Path) -> str | None:
 	return None
 
 
+_RE_ONE_LINE_FI = re.compile(r";\s*fi\s*$")
+
+
+def _cp_destinations(str_line: str) -> set[str]:
+	"""Return the project-relative destinations of every ``cp`` found on one source line.
+
+	Parameters
+	----------
+	str_line : str
+		One line of the shared scaffold lib.
+
+	Returns
+	-------
+	set of str
+		Destinations matched by the single-file ``cp`` pattern.
+	"""
+	return {str_dst for _, str_dst in _RE_CP_FILE.findall(str_line)}
+
+
 def conditional_relpaths(str_lib: str) -> set[str]:
 	"""Return destinations copied inside an ``if`` block, which are NOT unconditionally required.
 
@@ -118,11 +138,14 @@ def conditional_relpaths(str_lib: str) -> set[str]:
 	for str_line in str_lib.splitlines():
 		str_stripped = str_line.strip()
 		if str_stripped.startswith(("if ", "if[", "if[[")) or str_stripped == "if":
-			int_depth += 1
+			# A one-line `if ...; then cp ...; fi` opens and closes on the same line: counting
+			# it as an open block would mark every later `cp` conditional, a false green.
+			int_depth += 0 if _RE_ONE_LINE_FI.search(str_stripped) else 1
+			set_conditional.update(_cp_destinations(str_line))
 		elif str_stripped == "fi" or str_stripped.startswith("fi "):
 			int_depth = max(0, int_depth - 1)
 		elif int_depth > 0:
-			set_conditional.update(d for _, d in _RE_CP_FILE.findall(str_line))
+			set_conditional.update(_cp_destinations(str_line))
 	return set_conditional
 
 
@@ -190,7 +213,7 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
 	for str_src_dir, str_dst_dir in _RE_CP_DIR.findall(str_lib):
 		path_src_dir = path_common / str_src_dir
 		for path_file in sorted(path_src_dir.rglob("*")):
-			if path_file.is_file():
+			if path_file.is_file() and "__pycache__" not in path_file.parts:
 				str_rel = path_file.relative_to(path_src_dir).as_posix()
 				set_required.add(f"{str_dst_dir}/{str_rel}")
 	return set_required
@@ -228,17 +251,16 @@ def _parse_args(list_argv: list) -> tuple[pathlib.Path, pathlib.Path | None]:
 		The project root (defaults to cwd) and the BlueprintX checkout root (defaults to
 		``BLUEPRINTX_TEMPLATE_ROOT`` in the environment, or ``None`` when unset).
 	"""
-	path_root = pathlib.Path.cwd()
-	str_env_bx = os.environ.get("BLUEPRINTX_TEMPLATE_ROOT")
-	path_blueprintx = pathlib.Path(str_env_bx).resolve() if str_env_bx else None
-
-	list_rest = list(list_argv)
-	while list_rest:
-		str_flag = list_rest.pop(0)
-		if str_flag == "--root" and list_rest:
-			path_root = pathlib.Path(list_rest.pop(0)).resolve()
-		elif str_flag == "--blueprintx-root" and list_rest:
-			path_blueprintx = pathlib.Path(list_rest.pop(0)).resolve()
+	cls_parser = argparse.ArgumentParser(description="Report template drift.")
+	cls_parser.add_argument("--root", default=None)
+	cls_parser.add_argument(
+		"--blueprintx-root", default=os.environ.get("BLUEPRINTX_TEMPLATE_ROOT")
+	)
+	cls_args = cls_parser.parse_args(list_argv)
+	path_root = pathlib.Path(cls_args.root).resolve() if cls_args.root else pathlib.Path.cwd()
+	path_blueprintx = (
+		pathlib.Path(cls_args.blueprintx_root).resolve() if cls_args.blueprintx_root else None
+	)
 	return path_root, path_blueprintx
 
 
@@ -305,16 +327,6 @@ def main(list_argv: list) -> int:
 		return 0
 
 	set_required = required_relpaths(path_blueprintx)
-	# Add back the conditional copies this project actually opted into. Only when the
-	# provenance stamp SAYS so: `None` (a project scaffolded before the stamp recorded the
-	# choice) stays excluded, because reporting a file as missing on a project that
-	# legitimately declined it is the false positive this whole branch exists to avoid.
-	if review_bot_roster_enabled(path_root):
-		set_required = set_required | conditional_relpaths(
-			_RE_LINE_CONTINUATION.sub(
-				" ", (path_blueprintx / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
-			)
-		)
 	if not set_required:
 		print(
 			f"SKIPPED: found no required paths under {path_blueprintx} — "
@@ -322,6 +334,19 @@ def main(list_argv: list) -> int:
 			f"about drift, and is NOT the same as a clean comparison."
 		)
 		return 0
+
+	# Add back the conditional copies this project actually opted into. Only when the
+	# provenance stamp SAYS so: `None` (a project scaffolded before the stamp recorded the
+	# choice) stays excluded, because reporting a file as missing on a project that
+	# legitimately declined it is the false positive this whole branch exists to avoid.
+	# After the empty-set SKIPPED above on purpose: that is the only case where the lib is
+	# absent, and reading it here unguarded raised FileNotFoundError.
+	if review_bot_roster_enabled(path_root):
+		set_required = set_required | conditional_relpaths(
+			_RE_LINE_CONTINUATION.sub(
+				" ", (path_blueprintx / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
+			)
+		)
 
 	list_missing = missing_relpaths(path_root, set_required)
 	if not list_missing:

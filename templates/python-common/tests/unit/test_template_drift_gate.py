@@ -11,6 +11,8 @@ from pathlib import Path
 import sys
 from types import ModuleType
 
+import pytest
+
 
 _BIN = Path(__file__).resolve().parents[2] / "bin"
 
@@ -96,12 +98,11 @@ def test_a_conditional_cp_is_not_required_by_default(tmp_path: Path) -> None:
 
 def test_the_conditional_destination_is_reported_as_conditional(tmp_path: Path) -> None:
 	"""It is excluded because it is conditional, not because it was never parsed."""
-	str_lib = (tmp_path / gate._SCAFFOLD_LIB_RELPATH).parent
 	_blueprintx_root(tmp_path)
 	str_spliced = gate._RE_LINE_CONTINUATION.sub(
 		" ", (tmp_path / gate._SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
 	)
-	assert str_lib.exists()
+
 	assert gate.conditional_relpaths(str_spliced) == {".review-bots.yaml"}
 
 
@@ -119,3 +120,52 @@ def test_a_project_predating_the_stamp_reads_as_unknown(tmp_path: Path) -> None:
 	(tmp_path / gate._PROVENANCE_FILENAME).write_text("tier: lib-minimal\n", encoding="utf-8")
 
 	assert gate.review_bot_roster_enabled(tmp_path) is None
+
+
+def test_a_one_line_if_does_not_make_later_copies_conditional() -> None:
+	"""`if ...; then cp ...; fi` closes on its own line; the depth counter must not leak."""
+	str_lib = (
+		'if [ "$x" ]; then cp "$COMMON_TEMPLATE_ROOT/a.txt" "$str_project_path/a.txt"; fi\n'
+		'cp "$COMMON_TEMPLATE_ROOT/b.txt" "$str_project_path/b.txt"\n'
+	)
+
+	assert gate.conditional_relpaths(str_lib) == {"a.txt"}
+
+
+def test_bytecode_under_a_copied_directory_is_not_required(tmp_path: Path) -> None:
+	"""A `__pycache__` in the checkout's bin/ is an untracked artifact, never a template file."""
+	path_root = _blueprintx_root(tmp_path)
+	path_cache = path_root / gate._COMMON_TEMPLATE_RELPATH / "bin" / "__pycache__"
+	path_cache.mkdir(parents=True)
+	(path_cache / "x.cpython-312.pyc").write_bytes(b"")
+
+	set_required = gate.required_relpaths(path_root)
+
+	assert not any("__pycache__" in str_rel for str_rel in set_required)
+
+
+def test_roster_opt_in_against_a_checkout_without_the_lib_skips_instead_of_crashing(
+	tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+	"""The roster add-back re-read the lib unguarded and raised FileNotFoundError."""
+	path_project = tmp_path / "project"
+	path_project.mkdir()
+	(path_project / gate._PROVENANCE_FILENAME).write_text(
+		"tier: lib-minimal\nreview_bot_roster: true\n", encoding="utf-8"
+	)
+	path_empty_checkout = tmp_path / "checkout"
+	path_empty_checkout.mkdir()
+
+	int_code = gate.main(
+		["--root", str(path_project), "--blueprintx-root", str(path_empty_checkout)]
+	)
+
+	assert int_code == 0
+	assert "SKIPPED" in capsys.readouterr().out
+
+
+def test_the_equals_form_of_a_flag_is_honoured(tmp_path: Path) -> None:
+	"""`--root=x` used to be ignored silently, so the check ran against cwd without saying so."""
+	path_root, _ = gate._parse_args([f"--root={tmp_path}"])
+
+	assert path_root == tmp_path.resolve()
