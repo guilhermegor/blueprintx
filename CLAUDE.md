@@ -180,7 +180,9 @@ at, so one has not yet been needed (blueprintx#551).
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
 GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes
 `vX.Y.Z` and the package-manager jobs stamp that version into each artifact. You enter the version
-**once**, in the Action's field — no `make bump_version`, no commit to `main`.
+**once**, in the Action's field — no `make bump_version`, no commit to `main`. The field is
+validated before the tag is pushed: `MAJOR.MINOR.PATCH`, optionally followed by `-<prerelease>`
+(e.g. `0.2.0`, `0.2.0-rc.1`) — a rejected value is retyped, never a tag that has to be deleted.
 
 `blueprintx --version` resolves the version at runtime (mirrors how a Python wheel gets its version
 from the tag, one layer down):

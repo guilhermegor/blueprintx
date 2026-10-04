@@ -15,7 +15,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `cli-reference.md` | Utility page | Every BlueprintX command: `make` targets + `blueprintx` CLI flags |
 | `faq.md` | Utility page | Common questions about using and extending BlueprintX |
 | `troubleshooting.md` | Utility page | What broke while wiring this site's brand assets/routing, the cause, the fix, and which of those fixes were decided against scaffolding into `templates/` |
-| `secret-scanning.md` | Utility page | GitGuardian (`ggshield`) secret-scan workflow opt-in — how to enable it at scaffold time, how it propagates the key, and how to opt in after the fact |
+| `secret-scanning.md` | Utility page | Secret scanning per tier — the measured gitleaks-vs-GitGuardian comparison behind gitleaks being the default, plus the GitGuardian (`ggshield`) opt-in: how to enable it at scaffold time, how it propagates the key, and how to opt in after the fact |
 | `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, release) |
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
@@ -163,7 +163,7 @@ Apply these rules every time a change is made to the `docs/` directory:
 | Event | Required actions |
 |-------|-----------------|
 | New file added | 1. Add a row to the **file index** (Section 1). 2. Register the file in `mkdocs.yml` nav. Both changes go in the same commit. |
-| Non-published doc added | Place it under a non-published folder (`docs/backlog/`, `docs/superpowers/`), never the `docs/` root. Ensure that folder is in `exclude_docs`. Do NOT add it to the file index or `mkdocs.yml` nav. |
+| Non-published doc added | Backlogs and specs belong in `.specs/`, not `docs/`. Anything else non-published goes under a non-published folder (`docs/superpowers/`), never the `docs/` root. Ensure that folder is in `exclude_docs`. Do NOT add it to the file index or `mkdocs.yml` nav. |
 | File removed | 1. Remove its row from the **file index**. 2. Remove its entry from `mkdocs.yml` nav. Fix any cross-links in other docs that pointed to it. |
 | File renamed | Update the file index path, the `mkdocs.yml` nav entry, and all internal cross-links. |
 | New skeleton added | 1. Create its overview file following Type A structure. 2. Create its `examples-<skeleton>/` subdirectory and at least one example following Type B. 3. Add both to the nav under a new group. 4. Update Sections 1, 2, and 3 of this CLAUDE.md. |
