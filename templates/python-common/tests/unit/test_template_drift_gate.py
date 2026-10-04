@@ -37,7 +37,7 @@ def _load(str_name: str) -> ModuleType:
 
 gate = _load("check_template_drift")
 
-_LIB = '''scaffold_copy_common_templates() {
+_LIB = """scaffold_copy_common_templates() {
 	cp "$COMMON_TEMPLATE_ROOT/plain.txt" "$str_project_path/plain.txt"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_wrapped.py" \\
 		"$str_project_path/tests/unit/test_wrapped.py"
@@ -46,7 +46,7 @@ _LIB = '''scaffold_copy_common_templates() {
 	fi
 	cp "$COMMON_TEMPLATE_ROOT/after.txt" "$str_project_path/after.txt"
 }
-'''
+"""
 
 
 def _blueprintx_root(path_tmp: Path) -> Path:
