@@ -27,7 +27,7 @@ leaving it half-written.
 
 ## Format
 
-Four fields, in this order. Keep each to a few sentences — the entry stops getting written the
+Five fields, in this order. Keep each to a few sentences — the entry stops getting written the
 day it takes an hour to fill in.
 
 - **Symptom** — what was observed, not what was wrong.
