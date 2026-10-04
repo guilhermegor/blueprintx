@@ -242,6 +242,9 @@ jobs:
           LINT_ACTIONS_REQUIRED: "1"
         run: bash bin/ci/check_actions.sh
 
+      - name: Should-fail regression tests for check_action_pins
+        run: bash tests/test_check_actions_pins.sh
+
   secret-scan:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest
