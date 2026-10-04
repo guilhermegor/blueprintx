@@ -498,7 +498,7 @@ prompt_license() {
 # about code: comments and docstrings stay English in every locale, enforced in the
 # generated project by bin/check_comment_language.py. See docs/cli-reference.md, "Documentation locale".
 prompt_docs_locale() {
-    printf "${CYAN}Select documentation locale${NC} (README.md and docs/ pages of the new project)\n" >&2
+    printf "${CYAN}Select documentation locale${NC} (language the new project's README.md and docs/ are meant to be written in; shipped text is English)\n" >&2
     printf "  ${BLUE}1) en${NC}    — English (default)\n" >&2
     printf "  ${BLUE}2) pt-BR${NC} — Brazilian Portuguese\n" >&2
     printf "        Code comments and docstrings stay English either way.\n" >&2

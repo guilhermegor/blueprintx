@@ -20,7 +20,7 @@ Every command BlueprintX exposes. The interactive scaffolder is driven through `
 ## Documentation locale
 
 The last `make new` prompt asks which language the **generated project's** `README.md` and
-`docs/` pages are written in — `en` (default) or `pt-BR`. The value reaches the scaffold as
+`docs/` pages are meant to be written in — `en` (default) or `pt-BR`. The value reaches the scaffold as
 `DOCS_LOCALE`, next to `LICENSE_CHOICE`, and every MkDocs-bearing Python skeleton renders it
 into `theme.language` in the project's `mkdocs.yml`, so Material's search and UI strings
 follow the pages. Running a `bin/scaffold/*.sh` script directly, without the menu, falls back
@@ -28,6 +28,8 @@ to `en`.
 
 Two things the choice does **not** change:
 
+- **The shipped page text.** The templates are English; `pt-BR` sets the MkDocs UI language
+  and the project's declared locale, and translating the pages is left to the project.
 - **Code stays English in every locale.** Comments and docstrings are English whether the
   docs are `en` or `pt-BR`; the generated project's `bin/check_comment_language.py` enforces
   that boundary and never reads `docs/`, which is why it needs no locale setting of its own.
