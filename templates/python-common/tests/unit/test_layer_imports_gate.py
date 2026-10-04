@@ -602,12 +602,8 @@ def _sublayer_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
 	return _run_main(tmp_path)
 
 
-@pytest.mark.parametrize(
-	"str_fragment", ["capabilities/*/domain", "names ports, not providers"]
-)
-def test_a_glob_layer_key_governs_a_capability_sublayer(
-	tmp_path: Path, str_fragment: str
-) -> None:
+@pytest.mark.parametrize("str_fragment", ["capabilities/*/domain", "names ports, not providers"])
+def test_a_glob_layer_key_governs_a_capability_sublayer(tmp_path: Path, str_fragment: str) -> None:
 	"""⚠️ The three DDD sublayers have DIFFERENT rules, and one key cannot hold them.
 
 	The tier's own CLAUDE.md says domain depends on nothing, application on the domain only,

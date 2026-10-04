@@ -122,9 +122,7 @@ def test_ledger_name_must_be_kebab_plus_timestamp() -> None:
 # gate for everyone with the suite still green, so the negative control is the real assertion.
 
 
-@pytest.mark.parametrize(
-	"str_login", ["dependabot[bot]", "github-actions[bot]", "renovate[bot]"]
-)
+@pytest.mark.parametrize("str_login", ["dependabot[bot]", "github-actions[bot]", "renovate[bot]"])
 def test_bot_login_is_exempt(str_login: str) -> None:
 	"""GitHub's own ``[bot]`` suffix identifies the author, with no allow-list to rot."""
 	assert ledger.is_bot_author(str_login) is True

@@ -215,9 +215,7 @@ def test_gate_state_lets_red_outrank_pending(dict_axes: dict, str_state: str) ->
 	],
 	ids=["red-but-still-deciding", "red-and-everything-reported"],
 )
-def test_terminality_is_separate_from_display_state(
-	dict_axes: dict, bool_terminal: bool
-) -> None:
+def test_terminality_is_separate_from_display_state(dict_axes: dict, bool_terminal: bool) -> None:
 	"""A red-with-pending set is NOT terminal — conflating the two freezes the sticky comment.
 
 	Parameters
