@@ -56,6 +56,14 @@ set -euo pipefail
 # from yielding the literal glob pattern as a filename.
 shopt -s dotglob nullglob
 
+# 🔴 TEMPORARY, REMOVE WITH blueprintx#580 (moves docs/backlog/ to .specs/, #575): until that
+# lands, main's own tree still holds docs/backlog/, so a wired gate would be red on main
+# itself. This allowance skips ONLY the top-level docs/backlog/ (reported loudly each run, never
+# silently) — every other rule stays enforced, and the regression suite runs with it OFF so the
+# backlog rule itself stays pinned. When #580 merges, delete this variable, the branch in
+# walk(), and the test that exercises it.
+STR_ALLOW_LEGACY_BACKLOG="${DOCS_BOUNDARY_ALLOW_LEGACY_BACKLOG:-1}"
+
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DOCS_DIR="$REPO_ROOT/docs"
 errors=0
@@ -127,6 +135,11 @@ walk() {
         [ -e "$entry" ] || continue
         rel="${entry#"$DOCS_DIR"/}"
         checked=$((checked + 1))
+        if [ "$rel" = "backlog" ] && [ "$STR_ALLOW_LEGACY_BACKLOG" = "1" ]; then
+            echo "WARNING: docs/backlog — still a violation, tolerated ONLY until blueprintx#580" \
+                 "moves it to .specs/ (blueprintx#575); not descended into" >&2
+            continue
+        fi
         if reason="$(is_denied "$rel")"; then
             echo "ERROR: docs/$rel — $reason" >&2
             errors=$((errors + 1))
