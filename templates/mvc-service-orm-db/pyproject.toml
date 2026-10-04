@@ -25,6 +25,7 @@ python = ">=3.10,<4.0"
 beartype = ">=0.22"
 python-dotenv = ">=1.0.0"
 sqlalchemy = ">=2.0"
+alembic = ">=1.13.0"
 pandas = ">=2.0"
 # Imported by utils/typing/policy.py to widen `int` to numpy.integer. It is behind a
 # `try/except ModuleNotFoundError` degrade, which is why it went undeclared until
@@ -113,7 +114,11 @@ pywin32 = ["win32com", "win32api", "pythoncom", "pywintypes"]
 # pymsteams is no longer ignored: the scaffold now prunes its declaration when the webhook
 # opt-in is declined (bin/lib/scaffold_python_templates.sh), so when the line survives
 # scaffolding it IS imported, and there is nothing left for DEP002 to flag (blueprintx#274).
-DEP002 = ["openpyxl"]
+#
+# alembic — a migration COMMAND (`alembic upgrade head`), invoked as a CLI and never
+# imported. No scaffold change could make this one visible to deptry, so the entry is
+# permanent (mirrors ddd-service-orm-db's identical entry, blueprintx#381).
+DEP002 = ["openpyxl", "alembic"]
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]
