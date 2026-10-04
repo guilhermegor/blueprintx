@@ -75,8 +75,8 @@ def df_from_cursor() -> object:
 
 	Returns
 	-------
-	pandas.DataFrame
-		The coerced frame.
+	object
+		The coerced pandas frame.
 	"""
 	pytest.importorskip("pandas")
 	return from_cursor(_FakeCursor([("id",), ("title",)], [(1, "a"), (2, "b")]), _DICT_DTYPES)
@@ -88,8 +88,8 @@ def df_from_records() -> object:
 
 	Returns
 	-------
-	pandas.DataFrame
-		The coerced frame.
+	object
+		The coerced pandas frame.
 	"""
 	pytest.importorskip("pandas")
 	return from_records(_LIST_RECORDS, _DICT_DTYPES)
@@ -153,8 +153,8 @@ def df_empty_from_cursor() -> object:
 
 	Returns
 	-------
-	pandas.DataFrame
-		The empty-but-shaped frame.
+	object
+		The empty-but-shaped pandas frame.
 	"""
 	pytest.importorskip("pandas")
 	return from_cursor(_FakeCursor(None, []), _DICT_DTYPES)
@@ -166,8 +166,8 @@ def df_empty_from_records() -> object:
 
 	Returns
 	-------
-	pandas.DataFrame
-		The empty-but-shaped frame.
+	object
+		The empty-but-shaped pandas frame.
 	"""
 	pytest.importorskip("pandas")
 	return from_records([], _DICT_DTYPES)
@@ -211,8 +211,8 @@ def tuple_date_col_frames() -> tuple:
 
 	Returns
 	-------
-	tuple of (pandas.DataFrame, pandas.DataFrame)
-		The empty-path frame and the populated-path frame.
+	tuple
+		The empty-path and populated-path pandas frames.
 	"""
 	pytest.importorskip("pandas")
 	df_empty = from_cursor(_FakeCursor(None, []), {"id": "int64"}, list_date_cols=["dt_ref"])
@@ -229,7 +229,7 @@ def test_the_empty_path_still_declares_the_date_column(tuple_date_col_frames: tu
 
 	Parameters
 	----------
-	tuple_date_col_frames : tuple of (pandas.DataFrame, pandas.DataFrame)
+	tuple_date_col_frames : tuple
 		The shared empty-path and populated-path frames.
 	"""
 	df_empty, _ = tuple_date_col_frames
@@ -248,7 +248,7 @@ def test_from_cursor_applies_date_columns_on_the_empty_path(
 
 	Parameters
 	----------
-	tuple_date_col_frames : tuple of (pandas.DataFrame, pandas.DataFrame)
+	tuple_date_col_frames : tuple
 		The shared empty-path and populated-path frames.
 	"""
 	df_empty, df_rows = tuple_date_col_frames
