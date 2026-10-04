@@ -1,0 +1,5 @@
+# See queries/sqlite/.sqlfluff — same mechanism, different dialect. sqlfluff's name for
+# SQL Server is `tsql`, which is why the directory (an ENGINE name, matching DB_BACKEND)
+# and the dialect are spelled differently; they are two different vocabularies.
+[sqlfluff]
+dialect = tsql
