@@ -230,11 +230,6 @@ def test_main_fails_on_a_file_missing_the_revision_assignment(
 	assert gate.main() == 1
 
 
-# ------------------------------------------------------
-# Unverifiable metadata must not read as a root revision
-# ------------------------------------------------------
-
-
 def test_main_fails_on_a_non_literal_down_revision(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -289,11 +284,6 @@ def test_main_fails_on_a_tuple_with_a_non_string_element(
 	monkeypatch.chdir(tmp_path)
 
 	assert gate.main() == 1
-
-
-# --------------------------------------------------
-# A cycle beside a valid chain still has to be found
-# --------------------------------------------------
 
 
 def test_main_fails_on_a_cycle_that_coexists_with_a_valid_chain(
