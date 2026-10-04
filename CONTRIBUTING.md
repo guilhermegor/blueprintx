@@ -170,6 +170,7 @@ machine-decidable — it is a review question, so it stays prose reviewed by a h
 | Coverage floor | ✅ `fail_under = 80` (`.coveragerc`) | ❌ no Jest `coverageThreshold` configured |
 | Casing convention (functions/variables/import aliases) — row re-measured 2026-09-13 | ✅ ruff `N`, minus `N802` in `tests/**` (blueprintx#422, closes #422) | ❌ none configured — `@typescript-eslint/naming-convention` exists but is unused. No like-for-like gap: a JS/TS test name is a **string literal** passed to `it()`/`describe()`, not a function identifier, so the one real N802 collision this issue measured (a test name using upper-case for semantic emphasis) has no TS equivalent to conflict with in the first place. TypeScript also has no analogue to the type-prefix convention that would otherwise fight a constant-casing rule — this repo's Python house convention is Python-only |
 | Broad-except / catch-safety | ✅ ruff `BLE` (blueprintx#440) on top of the already-selected `E722`/`S110` | ✅ `@typescript-eslint/use-unknown-in-catch-callback-variable` + `only-throw-error` (blueprintx#440/#443) — by construction, not transcription: JS has no typed catch clause to mirror `BLE`, so the TS side closes the one gap `strict: true`'s `useUnknownInCatchVariables` leaves open (`.catch(cb)` callbacks) instead |
+| Required status checks provisioned on the default branch — row added 2026-09-20 | ✅ `bin/enable_repo_rules.sh` seeds `REQUIRED_CHECKS=("Review threads answered")` and provisions the `pr-quality-gate` ruleset from it | ❌ none — the script ships only from `templates/python-common/`, so the check names `ts-common`/`ts-lib` emit (`webpack`, `eslint`, `stylelint`, `jest`, `type-check`, `Review threads answered`) are required by nothing. Same for the `bash-cli` tier, which additionally ships no review-threads workflow at all (blueprintx#164; per-tier inventory and the four-rule qualification test in `docs/required-status-checks.md`) |
 
 Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
 The heading date covers the table as a whole; a row re-measured later carries its own date in
@@ -205,6 +206,18 @@ narrowed or widened.
    - All tests must pass
    - Code coverage should not decrease
    - Documentation must be updated
+
+### PR file-count ceiling — blueprintx#551
+
+A PR is capped at **90 cumulative changed files**, enforced by `bin/ci/check_pr_file_count.py`
+in both pre-commit and CI (`pr-file-count` job). Above it, split at a natural seam — by
+capability/tier, or whitespace-only vs content-changed — into PRs of 90 files or fewer each.
+
+The number is measured, not chosen: CodeRabbit hard-refuses to review a PR above **100**
+changed files (`Review skipped: N files exceed the limit of 100`), and a PR in that state can
+never merge. Over the 100 most recent PRs, exactly **1** exceeded even 90 files, and the
+largest legitimate PR in that set was 59 files — so 90 leaves headroom on both sides without
+being a rule nobody pays.
 
 ## Ruff Rule Adoption Log
 
