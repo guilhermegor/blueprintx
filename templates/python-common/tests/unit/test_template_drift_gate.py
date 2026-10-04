@@ -68,11 +68,6 @@ def _blueprintx_root(path_tmp: Path) -> Path:
 	return path_tmp
 
 
-# ------------------------------------------------
-# A wrapped `cp` is still a `cp` (blueprintx#109)
-# ------------------------------------------------
-
-
 def test_a_cp_split_over_two_lines_is_still_required(tmp_path: Path) -> None:
 	"""The regex stopped at the backslash, so a wrapped destination was never required.
 
@@ -90,11 +85,6 @@ def test_a_plain_cp_after_a_wrapped_one_is_not_swallowed(tmp_path: Path) -> None
 	set_required = gate.required_relpaths(_blueprintx_root(tmp_path))
 
 	assert {"plain.txt", "after.txt"} <= set_required
-
-
-# --------------------------------------------------------
-# A conditional `cp` is not an unconditional requirement
-# --------------------------------------------------------
 
 
 def test_a_conditional_cp_is_not_required_by_default(tmp_path: Path) -> None:
