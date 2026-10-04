@@ -39,7 +39,7 @@ notices at 238 then 241 files, each CI-fixing push making the PR *less* reviewab
 - [x] Confirm CI is green on the PR and address any review feedback. Two CodeRabbit
       threads on PR #458: a real file-cap regex gap (`_RE_FILE_CAP`'s trailing `\d+` had no
       terminator, so "...limit of 100x" false-matched) fixed in 6786f30 with a negative test;
-      and this checklist/status mismatch, resolved by completing this box. All 41 CI checks
+      and this checklist/status mismatch, resolved by completing this box. CI
       green, both threads replied to and resolved.
 
-Completed — kept as a record once every box above is ticked (CLAUDE.md backlog discipline).
+Completed 2026-10-04 — kept as a record (CLAUDE.md backlog discipline).
