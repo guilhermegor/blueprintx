@@ -41,20 +41,21 @@ resolve_target_env() {
 # is the wheelhouse-only pruning DB_BACKEND enables (measured 65 MB -> 45 MB, blueprintx#299).
 # A no-op for tiers that never carry more than one driver.
 driver_prune_list() {
-	# mariadb shares mysql's driver; the app lowercases DB_BACKEND, so match the same way.
-	local -A str_driver_of=(
-		[postgresql]=psycopg [mysql]=mysql-connector-python [mariadb]=mysql-connector-python
-		[oracle]=oracledb [mssql]=pyodbc
-	)
+	# Bash 3.2-safe (macOS system bash): no associative array, no ${var,,}. mariadb shares
+	# mysql's driver; the app lowercases DB_BACKEND, so match the same way.
+	local str_keep
 	DROP_PACKAGES=()
 	[[ -z "${DB_BACKEND:-}" ]] && return 0
-	local str_keep="${str_driver_of[${DB_BACKEND,,}]:-}" str_key str_pkg
-	local -A set_dropped=()
-	for str_key in "${!str_driver_of[@]}"; do
-		str_pkg="${str_driver_of[$str_key]}"
-		[[ "$str_pkg" == "$str_keep" || -n "${set_dropped[$str_pkg]:-}" ]] && continue
-		set_dropped[$str_pkg]=1
-		DROP_PACKAGES+=("$str_pkg")
+	case "$(printf '%s' "$DB_BACKEND" | tr '[:upper:]' '[:lower:]')" in
+	postgresql) str_keep=psycopg ;;
+	mysql | mariadb) str_keep=mysql-connector-python ;;
+	oracle) str_keep=oracledb ;;
+	mssql) str_keep=pyodbc ;;
+	*) str_keep="" ;;
+	esac
+	local str_pkg
+	for str_pkg in psycopg mysql-connector-python oracledb pyodbc; do
+		[[ "$str_pkg" == "$str_keep" ]] || DROP_PACKAGES+=("$str_pkg")
 	done
 }
 
@@ -76,7 +77,7 @@ export_and_select() {
 		--target-sys-platform "$TARGET_SYSPLAT" \
 		--target-platform-machine "$TARGET_MACHINE" \
 		--target-implementation "$TARGET_IMPL" \
-		"${args_drop[@]}"
+		${args_drop[@]+"${args_drop[@]}"}
 }
 
 # Cross-platform builds (target differs from the build machine) need pip's OWN platform-tag

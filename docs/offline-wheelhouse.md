@@ -70,7 +70,7 @@ differs). Override any of these to build for a **different** target:
 | `WHEELHOUSE_PIP_PLATFORM` | unset | pip's own `--platform` tag (`win_amd64`, `manylinux2014_x86_64`, ...) — needed only for a genuinely cross-platform binary download; see below |
 | `WHEELHOUSE_PIP_ABI` | unset | pip's own `--abi` tag, paired with `WHEELHOUSE_PIP_PLATFORM` |
 | `WHEELHOUSE_PART_MB` | `45` | Split-part size |
-| `DB_BACKEND` | unset | `postgresql`/`mysql`/`oracle`/`mssql` — prunes the other native-DB drivers |
+| `DB_BACKEND` | unset | `postgresql`/`mysql`/`mariadb`/`oracle`/`mssql` — prunes the other native-DB drivers (see the install caveat below) |
 
 `WHEELHOUSE_TARGET_*` only changes **which packages are selected** (the marker-evaluation
 step). It does not by itself make pip fetch a binary wheel built for a different platform —
@@ -90,6 +90,15 @@ sibling relationship it was built in.
 ```bash
 poe wheelhouse_assemble
 pip install --no-index --find-links ../_wheels/<repo-name>/wheels -r requirements-lock.txt
+```
+
+⚠️ **If you built with `DB_BACKEND` set, do not install with `-r requirements-lock.txt`.** The lock
+file still names the pruned drivers, and `--no-index` cannot fetch them, so pip fails with
+`No matching distribution found`. Install the wheel set itself instead — it is a complete
+dependency closure:
+
+```bash
+pip install --no-index --find-links ../_wheels/<repo-name>/wheels ../_wheels/<repo-name>/wheels/*.whl
 ```
 
 `wheelhouse_assemble` accepts three payload shapes, tried in order, and **REFUSES** rather
