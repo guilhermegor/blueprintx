@@ -47,6 +47,11 @@ long-lived `NPM_TOKEN` is stored. See `docs/contributing.md` for the release
 workflow and the one-time bootstrap steps required before the first automated
 publish.
 
+## Feature specs
+
+Feature specs live under `.specs/features/` — copy `.specs/spec.md` for the
+template and its `US-`/`AC-`/`ASM-`/`Q-XXX` id conventions.
+
 ## Documentation
 
 A [Docusaurus](https://docusaurus.io) site lives in `docs/`, with native version
