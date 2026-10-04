@@ -57,6 +57,8 @@
 # threshold — for BOTH rules, which is why `run_ruff_check` takes the rule code and its
 # config key as arguments instead of hardcoding C901.
 #
+# Per-construct measurements behind 1/2/8: see blueprintx#425.
+#
 # Escape hatch: put `# complexity-ok: <reason>` on the `def` line (ruff anchors both C901 and
 # PLR1702 there, not on a decorator). The reason is REQUIRED — a bare marker is rejected,
 # because the point of the hatch is the sentence explaining why the branching/nesting is the
