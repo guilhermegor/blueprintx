@@ -118,7 +118,7 @@ def test_content_before_the_first_entry_is_rejected(tmp_path: Path) -> None:
 	tmp_path : pathlib.Path
 		A throwaway directory pytest provides per test.
 	"""
-	path_yaml = _write(tmp_path, "  intent: \"orphan\"\n" + _STR_MINIMAL)
+	path_yaml = _write(tmp_path, '  intent: "orphan"\n' + _STR_MINIMAL)
 	with pytest.raises(gate.RegistryError):
 		gate.parse_registry(path_yaml)
 
