@@ -133,6 +133,45 @@ def _imports_sqlalchemy(cls_tree: ast.Module) -> bool:
 	return False
 
 
+def _receiver_root_name(cls_expr: ast.expr) -> str:
+	"""Return the base identifier of a call chain's receiver (``df_x.loc[m].where`` -> ``df_x``).
+
+	Parameters
+	----------
+	cls_expr : ast.expr
+		The ``.value`` of the ``.where``/``.filter`` attribute.
+
+	Returns
+	-------
+	str
+		The leftmost ``Name``, or ``""`` when the chain does not start at one.
+	"""
+	while isinstance(cls_expr, ast.Attribute | ast.Subscript | ast.Call):
+		cls_expr = cls_expr.func if isinstance(cls_expr, ast.Call) else cls_expr.value
+	return cls_expr.id if isinstance(cls_expr, ast.Name) else ""
+
+
+def _is_pandas_receiver(cls_attr: ast.Attribute) -> bool:
+	"""Return whether a ``.where``/``.filter`` call is on a DataFrame/Series by naming convention.
+
+	pandas boolean masks use ``&``/``|`` by design, so flagging them is a false positive. The
+	house type-prefix convention (``df_``/``series_``) is the only receiver evidence this gate
+	has without type inference, so it is what separates the two APIs.
+
+	Parameters
+	----------
+	cls_attr : ast.Attribute
+		The ``.where``/``.filter`` attribute access of the call.
+
+	Returns
+	-------
+	bool
+		True when the receiver chain starts at a ``df``/``df_*``/``series_*`` name.
+	"""
+	str_root = _receiver_root_name(cls_attr.value)
+	return str_root == "df" or str_root.startswith(("df_", "series_"))
+
+
 def _find_bitwise_nodes(cls_node: ast.AST) -> list[ast.AST]:
 	"""Find the outermost bitwise-precedence-hazard node(s) inside an expression tree.
 
@@ -212,6 +251,8 @@ def _bitwise_filter_problems(
 			and isinstance(cls_node.func, ast.Attribute)
 			and cls_node.func.attr in _FILTER_CALL_NAMES
 		):
+			continue
+		if _is_pandas_receiver(cls_node.func):
 			continue
 		for cls_arg in cls_node.args:
 			for cls_hazard in _find_bitwise_nodes(cls_arg):
@@ -463,6 +504,31 @@ def _table_args_names(cls_node: ast.ClassDef) -> list[tuple[str, int]]:
 	return _constraint_names_in_expr(_table_args_value(cls_node))
 
 
+def _declares_tablename(cls_node: ast.ClassDef) -> bool:
+	"""Return whether this class assigns ``__tablename__`` — i.e. it maps its own table.
+
+	Parameters
+	----------
+	cls_node : ast.ClassDef
+		The class to inspect.
+
+	Returns
+	-------
+	bool
+		True when the class body assigns ``__tablename__``.
+	"""
+	return any(
+		isinstance(cls_stmt, ast.Assign | ast.AnnAssign)
+		and any(
+			isinstance(cls_t, ast.Name) and cls_t.id == "__tablename__"
+			for cls_t in (
+				cls_stmt.targets if isinstance(cls_stmt, ast.Assign) else [cls_stmt.target]
+			)
+		)
+		for cls_stmt in cls_node.body
+	)
+
+
 def _declares_table_args(cls_node: ast.ClassDef) -> bool:
 	"""Return whether this class assigns ``__table_args__`` at all.
 
@@ -573,7 +639,11 @@ def _effective_table_args(
 		return [], []
 	str_owner = list_declarers[0]
 	list_effective = [(n, ln, str_owner) for n, ln in dict_own_names.get(str_owner, [])]
-	return list_effective, list_declarers[1:]
+	# A later declarer that maps its OWN table (``__tablename__``) is a parent in a joined/
+	# concrete inheritance chain: its ``__table_args__`` applies to its own table and is not
+	# discarded. Only table-less mixins are truly shadowed.
+	list_shadowed = [s for s in list_declarers[1:] if not _declares_tablename(dict_classes[s])]
+	return list_effective, list_shadowed
 
 
 def _duplicate_constraint_message(

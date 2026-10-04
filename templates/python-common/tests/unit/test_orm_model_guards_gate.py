@@ -221,6 +221,32 @@ def test_two_mixins_declaring_table_args_report_the_shadowing(tmp_path: Path) ->
 	assert "orm-guard-ok:" in list_problems[0]
 
 
+def test_mapped_parent_and_child_each_declaring_table_args_is_clean(tmp_path: Path) -> None:
+	"""A mapped parent keeps its own table's ``__table_args__`` — only mixins are shadowed."""
+	path_file = _python_file(
+		tmp_path,
+		"from sqlalchemy import UniqueConstraint\n\n"
+		"class Parent:\n"
+		"\t__tablename__ = 'parent'\n"
+		"\t__table_args__ = (UniqueConstraint('a', name='uq_parent'),)\n\n"
+		"class Child(Parent):\n"
+		"\t__tablename__ = 'child'\n"
+		"\t__table_args__ = (UniqueConstraint('b', name='uq_child'),)\n",
+	)
+
+	assert gate.check_python_file(path_file)[0] == []
+
+
+def test_pandas_mask_on_a_df_receiver_is_not_flagged(tmp_path: Path) -> None:
+	"""A frame named by the house ``df_`` prefix is pandas, whose masks use ``&`` by design."""
+	path_file = _python_file(
+		tmp_path,
+		"from sqlalchemy import select\n\ndf_out = df_in.where(mask_a & mask_b)\n",
+	)
+
+	assert gate.check_python_file(path_file)[0] == []
+
+
 def test_distinct_constraint_names_across_mixins_still_shadow(tmp_path: Path) -> None:
 	"""⚠️ Inverted 2026-09-18 — this used to assert PASS, and that was the bug.
 
