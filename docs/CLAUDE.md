@@ -51,7 +51,6 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 |-----------|----------|
 | `py-examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
 | `py-examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
-| `backlog/` | **Non-published** work-to-do backlogs (e.g. template backport notes). Excluded from the built site — see below. |
 | `superpowers/` | **Non-published** internal specs and plans. Excluded from the built site — see below. |
 
 Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
@@ -59,14 +58,13 @@ Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
 ### Non-published docs — never at the `docs/` root
 
 MkDocs **builds every `.md` under `docs/` into the site**, even files absent from
-`nav:` (they are merely unlisted, still reachable by URL). So a backlog, spec, or
+`nav:` (they are merely unlisted, still reachable by URL). So a spec or
 internal note dropped at the `docs/` root *will* ship to users and misguide them.
 Such files live under a dedicated folder that is excluded from the build via
 `exclude_docs` in `mkdocs.yml`:
 
 ```yaml
 exclude_docs: |
-  backlog/        # work-to-do backlogs (template backport notes, follow-ups)
   superpowers/    # internal specs and plans
 ```
 
