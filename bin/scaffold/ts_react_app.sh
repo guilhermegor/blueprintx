@@ -431,6 +431,9 @@ copy_static_ts_common_files() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+    # commit, never templated principles. See .specs/spec.md for the id conventions.
+    cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 }
 
 # Refresh the lockfile after apply_package_variants (blueprintx#468 review).
@@ -478,6 +481,9 @@ copy_common_templates() {
     envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
         < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
         > "$project_path/CLAUDE.md"
+    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
+    # file, language-agnostic, so it lives in templates/common not ts-common.
+    cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
         > "$project_path/README.md"
