@@ -4,13 +4,28 @@
 #
 # WHY THIS EXISTS, and why the number differs by tree (mccabe / C901):
 #
+#   | tree     | max | the argument                                                        |
+#   |----------|-----|---------------------------------------------------------------------|
+#   | tests/   |  1  | a test with a branch is testing two paths, and WHICH one ran does   |
+#   |          |     | not appear in the green. Complexity 1 is the mechanical form of the |
+#   |          |     | rule tests/CLAUDE.md already states in prose: "each test asserts    |
+#   |          |     | one behaviour". Prose never enforced it; this does.                 |
+#   | src/     |  2  | production code. Branching that is genuinely the work (a validator, |
+#   |          |     | a parser) takes the escape hatch below WITH a reason, rather than   |
+#   |          |     | being contorted to satisfy a number.                                |
+#   | bin/     |  8  | the gates are parsing tools by nature — argv, ruff output, YAML,    |
+#   |          |     | AST. Measured at 2 they were 74% violating, which is a number       |
+#   |          |     | nobody pays and therefore a gate nobody keeps.                      |
+#
+# The nesting-depth ceilings (PLR1702) are a SEPARATE table, counted separately:
+#
 #   | tree     | max | findings on the shipped tree, ruff 0.11.13                          |
 #   |----------|-----|---------------------------------------------------------------------|
 #   | tests/   |  2  | 2 findings at 1, 0 at 2.                                            |
 #   | src/     |  3  | 54 findings at 1, 8 at 2, 0 at 3.                                   |
 #   | bin/     |  5  | 16 findings at 3, 2 at 4, 0 at 5.                                   |
 #
-# 🔴 EVERY NUMBER ABOVE WAS COUNTED. An earlier revision of this block asserted
+# 🔴 EVERY NESTING NUMBER ABOVE WAS COUNTED. An earlier revision of this block asserted
 # tests/=1 "cost 0", src/=1 "same reasoning as mccabe's src/ row", and bin/=3
 # "8 findings at ceiling 3". All three were wrong — the real figures are 2, 54
 # and 16 — and because the pre-commit hook scans the whole tree, each one blocked
@@ -58,7 +73,7 @@ source "$SCRIPT_DIR/lib/bootstrap.sh" # resolve_python / resolve_poetry / run_po
 # branch below. Order is irrelevant; every entry gets its own ruff run.
 declare -A DICT_MAX_COMPLEXITY=(
 	["tests"]=1
-	["src"]=3
+	["src"]=2
 	["bin"]=8
 )
 
@@ -183,8 +198,8 @@ line_has_reasoned_hatch() {
 	# True only when the function's SIGNATURE carries the marker AND a non-empty reason.
 	#
 	# ⚠️ Scans the whole signature, not just the reported line. ruff anchors C901 and PLR1702
-	# on the `def`, but `ruff format` re-wraps a long signature and pushes a trailing comment down onto the
-	# closing-paren line — so a hatch written correctly on the `def` silently stopped counting
+	# on the `def`, but `ruff format` re-wraps a long signature and pushes a trailing comment
+	# down onto the closing-paren line — so a hatch written correctly on the `def` silently stopped counting
 	# the moment the formatter touched the file. Measured on `CreateLog._validate_path`. This
 	# repo's own ruff.toml states the general rule: before making a style load-bearing, check
 	# whether the FORMATTER already forbids it — the formatter wins, so the gate adapts.
