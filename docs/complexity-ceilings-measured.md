@@ -114,9 +114,10 @@ requiring reproduction here.
    stays at 1. The `tests/` ceiling of 1 does what it was built to do — forbid a *branch* —
    without penalizing assertion count.
 
-The one real constraint `src` = 2 imposes is `if` inside `for` (or nested `if`), which reports
-3 and fails. The fix is to extract — a filtered `for` becomes a comprehension, or the body
-becomes its own function — not to raise the ceiling. If that extraction is later measured to
+The real constraint `src` = 2 imposes is a second decision point of any shape: `if` inside
+`for`, a nested `if`, or simply two sequential `if` statements (measured: each reports 3 and
+fails). The fix is to extract — a filtered `for` becomes a comprehension, or a branch becomes
+its own function — not to raise the ceiling. If that extraction is later measured to
 produce worse functions than the branch it replaces, that is a new issue with its own
 measurement of how many functions the new ceiling would free, not an argument from radon's
 scale.
