@@ -3,6 +3,10 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with
 code in this repository.
 
+## Engineering principles
+
+See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+
 ## What this project is
 
 `${PROJECT_NAME}` is a React 19 + TypeScript + Webpack 5 SPA scaffolded from
