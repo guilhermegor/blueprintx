@@ -110,6 +110,23 @@ parse_args() {
     esac
 }
 
+# --publish / --deploy-target are tier-specific. A typo, or a value for a tier that ignores the
+# option, must FAIL — silently dropping it reports a promotion that is not the one asked for.
+require_valid_tier_options() {
+    case "$PUBLISH_TARGET" in
+        none | pypi | test-pypi | both) ;;
+        *) exit_usage_error "--publish must be none, pypi, test-pypi or both" ;;
+    esac
+    case "$DEPLOY_TARGET" in
+        none | pages | vercel) ;;
+        *) exit_usage_error "--deploy-target must be none, pages or vercel" ;;
+    esac
+    [ "$PUBLISH_TARGET" = "none" ] || [ "$TIER" = "lib-minimal" ] \
+        || exit_usage_error "--publish applies to --tier lib-minimal only"
+    [ "$DEPLOY_TARGET" = "none" ] || [ "$TIER" = "react-spa-webpack" ] \
+        || exit_usage_error "--deploy-target applies to --tier react-spa-webpack only"
+}
+
 # Refuse loudly rather than guess: an unknown tier, or a tier whose skeleton no longer
 # exists in this BlueprintX checkout, must FAIL — never silently copy nothing.
 require_known_tier() {
@@ -174,7 +191,7 @@ copy_online_assets_service_tier() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local dest="$PROJECT_PATH" wf
     mkdir -p "$dest/.github/workflows"
-    for wf in tests secret_scan review_threads coderabbit_trigger review_retry pr-gate pr-reconcile contract_drift release; do
+    for wf in tests review_threads coderabbit_trigger review_retry pr-gate pr-reconcile contract_drift release; do
         cp "$common/.github/workflows/$wf.yaml" "$dest/.github/workflows/$wf.yaml"
     done
     cp "$shared/docs_version/docs.yaml" "$dest/.github/workflows/docs.yaml"
@@ -193,7 +210,7 @@ copy_online_assets_lib_minimal() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local skeleton="$BLUEPRINTX_ROOT/templates/lib-minimal" dest="$PROJECT_PATH" wf
     mkdir -p "$dest/.github/workflows"
-    for wf in tests secret_scan review_threads coderabbit_trigger review_retry pr-gate pr-reconcile; do
+    for wf in tests review_threads coderabbit_trigger review_retry pr-gate pr-reconcile; do
         cp "$common/.github/workflows/$wf.yaml" "$dest/.github/workflows/$wf.yaml"
     done
     case "$PUBLISH_TARGET" in
@@ -233,12 +250,23 @@ copy_online_assets_react() {
     print_status "success" "GitHub assets copied (.github, deploy-target=$DEPLOY_TARGET)"
 }
 
+# secret_scan.yaml is opt-in: the scaffolds ship it only when GITGUARDIAN_API_KEY is exported,
+# because ggshield fails every non-bot scan in a repo that has no such secret. Same rule here;
+# set_secret_scan_key then gives the new repo the key. react-spa-webpack never shipped it.
+copy_secret_scan_if_keyed() {
+    [ "$TIER" = "react-spa-webpack" ] && return 0
+    [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0
+    cp "$BLUEPRINTX_ROOT/templates/python-common/.github/workflows/secret_scan.yaml" \
+        "$PROJECT_PATH/.github/workflows/secret_scan.yaml"
+}
+
 copy_online_assets() {
     case "$TIER" in
         lib-minimal) copy_online_assets_lib_minimal ;;
         react-spa-webpack) copy_online_assets_react ;;
         *) copy_online_assets_service_tier ;;
     esac
+    copy_secret_scan_if_keyed
 }
 
 # git_diffs/ is where a real offline user parks exported diffs — never rm -rf blindly.
@@ -408,6 +436,15 @@ create_remote_and_push() {
     print_status "success" "Created $REPOSITORY and pushed"
 }
 
+# Key on stdin, never --body: --body exposes it in gh's process arguments (CWE-200).
+set_secret_scan_key() {
+    [ -f "$PROJECT_PATH/.github/workflows/secret_scan.yaml" ] || return 0
+    [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0
+    printf '%s' "$GITGUARDIAN_API_KEY" | gh secret set GITGUARDIAN_API_KEY --repo "$REPOSITORY" >/dev/null 2>&1 \
+        && print_status "success" "GitGuardian secret-scan key set on $REPOSITORY" \
+        || print_status "warning" "Could not set GITGUARDIAN_API_KEY on $REPOSITORY — secret_scan.yaml will fail until you set it (or delete the workflow)"
+}
+
 # Best-effort: a fresh repo can lag a moment behind API-visibility, and a solo maintainer's
 # exact review policy is a judgment call this script does not prompt for — so a failure here
 # warns rather than aborts an otherwise-complete promotion (the assets are already pushed).
@@ -443,6 +480,7 @@ print_final_summary() {
 main() {
     parse_args "$@"
     require_known_tier
+    require_valid_tier_options
     require_git_repo
 
     detect_state
@@ -463,6 +501,7 @@ main() {
     remove_offline_only
     commit_promotion_changes
     create_remote_and_push
+    set_secret_scan_key
     apply_branch_protection
     print_final_summary
 }

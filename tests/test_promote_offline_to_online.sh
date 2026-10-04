@@ -61,6 +61,22 @@ expect_refuses() {
     fi
 }
 
+# Like expect_refuses, but the refusal must come from the named check: a nonzero exit alone
+# also describes "not a git repo", which these option tests would otherwise hide behind.
+expect_refuses_with() {
+    local desc="$1" needle="$2" out
+    shift 2
+    if out="$("$PROMOTE_SCRIPT" "$@" 2>&1)"; then
+        echo "FAIL ($desc): expected a refusal (nonzero exit), got success"
+        int_failures=$((int_failures + 1))
+    elif [[ "$out" == *"$needle"* ]]; then
+        echo "ok: $desc"
+    else
+        echo "FAIL ($desc): refused, but not by the expected check ($needle)"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 expect_succeeds() {
     local desc="$1"
     shift
@@ -94,6 +110,15 @@ test_gh_unauthenticated() {
     dir="$(make_git_repo "gh-unauth")"
     gh_dir="$(fake_gh_bin_dir)"
     expect_refuses "gh not authenticated is refused" "$gh_dir" "$dir" --tier lib-minimal
+}
+
+test_invalid_tier_options() {
+    local dir="$WORK_DIR/opts"
+    mkdir -p "$dir"
+    expect_refuses_with "an invalid --publish value is refused" "--publish must be" "$dir" --tier lib-minimal --publish bogus
+    expect_refuses_with "an invalid --deploy-target value is refused" "--deploy-target must be" "$dir" --tier react-spa-webpack --deploy-target bogus
+    expect_refuses_with "--publish on a non-lib tier is refused" "applies to --tier lib-minimal only" "$dir" --tier mvc-service-native-db --publish pypi
+    expect_refuses_with "--deploy-target on a non-react tier is refused" "applies to --tier react-spa-webpack only" "$dir" --tier lib-minimal --deploy-target pages
 }
 
 test_origin_without_assets_is_ambiguous() {
@@ -174,6 +199,7 @@ main() {
     test_not_a_git_repo
     test_dirty_tree
     test_gh_unauthenticated
+    test_invalid_tier_options
     test_origin_without_assets_is_ambiguous
     test_already_online_is_a_noop
     test_mutations_on_offline_fixture
