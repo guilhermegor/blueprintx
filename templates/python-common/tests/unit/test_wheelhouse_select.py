@@ -123,6 +123,15 @@ def test_a_manifest_whose_declared_count_agrees_still_passes(tmp_path: Path) -> 
 	assert gate.verify_parts(tmp_path, dict_manifest) == [(tmp_path / "a.part").resolve()]
 
 
+def test_a_non_positive_part_size_is_refused_instead_of_packing_nothing(tmp_path: Path) -> None:
+	"""A zero part size used to produce no parts and a successful, unassemblable manifest."""
+	path_zip = tmp_path / "w.zip"
+	path_zip.write_bytes(b"x")
+
+	with pytest.raises(SystemExit, match="positive"):
+		gate.split_into_parts(path_zip, 0)
+
+
 def test_an_absolute_part_name_cannot_escape_the_transfer_directory(tmp_path: Path) -> None:
 	"""``Path("/srv/parts") / "/etc/passwd"`` is ``/etc/passwd`` — the base is discarded.
 

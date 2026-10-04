@@ -261,6 +261,9 @@ def split_into_parts(path_file: Path, int_part_mb: int) -> list[Path]:
 	list of Path
 		The created part files, in the order they must be concatenated back.
 	"""
+	if int_part_mb < 1:
+		# read(0) returns b"" at once: no parts, a deleted archive and a "successful" manifest.
+		raise SystemExit(f"part size must be a positive number of MB, got {int_part_mb}")
 	int_part_bytes = int_part_mb * 1024 * 1024
 	list_parts: list[Path] = []
 	with path_file.open("rb") as file_in:

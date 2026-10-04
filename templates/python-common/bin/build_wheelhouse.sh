@@ -41,16 +41,20 @@ resolve_target_env() {
 # is the wheelhouse-only pruning DB_BACKEND enables (measured 65 MB -> 45 MB, blueprintx#299).
 # A no-op for tiers that never carry more than one driver.
 driver_prune_list() {
+	# mariadb shares mysql's driver; the app lowercases DB_BACKEND, so match the same way.
 	local -A str_driver_of=(
-		[postgresql]=psycopg [mysql]=mysql-connector-python
+		[postgresql]=psycopg [mysql]=mysql-connector-python [mariadb]=mysql-connector-python
 		[oracle]=oracledb [mssql]=pyodbc
 	)
 	DROP_PACKAGES=()
 	[[ -z "${DB_BACKEND:-}" ]] && return 0
-	local str_key
+	local str_keep="${str_driver_of[${DB_BACKEND,,}]:-}" str_key str_pkg
+	local -A set_dropped=()
 	for str_key in "${!str_driver_of[@]}"; do
-		[[ "$str_key" == "$DB_BACKEND" ]] && continue
-		DROP_PACKAGES+=("${str_driver_of[$str_key]}")
+		str_pkg="${str_driver_of[$str_key]}"
+		[[ "$str_pkg" == "$str_keep" || -n "${set_dropped[$str_pkg]:-}" ]] && continue
+		set_dropped[$str_pkg]=1
+		DROP_PACKAGES+=("$str_pkg")
 	done
 }
 
