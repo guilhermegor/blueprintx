@@ -136,7 +136,36 @@ test_already_online_is_a_noop() {
     echo "name: tests" >"$dir/.github/workflows/tests.yaml"
     git -C "$dir" add -A
     git -C "$dir" commit -q -m "chore: seed github assets"
+    git -C "$dir" update-ref refs/remotes/origin/main HEAD
     expect_succeeds "already-online project is a clean no-op" "$dir" --tier lib-minimal
+}
+
+test_origin_never_pushed_is_not_online() {
+    local dir
+    dir="$(make_git_repo "never-pushed")"
+    git -C "$dir" remote add origin "https://github.com/example/does-not-exist.git"
+    mkdir -p "$dir/.github/workflows"
+    echo "name: tests" >"$dir/.github/workflows/tests.yaml"
+    git -C "$dir" add -A
+    git -C "$dir" commit -q -m "chore: seed github assets"
+    expect_refuses_with "origin + workflows but no pushed ref is refused, not 'already online'" "nothing was ever pushed" "$dir" --tier lib-minimal
+}
+
+# The restored no-commit-to-branch hook must not block the promotion commit on main, and no
+# OTHER hook may be skipped: the stub refuses unless SKIP is exactly that one hook id.
+test_promotion_commit_skips_only_no_commit_to_branch() {
+    local dir
+    dir="$(make_git_repo "commit-skip")"
+    printf '#!/bin/bash\n[ "${SKIP:-}" = "no-commit-to-branch" ] || { echo "SKIP=${SKIP:-}" >&2; exit 1; }\n' >"$dir/.git/hooks/pre-commit"
+    chmod +x "$dir/.git/hooks/pre-commit"
+    echo "promoted" >"$dir/promoted.txt"
+    if bash -c 'source "$1"; PROJECT_PATH="$2"; commit_promotion_changes' _ "$PROMOTE_SCRIPT" "$dir" >/dev/null 2>&1 \
+        && [ -z "$(git -C "$dir" status --porcelain)" ]; then
+        echo "ok: promotion commit skips only no-commit-to-branch"
+    else
+        echo "FAIL (promotion commit skips only no-commit-to-branch): commit did not land"
+        int_failures=$((int_failures + 1))
+    fi
 }
 
 # White-box: sources the script (guarded — see its trailing BASH_SOURCE check) to call its
@@ -202,6 +231,8 @@ main() {
     test_invalid_tier_options
     test_origin_without_assets_is_ambiguous
     test_already_online_is_a_noop
+    test_origin_never_pushed_is_not_online
+    test_promotion_commit_skips_only_no_commit_to_branch
     test_mutations_on_offline_fixture
 
     if [ "$int_failures" -eq 0 ]; then

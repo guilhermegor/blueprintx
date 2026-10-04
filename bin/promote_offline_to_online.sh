@@ -422,8 +422,16 @@ PY
 commit_promotion_changes() {
     [ -n "$(git -C "$PROJECT_PATH" status --porcelain)" ] || return 0
     git -C "$PROJECT_PATH" add -A
-    git -C "$PROJECT_PATH" commit -q -m "chore: promote project to online GitHub workflow"
+    # Only no-commit-to-branch is skipped: an offline project commits on main by design, and the
+    # stock hook restored just above would refuse this one promotion commit. Every other hook runs.
+    SKIP=no-commit-to-branch git -C "$PROJECT_PATH" commit -q -m "chore: promote project to online GitHub workflow"
     print_status "success" "Committed promotion changes"
+}
+
+# `gh repo create --push` records refs/remotes/origin/<branch> only when the push succeeded, so
+# a local ref check (no network) tells "online" apart from "remote added, nothing pushed".
+has_pushed_remote_ref() {
+    [ -n "$(git -C "$PROJECT_PATH" for-each-ref --count=1 refs/remotes/origin)" ]
 }
 
 # gh repo create --source=. --push both creates the remote GitHub repo AND pushes the
@@ -433,6 +441,8 @@ create_remote_and_push() {
     [ "$VISIBILITY" = "public" ] && visibility_flag="--public"
     (cd "$PROJECT_PATH" && gh repo create "$REPOSITORY" "$visibility_flag" --source=. --remote=origin --push) \
         || exit_error "Failed to create/push $REPOSITORY via gh repo create."
+    has_pushed_remote_ref \
+        || exit_error "$REPOSITORY was created but nothing was pushed — promotion is INCOMPLETE. Run: git -C $PROJECT_PATH push -u origin HEAD"
     print_status "success" "Created $REPOSITORY and pushed"
 }
 
@@ -484,6 +494,9 @@ main() {
     require_git_repo
 
     detect_state
+    if [ "$HAS_ORIGIN" = "true" ] && [ "$HAS_GITHUB_ASSETS" = "true" ] && ! has_pushed_remote_ref; then
+        exit_error "$PROJECT_PATH has an 'origin' and .github/workflows but nothing was ever pushed (a failed first push?) — not online. Run: git -C $PROJECT_PATH push -u origin HEAD"
+    fi
     if [ "$HAS_ORIGIN" = "true" ] && [ "$HAS_GITHUB_ASSETS" = "true" ]; then
         print_status "success" "$PROJECT_PATH is already online (origin set, .github/workflows populated) — nothing to do."
         exit 0

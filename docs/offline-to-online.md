@@ -84,7 +84,7 @@ list `apply_offline_mode` ships, and other tooling may still use it.
 
 ## Preconditions — refuse loudly, never half-promote
 
-Checked before any file is touched, in this order: the target is a git repository; not already
+Checked before any file is touched, in this order: the tier and its tier-specific options are valid; the target is a git repository; not already
 fully online (an `origin` remote **and** a populated `.github/workflows/` — that combination is a
 clean no-op, exit 0); not in the ambiguous state of an `origin` remote **without** GitHub assets
 (refuses — could be mid-promotion or a manually-added remote, and guessing which is exactly what
