@@ -63,6 +63,15 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
 	def update(self, record_id: str, updates: Record) -> Record | None:
 		"""Update a record and return the new value if it exists.
 
+		⚠️ **Atomicity is part of this contract, not an implementation detail.** The
+		read of the current value and the write of the merged value MUST happen inside
+		ONE transaction with the row held under a pessimistic lock, so two concurrent
+		updates to different fields both survive. An implementation that reads through
+		``read()`` and writes through ``create()`` uses two connections and silently
+		loses one of the two writes. Callers may therefore rely on last-writer-wins per
+		FIELD, never per record, and never have to retry. See
+		``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
+
 		Parameters
 		----------
 		record_id : str
