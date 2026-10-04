@@ -661,6 +661,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#branch-coverage-and-the-floors-measurement-427" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branch coverage and the floor's measurement (#427)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#wired-on-both-sides" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1453,6 +1464,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#branch-coverage-and-the-floors-measurement-427" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branch coverage and the floor's measurement (#427)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#wired-on-both-sides" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1563,6 +1585,65 @@ that degrades back into a second hand-written list.</p>
 <p>It refuses to report success, however, when <code>.coveragerc</code> is missing, its <code>omit</code> list is
 empty, or <code>src/</code> has zero <code>.py</code> files — those are "discovery is broken," never "nothing to
 check."</p>
+<h2 id="branch-coverage-and-the-floors-measurement-427">Branch coverage and the floor's measurement (#427)<a class="headerlink" href="#branch-coverage-and-the-floors-measurement-427" title="Permanent link">&para;</a></h2>
+<p><code>.coveragerc</code> sets <code>branch = True</code>: statement coverage marks an <code>if</code> fully covered the moment
+either arm runs once, so the untaken arm is invisible. The floor was measured, not assumed.
+Each tier was scaffolded and measured with <code>bin/ci/scaffold_lint_test.sh</code>-style generated
+projects (not the template root, which pins different tool versions), statement-only first and
+then with <code>--cov-branch</code> on the same suite:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Statement-only</th>
+<th><code>--cov-branch</code></th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ddd-service-native-db</code></td>
+<td>100%</td>
+<td>100%</td>
+<td>measured set is empty: all capability code outside <code>example_feature</code> is in <code>omit</code></td>
+</tr>
+<tr>
+<td><code>ddd-service-orm-db</code></td>
+<td>100%</td>
+<td>100%</td>
+<td>same, so these two tiers give no evidence either way</td>
+</tr>
+<tr>
+<td><code>mvc-service-native-db</code></td>
+<td>80%</td>
+<td>81%</td>
+<td>branch coverage can rise: missed lines can be straight-line code with no branch of their own</td>
+</tr>
+<tr>
+<td><code>mvc-service-orm-db</code></td>
+<td>76%</td>
+<td>76%</td>
+<td>already below the floor before <code>branch = True</code>; not introduced by it</td>
+</tr>
+<tr>
+<td><code>lib-minimal</code></td>
+<td>100%</td>
+<td>100%</td>
+<td>two-file skeleton, nothing to branch on</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The floor stays at 80.</strong> #427 forbids lowering it to accommodate <code>branch = True</code>, and the
+floor is shared by every tier that copies this file, so setting it to the worst tier (76)
+would silently loosen it for <code>mvc-service-native-db</code> (81%) and for the DDD tiers' first real
+capability code. Turning branch coverage on dropped no tier below its statement-only figure.</p>
+<p>The one finding is a <strong>pre-existing gap</strong>: <code>mvc-service-orm-db</code> measures 76% against an 80
+floor, in <code>model/example_entity.py</code> and <code>controller/_pipeline.py</code> (untaken branches). Closing
+it means new tests for those two files, tracked separately from this change. Note that
+<code>poe unit_tests</code> does not pass <code>--cov</code>; the floor is compared only by the pre-commit
+<code>coverage-check</code> hook and the CI coverage gate.</p>
+<p><code>lib-minimal</code> ships its own <code>.coveragerc</code> and sets <code>branch = True</code> there too, so the metric
+means the same thing in every tier. It declares no <code>fail_under</code>, which this change leaves as is.</p>
 <h2 id="wired-on-both-sides">Wired on both sides<a class="headerlink" href="#wired-on-both-sides" title="Permanent link">&para;</a></h2>
 <p>Pre-commit hook <code>coverage-floor</code> and the CI step "Run Coverage Floor Gate" in
 <code>.github/workflows/tests.yaml</code> both run <code>bin/check_coverage_floor.py</code> — one implementation,
