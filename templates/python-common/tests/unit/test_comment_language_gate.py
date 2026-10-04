@@ -423,6 +423,4 @@ def test_bare_root_flag_fails_instead_of_checking_nothing(
 	str_out = capsys.readouterr().out
 
 	assert int_status == 1, "a bare --root reported success"
-	assert "--root needs a directory" in str_out, (
-		f"failed without naming the reason: {str_out!r}"
-	)
+	assert "--root needs a directory" in str_out, f"failed without naming the reason: {str_out!r}"
