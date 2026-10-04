@@ -48,11 +48,6 @@ def test_dashed_dbname_rejected_before_subprocess_runs(str_target: str, str_dsn:
 	str_module, str_class = str_target.split(".")
 	cls_module = importlib.import_module(f"chassis.db_schema.infrastructure.{str_module}")
 	cls_handler_type = getattr(cls_module, str_class)
-	with patch("subprocess.run") as mock_run:
-		try:
-			cls_handler_type(str_dsn)
-		except ValueError as err:
-			str_error = str(err)
-		else:
-			str_error = ""
-	assert ("database name" in str_error, mock_run.call_count) == (True, 0)
+	with patch("subprocess.run") as mock_run, pytest.raises(ValueError, match="database name"):
+		cls_handler_type(str_dsn)
+	assert mock_run.call_count == 0
