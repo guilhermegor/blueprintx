@@ -87,8 +87,12 @@ def sha256_of(path_file: Path) -> str:
 	return obj_hash.hexdigest()
 
 
-_IMPLEMENTATION_NAMES = {"cpython": "CPython", "pypy": "PyPy", "jython": "Jython",
-	"ironpython": "IronPython"}
+_IMPLEMENTATION_NAMES = {
+	"cpython": "CPython",
+	"pypy": "PyPy",
+	"jython": "Jython",
+	"ironpython": "IronPython",
+}
 
 
 def _canonical_implementation(str_implementation: str) -> str:
@@ -487,7 +491,8 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
 	if path_manifest.is_file():
 		dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
 		list_parts = verify_parts(dir_source, dict_manifest)
-		path_zip_tmp = _contained_path(dir_source, dict_manifest.get("zip_name") or "wheelhouse.zip")
+		str_zip_name = dict_manifest.get("zip_name") or "wheelhouse.zip"
+		path_zip_tmp = _contained_path(dir_source, str_zip_name)
 		reassemble_zip(list_parts, dict_manifest, path_zip_tmp)
 		int_count = unzip_wheels(path_zip_tmp, dir_out)
 		path_zip_tmp.unlink()

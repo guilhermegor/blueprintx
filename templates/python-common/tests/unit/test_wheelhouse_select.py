@@ -14,7 +14,6 @@ confident wrong answer, which is why they need tests rather than review.
 """
 
 import importlib.util
-import json
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -48,14 +47,14 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("wheelhouse_select")
 
 
-def _manifest(list_parts: list[dict], **kwargs) -> dict:
+def _manifest(list_parts: list[dict], **kwargs: object) -> dict:
 	"""Build a manifest with sane defaults, overridable per test.
 
 	Parameters
 	----------
 	list_parts : list of dict
 		The ``parts`` entries.
-	**kwargs
+	**kwargs : object
 		Fields overriding the defaults.
 
 	Returns
@@ -63,8 +62,11 @@ def _manifest(list_parts: list[dict], **kwargs) -> dict:
 	dict
 		A manifest shaped like the one ``pack_wheelhouse`` writes.
 	"""
-	dict_manifest = {"parts": list_parts, "part_count": len(list_parts),
-		"zip_name": "wheelhouse.zip"}
+	dict_manifest = {
+		"parts": list_parts,
+		"part_count": len(list_parts),
+		"zip_name": "wheelhouse.zip",
+	}
 	dict_manifest.update(kwargs)
 	return dict_manifest
 
