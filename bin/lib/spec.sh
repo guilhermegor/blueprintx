@@ -225,6 +225,7 @@ spec_stdin_for_skeleton() {
             ;;
         lib-minimal)
             _spec_answer_logs "$file"
+            _spec_answer_otel "$file"
             _spec_answer_docker_compose "$file"
             _spec_answer_publish_targets "$file"
             _spec_answer_review_bot "$file"
@@ -263,7 +264,7 @@ spec_describe_skeleton() {
                 env_wise_config:n review_bot_roster:n git_remote:n)
             ;;
         lib-minimal)
-            keys=(logs:n docker_compose:n docker_db_backend:postgresql \
+            keys=(logs:n otel:n docker_compose:n docker_db_backend:postgresql \
                 publish_pypi:y publish_test_pypi:y consume_private:n \
                 review_bot_roster:n git_remote:n)
             ;;

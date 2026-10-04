@@ -34,6 +34,7 @@ license=MIT
 github_username=my-github-user
 
 logs=n
+otel=n
 docker_compose=n
 publish_pypi=y
 publish_test_pypi=y
@@ -95,6 +96,7 @@ Same as the DDD tiers, **minus `storage`** (MVC has no schema-less storage promp
 | Key | Default | Notes |
 |---|---|---|
 | `logs` | `n` | Ships the in-repo logging helper (`utils/logs.py`). |
+| `otel` | `n` | Ships the OTLP log-export helper (`_internal/utils/otel_logging.py`). |
 | `docker_compose` | `n` | Same shape as the service tiers. |
 | `publish_pypi` | `y` | Ship `release-pypi.yaml`. |
 | `publish_test_pypi` | `y` | Ship `release-test-pypi.yaml`. |

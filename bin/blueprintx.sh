@@ -539,6 +539,18 @@ create_project() {
 }
 
 
+# Validate spec values against the chosen skeleton before any file is written: a bad value would
+# otherwise reach the scaffold, which reads a nonexistent license template after the project
+# dir already exists. Reads LANG_CHOICE, SKELETON_CHOICE and LICENSE_CHOICE.
+validate_spec_answers() {
+    local skeleton_language
+    skeleton_language=$(grep '^language=' "$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta" | cut -d= -f2-)
+    [ "$LANG_CHOICE" = "$skeleton_language" ] \
+        || exit_error "--spec: skeleton '$SKELETON_CHOICE' is a '$skeleton_language' skeleton, not '$LANG_CHOICE'."
+    [ -f "$TEMPLATES_ROOT/licenses/$LICENSE_CHOICE" ] \
+        || exit_error "--spec: unknown license '$LICENSE_CHOICE' (no templates/licenses/$LICENSE_CHOICE)."
+}
+
 #
 # --spec: answer blueprintx's own top-level prompts (project_name, ...,
 # skeleton, license) plus every scaffold-internal prompt by NAME instead of
@@ -560,6 +572,8 @@ run_create_flow_from_spec() {
     [ -f "$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta" ] \
         || exit_error "--spec: unknown skeleton '$SKELETON_CHOICE'."
     LICENSE_CHOICE=$(spec_get "$SPEC_FILE" license MIT)
+
+    validate_spec_answers
 
     if [ "$DRY_RUN" -eq 1 ]; then
         print_status "info" "Dry-run (--spec): resolved answers for '$SKELETON_CHOICE'"
