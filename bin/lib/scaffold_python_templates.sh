@@ -222,6 +222,9 @@ scaffold_copy_executables_and_vscode() {
 	# `python bin/check_review_threads.py` needs no change.
 	cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" \
 		"$str_project_path/bin/check_review_threads.py"
+	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+	# commit, never templated principles. See .specs/spec.md for the id conventions.
+	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
 
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"
@@ -239,6 +242,24 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/.vscode/tasks.json"
 }
 
+# The per-directory leaf CLAUDE.md docs. They are the asset class the copy lists kept
+# forgetting: nothing imports a doc, no test fails without it, and the generated project is
+# green precisely because the file is not there — so a doc written in python-common could sit
+# unshipped indefinitely (blueprintx#325). bin/ci/check_test_copy_lists.py now scans this
+# copy list as a third asset class, next to shared tests and shared workflows.
+#
+# src/config/CLAUDE.md is NOT here: each tier copies it in its own copy_global_config, next to
+# the config payload it documents. Moving it would be a behaviour change in five scaffolds for
+# no gain — the gate accepts either home.
+scaffold_copy_leaf_docs() {
+	local str_project_path="$1"
+
+	mkdir -p "$str_project_path/src/config/contracts" "$str_project_path/src/utils"
+	cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/CLAUDE.md" \
+		"$str_project_path/src/config/contracts/CLAUDE.md"
+	cp "$COMMON_TEMPLATE_ROOT/src/utils/CLAUDE.md" "$str_project_path/src/utils/CLAUDE.md"
+}
+
 scaffold_copy_common_templates() {
 	local str_tier="$1"
 	local str_project_path="$2"
@@ -249,5 +270,11 @@ scaffold_copy_common_templates() {
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	scaffold_copy_leaf_docs "$str_project_path"
+	# Every skeleton's root CLAUDE.md points readers at `.claude/CLAUDE.md` for the
+	# conventions shared across all skeletons (blueprintx#549) — copy the single
+	# source so that pointer resolves instead of dangling.
+	mkdir -p "$str_project_path/.claude"
+	cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$str_project_path/.claude/CLAUDE.md"
 	print_status "success" "Common templates applied"
 }
