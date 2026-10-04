@@ -61,7 +61,9 @@ shopt -s dotglob nullglob
 # itself. This allowance skips ONLY the top-level docs/backlog/ (reported loudly each run, never
 # silently) — every other rule stays enforced, and the regression suite runs with it OFF so the
 # backlog rule itself stays pinned. When #580 merges, delete this variable, the branch in
-# walk(), and the test that exercises it.
+# walk(), the self-cleaning check below it, and the tests that exercise them. Tracked on #580
+# ("after this merges, remove the docs/backlog/ allowance added by #546"); the gate also fails
+# by itself once docs/backlog/ is gone while this allowance is still here.
 STR_ALLOW_LEGACY_BACKLOG="${DOCS_BOUNDARY_ALLOW_LEGACY_BACKLOG:-1}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -79,6 +81,14 @@ fi
 # gate_free_surface: a check that cannot see its subject is not a check that passed one.
 if [ ! -r "$DOCS_DIR" ]; then
     echo "ERROR: docs/ exists but is not readable" >&2
+    exit 1
+fi
+
+# Self-cleaning: an allowance for a directory that no longer exists is dead weight that would
+# silently re-admit a future docs/backlog/, so fail loudly until it is removed (blueprintx#580).
+if [ "$STR_ALLOW_LEGACY_BACKLOG" = "1" ] && [ ! -e "$DOCS_DIR/backlog" ]; then
+    echo "ERROR: docs/backlog/ is gone — remove the temporary docs/backlog/ allowance" \
+         "(STR_ALLOW_LEGACY_BACKLOG) from this script; it was added for blueprintx#580" >&2
     exit 1
 fi
 

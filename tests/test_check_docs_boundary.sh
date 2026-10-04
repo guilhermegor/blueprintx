@@ -105,6 +105,21 @@ test_legacy_backlog_allowance_is_loud_and_narrow() {
     fi
 }
 
+test_legacy_allowance_fails_once_backlog_is_gone() {
+    # TEMPORARY (remove with blueprintx#580): the allowance cleans itself up. With no
+    # docs/backlog/ and the allowance still on, the gate must fail and say so.
+    local str_root str_out str_got="pass"
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/docs"
+    printf '# Hello\n' > "$str_root/docs/index.md"
+    str_out="$(DOCS_BOUNDARY_ALLOW_LEGACY_BACKLOG=1 bash "$str_root/bin/ci/check_docs_boundary.sh" 2>&1)" || str_got="fail"
+    rm -rf "$str_root"
+    if [ "$str_got" != "fail" ] || ! printf '%s' "$str_out" | grep -qF "remove the temporary"; then
+        print_status "error" "stale allowance -> $str_got without asking for its removal: $str_out"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 test_lessons_file_fails() {
     local str_root
     str_root="$(make_sandbox)"
@@ -295,6 +310,7 @@ main() {
     test_clean_docs_passes
     test_docs_backlog_fails
     test_legacy_backlog_allowance_is_loud_and_narrow
+    test_legacy_allowance_fails_once_backlog_is_gone
     test_lessons_file_fails
     test_superpowers_segment_fails
     test_design_md_fails
