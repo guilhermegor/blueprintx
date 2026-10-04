@@ -20,6 +20,12 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
 | `coverage-floor.md` | Utility page | Design record for `bin/check_coverage_floor.py` (blueprintx#149) — why `.coveragerc`'s `omit` list needed a code-derived floor, how it derives one, and why it stays deliberately coarse |
+| `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239) |
+| `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |
+| `quality-gate-blind-spots.md` | Utility page | Measured audit of what the quality gates cannot see (blueprintx#169) |
+| `required-status-checks.md` | Utility page | Which checks `REQUIRED_CHECKS` should seed per scaffolded tier (blueprintx#164) |
+| `skeletons.md` | Skeleton overview | API Service (Native DB) — hexagonal HTTP service with a transport layer |
+| `skeletons/bash-cli.md` | Skeleton overview | Standalone Bash CLI starter (`bash-cli`), git-tag versioned, bats + shellcheck |
 | `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
 | `py-mvc-service-native-db.md` | Skeleton overview | Layered MVC scaffold using native DB drivers (script/pipeline style) |
@@ -50,6 +56,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 |-----------|----------|
 | `py-examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
 | `py-examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
+| `skeletons/` | Skeleton overviews that live in a subfolder (`bash-cli.md`) |
 | `backlog/` | **Non-published** work-to-do backlogs (e.g. template backport notes). Excluded from the built site — see below. |
 | `superpowers/` | **Non-published** internal specs and plans. Excluded from the built site — see below. |
 

@@ -118,6 +118,16 @@ repos:
         pass_filenames: false
         files: (^|/)\.github/workflows/.*\.(yml|yaml)$
 
+      - id: docs-gap
+        name: docs gap (published pages registered in mkdocs nav + docs/CLAUDE.md index, blueprintx#340)
+        # Same ONE-implementation treatment as function-length: the shared gate in
+        # python-common, run over THIS repo via --root. always_run because removing or
+        # renaming a page is exactly the change a files: filter would never see.
+        entry: python3 templates/python-common/bin/check_docs_gap.py --root .
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: function-length
         name: function length (60 lines, docstring excluded)
         # Runs templates/python-common/bin/check_function_length.py over THIS repo via

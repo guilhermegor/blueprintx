@@ -77,6 +77,20 @@ jobs:
       - name: Verify INCLUDE_REVIEW_BOT_ROSTER=false omits the roster on all three scaffold shapes
         run: bash bin/ci/check_review_bot_roster_optout.sh
 
+  docs-gap:
+    name: Docs gap — published pages registered in nav and index
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # Stdlib-only, same shape as function-length below: ONE implementation run over this
+      # repo via --root (blueprintx#340).
+      - name: Check every published docs page reaches mkdocs nav and the docs/CLAUDE.md index
+        run: python3 templates/python-common/bin/check_docs_gap.py --root .
+
   function-length:
     name: Function length — 60 lines, docstring excluded
     runs-on: ubuntu-latest
