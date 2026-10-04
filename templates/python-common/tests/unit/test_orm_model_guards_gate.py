@@ -114,9 +114,8 @@ def test_bitwise_operator_outside_where_filter_is_not_flagged(tmp_path: Path) ->
 
 def test_no_sqlalchemy_import_skips_the_bitwise_check(tmp_path: Path) -> None:
 	"""A file with no ``sqlalchemy`` import is out of scope (e.g. a pandas ``.filter()``)."""
-	# Positional, not `items=`: `.where()`/`.filter()` take positional criteria, and the
-	# scanner only reads positional args -- with `items=` the fixture passed even with
-	# `_imports_sqlalchemy` deleted, so it proved nothing about the import gate.
+	# The scanner reads only positional arguments, so the criteria go in positionally.
+	# A keyword fixture stayed green with the scope check deleted, proving nothing about it.
 	path_file = _python_file(tmp_path, "df.filter(a & b)\n")
 
 	assert gate.check_python_file(path_file)[0] == []
