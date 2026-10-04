@@ -424,3 +424,24 @@ def test_bare_root_flag_fails_instead_of_checking_nothing(
 
 	assert int_status == 1, "a bare --root reported success"
 	assert "--root needs a directory" in str_out, f"failed without naming the reason: {str_out!r}"
+
+
+@pytest.mark.parametrize("list_argv", [["a.py", "--root", "x"], ["--root=x"]])
+def test_misplaced_root_flag_fails_instead_of_checking_nothing(
+	list_argv: list[str],
+	capsys: pytest.CaptureFixture,
+) -> None:
+	"""``--root`` anywhere but first must exit non-zero, not fall into the filename list.
+
+	Parameters
+	----------
+	list_argv : list of str
+		An argv carrying ``--root`` in a position the gate does not parse.
+	capsys : pytest.CaptureFixture
+		Captures the gate's message, so the assertion names the reason.
+	"""
+	int_status = gate.main(list_argv)
+	str_out = capsys.readouterr().out
+
+	assert int_status == 1, f"{list_argv} reported success"
+	assert "--root must be the first argument" in str_out, f"no reason named: {str_out!r}"

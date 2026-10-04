@@ -602,16 +602,19 @@ def split_root_option(list_argv: list) -> tuple:
 	Raises
 	------
 	ValueError
-		When ``--root`` is passed with no directory after it. Returning it as a filename
-		instead makes the gate print success for having checked nothing — measured on
-		blueprintx#247: `check_comment_language.py --root` exited 0. `check_function_length.py`,
-		the seam this mirrors, already rejects the same argv.
+		When ``--root`` is passed with no directory after it, or anywhere but first.
+		Returning it as a filename instead makes the gate print success for having checked
+		nothing — measured on blueprintx#247: `check_comment_language.py --root` exited 0.
+		`check_function_length.py`, the seam this mirrors, already rejects the same argv.
 	"""
 	if list_argv[:1] == ["--root"]:
-		if len(list_argv) < _INT_FLAG_WITH_VALUE:
+		if len(list_argv) < _INT_FLAG_WITH_VALUE or not list_argv[1]:
 			msg = "--root needs a directory"
 			raise ValueError(msg)
 		return pathlib.Path(list_argv[1]).resolve(), list_argv[2:]
+	if any(str_arg == "--root" or str_arg.startswith("--root=") for str_arg in list_argv):
+		msg = "--root must be the first argument, as `--root <dir>`"
+		raise ValueError(msg)
 	return None, list_argv
 
 
@@ -670,10 +673,9 @@ def main(list_argv: list) -> int:
 	if list_problems:
 		print(
 			f"\n{len(list_problems)} comment(s) read as Portuguese. Comments, docstrings and "
-			f"symbol names are English (root CLAUDE.md, 'Documentation language'); only "
-			f"README.md and docs/ follow the project's locale. If a flagged line is English and "
-			f"merely quotes "
-			f"Portuguese text, add {STR_ESCAPE} to it rather than rewording the sentence."
+			f"symbol names are English; only README.md and docs/ follow the project's "
+			f"locale. If a flagged line is English and merely quotes Portuguese text, add "
+			f"{STR_ESCAPE} to it rather than rewording the sentence."
 		)
 	return 1 if list_problems else 0
 

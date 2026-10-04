@@ -26,7 +26,7 @@ into `theme.language` in the project's `mkdocs.yml`, so Material's search and UI
 follow the pages. Running a `bin/scaffold/*.sh` script directly, without the menu, falls back
 to `en`.
 
-Two things the choice does **not** change:
+Three things the choice does **not** change:
 
 - **The shipped page text.** The templates are English; `pt-BR` sets the MkDocs UI language
   and the project's declared locale, and translating the pages is left to the project.

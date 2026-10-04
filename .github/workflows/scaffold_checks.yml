@@ -384,6 +384,9 @@ jobs:
       - name: Should-fail regression tests for validate_meta.sh
         run: bash tests/test_validate_meta.sh
 
+      - name: Should-fail regression tests for the docs-locale prompt
+        run: bash tests/test_docs_locale_prompt.sh
+
   specs-structure:
     name: .specs/ structure guard
     runs-on: ubuntu-latest

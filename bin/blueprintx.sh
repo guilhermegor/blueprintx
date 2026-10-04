@@ -589,7 +589,7 @@ run_create_flow() {
     print_status "config" "Location: $PROJECT_ROOT/$PROJECT_NAME"
     print_status "config" "Skeleton: $SKELETON_CHOICE"
     print_status "config" "License: $LICENSE_CHOICE"
-    print_status "config" "Docs locale: $DOCS_LOCALE"
+    print_status "config" "Docs locale: $DOCS_LOCALE (MkDocs skeletons only)"
     if [ "$DEV_MODE" -eq 1 ]; then
         print_status "warning" "Dev mode: project scaffolded in temp directory"
         if [ "$CLEAN_TEMP" -ne 1 ]; then
