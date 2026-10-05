@@ -104,7 +104,8 @@ capability code. Turning branch coverage on dropped no tier below its statement-
 
 The one finding is a **pre-existing gap**: `mvc-service-orm-db` measures 76% against an 80
 floor, in `model/example_entity.py` and `controller/_pipeline.py` (untaken branches). Closing
-it means new tests for those two files, tracked separately from this change. Note that
+it means new tests for those two files, tracked in
+[#617](https://github.com/guilhermegor/blueprintx/issues/617). Note that
 `poe unit_tests` does not pass `--cov`; the floor is compared only by the pre-commit
 `coverage-check` hook and the CI coverage gate.
 
