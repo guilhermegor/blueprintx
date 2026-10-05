@@ -33,28 +33,28 @@ import pytest
 # Illustrative family (stand-in for `import myproj.section as family`)
 # --------------------------
 class _Reader:
-	"""Base of the illustrative family; each member must declare ``_KNOB``."""
+    """Base of the illustrative family; each member must declare ``_KNOB``."""
 
 
 class _AlphaReader(_Reader):
-	"""One family member."""
+    """One family member."""
 
-	_KNOB: int = 1
+    _KNOB: int = 1
 
 
 class _BetaReader(_Reader):
-	"""Another family member."""
+    """Another family member."""
 
-	_KNOB: int = 2
+    _KNOB: int = 2
 
 
 # In your project this is `family.__all__` — the declared public surface. Discover
 # the members from it; never hand-list the CLASSES themselves.
 _FAMILY_NAMES = ("_AlphaReader", "_BetaReader")
 _FAMILY = tuple(
-	obj
-	for obj in (globals()[name] for name in _FAMILY_NAMES)
-	if inspect.isclass(obj) and issubclass(obj, _Reader)
+    obj
+    for obj in (globals()[name] for name in _FAMILY_NAMES)
+    if inspect.isclass(obj) and issubclass(obj, _Reader)
 )
 
 
@@ -62,23 +62,23 @@ _FAMILY = tuple(
 # Tests
 # --------------------------
 def test_discovery_matches_declared_surface() -> None:
-	"""Guard the discovery itself: every declared name resolves to a member.
+    """Guard the discovery itself: every declared name resolves to a member.
 
-	If ``_FAMILY`` drifts from the declared surface — a name added that is not a
-	family member, or a member dropped — the per-member test below would silently
-	stop covering it, so assert the discovery is complete and non-empty first.
-	"""
-	assert _FAMILY, "the family must not be empty"
-	assert len(_FAMILY) == len(_FAMILY_NAMES)
+    If ``_FAMILY`` drifts from the declared surface — a name added that is not a
+    family member, or a member dropped — the per-member test below would silently
+    stop covering it, so assert the discovery is complete and non-empty first.
+    """
+    assert _FAMILY, "the family must not be empty"
+    assert len(_FAMILY) == len(_FAMILY_NAMES)
 
 
 @pytest.mark.parametrize("cls_member", _FAMILY, ids=lambda cls: cls.__name__)
 def test_member_declares_the_convention(cls_member: type) -> None:
-	"""Assert each discovered family member declares the required knob.
+    """Assert each discovered family member declares the required knob.
 
-	Parameters
-	----------
-	cls_member : type
-		A family member discovered from the public surface.
-	"""
-	assert isinstance(cls_member._KNOB, int)
+    Parameters
+    ----------
+    cls_member : type
+            A family member discovered from the public surface.
+    """
+    assert isinstance(cls_member._KNOB, int)
