@@ -445,3 +445,33 @@ def test_misplaced_root_flag_fails_instead_of_checking_nothing(
 
 	assert int_status == 1, f"{list_argv} reported success"
 	assert "--root must be the first argument" in str_out, f"no reason named: {str_out!r}"
+
+
+def test_named_file_resolves_against_root_not_cwd(
+	tmp_path: Path,
+	monkeypatch: pytest.MonkeyPatch,
+	capsys: pytest.CaptureFixture,
+) -> None:
+	"""A relative filename after ``--root`` is read under that root, whatever the cwd.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Holds the root and an unrelated working directory.
+	monkeypatch : pytest.MonkeyPatch
+		Moves the cwd away from the root.
+	capsys : pytest.CaptureFixture
+		Captures the success banner naming the file count.
+	"""
+	path_root = tmp_path / "root"
+	path_root.mkdir()
+	(path_root / "ok.py").write_text('"""Fine."""\n')
+	path_cwd = tmp_path / "elsewhere"
+	path_cwd.mkdir()
+	monkeypatch.chdir(path_cwd)
+	# Registering the module root here makes teardown undo the rebind the gate performs.
+	monkeypatch.setattr(gate, "PATH_ROOT", gate.PATH_ROOT)
+
+	int_status = gate.main(["--root", str(path_root), "ok.py"])
+
+	assert int_status == 0, capsys.readouterr().out

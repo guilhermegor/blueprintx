@@ -641,8 +641,9 @@ def main(list_argv: list) -> int:
 	if path_root is not None:
 		PATH_ROOT = path_root
 	bool_audit = not list_argv
+	path_base = path_root or pathlib.Path.cwd()
 	list_paths = (
-		[pathlib.Path(str_name).resolve() for str_name in list_argv]
+		[(path_base / str_name).resolve() for str_name in list_argv]
 		if list_argv
 		else audit_paths()
 	)
