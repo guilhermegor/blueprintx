@@ -31,7 +31,7 @@ run_pin_check() {
 
 write_workflow() {
 	local str_uses="$1" str_file
-	str_file="$(mktemp --suffix=.yml)"
+	str_file="$(mktemp -d)/witness.yml"
 	cat > "$str_file" <<EOF
 name: witness
 on: push
@@ -50,7 +50,7 @@ expect_gate() {
 	local str_desc="$1" str_want="$2" str_needle="$3" str_file str_got="pass" str_out
 	str_file="$(write_workflow "$4")"
 	str_out="$(run_pin_check "$str_file")" || str_got="fail"
-	rm -f "$str_file"
+	rm -rf "$(dirname "$str_file")"
 	if [ "$str_got" != "$str_want" ]; then
 		print_status "error" "$str_desc -> $str_got (expected $str_want): $str_out"
 		int_failures=$((int_failures + 1))

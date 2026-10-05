@@ -133,7 +133,11 @@ main() {
 	check_job_timeouts "${list_workflows[@]}"
 	# Templates only until the follow-up filed from blueprintx#369 pins this repo's own
 	# workflows; then drop the filter and pass the full list.
-	mapfile -t list_template_workflows < <(printf '%s\n' "${list_workflows[@]}" | grep '^templates/')
+	mapfile -t list_template_workflows < <(printf '%s\n' "${list_workflows[@]}" | grep '^templates/' || true)
+	if [ "${#list_template_workflows[@]}" -eq 0 ]; then
+		echo "no template workflows discovered — the pin gate would pass vacuously" >&2
+		exit 1
+	fi
 	check_action_pins "${list_template_workflows[@]}"
 
 	# Resolve, don't install — same contract as the lint_* wrappers: a constrained box never
