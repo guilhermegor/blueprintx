@@ -45,6 +45,35 @@ class DsnParts(TypedDict):
 
 
 @type_checker
+def validate_not_flag(value: str, label: str) -> None:
+	"""Reject a value a getopt-based dump tool would parse as an option flag.
+
+	A ``backup()`` implementation passes ``value`` (typically the database
+	name) as the trailing bare positional argument to a dump CLI
+	(``mysqldump``, ``mariadb-dump``, ``pg_dump``). Those tools use
+	getopt-style parsing, where any positional beginning with ``-`` is read
+	as an option instead of a database name — a DSN whose database segment
+	is e.g. ``--result-file=/etc/passwd`` is silently accepted as a real
+	flag, redirecting where the dump is written. Call this once, at handler
+	construction, right after the value is parsed out of the DSN.
+
+	Parameters
+	----------
+	value : str
+		Value about to be placed in a dump-tool argv as a bare positional.
+	label : str
+		Human-readable name used in the raised error message.
+
+	Raises
+	------
+	ValueError
+		If ``value`` starts with ``-``.
+	"""
+	if value.startswith("-"):
+		raise ValueError(f"{label} must not start with '-' (got {value!r})")
+
+
+@type_checker
 def ensure_id(record: Record, id_field: str = "id") -> Record:
     """Ensure a record carries a string identifier.
 
