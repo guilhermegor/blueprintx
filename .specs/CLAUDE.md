@@ -72,6 +72,6 @@ were migrated into `features/<name>/{design.md,plan.md}` when `.specs/` was
 introduced (blueprintx#447); new spec/plan output goes directly here.
 
 `docs/backlog/` was the pre-`.specs/backlog/` home for work trackers, hidden from the
-published site by the same `exclude_docs` mechanism. Its 44 records moved here intact
+published site by the same `exclude_docs` mechanism. Its 45 records moved here intact
 in blueprintx#575 — `docs/` is for published documentation, and excluding a directory
 from the build was camouflage for that boundary violation rather than a fix.

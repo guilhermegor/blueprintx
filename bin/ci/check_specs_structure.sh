@@ -84,6 +84,7 @@ fi
 
 if [ -d "$SPECS_DIR/backlog" ]; then
     for entry in "$SPECS_DIR/backlog"/*; do
+        [ -e "$entry" ] || continue
         name="$(basename "$entry")"
         if [ ! -f "$entry" ]; then
             echo "ERROR: .specs/backlog/$name is not a file — .specs/backlog/ is flat" >&2

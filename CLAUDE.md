@@ -406,7 +406,7 @@ existing tracker** and keep it current.
 
 **Where it goes — `.specs/`, never `docs/`.** `docs/` is solely for published
 documentation, so the old `docs/backlog/` home contradicted that boundary outright, and
-`mkdocs.yml`'s `exclude_docs` hid 44 tracked files from the site rather than resolving
+`mkdocs.yml`'s `exclude_docs` hid 45 tracked files from the site rather than resolving
 it — the exclusion *was* the violation's camouflage (blueprintx#575).
 
 - **The effort maps to one feature** → `.specs/features/<feature-name>/tasks.md`, beside
@@ -429,7 +429,8 @@ team-reviewable record of what was done and why. When complete, tick the last bo
 a short "Completed — kept as a record" note instead of removing the file. `.specs/` is
 outside the MkDocs source tree entirely, so nothing has to be excluded to keep it
 unpublished. `bin/ci/check_specs_structure.sh` enforces the layout. (Lesson:
-persist-todo-in-docs-backlog.)
+persist-todo-in-docs-backlog, written when trackers lived in `docs/backlog/`; they moved
+in blueprintx#575.)
 
 ## Prose language: en-US everywhere in this repo
 
