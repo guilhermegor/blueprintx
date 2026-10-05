@@ -1639,7 +1639,8 @@ would silently loosen it for <code>mvc-service-native-db</code> (81%) and for th
 capability code. Turning branch coverage on dropped no tier below its statement-only figure.</p>
 <p>The one finding is a <strong>pre-existing gap</strong>: <code>mvc-service-orm-db</code> measures 76% against an 80
 floor, in <code>model/example_entity.py</code> and <code>controller/_pipeline.py</code> (untaken branches). Closing
-it means new tests for those two files, tracked separately from this change. Note that
+it means new tests for those two files, tracked in
+<a href="https://github.com/guilhermegor/blueprintx/issues/617">#617</a>. Note that
 <code>poe unit_tests</code> does not pass <code>--cov</code>; the floor is compared only by the pre-commit
 <code>coverage-check</code> hook and the CI coverage gate.</p>
 <p><code>lib-minimal</code> ships its own <code>.coveragerc</code> and sets <code>branch = True</code> there too, so the metric
