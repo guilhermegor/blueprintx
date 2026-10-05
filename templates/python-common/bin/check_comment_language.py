@@ -433,8 +433,8 @@ def _line_offset(str_text: str, str_word: str) -> int:
     Returns
     -------
     int
-            The 0-based line offset, found in the **redacted** block so a quoted occurrence earlier in
-            the block cannot win the race against the real one. 0 when it cannot be located.
+        The 0-based line offset, found in the **redacted** block so a quoted occurrence earlier in
+        the block cannot win the race against the real one. 0 when it cannot be located.
     """
     re_word = re.compile(rf"\b{re.escape(str_word)}\b", re.IGNORECASE)
     for int_offset, str_line in enumerate(redact(str_text).splitlines()):
@@ -565,7 +565,7 @@ def audit_paths() -> list:
     Returns
     -------
     list of pathlib.Path
-            Every TRACKED file carrying a supported extension, minus the skipped directories, sorted.
+        Every TRACKED file carrying a supported extension, minus the skipped directories, sorted.
     """
     set_supported = set(DICT_MARKERS) | {".py"}
     list_paths = [
