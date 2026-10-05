@@ -174,7 +174,9 @@ legitimate PR in that set is #532 at 59 files — a ceiling with headroom on bot
 number chosen to match a specific diff. Root-repo-only, like `check_makefile_pairing.sh`
 above: it is BlueprintX's own reviewer-capacity limit, not something a generated project
 inherits. No escape hatch — every real violation measured so far had an honest seam to split
-at, so one has not yet been needed (blueprintx#551).
+at, so one has not yet been needed (blueprintx#551). While a merge is in progress
+(`MERGE_HEAD` exists) the base is `git merge-base origin/<branch> HEAD MERGE_HEAD`, so the
+incoming side's files are not charged to the branch (measured: 186 reported vs 69 real).
 
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
@@ -323,7 +325,7 @@ The `templates/python-common/` directory is the **single source of truth** for s
 
 ## Template Python conventions (must be respected in all template files)
 
-- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, tab indent, double quotes, NumPy docstrings.
+- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, 4-space indent, double quotes, NumPy docstrings.
 - **Pre-commit hooks** (`.pre-commit-config.yaml`): ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
 - **Tests**: every skeleton runs `pytest` (`make unit_tests` → `poetry run pytest tests/unit/`; `pytest.ini` is shipped from `templates/python-common/` to all tiers). Tests are pytest-style — plain functions with fixtures (`conftest.py`, `capsys`, `monkeypatch`, `pytest_mock`) — not `unittest.TestCase`. Write new tests as pytest functions regardless of tier.
 - **One class per file**. Ports (ABCs) in `domain/ports.py`, ORM/DB implementations in `infrastructure/`, orchestration in `application/use_cases.py`. Never mix layers in one file.

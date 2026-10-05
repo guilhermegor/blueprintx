@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover - optional dependency
 	psycopg = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import DsnParts, ensure_id
+from chassis.db.infrastructure.helpers import DsnParts, ensure_id, validate_not_flag
 
 
 class PostgresDatabaseHandler(DatabaseHandler):
@@ -57,6 +57,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
 		self.user = dict_parsed.get("user") or os.getenv("DB_USER") or "user"
 		self.password = dict_parsed.get("password") or os.getenv("DB_PASSWORD") or "password"
 		self.dbname = dict_parsed.get("database") or os.getenv("DB_NAME") or "app"
+		validate_not_flag(self.dbname, "database name")
 		self._ensure_table()
 
 	def create(self, record: Record) -> str:
