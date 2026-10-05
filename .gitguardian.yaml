@@ -1,0 +1,5 @@
+version: 2
+secret:
+  ignored_matches:
+    - name: example passphrase in .env.example quoting doc (#474, not a credential)
+      match: pa$$word
