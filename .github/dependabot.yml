@@ -46,12 +46,6 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
-      # @eslint/js is versioned in lockstep with eslint; declared directly (blueprintx#614),
-      # a solo eslint major would otherwise leave it a major behind. First match wins.
-      eslint:
-        patterns:
-          - "eslint"
-          - "@eslint/js"
       minor-and-patch:
         patterns:
           - "*"
