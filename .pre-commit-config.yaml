@@ -242,6 +242,20 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: docs-boundary
+        name: docs/ boundary guard (working material stays out of docs/, blueprintx#536)
+        entry: bash bin/ci/check_docs_boundary.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: docs-boundary-tests
+        name: check_docs_boundary.sh should-fail regression tests (blueprintx#536)
+        entry: bash tests/test_check_docs_boundary.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_docs_boundary\.sh|tests/test_check_docs_boundary\.sh)$
+
       - id: version-sync
         name: version sync (pyproject vs CLI)
         entry: bash bin/ci/check_version_sync.sh

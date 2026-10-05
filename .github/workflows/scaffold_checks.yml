@@ -399,6 +399,21 @@ jobs:
       - name: Check .specs/ layout (blueprintx#447)
         run: bash bin/ci/check_specs_structure.sh
 
+  docs-boundary:
+    name: docs/ boundary guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Check docs/ holds only published documentation (blueprintx#536)
+        run: bash bin/ci/check_docs_boundary.sh
+
+      - name: Should-fail regression tests for the boundary gate
+        run: bash tests/test_check_docs_boundary.sh
+
   version-sync:
     name: Version sync — pyproject vs CLI
     runs-on: ubuntu-latest
