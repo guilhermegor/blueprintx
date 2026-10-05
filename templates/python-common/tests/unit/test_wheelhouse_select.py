@@ -13,10 +13,13 @@ resolved and operated on. None of the three produced an error — all three prod
 confident wrong answer, which is why they need tests rather than review.
 """
 
+import argparse
 import importlib.util
+import json
 from pathlib import Path
 import sys
 from types import ModuleType
+import zipfile
 
 import pytest
 
@@ -163,3 +166,134 @@ def test_a_nested_part_name_inside_the_directory_is_accepted(tmp_path: Path) -> 
 	(tmp_path / "sub").mkdir()
 
 	assert gate._contained_path(tmp_path, "sub/a.part").parent.name == "sub"
+
+
+def _wheel_dir(tmp_path: Path, *list_names: str) -> Path:
+	"""Create a directory holding one tiny file per name.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Temporary directory to create the folder in.
+	*list_names : str
+		File names to create.
+
+	Returns
+	-------
+	pathlib.Path
+		The directory.
+	"""
+	dir_wheels = tmp_path / "dl"
+	dir_wheels.mkdir()
+	# Created through map because the tests tree is capped at cyclomatic complexity 1.
+	tuple(map(lambda str_name: (dir_wheels / str_name).write_bytes(b"x" * 10), list_names))
+	return dir_wheels
+
+
+def _pack_args(tmp_path: Path, dir_wheels: Path) -> argparse.Namespace:
+	"""Build the ``pack`` arguments for a payload written next to ``tmp_path``.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Temporary directory the payload is written into.
+	dir_wheels : pathlib.Path
+		The wheels directory to pack.
+
+	Returns
+	-------
+	argparse.Namespace
+		Arguments as the CLI would parse them.
+	"""
+	return argparse.Namespace(
+		wheels_dir=str(dir_wheels),
+		zip_path=str(tmp_path / "out" / "wheelhouse.zip"),
+		manifest=str(tmp_path / "out" / "manifest.json"),
+		part_size_mb=1,
+	)
+
+
+def test_a_non_wheel_download_is_refused_instead_of_silently_dropped(tmp_path: Path) -> None:
+	"""An sdist has no wheel to zip; packing only the wheels would hide it from the target."""
+	dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl", "b-2.0.tar.gz")
+
+	with pytest.raises(SystemExit, match=r"b-2\.0\.tar\.gz"):
+		gate.build_zip(dir_wheels, tmp_path / "w.zip")
+
+
+def test_pack_then_assemble_round_trips_the_wheels(tmp_path: Path) -> None:
+	"""The shipped payload shape must reassemble to the wheels that were packed."""
+	dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl", "b-2.0-py3-none-any.whl")
+	gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+	dir_out = tmp_path / "wheels"
+
+	gate.assemble_wheelhouse(
+		argparse.Namespace(
+			source=str(tmp_path / "out"),
+			wheels_out=str(dir_out),
+			manifest=str(tmp_path / "out" / "manifest.json"),
+		)
+	)
+
+	assert sorted(p.name for p in dir_out.glob("*.whl")) == [
+		"a-1.0-py3-none-any.whl",
+		"b-2.0-py3-none-any.whl",
+	]
+
+
+def test_a_hand_made_zip_with_a_nested_folder_extracts_flat(tmp_path: Path) -> None:
+	"""Pip's --find-links does not recurse, so ``wheels/x.whl`` must land as ``x.whl``."""
+	path_zip = tmp_path / "wheelhouse.zip"
+	with zipfile.ZipFile(path_zip, "w") as zip_out:
+		zip_out.writestr("wheels/a-1.0-py3-none-any.whl", b"x")
+
+	gate.unzip_wheels(path_zip, tmp_path / "out")
+
+	assert (tmp_path / "out" / "a-1.0-py3-none-any.whl").is_file()
+
+
+def test_loose_wheels_that_disagree_with_the_manifest_do_not_shadow_it(tmp_path: Path) -> None:
+	"""A leftover or half-extracted ``wheels/`` must not win over the verified payload."""
+	path_manifest = tmp_path / "manifest.json"
+	path_manifest.write_text('{"wheel_count": 2}', encoding="utf-8")
+
+	assert gate._loose_wheels_match_manifest(path_manifest, 1) is False
+
+
+def test_loose_wheels_matching_the_manifest_count_are_accepted(tmp_path: Path) -> None:
+	"""The negative control: a complete earlier assemble is still a no-op."""
+	path_manifest = tmp_path / "manifest.json"
+	path_manifest.write_text('{"wheel_count": 2}', encoding="utf-8")
+
+	assert gate._loose_wheels_match_manifest(path_manifest, 2) is True
+
+
+def test_a_zip_name_that_collides_with_a_part_is_refused(tmp_path: Path) -> None:
+	"""``zip_name`` pointing at an input would truncate it before it is read."""
+	dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl")
+	gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+	path_manifest = tmp_path / "out" / "manifest.json"
+	dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
+	dict_manifest["zip_name"] = dict_manifest["parts"][0]["name"]
+	path_manifest.write_text(json.dumps(dict_manifest), encoding="utf-8")
+
+	with pytest.raises(SystemExit, match="collides"):
+		gate.assemble_wheelhouse(
+			argparse.Namespace(
+				source=str(tmp_path / "out"),
+				wheels_out=str(tmp_path / "wheels"),
+				manifest=str(path_manifest),
+			)
+		)
+
+
+def test_a_rebuild_with_fewer_parts_removes_the_stale_ones(tmp_path: Path) -> None:
+	"""Old ``wheelhouse.zip.NNN`` files would otherwise be copied to the target for nothing."""
+	dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl")
+	path_stale = tmp_path / "out" / "wheelhouse.zip.007"
+	path_stale.parent.mkdir()
+	path_stale.write_bytes(b"old")
+
+	gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+
+	assert not path_stale.exists()

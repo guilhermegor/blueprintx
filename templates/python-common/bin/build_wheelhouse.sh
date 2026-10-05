@@ -51,7 +51,11 @@ driver_prune_list() {
 	mysql | mariadb) str_keep=mysql-connector-python ;;
 	oracle) str_keep=oracledb ;;
 	mssql) str_keep=pyodbc ;;
-	*) str_keep="" ;;
+	sqlite) str_keep="" ;;
+	*)
+		print_status "warning" "DB_BACKEND='$DB_BACKEND' is not a known backend — every native-DB driver is being pruned"
+		str_keep=""
+		;;
 	esac
 	local str_pkg
 	for str_pkg in psycopg mysql-connector-python oracledb pyodbc; do
@@ -109,7 +113,10 @@ build_wheelhouse() {
 	print_status "section" "Building offline wheelhouse -> $WHEELHOUSE_DIR"
 	ensure_dir "$WHEELHOUSE_DIR"
 	dir_tmp="$(mktemp -d)"
-	trap 'rm -rf "$dir_tmp"' EXIT
+	# Expand now: dir_tmp is local, so a single-quoted trap would hit an unbound variable under
+	# set -u when it fires after this function returned, leaking the dir and exiting non-zero.
+	# shellcheck disable=SC2064
+	trap "rm -rf '$dir_tmp'" EXIT
 	dir_wheels="$dir_tmp/wheels"
 
 	resolve_target_env

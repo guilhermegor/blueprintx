@@ -92,6 +92,9 @@ poe wheelhouse_assemble
 pip install --no-index --find-links ../_wheels/<repo-name>/wheels -r requirements-lock.txt
 ```
 
+`poe` itself comes from PyPI, so it may be missing on the offline target. The task only runs
+`bash bin/build_wheelhouse.sh assemble`, which you can call directly.
+
 ⚠️ **If you built with `DB_BACKEND` set, do not install with `-r requirements-lock.txt`.** The lock
 file still names the pruned drivers, and `--no-index` cannot fetch them, so pip fails with
 `No matching distribution found`. Install the wheel set itself instead — it is a complete
@@ -120,8 +123,8 @@ Verified against an actually blocked index, not merely an absent one — a reach
 index still looks like success to a probe that never asked for the right thing:
 
 ```bash
-PIP_INDEX_URL=http://127.0.0.1:1/simple poe wheelhouse_assemble
-pip install --no-index --find-links <wheels-dir> -r requirements-lock.txt
+poe wheelhouse_assemble
+PIP_INDEX_URL=http://127.0.0.1:1/simple pip install --no-index --find-links <wheels-dir> -r requirements-lock.txt
 ```
 
 The install must succeed with the network fully denied. A wheelhouse that is never exercised

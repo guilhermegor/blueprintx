@@ -241,6 +241,15 @@ def build_zip(dir_wheels: Path, path_zip: Path) -> None:
 	list_wheels = sorted(dir_wheels.glob("*.whl"))
 	if not list_wheels:
 		raise SystemExit(f"wheelhouse pack: no *.whl files found in {dir_wheels}")
+	# `pip download` without --only-binary falls back to an sdist for a package with no matching
+	# wheel; zipping only *.whl would drop it silently and the offline install would then fail.
+	list_other = sorted(p.name for p in dir_wheels.iterdir() if p.is_file() and p.suffix != ".whl")
+	if list_other:
+		raise SystemExit(
+			f"wheelhouse pack: {len(list_other)} download(s) are not wheels "
+			f"({', '.join(list_other)}) — no matching wheel exists for the target; set "
+			"WHEELHOUSE_PIP_PLATFORM/ABI or pin a version that ships one"
+		)
 	with zipfile.ZipFile(path_zip, "w", zipfile.ZIP_DEFLATED) as zip_out:
 		for path_wheel in list_wheels:
 			zip_out.write(path_wheel, arcname=path_wheel.name)
@@ -293,6 +302,9 @@ def pack_wheelhouse(args: argparse.Namespace) -> int:
 	path_zip = Path(args.zip_path)
 	path_zip.parent.mkdir(parents=True, exist_ok=True)
 	build_zip(dir_wheels, path_zip)
+	# A rebuild with fewer parts must not leave older <zip>.NNN files to be copied to the target.
+	for path_stale in path_zip.parent.glob(f"{path_zip.name}.[0-9][0-9][0-9]"):
+		path_stale.unlink()
 
 	int_wheel_count = len(list(dir_wheels.glob("*.whl")))
 	str_zip_sha256 = sha256_of(path_zip)
@@ -453,8 +465,33 @@ def unzip_wheels(path_zip: Path, dir_out: Path) -> int:
 	dir_out.mkdir(parents=True, exist_ok=True)
 	with zipfile.ZipFile(path_zip) as zip_in:
 		list_names = [str_name for str_name in zip_in.namelist() if str_name.endswith(".whl")]
-		zip_in.extractall(dir_out, members=list_names)
+		for str_name in list_names:
+			# By basename: a hand-made zip of the wheels/ folder nests its members, and pip's
+			# --find-links does not recurse. The basename also rules out a path-traversal member.
+			(dir_out / Path(str_name).name).write_bytes(zip_in.read(str_name))
 	return len(list_names)
+
+
+def _loose_wheels_match_manifest(path_manifest: Path, int_loose: int) -> bool:
+	"""Return whether loose wheels in the output dir may stand in for the verified payload.
+
+	Parameters
+	----------
+	path_manifest : Path
+		The payload manifest; absent means there is nothing to compare against.
+	int_loose : int
+		How many ``*.whl`` files already sit in the output directory.
+
+	Returns
+	-------
+	bool
+		False when a manifest names a different ``wheel_count``: a leftover or half-extracted
+		``wheels/`` must not shadow the fresh payload.
+	"""
+	if not path_manifest.is_file():
+		return True
+	int_expected = json.loads(path_manifest.read_text(encoding="utf-8")).get("wheel_count")
+	return int_expected is None or int_expected == int_loose
 
 
 def assemble_wheelhouse(args: argparse.Namespace) -> int:
@@ -485,17 +522,22 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
 	dir_source = Path(args.source)
 	dir_out = Path(args.wheels_out)
 
-	if dir_out.is_dir() and any(dir_out.glob("*.whl")):
-		int_count = len(list(dir_out.glob("*.whl")))
+	path_manifest = Path(args.manifest)
+	int_count = len(list(dir_out.glob("*.whl"))) if dir_out.is_dir() else 0
+	if int_count and _loose_wheels_match_manifest(path_manifest, int_count):
 		print(f"{int_count} wheel(s) already loose in {dir_out} — nothing to assemble")
 		return 0
 
-	path_manifest = Path(args.manifest)
 	if path_manifest.is_file():
 		dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
 		list_parts = verify_parts(dir_source, dict_manifest)
 		str_zip_name = dict_manifest.get("zip_name") or "wheelhouse.zip"
 		path_zip_tmp = _contained_path(dir_source, str_zip_name)
+		# The reassembled archive is written, then unlinked: it must not be an input it reads.
+		if path_zip_tmp.resolve() in {path_manifest.resolve(), *list_parts}:
+			raise SystemExit(
+				f"wheelhouse assemble: zip_name {str_zip_name!r} collides with an input file"
+			)
 		reassemble_zip(list_parts, dict_manifest, path_zip_tmp)
 		int_count = unzip_wheels(path_zip_tmp, dir_out)
 		path_zip_tmp.unlink()
