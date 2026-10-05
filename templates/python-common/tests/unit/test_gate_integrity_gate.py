@@ -32,6 +32,7 @@ deliberate rename) through ``report()``.
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -350,3 +351,112 @@ def test_report_justified_gate_drop_passes(monkeypatch: pytest.MonkeyPatch) -> N
 def test_report_no_findings_passes() -> None:
 	"""An empty findings list passes without consulting the justification hatch at all."""
 	assert gate.report([], "base", 3) == 0
+
+
+# --------------------------
+# Tests — the merge-base mid-merge (a merge of main into the branch in progress)
+# --------------------------
+
+
+def _git_in(path_repo: Path, *args: str) -> str:
+	"""Run ``git`` inside a throwaway repo and return its stripped stdout.
+
+	Parameters
+	----------
+	path_repo : pathlib.Path
+		The repository to run in.
+	*args : str
+		Arguments after ``git``.
+
+	Returns
+	-------
+	str
+		Captured stdout, stripped.
+	"""
+	cls_proc = subprocess.run(  # noqa: S603
+		["git", "-C", str(path_repo), *args],  # noqa: S607
+		capture_output=True,
+		text=True,
+		check=True,
+	)
+	return cls_proc.stdout.strip()
+
+
+def _commit_file(path_repo: Path, str_name: str) -> None:
+	"""Create one file and commit it.
+
+	Parameters
+	----------
+	path_repo : pathlib.Path
+		The repository to commit in.
+	str_name : str
+		File name to create, also used as the commit message.
+	"""
+	(path_repo / str_name).write_text(str_name, encoding="utf-8")
+	_git_in(path_repo, "add", str_name)
+	_git_in(path_repo, "commit", "-q", "-m", str_name)
+
+
+@pytest.fixture
+def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+	"""Return a repo whose ``feature`` has an octopus merge of ``main`` and ``side`` in progress.
+
+	``main`` and ``side`` each move on after the fork, so a base resolved from the pre-merge
+	HEAD (the fork point) differs from the one that excludes the incoming side.
+
+	Parameters
+	----------
+	tmp_path : pathlib.Path
+		Pytest-provided scratch directory.
+	monkeypatch : pytest.MonkeyPatch
+		Used to run the gate's git helper inside the repo.
+
+	Returns
+	-------
+	pathlib.Path
+		The repository, left mid-merge.
+	"""
+	_git_in(tmp_path, "init", "-q", "--initial-branch=main")
+	_git_in(tmp_path, "config", "user.email", "t@example.com")
+	_git_in(tmp_path, "config", "user.name", "t")
+	_commit_file(tmp_path, "seed")
+	_git_in(tmp_path, "branch", "side")
+	_git_in(tmp_path, "checkout", "-q", "-b", "feature")
+	_commit_file(tmp_path, "own")
+	_git_in(tmp_path, "checkout", "-q", "main")
+	_commit_file(tmp_path, "main_moves_on")
+	_git_in(tmp_path, "checkout", "-q", "side")
+	_commit_file(tmp_path, "side_moves_on")
+	_git_in(tmp_path, "checkout", "-q", "feature")
+	_git_in(tmp_path, "merge", "-q", "--no-commit", "--no-ff", "side", "main")
+	monkeypatch.chdir(tmp_path)
+	return tmp_path
+
+
+def test_resolve_base_mid_merge_excludes_the_incoming_side(path_mid_merge: Path) -> None:
+	"""Mid-merge the base is main's tip, never the fork point that charges main's delta.
+
+	Charging it made main's own gate changes (``D206``/``W191`` in ``ruff.toml``) read as the
+	branch weakening them, so every "merge main into my branch" commit was rejected.
+	"""
+	str_main_tip = _git_in(path_mid_merge, "rev-parse", "main")
+
+	assert gate.resolve_base() == str_main_tip
+
+
+def test_merge_heads_lists_every_incoming_head_of_an_octopus(path_mid_merge: Path) -> None:
+	"""An octopus merge reports both incoming commits, not just the first MERGE_HEAD line."""
+	str_side = _git_in(path_mid_merge, "rev-parse", "side")
+	str_main = _git_in(path_mid_merge, "rev-parse", "main")
+
+	assert sorted(gate.merge_heads()) == sorted([str_side, str_main])
+
+
+def test_merge_heads_is_empty_when_no_merge_is_in_progress(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""Outside a merge there is nothing to add, so the base resolves exactly as before."""
+	_git_in(tmp_path, "init", "-q", "--initial-branch=main")
+	monkeypatch.chdir(tmp_path)
+
+	assert gate.merge_heads() == []
