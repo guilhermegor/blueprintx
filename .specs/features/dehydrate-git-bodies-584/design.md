@@ -32,8 +32,8 @@ own rule that a completed audit is a record, not scratch to delete.
    or closed PR/issue at audit time was a candidate.
 4. Matched each file by **topic**, never by filename — the naming variants
    (`pr<N>.md`, `prA.md`, `issue_<topic>.md`, `msg<N>.txt`) do not reliably
-   encode which issue/PR a file belongs to (`msg521.txt`/`msg522.txt` above
-   are the proof: their numeric suffix names the *wrong* PR). A file's full
+   encode which issue/PR a file belongs to (`msg521.txt`/`msg522.txt` in the
+   table below are the proof: their numeric suffix names the *wrong* PR). A file's full
    content was read and cross-referenced against the fetched titles and
    `Closes #N` / issue-number references, then confirmed by opening the
    matched PR/issue. **This is a topic match, not a byte-for-byte diff** —
@@ -118,8 +118,22 @@ their own subject (dotfiles-dev numbers appear only as "Related:" links
 inside a few bodies) — so none needed to be named as belonging to another
 repo's worktree.
 
+## Limits of this audit
+
+- **Search scope.** Step 1 looked at `.git/*.md` and `.git/msg*.txt` only (`-maxdepth 1`).
+  A body named another way (`body*.txt`, no extension) or written under a linked worktree's
+  own gitdir (`.git/worktrees/<id>/`) was not searched, so "0 orphaned" holds for the
+  37 files found, not for every body that may exist.
+- **Verdict strength.** "shipped" means topic-matched to an existing PR/issue. Only three
+  files were byte-diffed against live text; the rest, notably `pr240.md` (rewritten before
+  it was opened) and any still-draft PR, may hold text the live body lacks. The two
+  comment-body files (`c424.md`, `close424.md`) were matched to PR #424, not to posted
+  comments, since comments were not fetched.
+- **Status cells are as of 2026-09-21.** "open" / "partial draft" entries will go stale.
+
 ## Deletion
 
 Per #584's explicit instruction, this pass does **not** delete the 37
 source files in `.git/`. Deletion is a separate, later change once this
-classification has been reviewed.
+classification has been reviewed, and it needs a text diff of every topic-matched file
+against its live body first (see the limits above), not this table alone.
