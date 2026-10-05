@@ -1643,10 +1643,6 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 <td>Example walkthroughs for the <strong>ORM</strong> DDD skeleton</td>
 </tr>
 <tr>
-<td><code>backlog/</code></td>
-<td><strong>Non-published</strong> work-to-do backlogs (e.g. template backport notes). Excluded from the built site — see below.</td>
-</tr>
-<tr>
 <td><code>superpowers/</code></td>
 <td><strong>Non-published</strong> internal specs and plans. Excluded from the built site — see below.</td>
 </tr>
@@ -1655,13 +1651,12 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 <p>Future skeletons follow the same pattern: <code>&lt;lang&gt;-examples-&lt;skeleton-name&gt;/</code>.</p>
 <h3 id="non-published-docs-never-at-the-docs-root">Non-published docs — never at the <code>docs/</code> root<a class="headerlink" href="#non-published-docs-never-at-the-docs-root" title="Permanent link">&para;</a></h3>
 <p>MkDocs <strong>builds every <code>.md</code> under <code>docs/</code> into the site</strong>, even files absent from
-<code>nav:</code> (they are merely unlisted, still reachable by URL). So a backlog, spec, or
+<code>nav:</code> (they are merely unlisted, still reachable by URL). So a spec or
 internal note dropped at the <code>docs/</code> root <em>will</em> ship to users and misguide them.
 Such files live under a dedicated folder that is excluded from the build via
 <code>exclude_docs</code> in <code>mkdocs.yml</code>:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">exclude_docs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="no">backlog/        # work-to-do backlogs (template backport notes, follow-ups)</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="no">superpowers/    # internal specs and plans</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="no">superpowers/    # internal specs and plans</span>
 </span></code></pre></div>
 <p>Non-published docs are <strong>NOT</strong> added to the file index (Section 1), <strong>NOT</strong>
 registered in <code>mkdocs.yml</code> <code>nav:</code>, and <strong>NOT</strong> subject to the Type A/B/C content
@@ -1777,7 +1772,7 @@ non-published folder must be added to <code>exclude_docs</code> in the same comm
 </tr>
 <tr>
 <td>Non-published doc added</td>
-<td>Place it under a non-published folder (<code>docs/backlog/</code>, <code>docs/superpowers/</code>), never the <code>docs/</code> root. Ensure that folder is in <code>exclude_docs</code>. Do NOT add it to the file index or <code>mkdocs.yml</code> nav.</td>
+<td>Backlogs and specs belong in <code>.specs/</code>, not <code>docs/</code>. Anything else non-published goes under a non-published folder (<code>docs/superpowers/</code>), never the <code>docs/</code> root. Ensure that folder is in <code>exclude_docs</code>. Do NOT add it to the file index or <code>mkdocs.yml</code> nav.</td>
 </tr>
 <tr>
 <td>File removed</td>
