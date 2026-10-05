@@ -271,6 +271,28 @@ def test_a_bare_hatch_marker_mid_function_does_not_exempt(tmp_path: Path) -> Non
 	assert _run(tmp_path, []) == 1
 
 
+def test_a_hatch_marker_inside_a_string_literal_does_not_exempt(tmp_path: Path) -> None:
+	"""Only a real comment is an exemption; the same text in a string is just data."""
+	_write_test_file(
+		tmp_path,
+		"def test_x() -> None:\n\tstr_note = '# one-assert-ok: example'\n"
+		"\tassert 1 == 1\n\tassert 2 == 2\n",
+	)
+
+	assert _run(tmp_path, []) == 1
+
+
+def test_two_assertion_contexts_in_one_with_are_two_sites(tmp_path: Path) -> None:
+	"""``with pytest.raises(A), pytest.warns(B):`` must not pass the one-site cap."""
+	_write_test_file(
+		tmp_path,
+		"import pytest\n\n\ndef test_x() -> None:\n"
+		"\twith pytest.raises(ValueError), pytest.warns(UserWarning):\n\t\tpass\n",
+	)
+
+	assert _run(tmp_path, []) == 1
+
+
 def test_the_hatch_also_exempts_a_zero_assertion_test(tmp_path: Path) -> None:
 	"""The same hatch covers the zero-assertion check, not only the cap."""
 	_write_test_file(tmp_path, "def test_x() -> None:\n\tpass  # one-assert-ok: smoke test\n")

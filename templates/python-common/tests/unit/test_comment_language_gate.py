@@ -75,8 +75,8 @@ def _sole(list_items: list) -> object:
 # second. Read line by line, the opening quote never finds its closing one, the quoted span
 # survives redaction, and the quotation's language is charged to the English comment.
 _STR_SPANNING_QUOTE = (
-	'# The user decided: "nao vamos usar isso, para nada"\n'
-	"# -- quoted verbatim, so the comment itself stays English.\n"
+	'# The user decided: "nao vamos usar isso,\n'
+	'# para nada" -- quoted verbatim, so the comment itself stays English.\n'
 	"x = 1\n"
 )
 

@@ -46,9 +46,11 @@ catch (blueprintx#111's shape, recurring: `check_provenance.py`, `check_docstrin
 """
 
 import ast
+import io
 import pathlib
 import re
 import sys
+import tokenize
 
 
 RE_HATCH = re.compile(r"#[ \t]*one-assert-ok:[ \t]*(\S.*)$", re.M)
@@ -226,8 +228,8 @@ def _ctx_call_name(node_call: ast.Call) -> str | None:
 	return None
 
 
-def _is_assertion_with(node_with: ast.With) -> bool:
-	"""Return whether a ``with`` block is a ``pytest.raises``/``pytest.warns`` context.
+def _assertion_with_count(node_with: ast.With) -> int:
+	"""Count the ``pytest.raises``/``pytest.warns`` contexts in a ``with`` statement.
 
 	Parameters
 	----------
@@ -236,14 +238,15 @@ def _is_assertion_with(node_with: ast.With) -> bool:
 
 	Returns
 	-------
-	bool
-		``True`` when any item's context expression calls ``raises`` or ``warns``.
+	int
+		How many items call ``raises`` or ``warns`` — each is its own assertion site, so
+		``with pytest.raises(A), pytest.warns(B):`` is two, not one.
 	"""
-	for item in node_with.items:
-		expr = item.context_expr
-		if isinstance(expr, ast.Call) and _ctx_call_name(expr) in _SET_CTX_ASSERTIONS:
-			return True
-	return False
+	return sum(
+		isinstance(item.context_expr, ast.Call)
+		and _ctx_call_name(item.context_expr) in _SET_CTX_ASSERTIONS
+		for item in node_with.items
+	)
 
 
 def _assertion_sites(node_fn: ast.FunctionDef) -> list:
@@ -267,10 +270,10 @@ def _assertion_sites(node_fn: ast.FunctionDef) -> list:
 		for child in ast.iter_child_nodes(node):
 			if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
 				continue
-			if isinstance(child, ast.Assert) or (
-				isinstance(child, ast.With) and _is_assertion_with(child)
-			):
+			if isinstance(child, ast.Assert):
 				list_sites.append(child)
+			elif isinstance(child, ast.With):
+				list_sites.extend([child] * _assertion_with_count(child))
 			elif (
 				isinstance(child, ast.Expr)
 				and isinstance(child.value, ast.Call)
@@ -328,16 +331,18 @@ def _hatch_reason(str_source: str, node_fn: ast.FunctionDef) -> str:
 		The non-empty reason, or ``""`` when no valid hatch is present — a bare marker with
 		no reason does not exempt, matching ``# complexity-ok:``'s convention.
 	"""
-	# `ast.get_source_segment` stops at the function's last STATEMENT column, not the end of
-	# that physical line — a trailing `# one-assert-ok: ...` on the same line as the last
-	# statement sits past that boundary and would silently never match. Slice whole physical
-	# lines instead, so a hatch anywhere in the function's line range is found regardless of
-	# which column it starts on (mirrors check_complexity.sh's signature-hatch scan).
-	list_lines = str_source.splitlines()
+	# Only COMMENT tokens count: a marker inside a string literal is data, not an exemption.
+	# Tokens carry whole physical lines' comments, so a trailing hatch past the last
+	# statement's column (which `ast.get_source_segment` would cut off) is still found.
 	int_end = node_fn.end_lineno or node_fn.lineno
-	str_segment = "\n".join(list_lines[node_fn.lineno - 1 : int_end])
-	cls_match = RE_HATCH.search(str_segment)
-	return cls_match.group(1).strip() if cls_match and cls_match.group(1).strip() else ""
+	cls_tokens = tokenize.generate_tokens(io.StringIO(str_source).readline)
+	for cls_tok in cls_tokens:
+		if cls_tok.type != tokenize.COMMENT or not node_fn.lineno <= cls_tok.start[0] <= int_end:
+			continue
+		cls_match = RE_HATCH.search(cls_tok.string)
+		if cls_match and cls_match.group(1).strip():
+			return cls_match.group(1).strip()
+	return ""
 
 
 def cap_for_file(
