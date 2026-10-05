@@ -330,7 +330,7 @@ def main() -> int:
 		return 0
 
 	dict_rev_to_file, list_edges, list_problems = build_graph(list_files)
-	list_problems = list_problems + graph_problems(dict_rev_to_file, list_edges)
+	list_problems += graph_problems(dict_rev_to_file, list_edges)
 	for str_problem in list_problems:
 		print(f"❌ {str_problem}", file=sys.stderr)
 	if list_problems:

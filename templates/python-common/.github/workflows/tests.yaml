@@ -183,6 +183,16 @@ jobs:
         # hook-skipping contributor bypasses it.
         run: poetry run python bin/check_layer_imports.py
 
+      - name: Run ORM Model-Definition Guards
+        if: runner.os == 'Linux'
+        # Mirrors the `check-orm-model-guards` pre-commit hook (blueprintx#361): bitwise
+        # &/|/~ inside .where()/.filter(), two Base/module-scope create_all, and a duplicate
+        # constraint name= across a same-file mixin MRO — each a SILENT wrong answer at ORM
+        # model-declaration time, no exception raised. CI runs its gates as explicit steps,
+        # not via pre-commit, so this must be listed here or a hook-skipping contributor
+        # bypasses it.
+        run: poetry run python bin/check_orm_model_guards.py
+
       - name: Run Documentation-Language Boundary Enforcement
         if: runner.os == 'Linux'
         # Mirrors the `check-comment-language` pre-commit hook: prose for a READER may be in the
