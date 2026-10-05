@@ -98,7 +98,7 @@ Every row is decidable — yes/no, not a feeling.
       blocker — already met; re-verify green at cut time.**
 - [x] **Every gate that can block a merge carries a should-fail regression test**
       ([#111](https://github.com/guilhermegor/blueprintx/issues/111), closed in
-      Wave A per `docs/backlog/issue-waves_20260823_145527.md`).
+      Wave A per `.specs/backlog/issue-waves_20260823_145527.md`).
       Reopened by measurement on 2026-09-04 because the merge-blocking
       `validate-meta` job had no case in `tests/`. **Closed again by measurement,
       2026-09-18:** `tests/test_validate_meta.sh` now exists on `main` and is wired
