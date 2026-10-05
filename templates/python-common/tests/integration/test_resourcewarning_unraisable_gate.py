@@ -51,52 +51,52 @@ def test_stays_clean():
 
 
 def _run_probe(path_tmp: Path, str_module_source: str) -> subprocess.CompletedProcess[str]:
-	"""Run one throwaway test module under the shipped ``pytest.ini`` filters.
+    """Run one throwaway test module under the shipped ``pytest.ini`` filters.
 
-	Parameters
-	----------
-	path_tmp : pathlib.Path
-		Scratch directory the throwaway module is written into.
-	str_module_source : str
-		Source of the single test module to execute.
+    Parameters
+    ----------
+    path_tmp : pathlib.Path
+            Scratch directory the throwaway module is written into.
+    str_module_source : str
+            Source of the single test module to execute.
 
-	Returns
-	-------
-	subprocess.CompletedProcess[str]
-		The completed ``pytest`` invocation, captured as text.
-	"""
-	path_module = path_tmp / "test_probe.py"
-	path_module.write_text(str_module_source)
-	# Constant, trusted argv: sys.executable plus repo-internal paths, no shell, no
-	# untrusted input reaches it — the bandit subprocess warning is a false positive here.
-	return subprocess.run(  # noqa: S603
-		[sys.executable, "-m", "pytest", "-c", str(_PATH_PYTEST_INI), str(path_module), "-q"],
-		capture_output=True,
-		text=True,
-		check=False,
-	)
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+            The completed ``pytest`` invocation, captured as text.
+    """
+    path_module = path_tmp / "test_probe.py"
+    path_module.write_text(str_module_source)
+    # Constant, trusted argv: sys.executable plus repo-internal paths, no shell, no
+    # untrusted input reaches it — the bandit subprocess warning is a false positive here.
+    return subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "pytest", "-c", str(_PATH_PYTEST_INI), str(path_module), "-q"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def test_resourcewarning_gate_fails_on_del_leak(tmp_path: Path) -> None:
-	"""A file handle leaked via ``__del__`` must fail the suite.
+    """A file handle leaked via ``__del__`` must fail the suite.
 
-	Parameters
-	----------
-	tmp_path : pathlib.Path
-		Pytest's per-test scratch directory (isolates the throwaway module).
-	"""
-	cls_result = _run_probe(tmp_path, _STR_LEAKY_MODULE)
-	assert cls_result.returncode != 0
-	assert "PytestUnraisableExceptionWarning" in cls_result.stdout
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest's per-test scratch directory (isolates the throwaway module).
+    """
+    cls_result = _run_probe(tmp_path, _STR_LEAKY_MODULE)
+    assert cls_result.returncode != 0
+    assert "PytestUnraisableExceptionWarning" in cls_result.stdout
 
 
 def test_resourcewarning_gate_leaves_clean_run_green(tmp_path: Path) -> None:
-	"""An ordinary test with no leak must still pass under the same filters.
+    """An ordinary test with no leak must still pass under the same filters.
 
-	Parameters
-	----------
-	tmp_path : pathlib.Path
-		Pytest's per-test scratch directory (isolates the throwaway module).
-	"""
-	cls_result = _run_probe(tmp_path, _STR_CLEAN_MODULE)
-	assert cls_result.returncode == 0
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest's per-test scratch directory (isolates the throwaway module).
+    """
+    cls_result = _run_probe(tmp_path, _STR_CLEAN_MODULE)
+    assert cls_result.returncode == 0
