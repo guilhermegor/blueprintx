@@ -123,6 +123,13 @@ def run_vulture(cls_vulture: ModuleType, list_files: list) -> list:
 	list
 		``vulture.core.Item`` findings at or above ``_REPORT_MIN_CONFIDENCE``, vulture's
 		own sort order (by file, then line).
+
+	Raises
+	------
+	RuntimeError
+		When vulture could not read or parse one of the files. It records that as an
+		``InvalidInput`` exit code and carries on, so returning its findings anyway would
+		report a clean tree for a file that was never scanned.
 	"""
 	# Scavenge the EXPLICIT file list rather than the directory. vulture's own `exclude`
 	# matches against the full (often absolute) path string — and this gate's own `--root`
@@ -132,6 +139,8 @@ def run_vulture(cls_vulture: ModuleType, list_files: list) -> list:
 	# vulture that filtered list needs no second, differently-scoped exclude at all.
 	cls_scanner = cls_vulture.Vulture()
 	cls_scanner.scavenge([str(path_file) for path_file in list_files])
+	if cls_scanner.exit_code == cls_vulture.core.ExitCode.InvalidInput:
+		raise RuntimeError("vulture could not read or parse at least one file under src/")
 	return cls_scanner.get_unused_code(min_confidence=_REPORT_MIN_CONFIDENCE)
 
 
@@ -211,7 +220,8 @@ def main(list_argv: list) -> int:
 	-------
 	int
 		0 when nothing gates (including every legitimate skip), 1 on a >=80% confidence
-		finding or on broken discovery (``src/`` exists but holds zero ``.py`` files).
+		finding, on broken discovery (``src/`` exists but holds zero ``.py`` files), or when
+		vulture could not scan a file (an unscanned file is not a clean one).
 	"""
 	path_root = pathlib.Path(".").resolve()
 	if list_argv[:1] == ["--root"]:
@@ -241,7 +251,12 @@ def main(list_argv: list) -> int:
 		)
 		return 0
 
-	list_gate, list_report = classify_findings(run_vulture(cls_vulture, list_files))
+	try:
+		list_findings = run_vulture(cls_vulture, list_files)
+	except RuntimeError as err:
+		print(f"❌ check_dead_code: {err} — refusing to report a clean tree.", file=sys.stderr)
+		return 1
+	list_gate, list_report = classify_findings(list_findings)
 	print_report_tier(list_report)
 	if list_gate:
 		print_gate_tier(list_gate)

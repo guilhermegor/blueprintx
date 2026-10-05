@@ -92,6 +92,7 @@ def test_provable_dead_parameter_at_gate_confidence_fails(
 	on ``app/bootstrap.py``'s ``routine_conclusion`` helper) — provable from the file alone,
 	unlike a bare unused local, which vulture itself scores only 60% (contextual, not gating).
 	"""
+	pytest.importorskip("vulture")
 	_write_module(
 		tmp_path,
 		"src/thing.py",
@@ -103,6 +104,21 @@ def test_provable_dead_parameter_at_gate_confidence_fails(
 	assert ">=80% confidence" in str_err
 
 
+def test_unparsable_file_fails_instead_of_reporting_a_clean_tree(
+	tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+	"""A file vulture cannot parse is never scanned, so the gate must fail, not pass silently.
+
+	vulture records ``InvalidInput`` and carries on; before this check its findings for the
+	OTHER files came back and the run printed the all-clear over a file nobody had read.
+	"""
+	pytest.importorskip("vulture")
+	_write_module(tmp_path, "src/ok.py", "def used() -> int:\n    return 1\n")
+	_write_module(tmp_path, "src/broken.py", "def broken(:\n")
+	assert _load_gate().main(["--root", str(tmp_path)]) == 1
+	assert "could not read or parse" in capsys.readouterr().err
+
+
 def test_shipped_but_uncalled_function_does_not_gate(
 	tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
@@ -112,6 +128,7 @@ def test_shipped_but_uncalled_function_does_not_gate(
 	caller yet, which is the entire point of a template. Gating it would be the false positive
 	the issue measured 63 of on the real template.
 	"""
+	pytest.importorskip("vulture")
 	_write_module(
 		tmp_path,
 		"src/thing.py",
