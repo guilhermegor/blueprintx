@@ -124,7 +124,7 @@ index still looks like success to a probe that never asked for the right thing:
 
 ```bash
 poe wheelhouse_assemble
-PIP_INDEX_URL=http://127.0.0.1:1/simple pip install --no-index --find-links <wheels-dir> -r requirements-lock.txt
+PIP_INDEX_URL=http://127.0.0.1:1/simple pip install --no-index --find-links ../_wheels/<repo-name>/wheels -r requirements-lock.txt
 ```
 
 The install must succeed with the network fully denied. A wheelhouse that is never exercised

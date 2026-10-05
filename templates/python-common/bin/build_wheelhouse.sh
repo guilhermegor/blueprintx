@@ -144,6 +144,7 @@ assemble_wheelhouse() {
 		--manifest "$dir_source/manifest.json"
 	print_status "success" "Wheels ready at $dir_out — install with:"
 	print_status "info" "  pip install --no-index --find-links $dir_out -r requirements-lock.txt"
+	print_status "info" "  (built with DB_BACKEND? the lock still names pruned drivers — install $dir_out/*.whl instead)"
 }
 
 main() {
