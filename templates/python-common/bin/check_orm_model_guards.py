@@ -36,7 +36,7 @@ Three guards ship:
    ``create_all`` then SUCCEEDS having created nothing (or only part) of the schema, with no
    exception raised.
 3. **Duplicate constraint ``name=`` in the EFFECTIVE ``__table_args__``, and a
-   ``__table_args__`` shadowed by one.** ⚠️ Corrected 2026-09-18: SQLAlchemy does **not**
+   ``__table_args__`` shadowed by one.** SQLAlchemy does **not**
    concatenate ``__table_args__`` across bases. It is an ordinary class attribute, so
    attribute lookup takes the first declaration in the MRO and every later one is
    discarded whole — mixins do not compose. This check therefore does two things: it
@@ -65,6 +65,8 @@ _ALLOW_MARKER = "orm-guard-ok:"
 _SRC_ROOT = "src"
 
 _FILTER_CALL_NAMES = frozenset({"where", "filter"})
+_BASE_CALL_NAMES = frozenset({"declarative_base", "generate_base"})
+_BASE_CLASS_NAMES = frozenset({"DeclarativeBase", "DeclarativeBaseNoMeta"})
 
 
 def _hatch_reason(str_line: str) -> str | None:
@@ -264,7 +266,7 @@ def _bitwise_filter_problems(
 def _base_declarations_in_file(
 	cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[tuple[pathlib.Path, int, str]]:
-	"""Collect every ``declarative_base()`` call / ``DeclarativeBase`` subclass in this file.
+	"""Collect every Base declaration (``declarative_base()``, ``generate_base()``, subclasses).
 
 	Parameters
 	----------
@@ -292,11 +294,11 @@ def _base_declarations_in_file(
 				if isinstance(cls_node.func, ast.Attribute)
 				else None
 			)
-			if str_call_name == "declarative_base":
-				str_kind, int_line = "declarative_base() call", cls_node.lineno
+			if str_call_name in _BASE_CALL_NAMES:
+				str_kind, int_line = f"{str_call_name}() call", cls_node.lineno
 		elif isinstance(cls_node, ast.ClassDef) and any(
-			(isinstance(b, ast.Name) and b.id == "DeclarativeBase")
-			or (isinstance(b, ast.Attribute) and b.attr == "DeclarativeBase")
+			(isinstance(b, ast.Name) and b.id in _BASE_CLASS_NAMES)
+			or (isinstance(b, ast.Attribute) and b.attr in _BASE_CLASS_NAMES)
 			for b in cls_node.bases
 		):
 			str_kind, int_line = f"class {cls_node.name}(DeclarativeBase)", cls_node.lineno
@@ -378,6 +380,31 @@ def _create_all_message(path_file: pathlib.Path, int_line: int) -> str:
 	)
 
 
+def _is_main_guard(cls_node: ast.AST) -> bool:
+	"""Return whether a node is ``if __name__ == "__main__":`` — code that never runs on import.
+
+	Parameters
+	----------
+	cls_node : ast.AST
+		The node to classify.
+
+	Returns
+	-------
+	bool
+		``True`` only for an ``If`` comparing ``__name__`` to the string ``"__main__"``.
+	"""
+	if not (isinstance(cls_node, ast.If) and isinstance(cls_node.test, ast.Compare)):
+		return False
+	cls_test = cls_node.test
+	return (
+		isinstance(cls_test.left, ast.Name)
+		and cls_test.left.id == "__name__"
+		and any(
+			isinstance(c, ast.Constant) and c.value == "__main__" for c in cls_test.comparators
+		)
+	)
+
+
 def _module_scope_create_all_problems(
 	cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
@@ -408,8 +435,10 @@ def _module_scope_create_all_problems(
 				and not _line_allowed(list_lines, cls_child.lineno)
 			):
 				list_problems.append(_create_all_message(path_file, cls_child.lineno))
-			bool_child_in_function = bool_in_function or isinstance(
-				cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
+			bool_child_in_function = (
+				bool_in_function
+				or isinstance(cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda)
+				or _is_main_guard(cls_child)
 			)
 			_walk(cls_child, bool_child_in_function)
 
@@ -417,7 +446,42 @@ def _module_scope_create_all_problems(
 	return list_problems
 
 
-def _table_args_value(cls_node: ast.ClassDef) -> ast.expr | None:
+def _declared_attr_table_args(cls_node: ast.ClassDef) -> ast.FunctionDef | None:
+	"""Return a ``@declared_attr def __table_args__`` method, SQLAlchemy's documented mixin form.
+
+	Parameters
+	----------
+	cls_node : ast.ClassDef
+		The class to inspect.
+
+	Returns
+	-------
+	ast.FunctionDef or None
+		The method, or ``None`` when the class defines no such method.
+	"""
+	for cls_stmt in cls_node.body:
+		if isinstance(cls_stmt, ast.FunctionDef) and cls_stmt.name == "__table_args__":
+			return cls_stmt
+	return None
+
+
+def _table_args_value(cls_node: ast.ClassDef) -> ast.AST | None:
+	"""Return this class's own ``__table_args__`` declaration node, or ``None``.
+
+	Parameters
+	----------
+	cls_node : ast.ClassDef
+		The class to inspect.
+
+	Returns
+	-------
+	ast.AST or None
+		The assigned expression, or the ``@declared_attr`` method; ``None`` when absent.
+	"""
+	return _declared_attr_table_args(cls_node) or _assigned_table_args_value(cls_node)
+
+
+def _assigned_table_args_value(cls_node: ast.ClassDef) -> ast.expr | None:
 	"""Return this class's own ``__table_args__`` RHS expression, or ``None``.
 
 	Parameters
@@ -461,13 +525,37 @@ def _is_name_kw(cls_kw: ast.keyword) -> bool:
 	)
 
 
-def _constraint_names_in_expr(cls_value: ast.expr | None) -> list[tuple[str, int]]:
+def _call_constraint_names(cls_call: ast.Call) -> list[str]:
+	"""Return the constraint/index names one call declares: ``name=`` and ``Index``'s first arg.
+
+	Parameters
+	----------
+	cls_call : ast.Call
+		A call found inside a ``__table_args__`` expression.
+
+	Returns
+	-------
+	list of str
+		Zero or more literal names.
+	"""
+	list_names = [
+		str(cls_kw.value.value)
+		for cls_kw in cls_call.keywords
+		if _is_name_kw(cls_kw) and isinstance(cls_kw.value, ast.Constant)
+	]
+	str_func = cls_call.func.id if isinstance(cls_call.func, ast.Name) else ""
+	if str_func == "Index" and cls_call.args and isinstance(cls_call.args[0], ast.Constant):
+		list_names.append(str(cls_call.args[0].value))
+	return list_names
+
+
+def _constraint_names_in_expr(cls_value: ast.AST | None) -> list[tuple[str, int]]:
 	"""Return every ``name="..."`` constraint literal inside a ``__table_args__`` expression.
 
 	Parameters
 	----------
-	cls_value : ast.expr or None
-		The ``__table_args__`` RHS expression, or ``None`` (no such declaration).
+	cls_value : ast.AST or None
+		The ``__table_args__`` declaration node, or ``None`` (no such declaration).
 
 	Returns
 	-------
@@ -480,11 +568,7 @@ def _constraint_names_in_expr(cls_value: ast.expr | None) -> list[tuple[str, int
 	for cls_inner in ast.walk(cls_value):
 		if not isinstance(cls_inner, ast.Call):
 			continue
-		list_names += [
-			(cls_kw.value.value, cls_inner.lineno)
-			for cls_kw in cls_inner.keywords
-			if _is_name_kw(cls_kw)
-		]
+		list_names += [(str_n, cls_inner.lineno) for str_n in _call_constraint_names(cls_inner)]
 	return list_names
 
 
@@ -572,11 +656,7 @@ def _linearised_bases(
 ) -> list[str]:
 	"""Return ``str_name`` and its in-file ancestors, depth-first and left to right.
 
-	⚠️ This is not a full C3 linearisation, deliberately. This gate reads a single file with
-	``ast`` and cannot see a base defined elsewhere, so a real MRO is not computable here
-	anyway; depth-first left-to-right agrees with C3 for the single-base-plus-mixins shapes
-	SQLAlchemy models actually take, and disagreeing cases are unreachable without the
-	out-of-file bases this gate already skips.
+	Only the fallback of :func:`_in_file_mro`, for a hierarchy Python itself cannot linearise.
 
 	Parameters
 	----------
@@ -601,6 +681,71 @@ def _linearised_bases(
 	return list_order
 
 
+def _in_file_mro(str_name: str, dict_classes: dict[str, ast.ClassDef]) -> list[str]:
+	"""Return ``str_name`` and its in-file ancestors in Python's own C3 attribute-lookup order.
+
+	Builds a throwaway ``type`` per in-file class, bases first, and reads ``__mro__`` — so the
+	order is the interpreter's, diamonds included, instead of a hand-written approximation.
+	Bases defined elsewhere carry no ``__table_args__`` this gate can read and are skipped.
+
+	Parameters
+	----------
+	str_name : str
+		The class to start from.
+	dict_classes : dict of str to ast.ClassDef
+		Every class defined in this file, by name.
+
+	Returns
+	-------
+	list of str
+		Class names in lookup order, starting with ``str_name``; the depth-first walk when
+		Python rejects the hierarchy (a cycle or an inconsistent order).
+	"""
+	dict_built: dict[str, type] = {}
+
+	def _build(str_cls: str) -> type:
+		if str_cls not in dict_built:
+			tuple_bases = tuple(
+				_build(str_base)
+				for str_base in _base_class_names(dict_classes[str_cls])
+				if str_base in dict_classes
+			)
+			dict_built[str_cls] = type(str_cls, tuple_bases, {})
+		return dict_built[str_cls]
+
+	try:
+		list_mro = _build(str_name).__mro__
+	except (TypeError, RecursionError):
+		return _linearised_bases(str_name, dict_classes, set())
+	dict_name_of = {id(cls_type): str_cls for str_cls, cls_type in dict_built.items()}
+	return [dict_name_of[id(cls_type)] for cls_type in list_mro if id(cls_type) in dict_name_of]
+
+
+def _consumed_bases(cls_declaration: ast.AST | None) -> set[str]:
+	"""Return the bases a declaration composes explicitly, via ``<Base>.__table_args__``.
+
+	Parameters
+	----------
+	cls_declaration : ast.AST or None
+		A class's own ``__table_args__`` declaration node.
+
+	Returns
+	-------
+	set of str
+		Names ``X`` for every ``X.__table_args__`` the declaration reads — those bases are
+		combined into the live declaration, not discarded by it.
+	"""
+	if cls_declaration is None:
+		return set()
+	return {
+		cls_node.value.id
+		for cls_node in ast.walk(cls_declaration)
+		if isinstance(cls_node, ast.Attribute)
+		and cls_node.attr == "__table_args__"
+		and isinstance(cls_node.value, ast.Name)
+	}
+
+
 def _effective_table_args(
 	str_name: str,
 	dict_classes: dict[str, ast.ClassDef],
@@ -612,7 +757,8 @@ def _effective_table_args(
 	class in the MRO that defines it, and SQLAlchemy neither concatenates nor merges the
 	rest. Unioning every base's constraint names — which this function replaced — invented
 	collisions between a live declaration and a dead one, and renaming the dead one
-	"resolved" a finding by editing code that never runs.
+	"resolved" a finding by editing code that never runs. The exception is a declaration that
+	reads ``<Base>.__table_args__`` itself: that base is part of the live declaration.
 
 	Parameters
 	----------
@@ -627,22 +773,31 @@ def _effective_table_args(
 	-------
 	tuple
 		``(effective, shadowed)`` — ``effective`` is ``(constraint_name, lineno, owner)`` from
-		the first declaring class only; ``shadowed`` names the later declaring classes whose
-		``__table_args__`` is silently discarded at runtime.
+		the live declaration (and any base it composes); ``shadowed`` names the later
+		declaring classes whose ``__table_args__`` is silently discarded at runtime.
 	"""
 	list_declarers = [
 		str_cls
-		for str_cls in _linearised_bases(str_name, dict_classes, set())
+		for str_cls in _in_file_mro(str_name, dict_classes)
 		if _declares_table_args(dict_classes[str_cls])
 	]
 	if not list_declarers:
 		return [], []
 	str_owner = list_declarers[0]
-	list_effective = [(n, ln, str_owner) for n, ln in dict_own_names.get(str_owner, [])]
+	set_consumed = _consumed_bases(_table_args_value(dict_classes[str_owner]))
+	list_effective = [
+		(str_n, int_ln, str_cls)
+		for str_cls in [str_owner, *(c for c in list_declarers[1:] if c in set_consumed)]
+		for str_n, int_ln in dict_own_names.get(str_cls, [])
+	]
 	# A later declarer that maps its OWN table (``__tablename__``) is a parent in a joined/
 	# concrete inheritance chain: its ``__table_args__`` applies to its own table and is not
 	# discarded. Only table-less mixins are truly shadowed.
-	list_shadowed = [s for s in list_declarers[1:] if not _declares_tablename(dict_classes[s])]
+	list_shadowed = [
+		str_cls
+		for str_cls in list_declarers[1:]
+		if str_cls not in set_consumed and not _declares_tablename(dict_classes[str_cls])
+	]
 	return list_effective, list_shadowed
 
 
@@ -661,15 +816,15 @@ def _duplicate_constraint_message(
 	path_file : pathlib.Path
 		The offending file.
 	str_name : str
-		The duplicated constraint name.
+		The duplicated constraint or index name.
 	int_line : int
-		The line of the later (shadowing) declaration.
+		The line of the second declaration.
 	str_class : str
-		The class owning the later declaration.
+		The class owning the second declaration.
 	int_other_line : int
-		The line of the earlier (shadowed) declaration.
+		The line of the first declaration.
 	str_other_class : str
-		The class owning the earlier declaration.
+		The class owning the first declaration.
 
 	Returns
 	-------
@@ -677,37 +832,32 @@ def _duplicate_constraint_message(
 		A human-readable finding.
 	"""
 	return (
-		f"{path_file}:{int_line}: constraint name '{str_name}' declared here on {str_class} "
-		f"duplicates the one on {str_other_class} (line {int_other_line}), inside the SAME "
-		f"effective __table_args__ — both reach the table and one silently wins, so the "
-		f"model looks like it enforces both. Rename one of the two, or if deliberate: "
+		f"{path_file}:{int_line}: name '{str_name}' is declared twice in one effective "
+		f"__table_args__ (on {str_class} here, on {str_other_class} at line {int_other_line}). "
+		f"Some backends fail at DDL time and others resolve it arbitrarily, so the model may "
+		f"enforce less than it reads. Rename one of the two, or if deliberate: "
 		f"# {_ALLOW_MARKER} <reason>"
 	)
 
 
 def _shadowed_table_args_problems(
 	path_file: pathlib.Path,
-	str_name: str,
-	list_shadowed: list[str],
+	dict_inheritors: dict[str, list[str]],
 	dict_classes: dict[str, ast.ClassDef],
 	list_lines: list[str],
 ) -> list[str]:
-	"""Report each base whose ``__table_args__`` is discarded by attribute lookup.
+	"""Report each class whose ``__table_args__`` is discarded, once, naming who inherits it.
 
-	This is the finding the old union-everything walk was groping at and getting backwards.
 	Two mixins each declaring ``__table_args__`` do not compose: the first in the MRO wins
-	and the rest vanish, silently, with every constraint they declared. That is a real
-	defect in the model — and it is invisible once the duplicate check stops unioning, so it
-	has to be reported in its own right rather than left out.
+	and the rest vanish, silently, with every constraint they declared. A declaration that
+	reads ``<Base>.__table_args__`` itself is exempt (see :func:`_consumed_bases`).
 
 	Parameters
 	----------
 	path_file : pathlib.Path
 		The module's path, for the message.
-	str_name : str
-		The class whose MRO was resolved.
-	list_shadowed : list of str
-		Declaring classes after the first, in lookup order.
+	dict_inheritors : dict of str to list of str
+		Each shadowed class, mapped to the models whose lookup discards it.
 	dict_classes : dict of str to ast.ClassDef
 		Every class defined in this file, by name.
 	list_lines : list of str
@@ -719,24 +869,65 @@ def _shadowed_table_args_problems(
 		One finding per shadowed declaration not covered by an escape hatch.
 	"""
 	list_problems = []
-	for str_shadowed in list_shadowed:
+	for str_shadowed, list_models in dict_inheritors.items():
 		int_line = dict_classes[str_shadowed].lineno
 		if _line_allowed(list_lines, int_line):
 			continue
 		list_problems.append(
-			f"{path_file}:{int_line}: '{str_name}' inherits '__table_args__' from more than "
-			f"one base — '{str_shadowed}' declares one that Python's attribute lookup "
-			f"discards entirely. SQLAlchemy does not merge them; every constraint declared "
-			f"there is silently absent from the table. Combine them in one explicit "
-			f"'__table_args__' on the model, or if deliberate: # {_ALLOW_MARKER} <reason>"
+			f"{path_file}:{int_line}: '{str_shadowed}' declares '__table_args__', but "
+			f"{', '.join(list_models)} also inherit(s) another declaration, and Python's "
+			f"attribute lookup discards this one entirely. SQLAlchemy does not merge them; "
+			f"every constraint declared here is silently absent from the table. Combine them "
+			f"in one explicit '__table_args__' on the model "
+			f"('A.__table_args__ + B.__table_args__'), or if deliberate: "
+			f"# {_ALLOW_MARKER} <reason>"
 		)
+	return list_problems
+
+
+def _duplicate_names_in(
+	path_file: pathlib.Path,
+	list_effective: list[tuple[str, int, str]],
+	list_lines: list[str],
+) -> list[str]:
+	"""Report each name declared twice inside one effective ``__table_args__``.
+
+	Parameters
+	----------
+	path_file : pathlib.Path
+		The module's path, for the message.
+	list_effective : list of (str, int, str)
+		``(constraint_name, lineno, owner)`` from :func:`_effective_table_args`.
+	list_lines : list of str
+		The source, split into lines, for the escape-hatch check.
+
+	Returns
+	-------
+	list of str
+		Human-readable findings; empty when every name is unique.
+	"""
+	list_problems: list[str] = []
+	dict_seen: dict[str, tuple[int, str]] = {}
+	for str_constraint, int_line, str_class in list_effective:
+		if str_constraint not in dict_seen:
+			dict_seen[str_constraint] = (int_line, str_class)
+		elif not _line_allowed(list_lines, int_line):
+			int_other_line, str_other_class = dict_seen[str_constraint]
+			list_problems.append(
+				_duplicate_constraint_message(
+					path_file, str_constraint, int_line, str_class, int_other_line, str_other_class
+				)
+			)
 	return list_problems
 
 
 def _duplicate_constraint_name_problems(
 	cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
-	"""Report every constraint ``name=`` duplicated across a class's own in-file MRO.
+	"""Report duplicated constraint names and discarded ``__table_args__`` across in-file MROs.
+
+	Only module-level classes are resolved: a nested class of the same name (an inner
+	``Meta``/``Config``) would otherwise overwrite the model it shares a name with.
 
 	Parameters
 	----------
@@ -750,37 +941,24 @@ def _duplicate_constraint_name_problems(
 	Returns
 	-------
 	list of str
-		Human-readable findings; empty when the file complies.
+		Human-readable findings, each reported once; empty when the file complies.
 	"""
-	dict_classes = {n.name: n for n in ast.walk(cls_tree) if isinstance(n, ast.ClassDef)}
+	dict_classes = {n.name: n for n in cls_tree.body if isinstance(n, ast.ClassDef)}
 	dict_own_names = {str_name: _table_args_names(n) for str_name, n in dict_classes.items()}
-
+	dict_inheritors: dict[str, list[str]] = {}
 	list_problems: list[str] = []
-	for str_name in dict_classes:
+	for str_name, cls_model in dict_classes.items():
 		list_effective, list_shadowed = _effective_table_args(
 			str_name, dict_classes, dict_own_names
 		)
-		list_problems += _shadowed_table_args_problems(
-			path_file, str_name, list_shadowed, dict_classes, list_lines
-		)
-		dict_seen: dict[str, tuple[int, str]] = {}
-		for str_constraint, int_line, str_class in list_effective:
-			if str_constraint not in dict_seen:
-				dict_seen[str_constraint] = (int_line, str_class)
-				continue
-			int_other_line, str_other_class = dict_seen[str_constraint]
-			if not _line_allowed(list_lines, int_line):
-				list_problems.append(
-					_duplicate_constraint_message(
-						path_file,
-						str_constraint,
-						int_line,
-						str_class,
-						int_other_line,
-						str_other_class,
-					)
-				)
-	return list_problems
+		if not _line_allowed(list_lines, cls_model.lineno):
+			for str_shadowed in list_shadowed:
+				dict_inheritors.setdefault(str_shadowed, []).append(str_name)
+		list_problems += _duplicate_names_in(path_file, list_effective, list_lines)
+	list_problems += _shadowed_table_args_problems(
+		path_file, dict_inheritors, dict_classes, list_lines
+	)
+	return list(dict.fromkeys(list_problems))
 
 
 def check_python_file(

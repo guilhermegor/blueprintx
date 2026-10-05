@@ -113,10 +113,11 @@ def test_bitwise_operator_outside_where_filter_is_not_flagged(tmp_path: Path) ->
 
 
 def test_no_sqlalchemy_import_skips_the_bitwise_check(tmp_path: Path) -> None:
-	"""A file with no ``sqlalchemy`` import is out of scope (e.g. a pandas ``.filter()``)."""
-	# The scanner reads only positional arguments, so the criteria go in positionally.
-	# A keyword fixture stayed green with the scope check deleted, proving nothing about it.
-	path_file = _python_file(tmp_path, "df.filter(a & b)\n")
+	"""A file with no ``sqlalchemy`` import is out of scope (Django ``Q`` objects use ``&``).
+
+	The receiver is not named like a frame, so only the import scope check can skip this.
+	"""
+	path_file = _python_file(tmp_path, "qs.filter(Q(a) & Q(b))\n")
 
 	assert gate.check_python_file(path_file)[0] == []
 
@@ -127,7 +128,7 @@ def test_no_sqlalchemy_import_skips_the_bitwise_check(tmp_path: Path) -> None:
 
 
 def test_two_declarative_base_subclasses_across_the_tree_are_reported(
-	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
 	"""A second ``DeclarativeBase`` subclass anywhere in ``src/`` is a violation for BOTH."""
 	path_src = tmp_path / "src"
@@ -142,7 +143,12 @@ def test_two_declarative_base_subclasses_across_the_tree_are_reported(
 	)
 	monkeypatch.chdir(tmp_path)
 
-	assert gate.main() == 1
+	int_code = gate.main()
+	str_out = "".join(capsys.readouterr())
+
+	assert int_code == 1
+	assert "a.py" in str_out
+	assert "b.py" in str_out
 
 
 def test_single_declarative_base_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -193,14 +199,11 @@ def test_unrelated_create_all_method_is_not_flagged(tmp_path: Path) -> None:
 
 
 def test_two_mixins_declaring_table_args_report_the_shadowing(tmp_path: Path) -> None:
-	"""⚠️ Rewritten 2026-09-18 — the old premise was wrong and the old assertion encoded it.
+	"""Two mixins declaring ``__table_args__`` do not compose: the second one is discarded.
 
-	This was ``test_duplicate_constraint_name_across_mixins_is_reported`` and asserted a
-	*duplicate* finding, on the belief that SQLAlchemy concatenates ``__table_args__``.
-	It does not: attribute lookup takes ``MixinA``'s and discards ``MixinB``'s whole
-	declaration. The shared ``uq_x`` name never collides at runtime because only one of
-	them exists. The real defect is that ``MixinB``'s constraints are silently gone, so
-	that is what the gate must say.
+	SQLAlchemy does not concatenate them. Attribute lookup takes ``MixinA``'s and drops
+	``MixinB``'s whole declaration, so the shared ``uq_x`` name never collides at runtime and
+	the real defect is that ``MixinB``'s constraints are silently gone.
 	"""
 	path_file = _python_file(
 		tmp_path,
@@ -248,12 +251,7 @@ def test_pandas_mask_on_a_df_receiver_is_not_flagged(tmp_path: Path) -> None:
 
 
 def test_distinct_constraint_names_across_mixins_still_shadow(tmp_path: Path) -> None:
-	"""⚠️ Inverted 2026-09-18 — this used to assert PASS, and that was the bug.
-
-	Distinct names do not save the model: ``uq_y`` is not "composed" with ``uq_x``, it is
-	discarded along with the rest of ``MixinB.__table_args__``. The old test asserting a
-	clean pass here is precisely what let the false premise survive review.
-	"""
+	"""Distinct names do not save the model, ``uq_y`` goes with ``MixinB``'s declaration."""
 	path_file = _python_file(
 		tmp_path,
 		"from sqlalchemy import UniqueConstraint\n\n"
@@ -399,3 +397,153 @@ def test_main_passes_on_a_clean_tree(tmp_path: Path, monkeypatch: pytest.MonkeyP
 	monkeypatch.chdir(tmp_path)
 
 	assert gate.main() == 0
+
+
+# --------------------------
+# 4. Review-driven edge cases
+# --------------------------
+
+_SA = "from sqlalchemy import UniqueConstraint, Index, select\n"
+
+
+def test_bitwise_invert_inside_where_is_reported(tmp_path: Path) -> None:
+	"""``~`` binds tighter than ``==`` in the same way ``&`` does, so it is the same hazard."""
+	path_file = _python_file(tmp_path, _SA + "stmt = select(U).where(~U.active)\n")
+
+	assert len(gate.check_python_file(path_file)[0]) == 1
+
+
+def test_model_composing_its_mixins_explicitly_is_clean(tmp_path: Path) -> None:
+	"""The fix the shadow message recommends must itself pass, with neither mixin discarded."""
+	path_file = _python_file(
+		tmp_path,
+		_SA + "class MixinA:\n"
+		"\t__table_args__ = (UniqueConstraint('a', name='uq_a'),)\n\n"
+		"class MixinB:\n"
+		"\t__table_args__ = (UniqueConstraint('b', name='uq_b'),)\n\n"
+		"class Model(MixinA, MixinB):\n"
+		"\t__table_args__ = MixinA.__table_args__ + MixinB.__table_args__\n",
+	)
+
+	assert gate.check_python_file(path_file)[0] == []
+
+
+def test_composed_mixins_that_repeat_a_name_are_reported(tmp_path: Path) -> None:
+	"""Composing is not a free pass: the repeated name now sits in ONE effective declaration."""
+	path_file = _python_file(
+		tmp_path,
+		_SA + "class MixinA:\n"
+		"\t__table_args__ = (UniqueConstraint('a', name='uq_x'),)\n\n"
+		"class MixinB:\n"
+		"\t__table_args__ = (UniqueConstraint('b', name='uq_x'),)\n\n"
+		"class Model(MixinA, MixinB):\n"
+		"\t__table_args__ = MixinA.__table_args__ + MixinB.__table_args__\n",
+	)
+
+	assert "uq_x" in gate.check_python_file(path_file)[0][0]
+
+
+def test_diamond_reports_the_discarded_class_not_the_live_one(tmp_path: Path) -> None:
+	"""Python's real MRO is Model, TsMixin, AuditMixin, Common: ``AuditMixin`` wins."""
+	path_file = _python_file(
+		tmp_path,
+		_SA + "class Common:\n"
+		"\t__table_args__ = ()\n\n"
+		"class TsMixin(Common):\n"
+		"\tpass\n\n"
+		"class AuditMixin(Common):\n"
+		"\t__table_args__ = (UniqueConstraint('a', name='uq_a'),)\n\n"
+		"class Model(TsMixin, AuditMixin):\n"
+		"\tpass\n",
+	)
+
+	list_problems, _ = gate.check_python_file(path_file)
+
+	assert [p.split("'")[1] for p in list_problems] == ["Common"]
+
+
+def test_declared_attr_table_args_is_seen_as_a_declaration(tmp_path: Path) -> None:
+	"""A ``@declared_attr`` mixin wins the MRO here, so the plain-assign mixin is the one lost."""
+	path_file = _python_file(
+		tmp_path,
+		_SA + "class MixinA:\n"
+		"\t@declared_attr\n"
+		"\tdef __table_args__(cls):\n"
+		"\t\treturn (UniqueConstraint('a', name='uq_a'),)\n\n"
+		"class MixinB:\n"
+		"\t__table_args__ = (UniqueConstraint('b', name='uq_b'),)\n\n"
+		"class Model(MixinA, MixinB):\n"
+		"\tpass\n",
+	)
+
+	list_problems, _ = gate.check_python_file(path_file)
+
+	assert [p.split("'")[1] for p in list_problems] == ["MixinB"]
+
+
+def test_create_all_under_the_main_guard_is_not_flagged(tmp_path: Path) -> None:
+	"""``if __name__ == "__main__":`` never runs on import, which is what the finding describes."""
+	path_file = _python_file(
+		tmp_path,
+		"from sqlalchemy.orm import DeclarativeBase\n"
+		"class Base(DeclarativeBase): pass\n"
+		"if __name__ == '__main__':\n"
+		"\tBase.metadata.create_all(engine)\n",
+	)
+
+	assert gate.check_python_file(path_file)[0] == []
+
+
+def test_a_mixin_inherited_by_two_models_is_reported_once(tmp_path: Path) -> None:
+	"""One defect in the mixin is one finding, however many models inherit it."""
+	path_file = _python_file(
+		tmp_path,
+		_SA + "class Mx:\n"
+		"\t__table_args__ = (\n"
+		"\t\tUniqueConstraint('a', name='uq_x'),\n"
+		"\t\tUniqueConstraint('b', name='uq_x'),\n"
+		"\t)\n\n"
+		"class M1(Mx):\n\tpass\n\n"
+		"class M2(Mx):\n\tpass\n",
+	)
+
+	assert len(gate.check_python_file(path_file)[0]) == 1
+
+
+def test_duplicate_index_names_given_positionally_are_reported(tmp_path: Path) -> None:
+	"""``Index`` takes its name as the first positional argument, not ``name=``."""
+	path_file = _python_file(
+		tmp_path,
+		_SA + "class M:\n\t__table_args__ = (Index('ix_x', 'a'), Index('ix_x', 'b'))\n",
+	)
+
+	assert "ix_x" in gate.check_python_file(path_file)[0][0]
+
+
+def test_a_nested_class_does_not_overwrite_a_model_of_the_same_name(tmp_path: Path) -> None:
+	"""Only module-level classes are models; an inner ``Meta`` must not shadow a real one."""
+	path_file = _python_file(
+		tmp_path,
+		_SA + "class Meta:\n"
+		"\t__table_args__ = (UniqueConstraint('a', name='uq_a'),)\n\n"
+		"class Model(Meta):\n"
+		"\tclass Meta:\n"
+		"\t\tpass\n\n"
+		"\t__table_args__ = (UniqueConstraint('b', name='uq_b'),)\n",
+	)
+
+	list_problems, _ = gate.check_python_file(path_file)
+
+	assert [p.split("'")[1] for p in list_problems] == ["Meta"]
+
+
+def test_base_variants_beyond_declarative_base_are_found(tmp_path: Path) -> None:
+	"""``DeclarativeBaseNoMeta`` and ``registry().generate_base()`` also create a second Base."""
+	path_file = _python_file(
+		tmp_path,
+		"from sqlalchemy.orm import DeclarativeBaseNoMeta, registry\n"
+		"class B1(DeclarativeBaseNoMeta): pass\n"
+		"B2 = registry().generate_base()\n",
+	)
+
+	assert len(gate.check_python_file(path_file)[1]) == 2
