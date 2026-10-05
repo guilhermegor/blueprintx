@@ -107,7 +107,7 @@ Three findings, in descending order of cost:
    requiring it would deadlock every PR in every generated project, because it
    only runs on `types: [closed]`.
 
-The earlier pass on blueprintx#164 (`docs/backlog/repo_rules_self_audit_164_20260904_062813.md`)
+The earlier pass on blueprintx#164 (`.specs/backlog/repo-rules-self-audit-164_20260904_062813.md`)
 reached "keep one entry" for the Python tiers by reasoning about
 `tests.yaml` alone. That conclusion survives for `tests.yaml` — with a second,
 stronger disqualifier it did not have (the `branches:` filter, not just matrix
