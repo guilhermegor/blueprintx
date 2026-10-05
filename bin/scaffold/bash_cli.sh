@@ -119,10 +119,17 @@ copy_common_templates() {
 
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
+    # file, language-agnostic; bash-cli was added after #540 was scoped, included here
+    # for consistency with the other seven skeleton roots.
+    cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
+    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+    # commit, never templated principles. See .specs/spec.md for the id conventions.
+    cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 
     print_status "success" "Common templates applied"
 }
