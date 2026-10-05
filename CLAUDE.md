@@ -165,11 +165,26 @@ project (`poe_tasks.toml` replaced them there since #236) — so the script live
 `bin/check_makefile_pairing.sh`, not `templates/python-common/bin/`, and never ships as part
 of a scaffold.
 
+The **PR file-count ceiling** (`bin/ci/check_pr_file_count.py`, pre-commit hook
+`pr-file-count`, the `pr-file-count` CI job) fails a branch above **90 cumulative changed
+files** — 10 below the vendor cap where CodeRabbit hard-refuses to review at all
+(`Review skipped: N files exceed the limit of 100`), a state a PR can never merge out of.
+Calibrated over the 100 most recent PRs: **1 violation** (#424, 241 files), and the largest
+legitimate PR in that set is #532 at 59 files — a ceiling with headroom on both sides, not a
+number chosen to match a specific diff. Root-repo-only, like `check_makefile_pairing.sh`
+above: it is BlueprintX's own reviewer-capacity limit, not something a generated project
+inherits. No escape hatch — every real violation measured so far had an honest seam to split
+at, so one has not yet been needed (blueprintx#551). While a merge is in progress
+(`MERGE_HEAD` exists) the base is `git merge-base origin/<branch> HEAD MERGE_HEAD`, so the
+incoming side's files are not charged to the branch (measured: 186 reported vs 69 real).
+
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
 GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes
 `vX.Y.Z` and the package-manager jobs stamp that version into each artifact. You enter the version
-**once**, in the Action's field — no `make bump_version`, no commit to `main`.
+**once**, in the Action's field — no `make bump_version`, no commit to `main`. The field is
+validated before the tag is pushed: `MAJOR.MINOR.PATCH`, optionally followed by `-<prerelease>`
+(e.g. `0.2.0`, `0.2.0-rc.1`) — a rejected value is retyped, never a tag that has to be deleted.
 
 `blueprintx --version` resolves the version at runtime (mirrors how a Python wheel gets its version
 from the tag, one layer down):
@@ -219,6 +234,8 @@ BlueprintX/
 │   │                               #   (CODEOWNERS, PR template, bin/ git-diff scripts + export_repo_content.sh + lib/common.sh, make/git_diff.mk)
 │   ├── python-common/              # shared assets copied into ALL Python skeletons
 │   ├── ts-common/                  # shared assets copied into ALL TypeScript skeletons
+│   ├── api-service-native-db/      # Hexagonal API service (FastAPI transport) with native DB drivers
+│   │   └── skeleton.meta
 │   ├── ddd-service-native-db/      # DDD skeleton with native DB drivers
 │   │   └── skeleton.meta           # discovery descriptor (language, display_name, scaffold)
 │   ├── ddd-service-orm-db/         # DDD skeleton with SQLAlchemy ORM
@@ -232,6 +249,8 @@ BlueprintX/
 │   ├── react-spa-webpack/          # React 19 + TypeScript + Webpack 5 SPA skeleton
 │   │   └── skeleton.meta
 │   ├── ts-lib/                     # publishable TypeScript library skeleton
+│   │   └── skeleton.meta
+│   ├── bash-cli/                   # standalone Bash CLI, git-tag versioned, bats + shellcheck
 │   │   └── skeleton.meta
 │   └── licenses/                   # license text files (MIT, Apache-2.0, GPL-3.0, …)
 ├── docs/                           # MkDocs source pages
@@ -258,9 +277,9 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 
 ## How scaffolding works
 
-**Seven skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
-`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`) and two TypeScript
-(`react-spa-webpack`, `ts-lib`), one `skeleton.meta` each (see "Repo architecture" above and
+**Eight skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
+`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`), two TypeScript
+(`react-spa-webpack`, `ts-lib`) and one Bash (`bash-cli`), one `skeleton.meta` each (see "Repo architecture" above and
 "Discovery system" below). `bin/ci/validate_meta.sh` enforces that every one of these
 directory names is also named here — this count is a should-fail witness in its own right:
 add or remove a skeleton without updating it and the number goes stale before the paragraph
@@ -306,7 +325,7 @@ The `templates/python-common/` directory is the **single source of truth** for s
 
 ## Template Python conventions (must be respected in all template files)
 
-- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, tab indent, double quotes, NumPy docstrings.
+- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, 4-space indent, double quotes, NumPy docstrings.
 - **Pre-commit hooks** (`.pre-commit-config.yaml`): ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
 - **Tests**: every skeleton runs `pytest` (`make unit_tests` → `poetry run pytest tests/unit/`; `pytest.ini` is shipped from `templates/python-common/` to all tiers). Tests are pytest-style — plain functions with fixtures (`conftest.py`, `capsys`, `monkeypatch`, `pytest_mock`) — not `unittest.TestCase`. Write new tests as pytest functions regardless of tier.
 - **One class per file**. Ports (ABCs) in `domain/ports.py`, ORM/DB implementations in `infrastructure/`, orchestration in `application/use_cases.py`. Never mix layers in one file.
@@ -390,3 +409,12 @@ the published site (`exclude_docs` in each skeleton's `mkdocs.yml`) but tracked 
 team-reviewable record of what was done and why. When complete, tick the last box and add a
 short "Completed — kept as a record" note instead of removing the file. (Lesson:
 persist-todo-in-docs-backlog.)
+
+## Prose language: en-US everywhere in this repo
+
+This repository's own prose — `CLAUDE.md`, `CONTRIBUTING.md`, `docs/`, `docs/backlog/`,
+commit messages, comments, PR descriptions — is en-US, no exceptions. This is scoped to
+**BlueprintX itself**. It does not extend to a project BlueprintX scaffolds, which may
+legitimately be bilingual — see `templates/python-common/CLAUDE.md`'s description of
+`bin/check_comment_language.py`, whose locale-agnostic design is a feature for a *generated*
+project, not a statement about this one (blueprintx#194).
