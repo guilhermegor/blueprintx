@@ -1,0 +1,1941 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for BlueprintX scaffolds (Python and TypeScript)">
+      
+      
+      
+        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/ci-scanner-gap-analysis/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>CI scanner gap analysis (#305) - BlueprintX</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ci-scanner-gap-analysis-305" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="BlueprintX" class="md-header__button md-logo" aria-label="BlueprintX" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            BlueprintX
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CI scanner gap analysis (#305)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m3.55 19.09 1.41 1.41 1.8-1.79-1.42-1.42M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6c0-3.32-2.69-6-6-6m8 7h3v-2h-3m-2.76 7.71 1.8 1.79 1.41-1.41-1.79-1.8M20.45 5l-1.41-1.4-1.8 1.79 1.42 1.42M13 1h-2v3h2M6.76 5.39 4.96 3.6 3.55 5l1.79 1.81zM1 13h3v-2H1m12 9h-2v3h2"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/guilhermegor/BlueprintX" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="BlueprintX" class="md-nav__button md-logo" aria-label="BlueprintX" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    BlueprintX
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/guilhermegor/BlueprintX" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../complexity-ceilings-measured/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complexity Ceilings Measured
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../secret-scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Versioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage-floor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Floor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sonarqube-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SonarQube Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DDD Service (Native DB)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DDD Service (Native DB)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-ddd-service-native-db/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples/ddd-external-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - External API Calls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples/ddd-usage-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - Wiring with FastAPI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples/ddd-bank-balance-alert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - Bank Balance Alert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DDD Service (ORM DB)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DDD Service (ORM DB)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-ddd-service-orm-db/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples-orm/ddd-orm-usage-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - Usage with SQLAlchemy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples-orm/ddd-orm-external-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - External API Calls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-examples-orm/ddd-orm-bank-balance-alert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example - Bank Balance Alert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_3" id="__nav_14_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MVC Service (Native DB)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MVC Service (Native DB)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-mvc-service-native-db/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_4" id="__nav_14_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MVC Service (ORM DB)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MVC Service (ORM DB)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-mvc-service-orm-db/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../py-lib-minimal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lib Minimal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ts-react-spa-webpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    React SPA (Webpack)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ts-lib/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Library (TS, npm-ready)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-gitleaks-already-adopted-not-a-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. gitleaks — already adopted, not a gap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-osv-scanner-uncontested-gap-and-it-already-found-real-vulnerabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. osv-scanner — uncontested gap, and it already found real vulnerabilities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-jscpd-the-tool-works-a-curated-ignore-config-is-the-real-remaining-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. jscpd — the tool works; a curated ignore config is the real remaining work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-semgrep-the-off-the-shelf-packs-mostly-re-find-what-ruff-s-already-caught" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. semgrep — the off-the-shelf packs mostly re-find what ruff S already caught
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-exceptionsmd-and-baseline-histograms-process-artefacts-no-tool-to-measure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. EXCEPTIONS.md and baseline histograms — process artefacts, no tool to measure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-proposed-follow-up-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Proposed follow-up PRs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Proposed follow-up PRs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pr-1-adopt-osv-scanner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PR 1 — adopt osv-scanner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pr-2-adopt-jscpd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PR 2 — adopt jscpd
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pr-3-adopt-exceptionsmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PR 3 — adopt EXCEPTIONS.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pr-4-adopt-baseline-histograms-scoped-small-per-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PR 4 — adopt baseline histograms (scoped small, per §5)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-proposed-as-a-pr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not proposed as a PR
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ci-scanner-gap-analysis-305">CI scanner gap analysis (#305)<a class="headerlink" href="#ci-scanner-gap-analysis-305" title="Permanent link">&para;</a></h1>
+<p>This is the <strong>measured</strong> half of #305 — evaluating ditto's (<code>healthmoney/ditto</code>,
+<code>tools/quality-gate/</code>) scanner stack against what BlueprintX already runs, with each tool
+actually installed and run locally (never estimated). It is deliberately <strong>not</strong> the adoption
+PR: no workflow, pre-commit hook, or config file is added here — several open PRs already hold
+those files, and touching them here would collide. See "Proposed follow-up PRs" at the end for
+the exact files each adoption would touch.</p>
+<p>Scanned targets:</p>
+<ul>
+<li><strong>BlueprintX itself</strong> — repo root, checked out at
+  <code>docs/ci-scanner-gap-analysis-305</code> (branched from <code>origin/main</code>).</li>
+<li><strong>A freshly generated project</strong> — <code>lib-minimal</code> Python skeleton, scaffolded via
+  <code>bash bin/scaffold/python_lib_minimal.sh &lt;tmp&gt; ci-scanner-probe "gap analysis probe project"
+  0.0.1</code>, no GitHub remote (offline mode). Chosen because it is the fastest tier to scaffold and
+  still ships <code>pyproject.toml</code> → <code>poetry.lock</code>, the artifact several of these tools need.</li>
+</ul>
+<p>Environment: gitleaks 8.30.1 (already on <code>$PATH</code> via Homebrew), osv-scanner 2.6.0 (installed via
+<code>brew install osv-scanner</code>), semgrep 1.177.0 (installed via <code>pipx install semgrep</code>), jscpd 5.2.1
+(run via <code>npx --yes jscpd</code>, no persistent install). All four installed successfully — nothing to
+report as "couldn't install."</p>
+<hr />
+<h2 id="1-gitleaks-already-adopted-not-a-gap">1. gitleaks — already adopted, not a gap<a class="headerlink" href="#1-gitleaks-already-adopted-not-a-gap" title="Permanent link">&para;</a></h2>
+<p><strong>Status on <code>origin/main</code>: shipped.</strong> This is the one tool in #305 that is no longer a gap —
+the gitleaks slice of #305 has already landed:</p>
+<ul>
+<li><code>.gitleaks.toml</code> (repo root) — <code>[extend] useDefault = true</code> plus a narrow, reasoned allowlist
+  (2 entries: the config file's own patterns, and one measured false positive — see below).</li>
+<li><code>.github/workflows/secret_scan.yml</code> — pinned + SHA-256-verified gitleaks 8.30.1, runs
+  <code>templates/python-common/bin/check_secrets.sh --root .</code> with <code>GITLEAKS_REQUIRED=1</code>.</li>
+<li><code>.pre-commit-config.yaml</code> — <code>check-secrets</code> hook, same script, resolves gracefully when
+  gitleaks is absent locally.</li>
+<li><code>templates/python-common/bin/check_secrets.sh</code> — the ONE implementation, invoking
+  <code>gitleaks git "$STR_ROOT" --no-banner --redact -v</code>.</li>
+<li><code>templates/python-common/.gitleaks.toml</code> + <code>templates/python-common/.github/workflows/secret_scan.yaml</code></li>
+<li><code>templates/python-common/.pre-commit-config.yaml</code> — the same wiring copied into every
+  generated Python project.</li>
+<li>GitGuardian (#155/#286) references are <strong>gone</strong> from every <code>.yml</code>/<code>.pre-commit-config.yaml</code>
+  on <code>origin/main</code> — <code>grep -rn "GitGuardian\|ggshield\|GITGUARDIAN" --include=*.yml
+  --include=*.yaml --include=*.md .</code> (excluding this worktree path) matches only historical
+  <code>docs/backlog/*.md</code> entries, never a live config. gitleaks fully replaced it, exactly as
+  the issue recommended (#305), additive — GitGuardian is not blocked for anyone who still
+  wants it.</li>
+</ul>
+<p><strong>Measured locally, BlueprintX root</strong> (this worktree, <code>origin/main</code> HEAD):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>$ bash templates/python-common/bin/check_secrets.sh --root .
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>...
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>9:02PM INF 1054 commits scanned.
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>9:02PM INF scanned ~51354796 bytes (51.35 MB) in 1m4.8s
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>9:02PM INF no leaks found
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[✓] gitleaks: no leaks found
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>EXIT=0
+</span></code></pre></div>
+<p>Real: 0. False positive: 0 (the one historically-measured false positive —
+<code>generic-api-key</code> on <code>sweagent-capi:claude-opus-4.6</code> in
+<code>docs/backlog/pr-gate-blocks-merge_20260817_104500.md</code>, commit <code>f24161c</code> — is silenced by the
+repo's own <code>.gitleaks.toml</code> allowlist entry, so it no longer surfaces at all).</p>
+<p>⚠️ Note on method: <code>gitleaks git &lt;path&gt;</code> shells out to the system <code>git</code> binary to walk history.
+This agent runs inside a worktree-isolation sandbox that refuses any command invoking <code>git</code>
+(directly or via a wrapping tool) unless it can statically verify the target stays inside this
+worktree — <code>gitleaks git</code> trips that guard even when run correctly. The command above is the
+literal one the CI workflow and pre-commit hook run (<code>check_secrets.sh --root .</code>, invoked via
+<code>bash</code>, not <code>gitleaks</code> directly) and it passed the guard and executed for real — 1054 commits,
+64.8s, the real number, not an estimate. A secondary check, <code>gitleaks dir .</code> (working-tree-only,
+no git history, so unaffected by the guard), also came back clean: <code>scanned ~4.37 MB in 1.2s, no
+leaks found</code>.</p>
+<p><strong>Generated project</strong> (<code>ci-scanner-probe</code>, offline mode, own git history from the scaffold's
+first commit):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>$ gitleaks dir /tmp/.../scan-project/ci-scanner-probe
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>scanned ~1455657 bytes (1.46 MB) in 955ms
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>no leaks found
+</span></code></pre></div>
+<p><strong>What it catches that existing gates don't:</strong> nothing else in the stack does secret detection
+at all — ruff <code>S</code> catches <code>subprocess</code>/<code>eval</code>/hardcoded-bind-all-interfaces patterns, not
+credential-shaped strings; CodeQL is SAST, not entropy/pattern secret scanning. gitleaks is the
+only line here.</p>
+<p><strong>Recommendation: adopt — already done.</strong> No follow-up PR needed for this slice. Recorded here
+only so #305's gap analysis doesn't re-propose it.</p>
+<hr />
+<h2 id="2-osv-scanner-uncontested-gap-and-it-already-found-real-vulnerabilities">2. osv-scanner — uncontested gap, and it already found real vulnerabilities<a class="headerlink" href="#2-osv-scanner-uncontested-gap-and-it-already-found-real-vulnerabilities" title="Permanent link">&para;</a></h2>
+<p><strong>Status on <code>origin/main</code>: absent.</strong> No workflow, pre-commit hook, or <code>osv-scanner.toml</code>
+anywhere in the tree (<code>grep -rn "osv-scanner\|osv_scanner"</code> over <code>.yml</code>/<code>.yaml</code>/
+<code>.pre-commit-config.yaml</code> returns nothing).</p>
+<p><strong>Measured — BlueprintX itself</strong> (recursive scan from the repo root, finds every lockfile in
+one pass):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>$ osv-scanner scan source --recursive /home/guilhermegor/github/blueprintx/.claude/worktrees/agent-docs-305
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>Scanned .../poetry.lock file and found 84 packages
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>Scanned .../templates/python-common/requirements.txt file and found 3 packages
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>Scanned .../templates/ts-common/package-lock.json file and found 1087 packages
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>Scanned .../requirements.txt file and found 2 packages
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>Total 6 packages affected by 14 known vulnerabilities
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>(1 Critical, 6 High, 5 Medium, 2 Low, 0 Unknown) from 2 ecosystems.
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>14 vulnerabilities can be fixed.
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Ecosystem</th>
+<th>Version</th>
+<th>Fixed</th>
+<th>Highest CVSS</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>click</td>
+<td>PyPI</td>
+<td>8.3.1</td>
+<td>8.3.3</td>
+<td>7.2</td>
+<td>root <code>poetry.lock</code> (docs/MkDocs deps)</td>
+</tr>
+<tr>
+<td>mkdocs-material</td>
+<td>PyPI</td>
+<td>9.7.2</td>
+<td>9.7.7</td>
+<td>5.4</td>
+<td>root <code>poetry.lock</code></td>
+</tr>
+<tr>
+<td>pygments</td>
+<td>PyPI</td>
+<td>2.19.2</td>
+<td>2.20.0</td>
+<td>3.3</td>
+<td>root <code>poetry.lock</code></td>
+</tr>
+<tr>
+<td>handlebars (dev)</td>
+<td>npm</td>
+<td>4.7.8</td>
+<td>4.7.9</td>
+<td>up to 9.8 (7 CVEs)</td>
+<td><code>templates/ts-common/package-lock.json</code></td>
+</tr>
+<tr>
+<td>qs (dev)</td>
+<td>npm</td>
+<td>6.15.3</td>
+<td>6.16.0</td>
+<td>6.3 (×2)</td>
+<td><code>templates/ts-common/package-lock.json</code></td>
+</tr>
+<tr>
+<td>uuid (dev)</td>
+<td>npm</td>
+<td>8.3.2</td>
+<td>11.1.1</td>
+<td>7.5</td>
+<td><code>templates/ts-common/package-lock.json</code></td>
+</tr>
+</tbody>
+</table>
+<p>All 14 are <strong>real</strong>: OSV matches are deterministic version-range lookups against a published
+CVE/GHSA database, not a heuristic with a false-positive mode the way secret/entropy scanning
+has one — either the installed version falls in the vulnerable range or it doesn't. The npm
+findings are flagged <code>(dev)</code>, i.e. devDependencies of the TS skeleton's tooling — lower blast
+radius (never ships to a generated project's production bundle) but still copied into every
+scaffolded TypeScript project's <code>package-lock.json</code> today, unmonitored.</p>
+<p><strong>Measured — generated project</strong> (<code>ci-scanner-probe</code>, after <code>poetry lock</code> to produce the
+lockfile the scaffold doesn't generate by itself — no scaffold currently runs <code>poetry install</code>/
+<code>poetry lock</code>, so a freshly scaffolded project has a <code>pyproject.toml</code> but no lock until the user
+runs <code>make init_venv</code>):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>$ osv-scanner scan --lockfile=.../ci-scanner-probe/poetry.lock
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>Scanned .../poetry.lock file and found 121 packages
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>No issues found
+</span></code></pre></div>
+<p>Real: 0 (clean — the lib-minimal tier's declared deps currently resolve to non-vulnerable
+versions). False positive: 0.</p>
+<p><strong>What it catches that existing gates don't:</strong> <code>deptry</code> (#238, already adopted) answers "is
+this dependency unused or undeclared?" — a static, structural question about the import graph.
+Nothing in the current stack answers "is a <em>declared, used</em> dependency sitting on a version
+with a known CVE?" — osv-scanner is the only tool here that reads a lockfile against a
+vulnerability database. ruff/mypy/CodeQL never inspect resolved dependency versions.</p>
+<p><strong>Recommendation: adopt.</strong> Uncontested gap, zero installation friction (<code>brew install
+osv-scanner</code>, no API key, reads <code>poetry.lock</code> and <code>package-lock.json</code> natively so one tool
+covers both the Python and TypeScript sides), and it found 14 real, currently-unmonitored
+CVEs in this repo's own tree on the first run — including one Critical/9.8-CVSS finding
+(<code>handlebars</code>, GHSA-2w6w-674q-4c4q) that has been sitting in a template shipped to every new
+TypeScript project. ditto's ignore-with-expiry discipline (<code>id</code> + <code>reason</code> +
+<code>ignoreUntil</code> capped at 30 days) is worth adopting verbatim in the follow-up PR — an unexpiring
+ignore is a permanent silence, the exact failure mode this gate exists to prevent.</p>
+<hr />
+<h2 id="3-jscpd-the-tool-works-a-curated-ignore-config-is-the-real-remaining-work">3. jscpd — the tool works; a curated ignore config is the real remaining work<a class="headerlink" href="#3-jscpd-the-tool-works-a-curated-ignore-config-is-the-real-remaining-work" title="Permanent link">&para;</a></h2>
+<p><strong>Status on <code>origin/main</code>: absent.</strong> No <code>.jscpd.json</code>, no <code>jscpd</code> workflow step, no
+pre-commit hook (<code>grep -rn "jscpd"</code> over the tree returns nothing outside this doc).</p>
+<p><strong>Environment note:</strong> the <code>jscpd</code> npm package resolved by <code>npx jscpd</code>/<code>npx jscpd@5.2.1</code> in this
+sandbox turned out to be a Rust-rewrite CLI (reports <code>jscpd 5.2.1</code>, ships <code>--baseline</code>,
+<code>--baseline-from-ref</code>, <code>--blame</code>, SARIF/codeclimate reporters) with a different flag surface
+than the classic <code>kucherenko/jscpd</code> (no <code>--gitignore</code>/<code>--reporters</code>-style long form ambiguity,
+<code>.gitignore</code> respected by default, disabled via <code>--no-gitignore</code>). <code>npx</code> itself was flaky in
+this shell (intermittently resolved to printing the local <code>npm</code> version instead of running the
+package — a pre-existing asdf/npx quirk, not a jscpd issue); the fix was a scratch global
+install: <code>npm install --global jscpd@5.2.1 --prefix &lt;scratch&gt;/npm-global</code>, then invoking the
+binary directly. Recorded here so the adoption PR doesn't rediscover the same detour.</p>
+<p><strong>Measured — BlueprintX itself, ditto's config shape, zero exclusions</strong>
+(<code>--min-tokens 50 --min-lines 5 --mode strict --reporters console .</code>):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>$ jscpd --min-tokens 50 --min-lines 5 --mode strict --reporters console .
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>...
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>Total: 735 files, 139990 lines, 1115137 tokens, 968 clones,
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>       18293 duplicated lines (13.07%), 138472 duplicated tokens (12.42%)
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>time: 268.133ms
+</span></code></pre></div>
+<p>By format, the two largest contributors are <code>python</code> (459 clones, 14.17% duplicated lines) and
+<code>json</code> (175 clones, 13.83% duplicated lines) — <code>markdown</code> (101 clones) and <code>yaml</code> (102 clones)
+follow.</p>
+<p><strong>Manual classification of a sample (real vs by-design vs generated-noise)</strong> — this is exactly
+the distinction the issue calls out as "the work," not an afterthought:</p>
+<table>
+<thead>
+<tr>
+<th>Bucket</th>
+<th>Sample evidence</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Generated-file noise</strong></td>
+<td>All 175 <code>json</code> clones are internal repeats inside <code>templates/ts-common/package-lock.json</code> (npm's own dependency-tree structure repeating itself)</td>
+<td>Not actionable — needs a standard <code>--ignore "**/package-lock.json,**/poetry.lock"</code></td>
+</tr>
+<tr>
+<td><strong>Intended twins (by design)</strong></td>
+<td><code>templates/ddd-service-native-db/src/capabilities/example_feature/{application,domain,infrastructure}/*.py</code> byte-identical against the same paths under <code>templates/ddd-service-orm-db/</code> — <code>bootstrap.py</code>, <code>container.py</code>, <code>factories.py</code>, <code>use_cases.py</code>, <code>dto.py</code>, <code>entities.py</code>, <code>ports.py</code>, <code>repositories.py</code>, plus <code>docs/architecture.md</code> fenced examples</td>
+<td>Real duplication, <strong>deliberate</strong> — the two DDD tiers share the same example-feature scaffold on purpose (only the infra layer swaps DB driver). A blind gate would flag this every time; it needs the same kind of reasoned, path-scoped allowlist gitleaks already has, not a blanket exclusion of <code>templates/</code> (that would blind the gate to real drift between the tiers too)</td>
+</tr>
+<tr>
+<td><strong>Doc self-repetition</strong></td>
+<td><code>docs/py-ddd-service-native-db.md:python</code> clones against itself at several line ranges (a fenced code example repeated within one page)</td>
+<td>Low-value signal for an architecture gate — markdown fenced-code dedup is a documentation-style question, not a code-drift one</td>
+</tr>
+<tr>
+<td><strong>Real, actionable</strong></td>
+<td><code>templates/common/bin/check_review_threads.py</code> shares a ~14-line block with FOUR different <code>templates/python-common/bin/check_*.py</code> scripts (<code>check_dtypes.py</code>, <code>check_provenance.py</code>, <code>check_backlog_ledger.py</code>, <code>check_docstrings.py</code>) at the same relative offset — looks like a repeated CLI-entrypoint/error-reporting boilerplate pattern across the <code>check_*</code> gate family</td>
+<td>Genuine candidate for extraction into a shared helper — the kind of finding the issue's <code>check_codespell_sync.sh</code> analogy predicts jscpd would generalize</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Measured — generated project</strong> (<code>ci-scanner-probe</code>, same command, no config):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$ jscpd --min-tokens 50 --min-lines 5 --mode strict --reporters console &lt;probe&gt;/ci-scanner-probe
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>Total: 178 files, 40030 lines, 324085 tokens, 221 clones,
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>       2405 duplicated lines (6.01%), 16476 duplicated tokens (5.08%)
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>time: 193.977ms
+</span></code></pre></div>
+<p>Sampling the <code>python</code> clones (213 of 221) surfaced a <strong>real, single-project</strong> finding: within
+this one freshly scaffolded project's own <code>bin/</code>, <code>check_assertion_weakening.py</code> shares over a
+dozen 6–20-line blocks with <code>check_gate_integrity.py</code> (and a smaller set with
+<code>check_backlog_ledger.py</code>) — not a cross-tier twin, not a lockfile, not a doc fence. This is
+duplication inside a single generated project's shipped gate scripts, present from the moment
+<code>make new</code> finishes, before a user writes a line of their own code.</p>
+<p><strong>What it catches that existing gates don't:</strong> <code>check_codespell_sync.sh</code> is a hand-rolled,
+single-case duplication detector (do these two specific <code>.codespellrc</code> files match?). Nothing
+in the stack answers the general form — "do any two files/blocks anywhere in the tree say the
+same thing?" — for arbitrary code, not just one named config pair. ruff/mypy operate per-file
+and have no cross-file view; CodeQL and Semgrep (below) match <em>patterns</em>, not <em>literal repeated
+text</em>.</p>
+<p><strong>Recommendation: adopt, budgeting real time for config.</strong> The tool itself installed and ran in
+under 300ms on the whole repo and found a real, actionable, single-file-pair-worthy duplication
+even inside one freshly generated project's <code>bin/</code>. But the raw signal (968 clones, 13%) is
+dominated by lockfiles and deliberate template twins — shipping it as a blocking gate on day
+one, unconfigured, would be false-alarm-fatigue by volume, not by detection accuracy (every
+flagged clone IS a literal duplicate; the question is only whether it's <em>wanted</em>). The adoption
+PR's real work is the <code>.jscpd.json</code> ignore list (lockfiles, <code>docs/**/*.md</code> fenced examples) plus
+a documented, reasoned exception for the five-tier <code>example_feature</code> twins — mirroring how
+<code>.gitleaks.toml</code>'s allowlist is narrow and commented rather than a blanket path exclusion.</p>
+<h2 id="4-semgrep-the-off-the-shelf-packs-mostly-re-find-what-ruff-s-already-caught">4. semgrep — the off-the-shelf packs mostly re-find what ruff S already caught<a class="headerlink" href="#4-semgrep-the-off-the-shelf-packs-mostly-re-find-what-ruff-s-already-caught" title="Permanent link">&para;</a></h2>
+<p><strong>Status on <code>origin/main</code>: absent.</strong> No <code>.semgrep.yml</code>, no <code>semgrep</code> workflow step, no
+pre-commit hook.</p>
+<p><strong>Installed successfully:</strong> <code>pipx install semgrep</code> (first attempt hit a stale-pipx-metadata
+error from a pre-existing unrelated venv on this machine; <code>pipx install semgrep --force</code>
+fixed it). Confirmed with <code>semgrep --version</code> → <code>1.177.0</code>. <code>--config auto</code> requires metrics
+enabled (<code>[ERROR]: Cannot create auto config when metrics are off</code>), so both runs below use
+named public registry packs instead (<code>p/python</code>, <code>p/security-audit</code>) with <code>--metrics off</code> — no
+telemetry sent. <code>p/bash</code> does not exist as a registry pack (<code>HTTP 404</code>), so there is no
+semgrep-side bash coverage to compare against <code>bin/check_shell.sh</code>'s shellcheck gate.</p>
+<p><strong>Measured — BlueprintX itself</strong> (<code>bin/ci/</code>, <code>templates/python-common/bin/</code>,
+<code>templates/common/bin/</code> — the hand-written gate scripts, the most likely place for the
+injection/subprocess/deserialization patterns the issue names):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>$ semgrep --config p/python --config p/security-audit --metrics off \
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    bin/ci/ templates/python-common/bin/ templates/common/bin/
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>Ran 200 rules on 89 files: 1 finding.
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>templates/python-common/bin/pr_gate.py
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>  python.lang.security.audit.dynamic-urllib-use-detected
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>  316┆ with urllib.request.urlopen(cls_req) as cls_resp:  # noqa: S310
+</span></code></pre></div>
+<p><strong>Measured — generated project</strong> (<code>ci-scanner-probe</code>, same two packs, whole tree):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>$ semgrep --config p/python --config p/security-audit --metrics off ci-scanner-probe
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Ran 201 rules on 157 files: 2 findings.
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>bin/pr_gate.py
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>  python.lang.security.audit.dynamic-urllib-use-detected
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>  316┆ with urllib.request.urlopen(cls_req) as cls_resp:  # noqa: S310
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>src/ci_scanner_probe/_internal/utils/xml_reader.py
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>  python.lang.security.use-defused-xml
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>  40┆ from xml.etree.ElementTree import Element  # noqa: S405 — annotation only; parsing uses defusedxml
+</span></code></pre></div>
+<p><strong>Real vs false positive, both runs:</strong> 3 total findings across both targets, <strong>0 new</strong> — every
+one is a pattern ruff's bandit-equivalent <code>S</code> rules already flag (<code>S310</code>
+dynamic-urlopen-scheme, <code>S405</code> <code>xml.etree</code> import), already carries a <code># noqa: S3xx</code>/<code>S405</code>
+suppression, and in the XML case the suppression comment states the exact reason semgrep would
+otherwise need a human to discover (the import is type-only; actual parsing already goes
+through <code>defusedxml</code>). Zero of the 3 are a genuinely new category of finding, and zero are
+semgrep mis-firing — they're real hits on code the existing gate already reviewed and cleared.</p>
+<p><strong>What it catches that existing gates don't:</strong> on this measurement, for the <em>stock</em> rule packs,
+nothing — this directly confirms the issue's own framing ("ruff already runs
+PL/ERA/SIM/B/S/C901" for Python). Semgrep's actual marginal value is structural, not
+this measurement: <code>check_layer_imports.py</code>, <code>check_all_exports.py</code>, and <code>check_dtypes.py</code> are
+each a hand-parsed AST/regex walk enforcing one project-specific rule (no domain→infrastructure
+import, no untyped DataFrame load, …). ditto's <code>tools/quality-gate/</code> ships that same <em>shape</em> of
+rule (<code>no-direct-child-process-exec.yaml</code>, <code>no-process-env-outside-config.yaml</code>) as a ~15-line
+Semgrep YAML pattern instead of a bespoke parser with its own test file — the leverage is for
+the <em>next</em> rule of this kind, never demonstrated by running the stock packs, only by writing
+one custom rule and comparing its line count to <code>check_dtypes.py</code>'s.</p>
+<p><strong>Recommendation: defer.</strong> Not a "couldn't measure" defer — both runs completed and are real
+data — but a "the stock packs add nothing beyond what's already caught" result, while the
+argument in #305 for adopting semgrep specifically rests on custom-rule leverage that requires
+writing and comparing at least one custom rule against its hand-written equivalent, which
+belongs in the adoption PR (see §6) rather than being asserted here without that comparison.</p>
+<h2 id="5-exceptionsmd-and-baseline-histograms-process-artefacts-no-tool-to-measure">5. EXCEPTIONS.md and baseline histograms — process artefacts, no tool to measure<a class="headerlink" href="#5-exceptionsmd-and-baseline-histograms-process-artefacts-no-tool-to-measure" title="Permanent link">&para;</a></h2>
+<p>Both are documentation/tooling proposals from #305, not scanners — nothing to install or run
+locally. Recorded as adopt/defer calls based on reading the existing suppression surface:</p>
+<ul>
+<li><strong><code>EXCEPTIONS.md</code></strong>: this repo already has four QA-suppression families exempted from the
+  comment-budget gate (<code>noqa</code>, <code>complexity-ok</code>, <code>type: ignore</code>, <code>codespell:ignore</code> —
+  blueprintx#303) and a <code>.gitleaks.toml</code> allowlist that already follows ditto's own
+  discipline (narrow, path-scoped, reasoned — see §1). What's missing is the single document
+  stating the <em>policy</em> those exceptions already follow ad hoc. <strong>Recommend: adopt</strong> — no new
+  dependency, directly extends #303, and the four principles ditto states explicitly are
+  already this repo's unwritten practice.</li>
+<li><strong>Baseline histogram tooling</strong> (<code>complexity-histogram</code>, <code>function-size-histogram</code>,
+  <code>jscpd-baseline</code>, …): the pain this solves is real and dated — #168 and #303 both needed a
+  hand-written throwaway script to produce a violations-per-threshold table before a ceiling
+  could be justified with a number instead of a guess. jscpd 5.2.1 (§3) already ships
+  <code>--baseline</code>/<code>--update-baseline</code>/<code>--baseline-from-ref</code> natively, which covers the
+  duplication-specific case for free once §3 is adopted. <strong>Recommend: adopt the general
+  histogram idea, scoped small</strong> — one shared script under <code>templates/python-common/bin/</code>
+  that both <code>check_complexity.sh</code> and <code>check_function_length.py</code> can call with a
+  <code>--histogram</code> flag, rather than a new standalone tool family.</li>
+</ul>
+<hr />
+<h2 id="6-proposed-follow-up-prs">6. Proposed follow-up PRs<a class="headerlink" href="#6-proposed-follow-up-prs" title="Permanent link">&para;</a></h2>
+<p>This PR adds <strong>no</strong> workflow, pre-commit hook, or config file — every file listed below is
+untouched here, so these can be dispatched as separate, non-colliding PRs. <code>gitleaks</code> is
+omitted: it is already shipped (§1), so no follow-up PR is needed for it. <code>semgrep</code> is omitted
+too, per §4's defer verdict — its adoption case needs one custom rule written and measured
+against its hand-written equivalent before a PR is worth opening; that spike is a to-do
+against #305, not a PR yet.</p>
+<h3 id="pr-1-adopt-osv-scanner">PR 1 — adopt osv-scanner<a class="headerlink" href="#pr-1-adopt-osv-scanner" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>templates/python-common/bin/check_vulnerabilities.sh</code> (new) — the ONE implementation,
+  <code>osv-scanner scan --lockfile &lt;path&gt;</code> per lockfile found under <code>--root</code>, resolve-don't-install
+  like <code>check_secrets.sh</code> (graceful local skip, <code>OSV_SCANNER_REQUIRED=1</code> in CI).</li>
+<li><code>osv-scanner.toml</code> (new, repo root) + <code>templates/python-common/osv-scanner.toml</code> (new,
+  shipped copy) — ditto's ignore-with-expiry shape: <code>id</code> + <code>reason</code> + <code>ignoreUntil</code> capped at
+  30 days.</li>
+<li><code>.pre-commit-config.yaml</code> (edit — new <code>check-vulnerabilities</code> hook) +
+  <code>templates/python-common/.pre-commit-config.yaml</code> (edit, same hook, shipped copy).</li>
+<li><code>.github/workflows/dependency_scan.yml</code> (new, root) +
+  <code>templates/python-common/.github/workflows/dependency_scan.yaml</code> (new, shipped copy) —
+  pinned + checksum-verified <code>osv-scanner</code> install, mirroring <code>secret_scan.yml</code>.</li>
+<li><code>docs/dependency-scanning.md</code> (new) + <code>docs/CLAUDE.md</code> (edit — file index row) +
+  <code>mkdocs.yml</code> (edit — nav entry), per this repo's own docs registration rule.</li>
+<li><code>docs/backlog/osv-scanner-adoption-305_&lt;timestamp&gt;.md</code> (new, tracking file per the
+  Backlog discipline rule in root <code>CLAUDE.md</code>).</li>
+</ul>
+<h3 id="pr-2-adopt-jscpd">PR 2 — adopt jscpd<a class="headerlink" href="#pr-2-adopt-jscpd" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>templates/common/bin/check_duplication.sh</code> (new) — ONE implementation in <code>templates/common/</code>
+  (not <code>python-common/</code>, matching <code>check_review_threads.py</code>'s precedent for a tool that spans
+  every language family), resolve-don't-install, <code>JSCPD_REQUIRED=1</code> in CI.</li>
+<li><code>.jscpd.json</code> (new, repo root) — reasoned allowlist for the intended <code>ddd-service-native-db</code>
+  ↔ <code>ddd-service-orm-db</code> twin (§3), plus lockfile/doc-fence ignores.</li>
+<li><code>templates/common/.jscpd.json</code> (new, shipped into every skeleton by every
+  <code>bin/scaffold/{python,ts}_*.sh</code>, same copy mechanism as the rest of <code>templates/common/</code>).</li>
+<li><code>.pre-commit-config.yaml</code> (edit) + <code>templates/python-common/.pre-commit-config.yaml</code> (edit)</li>
+<li><code>templates/ts-common/.pre-commit-config.yaml</code> or its ESLint-equivalent config (edit) — one
+  hook entry per family.</li>
+<li><code>.github/workflows/duplication_scan.yml</code> (new, root) +
+  <code>templates/common/.github/workflows/duplication_scan.yml</code> (new, shipped copy).</li>
+<li><code>docs/duplication-detection.md</code> (new) + <code>docs/CLAUDE.md</code> (edit) + <code>mkdocs.yml</code> (edit).</li>
+<li><code>docs/backlog/jscpd-duplication-305_&lt;timestamp&gt;.md</code> (new, tracking file).</li>
+</ul>
+<h3 id="pr-3-adopt-exceptionsmd">PR 3 — adopt EXCEPTIONS.md<a class="headerlink" href="#pr-3-adopt-exceptionsmd" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>EXCEPTIONS.md</code> (new, repo root) — ditto's four principles + a per-check table of the ~250
+  existing suppressions (<code># noqa</code>, <code># complexity-ok:</code>, layer-policy, deptry ignores,
+  <code># pragma: no cover</code>, <code># type: ignore</code>, …) and whether each mandates a reason.</li>
+<li><code>templates/python-common/EXCEPTIONS.md</code> (new, shipped copy, scoped to the generated
+  project's own suppression surface).</li>
+<li><code>CONTRIBUTING.md</code> (edit — one-line pointer to <code>EXCEPTIONS.md</code>, same treatment <code>docs/</code>
+  cross-references already get elsewhere in this repo).</li>
+<li>No code, no config, no pre-commit hook — pure documentation, so no <code>docs/backlog/</code> tracking
+  file is required by the letter of the rule, though a short one costs little given this PR
+  touches three files across two directories.</li>
+</ul>
+<h3 id="pr-4-adopt-baseline-histograms-scoped-small-per-5">PR 4 — adopt baseline histograms (scoped small, per §5)<a class="headerlink" href="#pr-4-adopt-baseline-histograms-scoped-small-per-5" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>templates/python-common/bin/check_complexity.sh</code> (edit — add <code>--histogram</code> flag, reusing
+  the existing mccabe/ruff <code>C901</code> data source rather than a second counter).</li>
+<li><code>templates/python-common/bin/check_function_length.py</code> (edit — add <code>--histogram</code> flag).</li>
+<li><code>templates/python-common/bin/lib/histogram.sh</code> (new, small shared formatter both scripts
+  call, avoiding a third copy of the same table-printing logic — the same one-implementation
+  rule this whole doc keeps citing).</li>
+<li><code>docs/backlog/baseline-histograms-305_&lt;timestamp&gt;.md</code> (new, tracking file).</li>
+</ul>
+<h3 id="not-proposed-as-a-pr">Not proposed as a PR<a class="headerlink" href="#not-proposed-as-a-pr" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>semgrep</strong> — deferred per §4; the next step is a spike (one custom rule, e.g. a Semgrep
+  equivalent of <code>check_layer_imports.py</code>'s core check, measured against the hand-written
+  version's line count and false-positive rate) before an adoption PR is worth writing.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
