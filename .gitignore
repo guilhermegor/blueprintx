@@ -207,8 +207,8 @@ pyrightconfig.json
 # naming each file: a new backport store would otherwise arrive untracked and
 # unnoticed. .specs/ itself stays tracked — it holds real design docs.
 .specs/_lessons/
-# Previous location, before the generator moved to .specs/_lessons/. Kept so an
-# old checkout that still carries these does not surface them as untracked.
+# Previous location (docs/), before the generator moved to .specs/_lessons/. Kept so an
+# old checkout does not surface them as untracked; delete both lines once no checkout has them.
 docs/blueprintx-lessons.md
 docs/dotfiles-dev-lessons.md
 
