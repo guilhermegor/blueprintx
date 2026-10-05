@@ -1244,6 +1244,25 @@ def apply_root_flag(list_argv: list) -> bool:
 	return True
 
 
+def merge_heads() -> list:
+	"""Return every incoming commit of a merge in progress (several for an octopus).
+
+	Mid-merge the INDEX already holds the incoming side's files, but HEAD is still the
+	pre-merge tip, so a base taken from HEAD alone charges the incoming delta to this branch
+	-- main's own gate changes then read as the branch weakening them. ``rev-parse MERGE_HEAD``
+	resolves only the first line of the file, so an octopus merge reads the file itself.
+
+	Returns
+	-------
+	list of str
+		One commit hash per incoming head; empty when no merge is in progress.
+	"""
+	str_path = _git(["rev-parse", "--git-path", "MERGE_HEAD"]).strip()
+	if not str_path or not pathlib.Path(str_path).is_file():
+		return []
+	return pathlib.Path(str_path).read_text(encoding="utf-8").split()
+
+
 def resolve_base() -> str | None:
 	"""Resolve the merge-base to diff against.
 
@@ -1257,7 +1276,7 @@ def resolve_base() -> str | None:
 		(blueprintx#313); ``main()`` fails the run on it instead of passing it silently.
 	"""
 	str_ref = default_branch()
-	str_base = _git(["merge-base", "HEAD", str_ref]).strip()
+	str_base = _git(["merge-base", str_ref, "HEAD", *merge_heads()]).strip()
 	if not str_base:
 		print(f"❌ could not resolve a merge-base against {str_ref!r} — refusing to pass blind.")
 		return ""
