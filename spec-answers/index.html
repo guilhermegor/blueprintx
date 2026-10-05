@@ -10,13 +10,9 @@
       
       
       
-        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/cli-reference/">
+        <link rel="canonical" href="https://github.com/guilhermegor/BlueprintX/spec-answers/">
       
       
-        <link rel="prev" href="../examples/">
-      
-      
-        <link rel="next" href="../faq/">
       
       
         
@@ -27,7 +23,7 @@
     
     
       
-        <title>CLI Reference - BlueprintX</title>
+        <title>Named-key spec answers (--spec) - BlueprintX</title>
       
     
     
@@ -80,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cli-reference" class="md-skip">
+        <a href="#named-key-spec-answers-spec" class="md-skip">
           Skip to content
         </a>
       
@@ -115,7 +111,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CLI Reference
+              Named-key spec answers (--spec)
             
           </span>
         </div>
@@ -338,37 +334,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CLI Reference
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
         
   
   
@@ -384,70 +353,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#scaffolding" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scaffolding
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#blueprintx-flags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        blueprintx flags
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#docs-and-install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Docs and install
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#adding-a-skeleton" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Adding a skeleton
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1414,10 +1319,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#scaffolding" class="md-nav__link">
+  <a href="#spec-file-format" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scaffolding
+        Spec file format
       
     </span>
   </a>
@@ -1425,10 +1330,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#blueprintx-flags" class="md-nav__link">
+  <a href="#top-level-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
-        blueprintx flags
+        Top-level keys
       
     </span>
   </a>
@@ -1436,10 +1341,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#docs-and-install" class="md-nav__link">
+  <a href="#per-skeleton-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Docs and install
+        Per-skeleton keys
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-skeleton keys">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ddd-tiers-ddd-service-native-db-ddd-service-orm-db" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DDD tiers (ddd-service-native-db, ddd-service-orm-db)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mvc-tiers-mvc-service-native-db-mvc-service-orm-db" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MVC tiers (mvc-service-native-db, mvc-service-orm-db)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lib-minimal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lib-minimal
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publishregistry-keys-are-answer-only-they-do-not-implement-publishing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publish/registry keys are answer-only — they do not implement publishing
       
     </span>
   </a>
@@ -1447,10 +1402,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#adding-a-skeleton" class="md-nav__link">
+  <a href="#follow-up-typescript-and-future-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Adding a skeleton
+        Follow-up: TypeScript and future tiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#used-by-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Used by CI
       
     </span>
   </a>
@@ -1477,110 +1443,254 @@
   
 
 
-<h1 id="cli-reference"><strong>CLI Reference</strong><a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
-<p>Every command BlueprintX exposes. The interactive scaffolder is driven through <code>make</code> targets
-(or <code>bash tasks.sh &lt;target&gt;</code> where <code>make</code> is unavailable) and the <code>blueprintx</code> CLI flags.</p>
-<blockquote>
-<p><strong>See also:</strong> <a href="../get-started/">Get Started</a> for a first run · <a href="../faq/">FAQ</a>.</p>
-</blockquote>
-<hr />
-<h2 id="scaffolding">Scaffolding<a class="headerlink" href="#scaffolding" title="Permanent link">&para;</a></h2>
+<h1 id="named-key-spec-answers-spec"><strong>Named-key spec answers (<code>--spec</code>)</strong><a class="headerlink" href="#named-key-spec-answers-spec" title="Permanent link">&para;</a></h1>
+<p><code>blueprintx new</code> normally answers its prompts one of two ways: interactively, or by
+piping a fixed sequence of stdin lines (<code>printf 'n\n%.0s' {1..12} | blueprintx new ...</code>).
+The second form answers by <strong>position</strong> — line 3 is whatever the third prompt happens to
+be. Add a prompt anywhere in a scaffold script and every stored answer after it silently
+answers the wrong question; nothing fails loudly (blueprintx#481).</p>
+<p><code>--spec &lt;file&gt;</code> answers the same prompts by <strong>name</strong> instead. A name does not move when a
+prompt is inserted or reordered.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>blueprintx<span class="w"> </span>new<span class="w"> </span>--spec<span class="w"> </span>my-project.spec<span class="w">              </span><span class="c1"># scaffold from the spec</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>blueprintx<span class="w"> </span>new<span class="w"> </span>--spec<span class="w"> </span>my-project.spec<span class="w"> </span>--dry-run<span class="w">     </span><span class="c1"># print every resolved answer, write nothing</span>
+</span></code></pre></div>
+<p>Both the interactive flow and the raw piped-stdin flow keep working exactly as before —
+<code>--spec</code> is a third, additive path, not a replacement.</p>
+<h2 id="spec-file-format">Spec file format<a class="headerlink" href="#spec-file-format" title="Permanent link">&para;</a></h2>
+<p>A spec file is a <code>KEY=value</code> list, one pair per line — the same shape as a skeleton's own
+<code>skeleton.meta</code> (<code>#</code> comments and blank lines ignored, parsed with <code>grep</code>/<code>cut</code>, no new
+parser dependency). A key absent from the file takes its documented default; an absent
+file is a valid (all-default) spec.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># my-project.spec
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>project_name=my-lib
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>project_description=A demo library
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>language=python
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>skeleton=lib-minimal
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>license=MIT
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>github_username=my-github-user
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>logs=n
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>otel=n
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>docker_compose=n
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>publish_pypi=y
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>publish_test_pypi=y
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>consume_private=n
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>review_bot_roster=y
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>git_remote=n
+</span></code></pre></div>
+<h2 id="top-level-keys">Top-level keys<a class="headerlink" href="#top-level-keys" title="Permanent link">&para;</a></h2>
+<p>Answer <code>bin/blueprintx.sh</code>'s own prompts (before any scaffold script runs):</p>
 <table>
 <thead>
 <tr>
-<th>Command</th>
-<th>What it does</th>
+<th>Key</th>
+<th>Required</th>
+<th>Default</th>
+<th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>make new</code></td>
-<td>Interactive scaffolder — prompts for language, skeleton, and project name.</td>
+<td><code>project_name</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Project/folder name. Same validation as the interactive prompt.</td>
 </tr>
 <tr>
-<td><code>make preview</code></td>
-<td>Show every skeleton's structure without creating anything.</td>
+<td><code>project_description</code></td>
+<td>no</td>
+<td>empty</td>
+<td>One-line description.</td>
 </tr>
 <tr>
-<td><code>make dev</code></td>
-<td>Scaffold into a temp dir (preserved on exit).</td>
+<td><code>project_root</code></td>
+<td>no</td>
+<td><code>$PWD</code></td>
+<td>Parent directory the project is created under.</td>
 </tr>
 <tr>
-<td><code>make dev_clean</code></td>
-<td>Scaffold into a temp dir, auto-deleted on exit.</td>
+<td><code>language</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Must match a discovered <code>templates/*/skeleton.meta</code> <code>language=</code>.</td>
 </tr>
 <tr>
-<td><code>make dry_run</code></td>
-<td>Print the chosen skeleton structure; write no files.</td>
+<td><code>skeleton</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Must name a directory under <code>templates/</code> with a <code>skeleton.meta</code>.</td>
+</tr>
+<tr>
+<td><code>license</code></td>
+<td>no</td>
+<td><code>MIT</code></td>
+<td>One of the choices <code>prompt_license</code> offers.</td>
+</tr>
+<tr>
+<td><code>github_username</code></td>
+<td>no</td>
+<td><code>$GITHUB_USERNAME</code> env, else <code>gh</code> CLI, else prompt</td>
+<td>Passed through as <code>GITHUB_USERNAME</code> to the scaffold script.</td>
 </tr>
 </tbody>
 </table>
-<h2 id="blueprintx-flags"><code>blueprintx</code> flags<a class="headerlink" href="#blueprintx-flags" title="Permanent link">&para;</a></h2>
+<h2 id="per-skeleton-keys">Per-skeleton keys<a class="headerlink" href="#per-skeleton-keys" title="Permanent link">&para;</a></h2>
+<p>The translation from a named key to the scaffold script's actual <code>read</code> call order lives
+in <strong>one place</strong>: <code>spec_stdin_for_skeleton()</code> in <code>bin/lib/spec.sh</code>. The scaffold scripts
+themselves (<code>bin/scaffold/python_*.sh</code>) still read positional stdin at each prompt — they
+are not edited by this mechanism — so when one of them gains a new prompt, updating that
+one function is what keeps every spec-driven caller correct, instead of every stored
+answer string everywhere.</p>
+<p>Named-key support ships per skeleton. Today: the five Python tiers. Call
+<code>spec_skeleton_supported &lt;skeleton&gt;</code> to check before relying on <code>spec_stdin_for_skeleton</code>.</p>
+<h3 id="ddd-tiers-ddd-service-native-db-ddd-service-orm-db">DDD tiers (<code>ddd-service-native-db</code>, <code>ddd-service-orm-db</code>)<a class="headerlink" href="#ddd-tiers-ddd-service-native-db-ddd-service-orm-db" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th>Flag</th>
-<th>Effect</th>
+<th>Key</th>
+<th>Default</th>
+<th>Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>blueprintx new</code></td>
-<td>Create a new project interactively.</td>
+<td><code>docker_compose</code></td>
+<td><code>n</code></td>
+<td><code>y</code> also reads <code>docker_db_backend</code> (<code>postgresql</code>|<code>mariadb</code>|<code>mysql</code>).</td>
 </tr>
 <tr>
-<td><code>blueprintx preview</code></td>
-<td>Show available skeleton structures.</td>
+<td><code>storage</code></td>
+<td><code>n</code></td>
+<td>Schema-less file storage (JSON/CSV/joblib). DDD-only.</td>
 </tr>
 <tr>
-<td><code>--dev</code></td>
-<td>Scaffold into a temp directory (preserved).</td>
+<td><code>data_dir</code></td>
+<td><code>n</code></td>
+<td><code>y</code> also reads <code>data_dir_base</code> (default <code>logs</code>) and <code>data_dir_dated</code>.</td>
 </tr>
 <tr>
-<td><code>--dry-run</code></td>
-<td>Preview structure without creating files.</td>
+<td><code>webhook</code></td>
+<td><code>n</code></td>
+<td><code>y</code> also reads <code>webhook_platform</code> (<code>teams</code>|<code>slack</code>|<code>custom</code>).</td>
 </tr>
 <tr>
-<td><code>--clean</code></td>
-<td>Delete the temp dir on exit (with <code>--dev</code>).</td>
+<td><code>otel</code></td>
+<td><code>n</code></td>
+<td>OpenTelemetry OTLP log export.</td>
 </tr>
 <tr>
-<td><code>--spec &lt;file&gt;</code></td>
-<td>Answer every prompt by name from a spec file instead of interactively — see <a href="../spec-answers/">Named-key spec answers</a>.</td>
+<td><code>email</code></td>
+<td><code>n</code></td>
+<td><code>y</code> also reads <code>email_backend</code> (<code>outlook</code>|<code>smtp</code>).</td>
 </tr>
 <tr>
-<td><code>-V</code>, <code>--version</code></td>
-<td>Print the version (from the git tag) and exit.</td>
+<td><code>env_wise_config</code></td>
+<td><code>n</code></td>
+<td>Split <code>inputs.yaml</code>/<code>outputs.yaml</code> into <code>_dev</code>/<code>_prd</code> pairs.</td>
 </tr>
 <tr>
-<td><code>-h</code>, <code>--help</code></td>
-<td>Show usage.</td>
+<td><code>review_bot_roster</code></td>
+<td><code>n</code></td>
+<td><code>y</code> ships <code>.review-bots.yaml</code> (a PR review bot is expected).</td>
+</tr>
+<tr>
+<td><code>git_remote</code></td>
+<td><code>n</code></td>
+<td><code>y</code> is out of scope for this seam — it needs a real <code>gh</code> session; leave <code>n</code> for unattended/CI runs.</td>
 </tr>
 </tbody>
 </table>
-<h2 id="docs-and-install">Docs and install<a class="headerlink" href="#docs-and-install" title="Permanent link">&para;</a></h2>
+<h3 id="mvc-tiers-mvc-service-native-db-mvc-service-orm-db">MVC tiers (<code>mvc-service-native-db</code>, <code>mvc-service-orm-db</code>)<a class="headerlink" href="#mvc-tiers-mvc-service-native-db-mvc-service-orm-db" title="Permanent link">&para;</a></h3>
+<p>Same as the DDD tiers, <strong>minus <code>storage</code></strong> (MVC has no schema-less storage prompt), <strong>plus</strong>:</p>
 <table>
 <thead>
 <tr>
-<th>Command</th>
-<th>What it does</th>
+<th>Key</th>
+<th>Default</th>
+<th>Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>make mkdocs_serve</code></td>
-<td>Install docs deps and serve this site at http://0.0.0.0:8000.</td>
-</tr>
-<tr>
-<td><code>make install</code></td>
-<td>Install <code>bin/</code> + <code>templates/</code> under <code>/usr/share/blueprintx</code> (needs sudo).</td>
+<td><code>pipeline_intent</code></td>
+<td><code>n</code></td>
+<td><code>y</code> selects the multi-intent (<code>PIPELINE_INTENT</code> dispatch) pipeline shape. The scaffold script also accepts this directly as the <code>MULTI_PIPELINE_OPTIN=true</code> environment variable — set that instead of going through stdin if calling the scaffold script yourself.</td>
 </tr>
 </tbody>
 </table>
-<h2 id="adding-a-skeleton">Adding a skeleton<a class="headerlink" href="#adding-a-skeleton" title="Permanent link">&para;</a></h2>
-<p>Create <code>templates/&lt;name&gt;/</code> with a <code>skeleton.meta</code>, write a scaffold script under
-<code>bin/scaffold/</code>, and the menu updates automatically — no change to <code>blueprintx.sh</code>. See
-<a href="../contributing/">Contributing</a>.</p>
+<h3 id="lib-minimal"><code>lib-minimal</code><a class="headerlink" href="#lib-minimal" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>logs</code></td>
+<td><code>n</code></td>
+<td>Ships the in-repo logging helper (<code>utils/logs.py</code>).</td>
+</tr>
+<tr>
+<td><code>otel</code></td>
+<td><code>n</code></td>
+<td>Ships the OTLP log-export helper (<code>_internal/utils/otel_logging.py</code>).</td>
+</tr>
+<tr>
+<td><code>docker_compose</code></td>
+<td><code>n</code></td>
+<td>Same shape as the service tiers.</td>
+</tr>
+<tr>
+<td><code>publish_pypi</code></td>
+<td><code>y</code></td>
+<td>Ship <code>release-pypi.yaml</code>.</td>
+</tr>
+<tr>
+<td><code>publish_test_pypi</code></td>
+<td><code>y</code></td>
+<td>Ship <code>release-test-pypi.yaml</code>.</td>
+</tr>
+<tr>
+<td><code>consume_private</code></td>
+<td><code>n</code></td>
+<td>Append a commented private-source template to <code>pyproject.toml</code>.</td>
+</tr>
+<tr>
+<td><code>review_bot_roster</code></td>
+<td><code>n</code></td>
+<td>Same as the service tiers.</td>
+</tr>
+<tr>
+<td><code>git_remote</code></td>
+<td><code>n</code></td>
+<td>Same as the service tiers.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="publishregistry-keys-are-answer-only-they-do-not-implement-publishing">Publish/registry keys are answer-only — they do not implement publishing<a class="headerlink" href="#publishregistry-keys-are-answer-only-they-do-not-implement-publishing" title="Permanent link">&para;</a></h2>
+<p><code>publish_pypi</code>, <code>publish_test_pypi</code>, and <code>consume_private</code> answer <code>lib-minimal</code>'s
+<strong>existing</strong> yes/no gate for which release workflow file the scaffold ships — nothing in
+this seam performs a real publish, credential check, or registry call.</p>
+<p>Any future spec key that <em>does</em> perform real publishing or registry verification (for
+<code>lib-minimal</code> or a future <code>ts-lib</code>-shaped tier) must delegate that work to the
+<code>publishprobe</code> tool (greenfield#26) instead of reimplementing credentials or publishing
+here — scope note from blueprintx#481.</p>
+<h2 id="follow-up-typescript-and-future-tiers">Follow-up: TypeScript and future tiers<a class="headerlink" href="#follow-up-typescript-and-future-tiers" title="Permanent link">&para;</a></h2>
+<p><code>react-spa-webpack</code>, <code>ts-lib</code>, and any future non-Python skeleton have no entry in
+<code>spec_stdin_for_skeleton</code> yet. <code>--spec</code> still resolves their top-level answers (project
+name, language, skeleton, license, …); their scaffold-internal prompts stay interactive
+until a named-key map is added for them, the same way the five Python tiers were —
+<code>spec_skeleton_supported</code> returns <code>false</code> for them today, and <code>blueprintx new --spec</code>
+prints a warning rather than failing silently.</p>
+<h2 id="used-by-ci">Used by CI<a class="headerlink" href="#used-by-ci" title="Permanent link">&para;</a></h2>
+<p><code>bin/ci/scaffold_lint_test.sh &lt;skeleton&gt;</code> drives its scaffold through
+<code>spec_stdin_for_skeleton</code> (all-default: decline every opt-in, no remote — the same
+"clean offline scaffold" baseline the old positional <code>printf</code> produced). Set
+<code>SCAFFOLD_SPEC_FILE=/path/to/file.spec</code> to probe the harness against a specific spec
+instead of the defaults, mirroring the existing <code>SCAFFOLD_PROJECT_NAME</code> override.</p>
 
 
 
