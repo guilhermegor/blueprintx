@@ -15,13 +15,21 @@ nav:
   - FAQ: faq.md
   - Complexity Ceilings Measured: complexity-ceilings-measured.md
   - Troubleshooting: troubleshooting.md
+  - Offline Wheelhouse: offline-wheelhouse.md
   - Secret Scanning: secret-scanning.md
   - Contributing: contributing.md
   - Changelog: changelog.md
   - Versioning: versioning.md
   - Coverage Floor: coverage-floor.md
+  - Decision Records: decision-records.md
+  - Issue Scope: issue-scope.md
+  - Quality Gate Blind Spots: quality-gate-blind-spots.md
+  - Required Status Checks: required-status-checks.md
   - SonarQube Evaluation: sonarqube-evaluation.md
+  - CI Scanner Gap Analysis: ci-scanner-gap-analysis.md
+  - Spec Answers: spec-answers.md
   - Python:
+      - API Service (Native DB): skeletons.md
       - DDD Service (Native DB):
           - Overview: py-ddd-service-native-db.md
           - Example - External API Calls: py-examples/ddd-external-api.md
@@ -37,6 +45,8 @@ nav:
       - MVC Service (ORM DB):
           - Overview: py-mvc-service-orm-db.md
       - Lib Minimal: py-lib-minimal.md
+  - Bash:
+      - Bash CLI: skeletons/bash-cli.md
   - TypeScript:
       - React SPA (Webpack): ts-react-spa-webpack.md
       - Library (TS, npm-ready): ts-lib.md
