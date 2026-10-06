@@ -325,7 +325,7 @@ The `templates/python-common/` directory is the **single source of truth** for s
 
 ## Template Python conventions (must be respected in all template files)
 
-- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, tab indent, double quotes, NumPy docstrings.
+- **Ruff** is the linter/formatter. Config lives in `templates/python-common/ruff.toml`: line-length 99, 4-space indent, double quotes, NumPy docstrings.
 - **Pre-commit hooks** (`.pre-commit-config.yaml`): ruff, pydocstyle (DAR/D412/D417), codespell, commitizen, gitlint, hadolint, unit + integration tests, coverage badge.
 - **Tests**: every skeleton runs `pytest` (`make unit_tests` → `poetry run pytest tests/unit/`; `pytest.ini` is shipped from `templates/python-common/` to all tiers). Tests are pytest-style — plain functions with fixtures (`conftest.py`, `capsys`, `monkeypatch`, `pytest_mock`) — not `unittest.TestCase`. Write new tests as pytest functions regardless of tier.
 - **One class per file**. Ports (ABCs) in `domain/ports.py`, ORM/DB implementations in `infrastructure/`, orchestration in `application/use_cases.py`. Never mix layers in one file.
@@ -395,24 +395,46 @@ From `CONTRIBUTING.md`:
 - Commits: Conventional Commits — `feat(scope): message`, `fix(scope): message`, etc.
 - Direct commits to `main` are blocked by pre-commit (`no-commit-to-branch`).
 
-## Backlog discipline (persist progress to `docs/backlog/`)
+## Backlog discipline (persist progress to `.specs/`)
 
 Any multi-step effort here (a backport wave, a multi-PR feature) MUST be tracked in a
-**`docs/backlog/<topic>_YYYYMMDD_HHMMSS.md`** file, created the moment the plan is approved
-and updated after every slice (tick done items, add new to-dos, remove superseded ones).
-This is **not optional and not replaced by a session task tool** (TaskCreate/TodoWrite are
-session-local; the backlog is the in-repo, team-reviewable, cross-session record). At the
-start of work, **re-read any existing `docs/backlog/` file** and keep it current. The
-filename timestamp is set at creation and never renamed. `docs/backlog/` is git-ignored from
-the published site (`exclude_docs` in each skeleton's `mkdocs.yml`) but tracked in the repo.
-**Do NOT delete a backlog file once every box is `[x]`** — keep it as a permanent,
-team-reviewable record of what was done and why. When complete, tick the last box and add a
-short "Completed — kept as a record" note instead of removing the file. (Lesson:
-persist-todo-in-docs-backlog.)
+file created the moment the plan is approved and updated after every slice (tick done
+items, add new to-dos, remove superseded ones). This is **not optional and not replaced
+by a session task tool** (TaskCreate/TodoWrite are session-local; the tracker is the
+in-repo, team-reviewable, cross-session record). At the start of work, **re-read the
+existing tracker** and keep it current.
+
+**Where it goes — `.specs/`, never `docs/`.** `docs/` is solely for published
+documentation, so the old `docs/backlog/` home contradicted that boundary outright, and
+`mkdocs.yml`'s `exclude_docs` hid 45 tracked files from the site rather than resolving
+it — the exclusion *was* the violation's camouflage (blueprintx#575).
+
+- **The effort maps to one feature** → `.specs/features/<feature-name>/tasks.md`, beside
+  the `design.md` / `plan.md` that `s:brainstorming` and `s:writing-plans` already land
+  there. Per-feature, **not one global file**: a single tracker is a merge-conflict magnet
+  the moment two subagents touch it, and this repo routinely runs five at once. It also
+  gives the file a natural end — the feature ships, the file stays as the record.
+- **It maps to no single feature** (a backport wave, a cross-cutting audit) →
+  `.specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md`. The filename timestamp is set at
+  creation and never renamed.
+
+**Status markers:** `[ ]` to-do, `[~] <branch>` doing, `[x]` done. ⚠️ `[~]` carries the
+**branch**, not an agent id — agent ids die with the session, and "doing" without "by
+whom" re-creates the collision the tracker exists to expose. ⚠️ A marker is a claim,
+never evidence: an `[x]` with no merged PR behind it is blueprintx#509's failure (merged
+with an empty `closingIssuesReferences`, so #355 never closed) in a cheaper file.
+
+**Do NOT delete a tracker once every box is `[x]`** — keep it as a permanent,
+team-reviewable record of what was done and why. When complete, tick the last box and add
+a short "Completed — kept as a record" note instead of removing the file. `.specs/` is
+outside the MkDocs source tree entirely, so nothing has to be excluded to keep it
+unpublished. `bin/ci/check_specs_structure.sh` enforces the layout. (Lesson:
+persist-todo-in-docs-backlog, written when trackers lived in `docs/backlog/`; they moved
+in blueprintx#575.)
 
 ## Prose language: en-US everywhere in this repo
 
-This repository's own prose — `CLAUDE.md`, `CONTRIBUTING.md`, `docs/`, `docs/backlog/`,
+This repository's own prose — `CLAUDE.md`, `CONTRIBUTING.md`, `docs/`, `.specs/`,
 commit messages, comments, PR descriptions — is en-US, no exceptions. This is scoped to
 **BlueprintX itself**. It does not extend to a project BlueprintX scaffolds, which may
 legitimately be bilingual — see `templates/python-common/CLAUDE.md`'s description of
