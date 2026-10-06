@@ -98,26 +98,28 @@ test_validate_answers_reports_every_bad_key() {
 }
 
 test_bad_yn_stops_before_anything_is_created() {
-    local file root out
+    local file root out int_rc
     root="$WORK_DIR/bad-yn-root"
     file="$(write_spec bad-yn lib-minimal "project_root=$root" "otel=yse")"
     out="$(run_blueprintx new --spec "$file")"
-    if [[ "$out" == *"'otel' must be"* && ! -e "$root/spec-probe" ]]; then
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'otel' must be"* && ! -e "$root" ]]; then
         pass "a bad y/n value refuses the run and creates nothing"
     else
-        fail "bad y/n refusal" "project dir exists or message missing: ${out: -300}"
+        fail "bad y/n refusal" "rc=$int_rc, root exists or message missing: ${out: -300}"
     fi
 }
 
 test_unmapped_skeleton_is_refused_before_creating_anything() {
-    local file root out
+    local file root out int_rc
     root="$WORK_DIR/unmapped-root"
     file="$(SPEC_LANGUAGE=typescript write_spec unmapped react-spa-webpack "project_root=$root")"
     out="$(run_blueprintx new --spec "$file")"
-    if [[ "$out" == *"has no named-key prompt map"* && ! -e "$root" ]]; then
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"has no named-key prompt map"* && ! -e "$root" ]]; then
         pass "a skeleton with no prompt map is refused before any directory is made"
     else
-        fail "unmapped skeleton" "root exists or message missing: ${out: -300}"
+        fail "unmapped skeleton" "rc=$int_rc, root exists or message missing: ${out: -300}"
     fi
 }
 
