@@ -84,22 +84,36 @@ list `apply_offline_mode` ships, and other tooling may still use it.
 
 ## Preconditions — refuse loudly, never half-promote
 
-Checked before any file is touched, in this order: the tier and its tier-specific options are valid; the target is a git repository; not already
-fully online (an `origin` remote **and** a populated `.github/workflows/` — that combination is a
-clean no-op, exit 0); not in the ambiguous state of an `origin` remote **without** GitHub assets
-(refuses — could be mid-promotion or a manually-added remote, and guessing which is exactly what
-this script exists not to do); the working tree is clean; `gh` is installed and authenticated;
-the `--tier` is one of the 6 known tiers **and** `templates/<tier>/skeleton.meta` still exists in
-this BlueprintX checkout (an unknown or since-removed tier fails loudly rather than copying
-nothing and reporting success).
+Checked before any file is touched, in this order: the `--tier` is one of the 6 known tiers **and**
+`templates/<tier>/skeleton.meta` still exists in this BlueprintX checkout (an unknown or
+since-removed tier fails loudly rather than copying nothing and reporting success); the
+tier-specific options are valid; the target is a git repository; not already fully online (an
+`origin` remote **and** a populated `.github/workflows/` — that combination is a clean no-op, exit
+0); not in the ambiguous state of an `origin` remote **without** GitHub assets (refuses — could be
+mid-promotion or a manually-added remote, and guessing which is exactly what this script exists
+not to do); the current branch is `main` (the push and the branch protection both target it); the
+working tree is clean, unless a previous promotion was interrupted (see below); `gh` is installed
+and authenticated. All of these run before any `gh` call that changes anything.
 
-## Idempotency
+## Idempotency and resuming
 
 Every mutation is independently safe to re-run: file copies overwrite identical content, removals
 use `-f`/check-first, the poe-include and pre-commit-hook edits detect their own prior
-application and no-op, and `package.json` script stripping is a `dict.pop(..., None)`. A run
-interrupted partway (`set -euo pipefail` stops at the first failure) resumes cleanly on the next
-invocation — nothing needs to be undone by hand first.
+application and no-op, and `package.json` script stripping is a `dict.pop(..., None)`. The poe-include
+and pre-commit-hook edits **fail loudly** when they find the entry in a shape they do not recognise,
+rather than reporting success over a half-edited project.
+
+A run interrupted **before the first push** (most likely: a pre-commit hook rejected the promotion
+commit) leaves the copied assets in the working tree and no `origin`. The next run recognises that
+state — `.github/workflows/` populated, no `origin` — and resumes: it overwrites the workflows from
+the templates, repeats the removals and commits again. Only the paths this script itself writes or
+removes may be dirty on a resume; any other uncommitted change is refused.
+
+**After the first push the project reads as online and a re-run does nothing.** That includes the
+branch-protection step: if it failed (it is best-effort), set it up on GitHub by hand. The protection
+this script applies is a baseline — force-push and branch deletion on `main` are blocked, but
+required reviews and required status checks are **not** configured, so the result is weaker than an
+online scaffold's.
 
 ## Verification
 

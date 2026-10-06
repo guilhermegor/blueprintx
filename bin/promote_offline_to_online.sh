@@ -29,6 +29,7 @@ VISIBILITY="private"
 DEPLOY_TARGET="none"
 PUBLISH_TARGET="none"
 SKIP_BRANCH_PROTECTION=false
+PROTECTION_APPLIED=false
 
 usage() {
     cat <<'EOF'
@@ -152,9 +153,34 @@ require_git_repo() {
         || exit_error "$PROJECT_PATH is not a git repository — refusing to promote."
 }
 
+# gh repo create --push pushes the CURRENT branch while protection targets main, so a promotion
+# started on a feature branch would publish the wrong branch and 404 the protection call.
+require_on_main() {
+    local branch
+    branch="$(git -C "$PROJECT_PATH" symbolic-ref --short HEAD 2>/dev/null || true)"
+    [ "$branch" = "main" ] \
+        || exit_error "$PROJECT_PATH is on '${branch:-a detached HEAD}', not main — check out main first (the push and branch protection both target main)."
+}
+
 require_clean_tree() {
     [ -z "$(git -C "$PROJECT_PATH" status --porcelain)" ] \
         || exit_error "$PROJECT_PATH has uncommitted changes — commit or stash them first, then re-run."
+}
+
+# A run whose promotion commit failed (a hook failed or rewrote files) leaves the copied assets
+# dirty in the tree and no origin yet. The only changes allowed on that resume are the paths
+# this script itself writes or removes; anything else is the user's work and is refused.
+require_resumable_tree() {
+    local line path
+    while IFS= read -r line; do
+        path="${line:3}"
+        case "$path" in
+            .github/* | SECURITY.md | vercel.json | package.json | poe_tasks.toml | poe_tasks.offline.toml \
+                | .pre-commit-config.yaml | git_diffs/* | bin/git_diff_*.sh | bin/new_branch.sh \
+                | bin/git_merge_to_main.sh | bin/protect_branch.sh) ;;
+            *) exit_error "$PROJECT_PATH has changes outside a previous promotion (${path}) — commit or stash them first, then re-run." ;;
+        esac
+    done < <(git -C "$PROJECT_PATH" status --porcelain)
 }
 
 require_gh_ready() {
@@ -178,7 +204,7 @@ detect_state() {
 resolve_identity() {
     [ -n "$GITHUB_USERNAME" ] || GITHUB_USERNAME="$(gh api user --jq .login)"
     [ -n "$GITHUB_USERNAME" ] || exit_error "Could not resolve a GitHub username; pass --github-user explicitly."
-    PROJECT_NAME="$(basename "$PROJECT_PATH")"
+    PROJECT_NAME="$(basename "$(cd "$PROJECT_PATH" && pwd)")"
     PROJECT_DISPLAY_NAME="$(echo "$PROJECT_NAME" | tr '_-' '  ' | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2); print}')"
     REPOSITORY="$GITHUB_USERNAME/$PROJECT_NAME"
     export PROJECT_NAME PROJECT_DISPLAY_NAME GITHUB_USERNAME REPOSITORY
@@ -325,7 +351,8 @@ remove_offline_only() {
 strip_poe_include() {
     local tasks="$PROJECT_PATH/poe_tasks.toml"
     [ -f "$tasks" ] || return 0
-    python3 - "$tasks" <<'PY'
+    local outcome
+    outcome="$(python3 - "$tasks" <<'PY'
 import re
 import sys
 
@@ -334,11 +361,12 @@ with open(path, encoding="utf-8") as fh:
     text = fh.read()
 
 if '"poe_tasks.offline.toml"' not in text:
+    print("absent")
     sys.exit(0)
 
 match = re.search(r"\n\[tool\.poe\]\ninclude = \[([^\]]*)\]\n", text)
 if not match:
-    sys.exit(0)
+    sys.exit("strip_poe_include: poe_tasks.offline.toml is listed but the [tool.poe] include table has an unexpected shape — edit poe_tasks.toml by hand, then re-run.")
 
 entries = [e.strip() for e in match.group(1).split(",") if e.strip() and e.strip() != '"poe_tasks.offline.toml"']
 replacement = f"\n[tool.poe]\ninclude = [{', '.join(entries)}]\n" if entries else "\n"
@@ -346,8 +374,11 @@ text = text[: match.start()] + replacement + text[match.end() :]
 
 with open(path, "w", encoding="utf-8") as fh:
     fh.write(text)
+print("removed")
 PY
-    print_status "info" "Removed poe_tasks.offline.toml from poe_tasks.toml include list"
+)"
+    [ "$outcome" = "removed" ] && print_status "info" "Removed poe_tasks.offline.toml from poe_tasks.toml include list"
+    return 0
 }
 
 # Reverses swap_protect_branch_hook() (bin/scaffold/python_*.sh): drops the local
@@ -357,7 +388,8 @@ PY
 restore_protect_branch_hook() {
     local pc="$PROJECT_PATH/.pre-commit-config.yaml"
     [ -f "$pc" ] || return 0
-    python3 - "$pc" <<'PY'
+    local outcome
+    outcome="$(python3 - "$pc" <<'PY'
 import re
 import sys
 
@@ -377,6 +409,9 @@ local_hook = (
     "        pass_filenames: false\n"
 )
 if local_hook not in text:
+    if "id: protect-branch" in text:
+        sys.exit("restore_protect_branch_hook: a protect-branch hook is present but not in the shape swap_protect_branch_hook writes — restore no-commit-to-branch by hand, then re-run.")
+    print("absent")
     sys.exit(0)
 
 text = text.replace(local_hook, "repos:\n", 1)
@@ -391,8 +426,11 @@ if count == 0:
 
 with open(path, "w", encoding="utf-8") as fh:
     fh.write(text)
+print("restored")
 PY
-    print_status "info" "Restored stock no-commit-to-branch hook in .pre-commit-config.yaml"
+)"
+    [ "$outcome" = "restored" ] && print_status "info" "Restored stock no-commit-to-branch hook in .pre-commit-config.yaml"
+    return 0
 }
 
 # Reverses the git:diff:* entries patch_package_json() added in ts_react_app.sh's
@@ -413,7 +451,7 @@ for key in ("git:diff:export", "git:diff:check", "git:diff:apply"):
     scripts.pop(key, None)
 
 with open(path, "w", encoding="utf-8") as fh:
-    json.dump(pkg, fh, indent=2)
+    json.dump(pkg, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
 PY
     print_status "info" "Removed git:diff:* scripts from package.json"
@@ -460,6 +498,7 @@ set_secret_scan_key() {
 # warns rather than aborts an otherwise-complete promotion (the assets are already pushed).
 apply_branch_protection() {
     [ "$SKIP_BRANCH_PROTECTION" = "true" ] && return 0
+    PROTECTION_APPLIED=false
     local payload
     payload=$(
         cat <<'JSON'
@@ -475,16 +514,18 @@ JSON
     )
     if gh api --method PUT "repos/$REPOSITORY/branches/main/protection" \
         -H "Accept: application/vnd.github+json" --input - <<<"$payload" >/dev/null 2>&1; then
-        print_status "success" "Applied baseline branch protection on main"
+        PROTECTION_APPLIED=true
+        print_status "success" "Applied baseline branch protection on main (force-push and deletion blocked; required reviews and status checks are NOT configured)"
     else
-        print_status "warning" "Could not apply branch protection automatically; configure it on GitHub manually."
+        print_status "warning" "Could not apply branch protection automatically; configure it on GitHub manually (re-running cannot retry it: the project now reads as online)."
     fi
 }
 
 print_final_summary() {
     print_section "Promotion complete"
     print_status "success" "$PROJECT_PATH is now online as $REPOSITORY"
-    print_status "info" "Re-run this script any time — every step here is idempotent."
+    [ "$PROTECTION_APPLIED" = "true" ] || print_status "warning" "Branch protection on main is NOT in place (skipped or failed) — set it up on GitHub."
+    print_status "info" "Re-running before the first push resumes the promotion; afterwards the project reads as online and nothing is repeated."
 }
 
 main() {
@@ -505,7 +546,13 @@ main() {
         exit_error "$PROJECT_PATH already has an 'origin' remote but no .github/workflows — ambiguous state (mid-promotion? a remote added by hand?). Refusing to guess; reconcile manually."
     fi
 
-    require_clean_tree
+    require_on_main
+    if [ "$HAS_GITHUB_ASSETS" = "true" ]; then
+        print_status "warning" "$PROJECT_PATH has .github/workflows but no origin — resuming a previous promotion; workflows will be overwritten from the templates."
+        require_resumable_tree
+    else
+        require_clean_tree
+    fi
     require_gh_ready
     resolve_identity
 
