@@ -65,226 +65,226 @@ PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 # the runtime type-checking engine is exempt from *type* analysis (mypy cannot follow its
 # metaprogramming), but a long function is just as hard to read there as anywhere else.
 TUPLE_SKIP_DIRS = (
-	".git",
-	# A parallel-agent worktree under `.claude/worktrees/agent-NAME` is a FULL, older
-	# checkout of this repo, not project source — walking it inflates the file count and
-	# polices a stale revision (blueprintx#331). Only relevant here because this gate's
-	# `PATH_ROOT` is overridable via `--root` to the actual repo root — the comment-language
-	# gate carries the same `TUPLE_SKIP_DIRS` pattern but never needs this entry, since its
-	# root is fixed to `templates/python-common` and never reaches `.claude` at all.
-	".claude",
-	".mypy_cache",
-	".pytest_cache",
-	".ruff_cache",
-	".venv",
-	"__pycache__",
-	"htmlcov",
-	"node_modules",
-	"site",
+    ".git",
+    # A parallel-agent worktree under `.claude/worktrees/agent-NAME` is a FULL, older
+    # checkout of this repo, not project source — walking it inflates the file count and
+    # polices a stale revision (blueprintx#331). Only relevant here because this gate's
+    # `PATH_ROOT` is overridable via `--root` to the actual repo root — the comment-language
+    # gate carries the same `TUPLE_SKIP_DIRS` pattern but never needs this entry, since its
+    # root is fixed to `templates/python-common` and never reaches `.claude` at all.
+    ".claude",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "htmlcov",
+    "node_modules",
+    "site",
 )
 
 STR_SHELL_OPEN_SUFFIX = "() {"
 
 
 class UnparsableFileError(Exception):
-	"""Raised when a discovered ``.py`` file cannot be parsed.
+    """Raised when a discovered ``.py`` file cannot be parsed.
 
-	Its own type rather than a printed warning, so the caller must decide what it means —
-	and the only defensible decision is a failure.
-	"""
+    Its own type rather than a printed warning, so the caller must decide what it means —
+    and the only defensible decision is a failure.
+    """
 
 
 def own_docstring_span(cls_node: ast.AST) -> int:
-	"""Return how many lines one node's own docstring occupies.
+    """Return how many lines one node's own docstring occupies.
 
-	Parameters
-	----------
-	cls_node : ast.AST
-		A function, method, or class node.
+    Parameters
+    ----------
+    cls_node : ast.AST
+            A function, method, or class node.
 
-	Returns
-	-------
-	int
-		Line count of the docstring expression, or 0 when there is none.
-	"""
-	list_body = getattr(cls_node, "body", [])
-	if not list_body:
-		return 0
-	cls_first = list_body[0]
-	bool_is_docstring = (
-		isinstance(cls_first, ast.Expr)
-		and isinstance(cls_first.value, ast.Constant)
-		and isinstance(cls_first.value.value, str)
-	)
-	if not bool_is_docstring:
-		return 0
-	return (cls_first.end_lineno or cls_first.lineno) - cls_first.lineno + 1
+    Returns
+    -------
+    int
+            Line count of the docstring expression, or 0 when there is none.
+    """
+    list_body = getattr(cls_node, "body", [])
+    if not list_body:
+        return 0
+    cls_first = list_body[0]
+    bool_is_docstring = (
+        isinstance(cls_first, ast.Expr)
+        and isinstance(cls_first.value, ast.Constant)
+        and isinstance(cls_first.value.value, str)
+    )
+    if not bool_is_docstring:
+        return 0
+    return (cls_first.end_lineno or cls_first.lineno) - cls_first.lineno + 1
 
 
 def docstring_span(cls_node: ast.AST) -> int:
-	"""Return every docstring line inside a function, nested definitions included.
+    """Return every docstring line inside a function, nested definitions included.
 
-	⚠️ NESTED DOCSTRINGS COUNT AS DOCUMENTATION TOO, and subtracting only the outer one was
-	a real defect in this metric. A decorator factory holds its `decorator` and `wrapper`
-	closures inside its own span, so their docstrings landed on the OUTER function's tally —
-	which is the rule contradicting itself, since the whole reason docstrings are excluded is
-	that a ceiling must not measure how well something is documented.
+    ⚠️ NESTED DOCSTRINGS COUNT AS DOCUMENTATION TOO, and subtracting only the outer one was
+    a real defect in this metric. A decorator factory holds its `decorator` and `wrapper`
+    closures inside its own span, so their docstrings landed on the OUTER function's tally —
+    which is the rule contradicting itself, since the whole reason docstrings are excluded is
+    that a ceiling must not measure how well something is documented.
 
-	Measured, and the reason this is not a cosmetic fix: `retry_with_backoff` came out at 69
-	lines and "needed" a refactor. Nearly all of the excess was the two closures' NumPy
-	sections. Trimming them to get under the ceiling is documentation deleted to satisfy a
-	counter — the exact incentive the exclusion exists to prevent.
+    Measured, and the reason this is not a cosmetic fix: `retry_with_backoff` came out at 69
+    lines and "needed" a refactor. Nearly all of the excess was the two closures' NumPy
+    sections. Trimming them to get under the ceiling is documentation deleted to satisfy a
+    counter — the exact incentive the exclusion exists to prevent.
 
-	Parameters
-	----------
-	cls_node : ast.AST
-		A function or method node.
+    Parameters
+    ----------
+    cls_node : ast.AST
+            A function or method node.
 
-	Returns
-	-------
-	int
-		Total docstring lines in the node's own body and in every definition nested in it.
-	"""
-	int_total = own_docstring_span(cls_node)
-	for cls_child in ast.walk(cls_node):
-		if cls_child is cls_node:
-			continue
-		if isinstance(cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-			int_total += own_docstring_span(cls_child)
-	return int_total
+    Returns
+    -------
+    int
+            Total docstring lines in the node's own body and in every definition nested in it.
+    """
+    int_total = own_docstring_span(cls_node)
+    for cls_child in ast.walk(cls_node):
+        if cls_child is cls_node:
+            continue
+        if isinstance(cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            int_total += own_docstring_span(cls_child)
+    return int_total
 
 
 def python_functions(path_file: pathlib.Path) -> list:
-	"""Return every function in a Python file with its docstring-excluded length.
+    """Return every function in a Python file with its docstring-excluded length.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		Path to a ``.py`` source file.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+            Path to a ``.py`` source file.
 
-	Returns
-	-------
-	list of tuple
-		``(name, lineno, length)`` per function, including nested ones and methods.
-	"""
-	try:
-		cls_tree = ast.parse(path_file.read_text(encoding="utf-8"), filename=str(path_file))
-	except SyntaxError as cls_err:
-		# ⚠️ A file this gate cannot parse is a FINDING, not silence. The first version
-		# printed the error and handed back nothing, which the caller could only read as
-		# an absence of over-long functions — so a malformed file passed the audit by
-		# being unreadable. That is the same vacuous pass this gate fails discovery over.
-		raise UnparsableFileError(f"{path_file}: could not parse ({cls_err})") from cls_err
+    Returns
+    -------
+    list of tuple
+            ``(name, lineno, length)`` per function, including nested ones and methods.
+    """
+    try:
+        cls_tree = ast.parse(path_file.read_text(encoding="utf-8"), filename=str(path_file))
+    except SyntaxError as cls_err:
+        # ⚠️ A file this gate cannot parse is a FINDING, not silence. The first version
+        # printed the error and handed back nothing, which the caller could only read as
+        # an absence of over-long functions — so a malformed file passed the audit by
+        # being unreadable. That is the same vacuous pass this gate fails discovery over.
+        raise UnparsableFileError(f"{path_file}: could not parse ({cls_err})") from cls_err
 
-	list_found = []
-	for cls_node in ast.walk(cls_tree):
-		if not isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef):
-			continue
-		int_span = (cls_node.end_lineno or cls_node.lineno) - cls_node.lineno + 1
-		list_found.append((cls_node.name, cls_node.lineno, int_span - docstring_span(cls_node)))
-	return list_found
+    list_found = []
+    for cls_node in ast.walk(cls_tree):
+        if not isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        int_span = (cls_node.end_lineno or cls_node.lineno) - cls_node.lineno + 1
+        list_found.append((cls_node.name, cls_node.lineno, int_span - docstring_span(cls_node)))
+    return list_found
 
 
 def shell_functions(path_file: pathlib.Path) -> list:
-	"""Return every shell function in a file with its length.
+    """Return every shell function in a file with its length.
 
-	Relies on the ``shfmt`` shape the repo already enforces: an opening ``name() {`` at
-	column 0 and a closing ``}`` at column 0. See the module docstring for why this is
-	exact here rather than a heuristic.
+    Relies on the ``shfmt`` shape the repo already enforces: an opening ``name() {`` at
+    column 0 and a closing ``}`` at column 0. See the module docstring for why this is
+    exact here rather than a heuristic.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		Path to a ``.sh`` source file.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+            Path to a ``.sh`` source file.
 
-	Returns
-	-------
-	list of tuple
-		``(name, lineno, length)`` per function.
-	"""
-	list_lines = path_file.read_text(encoding="utf-8", errors="replace").splitlines()
-	list_found = []
-	str_open_name = ""
-	int_open_line = 0
-	for int_index, str_line in enumerate(list_lines, start=1):
-		if str_open_name and str_line == "}":
-			list_found.append((str_open_name, int_open_line, int_index - int_open_line + 1))
-			str_open_name = ""
-			continue
-		if str_open_name or not str_line.endswith(STR_SHELL_OPEN_SUFFIX):
-			continue
-		str_candidate = str_line[: -len(STR_SHELL_OPEN_SUFFIX)].strip()
-		if str_candidate.startswith("function "):
-			str_candidate = str_candidate[len("function ") :].strip()
-		if str_candidate and str_candidate.replace("_", "").replace("-", "").isalnum():
-			str_open_name = str_candidate
-			int_open_line = int_index
-	return list_found
+    Returns
+    -------
+    list of tuple
+            ``(name, lineno, length)`` per function.
+    """
+    list_lines = path_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    list_found = []
+    str_open_name = ""
+    int_open_line = 0
+    for int_index, str_line in enumerate(list_lines, start=1):
+        if str_open_name and str_line == "}":
+            list_found.append((str_open_name, int_open_line, int_index - int_open_line + 1))
+            str_open_name = ""
+            continue
+        if str_open_name or not str_line.endswith(STR_SHELL_OPEN_SUFFIX):
+            continue
+        str_candidate = str_line[: -len(STR_SHELL_OPEN_SUFFIX)].strip()
+        if str_candidate.startswith("function "):
+            str_candidate = str_candidate[len("function ") :].strip()
+        if str_candidate and str_candidate.replace("_", "").replace("-", "").isalnum():
+            str_open_name = str_candidate
+            int_open_line = int_index
+    return list_found
 
 
 def file_problems(path_file: pathlib.Path) -> list:
-	"""Return one message per function in the file that exceeds the ceiling.
+    """Return one message per function in the file that exceeds the ceiling.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		Path to a ``.py`` or ``.sh`` file.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+            Path to a ``.py`` or ``.sh`` file.
 
-	Returns
-	-------
-	list of str
-		Human-readable findings; empty when every function fits.
-	"""
-	if path_file.suffix not in (".py", ".sh"):
-		return []
+    Returns
+    -------
+    list of str
+            Human-readable findings; empty when every function fits.
+    """
+    if path_file.suffix not in (".py", ".sh"):
+        return []
 
-	try:
-		str_shown = str(path_file.relative_to(PATH_ROOT))
-	except ValueError:
-		str_shown = str(path_file)
+    try:
+        str_shown = str(path_file.relative_to(PATH_ROOT))
+    except ValueError:
+        str_shown = str(path_file)
 
-	str_note = ", docstring excluded" if path_file.suffix == ".py" else ""
-	try:
-		list_functions = (
-			python_functions(path_file)
-			if path_file.suffix == ".py"
-			else shell_functions(path_file)
-		)
-	except UnparsableFileError as cls_err:
-		return [str(cls_err)]
+    str_note = ", docstring excluded" if path_file.suffix == ".py" else ""
+    try:
+        list_functions = (
+            python_functions(path_file)
+            if path_file.suffix == ".py"
+            else shell_functions(path_file)
+        )
+    except UnparsableFileError as cls_err:
+        return [str(cls_err)]
 
-	return [
-		f"{str_shown}:{int_line}: {str_name}() is {int_length} lines"
-		f" (max {INT_MAX_LINES}{str_note})"
-		for str_name, int_line, int_length in list_functions
-		if int_length > INT_MAX_LINES
-	]
+    return [
+        f"{str_shown}:{int_line}: {str_name}() is {int_length} lines"
+        f" (max {INT_MAX_LINES}{str_note})"
+        for str_name, int_line, int_length in list_functions
+        if int_length > INT_MAX_LINES
+    ]
 
 
 def audit_paths() -> list:
-	"""Discover every checkable file under the repository root.
+    """Discover every checkable file under the repository root.
 
-	Returns
-	-------
-	list of pathlib.Path
-		Sorted ``.py`` and ``.sh`` paths, skipping vendored and generated trees.
-	"""
-	# Compare parts RELATIVE TO PATH_ROOT, never `path_file.parts` directly. The latter
-	# carries every ancestor above the repo too, and a directory literally named `.claude`
-	# is not a rare ancestor here — this very gate runs from inside a parallel-agent
-	# worktree under `.claude/worktrees`, so `PATH_ROOT` itself commonly sits under one.
-	# An ancestor-based match would then skip every file on every such run, blueprintx#331 —
-	# the vacuous-audit failure this gate exists to catch, self-inflicted. The
-	# comment-language gate already avoids this the same way.
-	list_paths = []
-	for str_suffix in ("*.py", "*.sh"):
-		for path_file in PATH_ROOT.rglob(str_suffix):
-			if any(
-				str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
-			):
-				continue
-			list_paths.append(path_file)
-	return sorted(list_paths)
+    Returns
+    -------
+    list of pathlib.Path
+            Sorted ``.py`` and ``.sh`` paths, skipping vendored and generated trees.
+    """
+    # Compare parts RELATIVE TO PATH_ROOT, never `path_file.parts` directly. The latter
+    # carries every ancestor above the repo too, and a directory literally named `.claude`
+    # is not a rare ancestor here — this very gate runs from inside a parallel-agent
+    # worktree under `.claude/worktrees`, so `PATH_ROOT` itself commonly sits under one.
+    # An ancestor-based match would then skip every file on every such run, blueprintx#331 —
+    # the vacuous-audit failure this gate exists to catch, self-inflicted. The
+    # comment-language gate already avoids this the same way.
+    list_paths = []
+    for str_suffix in ("*.py", "*.sh"):
+        for path_file in PATH_ROOT.rglob(str_suffix):
+            if any(
+                str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
+            ):
+                continue
+            list_paths.append(path_file)
+    return sorted(list_paths)
 
 
 # `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
@@ -292,72 +292,72 @@ _INT_FLAG_WITH_VALUE = 2
 
 
 def main(list_argv: list) -> int:
-	"""Check every named file for a function longer than the ceiling.
+    """Check every named file for a function longer than the ceiling.
 
-	Parameters
-	----------
-	list_argv : list of str
-		Filenames, as pre-commit passes them. Empty means audit the whole repository.
+    Parameters
+    ----------
+    list_argv : list of str
+            Filenames, as pre-commit passes them. Empty means audit the whole repository.
 
-	Returns
-	-------
-	int
-		0 when every function fits, 1 on a violation.
-	"""
-	# ⚠️ PLW0603 is real and accepted here with its upgrade path written down. `--root` exists
-	# so BlueprintX can run THIS file over its own tree instead of keeping a second copy, and
-	# the root it sets is read by helpers throughout the module for relative-path display.
-	# Threading it through every signature is the proper fix; it is a wider change than this
-	# one, and a module-level default set once by the entrypoint is the honest shape until
-	# then.
-	global PATH_ROOT  # noqa: PLW0603
-	if list_argv[:1] == ["--root"]:
-		if len(list_argv) < _INT_FLAG_WITH_VALUE:
-			print("❌ --root needs a directory")
-			return 1
-		PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
-		list_argv = list_argv[2:]
+    Returns
+    -------
+    int
+            0 when every function fits, 1 on a violation.
+    """
+    # ⚠️ PLW0603 is real and accepted here with its upgrade path written down. `--root` exists
+    # so BlueprintX can run THIS file over its own tree instead of keeping a second copy, and
+    # the root it sets is read by helpers throughout the module for relative-path display.
+    # Threading it through every signature is the proper fix; it is a wider change than this
+    # one, and a module-level default set once by the entrypoint is the honest shape until
+    # then.
+    global PATH_ROOT  # noqa: PLW0603
+    if list_argv[:1] == ["--root"]:
+        if len(list_argv) < _INT_FLAG_WITH_VALUE:
+            print("❌ --root needs a directory")
+            return 1
+        PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
+        list_argv = list_argv[2:]
 
-	bool_audit = not list_argv
-	list_paths = (
-		[pathlib.Path(str_name).resolve() for str_name in list_argv]
-		if list_argv
-		else audit_paths()
-	)
+    bool_audit = not list_argv
+    list_paths = (
+        [pathlib.Path(str_name).resolve() for str_name in list_argv]
+        if list_argv
+        else audit_paths()
+    )
 
-	# ⚠️ In audit mode, ZERO discovered files is a failure, not a pass. Scanning nothing
-	# produces no findings, so a gate whose globs stopped matching — a renamed layout, a
-	# scaffold that puts sources elsewhere — reports success forever, and is green precisely
-	# because it checks nothing. When filenames are passed in, the hook is driving, and
-	# receiving none simply means nothing matching was staged.
-	if bool_audit and not list_paths:
-		print(
-			f"❌ no .py or .sh file found under {PATH_ROOT} — this gate would pass "
-			f"vacuously. Check TUPLE_SKIP_DIRS against the layout."
-		)
-		return 1
+    # ⚠️ In audit mode, ZERO discovered files is a failure, not a pass. Scanning nothing
+    # produces no findings, so a gate whose globs stopped matching — a renamed layout, a
+    # scaffold that puts sources elsewhere — reports success forever, and is green precisely
+    # because it checks nothing. When filenames are passed in, the hook is driving, and
+    # receiving none simply means nothing matching was staged.
+    if bool_audit and not list_paths:
+        print(
+            f"❌ no .py or .sh file found under {PATH_ROOT} — this gate would pass "
+            f"vacuously. Check TUPLE_SKIP_DIRS against the layout."
+        )
+        return 1
 
-	list_problems = []
-	for path_file in list_paths:
-		list_problems.extend(file_problems(path_file))
-	for str_problem in list_problems:
-		print(str_problem)
+    list_problems = []
+    for path_file in list_paths:
+        list_problems.extend(file_problems(path_file))
+    for str_problem in list_problems:
+        print(str_problem)
 
-	if not list_problems:
-		# Report the FILE COUNT on success, not just silence. A gate that prints nothing
-		# when clean is indistinguishable from a gate that did not run.
-		print(f"✅ function length OK ({len(list_paths)} file(s) checked)")
-		return 0
+    if not list_problems:
+        # Report the FILE COUNT on success, not just silence. A gate that prints nothing
+        # when clean is indistinguishable from a gate that did not run.
+        print(f"✅ function length OK ({len(list_paths)} file(s) checked)")
+        return 0
 
-	print(
-		f"\n{len(list_problems)} finding(s). Any function over {INT_MAX_LINES} lines: split it "
-		f"rather than raising the ceiling, which is about what one reader holds in their head "
-		f"at once and does not move because one function is special. For Python the docstring "
-		f"is already excluded, so the number shown is code only. A file reported as unparsable "
-		f"is a finding in its own right — it cannot be checked, which is not the same as clean."
-	)
-	return 1
+    print(
+        f"\n{len(list_problems)} finding(s). Any function over {INT_MAX_LINES} lines: split it "
+        f"rather than raising the ceiling, which is about what one reader holds in their head "
+        f"at once and does not move because one function is special. For Python the docstring "
+        f"is already excluded, so the number shown is code only. A file reported as unparsable "
+        f"is a finding in its own right — it cannot be checked, which is not the same as clean."
+    )
+    return 1
 
 
 if __name__ == "__main__":
-	sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:]))

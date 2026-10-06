@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover - optional dependency
 	mysql_connector = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import DsnParts, ensure_id
+from chassis.db.infrastructure.helpers import DsnParts, ensure_id, validate_not_flag
 
 
 class MariaDBDatabaseHandler(DatabaseHandler):
@@ -52,6 +52,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 		self.user = self.connection_kwargs.get("user") or "root"
 		self.password = self.connection_kwargs.get("password") or ""
 		self.dbname = self.connection_kwargs.get("database") or "app"
+		validate_not_flag(self.dbname, "database name")
 		self._ensure_table()
 
 	def create(self, record: Record) -> str:
