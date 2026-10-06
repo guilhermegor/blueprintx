@@ -102,13 +102,39 @@ RULESET_NAME="pr-quality-gate"
 # rule objected, because the only things standing between a red check and `main` were a hook and
 # a habit — and both are probabilistic. A gate nobody can bypass by forgetting is the whole point.
 #
-# blueprintx#164: re-confirmed one entry is enough, not expanded. A generated project's own CI
-# (templates/python-common/.github/workflows/tests.yaml) collapses to ONE check-run name per
-# matrix leg (`Run Automated Tests (<os>, py<version>)`) — same "guessed name that drifts" trap
-# this comment already warns against, and no fresh scaffold + real PR was run to capture the
-# exact leg names, so there is no population evidence (same bar GitGuardian failed, see
-# secret_scan.yaml) to require any of them.
-REQUIRED_CHECKS=("Review threads answered")
+# blueprintx#164/#564: the qualifying set DIFFERS BY TIER — this same script now ships to the
+# TypeScript and Bash skeletons, which emit a different set of check names, so the list is DATA
+# (bin/required-checks.txt, shipped per template family) and no longer a literal here. A name
+# qualifies only if all four hold: it is a literal `jobs.<id>.name:` of a workflow THIS project
+# ships; its `on: pull_request` carries no `types:`/`branches:`/`paths:` filter that can make it
+# absent on an ordinary PR; no job-level `if:` can skip it; and the project actually ships that
+# workflow. `tests.yaml` fails the second rule (a `branches:` filter, plus matrix values that
+# drift into the name) and `coderabbit_trigger.yaml` the third (`if: draft == false`).
+#
+# A MISSING file is UNKNOWN, not a confirmed empty list — same convention as the three-state
+# read contract in report_blocking_checks/assert_branch_protection_strict below (blueprintx#311):
+# absence must never be treated the same as "checked and found nothing". A brand-new repo with
+# no prior ruleset loses nothing either way, but a project that already had one provisioned
+# (this script run before, then the file went missing) must not have its required_status_checks
+# rule silently dropped by the next PUT — see the REQUIRED_CHECKS_FILE_MISSING guard in
+# apply_ruleset below (PR #585 review).
+REQUIRED_CHECKS_FILE="$SCRIPT_DIR/required-checks.txt"
+REQUIRED_CHECKS=()
+REQUIRED_CHECKS_FILE_MISSING=0
+
+load_required_checks() {
+	# One check name per line; blank lines and `#` comments ignored. Names are compared to
+	# GitHub's check-run names VERBATIM, so leading/trailing space would silently never match.
+	[ -f "$REQUIRED_CHECKS_FILE" ] || return 0
+	local str_line
+	while IFS= read -r str_line || [ -n "$str_line" ]; do
+		case "$str_line" in '' | '#'*) continue ;; esac
+		REQUIRED_CHECKS+=("$str_line")
+	done <"$REQUIRED_CHECKS_FILE"
+}
+
+[ -f "$REQUIRED_CHECKS_FILE" ] || REQUIRED_CHECKS_FILE_MISSING=1
+load_required_checks
 
 require_gh() {
 	# gh must be installed and authenticated. Missing either is a skip, not a failure.
@@ -193,6 +219,17 @@ apply_ruleset() {
 	local str_id
 	str_id=$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
+
+	# PR #585 review: never let a MISSING required-checks.txt (unknown, not confirmed
+	# empty — see the header above REQUIRED_CHECKS_FILE) drive a PUT against an EXISTING
+	# ruleset. REQUIRED_CHECKS would read as empty, build_ruleset_json would omit
+	# required_status_checks, and the PUT would silently strip whatever this ruleset already
+	# enforces. A brand-new ruleset (str_id empty) has nothing to lose, so only the update path
+	# is guarded.
+	if [ -n "$str_id" ] && [ "$REQUIRED_CHECKS_FILE_MISSING" = "1" ]; then
+		print_status "warning" "$REQUIRED_CHECKS_FILE is missing and ruleset '$RULESET_NAME' (id $str_id) already exists — skipping the update so its required_status_checks rule is never silently dropped. Restore the file, then re-run 'poe enable_repo_rules'."
+		return 0
+	fi
 
 	# Keep the API's own words: never discard output whose failure you then explain. The old
 	# form swallowed stderr and blamed admin rights for every failure, including the ones that

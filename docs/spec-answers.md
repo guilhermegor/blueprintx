@@ -57,6 +57,16 @@ Answer `bin/blueprintx.sh`'s own prompts (before any scaffold script runs):
 | `license` | no | `MIT` | One of the choices `prompt_license` offers. |
 | `github_username` | no | `$GITHUB_USERNAME` env, else `gh` CLI, else prompt | Passed through as `GITHUB_USERNAME` to the scaffold script. |
 
+## Value rules and flags
+
+- **y/n keys** take `y`/`yes`/`true` or `n`/`no`/`false`, in any case; an empty value means the
+  key's default. Any other value (for example `maybe`, or a mistyped `yes`) **stops the run before anything is
+  created**, naming the key. It is never read as `n`.
+- **`--dev`** scaffolds into a fresh temp directory instead of `project_root`/`$PWD`, and
+  **`--clean`** (with `--dev`) deletes it on exit — the same as the interactive flow. With `--dev`,
+  `project_root` is ignored.
+- **`--dry-run`** prints the resolved answers and the structure, and creates nothing.
+
 ## Per-skeleton keys
 
 The translation from a named key to the scaffold script's actual `read` call order lives
@@ -121,8 +131,9 @@ here — scope note from blueprintx#481.
 `spec_stdin_for_skeleton` yet. `--spec` still resolves their top-level answers (project
 name, language, skeleton, license, …); their scaffold-internal prompts stay interactive
 until a named-key map is added for them, the same way the five Python tiers were —
-`spec_skeleton_supported` returns `false` for them today, and `blueprintx new --spec`
-prints a warning rather than failing silently.
+`spec_skeleton_supported` returns `false` for them today. `blueprintx new --spec` **refuses**
+such a skeleton before creating anything (a half-interactive run would hang an unattended
+caller); `--spec ... --dry-run` still reports the resolved top-level answers with a warning.
 
 ## Used by CI
 

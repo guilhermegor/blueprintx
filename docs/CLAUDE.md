@@ -15,6 +15,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `cli-reference.md` | Utility page | Every BlueprintX command: `make` targets + `blueprintx` CLI flags |
 | `faq.md` | Utility page | Common questions about using and extending BlueprintX |
 | `troubleshooting.md` | Utility page | What broke while wiring this site's brand assets/routing, the cause, the fix, and which of those fixes were decided against scaffolding into `templates/` |
+| `offline-wheelhouse.md` | Utility page | How a scaffolded Python project installs offline — `poe wheelhouse` / `wheelhouse_assemble`, target-env selection, manifest/split-part payload (blueprintx#299) |
 | `secret-scanning.md` | Utility page | Secret scanning per tier — the measured gitleaks-vs-GitGuardian comparison behind gitleaks being the default, plus the GitGuardian (`ggshield`) opt-in: how to enable it at scaffold time, how it propagates the key, and how to opt in after the fact |
 | `complexity-ceilings-measured.md` | Utility page | Why the complexity ceilings are 1/2/8 per tree — per-construct ruff mccabe measurements (`and`/`or`/`assert` free, a second decision point costs) and why radon's scale was not adopted (blueprintx#425) |
 | `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, release) |
@@ -160,6 +161,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `get-started.md` | First-run guide | Numbered setup steps, requirements, feature highlights |
 | `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
 | `coverage-floor.md` | Gate design record | What the gate enforces, why `fail_under` alone is insufficient, the coarse-by-design boundary, and what stays out of scope |
+| `offline-wheelhouse.md` | Air-gapped install record | The three subcommands (`select`/`pack`/`assemble`), what the manifest authenticates and what it does not, the part-splitting contract, and the target-triple inputs the selector resolves markers against |
 | `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
 
 When adding a new utility page, document its intent and key sections in the table above.
