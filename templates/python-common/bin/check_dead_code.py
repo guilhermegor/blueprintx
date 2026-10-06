@@ -206,6 +206,40 @@ def print_gate_tier(list_gate: list) -> None:
 	)
 
 
+def run_gate(cls_vulture: ModuleType, list_files: list) -> int:
+	"""Scan the files, print both tiers, and return the gate's exit code.
+
+	Parameters
+	----------
+	cls_vulture : ModuleType
+		The imported ``vulture`` package.
+	list_files : list
+		The ``pathlib.Path`` files to scan.
+
+	Returns
+	-------
+	int
+		0 when nothing gates, 1 on a >=80% confidence finding or when vulture could not
+		scan a file (an unscanned file is not a clean one).
+	"""
+	try:
+		list_findings = run_vulture(cls_vulture, list_files)
+	except RuntimeError as err:
+		print(f"❌ check_dead_code: {err} — refusing to report a clean tree.", file=sys.stderr)
+		return 1
+	list_gate, list_report = classify_findings(list_findings)
+	print_report_tier(list_report)
+	if list_gate:
+		print_gate_tier(list_gate)
+		return 1
+
+	print(
+		f"dead-code gate OK: {len(list_files)} .py file(s) scanned, 0 finding(s) at "
+		f">={_GATE_MIN_CONFIDENCE}% confidence."
+	)
+	return 0
+
+
 def main(list_argv: list) -> int:
 	"""Run the dead-code gate over ``<root>/src`` and report both tiers.
 
@@ -251,22 +285,7 @@ def main(list_argv: list) -> int:
 		)
 		return 0
 
-	try:
-		list_findings = run_vulture(cls_vulture, list_files)
-	except RuntimeError as err:
-		print(f"❌ check_dead_code: {err} — refusing to report a clean tree.", file=sys.stderr)
-		return 1
-	list_gate, list_report = classify_findings(list_findings)
-	print_report_tier(list_report)
-	if list_gate:
-		print_gate_tier(list_gate)
-		return 1
-
-	print(
-		f"dead-code gate OK: {len(list_files)} .py file(s) scanned, 0 finding(s) at "
-		f">={_GATE_MIN_CONFIDENCE}% confidence."
-	)
-	return 0
+	return run_gate(cls_vulture, list_files)
 
 
 if __name__ == "__main__":
