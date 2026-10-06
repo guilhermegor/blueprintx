@@ -122,29 +122,31 @@ test_unmapped_skeleton_is_refused_before_creating_anything() {
 }
 
 test_dev_clean_uses_a_temp_root_and_removes_it() {
-    local file root out str_temp
+    local file root out str_temp int_rc
     root="$WORK_DIR/proot-clean"
     file="$(write_spec dev-clean lib-minimal "project_root=$root")"
     out="$(run_blueprintx new --spec "$file" --dev --clean)"
+    int_rc=$?
     str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | tr -d '\r' | tail -1)"
     str_temp="$(sed 's/\x1b\[[0-9;]*m//g' <<<"$str_temp")"
-    if [ -n "$str_temp" ] && [ ! -e "$str_temp" ] && [ ! -e "$root" ]; then
+    if [ "$int_rc" -eq 0 ] && [ -n "$str_temp" ] && [ ! -e "$str_temp" ] && [ ! -e "$root" ]; then
         pass "--spec --dev --clean scaffolds into a temp root, ignores project_root, and cleans up"
     else
-        fail "--dev --clean" "temp='$str_temp' exists=$([ -e "$str_temp" ] && echo yes || echo no) root-made=$([ -e "$root" ] && echo yes || echo no)"
+        fail "--dev --clean" "rc=$int_rc temp='$str_temp' exists=$([ -e "$str_temp" ] && echo yes || echo no) root-made=$([ -e "$root" ] && echo yes || echo no)"
     fi
 }
 
 test_dev_without_clean_preserves_the_temp_root() {
-    local file root out str_temp
+    local file root out str_temp int_rc
     root="$WORK_DIR/proot-keep"
     file="$(write_spec dev-keep lib-minimal "project_root=$root")"
     out="$(run_blueprintx new --spec "$file" --dev)"
+    int_rc=$?
     str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
-    if [ -n "$str_temp" ] && [ -d "$str_temp/spec-probe" ] && [ ! -e "$root" ]; then
+    if [ "$int_rc" -eq 0 ] && [ -n "$str_temp" ] && [ -d "$str_temp/spec-probe" ] && [ ! -e "$root" ]; then
         pass "--spec --dev keeps the temp root and the project inside it"
     else
-        fail "--dev" "temp='$str_temp' project-in-temp=$([ -d "$str_temp/spec-probe" ] && echo yes || echo no)"
+        fail "--dev" "rc=$int_rc temp='$str_temp' project-in-temp=$([ -d "$str_temp/spec-probe" ] && echo yes || echo no)"
     fi
 }
 

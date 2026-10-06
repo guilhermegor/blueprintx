@@ -104,10 +104,11 @@ spec_skeleton_supported "$SKELETON" || {
     echo "ERROR: bin/lib/spec.sh has no named-key prompt map for '$SKELETON'" >&2
     exit 1
 }
-# A set-but-unreadable override would otherwise read as an all-default spec and scaffold the
-# wrong thing; and a bad y/n value must stop here, not become a quiet "n" (see spec_yn).
-if [ -n "${SCAFFOLD_SPEC_FILE:-}" ] && [ ! -r "$SCAFFOLD_SPEC_FILE" ]; then
-    echo "ERROR: SCAFFOLD_SPEC_FILE is set but not readable: $SCAFFOLD_SPEC_FILE" >&2
+# A set-but-unusable override (missing, unreadable, or a directory, which spec_get skips) would
+# otherwise read as an all-default spec and scaffold the wrong thing; and a bad y/n value must
+# stop here, not become a quiet "n" (see spec_yn).
+if [ -n "${SCAFFOLD_SPEC_FILE:-}" ] && { [ ! -f "$SCAFFOLD_SPEC_FILE" ] || [ ! -r "$SCAFFOLD_SPEC_FILE" ]; }; then
+    echo "ERROR: SCAFFOLD_SPEC_FILE is set but is not a readable file: $SCAFFOLD_SPEC_FILE" >&2
     exit 1
 fi
 spec_validate_answers "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" || exit 1
