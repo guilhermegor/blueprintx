@@ -15,6 +15,7 @@ nav:
   - FAQ: faq.md
   - Complexity Ceilings Measured: complexity-ceilings-measured.md
   - Troubleshooting: troubleshooting.md
+  - Offline Wheelhouse: offline-wheelhouse.md
   - Secret Scanning: secret-scanning.md
   - Contributing: contributing.md
   - Quality Rules: quality-rules.md
