@@ -1341,6 +1341,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#value-rules-and-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Value rules and flags
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#per-skeleton-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1534,6 +1545,16 @@ file is a valid (all-default) spec.</p>
 </tr>
 </tbody>
 </table>
+<h2 id="value-rules-and-flags">Value rules and flags<a class="headerlink" href="#value-rules-and-flags" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>y/n keys</strong> take <code>y</code>/<code>yes</code>/<code>true</code> or <code>n</code>/<code>no</code>/<code>false</code>, in any case; an empty value means the
+  key's default. Any other value (for example <code>maybe</code>, or a mistyped <code>yes</code>) <strong>stops the run before anything is
+  created</strong>, naming the key. It is never read as <code>n</code>.</li>
+<li><strong><code>--dev</code></strong> scaffolds into a fresh temp directory instead of <code>project_root</code>/<code>$PWD</code>, and
+  <strong><code>--clean</code></strong> (with <code>--dev</code>) deletes it on exit — the same as the interactive flow. With <code>--dev</code>,
+  <code>project_root</code> is ignored.</li>
+<li><strong><code>--dry-run</code></strong> prints the resolved answers and the structure, and creates nothing.</li>
+</ul>
 <h2 id="per-skeleton-keys">Per-skeleton keys<a class="headerlink" href="#per-skeleton-keys" title="Permanent link">&para;</a></h2>
 <p>The translation from a named key to the scaffold script's actual <code>read</code> call order lives
 in <strong>one place</strong>: <code>spec_stdin_for_skeleton()</code> in <code>bin/lib/spec.sh</code>. The scaffold scripts
@@ -1683,8 +1704,9 @@ here — scope note from blueprintx#481.</p>
 <code>spec_stdin_for_skeleton</code> yet. <code>--spec</code> still resolves their top-level answers (project
 name, language, skeleton, license, …); their scaffold-internal prompts stay interactive
 until a named-key map is added for them, the same way the five Python tiers were —
-<code>spec_skeleton_supported</code> returns <code>false</code> for them today, and <code>blueprintx new --spec</code>
-prints a warning rather than failing silently.</p>
+<code>spec_skeleton_supported</code> returns <code>false</code> for them today. <code>blueprintx new --spec</code> <strong>refuses</strong>
+such a skeleton before creating anything (a half-interactive run would hang an unattended
+caller); <code>--spec ... --dry-run</code> still reports the resolved top-level answers with a warning.</p>
 <h2 id="used-by-ci">Used by CI<a class="headerlink" href="#used-by-ci" title="Permanent link">&para;</a></h2>
 <p><code>bin/ci/scaffold_lint_test.sh &lt;skeleton&gt;</code> drives its scaffold through
 <code>spec_stdin_for_skeleton</code> (all-default: decline every opt-in, no remote — the same
