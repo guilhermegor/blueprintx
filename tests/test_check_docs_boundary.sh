@@ -21,10 +21,6 @@ source "$REPO_ROOT/bin/lib/common.sh"
 
 int_failures=0
 
-# The end state is ENFORCING: run every case with the temporary docs/backlog/ allowance off
-# so the backlog rule stays pinned. The one case that exercises the allowance sets it itself.
-export DOCS_BOUNDARY_ALLOW_LEGACY_BACKLOG=0
-
 make_sandbox() {
     # Prints the path of a fresh fake repo root: a copy of the real
     # check_docs_boundary.sh under bin/ci/, no docs/ yet — the caller populates it.
@@ -79,45 +75,6 @@ test_docs_backlog_fails() {
     printf '# Backlog\n' > "$str_root/docs/backlog/wave-1_20260101_000000.md"
     expect_gate "docs/backlog/ present" "$str_root" "fail" \
         "docs/backlog — working material"
-}
-
-test_legacy_backlog_allowance_is_loud_and_narrow() {
-    # TEMPORARY (remove with blueprintx#580): the allowance must pass a bare docs/backlog/,
-    # say so on stderr naming #580, still reject a lessons file inside it NOT being reached
-    # (not descended), and still reject the same violation anywhere else in docs/.
-    local str_root str_out str_got="pass"
-    str_root="$(make_sandbox)"
-    mkdir -p "$str_root/docs/backlog"
-    printf '# Hello\n' > "$str_root/docs/index.md"
-    printf 'x\n' > "$str_root/docs/backlog/my-lessons.md"
-    str_out="$(DOCS_BOUNDARY_ALLOW_LEGACY_BACKLOG=1 bash "$str_root/bin/ci/check_docs_boundary.sh" 2>&1)" || str_got="fail"
-    if [ "$str_got" != "pass" ] || ! printf '%s' "$str_out" | grep -qF "blueprintx#580"; then
-        print_status "error" "legacy backlog allowance -> $str_got without naming #580: $str_out"
-        int_failures=$((int_failures + 1))
-    fi
-    printf 'x\n' > "$str_root/docs/other-lessons.md"
-    str_got="pass"
-    DOCS_BOUNDARY_ALLOW_LEGACY_BACKLOG=1 bash "$str_root/bin/ci/check_docs_boundary.sh" >/dev/null 2>&1 || str_got="fail"
-    rm -rf "$str_root"
-    if [ "$str_got" != "fail" ]; then
-        print_status "error" "legacy backlog allowance -> let a lessons file outside docs/backlog through"
-        int_failures=$((int_failures + 1))
-    fi
-}
-
-test_legacy_allowance_fails_once_backlog_is_gone() {
-    # TEMPORARY (remove with blueprintx#580): the allowance cleans itself up. With no
-    # docs/backlog/ and the allowance still on, the gate must fail and say so.
-    local str_root str_out str_got="pass"
-    str_root="$(make_sandbox)"
-    mkdir -p "$str_root/docs"
-    printf '# Hello\n' > "$str_root/docs/index.md"
-    str_out="$(DOCS_BOUNDARY_ALLOW_LEGACY_BACKLOG=1 bash "$str_root/bin/ci/check_docs_boundary.sh" 2>&1)" || str_got="fail"
-    rm -rf "$str_root"
-    if [ "$str_got" != "fail" ] || ! printf '%s' "$str_out" | grep -qF "remove the temporary"; then
-        print_status "error" "stale allowance -> $str_got without asking for its removal: $str_out"
-        int_failures=$((int_failures + 1))
-    fi
 }
 
 test_lessons_file_fails() {
@@ -309,8 +266,6 @@ main() {
     test_no_docs_dir_is_a_skip
     test_clean_docs_passes
     test_docs_backlog_fails
-    test_legacy_backlog_allowance_is_loud_and_narrow
-    test_legacy_allowance_fails_once_backlog_is_gone
     test_lessons_file_fails
     test_superpowers_segment_fails
     test_design_md_fails
