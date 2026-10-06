@@ -235,6 +235,13 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
 
+      - id: spec-answers-tests
+        name: --spec regression tests (blueprintx#629)
+        entry: bash tests/test_spec_answers.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/spec\.sh|bin/blueprintx\.sh|tests/test_spec_answers\.sh)$
+
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)
         entry: bash bin/ci/check_specs_structure.sh
