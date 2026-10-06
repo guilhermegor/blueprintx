@@ -182,6 +182,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_function_length_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
 		"$str_project_path/tests/unit/test_comment_budget_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_wheelhouse_select.py" \
+		"$str_project_path/tests/unit/test_wheelhouse_select.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
 		"$str_project_path/tests/unit/test_gate_integrity_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
@@ -244,6 +246,16 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/.vscode/tasks.json"
 }
 
+scaffold_copy_docs_extras() {
+	local str_project_path="$1"
+
+	# Incident-record page (blueprintx#240) — shared source so all reachable tiers stay in
+	# sync, same reasoning as the usage/examples/faq/contributing/changelog loop in each
+	# tier's own copy_mkdocs_templates. Copied here (not there) because docs/ already
+	# exists by the time this runs, and this file is not touched by any in-flight PR.
+	cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" "$str_project_path/docs/incidents.md"
+}
+
 # The per-directory leaf CLAUDE.md docs. They are the asset class the copy lists kept
 # forgetting: nothing imports a doc, no test fails without it, and the generated project is
 # green precisely because the file is not there — so a doc written in python-common could sit
@@ -272,6 +284,7 @@ scaffold_copy_common_templates() {
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	scaffold_copy_docs_extras "$str_project_path"
 	scaffold_copy_leaf_docs "$str_project_path"
 	# Every skeleton's root CLAUDE.md points readers at `.claude/CLAUDE.md` for the
 	# conventions shared across all skeletons (blueprintx#549) — copy the single

@@ -417,3 +417,40 @@ def test_main_hands_the_merge_over_after_the_poll_not_before(
     gate.main()
 
     assert list_calls == ["poll", "enable_auto_merge"]
+
+
+def test_main_returns_nonzero_when_an_axis_is_confirmed_failing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """blueprintx#584: a required status check that always exits 0 blocks nothing.
+
+    ``main()`` must surface a confirmed ``"failure"`` axis as a nonzero exit — otherwise
+    "Classify and gate this PR" (now required, see required-checks.txt) would pass on every
+    red run.
+    """
+    monkeypatch.setenv("GITHUB_TOKEN", "tkn")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "7")
+
+    dict_failing_axes = {"tests": "failure"}
+    monkeypatch.setattr(gate, "_api", _fake_api_for_main)
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: (dict_failing_axes, {}))
+    monkeypatch.setattr(gate, "_enable_auto_merge", lambda *a, **k: None)
+
+    assert gate.main() == 1
+
+
+def test_main_returns_zero_when_every_axis_is_green(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The green path stays a 0 exit — a passing required check must still pass."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tkn")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "7")
+
+    dict_green_axes = {"tests": "success"}
+    monkeypatch.setattr(gate, "_api", _fake_api_for_main)
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: (dict_green_axes, {}))
+    monkeypatch.setattr(gate, "_enable_auto_merge", lambda *a, **k: None)
+
+    assert gate.main() == 0
