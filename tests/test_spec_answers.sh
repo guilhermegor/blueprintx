@@ -31,11 +31,12 @@ fail() {
 
 write_spec() {
     # write_spec <name> <skeleton> [extra key=value lines...]; prints the file path.
+    # The language defaults to python; set SPEC_LANGUAGE for a non-Python skeleton.
     local name="$1" skeleton="$2"
     local file="$WORK_DIR/$name.spec"
     shift 2
     {
-        printf 'project_name=spec-probe\nproject_description=probe\nlanguage=python\n'
+        printf 'project_name=spec-probe\nproject_description=probe\nlanguage=%s\n' "${SPEC_LANGUAGE:-python}"
         printf 'skeleton=%s\nlicense=MIT\ngithub_username=ci-bot\n' "$skeleton"
         printf '%s\n' "$@"
     } >"$file"
@@ -111,8 +112,7 @@ test_bad_yn_stops_before_anything_is_created() {
 test_unmapped_skeleton_is_refused_before_creating_anything() {
     local file root out
     root="$WORK_DIR/unmapped-root"
-    file="$(write_spec unmapped react-spa-webpack "project_root=$root")"
-    sed -i 's/^language=python/language=typescript/' "$file"
+    file="$(SPEC_LANGUAGE=typescript write_spec unmapped react-spa-webpack "project_root=$root")"
     out="$(run_blueprintx new --spec "$file")"
     if [[ "$out" == *"has no named-key prompt map"* && ! -e "$root" ]]; then
         pass "a skeleton with no prompt map is refused before any directory is made"
