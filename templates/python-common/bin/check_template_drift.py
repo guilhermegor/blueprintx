@@ -59,13 +59,15 @@ _COMMON_TEMPLATE_RELPATH = pathlib.Path("templates/python-common")
 # Mirrors the two `cp` shapes scaffold_python_templates.sh actually uses: a single file, and
 # the one wholesale `cp -r DIR/. DEST` directory copy (`bin/`). Both destinations are relative
 # to `$str_project_path`, i.e. the scaffolded project's own root.
-_RE_CP_FILE = re.compile(r'cp\s+"\$COMMON_TEMPLATE_ROOT/([^"]+)"\s+"\$str_project_path/([^"]+)"')
+_RE_CP_FILE = re.compile(
+    r'cp\s+"\$(?:COMMON|SHARED)_TEMPLATE_ROOT/([^"]+)"\s+"\$str_project_path/([^"]+)"'
+)
 # A backslash-newline is shell line-splicing: one logical command. Spliced out before the
 # cp patterns run, so a wrapped `cp` parses exactly like an unwrapped one.
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
 
 _RE_CP_DIR = re.compile(
-    r'cp\s+-r\s+"\$COMMON_TEMPLATE_ROOT/([^"]+)/\."\s+"\$str_project_path/([^"]+)"'
+    r'cp\s+-r\s+"\$(?:COMMON|SHARED)_TEMPLATE_ROOT/([^"]+)/\."\s+"\$str_project_path/([^"]+)"'
 )
 
 

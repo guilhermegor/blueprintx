@@ -169,3 +169,10 @@ def test_the_equals_form_of_a_flag_is_honoured(tmp_path: Path) -> None:
     path_root, _ = gate._parse_args([f"--root={tmp_path}"])
 
     assert path_root == tmp_path.resolve()
+
+
+def test_a_copy_from_the_language_agnostic_root_is_required() -> None:
+    """`$SHARED_TEMPLATE_ROOT` (templates/common/) copies are shipped to every project too."""
+    str_line = 'cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$str_project_path/bin/ship.sh"'
+
+    assert gate._cp_destinations(str_line) == {"bin/ship.sh"}
