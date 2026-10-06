@@ -70,15 +70,22 @@ spec_get() {
 # Usage: spec_yn <file> <key> <default: y|n>
 #
 # Normalises a spec value to a single lowercase y/n, the alphabet every
-# scaffold prompt's `case` statement already matches against.
+# scaffold prompt's `case` statement already matches against. Accepts
+# y/yes/true and n/no/false in any case; empty means <default>. Anything else
+# is an ERROR naming the key (stderr, status 1), never a quiet "n": a typo such
+# as `yse` must not silently answer "no" to a prompt the author meant to enable.
 
 spec_yn() {
     local file="$1" key="$2" default="${3:-n}"
     local value
     value="$(spec_get "$file" "$key" "$default")"
-    case "$value" in
-        y | Y | yes | YES | true | TRUE) echo y ;;
-        *) echo n ;;
+    case "$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')" in
+        y | yes | true) echo y ;;
+        n | no | false) echo n ;;
+        *)
+            echo "spec: '$key' must be y/yes/true or n/no/false, got '$value'" >&2
+            return 1
+            ;;
     esac
 }
 
@@ -180,14 +187,18 @@ _spec_answer_publish_targets() {
 # support ships incrementally, tier by tier — see docs/spec-answers.md for
 # what is mapped and what remains a follow-up.
 
+_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db lib-minimal"
+
 spec_skeleton_supported() {
-    case "$1" in
-        ddd-service-native-db | ddd-service-orm-db | \
-            mvc-service-native-db | mvc-service-orm-db | lib-minimal)
-            return 0
-            ;;
+    case " $_SPEC_SUPPORTED_SKELETONS " in
+        *" $1 "*) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+# The supported skeletons, comma-separated, for an error message.
+spec_supported_skeletons() {
+    printf '%s' "${_SPEC_SUPPORTED_SKELETONS// /, }"
 }
 
 #
@@ -200,6 +211,9 @@ spec_skeleton_supported() {
 
 spec_stdin_for_skeleton() {
     local skeleton="$1" file="$2"
+    # Defence in depth: callers validate in the main shell first (see spec_validate_answers),
+    # because a failure here, inside a pipeline, would emit no answers rather than stop it.
+    spec_validate_answers "$skeleton" "$file" || return 1
     case "$skeleton" in
         ddd-service-native-db | ddd-service-orm-db)
             _spec_answer_docker_compose "$file"
@@ -237,16 +251,10 @@ spec_stdin_for_skeleton() {
     esac
 }
 
-#
-# Usage: spec_describe_skeleton <skeleton> <file>
-#
-# Prints "key=resolved_value" for every named key that skeleton reads — the
-# --spec --dry-run report (issue #481: "print resolved answers"). Prints
-# every key a tier CAN read, not only the ones a sub-branch would reach, so
-# a spec author can see exactly what changing any one key would resolve to.
-
-spec_describe_skeleton() {
-    local skeleton="$1" file="$2"
+# One "key:default" entry per line for a skeleton's named-key prompt map — the
+# single list spec_describe_skeleton and spec_validate_answers both read.
+_spec_key_map() {
+    local skeleton="$1"
     local -a keys=()
     case "$skeleton" in
         ddd-service-native-db | ddd-service-orm-db)
@@ -273,10 +281,44 @@ spec_describe_skeleton() {
             return 1
             ;;
     esac
-    local entry key default
-    for entry in "${keys[@]}"; do
+    printf '%s\n' "${keys[@]}"
+}
+
+#
+# Usage: spec_validate_answers <skeleton> <file>
+#
+# Checks every y/n key of the skeleton's map with spec_yn, reporting ALL bad
+# values (not just the first) and returning 1 if any. Call it in the MAIN shell
+# before piping spec_stdin_for_skeleton into a scaffold: inside the pipeline an
+# error would be a silently missing answer line, shifting every later answer.
+
+spec_validate_answers() {
+    local skeleton="$1" file="$2"
+    local map entry key default int_bad=0
+    map="$(_spec_key_map "$skeleton")" || return 1
+    while IFS= read -r entry; do
         key="${entry%%:*}"
         default="${entry#*:}"
-        printf '%s=%s\n' "$key" "$(spec_get "$file" "$key" "$default")"
-    done
+        case "$default" in
+            y | n) spec_yn "$file" "$key" "$default" >/dev/null || int_bad=1 ;;
+        esac
+    done <<<"$map"
+    return "$int_bad"
+}
+
+#
+# Usage: spec_describe_skeleton <skeleton> <file>
+#
+# Prints "key=resolved_value" for every named key that skeleton reads — the
+# --spec --dry-run report (issue #481: "print resolved answers"). Prints
+# every key a tier CAN read, not only the ones a sub-branch would reach, so
+# a spec author can see exactly what changing any one key would resolve to.
+
+spec_describe_skeleton() {
+    local skeleton="$1" file="$2"
+    local str_map str_entry
+    str_map="$(_spec_key_map "$skeleton")" || return 1
+    while IFS= read -r str_entry; do
+        printf '%s=%s\n' "${str_entry%%:*}" "$(spec_get "$file" "${str_entry%%:*}" "${str_entry#*:}")"
+    done <<<"$str_map"
 }
