@@ -241,6 +241,12 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/blueprintx\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
+      - id: spec-answers-tests
+        name: --spec regression tests (blueprintx#629)
+        entry: bash tests/test_spec_answers.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/spec\.sh|bin/blueprintx\.sh|tests/test_spec_answers\.sh)$
 
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)

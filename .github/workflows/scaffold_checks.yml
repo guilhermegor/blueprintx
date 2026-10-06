@@ -390,6 +390,18 @@ jobs:
       - name: Should-fail regression tests for the docs-locale prompt
         run: bash tests/test_docs_locale_prompt.sh
 
+  spec-answers:
+    name: --spec regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Run the --spec should-fail suite (blueprintx#629)
+        run: bash tests/test_spec_answers.sh
+
   specs-structure:
     name: .specs/ structure guard
     runs-on: ubuntu-latest

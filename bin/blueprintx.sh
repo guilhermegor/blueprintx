@@ -575,6 +575,47 @@ validate_spec_answers() {
         || exit_error "--spec: skeleton '$SKELETON_CHOICE' is a '$skeleton_language' skeleton, not '$LANG_CHOICE'."
     [ -f "$TEMPLATES_ROOT/licenses/$LICENSE_CHOICE" ] \
         || exit_error "--spec: unknown license '$LICENSE_CHOICE' (no templates/licenses/$LICENSE_CHOICE)."
+    # A bad y/n value must stop the run here, in the main shell: spec_yn used to turn it into "n".
+    if spec_skeleton_supported "$SKELETON_CHOICE"; then
+        spec_validate_answers "$SKELETON_CHOICE" "$SPEC_FILE" \
+            || exit_error "--spec: fix the y/n value(s) above before scaffolding."
+    fi
+}
+
+# --dev: scaffold into a fresh temp root instead of the working directory; with --clean the
+# root is removed on exit. Shared by the interactive flow and the --spec flow.
+select_dev_project_root() {
+    TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/BlueprintX.XXXXXX")
+    PROJECT_ROOT="$TEMP_ROOT"
+    print_status "config" "Dev mode: using temp root $PROJECT_ROOT"
+    if [ "$CLEAN_TEMP" -eq 1 ]; then
+        trap 'rm -rf "$TEMP_ROOT"' EXIT
+        print_status "info" "Temp directory will be cleaned on exit"
+    fi
+}
+
+print_dev_mode_notice() {
+    [ "$DEV_MODE" -eq 1 ] || return 0
+    print_status "warning" "Dev mode: project scaffolded in temp directory"
+    if [ "$CLEAN_TEMP" -ne 1 ]; then
+        print_status "info" "Temp directory preserved at: $TEMP_ROOT"
+    fi
+}
+
+# Pipe the named-key answers into the skeleton's scaffold. Reads the globals the spec flow set.
+scaffold_from_spec() {
+    print_status "info" "Creating project '$PROJECT_NAME' under '$PROJECT_ROOT' from spec '$SPEC_FILE'"
+
+    local meta="$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta"
+    local scaffold_rel scaffold_script
+    scaffold_rel=$(grep '^scaffold=' "$meta" | cut -d= -f2-)
+    scaffold_script="$BLUEPRINTX_ROOT/$scaffold_rel"
+    [ -f "$scaffold_script" ] || exit_error "Scaffold script not found: $scaffold_script"
+
+    spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
+        | GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
+            LICENSE_CHOICE="$LICENSE_CHOICE" \
+            bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION"
 }
 
 #
@@ -618,31 +659,23 @@ run_create_flow_from_spec() {
         exit 0
     fi
 
-    PROJECT_ROOT=$(spec_get "$SPEC_FILE" project_root "$PWD")
-    mkdir -p "$PROJECT_ROOT"
+    # Refuse before anything is created: a skeleton with no prompt map would otherwise run its
+    # scaffold with interactive prompts, hanging an unattended run.
+    spec_skeleton_supported "$SKELETON_CHOICE" \
+        || exit_error "--spec: '$SKELETON_CHOICE' has no named-key prompt map, so it cannot run unattended. Use the interactive flow, or one of: $(spec_supported_skeletons)."
 
-    print_status "info" "Creating project '$PROJECT_NAME' under '$PROJECT_ROOT' from spec '$SPEC_FILE'"
-
-    local meta="$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta"
-    local scaffold_rel scaffold_script
-    scaffold_rel=$(grep '^scaffold=' "$meta" | cut -d= -f2-)
-    scaffold_script="$BLUEPRINTX_ROOT/$scaffold_rel"
-    [ -f "$scaffold_script" ] || exit_error "Scaffold script not found: $scaffold_script"
-
-    if spec_skeleton_supported "$SKELETON_CHOICE"; then
-        spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
-            | GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
-                LICENSE_CHOICE="$LICENSE_CHOICE" \
-                bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION"
+    if [ "$DEV_MODE" -eq 1 ]; then
+        select_dev_project_root
     else
-        print_status "warning" "No named-key prompt map for '$SKELETON_CHOICE' yet — its internal prompts stay interactive."
-        GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
-            LICENSE_CHOICE="$LICENSE_CHOICE" \
-            bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION"
+        PROJECT_ROOT=$(spec_get "$SPEC_FILE" project_root "$PWD")
+        mkdir -p "$PROJECT_ROOT"
     fi
+
+    scaffold_from_spec
 
     echo
     print_status "success" "Project created from spec: $PROJECT_ROOT/$PROJECT_NAME"
+    print_dev_mode_notice
 }
 
 run_create_flow() {
@@ -657,13 +690,7 @@ run_create_flow() {
     if [ "$DRY_RUN" -eq 1 ]; then
         PROJECT_ROOT="(dry-run)"
     elif [ "$DEV_MODE" -eq 1 ]; then
-        TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/BlueprintX.XXXXXX")
-        PROJECT_ROOT="$TEMP_ROOT"
-        print_status "config" "Dev mode: using temp root $PROJECT_ROOT"
-        if [ "$CLEAN_TEMP" -eq 1 ]; then
-            trap 'rm -rf "$TEMP_ROOT"' EXIT
-            print_status "info" "Temp directory will be cleaned on exit"
-        fi
+        select_dev_project_root
     else
         PROJECT_ROOT=$(prompt_project_root)
     fi
@@ -691,12 +718,7 @@ run_create_flow() {
     print_status "config" "Skeleton: $SKELETON_CHOICE"
     print_status "config" "License: $LICENSE_CHOICE"
     print_status "config" "Docs locale: $DOCS_LOCALE (MkDocs skeletons only)"
-    if [ "$DEV_MODE" -eq 1 ]; then
-        print_status "warning" "Dev mode: project scaffolded in temp directory"
-        if [ "$CLEAN_TEMP" -ne 1 ]; then
-            print_status "info" "Temp directory preserved at: $TEMP_ROOT"
-        fi
-    fi
+    print_dev_mode_notice
     print_status "info" "Log file: $LOG_FILE"
 }
 
