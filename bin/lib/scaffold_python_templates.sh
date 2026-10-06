@@ -182,6 +182,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_function_length_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
 		"$str_project_path/tests/unit/test_comment_budget_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_wheelhouse_select.py" \
+		"$str_project_path/tests/unit/test_wheelhouse_select.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
 		"$str_project_path/tests/unit/test_gate_integrity_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
@@ -198,6 +200,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_sql_guards_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_identifier_masking_gate.py" \
 		"$str_project_path/tests/unit/test_identifier_masking_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_orm_model_guards_gate.py" \
+		"$str_project_path/tests/unit/test_orm_model_guards_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
 		"$str_project_path/tests/unit/test_ruff_ret_rule.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
