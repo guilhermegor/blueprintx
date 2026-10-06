@@ -510,6 +510,8 @@ copy_global_config() {
     # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" "$project_path/tests/unit/test_quality_rules_gate.py"
+    # Companion test for check_one_assert.py (#544) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
