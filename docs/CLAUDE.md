@@ -22,6 +22,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
 | `coverage-floor.md` | Utility page | Design record for `bin/check_coverage_floor.py` (blueprintx#149) — why `.coveragerc`'s `omit` list needed a code-derived floor, how it derives one, and why it stays deliberately coarse |
+| `sonarqube-evaluation.md` | Utility page | Decision record — SonarQube audited against the gates already running here (ruff, `check_*` family, ESLint, gitleaks, Dependabot, CodeQL); recommendation and why |
 | `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
 | `py-mvc-service-native-db.md` | Skeleton overview | Layered MVC scaffold using native DB drivers (script/pipeline style) |
@@ -52,7 +53,6 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 |-----------|----------|
 | `py-examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
 | `py-examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
-| `backlog/` | **Non-published** work-to-do backlogs (e.g. template backport notes). Excluded from the built site — see below. |
 | `superpowers/` | **Non-published** internal specs and plans. Excluded from the built site — see below. |
 
 Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
@@ -60,14 +60,13 @@ Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
 ### Non-published docs — never at the `docs/` root
 
 MkDocs **builds every `.md` under `docs/` into the site**, even files absent from
-`nav:` (they are merely unlisted, still reachable by URL). So a backlog, spec, or
+`nav:` (they are merely unlisted, still reachable by URL). So a spec or
 internal note dropped at the `docs/` root *will* ship to users and misguide them.
 Such files live under a dedicated folder that is excluded from the build via
 `exclude_docs` in `mkdocs.yml`:
 
 ```yaml
 exclude_docs: |
-  backlog/        # work-to-do backlogs (template backport notes, follow-ups)
   superpowers/    # internal specs and plans
 ```
 
@@ -154,6 +153,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
 | `coverage-floor.md` | Gate design record | What the gate enforces, why `fail_under` alone is insufficient, the coarse-by-design boundary, and what stays out of scope |
 | `offline-wheelhouse.md` | Air-gapped install record | The three subcommands (`select`/`pack`/`assemble`), what the manifest authenticates and what it does not, the part-splitting contract, and the target-triple inputs the selector resolves markers against |
+| `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
@@ -166,7 +166,7 @@ Apply these rules every time a change is made to the `docs/` directory:
 | Event | Required actions |
 |-------|-----------------|
 | New file added | 1. Add a row to the **file index** (Section 1). 2. Register the file in `mkdocs.yml` nav. Both changes go in the same commit. |
-| Non-published doc added | Place it under a non-published folder (`docs/backlog/`, `docs/superpowers/`), never the `docs/` root. Ensure that folder is in `exclude_docs`. Do NOT add it to the file index or `mkdocs.yml` nav. |
+| Non-published doc added | Backlogs and specs belong in `.specs/`, not `docs/`. Anything else non-published goes under a non-published folder (`docs/superpowers/`), never the `docs/` root. Ensure that folder is in `exclude_docs`. Do NOT add it to the file index or `mkdocs.yml` nav. |
 | File removed | 1. Remove its row from the **file index**. 2. Remove its entry from `mkdocs.yml` nav. Fix any cross-links in other docs that pointed to it. |
 | File renamed | Update the file index path, the `mkdocs.yml` nav entry, and all internal cross-links. |
 | New skeleton added | 1. Create its overview file following Type A structure. 2. Create its `examples-<skeleton>/` subdirectory and at least one example following Type B. 3. Add both to the nav under a new group. 4. Update Sections 1, 2, and 3 of this CLAUDE.md. |
