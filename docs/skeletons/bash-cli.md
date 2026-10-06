@@ -38,7 +38,7 @@ Chocolatey sub-workflows (`.github/workflows/release_*.yml`) called from its
 `make install` leg — start small, verify the skeleton scaffolds/lints/tests green
 first. Adding the remaining channels as `release_*.yml` sub-workflows (same
 `workflow_call` + `needs: tag` pattern) is tracked in
-`docs/backlog/bash-cli-skeleton_20260917_171817.md`.
+`.specs/backlog/bash-cli-skeleton_20260917_171817.md`.
 
 ## Verification
 
