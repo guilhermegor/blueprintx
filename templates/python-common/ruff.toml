@@ -73,11 +73,21 @@ exclude = [
 
 [format]
 quote-style = "double"
-indent-style = "tab"
+indent-style = "space"
 docstring-code-format = false
 docstring-code-line-length = 79  # original python standard - readability in terminal (help)
+# transitional: blueprintx#419 reindent chain, removed by #555 (last of the chain)
+exclude = ["**/*.py"]
 
 [lint]
+# ⚠️ Preview is needed ONLY for PLR1702 (too-many-nested-blocks, below) — it is still a
+# preview-only rule in ruff 0.11.13. Turning preview on ALSO activates 10 tag-along preview
+# rules under families already selected (`PL`, `S`), unrelated to nesting and never
+# individually chosen — they are explicitly ignored below with the measurement that found
+# them (blueprintx#434). Full reasoning for WHY nesting is gated at all lives in
+# check_complexity.sh's header, alongside the mccabe ceiling it is paired with.
+preview = true
+
 select = [
     "UP",  # pyupgrade - flags the use of deprecated Python features
     "E",   # pycodestyle - checks for PEP 8 compliance
@@ -133,23 +143,25 @@ select = [
     # whole — see CONTRIBUTING.md "Ruff Rule Adoption Log" for the per-rule verdicts
     # (blueprintx#422, closes #422).
     "N",
+    # PLR1702 - too-many-nested-blocks. Paired with `max-complexity = 3` for `src/` ONLY —
+    # the two are valid ONLY together (ceiling 3 alone would admit the nested `if`/`for`
+    # ceiling 2 exists to forbid; PLR1702 alone would not solve the guard+try/except case
+    # that prompted this). Ceilings live per-tree in check_complexity.sh, same mechanism as
+    # `max-complexity` — `per-file-ignores` can switch a rule off but cannot give it a
+    # different threshold. Already implied by `PL` above once `preview = true` is set; named
+    # explicitly so the dependency is not silent. Full reasoning: check_complexity.sh header,
+    # blueprintx#434.
+    "PLR1702",
 ]
 ignore = [
-    "D206",  # docstring should be indented with spaces, not tabs
-    # W191 (tab-indentation) treats a tab as a violation, while `[format] indent-style =
-    # "tab"` below makes the formatter PRODUCE tabs. Enabling it would set the linter against
-    # the formatter, and the formatter wins — the same principle the E701 note states, in
-    # reverse: there the formatter already forbids the style, here it already requires it.
-    #
-    # ⚠️ Ignoring W191 is what makes the rest of `W` adoptable, and the difference is the
-    # whole measurement: W191 accounted for 6022 of 6022 findings, so `W` minus W191 is ZERO
-    # today. It costs nothing now and catches trailing whitespace and invalid regex escapes
-    # from here on (blueprintx#222).
-    #
-    # ⚠️ Measuring this is itself a trap: `ruff check --config 'lint.ignore=["W191"]'` does
-    # NOT merge the way it reads and still reported all 6022. Only `--ignore W191` gives the
-    # real number, and the wrong one supports the wrong conclusion ("W is not adoptable").
-    "W191",
+    # D206 (docstring indented with tabs) and W191 (tab-indentation) both existed only to
+    # keep the linter from fighting `[format] indent-style = "tab"` — the formatter produced
+    # tabs, so the linter had to stop flagging them. blueprintx#419 moved the formatter to
+    # `indent-style = "space"`, which removes the premise for both: neither rule fires on
+    # space-indented code, so there is nothing left to suppress. Re-measured 2026-09-05 after
+    # the conversion: `ruff check --select W191,D206` reports zero findings with both rules
+    # ENABLED, confirming the ignores were the only thing keeping them silent, not a latent
+    # violation count (the 6022-finding number from blueprintx#222 was measured under tabs).
     # E701 (multiple statements on one line) is deliberately NOT ignored. It is
     # tempting to add it here to allow `if cond: break`, but that would be dead
     # config: `ruff format` (Black semantics, not configurable) expands a compound
@@ -159,6 +171,24 @@ ignore = [
     # a comprehension, `any(...)`, a ternary, dict dispatch) for real concision —
     # the formatter keeps those on one line. General rule: before suppressing a lint
     # rule to enable a style, check whether the FORMATTER already forbids it.
+
+    # ⚠️ The 10 rules below are PREVIEW-ONLY TAG-ALONGS, switched on incidentally by
+    # `preview = true` above (needed only for PLR1702) — none of these was individually
+    # evaluated or adopted. Measured 2026-09 (ruff 0.11.13) on `templates/`: `--preview` alone
+    # raised findings from 21 to 81; ignoring exactly these 10 restores 21 — same rules, zero
+    # net cost (blueprintx#434). 🔴 REVISIT EACH ONE, ON ITS OWN MEASUREMENT, the day PLR1702
+    # leaves preview — this list must not survive unexamined once the reason for its existence
+    # (borrowing preview mode) is gone.
+    "PLR6301",  # no-self-use — 15 findings, unmeasured on its own merits
+    "PLC1901",  # compare-to-empty-string — 14 findings, unmeasured
+    "S404",     # suspicious-subprocess-import — 8 findings, unmeasured
+    "PLC0415",  # import-outside-top-level — 8 findings, unmeasured
+    "PLC2701",  # import-private-name — 5 findings, unmeasured
+    "PLR6201",  # literal-membership — 4 findings, unmeasured
+    "PLC0207",  # missing-maxsplit-arg — 3 findings, unmeasured
+    "PLR0917",  # too-many-positional-arguments — 1 finding, unmeasured
+    "PLR0916",  # too-many-boolean-expressions — 1 finding, unmeasured
+    "PLR0914",  # too-many-locals — 1 finding, unmeasured
 ]
 fixable = ["I"]
 # allow dummy variables to start with an underscore and be followed by alphanumeric
@@ -248,6 +278,8 @@ ignore-fully-untyped = false  # flag functions that are completely untyped
 allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 
 [lint.per-file-ignores]
+# transitional: blueprintx#419 reindent chain, removed by #555 (last of the chain)
+"**/*.py" = ["W191", "D206"]
 # ⚠️ `bin` was ONCE in [exclude] above, with the reason "ruff-format would tabify
 # space-indented helpers and trip E101". Two things were wrong with that (blueprintx#207):
 #
