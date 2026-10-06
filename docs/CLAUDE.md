@@ -27,6 +27,9 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `required-status-checks.md` | Utility page | Which checks `REQUIRED_CHECKS` should seed per scaffolded tier (blueprintx#164) |
 | `skeletons.md` | Skeleton overview | API Service (Native DB) — hexagonal HTTP service with a transport layer |
 | `skeletons/bash-cli.md` | Skeleton overview | Standalone Bash CLI starter (`bash-cli`), git-tag versioned, bats + shellcheck |
+| `sonarqube-evaluation.md` | Utility page | Decision record — SonarQube audited against the gates already running here (ruff, `check_*` family, ESLint, gitleaks, Dependabot, CodeQL); recommendation and why |
+| `ci-scanner-gap-analysis.md` | Utility page | Measured evaluation (blueprintx#305) of an external scanner stack against the gates already running here, each tool installed and run locally; deliberately not the adoption PR |
+| `spec-answers.md` | Utility page | Named-key spec answers (`--spec`): answering scaffold prompts by key instead of stdin position, so adding a prompt cannot silently shift every stored answer (blueprintx#481) |
 | `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
 | `py-mvc-service-native-db.md` | Skeleton overview | Layered MVC scaffold using native DB drivers (script/pipeline style) |
@@ -58,7 +61,6 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `py-examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
 | `py-examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
 | `skeletons/` | Skeleton overviews that live in a subfolder (`bash-cli.md`) |
-| `backlog/` | **Non-published** work-to-do backlogs (e.g. template backport notes). Excluded from the built site — see below. |
 | `superpowers/` | **Non-published** internal specs and plans. Excluded from the built site — see below. |
 
 Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
@@ -66,14 +68,13 @@ Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
 ### Non-published docs — never at the `docs/` root
 
 MkDocs **builds every `.md` under `docs/` into the site**, even files absent from
-`nav:` (they are merely unlisted, still reachable by URL). So a backlog, spec, or
+`nav:` (they are merely unlisted, still reachable by URL). So a spec or
 internal note dropped at the `docs/` root *will* ship to users and misguide them.
 Such files live under a dedicated folder that is excluded from the build via
 `exclude_docs` in `mkdocs.yml`:
 
 ```yaml
 exclude_docs: |
-  backlog/        # work-to-do backlogs (template backport notes, follow-ups)
   superpowers/    # internal specs and plans
 ```
 
@@ -159,6 +160,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `get-started.md` | First-run guide | Numbered setup steps, requirements, feature highlights |
 | `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
 | `coverage-floor.md` | Gate design record | What the gate enforces, why `fail_under` alone is insufficient, the coarse-by-design boundary, and what stays out of scope |
+| `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
@@ -171,7 +173,7 @@ Apply these rules every time a change is made to the `docs/` directory:
 | Event | Required actions |
 |-------|-----------------|
 | New file added | 1. Add a row to the **file index** (Section 1). 2. Register the file in `mkdocs.yml` nav. Both changes go in the same commit. |
-| Non-published doc added | Place it under a non-published folder (`docs/backlog/`, `docs/superpowers/`), never the `docs/` root. Ensure that folder is in `exclude_docs`. Do NOT add it to the file index or `mkdocs.yml` nav. |
+| Non-published doc added | Backlogs and specs belong in `.specs/`, not `docs/`. Anything else non-published goes under a non-published folder (`docs/superpowers/`), never the `docs/` root. Ensure that folder is in `exclude_docs`. Do NOT add it to the file index or `mkdocs.yml` nav. |
 | File removed | 1. Remove its row from the **file index**. 2. Remove its entry from `mkdocs.yml` nav. Fix any cross-links in other docs that pointed to it. |
 | File renamed | Update the file index path, the `mkdocs.yml` nav entry, and all internal cross-links. |
 | New skeleton added | 1. Create its overview file following Type A structure. 2. Create its `examples-<skeleton>/` subdirectory and at least one example following Type B. 3. Add both to the nav under a new group. 4. Update Sections 1, 2, and 3 of this CLAUDE.md. |
