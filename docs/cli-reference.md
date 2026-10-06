@@ -48,6 +48,7 @@ Only MkDocs skeletons consume the value today; `ts-lib` (Docusaurus), `react-spa
 | `--dev` | Scaffold into a temp directory (preserved). |
 | `--dry-run` | Preview structure without creating files. |
 | `--clean` | Delete the temp dir on exit (with `--dev`). |
+| `--spec <file>` | Answer every prompt by name from a spec file instead of interactively — see [Named-key spec answers](spec-answers.md). |
 | `-V`, `--version` | Print the version (from the git tag) and exit. |
 | `-h`, `--help` | Show usage. |
 
