@@ -118,6 +118,13 @@ repos:
         pass_filenames: false
         files: (^|/)\.github/workflows/.*\.(yml|yaml)$
 
+      - id: action-pins-tests
+        name: check_action_pins should-fail regression tests (blueprintx#369)
+        entry: bash tests/test_check_actions_pins.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_actions\.sh|tests/test_check_actions_pins\.sh)$
+
       - id: function-length
         name: function length (60 lines, docstring excluded)
         # Runs templates/python-common/bin/check_function_length.py over THIS repo via
@@ -178,6 +185,17 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: pr-file-count
+        name: PR file-count ceiling (90 files, blueprintx#551)
+        # Same diff-scoped shape as gate-integrity above: merge-base(HEAD, main), not a
+        # whole-tree audit. CodeRabbit hard-refuses to review a PR above 100 changed
+        # files, so this fails 10 files short of that at a calibrated 1%-of-100
+        # violation rate (see the script's own docstring for the full reasoning).
+        entry: python3 bin/ci/check_pr_file_count.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: check-secrets
         name: secret scan (gitleaks)
         # Same treatment as check-complexity above: ONE implementation, run over this repo via
@@ -223,6 +241,20 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+      - id: docs-boundary
+        name: docs/ boundary guard (working material stays out of docs/, blueprintx#536)
+        entry: bash bin/ci/check_docs_boundary.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: docs-boundary-tests
+        name: check_docs_boundary.sh should-fail regression tests (blueprintx#536)
+        entry: bash tests/test_check_docs_boundary.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_docs_boundary\.sh|tests/test_check_docs_boundary\.sh)$
 
       - id: version-sync
         name: version sync (pyproject vs CLI)

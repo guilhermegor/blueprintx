@@ -17,11 +17,11 @@ class SQLiteDatabaseHandler(DatabaseHandler):
     Parameters
     ----------
     db_path : str or Path
-            Location of the SQLite database file.
+        Location of the SQLite database file.
     table : str, optional
-            Table name used for storage, by default ``"records"``.
+        Table name used for storage, by default ``"records"``.
     id_field : str, optional
-            Identifier field name, by default ``"id"``.
+        Identifier field name, by default ``"id"``.
     """
 
     def __init__(self, db_path: str | Path, table: str = "records", id_field: str = "id") -> None:
@@ -37,12 +37,12 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record : Record
-                Data to persist.
+            Data to persist.
 
         Returns
         -------
         str
-                Identifier assigned to the stored record.
+            Identifier assigned to the stored record.
         """
         record = ensure_id(record, self.id_field)
         json_payload = json.dumps(record)
@@ -59,12 +59,12 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier to look up.
+            Identifier to look up.
 
         Returns
         -------
         Record or None
-                Stored record when present, otherwise ``None``.
+            Stored record when present, otherwise ``None``.
         """
         with self._connect() as cls_conn:
             cls_cursor = cls_conn.execute(
@@ -77,25 +77,39 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         return json.loads(tuple_row[0])
 
     def update(self, record_id: str, updates: Record) -> Record | None:
-        """Update an existing record.
+        """Update an existing record atomically.
+
+        ``BEGIN IMMEDIATE`` takes the write lock before the read, so the read and the
+        write share one transaction and a concurrent update cannot be lost. See
+        ``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
 
         Parameters
         ----------
         record_id : str
-                Identifier of the record to update.
+            Identifier of the record to update.
         updates : Record
-                Fields to merge into the existing record.
+            Fields to merge into the existing record.
 
         Returns
         -------
         Record or None
-                Updated record when it exists, otherwise ``None``.
+            Updated record when it exists, otherwise ``None``.
         """
-        dict_existing = self.read(record_id)
-        if dict_existing is None:
-            return None
-        dict_updated = {**dict_existing, **updates, self.id_field: record_id}
-        self.create(dict_updated)
+        with self._connect() as cls_conn:
+            cls_conn.execute("BEGIN IMMEDIATE")
+            cls_cursor = cls_conn.execute(
+                f"SELECT data FROM {self.table} WHERE {self.id_field} = ?",  # noqa: S608
+                (record_id,),
+            )
+            tuple_row = cls_cursor.fetchone()
+            if tuple_row is None:
+                return None
+            dict_updated = {**json.loads(tuple_row[0]), **updates, self.id_field: record_id}
+            cls_conn.execute(
+                f"UPDATE {self.table} SET data = ? WHERE {self.id_field} = ?",  # noqa: S608
+                (json.dumps(dict_updated), record_id),
+            )
+            cls_conn.commit()
         return dict_updated
 
     def delete(self, record_id: str) -> bool:
@@ -104,12 +118,12 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to remove.
+            Identifier of the record to remove.
 
         Returns
         -------
         bool
-                ``True`` when a record was deleted, ``False`` otherwise.
+            ``True`` when a record was deleted, ``False`` otherwise.
         """
         with self._connect() as cls_conn:
             cls_cursor = cls_conn.execute(
@@ -134,7 +148,7 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         Returns
         -------
         sqlite3.Connection
-                Connection bound to the configured database file.
+            Connection bound to the configured database file.
         """
         return sqlite3.connect(self.db_path)
 

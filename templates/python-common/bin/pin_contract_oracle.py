@@ -25,68 +25,68 @@ import sys
 
 
 def read_header(path_file: pathlib.Path, str_sep: str, str_encoding: str) -> tuple[str, ...]:
-	"""Return the first non-empty line of a delimited file as a tuple of stripped column names.
+    """Return the first non-empty line of a delimited file as a tuple of stripped column names.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		The downloaded artifact (CSV / delimited text).
-	str_sep : str
-		Column delimiter.
-	str_encoding : str
-		Text encoding to decode the file with.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+            The downloaded artifact (CSV / delimited text).
+    str_sep : str
+            Column delimiter.
+    str_encoding : str
+            Text encoding to decode the file with.
 
-	Returns
-	-------
-	tuple of str
-		The header columns, in the file's own order.
+    Returns
+    -------
+    tuple of str
+            The header columns, in the file's own order.
 
-	Raises
-	------
-	ValueError
-		If the file has no non-empty line.
-	"""
-	with path_file.open(encoding=str_encoding) as fh:
-		for str_line in fh:
-			if str_line.strip():
-				return tuple(cell.strip() for cell in str_line.rstrip("\n").split(str_sep))
-	raise ValueError(f"no non-empty header line in {path_file}")
+    Raises
+    ------
+    ValueError
+            If the file has no non-empty line.
+    """
+    with path_file.open(encoding=str_encoding) as fh:
+        for str_line in fh:
+            if str_line.strip():
+                return tuple(cell.strip() for cell in str_line.rstrip("\n").split(str_sep))
+    raise ValueError(f"no non-empty header line in {path_file}")
 
 
 def main() -> int:
-	"""Parse arguments, print the header tuple, and optionally write the fixture.
+    """Parse arguments, print the header tuple, and optionally write the fixture.
 
-	Returns
-	-------
-	int
-		Process exit code (0 on success).
-	"""
-	parser = argparse.ArgumentParser(description="Pin a contract's columns to a source oracle.")
-	parser.add_argument("artifact", type=pathlib.Path, help="path to the downloaded artifact")
-	parser.add_argument("--sep", default=";", help="column delimiter (default ';')")
-	parser.add_argument(
-		"--encoding", default="utf-8-sig", help="text encoding (default utf-8-sig)"
-	)
-	parser.add_argument(
-		"--write",
-		type=pathlib.Path,
-		default=None,
-		help="also write the header line verbatim to this fixture path",
-	)
-	args = parser.parse_args()
+    Returns
+    -------
+    int
+            Process exit code (0 on success).
+    """
+    parser = argparse.ArgumentParser(description="Pin a contract's columns to a source oracle.")
+    parser.add_argument("artifact", type=pathlib.Path, help="path to the downloaded artifact")
+    parser.add_argument("--sep", default=";", help="column delimiter (default ';')")
+    parser.add_argument(
+        "--encoding", default="utf-8-sig", help="text encoding (default utf-8-sig)"
+    )
+    parser.add_argument(
+        "--write",
+        type=pathlib.Path,
+        default=None,
+        help="also write the header line verbatim to this fixture path",
+    )
+    args = parser.parse_args()
 
-	tuple_header = read_header(args.artifact, args.sep, args.encoding)
-	print("tuple_required = (")
-	for str_col in tuple_header:
-		print(f'    "{str_col}",')
-	print(")")
+    tuple_header = read_header(args.artifact, args.sep, args.encoding)
+    print("tuple_required = (")
+    for str_col in tuple_header:
+        print(f'    "{str_col}",')
+    print(")")
 
-	if args.write is not None:
-		args.write.parent.mkdir(parents=True, exist_ok=True)
-		args.write.write_text(args.sep.join(tuple_header) + "\n", encoding="utf-8")
-		print(f"\nWrote header fixture: {args.write}", file=sys.stderr)
-	return 0
+    if args.write is not None:
+        args.write.parent.mkdir(parents=True, exist_ok=True)
+        args.write.write_text(args.sep.join(tuple_header) + "\n", encoding="utf-8")
+        print(f"\nWrote header fixture: {args.write}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
-	sys.exit(main())
+    sys.exit(main())

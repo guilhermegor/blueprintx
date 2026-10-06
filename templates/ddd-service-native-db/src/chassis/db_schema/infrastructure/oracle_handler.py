@@ -17,26 +17,42 @@ from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
 
 
+def _read_lob(value: Any) -> str:
+    """Return the text of an Oracle CLOB, or the value itself when already a string.
+
+    Parameters
+    ----------
+    value : Any
+        Column value returned by ``oracledb``; a LOB object or a ``str``.
+
+    Returns
+    -------
+    str
+        Textual payload of the column.
+    """
+    return value.read() if hasattr(value, "read") else value
+
+
 class OracleDatabaseHandler(DatabaseHandler):
     """Oracle handler using oracledb/cx_Oracle.
 
     Parameters
     ----------
     dsn : str
-            Oracle DSN string (e.g., ``host:port/service`` or EZCONNECT).
+        Oracle DSN string (e.g., ``host:port/service`` or EZCONNECT).
     user : str, optional
-            Database user; falls back to ``DB_USER``.
+        Database user; falls back to ``DB_USER``.
     password : str, optional
-            Database password; falls back to ``DB_PASSWORD``.
+        Database password; falls back to ``DB_PASSWORD``.
     table : str, optional
-            Table name used for storage, by default ``"records"``.
+        Table name used for storage, by default ``"records"``.
     id_field : str, optional
-            Identifier field name, by default ``"id"``.
+        Identifier field name, by default ``"id"``.
 
     Raises
     ------
     ImportError
-            If ``oracledb``/``cx_Oracle`` is not installed when instantiating the handler.
+        If ``oracledb``/``cx_Oracle`` is not installed when instantiating the handler.
     """
 
     def __init__(
@@ -65,12 +81,12 @@ class OracleDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record : Record
-                Data to persist; an ``id`` is generated if missing.
+            Data to persist; an ``id`` is generated if missing.
 
         Returns
         -------
         str
-                Identifier assigned to the stored record.
+            Identifier assigned to the stored record.
         """
         record = ensure_id(record, self.id_field)
         payload = json.dumps(record)
@@ -94,12 +110,12 @@ class OracleDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier to look up.
+            Identifier to look up.
 
         Returns
         -------
         Record or None
-                Stored record if found, else ``None``.
+            Stored record if found, else ``None``.
         """
         with self._connect() as conn:
             cur = conn.cursor()
@@ -107,29 +123,44 @@ class OracleDatabaseHandler(DatabaseHandler):
             row = cur.fetchone()
         if not row:
             return None
-        return json.loads(row[0].read() if hasattr(row[0], "read") else row[0])
+        return json.loads(_read_lob(row[0]))
 
     def update(self, record_id: str, updates: Record) -> Record | None:
-        """Merge updates into an existing record.
+        """Merge updates into an existing record atomically.
+
+        The read and the write share one transaction and the row is held by
+        ``SELECT … FOR UPDATE``, so a concurrent update cannot be lost. See
+        ``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
 
         Parameters
         ----------
         record_id : str
-                Identifier of the record to update.
+            Identifier of the record to update.
         updates : Record
-                Partial payload containing fields to override.
+            Partial payload containing fields to override.
 
         Returns
         -------
         Record or None
-                Updated record when found, else ``None``.
+            Updated record when found, else ``None``.
         """
-        existing = self.read(record_id)
-        if existing is None:
-            return None
-        updated = {**existing, **updates, self.id_field: record_id}
-        self.create(updated)
-        return updated
+        with self._connect() as cls_conn:
+            cls_cur = cls_conn.cursor()
+            cls_cur.execute(
+                f"SELECT data FROM {self.table} WHERE {self.id_field} = :id FOR UPDATE",  # noqa: S608
+                [record_id],
+            )
+            tuple_row = cls_cur.fetchone()
+            if tuple_row is None:
+                return None
+            dict_stored = json.loads(_read_lob(tuple_row[0]))
+            dict_updated = {**dict_stored, **updates, self.id_field: record_id}
+            cls_cur.execute(
+                f"UPDATE {self.table} SET data = :data WHERE {self.id_field} = :id",  # noqa: S608
+                [json.dumps(dict_updated), record_id],
+            )
+            cls_conn.commit()
+        return dict_updated
 
     def delete(self, record_id: str) -> bool:
         """Delete a record by identifier.
@@ -137,12 +168,12 @@ class OracleDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to remove.
+            Identifier of the record to remove.
 
         Returns
         -------
         bool
-                ``True`` when a row was deleted, otherwise ``False``.
+            ``True`` when a row was deleted, otherwise ``False``.
         """
         with self._connect() as conn:
             cur = conn.cursor()
@@ -157,12 +188,12 @@ class OracleDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         target_path : str or Path
-                Destination path for the JSON backup.
+            Destination path for the JSON backup.
 
         Returns
         -------
         Path
-                Path to the created backup file.
+            Path to the created backup file.
         """
         target = Path(target_path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -172,7 +203,7 @@ class OracleDatabaseHandler(DatabaseHandler):
             rows = []
             for row in cur:
                 cell = row[0]
-                rows.append(json.loads(cell.read() if hasattr(cell, "read") else cell))
+                rows.append(json.loads(_read_lob(cell)))
             handle.write(json.dumps(rows, indent=2, ensure_ascii=False))
         return target
 

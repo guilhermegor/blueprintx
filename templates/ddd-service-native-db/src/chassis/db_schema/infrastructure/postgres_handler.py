@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover - optional dependency
     psycopg = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import DsnParts, ensure_id
+from chassis.db.infrastructure.helpers import DsnParts, ensure_id, validate_not_flag
 
 
 class PostgresDatabaseHandler(DatabaseHandler):
@@ -25,16 +25,16 @@ class PostgresDatabaseHandler(DatabaseHandler):
     Parameters
     ----------
     dsn : str
-            Connection string for psycopg.
+        Connection string for psycopg.
     table : str, optional
-            Table name used for storage, by default ``"records"``.
+        Table name used for storage, by default ``"records"``.
     id_field : str, optional
-            Identifier field name, by default ``"id"``.
+        Identifier field name, by default ``"id"``.
 
     Raises
     ------
     ImportError
-            If ``psycopg`` is not installed when instantiating the handler.
+        If ``psycopg`` is not installed when instantiating the handler.
     """
 
     def __init__(self, dsn: str, table: str = "records", id_field: str = "id") -> None:
@@ -57,6 +57,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
         self.user = dict_parsed.get("user") or os.getenv("DB_USER") or "user"
         self.password = dict_parsed.get("password") or os.getenv("DB_PASSWORD") or "password"
         self.dbname = dict_parsed.get("database") or os.getenv("DB_NAME") or "app"
+        validate_not_flag(self.dbname, "database name")
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -65,12 +66,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record : Record
-                Data to persist.
+            Data to persist.
 
         Returns
         -------
         str
-                Identifier assigned to the stored record.
+            Identifier assigned to the stored record.
         """
         record = ensure_id(record, self.id_field)
         json_payload = json.dumps(record)
@@ -88,12 +89,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier to look up.
+            Identifier to look up.
 
         Returns
         -------
         Record or None
-                Stored record when present, otherwise ``None``.
+            Stored record when present, otherwise ``None``.
         """
         with self._connect() as cls_conn, cls_conn.cursor() as cls_cur:
             cls_cur.execute(
@@ -106,25 +107,38 @@ class PostgresDatabaseHandler(DatabaseHandler):
         return json.loads(tuple_row[0])
 
     def update(self, record_id: str, updates: Record) -> Record | None:
-        """Update an existing record.
+        """Update an existing record atomically.
+
+        The read and the write share one transaction and the row is held by
+        ``SELECT … FOR UPDATE``, so a concurrent update cannot be lost. See
+        ``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
 
         Parameters
         ----------
         record_id : str
-                Identifier of the record to update.
+            Identifier of the record to update.
         updates : Record
-                Fields to merge into the existing record.
+            Fields to merge into the existing record.
 
         Returns
         -------
         Record or None
-                Updated record when it exists, otherwise ``None``.
+            Updated record when it exists, otherwise ``None``.
         """
-        dict_existing = self.read(record_id)
-        if dict_existing is None:
-            return None
-        dict_updated = {**dict_existing, **updates, self.id_field: record_id}
-        self.create(dict_updated)
+        with self._connect() as cls_conn, cls_conn.cursor() as cls_cur:
+            cls_cur.execute(
+                f"SELECT data FROM {self.table} WHERE {self.id_field} = %s FOR UPDATE",  # noqa: S608
+                (record_id,),
+            )
+            tuple_row = cls_cur.fetchone()
+            if tuple_row is None:
+                return None
+            dict_updated = {**json.loads(tuple_row[0]), **updates, self.id_field: record_id}
+            cls_cur.execute(
+                f"UPDATE {self.table} SET data = %s WHERE {self.id_field} = %s",  # noqa: S608
+                (json.dumps(dict_updated), record_id),
+            )
+            cls_conn.commit()
         return dict_updated
 
     def delete(self, record_id: str) -> bool:
@@ -133,12 +147,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to remove.
+            Identifier of the record to remove.
 
         Returns
         -------
         bool
-                ``True`` when a record was deleted, ``False`` otherwise.
+            ``True`` when a record was deleted, ``False`` otherwise.
         """
         with self._connect() as cls_conn, cls_conn.cursor() as cls_cur:
             cls_cur.execute(
@@ -153,12 +167,12 @@ class PostgresDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         target_path : str or Path
-                Destination path for the backup file.
+            Destination path for the backup file.
 
         Returns
         -------
         Path
-                Path to the created backup file.
+            Path to the created backup file.
         """
         path_target = Path(target_path)
         path_target.parent.mkdir(parents=True, exist_ok=True)

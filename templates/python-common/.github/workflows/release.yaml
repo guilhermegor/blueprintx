@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, e.g. 1.4.0 (no leading v)"
+        description: "Release version, e.g. 1.4.0 or 1.4.0-rc.1 (no leading v)"
         required: true
 
 permissions:
@@ -19,9 +19,21 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+
+      # The input is free text. A malformed value would otherwise reach `git tag` —
+      # the irreversible half of this job — before failing later. Reject it here so
+      # a bad input is a no-op, not a pushed tag with no release to match.
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$ ]]; then
+            echo "::error::Invalid version '$VERSION' — expected SemVer MAJOR.MINOR.PATCH with no leading zeroes, optionally followed by a hyphen and dot-separated non-empty prerelease identifiers (e.g. 1.2.3, 1.2.3-rc.1). Rejected: 1.2.3.rc, 1.2.3-rc., 1.2.3-rc..1, 01.2.3, 1.2.3-rc.01." >&2
+            exit 1
+          fi
 
       - name: Create tag and GitHub Release
         env:
@@ -40,7 +52,7 @@ jobs:
   # version that failed to ship. mike deploys the released X.Y to the gh-pages branch under the
   # `latest` alias and makes it the default, giving Material a version dropdown. Services carry
   # no PyPI step, so this gates on the tag job rather than a publish. GitHub Pages must serve
-  # from the gh-pages branch (`poe enable_pages`). A prerelease (suffix like a1/b1/rc1/-alpha)
+  # from the gh-pages branch (`poe enable_pages`). A prerelease (suffix like -rc.1/-alpha)
   # is skipped in-step so it never moves `latest`.
   deploy_docs:
     name: Deploy Versioned Docs (mike)
@@ -53,18 +65,18 @@ jobs:
       VERSION: ${{ inputs.version }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # Full history so mike can read/rewrite the existing gh-pages version tree.
           fetch-depth: 0
 
       - name: Set Up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.x"
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
         with:
           virtualenvs-in-project: true
           virtualenvs-create: true
@@ -85,7 +97,7 @@ jobs:
 
       - name: Deploy Docs with mike
         run: |
-          # A suffixed prerelease (1.0.0rc1, 1.0.0-alpha1) builds a tag but must NOT move
+          # A suffixed prerelease (1.0.0-rc.1, 1.0.0-alpha1) builds a tag but must NOT move
           # `latest`; only a bare X.Y.Z deploys versioned docs. Version dropdown granularity is
           # X.Y, so 1.4.2 and 1.4.7 share the "1.4" entry; `latest` always tracks the newest.
           if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
