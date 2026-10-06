@@ -18,23 +18,23 @@ _BIN = Path(__file__).resolve().parents[2] / "bin"
 
 
 def _load(str_name: str) -> ModuleType:
-	"""Load a ``bin/`` script by path (``bin/`` is not a package).
+    """Load a ``bin/`` script by path (``bin/`` is not a package).
 
-	Parameters
-	----------
-	str_name : str
-		Module stem under ``bin/``.
+    Parameters
+    ----------
+    str_name : str
+            Module stem under ``bin/``.
 
-	Returns
-	-------
-	ModuleType
-		The imported module.
-	"""
-	cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
-	cls_module = importlib.util.module_from_spec(cls_spec)
-	sys.modules[str_name] = cls_module
-	cls_spec.loader.exec_module(cls_module)
-	return cls_module
+    Returns
+    -------
+    ModuleType
+            The imported module.
+    """
+    cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
+    cls_module = importlib.util.module_from_spec(cls_spec)
+    sys.modules[str_name] = cls_module
+    cls_spec.loader.exec_module(cls_module)
+    return cls_module
 
 
 gate = _load("check_template_drift")
@@ -52,120 +52,120 @@ _LIB = """scaffold_copy_common_templates() {
 
 
 def _blueprintx_root(path_tmp: Path) -> Path:
-	"""Write a synthetic BlueprintX checkout holding just the shared scaffold lib.
+    """Write a synthetic BlueprintX checkout holding just the shared scaffold lib.
 
-	Parameters
-	----------
-	path_tmp : pathlib.Path
-		A temporary directory to build under.
+    Parameters
+    ----------
+    path_tmp : pathlib.Path
+            A temporary directory to build under.
 
-	Returns
-	-------
-	pathlib.Path
-		The synthetic root, suitable for ``required_relpaths``.
-	"""
-	path_lib = path_tmp / gate._SCAFFOLD_LIB_RELPATH
-	path_lib.parent.mkdir(parents=True, exist_ok=True)
-	path_lib.write_text(_LIB, encoding="utf-8")
-	return path_tmp
+    Returns
+    -------
+    pathlib.Path
+            The synthetic root, suitable for ``required_relpaths``.
+    """
+    path_lib = path_tmp / gate._SCAFFOLD_LIB_RELPATH
+    path_lib.parent.mkdir(parents=True, exist_ok=True)
+    path_lib.write_text(_LIB, encoding="utf-8")
+    return path_tmp
 
 
 def test_a_cp_split_over_two_lines_is_still_required(tmp_path: Path) -> None:
-	"""The regex stopped at the backslash, so a wrapped destination was never required.
+    """The regex stopped at the backslash, so a wrapped destination was never required.
 
-	Measured on the real lib when this was found: 23 destinations parsed against 52
-	actually copied — the drift doctor was blind to 29 of the files it exists to police,
-	and reported a clean comparison while doing it.
-	"""
-	set_required = gate.required_relpaths(_blueprintx_root(tmp_path))
+    Measured on the real lib when this was found: 23 destinations parsed against 52
+    actually copied — the drift doctor was blind to 29 of the files it exists to police,
+    and reported a clean comparison while doing it.
+    """
+    set_required = gate.required_relpaths(_blueprintx_root(tmp_path))
 
-	assert "tests/unit/test_wrapped.py" in set_required
+    assert "tests/unit/test_wrapped.py" in set_required
 
 
 def test_a_plain_cp_after_a_wrapped_one_is_not_swallowed(tmp_path: Path) -> None:
-	"""The negative control for the splice: it must not consume the following command."""
-	set_required = gate.required_relpaths(_blueprintx_root(tmp_path))
+    """The negative control for the splice: it must not consume the following command."""
+    set_required = gate.required_relpaths(_blueprintx_root(tmp_path))
 
-	assert {"plain.txt", "after.txt"} <= set_required
+    assert {"plain.txt", "after.txt"} <= set_required
 
 
 def test_a_conditional_cp_is_not_required_by_default(tmp_path: Path) -> None:
-	"""`.review-bots.yaml` is copied only when the scaffold answered yes (blueprintx#374)."""
-	set_required = gate.required_relpaths(_blueprintx_root(tmp_path))
+    """`.review-bots.yaml` is copied only when the scaffold answered yes (blueprintx#374)."""
+    set_required = gate.required_relpaths(_blueprintx_root(tmp_path))
 
-	assert ".review-bots.yaml" not in set_required
+    assert ".review-bots.yaml" not in set_required
 
 
 def test_the_conditional_destination_is_reported_as_conditional(tmp_path: Path) -> None:
-	"""It is excluded because it is conditional, not because it was never parsed."""
-	_blueprintx_root(tmp_path)
-	str_spliced = gate._RE_LINE_CONTINUATION.sub(
-		" ", (tmp_path / gate._SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
-	)
+    """It is excluded because it is conditional, not because it was never parsed."""
+    _blueprintx_root(tmp_path)
+    str_spliced = gate._RE_LINE_CONTINUATION.sub(
+        " ", (tmp_path / gate._SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
+    )
 
-	assert gate.conditional_relpaths(str_spliced) == {".review-bots.yaml"}
+    assert gate.conditional_relpaths(str_spliced) == {".review-bots.yaml"}
 
 
 def test_provenance_records_the_roster_choice(tmp_path: Path) -> None:
-	"""The stamp is what lets the checker recover an opt-out instead of guessing."""
-	(tmp_path / gate._PROVENANCE_FILENAME).write_text(
-		"tier: lib-minimal\nreview_bot_roster: false\n", encoding="utf-8"
-	)
+    """The stamp is what lets the checker recover an opt-out instead of guessing."""
+    (tmp_path / gate._PROVENANCE_FILENAME).write_text(
+        "tier: lib-minimal\nreview_bot_roster: false\n", encoding="utf-8"
+    )
 
-	assert gate.review_bot_roster_enabled(tmp_path) is False
+    assert gate.review_bot_roster_enabled(tmp_path) is False
 
 
 def test_a_project_predating_the_stamp_reads_as_unknown(tmp_path: Path) -> None:
-	"""`None`, never `False` — the caller must not assume either answer for old projects."""
-	(tmp_path / gate._PROVENANCE_FILENAME).write_text("tier: lib-minimal\n", encoding="utf-8")
+    """`None`, never `False` — the caller must not assume either answer for old projects."""
+    (tmp_path / gate._PROVENANCE_FILENAME).write_text("tier: lib-minimal\n", encoding="utf-8")
 
-	assert gate.review_bot_roster_enabled(tmp_path) is None
+    assert gate.review_bot_roster_enabled(tmp_path) is None
 
 
 def test_a_one_line_if_does_not_make_later_copies_conditional() -> None:
-	"""`if ...; then cp ...; fi` closes on its own line; the depth counter must not leak."""
-	str_lib = (
-		'if [ "$x" ]; then cp "$COMMON_TEMPLATE_ROOT/a.txt" "$str_project_path/a.txt"; fi\n'
-		'cp "$COMMON_TEMPLATE_ROOT/b.txt" "$str_project_path/b.txt"\n'
-	)
+    """`if ...; then cp ...; fi` closes on its own line; the depth counter must not leak."""
+    str_lib = (
+        'if [ "$x" ]; then cp "$COMMON_TEMPLATE_ROOT/a.txt" "$str_project_path/a.txt"; fi\n'
+        'cp "$COMMON_TEMPLATE_ROOT/b.txt" "$str_project_path/b.txt"\n'
+    )
 
-	assert gate.conditional_relpaths(str_lib) == {"a.txt"}
+    assert gate.conditional_relpaths(str_lib) == {"a.txt"}
 
 
 def test_bytecode_under_a_copied_directory_is_not_required(tmp_path: Path) -> None:
-	"""A `__pycache__` in the checkout's bin/ is an untracked artifact, never a template file."""
-	path_root = _blueprintx_root(tmp_path)
-	path_cache = path_root / gate._COMMON_TEMPLATE_RELPATH / "bin" / "__pycache__"
-	path_cache.mkdir(parents=True)
-	(path_cache / "x.cpython-312.pyc").write_bytes(b"")
+    """A `__pycache__` in the checkout's bin/ is an untracked artifact, never a template file."""
+    path_root = _blueprintx_root(tmp_path)
+    path_cache = path_root / gate._COMMON_TEMPLATE_RELPATH / "bin" / "__pycache__"
+    path_cache.mkdir(parents=True)
+    (path_cache / "x.cpython-312.pyc").write_bytes(b"")
 
-	set_required = gate.required_relpaths(path_root)
+    set_required = gate.required_relpaths(path_root)
 
-	assert not any("__pycache__" in str_rel for str_rel in set_required)
+    assert not any("__pycache__" in str_rel for str_rel in set_required)
 
 
 def test_roster_opt_in_against_a_checkout_without_the_lib_skips_instead_of_crashing(
-	tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
-	"""The roster add-back re-read the lib unguarded and raised FileNotFoundError."""
-	path_project = tmp_path / "project"
-	path_project.mkdir()
-	(path_project / gate._PROVENANCE_FILENAME).write_text(
-		"tier: lib-minimal\nreview_bot_roster: true\n", encoding="utf-8"
-	)
-	path_empty_checkout = tmp_path / "checkout"
-	path_empty_checkout.mkdir()
+    """The roster add-back re-read the lib unguarded and raised FileNotFoundError."""
+    path_project = tmp_path / "project"
+    path_project.mkdir()
+    (path_project / gate._PROVENANCE_FILENAME).write_text(
+        "tier: lib-minimal\nreview_bot_roster: true\n", encoding="utf-8"
+    )
+    path_empty_checkout = tmp_path / "checkout"
+    path_empty_checkout.mkdir()
 
-	int_code = gate.main(
-		["--root", str(path_project), "--blueprintx-root", str(path_empty_checkout)]
-	)
+    int_code = gate.main(
+        ["--root", str(path_project), "--blueprintx-root", str(path_empty_checkout)]
+    )
 
-	assert int_code == 0
-	assert "SKIPPED" in capsys.readouterr().out
+    assert int_code == 0
+    assert "SKIPPED" in capsys.readouterr().out
 
 
 def test_the_equals_form_of_a_flag_is_honoured(tmp_path: Path) -> None:
-	"""`--root=x` used to be ignored silently, so the check ran against cwd without saying so."""
-	path_root, _ = gate._parse_args([f"--root={tmp_path}"])
+    """`--root=x` used to be ignored silently, so the check ran against cwd without saying so."""
+    path_root, _ = gate._parse_args([f"--root={tmp_path}"])
 
-	assert path_root == tmp_path.resolve()
+    assert path_root == tmp_path.resolve()

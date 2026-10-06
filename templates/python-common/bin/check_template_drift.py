@@ -65,297 +65,297 @@ _RE_CP_FILE = re.compile(r'cp\s+"\$COMMON_TEMPLATE_ROOT/([^"]+)"\s+"\$str_projec
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
 
 _RE_CP_DIR = re.compile(
-	r'cp\s+-r\s+"\$COMMON_TEMPLATE_ROOT/([^"]+)/\."\s+"\$str_project_path/([^"]+)"'
+    r'cp\s+-r\s+"\$COMMON_TEMPLATE_ROOT/([^"]+)/\."\s+"\$str_project_path/([^"]+)"'
 )
 
 
 def read_tier(path_root: pathlib.Path) -> str | None:
-	"""Return the ``tier:`` value stamped in the project's provenance file, or ``None``.
+    """Return the ``tier:`` value stamped in the project's provenance file, or ``None``.
 
-	Parameters
-	----------
-	path_root : pathlib.Path
-		The project root to inspect.
+    Parameters
+    ----------
+    path_root : pathlib.Path
+            The project root to inspect.
 
-	Returns
-	-------
-	str or None
-		The stamped tier name, or ``None`` when there is no provenance stamp at all.
-	"""
-	path_stamp = path_root / _PROVENANCE_FILENAME
-	if not path_stamp.exists():
-		return None
-	for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
-		str_stripped = str_line.strip()
-		if str_stripped.startswith("tier:"):
-			return str_stripped.split(":", 1)[1].strip()
-	return None
+    Returns
+    -------
+    str or None
+            The stamped tier name, or ``None`` when there is no provenance stamp at all.
+    """
+    path_stamp = path_root / _PROVENANCE_FILENAME
+    if not path_stamp.exists():
+        return None
+    for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
+        str_stripped = str_line.strip()
+        if str_stripped.startswith("tier:"):
+            return str_stripped.split(":", 1)[1].strip()
+    return None
 
 
 _RE_ONE_LINE_FI = re.compile(r";\s*fi\s*$")
 
 
 def _cp_destinations(str_line: str) -> set[str]:
-	"""Return the project-relative destinations of every ``cp`` found on one source line.
+    """Return the project-relative destinations of every ``cp`` found on one source line.
 
-	Parameters
-	----------
-	str_line : str
-		One line of the shared scaffold lib.
+    Parameters
+    ----------
+    str_line : str
+            One line of the shared scaffold lib.
 
-	Returns
-	-------
-	set of str
-		Destinations matched by the single-file ``cp`` pattern.
-	"""
-	return {str_dst for _, str_dst in _RE_CP_FILE.findall(str_line)}
+    Returns
+    -------
+    set of str
+            Destinations matched by the single-file ``cp`` pattern.
+    """
+    return {str_dst for _, str_dst in _RE_CP_FILE.findall(str_line)}
 
 
 def conditional_relpaths(str_lib: str) -> set[str]:
-	"""Return destinations copied inside an ``if`` block, which are NOT unconditionally required.
+    """Return destinations copied inside an ``if`` block, which are NOT unconditionally required.
 
-	``.review-bots.yaml`` is copied only when ``INCLUDE_REVIEW_BOT_ROSTER`` is true
-	(blueprintx#374). Treating it as required made the drift check report a missing file on
-	every project that legitimately declined a reviewer bot — a gate crying wolf about a
-	choice the scaffold offered.
+    ``.review-bots.yaml`` is copied only when ``INCLUDE_REVIEW_BOT_ROSTER`` is true
+    (blueprintx#374). Treating it as required made the drift check report a missing file on
+    every project that legitimately declined a reviewer bot — a gate crying wolf about a
+    choice the scaffold offered.
 
-	⚠️ Scoped to what this regex can honestly see: a ``cp`` between an ``if`` and its ``fi``,
-	at any nesting. It does not evaluate the condition — that is
-	:func:`review_bot_roster_enabled`'s job, from the provenance stamp.
+    ⚠️ Scoped to what this regex can honestly see: a ``cp`` between an ``if`` and its ``fi``,
+    at any nesting. It does not evaluate the condition — that is
+    :func:`review_bot_roster_enabled`'s job, from the provenance stamp.
 
-	Parameters
-	----------
-	str_lib : str
-		The shared scaffold lib source, line-continuations already spliced.
+    Parameters
+    ----------
+    str_lib : str
+            The shared scaffold lib source, line-continuations already spliced.
 
-	Returns
-	-------
-	set of str
-		Project-relative destinations whose ``cp`` sits inside a conditional.
-	"""
-	set_conditional: set[str] = set()
-	int_depth = 0
-	for str_line in str_lib.splitlines():
-		str_stripped = str_line.strip()
-		if str_stripped.startswith(("if ", "if[", "if[[")) or str_stripped == "if":
-			# A one-line `if ...; then cp ...; fi` opens and closes on the same line: counting
-			# it as an open block would mark every later `cp` conditional, a false green.
-			int_depth += 0 if _RE_ONE_LINE_FI.search(str_stripped) else 1
-			set_conditional.update(_cp_destinations(str_line))
-		elif str_stripped == "fi" or str_stripped.startswith("fi "):
-			int_depth = max(0, int_depth - 1)
-		elif int_depth > 0:
-			set_conditional.update(_cp_destinations(str_line))
-	return set_conditional
+    Returns
+    -------
+    set of str
+            Project-relative destinations whose ``cp`` sits inside a conditional.
+    """
+    set_conditional: set[str] = set()
+    int_depth = 0
+    for str_line in str_lib.splitlines():
+        str_stripped = str_line.strip()
+        if str_stripped.startswith(("if ", "if[", "if[[")) or str_stripped == "if":
+            # A one-line `if ...; then cp ...; fi` opens and closes on the same line: counting
+            # it as an open block would mark every later `cp` conditional, a false green.
+            int_depth += 0 if _RE_ONE_LINE_FI.search(str_stripped) else 1
+            set_conditional.update(_cp_destinations(str_line))
+        elif str_stripped == "fi" or str_stripped.startswith("fi "):
+            int_depth = max(0, int_depth - 1)
+        elif int_depth > 0:
+            set_conditional.update(_cp_destinations(str_line))
+    return set_conditional
 
 
 def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
-	"""Return the ``review_bot_roster:`` choice stamped at scaffold time, or ``None``.
+    """Return the ``review_bot_roster:`` choice stamped at scaffold time, or ``None``.
 
-	Provenance recorded only tier/version/commit/timestamp, so the drift checker could not
-	recover an opt-out and had to guess. It now records the choice; ``None`` means the
-	project predates the stamp, and the caller must not assume either answer.
+    Provenance recorded only tier/version/commit/timestamp, so the drift checker could not
+    recover an opt-out and had to guess. It now records the choice; ``None`` means the
+    project predates the stamp, and the caller must not assume either answer.
 
-	Parameters
-	----------
-	path_root : pathlib.Path
-		The project root to inspect.
+    Parameters
+    ----------
+    path_root : pathlib.Path
+            The project root to inspect.
 
-	Returns
-	-------
-	bool or None
-		The stamped choice, or ``None`` when the stamp is absent or silent on it.
-	"""
-	path_stamp = path_root / _PROVENANCE_FILENAME
-	if not path_stamp.exists():
-		return None
-	for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
-		str_stripped = str_line.strip()
-		if str_stripped.startswith("review_bot_roster:"):
-			return str_stripped.split(":", 1)[1].strip() == "true"
-	return None
+    Returns
+    -------
+    bool or None
+            The stamped choice, or ``None`` when the stamp is absent or silent on it.
+    """
+    path_stamp = path_root / _PROVENANCE_FILENAME
+    if not path_stamp.exists():
+        return None
+    for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
+        str_stripped = str_line.strip()
+        if str_stripped.startswith("review_bot_roster:"):
+            return str_stripped.split(":", 1)[1].strip() == "true"
+    return None
 
 
 def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
-	"""Derive every python-common-sourced path a scaffold copies UNCONDITIONALLY.
+    """Derive every python-common-sourced path a scaffold copies UNCONDITIONALLY.
 
-	Parsed straight out of ``bin/lib/scaffold_python_templates.sh`` rather than hand-listed,
-	so this set cannot drift from what actually gets copied. Deliberately excludes anything
-	conditional (the docker-compose choice, webhook/storage opt-ins) — those live OUTSIDE the
-	shared step this parses, in each individual ``bin/scaffold/python_*.sh``.
+    Parsed straight out of ``bin/lib/scaffold_python_templates.sh`` rather than hand-listed,
+    so this set cannot drift from what actually gets copied. Deliberately excludes anything
+    conditional (the docker-compose choice, webhook/storage opt-ins) — those live OUTSIDE the
+    shared step this parses, in each individual ``bin/scaffold/python_*.sh``.
 
-	Parameters
-	----------
-	path_blueprintx_root : pathlib.Path
-		Root of a BlueprintX checkout.
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+            Root of a BlueprintX checkout.
 
-	Returns
-	-------
-	set of str
-		Project-relative paths (POSIX separators) the shared scaffold step always copies.
-		Empty when the shared lib file cannot be found — the caller treats that as SKIPPED,
-		never as "nothing is required".
-	"""
-	path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
-	if not path_lib.exists():
-		return set()
-	# Splice shell line-continuations BEFORE matching. A `cp "$SRC/x" \\<newline> "$DST/x"`
-	# is one command to the shell, but `_RE_CP_FILE` stopped at the backslash and skipped
-	# it — measured on this branch: 23 destinations found, 52 actually copied, so the
-	# drift doctor was blind to 29 of the files it exists to police (blueprintx#109).
-	str_lib = _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8"))
-	path_common = path_blueprintx_root / _COMMON_TEMPLATE_RELPATH
+    Returns
+    -------
+    set of str
+            Project-relative paths (POSIX separators) the shared scaffold step always copies.
+            Empty when the shared lib file cannot be found — the caller treats that as SKIPPED,
+            never as "nothing is required".
+    """
+    path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
+    if not path_lib.exists():
+        return set()
+    # Splice shell line-continuations BEFORE matching. A `cp "$SRC/x" \\<newline> "$DST/x"`
+    # is one command to the shell, but `_RE_CP_FILE` stopped at the backslash and skipped
+    # it — measured on this branch: 23 destinations found, 52 actually copied, so the
+    # drift doctor was blind to 29 of the files it exists to police (blueprintx#109).
+    str_lib = _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8"))
+    path_common = path_blueprintx_root / _COMMON_TEMPLATE_RELPATH
 
-	set_conditional = conditional_relpaths(str_lib)
-	set_required = {
-		str_dst for _, str_dst in _RE_CP_FILE.findall(str_lib) if str_dst not in set_conditional
-	}
-	for str_src_dir, str_dst_dir in _RE_CP_DIR.findall(str_lib):
-		path_src_dir = path_common / str_src_dir
-		for path_file in sorted(path_src_dir.rglob("*")):
-			if path_file.is_file() and "__pycache__" not in path_file.parts:
-				str_rel = path_file.relative_to(path_src_dir).as_posix()
-				set_required.add(f"{str_dst_dir}/{str_rel}")
-	return set_required
+    set_conditional = conditional_relpaths(str_lib)
+    set_required = {
+        str_dst for _, str_dst in _RE_CP_FILE.findall(str_lib) if str_dst not in set_conditional
+    }
+    for str_src_dir, str_dst_dir in _RE_CP_DIR.findall(str_lib):
+        path_src_dir = path_common / str_src_dir
+        for path_file in sorted(path_src_dir.rglob("*")):
+            if path_file.is_file() and "__pycache__" not in path_file.parts:
+                str_rel = path_file.relative_to(path_src_dir).as_posix()
+                set_required.add(f"{str_dst_dir}/{str_rel}")
+    return set_required
 
 
 def missing_relpaths(path_root: pathlib.Path, set_required: set[str]) -> list[str]:
-	"""Return the required paths that do not exist under the project root, sorted.
+    """Return the required paths that do not exist under the project root, sorted.
 
-	Parameters
-	----------
-	path_root : pathlib.Path
-		The project root to check.
-	set_required : set of str
-		Project-relative paths the template ships.
+    Parameters
+    ----------
+    path_root : pathlib.Path
+            The project root to check.
+    set_required : set of str
+            Project-relative paths the template ships.
 
-	Returns
-	-------
-	list of str
-		Sorted relative paths present in the template but absent from the project.
-	"""
-	return sorted(str_rel for str_rel in set_required if not (path_root / str_rel).exists())
+    Returns
+    -------
+    list of str
+            Sorted relative paths present in the template but absent from the project.
+    """
+    return sorted(str_rel for str_rel in set_required if not (path_root / str_rel).exists())
 
 
 def _parse_args(list_argv: list) -> tuple[pathlib.Path, pathlib.Path | None]:
-	"""Parse ``--root`` and ``--blueprintx-root`` out of argv, with env-var fallbacks.
+    """Parse ``--root`` and ``--blueprintx-root`` out of argv, with env-var fallbacks.
 
-	Parameters
-	----------
-	list_argv : list of str
-		Raw CLI arguments (``sys.argv[1:]``).
+    Parameters
+    ----------
+    list_argv : list of str
+            Raw CLI arguments (``sys.argv[1:]``).
 
-	Returns
-	-------
-	tuple of (pathlib.Path, pathlib.Path or None)
-		The project root (defaults to cwd) and the BlueprintX checkout root (defaults to
-		``BLUEPRINTX_TEMPLATE_ROOT`` in the environment, or ``None`` when unset).
-	"""
-	cls_parser = argparse.ArgumentParser(description="Report template drift.")
-	cls_parser.add_argument("--root", default=None)
-	cls_parser.add_argument(
-		"--blueprintx-root", default=os.environ.get("BLUEPRINTX_TEMPLATE_ROOT")
-	)
-	cls_args = cls_parser.parse_args(list_argv)
-	path_root = pathlib.Path(cls_args.root).resolve() if cls_args.root else pathlib.Path.cwd()
-	path_blueprintx = (
-		pathlib.Path(cls_args.blueprintx_root).resolve() if cls_args.blueprintx_root else None
-	)
-	return path_root, path_blueprintx
+    Returns
+    -------
+    tuple of (pathlib.Path, pathlib.Path or None)
+            The project root (defaults to cwd) and the BlueprintX checkout root (defaults to
+            ``BLUEPRINTX_TEMPLATE_ROOT`` in the environment, or ``None`` when unset).
+    """
+    cls_parser = argparse.ArgumentParser(description="Report template drift.")
+    cls_parser.add_argument("--root", default=None)
+    cls_parser.add_argument(
+        "--blueprintx-root", default=os.environ.get("BLUEPRINTX_TEMPLATE_ROOT")
+    )
+    cls_args = cls_parser.parse_args(list_argv)
+    path_root = pathlib.Path(cls_args.root).resolve() if cls_args.root else pathlib.Path.cwd()
+    path_blueprintx = (
+        pathlib.Path(cls_args.blueprintx_root).resolve() if cls_args.blueprintx_root else None
+    )
+    return path_root, path_blueprintx
 
 
 def _report_missing(str_tier: str, list_missing: list, int_total: int) -> None:
-	"""Print the drift report body for a non-empty ``list_missing``.
+    """Print the drift report body for a non-empty ``list_missing``.
 
-	Parameters
-	----------
-	str_tier : str
-		The project's stamped tier name.
-	list_missing : list of str
-		Sorted relative paths the template ships that the project lacks.
-	int_total : int
-		How many paths were required in total (for the trailing summary line).
+    Parameters
+    ----------
+    str_tier : str
+            The project's stamped tier name.
+    list_missing : list of str
+            Sorted relative paths the template ships that the project lacks.
+    int_total : int
+            How many paths were required in total (for the trailing summary line).
 
-	Returns
-	-------
-	None
-	"""
-	print(
-		f"Template drift detected for tier '{str_tier}' — the template ships these paths and "
-		f"this project does not have them:\n"
-	)
-	for str_rel in list_missing:
-		print(f"➖ {str_rel}")
-	print(
-		f"\n{len(list_missing)} of {int_total} required path(s) missing. This is a REPORT, not "
-		f"a gate — a project may have removed one of these on purpose; a human decides whether "
-		f"to backfill it."
-	)
+    Returns
+    -------
+    None
+    """
+    print(
+        f"Template drift detected for tier '{str_tier}' — the template ships these paths and "
+        f"this project does not have them:\n"
+    )
+    for str_rel in list_missing:
+        print(f"➖ {str_rel}")
+    print(
+        f"\n{len(list_missing)} of {int_total} required path(s) missing. This is a REPORT, not "
+        f"a gate — a project may have removed one of these on purpose; a human decides whether "
+        f"to backfill it."
+    )
 
 
 def main(list_argv: list) -> int:
-	"""Report template drift for the project at ``--root``. Always returns 0 (a reporter).
+    """Report template drift for the project at ``--root``. Always returns 0 (a reporter).
 
-	Parameters
-	----------
-	list_argv : list of str
-		CLI arguments (``sys.argv[1:]``).
+    Parameters
+    ----------
+    list_argv : list of str
+            CLI arguments (``sys.argv[1:]``).
 
-	Returns
-	-------
-	int
-		Always 0 — see the module docstring for why this never gates.
-	"""
-	path_root, path_blueprintx = _parse_args(list_argv)
+    Returns
+    -------
+    int
+            Always 0 — see the module docstring for why this never gates.
+    """
+    path_root, path_blueprintx = _parse_args(list_argv)
 
-	str_tier = read_tier(path_root)
-	if str_tier is None:
-		print(
-			f"SKIPPED: no {_PROVENANCE_FILENAME} at {path_root} — nothing to check. Either this "
-			f"tree was not scaffolded by BlueprintX (this repo, run over itself, always takes "
-			f"this path), or it predates provenance stamping (blueprintx#109). This run proves "
-			f"nothing about drift."
-		)
-		return 0
+    str_tier = read_tier(path_root)
+    if str_tier is None:
+        print(
+            f"SKIPPED: no {_PROVENANCE_FILENAME} at {path_root} — nothing to check. Either this "
+            f"tree was not scaffolded by BlueprintX (this repo, run over itself, always takes "
+            f"this path), or it predates provenance stamping (blueprintx#109). This run proves "
+            f"nothing about drift."
+        )
+        return 0
 
-	if path_blueprintx is None or not path_blueprintx.exists():
-		print(
-			f"SKIPPED: tier is '{str_tier}' but no BlueprintX checkout is available to compare "
-			f"against — pass --blueprintx-root or set BLUEPRINTX_TEMPLATE_ROOT. This run proves "
-			f"nothing about drift."
-		)
-		return 0
+    if path_blueprintx is None or not path_blueprintx.exists():
+        print(
+            f"SKIPPED: tier is '{str_tier}' but no BlueprintX checkout is available to compare "
+            f"against — pass --blueprintx-root or set BLUEPRINTX_TEMPLATE_ROOT. This run proves "
+            f"nothing about drift."
+        )
+        return 0
 
-	set_required = required_relpaths(path_blueprintx)
-	if not set_required:
-		print(
-			f"SKIPPED: found no required paths under {path_blueprintx} — "
-			f"{_SCAFFOLD_LIB_RELPATH} is missing or unparsable there. This run proves nothing "
-			f"about drift, and is NOT the same as a clean comparison."
-		)
-		return 0
+    set_required = required_relpaths(path_blueprintx)
+    if not set_required:
+        print(
+            f"SKIPPED: found no required paths under {path_blueprintx} — "
+            f"{_SCAFFOLD_LIB_RELPATH} is missing or unparsable there. This run proves nothing "
+            f"about drift, and is NOT the same as a clean comparison."
+        )
+        return 0
 
-	# Add back the conditional copies this project actually opted into. Only when the
-	# provenance stamp SAYS so: `None` (a project scaffolded before the stamp recorded the
-	# choice) stays excluded, because reporting a file as missing on a project that
-	# legitimately declined it is the false positive this whole branch exists to avoid.
-	# After the empty-set SKIPPED above on purpose: that is the only case where the lib is
-	# absent, and reading it here unguarded raised FileNotFoundError.
-	if review_bot_roster_enabled(path_root):
-		set_required = set_required | conditional_relpaths(
-			_RE_LINE_CONTINUATION.sub(
-				" ", (path_blueprintx / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
-			)
-		)
+    # Add back the conditional copies this project actually opted into. Only when the
+    # provenance stamp SAYS so: `None` (a project scaffolded before the stamp recorded the
+    # choice) stays excluded, because reporting a file as missing on a project that
+    # legitimately declined it is the false positive this whole branch exists to avoid.
+    # After the empty-set SKIPPED above on purpose: that is the only case where the lib is
+    # absent, and reading it here unguarded raised FileNotFoundError.
+    if review_bot_roster_enabled(path_root):
+        set_required |= conditional_relpaths(
+            _RE_LINE_CONTINUATION.sub(
+                " ", (path_blueprintx / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
+            )
+        )
 
-	list_missing = missing_relpaths(path_root, set_required)
-	if not list_missing:
-		print(f"No template drift detected — {len(set_required)} required path(s) present.")
-		return 0
+    list_missing = missing_relpaths(path_root, set_required)
+    if not list_missing:
+        print(f"No template drift detected — {len(set_required)} required path(s) present.")
+        return 0
 
-	_report_missing(str_tier, list_missing, len(set_required))
-	return 0
+    _report_missing(str_tier, list_missing, len(set_required))
+    return 0
 
 
 if __name__ == "__main__":
-	sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:]))
