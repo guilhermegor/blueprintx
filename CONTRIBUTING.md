@@ -108,17 +108,20 @@ GitHub Actions cannot read it — it is only the source you `gh secret set` from
 
 **Re-provisioning a lost/rotated value:**
 1. Mint the new credential (fine-grained PAT at github.com/settings/personal-access-tokens,
-   API key at the vendor, or `gpg --export-secret-keys --armor <key-id>` for the GPG key) with
+   API key at the vendor, or the GPG key exported to a private file, never to the terminal:
+   `( umask 077; gpg --export-secret-keys --armor <key-id> > apt-gpg-private.asc )`, paste it
+   into `.env`, then `shred -u apt-gpg-private.asc`, or `rm` where `shred` is unavailable) with
    the scope from the table above, never broader. The PAT's `Issues: write` stays off: a
    token with it was measured (2026-09-10) to 403 on issues and 422 on PRs, and the
    workflows only ever comment on PRs.
-2. `[ -e .env ] || install -m 600 .env.example .env` (never overwrites a `.env` that already
-   holds real values), then replace the `KEY-GOES-HERE` placeholder of the secret you are
+2. `[ -e .env ] || install -m 600 .env.example .env; chmod 600 .env` (never overwrites a
+   `.env` that already holds real values, and tightens one with loose permissions), then replace the `KEY-GOES-HERE` placeholder of the secret you are
    setting. Never upload a value that still equals the placeholder.
-3. Load it in a subshell, so the secrets do not stay exported in your interactive shell, and
-   upload over stdin, so the value never lands in `ps`/`/proc` argv (single-quote any value
+3. Source it in a subshell, so the variables do not outlive the command, without `set -a`, so
+   they are never exported into `gh`'s environment (`printf` is a builtin, so the value still
+   reaches the pipe), and upload over stdin, so the value never lands in `ps`/`/proc` argv (single-quote any value
    containing `$` so sourcing keeps it literal; a literal `'` inside is written `'\''`):
-   `( set -a; . ./.env; set +a; printf '%s' "$<NAME>" | gh secret set <NAME> --repo guilhermegor/blueprintx )`.
+   `( . ./.env; printf '%s' "$<NAME>" | gh secret set <NAME> --repo guilhermegor/blueprintx )`.
    Skip `APT_GPG_PASSPHRASE` when the key has none (the workflow treats it as optional).
    Replacing `APT_GPG_PRIVATE_KEY` with a different key changes the public key APT users
    trust, so they must re-import it or `apt update` fails the signature check.
