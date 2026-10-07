@@ -45,7 +45,8 @@ class JoblibHandler(DatabaseHandler):
     dir_path : str or Path
             Directory where artifact files are stored.
     compress : tuple of (str, int), optional
-            Joblib compression codec and level, by default ``("lz4", 3)``.
+            Joblib compression codec and level, by default ``("zlib", 3)`` — zlib is in the
+            standard library, where ``lz4`` is a dependency no tier declares (blueprintx#650).
     secret_key : bytes or None, optional
             Key for HMAC-SHA256 signing. When ``None`` only SHA256 + metadata checks run.
     """
@@ -53,7 +54,7 @@ class JoblibHandler(DatabaseHandler):
     def __init__(
         self,
         dir_path: str | Path,
-        compress: tuple[str, int] = ("lz4", 3),
+        compress: tuple[str, int] = ("zlib", 3),
         secret_key: bytes | None = None,
     ) -> None:
         self._dir = Path(dir_path)
