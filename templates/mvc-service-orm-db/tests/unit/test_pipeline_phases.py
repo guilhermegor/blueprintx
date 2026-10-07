@@ -7,7 +7,7 @@ a throwaway SQLite file, so the read phase proves a row really comes back throug
 instead of asserting that a mock was called.
 """
 
-import contextlib
+from collections.abc import Iterator
 import json
 from pathlib import Path
 from unittest.mock import Mock
@@ -26,7 +26,7 @@ STR_SEED_TITLE = "Hello from MVC ORM service!"
 # Helpers and fixtures
 # --------------------------
 @pytest.fixture
-def cls_engine(tmp_path: Path) -> Engine:
+def cls_engine(tmp_path: Path) -> Iterator[Engine]:
     """Provide an engine bound to a throwaway SQLite database file.
 
     Parameters
@@ -34,8 +34,8 @@ def cls_engine(tmp_path: Path) -> Engine:
     tmp_path : pathlib.Path
             Pytest-provided temporary directory.
 
-    Returns
-    -------
+    Yields
+    ------
     sqlalchemy.Engine
             Engine for ``tmp_path / "pipeline.db"``, disposed after the test.
     """
@@ -108,7 +108,10 @@ def test_log_context_reports_no_handlers_when_none_are_wired(
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     _build_orchestrator(tmp_path, cls_engine)._log_context()
 
-    assert "Email handler: none\nWebhook notifier: none" in _logged(mock_log)
+    str_logged = _logged(mock_log)
+
+    assert "Email handler: none" in str_logged
+    assert "Webhook notifier: none" in str_logged
 
 
 def test_log_context_reports_a_configured_webhook(
@@ -181,7 +184,7 @@ def test_run_disposes_the_engine_even_when_the_read_fails(
     cls_orchestrator = _build_orchestrator(tmp_path, cls_engine)
     mocker.patch.object(cls_orchestrator, "_read", side_effect=RuntimeError("boom"))
     mock_dispose = mocker.patch.object(cls_engine, "dispose")
-    with contextlib.suppress(RuntimeError):
+    with pytest.raises(RuntimeError, match="boom"):
         cls_orchestrator.run()
 
     mock_dispose.assert_called_once_with()

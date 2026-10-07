@@ -21,11 +21,7 @@ from utils.frames import from_records
 from utils.typing import TypeChecker
 
 
-# ``pandas`` is imported for real (not TYPE_CHECKING-only): ``ExampleEntity`` carries the
-# runtime ``TypeChecker``, whose beartype check resolves ``-> pd.DataFrame`` against this
-# module's globals at call time, and an unbound ``pd`` made ``fetch_all`` raise
-# ``BeartypeCallHintForwardRefException`` on every call (blueprintx#617). Still
-# annotation-only per .layer-policy.yaml: ``pd`` is never called, only used as a type.
+# Runtime import on purpose, not TYPE_CHECKING: see docs/coverage-floor.md (blueprintx#617).
 
 
 # Declare the column types on load — never trust pandas' inference (a zero-padded

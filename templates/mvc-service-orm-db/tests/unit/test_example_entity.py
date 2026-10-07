@@ -5,20 +5,21 @@ against a throwaway SQLite database in ``tmp_path`` rather than mocking the sess
 would assert that the code calls the ORM, not that a row actually comes back typed.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from sqlalchemy import Engine, create_engine, inspect
 
-from src.model.example_entity import ExampleEntity
+from src.model.example_entity import _DICT_DTYPES, ExampleEntity
 
 
 # --------------------------
 # Fixtures
 # --------------------------
 @pytest.fixture
-def cls_engine(tmp_path: Path) -> Engine:
+def cls_engine(tmp_path: Path) -> Iterator[Engine]:
     """Provide an engine bound to a throwaway SQLite database file.
 
     Parameters
@@ -26,8 +27,8 @@ def cls_engine(tmp_path: Path) -> Engine:
     tmp_path : pathlib.Path
             Pytest-provided temporary directory.
 
-    Returns
-    -------
+    Yields
+    ------
     sqlalchemy.Engine
             Engine for ``tmp_path / "example.db"``, disposed after the test.
     """
@@ -92,7 +93,7 @@ def test_fetch_all_types_the_columns_as_declared(cls_entity: ExampleEntity) -> N
     """``fetch_all`` applies the declared dtypes instead of letting pandas infer them."""
     cls_entity.insert("alpha")
 
-    assert cls_entity.fetch_all()["id"].dtype == "int64"
+    assert cls_entity.fetch_all()["id"].dtype == _DICT_DTYPES["id"]
 
 
 def test_fetch_all_on_an_empty_table_keeps_the_declared_columns(
