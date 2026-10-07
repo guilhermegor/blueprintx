@@ -16,7 +16,12 @@ except ImportError:  # pragma: no cover - optional dependency
 	mysql_connector = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import DsnParts, ensure_id, validate_not_flag
+from chassis.db.infrastructure.helpers import (
+	DsnParts,
+	ensure_id,
+	validate_not_flag,
+	validate_sql_identifier,
+)
 
 
 class MariaDBDatabaseHandler(DatabaseHandler):
@@ -44,6 +49,8 @@ class MariaDBDatabaseHandler(DatabaseHandler):
 				"install it to use this backend."
 			)
 		self.dsn = dsn
+		validate_sql_identifier(table, "table")
+		validate_sql_identifier(id_field, "id_field")
 		self.table = table
 		self.id_field = id_field
 		self.connection_kwargs: DsnParts = self._parse_dsn(dsn)

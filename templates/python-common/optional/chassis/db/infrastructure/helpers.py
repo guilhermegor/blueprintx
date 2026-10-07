@@ -10,7 +10,7 @@ from chassis.db.domain.ports import Record
 from chassis.typing.decorators import type_checker
 
 
-RE_SQL_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_RE_SQL_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 class DsnParts(TypedDict):
@@ -99,7 +99,7 @@ def validate_sql_identifier(value: str, label: str) -> None:
     ValueError
         If ``value`` is not ``[A-Za-z_][A-Za-z0-9_]*``.
     """
-    if not RE_SQL_IDENTIFIER.fullmatch(value):
+    if not _RE_SQL_IDENTIFIER.fullmatch(value):
         raise ValueError(f"{label} must match [A-Za-z_][A-Za-z0-9_]* (got {value!r})")
 
 

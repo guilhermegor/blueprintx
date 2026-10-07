@@ -16,7 +16,12 @@ except ImportError:  # pragma: no cover - optional dependency
 	psycopg = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import DsnParts, ensure_id, validate_not_flag
+from chassis.db.infrastructure.helpers import (
+	DsnParts,
+	ensure_id,
+	validate_not_flag,
+	validate_sql_identifier,
+)
 
 
 class PostgresDatabaseHandler(DatabaseHandler):
@@ -43,6 +48,8 @@ class PostgresDatabaseHandler(DatabaseHandler):
 				"psycopg is required for PostgresDatabaseHandler; install psycopg[binary]."
 			)
 		self.dsn = dsn
+		validate_sql_identifier(table, "table")
+		validate_sql_identifier(id_field, "id_field")
 		self.table = table
 		self.id_field = id_field
 		dict_parsed = self._parse_dsn(dsn)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 import json
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,7 @@ except ImportError:  # pragma: no cover - optional dependency
 	pyodbc = None
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db.infrastructure.helpers import ensure_id, validate_sql_identifier
 
 
 class MSSQLDatabaseHandler(DatabaseHandler):
@@ -42,6 +43,8 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 				"pyodbc is required for MSSQLDatabaseHandler; install it to use this backend."
 			)
 		self.connection_string = connection_string
+		validate_sql_identifier(table, "table")
+		validate_sql_identifier(id_field, "id_field")
 		self.table = table
 		self.id_field = id_field
 		self._ensure_table()
@@ -61,7 +64,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 		"""
 		record = ensure_id(record, self.id_field)
 		payload = json.dumps(record)
-		with self._connect() as conn:
+		with closing(self._connect()) as conn, conn:
 			cur = conn.cursor()
 			cur.execute(
 				f"MERGE {self.table} AS t USING (SELECT ? AS {self.id_field}, ? AS data) AS s "  # noqa: S608
@@ -87,7 +90,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 		Record or None
 			Stored record if found, else ``None``.
 		"""
-		with self._connect() as conn:
+		with closing(self._connect()) as conn, conn:
 			cur = conn.cursor()
 			cur.execute(f"SELECT data FROM {self.table} WHERE {self.id_field} = ?", (record_id,))  # noqa: S608
 			row = cur.fetchone()
@@ -114,7 +117,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 		Record or None
 			Updated record when found, else ``None``.
 		"""
-		with self._connect() as cls_conn:
+		with closing(self._connect()) as cls_conn, cls_conn:
 			cls_cur = cls_conn.cursor()
 			cls_cur.execute(
 				f"SELECT data FROM {self.table} WITH (UPDLOCK, ROWLOCK) "  # noqa: S608
@@ -145,7 +148,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 		bool
 			``True`` when a row was deleted, otherwise ``False``.
 		"""
-		with self._connect() as conn:
+		with closing(self._connect()) as conn, conn:
 			cur = conn.cursor()
 			cur.execute(f"DELETE FROM {self.table} WHERE {self.id_field} = ?", (record_id,))  # noqa: S608
 			deleted = cur.rowcount > 0
@@ -167,7 +170,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 		"""
 		target = Path(target_path)
 		target.parent.mkdir(parents=True, exist_ok=True)
-		with target.open("w", encoding="utf-8") as handle, self._connect() as conn:
+		with target.open("w", encoding="utf-8") as handle, closing(self._connect()) as conn, conn:
 			cur = conn.cursor()
 			cur.execute(f"SELECT data FROM {self.table}")  # noqa: S608
 			rows = (json.loads(row[0]) for row in cur)
@@ -183,7 +186,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
 
 	def _ensure_table(self) -> None:
 		"""Create the backing table when it does not exist."""
-		with self._connect() as conn:
+		with closing(self._connect()) as conn, conn:
 			cur = conn.cursor()
 			cur.execute(
 				f"""
