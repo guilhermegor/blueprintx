@@ -76,8 +76,6 @@ quote-style = "double"
 indent-style = "space"
 docstring-code-format = false
 docstring-code-line-length = 79  # original python standard - readability in terminal (help)
-# transitional: blueprintx#419 reindent chain, removed by #555 (last of the chain)
-exclude = ["**/*.py"]
 
 [lint]
 # ⚠️ Preview is needed ONLY for PLR1702 (too-many-nested-blocks, below) — it is still a
@@ -278,8 +276,6 @@ ignore-fully-untyped = false  # flag functions that are completely untyped
 allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 
 [lint.per-file-ignores]
-# transitional: blueprintx#419 reindent chain, removed by #555 (last of the chain)
-"**/*.py" = ["W191", "D206"]
 # ⚠️ `bin` was ONCE in [exclude] above, with the reason "ruff-format would tabify
 # space-indented helpers and trip E101". Two things were wrong with that (blueprintx#207):
 #
