@@ -93,7 +93,7 @@ then with `--cov-branch` on the same suite:
 |---|---|---|---|
 | `ddd-service-native-db` | 100% | 100% | measured set is empty: all capability code outside `example_feature` is in `omit` |
 | `ddd-service-orm-db` | 100% | 100% | same, so these two tiers give no evidence either way |
-| `mvc-service-native-db` | 80% | 81% | branch coverage can rise: missed lines can be straight-line code with no branch of their own |
+| `mvc-service-native-db` | 80% | 81% | branch coverage can rise: missed lines can be straight-line code with no branch of their own; 86% once `ExampleEntity` is exercised (#667, same unbound `pd` as #617) |
 | `mvc-service-orm-db` | 76% | 76% | already below the floor before `branch = True`; not introduced by it |
 | `lib-minimal` | 100% | 100% | two-file skeleton, nothing to branch on |
 
