@@ -486,3 +486,103 @@ def test_untracked_files_are_invisible_but_tracked_ones_are_not(
     assert list_names == ["ok.py"], (
         f"untracked worktree content leaked into discovery: {list_names}"
     )
+
+
+def test_bare_root_flag_fails_instead_of_checking_nothing(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """``--root`` with no directory must exit non-zero, not report success.
+
+    Before blueprintx#247 the flag fell through to the filename list, `file_problems`
+    ignored its unsupported extension, and the gate printed its success banner having
+    checked nothing. `check_function_length.py` — the seam this one mirrors — already
+    rejected the same argv, so the two had drifted.
+
+    Parameters
+    ----------
+    capsys : pytest.CaptureFixture
+            Captures the gate's message, so the assertion names the reason and not only
+            the exit code (a crash also exits non-zero).
+    """
+    int_status = gate.main(["--root"])
+    str_out = capsys.readouterr().out
+
+    assert int_status == 1, "a bare --root reported success"
+    assert "--root needs a directory" in str_out, f"failed without naming the reason: {str_out!r}"
+
+
+def test_missing_root_directory_fails_instead_of_checking_nothing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """``--root`` naming a directory that does not exist must exit non-zero.
+
+    Every named file's read then raises ``OSError``, `file_problems` returns no problem, and
+    the gate used to exit 0 having checked nothing — the success-for-checking-nothing outcome
+    of blueprintx#247 again, through a path the bare-flag fix did not cover.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            A parent under which the missing root is named but never created.
+    capsys : pytest.CaptureFixture
+            Captures the gate's message, so the assertion names the reason and not only
+            the exit code.
+    """
+    int_status = gate.main(["--root", str(tmp_path / "nonexistent"), "a.py"])
+    str_out = capsys.readouterr().out
+
+    assert (int_status, "is not a directory" in str_out) == (1, True), (
+        f"status {int_status}, output {str_out!r}"
+    )
+
+
+@pytest.mark.parametrize("list_argv", [["a.py", "--root", "x"], ["--root=x"]])
+def test_misplaced_root_flag_fails_instead_of_checking_nothing(
+    list_argv: list[str],
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """``--root`` anywhere but first must exit non-zero, not fall into the filename list.
+
+    Parameters
+    ----------
+    list_argv : list of str
+            An argv carrying ``--root`` in a position the gate does not parse.
+    capsys : pytest.CaptureFixture
+            Captures the gate's message, so the assertion names the reason.
+    """
+    int_status = gate.main(list_argv)
+    str_out = capsys.readouterr().out
+
+    assert int_status == 1, f"{list_argv} reported success"
+    assert "--root must be the first argument" in str_out, f"no reason named: {str_out!r}"
+
+
+def test_named_file_resolves_against_root_not_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """A relative filename after ``--root`` is read under that root, whatever the cwd.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Holds the root and an unrelated working directory.
+    monkeypatch : pytest.MonkeyPatch
+            Moves the cwd away from the root.
+    capsys : pytest.CaptureFixture
+            Captures the success banner naming the file count.
+    """
+    path_root = tmp_path / "root"
+    path_root.mkdir()
+    (path_root / "ok.py").write_text('"""Fine."""\n')
+    path_cwd = tmp_path / "elsewhere"
+    path_cwd.mkdir()
+    monkeypatch.chdir(path_cwd)
+    # Registering the module root here makes teardown undo the rebind the gate performs.
+    monkeypatch.setattr(gate, "PATH_ROOT", gate.PATH_ROOT)
+
+    int_status = gate.main(["--root", str(path_root), "ok.py"])
+
+    assert int_status == 0, capsys.readouterr().out
