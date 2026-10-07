@@ -259,7 +259,7 @@ repos:
         entry: bash tests/test_spec_answers.sh
         language: system
         pass_filenames: false
-        files: ^(bin/lib/(spec|common)\.sh|bin/blueprintx\.sh|bin/scaffold/python_lib_minimal\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
+        files: ^(bin/lib/(spec|common)\.sh|bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
 
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)

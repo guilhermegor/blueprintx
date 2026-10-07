@@ -624,15 +624,20 @@ scaffold_from_spec() {
     scaffold_script="$BLUEPRINTX_ROOT/$scaffold_rel"
     [ -f "$scaffold_script" ] || exit_error "Scaffold script not found: $scaffold_script"
 
-    local -a list_status
-    spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
-        | GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
-            LICENSE_CHOICE="$LICENSE_CHOICE" DOCS_LOCALE="$DOCS_LOCALE" \
-            bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION"
-    list_status=("${PIPESTATUS[@]}")
-    # The pipeline's own status is the scaffold's, and `set -e` already stops on that. A failed
-    # answer stream would otherwise hand the scaffold an empty stdin and still report success.
-    [ "${list_status[0]}" -eq 0 ] || exit_error "--spec: could not resolve the answers for '$SKELETON_CHOICE'."
+    # Resolve the answers BEFORE the scaffold starts, into a file rather than `$(...)`, which
+    # would strip trailing empty (accept-default) answer lines. No pipe also means no SIGPIPE
+    # status when the scaffold finishes before reading every line.
+    local path_answers
+    path_answers="$(mktemp)"
+    spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" >"$path_answers" || {
+        rm -f "$path_answers"
+        exit_error "--spec: could not resolve the answers for '$SKELETON_CHOICE'."
+    }
+    GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
+        LICENSE_CHOICE="$LICENSE_CHOICE" DOCS_LOCALE="$DOCS_LOCALE" \
+        bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" \
+        <"$path_answers" || { rm -f "$path_answers"; return 1; }
+    rm -f "$path_answers"
 }
 
 #

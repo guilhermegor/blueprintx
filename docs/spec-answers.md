@@ -61,8 +61,10 @@ Answer `bin/blueprintx.sh`'s own prompts (before any scaffold script runs):
 ## Value rules and flags
 
 - **Values are trimmed.** Leading and trailing whitespace, including the `\r` a spec saved with
-  CRLF line endings leaves on every line, is stripped for every key, so `otel=yes` reads the
-  same on Windows. Whitespace inside a value is kept.
+  CRLF line endings leaves on every line, is stripped from every value, so `otel=yes` reads the
+  same on Windows. Whitespace inside a value is kept. A value that is blank after trimming
+  means the key's default, for every key. Keys are not trimmed: write `otel=yes`, never
+  ` otel=yes` or `otel = yes`, or the line is ignored and the default applies.
 - **y/n keys** take `y`/`yes`/`true` or `n`/`no`/`false`, in any case; an empty value means the
   key's default. Any other value (for example `maybe`, or a mistyped `yes`) **stops the run before anything is
   created**, naming the key. It is never read as `n`.

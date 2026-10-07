@@ -211,7 +211,18 @@ test_spec_values_are_trimmed_so_a_crlf_spec_works() {
 }
 
 test_yn_keys_read_by_callers_match_the_key_map() {
-    local str_called str_mapped
+    local str_called str_mapped str_unparsed
+    # A call site the sed below cannot read (a variable default, two calls on one line) would
+    # escape the comparison, so any such line fails the test. The validator's generic call is
+    # the one allowed exception.
+    str_unparsed="$(grep -n 'spec_yn "\$' "$REPO_ROOT/bin/lib/spec.sh" \
+        | grep -v '"\$key" "\$default"' \
+        | grep -vE '^[0-9]+:[^#]*spec_yn "\$[a-z0-9]*" [a-z_]+ [yn]([^a-z_]|$)' \
+        ; grep -n 'spec_yn .*spec_yn ' "$REPO_ROOT/bin/lib/spec.sh")" || true
+    if [ -n "$str_unparsed" ]; then
+        fail "key map vs callers" "call site(s) the check cannot parse: $str_unparsed"
+        return
+    fi
     # Every `spec_yn "$x" <key> <default>` call site in the answer emitters, as "key:default".
     str_called="$(sed -n 's/.*spec_yn "\$[a-z0-9]*" \([a-z_]*\) \([yn]\).*/\1:\2/p' "$REPO_ROOT/bin/lib/spec.sh" | sort -u)"
     # Every y/n entry of the key map across all supported skeletons.
@@ -246,14 +257,15 @@ test_a_failed_answer_stream_stops_the_scaffold_flow() {
         source "$str_repo/bin/blueprintx.sh"
         mkdir -p "$str_stub/templates/fake"
         printf "scaffold=fake.sh\n" >"$str_stub/templates/fake/skeleton.meta"
-        printf "exit 0\n" >"$str_stub/fake.sh"
+        printf "touch \"%s/scaffold-ran\"\n" "$str_stub" >"$str_stub/fake.sh"
         TEMPLATES_ROOT="$str_stub/templates" BLUEPRINTX_ROOT="$str_stub"
         SKELETON_CHOICE=fake SPEC_FILE=none PROJECT_ROOT="$str_stub" PROJECT_NAME=p PROJECT_DESCRIPTION=d
         LICENSE_CHOICE=MIT DOCS_LOCALE=en
         spec_stdin_for_skeleton() { return 1; }
         scaffold_from_spec' _ "$REPO_ROOT" "$WORK_DIR/stream" 2>&1)" || true
-    if [[ "$str_res" == *"could not resolve the answers for 'fake'"* ]]; then
-        pass "a failing answer stream is reported instead of handing the scaffold an empty stdin"
+    if [[ "$str_res" == *"could not resolve the answers for 'fake'"* ]] \
+        && [ ! -e "$WORK_DIR/stream/scaffold-ran" ]; then
+        pass "a failing answer stream stops the flow before the scaffold ever runs"
     else
         fail "answer stream status" "got: ${str_res: -300}"
     fi
