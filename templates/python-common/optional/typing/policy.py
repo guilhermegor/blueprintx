@@ -49,48 +49,48 @@ PEP484_NUMERIC_TOWER: bool = False
 
 def _int_hint(  # complexity-ok: type metaprogramming
 ) -> Any:
-	"""Build the ``int`` replacement hint from the numeric knobs.
+    """Build the ``int`` replacement hint from the numeric knobs.
 
-	Returns
-	-------
-	Any
-		Either bare ``int`` (no override needed) or an ``Annotated``/union hint that
-		widens to ``numpy.integer`` and/or rejects ``bool``, per the knobs above.
-	"""
-	int_base: Any = int
-	if WIDEN_INT_TO_NUMPY:
-		try:
-			import numpy as np
+    Returns
+    -------
+    Any
+            Either bare ``int`` (no override needed) or an ``Annotated``/union hint that
+            widens to ``numpy.integer`` and/or rejects ``bool``, per the knobs above.
+    """
+    int_base: Any = int
+    if WIDEN_INT_TO_NUMPY:
+        try:
+            import numpy as np
 
-			int_base = int | np.integer
-		except ModuleNotFoundError:  # pragma: no cover - depends on the tier's deps
-			int_base = int
-	if STRICT_BOOL:
-		return Annotated[int_base, Is[lambda obj: not isinstance(obj, bool)]]
-	return int_base
+            int_base = int | np.integer
+        except ModuleNotFoundError:  # pragma: no cover - depends on the tier's deps
+            int_base = int
+    if STRICT_BOOL:
+        return Annotated[int_base, Is[lambda obj: not isinstance(obj, bool)]]
+    return int_base
 
 
 def build_conf() -> BeartypeConf:
-	"""Assemble the project ``BeartypeConf`` from the policy knobs.
+    """Assemble the project ``BeartypeConf`` from the policy knobs.
 
-	Returns
-	-------
-	BeartypeConf
-		The configuration the engine adapter applies to every checked call.
-	"""
-	int_hint = _int_hint()
-	if int_hint is int:
-		# No numeric override applies, so skip the hint override entirely and let beartype
-		# use its own int handling rather than a redundant self-mapping.
-		return BeartypeConf(
-			violation_type=VIOLATION_TYPE,
-			is_pep484_tower=PEP484_NUMERIC_TOWER,
-		)
-	return BeartypeConf(
-		violation_type=VIOLATION_TYPE,
-		is_pep484_tower=PEP484_NUMERIC_TOWER,
-		hint_overrides=BeartypeHintOverrides({int: int_hint}),
-	)
+    Returns
+    -------
+    BeartypeConf
+            The configuration the engine adapter applies to every checked call.
+    """
+    int_hint = _int_hint()
+    if int_hint is int:
+        # No numeric override applies, so skip the hint override entirely and let beartype
+        # use its own int handling rather than a redundant self-mapping.
+        return BeartypeConf(
+            violation_type=VIOLATION_TYPE,
+            is_pep484_tower=PEP484_NUMERIC_TOWER,
+        )
+    return BeartypeConf(
+        violation_type=VIOLATION_TYPE,
+        is_pep484_tower=PEP484_NUMERIC_TOWER,
+        hint_overrides=BeartypeHintOverrides({int: int_hint}),
+    )
 
 
 CONF = build_conf()
