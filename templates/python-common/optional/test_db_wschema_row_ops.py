@@ -11,11 +11,18 @@ LIST_ROWS = [{"id": "1", "v": "a"}, {"id": "2", "v": "b"}, {"id": "2", "v": "c"}
 
 
 @pytest.mark.parametrize(
-    ("value", "str_expected"), [("1", True), (1, True), ("9", False), (None, False)]
+    ("dict_row", "bool_expected"),
+    [
+        ({"id": "1"}, True),
+        ({"id": 1}, True),
+        ({"id": "9"}, False),
+        ({}, False),
+        ({"id": None}, False),
+    ],
 )
-def test_row_has_id_compares_as_strings(value: object, str_expected: bool) -> None:
+def test_row_has_id_compares_as_strings(dict_row: dict[str, object], bool_expected: bool) -> None:
     """The CSV backend returns every value as text, so ``1`` and ``"1"`` are the same id."""
-    assert _row_has_id({"id": value} if value is not None else {}, "id", "1") is str_expected
+    assert _row_has_id(dict_row, "id", "1") is bool_expected
 
 
 def test_find_row_returns_the_first_match() -> None:
