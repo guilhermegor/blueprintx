@@ -55,6 +55,7 @@ Answer `bin/blueprintx.sh`'s own prompts (before any scaffold script runs):
 | `language` | yes | — | Must match a discovered `templates/*/skeleton.meta` `language=`. |
 | `skeleton` | yes | — | Must name a directory under `templates/` with a `skeleton.meta`. |
 | `license` | no | `MIT` | One of the choices `prompt_license` offers. |
+| `docs_locale` | no | `en` | `en` or `pt-BR`, the choices `prompt_docs_locale` offers. Any other value stops the run before anything is created, naming the key. |
 | `github_username` | no | `$GITHUB_USERNAME` env, else `gh` CLI, else prompt | Passed through as `GITHUB_USERNAME` to the scaffold script. |
 
 ## Value rules and flags
