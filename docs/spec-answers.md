@@ -60,11 +60,15 @@ Answer `bin/blueprintx.sh`'s own prompts (before any scaffold script runs):
 
 ## Value rules and flags
 
+- **Values are trimmed.** Leading and trailing whitespace, including the `\r` a spec saved with
+  CRLF line endings leaves on every line, is stripped for every key, so `otel=yes` reads the
+  same on Windows. Whitespace inside a value is kept.
 - **y/n keys** take `y`/`yes`/`true` or `n`/`no`/`false`, in any case; an empty value means the
   key's default. Any other value (for example `maybe`, or a mistyped `yes`) **stops the run before anything is
   created**, naming the key. It is never read as `n`.
 - **`--dev`** scaffolds into a fresh temp directory instead of `project_root`/`$PWD`, and
-  **`--clean`** (with `--dev`) deletes it on exit — the same as the interactive flow. With `--dev`,
+  **`--clean`** (with `--dev`) deletes it on exit — the same as the interactive flow, and the
+  closing notice says the printed project path will not exist afterwards. With `--dev`,
   `project_root` is ignored.
 - **`--dry-run`** prints the resolved answers and the structure, and creates nothing.
 
@@ -135,6 +139,11 @@ until a named-key map is added for them, the same way the five Python tiers were
 `spec_skeleton_supported` returns `false` for them today. `blueprintx new --spec` **refuses**
 such a skeleton before creating anything (a half-interactive run would hang an unattended
 caller); `--spec ... --dry-run` still reports the resolved top-level answers with a warning.
+The refusal is deliberately unconditional, not "only when stdin is not a terminal" (considered
+in #636): `--spec` exists to run without a person, and a spec whose internal answers are
+silently ignored in favour of live prompts would be a different, half-honoured contract.
+`--spec` names a skeleton by exact equality, so two supported names joined by a space do not
+match.
 
 ## Used by CI
 

@@ -609,6 +609,8 @@ print_dev_mode_notice() {
     print_status "warning" "Dev mode: project scaffolded in temp directory"
     if [ "$CLEAN_TEMP" -ne 1 ]; then
         print_status "info" "Temp directory preserved at: $TEMP_ROOT"
+    else
+        print_status "info" "Temp directory is deleted on exit: the project path above will not exist afterwards"
     fi
 }
 
@@ -622,10 +624,15 @@ scaffold_from_spec() {
     scaffold_script="$BLUEPRINTX_ROOT/$scaffold_rel"
     [ -f "$scaffold_script" ] || exit_error "Scaffold script not found: $scaffold_script"
 
+    local -a list_status
     spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
         | GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
             LICENSE_CHOICE="$LICENSE_CHOICE" DOCS_LOCALE="$DOCS_LOCALE" \
             bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION"
+    list_status=("${PIPESTATUS[@]}")
+    # The pipeline's own status is the scaffold's, and `set -e` already stops on that. A failed
+    # answer stream would otherwise hand the scaffold an empty stdin and still report success.
+    [ "${list_status[0]}" -eq 0 ] || exit_error "--spec: could not resolve the answers for '$SKELETON_CHOICE'."
 }
 
 #
