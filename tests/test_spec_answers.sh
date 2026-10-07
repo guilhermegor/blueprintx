@@ -216,6 +216,7 @@ test_yn_keys_read_by_callers_match_the_key_map() {
     # escape the comparison, so any such line fails the test. The validator's generic call is
     # the one allowed exception.
     str_unparsed="$(grep -n 'spec_yn "\$' "$REPO_ROOT/bin/lib/spec.sh" \
+        | grep -vE '^[0-9]+:[[:space:]]*#' \
         | grep -v '"\$key" "\$default"' \
         | grep -vE '^[0-9]+:[^#]*spec_yn "\$[a-z0-9]*" [a-z_]+ [yn]([^a-z_]|$)' \
         ; grep -n 'spec_yn .*spec_yn ' "$REPO_ROOT/bin/lib/spec.sh")" || true
@@ -224,7 +225,7 @@ test_yn_keys_read_by_callers_match_the_key_map() {
         return
     fi
     # Every `spec_yn "$x" <key> <default>` call site in the answer emitters, as "key:default".
-    str_called="$(sed -n 's/.*spec_yn "\$[a-z0-9]*" \([a-z_]*\) \([yn]\).*/\1:\2/p' "$REPO_ROOT/bin/lib/spec.sh" | sort -u)"
+    str_called="$(sed -n '/^[[:space:]]*#/d; s/.*spec_yn "\$[a-z0-9]*" \([a-z_]*\) \([yn]\).*/\1:\2/p' "$REPO_ROOT/bin/lib/spec.sh" | sort -u)"
     # Every y/n entry of the key map across all supported skeletons.
     str_mapped="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
         for sk in $_SPEC_SUPPORTED_SKELETONS; do _spec_key_map "$sk"; done' _ "$REPO_ROOT" \
