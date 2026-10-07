@@ -252,7 +252,8 @@ repos:
         entry: bash tests/test_docs_locale_prompt.sh
         language: system
         pass_filenames: false
-        files: ^(bin/blueprintx\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
+        files: ^(bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
+
       - id: spec-answers-tests
         name: --spec regression tests (blueprintx#629)
         entry: bash tests/test_spec_answers.sh
