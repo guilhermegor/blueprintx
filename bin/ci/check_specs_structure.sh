@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Validates the .specs/ layout (blueprintx#447, #583). One implementation, two callers: this
-# repo's own tree (default) and a generated project (`--root <dir>`, as the other gates take it).
+# repo's own tree (default) or any tree via `--root <dir>`, as the other gates take it.
 # .specs/CLAUDE.md is the human-facing version of every rule below; each is checked, not claimed.
 #
 #   1. If .specs/ exists, .specs/CLAUDE.md must exist.
@@ -8,8 +8,8 @@
 #   3. features/ holds directories only, kebab-case with a letter, and never a change TYPE
 #      (bugfix/, chore/, ... — dotfiles-dev#442: features/ splits on lifecycle, not change type).
 #   4. features/<name>/ holds at least one of design.md, plan.md, tasks.md. pr.md or
-#      pr-<N>-<kebab>.md are recognised but never sufficient; any other pr*.md name fails.
-#   5. Every task line in tasks.md uses [ ], [~] <branch> or [x] — [~] must name a branch.
+#      pr-<N>-<kebab>.md are recognized but never sufficient; any other pr[-_0-9]*.md name fails.
+#   5. Every task line in tasks.md uses [ ], [~] <branch> or [x] — [~] must name a <type>/<name> branch.
 #   6. backlog/ is flat, <kebab-topic>_YYYYMMDD_HHMMSS.md.
 
 set -euo pipefail
@@ -40,24 +40,35 @@ errors=0
 # Conventional-Commit and branch types — a feature directory named after one is a type-folder.
 is_change_type() {
     case "$1" in
-        feat|feature|fix|bugfix|hotfix|chore|docs|refactor|perf|test|style|build|ci|revert|release)
+        feat|feature|fix|bugfix|hotfix|chore|docs|refactor|perf|test|tests|style|build|ci|revert|release)
             return 0 ;;
         *) return 1 ;;
     esac
 }
 
-# Every task line (`- [?]` / `* [?]`, outside code fences) must be [ ], [~] <branch> or [x].
+# Every task line (`-`/`*`/`+`/`1.` bullets, outside code fences) must be [ ], [~] <type>/<branch>
+# or [x]. A fence closes on the same character, at least as long, with nothing after it.
 check_tasks_markers() {
     local file="$1" label="$2" bad
     bad="$(awk '
-        /^[[:space:]]*```/ { fence = !fence; next }
-        fence { next }
-        match($0, /^[[:space:]]*[-*] \[[^]]*\]/) {
+        fence {
+            if (match($0, /^[[:space:]]*(```+|~~~+)[[:space:]]*$/)) {
+                run = $0; gsub(/[[:space:]]/, "", run)
+                if (substr(run, 1, 1) == fchar && length(run) >= flen) fence = 0
+            }
+            next
+        }
+        match($0, /^[[:space:]]*(```+|~~~+)/) {
+            run = substr($0, RSTART, RLENGTH); gsub(/[[:space:]]/, "", run)
+            fence = 1; fchar = substr(run, 1, 1); flen = length(run); fline = NR; next
+        }
+        match($0, /^[[:space:]]*([-*+]|[0-9]+[.)]) \[[^]]*\]/) {
             mark = substr($0, RSTART, RLENGTH); sub(/^[^[]*\[/, "", mark); sub(/\]$/, "", mark)
             rest = substr($0, RLENGTH + 1)
             if (mark != " " && mark != "~" && mark != "x") print NR ": " $0
-            else if (mark == "~" && rest !~ /^ +[^ ]/) print NR ": " $0
-        }' "$file")"
+            else if (mark == "~" && rest !~ /^[[:space:]]+[a-z]+\/[^[:space:]]+/) print NR ": " $0
+        }
+        END { if (fence) print fline ": unclosed code fence" }' "$file")"
     if [ -n "$bad" ]; then
         printf '%s\n' "$bad" | while IFS= read -r line; do
             echo "ERROR: $label line $line — markers are [ ], [~] <branch> and [x]" >&2
@@ -121,7 +132,12 @@ if [ -d "$SPECS_DIR/features" ]; then
                  "(pr.md alone is not a feature)" >&2
             errors=$((errors + 1))
         fi
-        for member in "$entry"/pr.md "$entry"/pr-*.md; do
+        for member in "$entry"/[pP][rR].md "$entry"/[pP][rR][-_0-9]*.md; do
+            if [ ! -f "$member" ]; then
+                echo "ERROR: .specs/features/$name/$(basename "$member") is not a file" >&2
+                errors=$((errors + 1))
+                continue
+            fi
             member_name="$(basename "$member")"
             if ! printf '%s' "$member_name" | grep -qE '^pr(-[0-9]+-[a-z0-9]+(-[a-z0-9]+)*)?\.md$'; then
                 echo "ERROR: .specs/features/$name/$member_name is not pr.md or" \

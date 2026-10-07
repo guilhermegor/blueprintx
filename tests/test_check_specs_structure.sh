@@ -88,7 +88,7 @@ test_stray_top_level_entry_fails() {
 
 test_type_folder_fails() {
     local str_type str_root
-    for str_type in bugfix chore feat fix docs refactor; do
+    for str_type in bugfix chore feat fix docs refactor test tests; do
         str_root="$(make_tree)"
         feature "$str_root" "$str_type" design.md
         expect "type-folder $str_type/" "$str_root" fail "features/$str_type is a change type"
@@ -121,7 +121,7 @@ test_feature_floor() {
 
 test_malformed_pr_name_fails() {
     local str_name str_root
-    for str_name in pr-draft.md pr-1.md pr-x-slug.md pr-1-Bad_Slug.md; do
+    for str_name in pr-draft.md pr-1.md pr-x-slug.md pr-1-Bad_Slug.md pr1.md pr_draft.md PR.md; do
         str_root="$(make_tree)"
         feature "$str_root" "one-thing" design.md "$str_name"
         expect "malformed pr file $str_name" "$str_root" fail "is not pr.md or"
@@ -144,7 +144,8 @@ test_gitkeep_in_features_is_tolerated() {
 
 test_bad_task_markers_fail() {
     local str_line str_root
-    for str_line in '- [?] unknown' '- [X] upper' '- [] empty' '- [~]' '- [~] ' '* [done] word'; do
+    for str_line in '- [?] unknown' '- [X] upper' '- [] empty' '- [~]' '- [~] ' '* [done] word' \
+        '+ [?] plus' '1. [?] ordered' '2) [?] paren' '- [~]	' '- [~] 	'; do
         str_root="$(make_tree)"
         feature "$str_root" "one-thing" design.md
         printf '%s\n' "$str_line" >"$str_root/.specs/features/one-thing/tasks.md"
@@ -160,6 +161,32 @@ test_good_task_markers_pass() {
         'prose with [brackets] is not a task' '```' '- [?] inside a fence is documentation' '```' \
         >"$str_root/.specs/features/one-thing/tasks.md"
     expect "legal markers, prose and a fenced example" "$str_root" pass
+}
+
+test_fence_tracking() {
+    local str_root
+    str_root="$(make_tree)"
+    feature "$str_root" "one-thing"
+    printf '%s\n' '~~~' '- [?] tilde-fenced example' '~~~' '````' '```' '- [?] nested' '````' \
+        >"$str_root/.specs/features/one-thing/tasks.md"
+    expect "tilde fence and a longer backtick fence" "$str_root" pass
+    str_root="$(make_tree)"
+    feature "$str_root" "one-thing"
+    printf '%s\n' '```' '- [ ] opened and never closed' >"$str_root/.specs/features/one-thing/tasks.md"
+    expect "unclosed fence" "$str_root" fail "unclosed code fence"
+    str_root="$(make_tree)"
+    feature "$str_root" "one-thing"
+    printf '%s\n' '```' '~~~' '- [?] still inside the backtick fence' '```' \
+        >"$str_root/.specs/features/one-thing/tasks.md"
+    expect "other-character fence does not close" "$str_root" pass
+}
+
+test_pr_directory_is_not_a_body() {
+    local str_root
+    str_root="$(make_tree)"
+    feature "$str_root" "one-thing" design.md
+    mkdir "$str_root/.specs/features/one-thing/pr-1-x.md"
+    expect "directory named like a PR body" "$str_root" fail "is not a file"
 }
 
 test_backlog_rules() {
@@ -188,6 +215,8 @@ main() {
     test_gitkeep_in_features_is_tolerated
     test_bad_task_markers_fail
     test_good_task_markers_pass
+    test_fence_tracking
+    test_pr_directory_is_not_a_body
     test_backlog_rules
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"

@@ -273,7 +273,7 @@ repos:
         entry: bash tests/test_check_specs_structure.sh
         language: system
         pass_filenames: false
-        files: ^(bin/ci/check_specs_structure\.sh|tests/test_check_specs_structure\.sh)$
+        files: ^(bin/ci/check_specs_structure\.sh|tests/test_check_specs_structure\.sh|bin/lib/common\.sh)$
 
       - id: docs-boundary
         name: docs/ boundary guard (working material stays out of docs/, blueprintx#536)
