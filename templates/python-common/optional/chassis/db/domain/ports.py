@@ -83,6 +83,13 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
         -------
         Record or None
                 Updated record when it exists, otherwise ``None``.
+
+        Raises
+        ------
+        NotImplementedError
+                Only from a backend whose records are immutable by design
+                (``JoblibHandler``), which has no in-place write to make atomic. Such a
+                handler states so in its own docstring and in the factory's ``Notes``.
         """
 
     @abstractmethod

@@ -19,46 +19,46 @@ _BIN = Path(__file__).resolve().parents[2] / "bin"
 
 
 def _load(str_name: str) -> ModuleType:
-	"""Load a ``bin/`` script by path (``bin/`` is not a package).
+    """Load a ``bin/`` script by path (``bin/`` is not a package).
 
-	Parameters
-	----------
-	str_name : str
-		Module stem under ``bin/``.
+    Parameters
+    ----------
+    str_name : str
+        Module stem under ``bin/``.
 
-	Returns
-	-------
-	ModuleType
-		The imported module.
-	"""
-	cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
-	cls_module = importlib.util.module_from_spec(cls_spec)
-	sys.modules[str_name] = cls_module
-	cls_spec.loader.exec_module(cls_module)
-	return cls_module
+    Returns
+    -------
+    ModuleType
+        The imported module.
+    """
+    cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
+    cls_module = importlib.util.module_from_spec(cls_spec)
+    sys.modules[str_name] = cls_module
+    cls_spec.loader.exec_module(cls_module)
+    return cls_module
 
 
 gate = _load("check_fixture_scope")
 
 
 def _test_file(path_dir: Path, str_source: str) -> Path:
-	"""Write a test-module source file and return its path.
+    """Write a test-module source file and return its path.
 
-	Parameters
-	----------
-	path_dir : pathlib.Path
-		Directory to write into.
-	str_source : str
-		File contents.
+    Parameters
+    ----------
+    path_dir : pathlib.Path
+        Directory to write into.
+    str_source : str
+        File contents.
 
-	Returns
-	-------
-	pathlib.Path
-		The written file.
-	"""
-	path_file = path_dir / "test_sample.py"
-	path_file.write_text(str_source, encoding="utf-8")
-	return path_file
+    Returns
+    -------
+    pathlib.Path
+        The written file.
+    """
+    path_file = path_dir / "test_sample.py"
+    path_file.write_text(str_source, encoding="utf-8")
+    return path_file
 
 
 # --------------------------
@@ -67,28 +67,28 @@ def _test_file(path_dir: Path, str_source: str) -> Path:
 
 
 def test_a_module_scope_fixture_with_no_reason_is_reported(tmp_path: Path) -> None:
-	"""A widened, unjustified scope produces exactly one finding."""
-	path_file = _test_file(
-		tmp_path,
-		'import pytest\n\n\n@pytest.fixture(scope="module")\ndef shared():\n\treturn {}\n',
-	)
+    """A widened, unjustified scope produces exactly one finding."""
+    path_file = _test_file(
+        tmp_path,
+        'import pytest\n\n\n@pytest.fixture(scope="module")\ndef shared():\n\treturn {}\n',
+    )
 
-	list_problems = gate.file_problems(path_file)
+    list_problems = gate.file_problems(path_file)
 
-	assert len(list_problems) == 1
-	assert "shared()" in list_problems[0]
-	assert "scope='module'" in list_problems[0]
+    assert len(list_problems) == 1
+    assert "shared()" in list_problems[0]
+    assert "scope='module'" in list_problems[0]
 
 
 @pytest.mark.parametrize("str_scope", ["class", "session", "package"])
 def test_every_wide_scope_is_reported(tmp_path: Path, str_scope: str) -> None:
-	"""class/session/package are widened scopes too, not just module."""
-	path_file = _test_file(
-		tmp_path,
-		f'import pytest\n\n\n@pytest.fixture(scope="{str_scope}")\ndef shared():\n\treturn {{}}\n',
-	)
+    """class/session/package are widened scopes too, not just module."""
+    path_file = _test_file(
+        tmp_path,
+        f'import pytest\n\n\n@pytest.fixture(scope="{str_scope}")\ndef shared():\n\treturn {{}}\n',
+    )
 
-	assert len(gate.file_problems(path_file)) == 1
+    assert len(gate.file_problems(path_file)) == 1
 
 
 # --------------------------
@@ -97,75 +97,75 @@ def test_every_wide_scope_is_reported(tmp_path: Path, str_scope: str) -> None:
 
 
 def test_a_bare_fixture_decorator_is_accepted() -> None:
-	"""`@pytest.fixture` with no call carries no `scope=` to widen."""
-	node_dec = __import__("ast").parse("@fixture\ndef f(): pass").body[0].decorator_list[0]
+    """`@pytest.fixture` with no call carries no `scope=` to widen."""
+    node_dec = __import__("ast").parse("@fixture\ndef f(): pass").body[0].decorator_list[0]
 
-	assert gate._decorator_call_name(node_dec) is None
+    assert gate._decorator_call_name(node_dec) is None
 
 
 def test_the_default_function_scope_is_accepted(tmp_path: Path) -> None:
-	"""No `scope=` kwarg at all — the pytest default — passes clean."""
-	path_file = _test_file(tmp_path, "import pytest\n\n\n@pytest.fixture\ndef f():\n\treturn {}\n")
+    """No `scope=` kwarg at all — the pytest default — passes clean."""
+    path_file = _test_file(tmp_path, "import pytest\n\n\n@pytest.fixture\ndef f():\n\treturn {}\n")
 
-	assert gate.file_problems(path_file) == []
+    assert gate.file_problems(path_file) == []
 
 
 def test_an_explicit_function_scope_is_accepted(tmp_path: Path) -> None:
-	"""`scope="function"` spelled out explicitly is the same as the default."""
-	path_file = _test_file(
-		tmp_path,
-		'import pytest\n\n\n@pytest.fixture(scope="function")\ndef f():\n\treturn {}\n',
-	)
+    """`scope="function"` spelled out explicitly is the same as the default."""
+    path_file = _test_file(
+        tmp_path,
+        'import pytest\n\n\n@pytest.fixture(scope="function")\ndef f():\n\treturn {}\n',
+    )
 
-	assert gate.file_problems(path_file) == []
+    assert gate.file_problems(path_file) == []
 
 
 def test_a_written_justification_on_the_decorator_line_is_accepted(tmp_path: Path) -> None:
-	"""`# fixture-scope-ok: <reason>` on the decorator line is the escape hatch."""
-	path_file = _test_file(
-		tmp_path,
-		'import pytest\n\n\n@pytest.fixture(scope="module")  '
-		"# fixture-scope-ok: read-only, never mutated\ndef shared():\n\treturn {}\n",
-	)
+    """`# fixture-scope-ok: <reason>` on the decorator line is the escape hatch."""
+    path_file = _test_file(
+        tmp_path,
+        'import pytest\n\n\n@pytest.fixture(scope="module")  '
+        "# fixture-scope-ok: read-only, never mutated\ndef shared():\n\treturn {}\n",
+    )
 
-	assert gate.file_problems(path_file) == []
+    assert gate.file_problems(path_file) == []
 
 
 def test_a_written_justification_on_the_def_line_is_also_accepted(tmp_path: Path) -> None:
-	"""The reason may sit anywhere from the decorator through the `def` line."""
-	path_file = _test_file(
-		tmp_path,
-		'import pytest\n\n\n@pytest.fixture(scope="module")\n'
-		"def shared():  # fixture-scope-ok: seeded once per module on purpose\n\treturn {}\n",
-	)
+    """The reason may sit anywhere from the decorator through the `def` line."""
+    path_file = _test_file(
+        tmp_path,
+        'import pytest\n\n\n@pytest.fixture(scope="module")\n'
+        "def shared():  # fixture-scope-ok: seeded once per module on purpose\n\treturn {}\n",
+    )
 
-	assert gate.file_problems(path_file) == []
+    assert gate.file_problems(path_file) == []
 
 
 def test_a_bare_marker_with_no_reason_is_rejected(tmp_path: Path) -> None:
-	"""Mirrors `test-change-ok:` / `complexity-ok:` elsewhere: the reason is REQUIRED."""
-	path_file = _test_file(
-		tmp_path,
-		'import pytest\n\n\n@pytest.fixture(scope="module")  # fixture-scope-ok:\n'
-		"def shared():\n\treturn {}\n",
-	)
+    """Mirrors `test-change-ok:` / `complexity-ok:` elsewhere: the reason is REQUIRED."""
+    path_file = _test_file(
+        tmp_path,
+        'import pytest\n\n\n@pytest.fixture(scope="module")  # fixture-scope-ok:\n'
+        "def shared():\n\treturn {}\n",
+    )
 
-	assert len(gate.file_problems(path_file)) == 1
+    assert len(gate.file_problems(path_file)) == 1
 
 
 def test_a_dynamic_scope_value_is_not_flagged(tmp_path: Path) -> None:
-	"""A `scope=` computed from a variable is not a decidable literal — not flagged.
+    """A `scope=` computed from a variable is not a decidable literal — not flagged.
 
-	Not a loophole: anything dynamic enough to dodge this proxy is unusual enough that a
-	human reviewing the diff will notice it on its own merits.
-	"""
-	path_file = _test_file(
-		tmp_path,
-		'import pytest\n\nSTR_SCOPE = "module"\n\n\n'
-		"@pytest.fixture(scope=STR_SCOPE)\ndef shared():\n\treturn {}\n",
-	)
+    Not a loophole: anything dynamic enough to dodge this proxy is unusual enough that a
+    human reviewing the diff will notice it on its own merits.
+    """
+    path_file = _test_file(
+        tmp_path,
+        'import pytest\n\nSTR_SCOPE = "module"\n\n\n'
+        "@pytest.fixture(scope=STR_SCOPE)\ndef shared():\n\treturn {}\n",
+    )
 
-	assert gate.file_problems(path_file) == []
+    assert gate.file_problems(path_file) == []
 
 
 # --------------------------
@@ -174,47 +174,47 @@ def test_a_dynamic_scope_value_is_not_flagged(tmp_path: Path) -> None:
 
 
 def test_an_unparsable_file_raises_rather_than_reporting_clean(tmp_path: Path) -> None:
-	"""A file the gate cannot parse must be a finding, never silently clean."""
-	path_file = _test_file(tmp_path, "def f(:\n")
+    """A file the gate cannot parse must be a finding, never silently clean."""
+    path_file = _test_file(tmp_path, "def f(:\n")
 
-	with pytest.raises(gate.UnparsableFileError):
-		gate.file_problems(path_file)
+    with pytest.raises(gate.UnparsableFileError):
+        gate.file_problems(path_file)
 
 
 def test_audit_mode_fails_when_discovery_matches_nothing(
-	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-	"""Zero discovered test files is a FAILURE — a renamed `tests/` layout must not go green."""
-	monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+    """Zero discovered test files is a FAILURE — a renamed `tests/` layout must not go green."""
+    monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
-	assert gate.main([]) == 1
+    assert gate.main([]) == 1
 
 
 def test_audit_mode_passes_and_reports_the_count(
-	tmp_path: Path,
-	monkeypatch: pytest.MonkeyPatch,
-	capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-	"""On success the gate prints how many files it checked, rather than staying silent."""
-	path_tests = tmp_path / "tests" / "unit"
-	path_tests.mkdir(parents=True)
-	_test_file(path_tests, "import pytest\n\n\n@pytest.fixture\ndef f():\n\treturn {}\n")
-	monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+    """On success the gate prints how many files it checked, rather than staying silent."""
+    path_tests = tmp_path / "tests" / "unit"
+    path_tests.mkdir(parents=True)
+    _test_file(path_tests, "import pytest\n\n\n@pytest.fixture\ndef f():\n\treturn {}\n")
+    monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
-	assert gate.main([]) == 0
-	assert "1 file(s) checked" in capsys.readouterr().out
+    assert gate.main([]) == 0
+    assert "1 file(s) checked" in capsys.readouterr().out
 
 
 def test_audit_mode_fails_on_a_real_violation_end_to_end(
-	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-	"""The finding must reach the exit code, not just `file_problems`' return value."""
-	path_tests = tmp_path / "tests" / "unit"
-	path_tests.mkdir(parents=True)
-	_test_file(
-		path_tests,
-		'import pytest\n\n\n@pytest.fixture(scope="session")\ndef f():\n\treturn {}\n',
-	)
-	monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+    """The finding must reach the exit code, not just `file_problems`' return value."""
+    path_tests = tmp_path / "tests" / "unit"
+    path_tests.mkdir(parents=True)
+    _test_file(
+        path_tests,
+        'import pytest\n\n\n@pytest.fixture(scope="session")\ndef f():\n\treturn {}\n',
+    )
+    monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
-	assert gate.main([]) == 1
+    assert gate.main([]) == 1
