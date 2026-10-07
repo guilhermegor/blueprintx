@@ -121,7 +121,7 @@ class NoteStatus(Enum):
 ```python
 # entities.py — persistence model (maps to a DB row)
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from .enums import NoteStatus
 
@@ -129,9 +129,11 @@ from .enums import NoteStatus
 class Note:
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     title: str = ""
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     status: NoteStatus = NoteStatus.DRAFT
 ```
+
+`created_at` is a timezone-aware UTC timestamp (`datetime.now(tz=timezone.utc)`, stdlib, so it needs no tz database on Windows); `datetime.utcnow` is deprecated since Python 3.12 and returns a naive value.
 
 ```python
 # dto.py — network model (what goes over the wire)
@@ -171,14 +173,14 @@ class NoteRepository(Protocol, metaclass=ProtocolTypeCheckerMeta):
 
 ```python
 # use_cases.py
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from ..domain.dto import NoteCreateDTO, NoteResponseDTO
 from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
 def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
-    cls_note = Note(id=uuid.uuid4().hex, title=cls_dto.title, created_at=datetime.utcnow())
+    cls_note = Note(id=uuid.uuid4().hex, title=cls_dto.title, created_at=datetime.now(tz=timezone.utc))
     cls_stored = cls_repo.add(cls_note)
     return NoteResponseDTO(
         id=cls_stored.id,
