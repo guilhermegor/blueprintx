@@ -8,7 +8,7 @@ import shutil
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
-from chassis.db_wschema.infrastructure._row_ops import apply_update, find_row
+from chassis.db_wschema.infrastructure._row_ops import _apply_update, _find_row
 
 
 class JSONDatabaseHandler(DatabaseHandler):
@@ -61,7 +61,7 @@ class JSONDatabaseHandler(DatabaseHandler):
         Record or None
                 Stored record when present, otherwise ``None``.
         """
-        return find_row(self._read_all(), self.id_field, record_id)
+        return _find_row(self._read_all(), self.id_field, record_id)
 
     def update(self, record_id: str, updates: Record) -> Record | None:
         """Update an existing record.
@@ -78,7 +78,9 @@ class JSONDatabaseHandler(DatabaseHandler):
         Record or None
                 Updated record when found, otherwise ``None``.
         """
-        list_rows, dict_updated = apply_update(self._read_all(), self.id_field, record_id, updates)
+        list_rows, dict_updated = _apply_update(
+            self._read_all(), self.id_field, record_id, updates
+        )
         if dict_updated is not None:
             self._write_all(list_rows)
         return dict_updated
