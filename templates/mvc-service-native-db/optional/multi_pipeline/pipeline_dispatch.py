@@ -42,29 +42,29 @@ _INTENT_BUILDERS: dict[str, Callable[..., Pipeline]] = {
 
 @type_checker
 def raw_intent(list_argv: list[str], str_env_value: str) -> str:
-	"""Pick the raw intent token: an explicit CLI argument beats the inherited env value.
+    """Pick the raw intent token: an explicit CLI argument beats the inherited env value.
 
-	``poe run <intent>`` (and poe-the-poet's task runner in general) appends extra CLI words
-	after the ``argv[0]`` module path, so ``list_argv[1]`` is the explicit intent when the
-	caller gave one. Falling back to ``str_env_value`` keeps ``.env``-driven callers (CI, cron,
-	containers) working unchanged when no argument is given.
+    ``poe run <intent>`` (and poe-the-poet's task runner in general) appends extra CLI words
+    after the ``argv[0]`` module path, so ``list_argv[1]`` is the explicit intent when the
+    caller gave one. Falling back to ``str_env_value`` keeps ``.env``-driven callers (CI, cron,
+    containers) working unchanged when no argument is given.
 
-	Parameters
-	----------
-	list_argv : list[str]
-		The process argv (``sys.argv``).
-	str_env_value : str
-		The env-derived value (``PIPELINE_INTENT``, already defaulted to ``"send"``) used when
-		no CLI argument is given.
+    Parameters
+    ----------
+    list_argv : list[str]
+        The process argv (``sys.argv``).
+    str_env_value : str
+        The env-derived value (``PIPELINE_INTENT``, already defaulted to ``"send"``) used when
+        no CLI argument is given.
 
-	Returns
-	-------
-	str
-		``list_argv[1]`` when present, else ``str_env_value``.
-	"""
-	if len(list_argv) > 1:
-		return list_argv[1]
-	return str_env_value
+    Returns
+    -------
+    str
+        ``list_argv[1]`` when present, else ``str_env_value``.
+    """
+    if len(list_argv) > 1:
+        return list_argv[1]
+    return str_env_value
 
 
 @type_checker
