@@ -8,15 +8,17 @@ neither repeats this table, so there is exactly one place a rule's rationale can
 (blueprintx#432).
 
 `templates/python-common/bin/check_quality_rules.py` is the gate that keeps the YAML honest.
-It can decide three things mechanically, and refuses to pretend it can decide a fourth:
+It runs five mechanical checks, and refuses to pretend it can decide the rest:
 
 | Decidable — the gate checks it | Not decidable — stays a review question |
 |---|---|
 | Every scaffolded language (discovered from `templates/*/skeleton.meta`) has an entry for every rule — a missing language is an error, not an omission | Whether two differently-worded rules in two languages actually prohibit the *same construct* |
 | A `status: not-implemented` or `overridden_by:` entry carries a non-empty `note` explaining why | Whether a rule that is missing from one language *should* exist there |
 | A declared `file` + `pattern` actually appears in the real config file it claims to describe | — |
+| Every rule has a non-empty `intent` — the prohibited construct, not a number to copy | — |
+| Every `docs:` reference carries an anchor that matches a real heading in the page it names | — |
 
-The third check is what stops this table from becoming exactly the kind of stale
+The config-pattern check (the third row above) is what stops this table from becoming exactly the kind of stale
 documentation `check_codespell_sync.sh` exists to catch for `.codespellrc`: a number written
 here and never checked against the tool that is supposed to enforce it.
 
@@ -104,6 +106,6 @@ formatter (redundant) or contradict it (unenforceable, since the formatter alway
 same principle `ruff.toml`'s own `E701` comment states). `overridden_by: PEP-8` records that
 explicitly, so the next reader sees a *decision*, not an oversight.
 
-TypeScript carries no equivalent entry to override: a default parameter is always
-`x: number = 7` with spaces, annotated or not, so there is no asymmetry for a house rule to
-correct. `prettier` already produces the only correct spacing.
+TypeScript has an entry for this rule too, but it carries no `overridden_by:`: a default
+parameter is always `x: number = 7` with spaces, annotated or not, so there is no asymmetry
+for a house rule to correct. `prettier` already produces the only correct spacing.
