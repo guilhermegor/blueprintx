@@ -89,6 +89,42 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 
 5. **GitGuardian exceptions**: a false positive in the secret scan is silenced in the root `.gitguardian.yaml` (`secret.ignored_matches`), never by editing history. Every entry needs a `name` stating why the match is not a credential.
 
+## Repository Secrets (Actions)
+
+This repo's own Actions secrets (`gh secret list`) are set by hand and reproducible from
+`.env.example`, not from memory — the pattern `dotfiles-dev` uses for its own credentials.
+`.env.example` (tracked) documents every secret's consumer and minimum scope; `.env`
+(git-ignored, `*.env` in `.gitignore`) holds the real values. **`.env` does NOT feed CI** —
+GitHub Actions cannot read it — it is only the source you `gh secret set` from.
+
+| Secret | Consumer(s) | Minimum scope |
+|---|---|---|
+| `GH_PAT_REVIEW_TRIGGER` | `coderabbit_trigger.yml`, `review_retry.yml`, `verify_branch_protection.yml` | Fine-grained PAT, this repo only, `Pull requests: Read and write` + `Administration: Read` (not `Issues: write`) |
+| `GITGUARDIAN_API_KEY` | `scaffold_checks.yml` (`secret-scan` job) | GitGuardian API key with the `scan` scope |
+| `APT_GPG_KEY_ID` | `release_apt.yml`, `release.yml` | GPG key ID of `APT_GPG_PRIVATE_KEY` |
+| `APT_GPG_PASSPHRASE` | `release_apt.yml`, `release.yml` | Passphrase for `APT_GPG_PRIVATE_KEY` |
+| `APT_GPG_PRIVATE_KEY` | `release_apt.yml`, `release.yml` | Armored GPG private key that signs the APT repo |
+| `SNAPCRAFT_STORE_CREDENTIALS` | `release_snap.yml`, `release.yml` | Snap Store login exported with `snapcraft export-login`; first-time setup is in `.specs/features/snap-publishing/plan.md` |
+
+**Re-provisioning a lost/rotated value:**
+1. Mint the new credential (fine-grained PAT at github.com/settings/personal-access-tokens,
+   API key at the vendor, or `gpg --export-secret-keys --armor <key-id>` for the GPG key) with
+   the scope from the table above, never broader. The PAT's `Issues: write` stays off: a
+   token with it was measured (2026-09-10) to 403 on issues and 422 on PRs, and the
+   workflows only ever comment on PRs.
+2. `[ -e .env ] || install -m 600 .env.example .env` (never overwrites a `.env` that already
+   holds real values), then replace the `KEY-GOES-HERE` placeholder of the secret you are
+   setting. Never upload a value that still equals the placeholder.
+3. Load it in a subshell, so the secrets do not stay exported in your interactive shell, and
+   upload over stdin, so the value never lands in `ps`/`/proc` argv (single-quote any value
+   containing `$` so sourcing keeps it literal; a literal `'` inside is written `'\''`):
+   `( set -a; . ./.env; set +a; printf '%s' "$<NAME>" | gh secret set <NAME> --repo guilhermegor/blueprintx )`.
+   Skip `APT_GPG_PASSPHRASE` when the key has none (the workflow treats it as optional).
+   Replacing `APT_GPG_PRIVATE_KEY` with a different key changes the public key APT users
+   trust, so they must re-import it or `apt update` fails the signature check.
+4. Verify: `gh secret list --repo guilhermegor/blueprintx` shows an updated timestamp for
+   `<NAME>`, and the workflow that consumes it succeeds on its next run.
+
 ## Cross-Language Quality Parity
 
 BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality
