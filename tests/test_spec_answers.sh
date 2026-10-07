@@ -152,6 +152,50 @@ test_dev_without_clean_preserves_the_temp_root() {
     fi
 }
 
+test_bad_docs_locale_stops_before_anything_is_created() {
+    local file root out int_rc
+    root="$WORK_DIR/bad-locale-root"
+    file="$(write_spec bad-locale lib-minimal "project_root=$root" "docs_locale=pt-br")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'docs_locale' must be en or pt-BR"* && ! -e "$root" ]]; then
+        pass "an unknown docs_locale refuses the run, naming the key, and creates nothing"
+    else
+        fail "bad docs_locale refusal" "rc=$int_rc, root exists or message missing: ${out: -300}"
+    fi
+}
+
+# Reads the generated mkdocs.yml: the placeholder only renders when DOCS_LOCALE reaches the scaffold.
+spec_docs_language() {
+    # spec_docs_language <name> [extra spec lines...]; prints the `language:` the project got.
+    local name="$1" file out str_temp
+    shift
+    file="$(write_spec "$name" lib-minimal "$@")"
+    out="$(run_blueprintx new --spec "$file" --dev)"
+    str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
+    sed -n 's/^  language: //p' "$str_temp/spec-probe/mkdocs.yml" 2>/dev/null
+}
+
+test_docs_locale_reaches_the_scaffold() {
+    local str_got
+    str_got="$(spec_docs_language docs-pt "docs_locale=pt-BR")"
+    if [ "$str_got" = "pt-BR" ]; then
+        pass "docs_locale=pt-BR in a spec renders language: pt-BR in the generated mkdocs.yml"
+    else
+        fail "docs_locale pass-through" "generated mkdocs.yml language='$str_got' (expected pt-BR)"
+    fi
+}
+
+test_absent_docs_locale_defaults_to_en() {
+    local str_got
+    str_got="$(spec_docs_language docs-default)"
+    if [ "$str_got" = "en" ]; then
+        pass "a spec with no docs_locale renders language: en, the prompt's default"
+    else
+        fail "docs_locale default" "generated mkdocs.yml language='$str_got' (expected en)"
+    fi
+}
+
 main() {
     test_spec_yn_accepts_the_documented_forms
     test_spec_yn_rejects_a_typo_naming_the_key
@@ -160,6 +204,9 @@ main() {
     test_unmapped_skeleton_is_refused_before_creating_anything
     test_dev_clean_uses_a_temp_root_and_removes_it
     test_dev_without_clean_preserves_the_temp_root
+    test_bad_docs_locale_stops_before_anything_is_created
+    test_docs_locale_reaches_the_scaffold
+    test_absent_docs_locale_defaults_to_en
 
     if [ "$int_failures" -eq 0 ]; then
         echo "All --spec regression tests passed."

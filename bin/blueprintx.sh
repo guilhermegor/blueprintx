@@ -344,7 +344,7 @@ prompt_project_root() {
             return 0
             ;;
         *)
-            print_status "warning" "Invalid option. Try again."
+            print_status "warning" "Invalid option. Try again." >&2
             prompt_project_root
             return
             ;;
@@ -433,7 +433,7 @@ prompt_language() {
         return 0
     fi
 
-    print_status "warning" "Invalid option. Try again."
+    print_status "warning" "Invalid option. Try again." >&2
     prompt_language
 }
 
@@ -466,7 +466,7 @@ prompt_skeleton() {
         return 0
     fi
 
-    print_status "warning" "Invalid option. Try again."
+    print_status "warning" "Invalid option. Try again." >&2
     prompt_skeleton "$lang"
 }
 
@@ -502,10 +502,42 @@ prompt_license() {
         10)   echo "CC0-1.0" ;;
         11)   echo "Unlicense" ;;
         *)
-            print_status "warning" "Invalid option. Try again."
+            print_status "warning" "Invalid option. Try again." >&2
             prompt_license
             return
             ;;
+    esac
+}
+
+# The locale of the GENERATED project's published pages only. It says nothing about
+# BlueprintX's own prose, which is en-US with no exceptions (root CLAUDE.md), and nothing
+# about code: comments and docstrings stay English in every locale, enforced in the
+# generated project by bin/check_comment_language.py. See docs/cli-reference.md, "Documentation locale".
+prompt_docs_locale() {
+    printf "${CYAN}Select documentation locale${NC} (language the new project's README.md and docs/ are meant to be written in; shipped text is English)\n" >&2
+    printf "  ${BLUE}1) en${NC}    — English (default)\n" >&2
+    printf "  ${BLUE}2) pt-BR${NC} — Brazilian Portuguese\n" >&2
+    printf "        Code comments and docstrings stay English either way.\n" >&2
+    printf "${CYAN}Choice${NC} [1-2, default 1]: " >&2
+    read -r choice
+    printf "\n" >&2
+
+    case "$choice" in
+        1|"") echo "en" ;;
+        2)    echo "pt-BR" ;;
+        *)
+            print_status "warning" "Invalid option. Try again." >&2
+            prompt_docs_locale
+            return
+            ;;
+    esac
+}
+
+# The locales prompt_docs_locale offers; the --spec flow validates against the same two.
+is_valid_docs_locale() {
+    case "$1" in
+        en|pt-BR) return 0 ;;
+        *) return 1 ;;
     esac
 }
 
@@ -516,6 +548,7 @@ create_project() {
     local lang="$4"
     local skeleton="$5"
     local license_choice="$6"
+    local docs_locale="$7"
 
     local full_path="$project_root/$project_name"
 
@@ -535,13 +568,14 @@ create_project() {
         exit_error "Scaffold script not found: $scaffold_script"
     fi
 
-    LICENSE_CHOICE="$license_choice" bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
+    LICENSE_CHOICE="$license_choice" DOCS_LOCALE="$docs_locale" \
+        bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
 }
 
 
 # Validate spec values against the chosen skeleton before any file is written: a bad value would
 # otherwise reach the scaffold, which reads a nonexistent license template after the project
-# dir already exists. Reads LANG_CHOICE, SKELETON_CHOICE and LICENSE_CHOICE.
+# dir already exists. Reads LANG_CHOICE, SKELETON_CHOICE, LICENSE_CHOICE and DOCS_LOCALE.
 validate_spec_answers() {
     local skeleton_language
     skeleton_language=$(grep '^language=' "$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta" | cut -d= -f2-)
@@ -549,6 +583,8 @@ validate_spec_answers() {
         || exit_error "--spec: skeleton '$SKELETON_CHOICE' is a '$skeleton_language' skeleton, not '$LANG_CHOICE'."
     [ -f "$TEMPLATES_ROOT/licenses/$LICENSE_CHOICE" ] \
         || exit_error "--spec: unknown license '$LICENSE_CHOICE' (no templates/licenses/$LICENSE_CHOICE)."
+    is_valid_docs_locale "$DOCS_LOCALE" \
+        || exit_error "--spec: 'docs_locale' must be en or pt-BR, got '$DOCS_LOCALE'."
     # A bad y/n value must stop the run here, in the main shell: spec_yn used to turn it into "n".
     if spec_skeleton_supported "$SKELETON_CHOICE"; then
         spec_validate_answers "$SKELETON_CHOICE" "$SPEC_FILE" \
@@ -588,7 +624,7 @@ scaffold_from_spec() {
 
     spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
         | GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
-            LICENSE_CHOICE="$LICENSE_CHOICE" \
+            LICENSE_CHOICE="$LICENSE_CHOICE" DOCS_LOCALE="$DOCS_LOCALE" \
             bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION"
 }
 
@@ -613,6 +649,7 @@ run_create_flow_from_spec() {
     [ -f "$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta" ] \
         || exit_error "--spec: unknown skeleton '$SKELETON_CHOICE'."
     LICENSE_CHOICE=$(spec_get "$SPEC_FILE" license MIT)
+    DOCS_LOCALE=$(spec_get "$SPEC_FILE" docs_locale en)
 
     validate_spec_answers
 
@@ -623,6 +660,7 @@ run_create_flow_from_spec() {
         print_status "config" "language=$LANG_CHOICE"
         print_status "config" "skeleton=$SKELETON_CHOICE"
         print_status "config" "license=$LICENSE_CHOICE"
+        print_status "config" "docs_locale=$DOCS_LOCALE"
         if spec_skeleton_supported "$SKELETON_CHOICE"; then
             spec_describe_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
                 | while IFS= read -r line; do print_status "config" "$line"; done
@@ -672,6 +710,7 @@ run_create_flow() {
     LANG_CHOICE=$(prompt_language)
     SKELETON_CHOICE=$(prompt_skeleton "$LANG_CHOICE")
     LICENSE_CHOICE=$(prompt_license)
+    DOCS_LOCALE=$(prompt_docs_locale)
 
     if [ "$DRY_RUN" -eq 1 ]; then
         print_status "info" "Dry-run: showing structure for '$SKELETON_CHOICE'"
@@ -679,7 +718,7 @@ run_create_flow() {
         exit 0
     fi
 
-    create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE" "$LICENSE_CHOICE"
+    create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE" "$LICENSE_CHOICE" "$DOCS_LOCALE"
 
     echo
     printf "${GREEN}╔════════════════════════════════════════╗${NC}\n"
@@ -690,6 +729,7 @@ run_create_flow() {
     print_status "config" "Location: $PROJECT_ROOT/$PROJECT_NAME"
     print_status "config" "Skeleton: $SKELETON_CHOICE"
     print_status "config" "License: $LICENSE_CHOICE"
+    print_status "config" "Docs locale: $DOCS_LOCALE (MkDocs skeletons only)"
     print_dev_mode_notice
     print_status "info" "Log file: $LOG_FILE"
 }
@@ -755,4 +795,7 @@ main() {
     run_create_flow
 }
 
-main
+# Sourced by tests/test_docs_locale_prompt.sh to reach the prompt helpers without the menu.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main
+fi

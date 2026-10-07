@@ -8,185 +8,185 @@ from typing import Any
 
 
 try:
-	import pyodbc
+    import pyodbc
 except ImportError:  # pragma: no cover - optional dependency
-	pyodbc = None
+    pyodbc = None
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
 
 
 class MSSQLDatabaseHandler(DatabaseHandler):
-	"""SQL Server handler using pyodbc.
+    """SQL Server handler using pyodbc.
 
-	Parameters
-	----------
-	connection_string : str
-		ODBC connection string for ``pyodbc.connect``.
-	table : str, optional
-		Table name used for storage, by default ``"records"``.
-	id_field : str, optional
-		Identifier field name, by default ``"id"``.
+    Parameters
+    ----------
+    connection_string : str
+        ODBC connection string for ``pyodbc.connect``.
+    table : str, optional
+        Table name used for storage, by default ``"records"``.
+    id_field : str, optional
+        Identifier field name, by default ``"id"``.
 
-	Raises
-	------
-	ImportError
-		If ``pyodbc`` is not installed when instantiating the handler.
-	"""
+    Raises
+    ------
+    ImportError
+        If ``pyodbc`` is not installed when instantiating the handler.
+    """
 
-	def __init__(
-		self, connection_string: str, table: str = "records", id_field: str = "id"
-	) -> None:
-		if pyodbc is None:
-			raise ImportError(
-				"pyodbc is required for MSSQLDatabaseHandler; install it to use this backend."
-			)
-		self.connection_string = connection_string
-		self.table = table
-		self.id_field = id_field
-		self._ensure_table()
+    def __init__(
+        self, connection_string: str, table: str = "records", id_field: str = "id"
+    ) -> None:
+        if pyodbc is None:
+            raise ImportError(
+                "pyodbc is required for MSSQLDatabaseHandler; install it to use this backend."
+            )
+        self.connection_string = connection_string
+        self.table = table
+        self.id_field = id_field
+        self._ensure_table()
 
-	def create(self, record: Record) -> str:
-		"""Insert or update a record.
+    def create(self, record: Record) -> str:
+        """Insert or update a record.
 
-		Parameters
-		----------
-		record : Record
-			Data to persist; an ``id`` is generated if missing.
+        Parameters
+        ----------
+        record : Record
+            Data to persist; an ``id`` is generated if missing.
 
-		Returns
-		-------
-		str
-			Identifier assigned to the stored record.
-		"""
-		record = ensure_id(record, self.id_field)
-		payload = json.dumps(record)
-		with self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(
-				f"MERGE {self.table} AS t USING (SELECT ? AS {self.id_field}, ? AS data) AS s "  # noqa: S608
-				f"ON t.{self.id_field} = s.{self.id_field} "
-				f"WHEN MATCHED THEN UPDATE SET data = s.data "
-				f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) "
-				f"VALUES (s.{self.id_field}, s.data);",
-				(record[self.id_field], payload),
-			)
-			conn.commit()
-		return str(record[self.id_field])
+        Returns
+        -------
+        str
+            Identifier assigned to the stored record.
+        """
+        record = ensure_id(record, self.id_field)
+        payload = json.dumps(record)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                f"MERGE {self.table} AS t USING (SELECT ? AS {self.id_field}, ? AS data) AS s "  # noqa: S608
+                f"ON t.{self.id_field} = s.{self.id_field} "
+                f"WHEN MATCHED THEN UPDATE SET data = s.data "
+                f"WHEN NOT MATCHED THEN INSERT ({self.id_field}, data) "
+                f"VALUES (s.{self.id_field}, s.data);",
+                (record[self.id_field], payload),
+            )
+            conn.commit()
+        return str(record[self.id_field])
 
-	def read(self, record_id: str) -> Record | None:
-		"""Fetch a record by identifier.
+    def read(self, record_id: str) -> Record | None:
+        """Fetch a record by identifier.
 
-		Parameters
-		----------
-		record_id : str
-			Identifier to look up.
+        Parameters
+        ----------
+        record_id : str
+            Identifier to look up.
 
-		Returns
-		-------
-		Record or None
-			Stored record if found, else ``None``.
-		"""
-		with self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(f"SELECT data FROM {self.table} WHERE {self.id_field} = ?", (record_id,))  # noqa: S608
-			row = cur.fetchone()
-		if not row:
-			return None
-		return json.loads(row[0])
+        Returns
+        -------
+        Record or None
+            Stored record if found, else ``None``.
+        """
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(f"SELECT data FROM {self.table} WHERE {self.id_field} = ?", (record_id,))  # noqa: S608
+            row = cur.fetchone()
+        if not row:
+            return None
+        return json.loads(row[0])
 
-	def update(self, record_id: str, updates: Record) -> Record | None:
-		"""Merge updates into an existing record atomically.
+    def update(self, record_id: str, updates: Record) -> Record | None:
+        """Merge updates into an existing record atomically.
 
-		The read and the write share one transaction and the row is held by
-		``WITH (UPDLOCK, ROWLOCK)``, so a concurrent update cannot be lost. See
-		``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
+        The read and the write share one transaction and the row is held by
+        ``WITH (UPDLOCK, ROWLOCK)``, so a concurrent update cannot be lost. See
+        ``templates/python-common/CLAUDE.md`` → "DatabaseHandler contract".
 
-		Parameters
-		----------
-		record_id : str
-			Identifier of the record to update.
-		updates : Record
-			Partial payload containing fields to override.
+        Parameters
+        ----------
+        record_id : str
+            Identifier of the record to update.
+        updates : Record
+            Partial payload containing fields to override.
 
-		Returns
-		-------
-		Record or None
-			Updated record when found, else ``None``.
-		"""
-		with self._connect() as cls_conn:
-			cls_cur = cls_conn.cursor()
-			cls_cur.execute(
-				f"SELECT data FROM {self.table} WITH (UPDLOCK, ROWLOCK) "  # noqa: S608
-				f"WHERE {self.id_field} = ?",
-				(record_id,),
-			)
-			tuple_row = cls_cur.fetchone()
-			if tuple_row is None:
-				return None
-			dict_updated = {**json.loads(tuple_row[0]), **updates, self.id_field: record_id}
-			cls_cur.execute(
-				f"UPDATE {self.table} SET data = ? WHERE {self.id_field} = ?",  # noqa: S608
-				(json.dumps(dict_updated), record_id),
-			)
-			cls_conn.commit()
-		return dict_updated
+        Returns
+        -------
+        Record or None
+            Updated record when found, else ``None``.
+        """
+        with self._connect() as cls_conn:
+            cls_cur = cls_conn.cursor()
+            cls_cur.execute(
+                f"SELECT data FROM {self.table} WITH (UPDLOCK, ROWLOCK) "  # noqa: S608
+                f"WHERE {self.id_field} = ?",
+                (record_id,),
+            )
+            tuple_row = cls_cur.fetchone()
+            if tuple_row is None:
+                return None
+            dict_updated = {**json.loads(tuple_row[0]), **updates, self.id_field: record_id}
+            cls_cur.execute(
+                f"UPDATE {self.table} SET data = ? WHERE {self.id_field} = ?",  # noqa: S608
+                (json.dumps(dict_updated), record_id),
+            )
+            cls_conn.commit()
+        return dict_updated
 
-	def delete(self, record_id: str) -> bool:
-		"""Delete a record by identifier.
+    def delete(self, record_id: str) -> bool:
+        """Delete a record by identifier.
 
-		Parameters
-		----------
-		record_id : str
-			Identifier of the record to remove.
+        Parameters
+        ----------
+        record_id : str
+            Identifier of the record to remove.
 
-		Returns
-		-------
-		bool
-			``True`` when a row was deleted, otherwise ``False``.
-		"""
-		with self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(f"DELETE FROM {self.table} WHERE {self.id_field} = ?", (record_id,))  # noqa: S608
-			deleted = cur.rowcount > 0
-			conn.commit()
-		return deleted
+        Returns
+        -------
+        bool
+            ``True`` when a row was deleted, otherwise ``False``.
+        """
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM {self.table} WHERE {self.id_field} = ?", (record_id,))  # noqa: S608
+            deleted = cur.rowcount > 0
+            conn.commit()
+        return deleted
 
-	def backup(self, target_path: str | Path) -> Path:
-		"""Stream all records to a JSON file as a backup artifact.
+    def backup(self, target_path: str | Path) -> Path:
+        """Stream all records to a JSON file as a backup artifact.
 
-		Parameters
-		----------
-		target_path : str or Path
-			Destination path for the JSON backup.
+        Parameters
+        ----------
+        target_path : str or Path
+            Destination path for the JSON backup.
 
-		Returns
-		-------
-		Path
-			Path to the created backup file.
-		"""
-		target = Path(target_path)
-		target.parent.mkdir(parents=True, exist_ok=True)
-		with target.open("w", encoding="utf-8") as handle, self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(f"SELECT data FROM {self.table}")  # noqa: S608
-			rows = (json.loads(row[0]) for row in cur)
-			handle.write(json.dumps(list(rows), indent=2, ensure_ascii=False))
-		return target
+        Returns
+        -------
+        Path
+            Path to the created backup file.
+        """
+        target = Path(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("w", encoding="utf-8") as handle, self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(f"SELECT data FROM {self.table}")  # noqa: S608
+            rows = (json.loads(row[0]) for row in cur)
+            handle.write(json.dumps(list(rows), indent=2, ensure_ascii=False))
+        return target
 
-	def close(self) -> None:
-		"""Release resources (no-op, connections are per-call)."""
+    def close(self) -> None:
+        """Release resources (no-op, connections are per-call)."""
 
-	def _connect(self) -> Any:
-		"""Create a pyodbc connection using the configured connection string."""
-		return pyodbc.connect(self.connection_string)
+    def _connect(self) -> Any:
+        """Create a pyodbc connection using the configured connection string."""
+        return pyodbc.connect(self.connection_string)
 
-	def _ensure_table(self) -> None:
-		"""Create the backing table when it does not exist."""
-		with self._connect() as conn:
-			cur = conn.cursor()
-			cur.execute(
-				f"""
+    def _ensure_table(self) -> None:
+        """Create the backing table when it does not exist."""
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                f"""
                 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='{self.table}' AND xtype='U')
                 BEGIN
                     CREATE TABLE {self.table} (
@@ -195,5 +195,5 @@ class MSSQLDatabaseHandler(DatabaseHandler):
                     );
                 END
                 """  # noqa: S608
-			)
-			conn.commit()
+            )
+            conn.commit()
