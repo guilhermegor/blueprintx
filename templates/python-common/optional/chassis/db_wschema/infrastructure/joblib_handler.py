@@ -384,13 +384,15 @@ class JoblibHandler(DatabaseHandler):
         """
         if not self._key:
             return
-        self._check_signature(record_id, bytes_data)
+        self._check_signature(self._key, record_id, bytes_data)
 
-    def _check_signature(self, record_id: str, bytes_data: bytes) -> None:
+    def _check_signature(self, bytes_key: bytes, record_id: str, bytes_data: bytes) -> None:
         """Raise unless the stored signature equals the HMAC of ``bytes_data``.
 
         Parameters
         ----------
+        bytes_key : bytes
+                The configured ``secret_key``.
         record_id : str
                 Validated artifact identifier.
         bytes_data : bytes
@@ -401,7 +403,7 @@ class JoblibHandler(DatabaseHandler):
         ValueError
                 If the sidecar is missing or does not match.
         """
-        bytes_sig_actual = hmac.new(self._key, bytes_data, hashlib.sha256).digest()
+        bytes_sig_actual = hmac.new(bytes_key, bytes_data, hashlib.sha256).digest()
         if not hmac.compare_digest(self._stored_signature(record_id), bytes_sig_actual):
             raise ValueError(f"HMAC verification failed for {record_id!r} — file may be tampered")
 
