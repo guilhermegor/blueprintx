@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - optional dependency
     oracledb = None  # type: ignore[assignment]
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db.infrastructure.helpers import ensure_id, validate_sql_identifier
 
 
 def _read_lob(value: Any) -> str:
@@ -71,6 +71,8 @@ class OracleDatabaseHandler(DatabaseHandler):
         self.dsn = dsn
         self.user = user or os.getenv("DB_USER")
         self.password = password or os.getenv("DB_PASSWORD")
+        validate_sql_identifier(table, "table")
+        validate_sql_identifier(id_field, "id_field")
         self.table = table
         self.id_field = id_field
         self._ensure_table()

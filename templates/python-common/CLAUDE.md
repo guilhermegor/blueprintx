@@ -156,6 +156,19 @@ DEFERRED transaction, which takes only a read lock at the `SELECT` and tries to 
 which the busy-timeout cannot wait out because waiting cannot resolve a deadlock. `BEGIN
 IMMEDIATE` takes the write lock up front, so the second writer queues instead of failing.
 
+## DatabaseHandler contract — connections close, identifiers are validated
+
+- **A handler closes every connection it opens.** `with conn:` is a *transaction* block for
+  `sqlite3` and `pyodbc` — it commits or rolls back and leaves the connection open, so each call
+  leaked one (on SQLite, holding the file lock too). Those two handlers use
+  `with closing(self._connect()) as cls_conn, cls_conn:`. `psycopg`, `mysql.connector` and
+  `oracledb` close in `__exit__` already, so their handlers need nothing extra. A new backend
+  must check which of the two its driver is, not assume.
+- **`table` and `id_field` are validated once, in the constructor**, by
+  `validate_sql_identifier` (`chassis/db/infrastructure/helpers.py`) against
+  `[A-Za-z_][A-Za-z0-9_]*`. A driver cannot bind an identifier, so it is interpolated into SQL
+  text; the check is what makes the `# noqa: S608` on those statements true rather than assumed.
+
 ## What can leave `pyproject.toml` — and what cannot
 
 Audited in blueprintx#233 across all five Python tiers. **The answer is: nothing else.** This
