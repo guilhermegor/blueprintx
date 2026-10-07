@@ -118,6 +118,18 @@ repos:
         pass_filenames: false
         files: (^|/)\.github/workflows/.*\.(yml|yaml)$
 
+      - id: docs-gap
+        name: docs gap (published pages registered in mkdocs nav + docs/CLAUDE.md index, blueprintx#340)
+        # Same ONE-implementation treatment as function-length: the shared gate in
+        # python-common, run over THIS repo via --root. always_run because removing or
+        # renaming a page is exactly the change a files: filter would never see.
+        # pathspec (mkdocs' exclude_docs matcher) and yaml are not stdlib: an isolated hook
+        # env carries them, so a contributor without them installed does not crash the commit.
+        entry: python templates/python-common/bin/check_docs_gap.py --root .
+        language: python
+        additional_dependencies: [pathspec, pyyaml]
+        pass_filenames: false
+        always_run: true
       - id: action-pins-tests
         name: check_action_pins should-fail regression tests (blueprintx#369)
         entry: bash tests/test_check_actions_pins.sh
@@ -309,6 +321,19 @@ repos:
         language: system
         pass_filenames: false
         files: \.(py|md)$
+
+      - id: quality-rules
+        name: quality-rules.yaml validation (blueprintx#432)
+        # Same treatment as function-length/check-complexity/docs-code-refs above: ONE
+        # implementation, run over this repo via --root rather than kept as a second copy.
+        # always_run because the gate cross-references quality-rules.yaml against config
+        # files scattered across templates/ (ruff.toml, eslint.config.js, ...) plus every
+        # templates/*/skeleton.meta — narrower to a `files:` glob than that combination is
+        # worth staying correct for.
+        entry: python3 templates/python-common/bin/check_quality_rules.py --root .
+        language: system
+        pass_filenames: false
+        always_run: true
 
       - id: check-markdown
         name: markdownlint (pymarkdownlnt, measured rule set — blueprintx#383)
