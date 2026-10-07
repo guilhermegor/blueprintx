@@ -498,6 +498,7 @@ conditional_copy_storage() {
     if [[ "$INCLUDE_STORAGE" != "true" ]]; then return; fi
     mkdir -p "$project_path/src/chassis/db_wschema"
     cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db_wschema/." "$project_path/src/chassis/db_wschema/"
+    cp "$COMMON_TEMPLATE_ROOT/optional/test_joblib_handler.py" "$project_path/tests/unit/test_joblib_handler.py"
     cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env.example"
     print_status "success" "Schema-less storage (chassis/db_wschema) added"
