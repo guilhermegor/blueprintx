@@ -24,6 +24,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `coverage-floor.md` | Utility page | Design record for `bin/check_coverage_floor.py` (blueprintx#149) — why `.coveragerc`'s `omit` list needed a code-derived floor, how it derives one, and why it stays deliberately coarse |
 | `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239) |
 | `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |
+| `quality-rules.md` | Utility page | The machine-readable quality-rule registry (`quality-rules.yaml`) and the gate that keeps it honest — one entry per rule, with the intent each ceiling encodes (blueprintx#432) |
 | `quality-gate-blind-spots.md` | Utility page | Measured audit of what the quality gates cannot see (blueprintx#169) |
 | `required-status-checks.md` | Utility page | Which checks `REQUIRED_CHECKS` should seed per scaffolded tier (blueprintx#164) |
 | `skeletons.md` | Skeleton overview | API Service (Native DB) — hexagonal HTTP service with a transport layer |
@@ -163,6 +164,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `coverage-floor.md` | Gate design record | What the gate enforces, why `fail_under` alone is insufficient, the coarse-by-design boundary, and what stays out of scope |
 | `offline-wheelhouse.md` | Air-gapped install record | The three subcommands (`select`/`pack`/`assemble`), what the manifest authenticates and what it does not, the part-splitting contract, and the target-triple inputs the selector resolves markers against |
 | `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
+| `quality-rules.md` | Quality-rule registry record | What the gate decides vs leaves to review, one section per rule id (the `docs:` anchors) |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
