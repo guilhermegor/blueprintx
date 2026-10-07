@@ -13,8 +13,7 @@ for this path rather than the example fixed (blueprintx#172).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+import pandas as pd
 from sqlalchemy import Engine, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -22,8 +21,11 @@ from utils.frames import from_records
 from utils.typing import TypeChecker
 
 
-if TYPE_CHECKING:
-    import pandas as pd
+# ``pandas`` is imported for real (not TYPE_CHECKING-only): ``ExampleEntity`` carries the
+# runtime ``TypeChecker``, whose beartype check resolves ``-> pd.DataFrame`` against this
+# module's globals at call time, and an unbound ``pd`` made ``fetch_all`` raise
+# ``BeartypeCallHintForwardRefException`` on every call (blueprintx#617). Still
+# annotation-only per .layer-policy.yaml: ``pd`` is never called, only used as a type.
 
 
 # Declare the column types on load — never trust pandas' inference (a zero-padded
