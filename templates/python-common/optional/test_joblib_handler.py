@@ -135,6 +135,46 @@ def test_read_rejects_a_symlink_that_leaves_the_store(
         cls_store.read(str_outside_id)
 
 
+@pytest.fixture
+def str_stored_id_with_escaping_sig(cls_store: JoblibHandler, tmp_path: Path) -> str:
+    """Store an artifact whose ``.sig`` sidecar is a symlink out of the store.
+
+    Parameters
+    ----------
+    cls_store : JoblibHandler
+        Handler under test.
+    tmp_path : pathlib.Path
+        Pytest's per-test temporary directory.
+
+    Returns
+    -------
+    str
+        Identifier of the stored artifact.
+    """
+    str_record_id = cls_store.create({"_name": "half", "value": 1})
+    (tmp_path / "victim.sig").write_bytes(b"outside")
+    (tmp_path / "store" / f"{str_record_id}.sig").symlink_to(tmp_path / "victim.sig")
+    return str_record_id
+
+
+def test_delete_rejects_a_signature_that_leaves_the_store(
+    cls_store: JoblibHandler, str_stored_id_with_escaping_sig: str
+) -> None:
+    """A ``.sig`` symlinked out of the store is refused, not followed."""
+    with pytest.raises(ValueError, match="escapes"):
+        cls_store.delete(str_stored_id_with_escaping_sig)
+
+
+def test_delete_leaves_the_artifact_when_its_signature_is_refused(
+    cls_store: JoblibHandler, str_stored_id_with_escaping_sig: str, tmp_path: Path
+) -> None:
+    """Both paths are checked before anything is unlinked, so a refusal deletes nothing."""
+    with contextlib.suppress(ValueError):
+        cls_store.delete(str_stored_id_with_escaping_sig)
+
+    assert (tmp_path / "store" / f"{str_stored_id_with_escaping_sig}.joblib").exists()
+
+
 @pytest.mark.parametrize("str_name", ["../evil", "a/b", "..", "a\\b", "/abs", ""])
 def test_create_rejects_a_name_outside_the_kebab_charset(
     cls_store: JoblibHandler, str_name: str

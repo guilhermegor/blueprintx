@@ -53,8 +53,10 @@ Supported values for `STORAGE_BACKEND`: `json`, `csv`, `joblib`.
     with `create()`. Each artifact is named `name_YYYYMMDD_HHMMSS_{sha256_prefix8}.joblib`
     and verified on load with SHA256 prefix matching and optional HMAC.
     A `record_id` must be that exact shape (lowercase kebab name, then date, time and hash)
-    and `_name` may hold only lowercase letters, digits and `-`: anything else, including a
-    path separator or `..`, raises `ValueError` so no call can leave the store directory.
+    and `_name` is checked after `create()` turns each `_` into `-`, so a name may hold only
+    lowercase letters, digits and `-` (`my_model` becomes `my-model`): anything else,
+    including uppercase letters, a path separator or `..`, raises `ValueError` so no call can
+    leave the store directory.
 
 ---
 

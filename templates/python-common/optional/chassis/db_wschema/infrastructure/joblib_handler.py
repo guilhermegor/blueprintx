@@ -161,11 +161,13 @@ class JoblibHandler(DatabaseHandler):
                 If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
                 component.
         """
+        # Both paths are confined BEFORE anything is unlinked: resolving the sidecar after
+        # the artifact is gone would leave the store half-deleted when the sidecar is refused.
         path_artifact = self._artifact_path(record_id, ".joblib")
+        path_sig = self._artifact_path(record_id, ".sig")
         if not path_artifact.exists():
             return False
         path_artifact.unlink()
-        path_sig = self._artifact_path(record_id, ".sig")
         if path_sig.exists():
             path_sig.unlink()
         return True
@@ -207,7 +209,7 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         str_name : str
-                Artifact name, already normalised with ``_`` replaced by ``-``.
+                Artifact name, already normalized with ``_`` replaced by ``-``.
 
         Returns
         -------
@@ -268,7 +270,7 @@ class JoblibHandler(DatabaseHandler):
     def _confined(self, path_candidate: Path) -> Path:
         """Return ``path_candidate`` when it resolves inside the store directory.
 
-        Defence in depth behind the id shape check: it catches a symlink inside the store
+        Defense in depth behind the id shape check: it catches a symlink inside the store
         that points elsewhere, which no string check on the id can see.
 
         Parameters

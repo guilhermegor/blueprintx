@@ -34,7 +34,7 @@ def build_storage_handler() -> DatabaseHandler:
     Reads ``STORAGE_BACKEND`` (separate from ``DB_BACKEND``) to pick the backend.
     Supported values: ``json``, ``csv``, ``joblib``.
     ⚠️ ``update()`` is part of the ``DatabaseHandler`` contract but the ``joblib`` backend
-    cannot honour it: its artifacts are immutable, so ``update()`` raises
+    cannot honor it: its artifacts are immutable, so ``update()`` raises
     ``NotImplementedError``. Call ``create()`` to save a new version. A caller that must
     update in place picks ``json`` or ``csv``.
     Uses ``DATA_DIR`` as the base directory for all backends.
