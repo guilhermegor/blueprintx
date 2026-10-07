@@ -23,160 +23,160 @@ from utils.typing import type_checker
 # backend/auth option in a DSN, and the branching IS the assembly: collapsing it would
 # hide which option produced which connection string.
 def _normalize_odbc_bool(str_value: str) -> str:  # complexity-ok: DSN option mapping
-	"""Map a ``.env`` boolean to the ``yes``/``no`` an ODBC keyword expects.
+    """Map a ``.env`` boolean to the ``yes``/``no`` an ODBC keyword expects.
 
-	ODBC keywords like ``Encrypt`` / ``TrustServerCertificate`` accept ``yes``/``no`` —
-	**not** ``true``/``false`` — so a ``.env`` value of ``true`` would otherwise be passed
-	verbatim and rejected. Common boolean spellings (``true``/``false``, ``1``/``0``,
-	``yes``/``no``, ``y``/``n``, ``on``/``off``, any case) are normalised; any other token is
-	returned stripped-but-verbatim so driver-specific values (``strict``/``mandatory``/
-	``optional``) still pass through.
+    ODBC keywords like ``Encrypt`` / ``TrustServerCertificate`` accept ``yes``/``no`` —
+    **not** ``true``/``false`` — so a ``.env`` value of ``true`` would otherwise be passed
+    verbatim and rejected. Common boolean spellings (``true``/``false``, ``1``/``0``,
+    ``yes``/``no``, ``y``/``n``, ``on``/``off``, any case) are normalised; any other token is
+    returned stripped-but-verbatim so driver-specific values (``strict``/``mandatory``/
+    ``optional``) still pass through.
 
-	Parameters
-	----------
-	str_value : str
-		The raw value read from the environment.
+    Parameters
+    ----------
+    str_value : str
+            The raw value read from the environment.
 
-	Returns
-	-------
-	str
-		``"yes"`` / ``"no"`` for a recognised boolean, else the stripped original.
-	"""
-	str_norm = str_value.strip().casefold()
-	if str_norm in {"true", "1", "yes", "y", "on", "t"}:
-		return "yes"
-	if str_norm in {"false", "0", "no", "n", "off", "f"}:
-		return "no"
-	return str_value.strip()
+    Returns
+    -------
+    str
+            ``"yes"`` / ``"no"`` for a recognised boolean, else the stripped original.
+    """
+    str_norm = str_value.strip().casefold()
+    if str_norm in {"true", "1", "yes", "y", "on", "t"}:
+        return "yes"
+    if str_norm in {"false", "0", "no", "n", "off", "f"}:
+        return "no"
+    return str_value.strip()
 
 
 @type_checker
 def _compose_url(str_backend: str) -> str:  # complexity-ok: DSN assembly per backend
-	"""Build a SQLAlchemy URL from generic environment variables.
+    """Build a SQLAlchemy URL from generic environment variables.
 
-	Parameters
-	----------
-	str_backend : str
-		Backend key (``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``).
+    Parameters
+    ----------
+    str_backend : str
+            Backend key (``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``).
 
-	Returns
-	-------
-	str
-		A SQLAlchemy-compatible connection URL composed from ``DB_*`` env vars.
-	"""
-	str_user = os.getenv("DB_USER", "user")
-	str_password = os.getenv("DB_PASSWORD", "password")
-	str_host = os.getenv("DB_HOST", "localhost")
-	dict_default_ports: dict[str, str] = {
-		"postgresql": "5432",
-		"mariadb": "3306",
-		"mysql": "3306",
-		"mssql": "1433",
-		"oracle": "1521",
-	}
-	str_port = os.getenv("DB_PORT", dict_default_ports[str_backend])
-	str_name = os.getenv("DB_NAME", "app")
-	dict_schemes: dict[str, str] = {
-		"postgresql": "postgresql+psycopg",
-		"mariadb": "mysql+mysqlconnector",
-		"mysql": "mysql+mysqlconnector",
-		"mssql": "mssql+pyodbc",
-		"oracle": "oracle+oracledb",
-	}
-	str_scheme = dict_schemes[str_backend]
-	if str_backend == "oracle":
-		str_service = os.getenv("DB_SERVICE", "XEPDB1")
-		return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/?service_name={str_service}"
-	if str_backend == "mssql":
-		str_driver = quote_plus(os.getenv("DB_ODBC_DRIVER", "ODBC Driver 17 for SQL Server"))
-		str_auth = os.getenv("DB_MSSQL_AUTH", "sql").lower()
-		if str_auth in {"aad", "ad", "azure", "activedirectoryinteractive"}:
-			str_url = (
-				f"{str_scheme}://{str_host}:{str_port}/{str_name}"
-				f"?driver={str_driver}&authentication=ActiveDirectoryInteractive"
-			)
-		else:
-			str_url = (
-				f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
-				f"?driver={str_driver}"
-			)
-		# ODBC Driver 18 encrypts by default; append the normalised TLS settings when these
-		# env vars are set so a server with a self-signed certificate stays reachable.
-		str_encrypt = os.getenv("DB_ENCRYPT")
-		if str_encrypt:
-			str_url += f"&Encrypt={_normalize_odbc_bool(str_encrypt)}"
-		str_trust = os.getenv("DB_TRUST_SERVER_CERTIFICATE")
-		if str_trust:
-			str_url += f"&TrustServerCertificate={_normalize_odbc_bool(str_trust)}"
-		return str_url
-	return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
+    Returns
+    -------
+    str
+            A SQLAlchemy-compatible connection URL composed from ``DB_*`` env vars.
+    """
+    str_user = os.getenv("DB_USER", "user")
+    str_password = os.getenv("DB_PASSWORD", "password")
+    str_host = os.getenv("DB_HOST", "localhost")
+    dict_default_ports: dict[str, str] = {
+        "postgresql": "5432",
+        "mariadb": "3306",
+        "mysql": "3306",
+        "mssql": "1433",
+        "oracle": "1521",
+    }
+    str_port = os.getenv("DB_PORT", dict_default_ports[str_backend])
+    str_name = os.getenv("DB_NAME", "app")
+    dict_schemes: dict[str, str] = {
+        "postgresql": "postgresql+psycopg",
+        "mariadb": "mysql+mysqlconnector",
+        "mysql": "mysql+mysqlconnector",
+        "mssql": "mssql+pyodbc",
+        "oracle": "oracle+oracledb",
+    }
+    str_scheme = dict_schemes[str_backend]
+    if str_backend == "oracle":
+        str_service = os.getenv("DB_SERVICE", "XEPDB1")
+        return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/?service_name={str_service}"
+    if str_backend == "mssql":
+        str_driver = quote_plus(os.getenv("DB_ODBC_DRIVER", "ODBC Driver 17 for SQL Server"))
+        str_auth = os.getenv("DB_MSSQL_AUTH", "sql").lower()
+        if str_auth in {"aad", "ad", "azure", "activedirectoryinteractive"}:
+            str_url = (
+                f"{str_scheme}://{str_host}:{str_port}/{str_name}"
+                f"?driver={str_driver}&authentication=ActiveDirectoryInteractive"
+            )
+        else:
+            str_url = (
+                f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
+                f"?driver={str_driver}"
+            )
+        # ODBC Driver 18 encrypts by default; append the normalised TLS settings when these
+        # env vars are set so a server with a self-signed certificate stays reachable.
+        str_encrypt = os.getenv("DB_ENCRYPT")
+        if str_encrypt:
+            str_url += f"&Encrypt={_normalize_odbc_bool(str_encrypt)}"
+        str_trust = os.getenv("DB_TRUST_SERVER_CERTIFICATE")
+        if str_trust:
+            str_url += f"&TrustServerCertificate={_normalize_odbc_bool(str_trust)}"
+        return str_url
+    return f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
 
 
 @type_checker
 def build_database_url() -> str:
-	"""Build a SQLAlchemy database URL from environment configuration.
+    """Build a SQLAlchemy database URL from environment configuration.
 
-	Returns
-	-------
-	str
-		SQLAlchemy-compatible database URL.
+    Returns
+    -------
+    str
+            SQLAlchemy-compatible database URL.
 
-	Raises
-	------
-	ValueError
-		If ``DB_BACKEND`` does not match a supported backend.
+    Raises
+    ------
+    ValueError
+            If ``DB_BACKEND`` does not match a supported backend.
 
-	Notes
-	-----
-	Reads ``DB_BACKEND`` (default ``sqlite``). Supported: ``sqlite``,
-	``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses
-	``DB_PATH``; the rest read ``DB_DSN`` first, then compose from ``DB_*`` vars.
-	"""
-	load_dotenv()
-	str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
+    Notes
+    -----
+    Reads ``DB_BACKEND`` (default ``sqlite``). Supported: ``sqlite``,
+    ``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses
+    ``DB_PATH``; the rest read ``DB_DSN`` first, then compose from ``DB_*`` vars.
+    """
+    load_dotenv()
+    str_backend = os.getenv("DB_BACKEND", "sqlite").lower()
 
-	dict_builders: dict[str, Callable[[], str]] = {
-		"sqlite": lambda: f"sqlite:///{os.getenv('DB_PATH', './data/app.db')}",
-		"postgresql": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
-		"mariadb": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
-		"mysql": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
-		"mssql": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
-		"oracle": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
-	}
+    dict_builders: dict[str, Callable[[], str]] = {
+        "sqlite": lambda: f"sqlite:///{os.getenv('DB_PATH', './data/app.db')}",
+        "postgresql": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
+        "mariadb": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
+        "mysql": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
+        "mssql": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
+        "oracle": lambda: os.getenv("DB_DSN") or _compose_url(str_backend),
+    }
 
-	if str_backend not in dict_builders:
-		str_supported = ", ".join(dict_builders)
-		raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
-	return dict_builders[str_backend]()
+    if str_backend not in dict_builders:
+        str_supported = ", ".join(dict_builders)
+        raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
+    return dict_builders[str_backend]()
 
 
 @type_checker
 def build_engine() -> Engine:
-	"""Build a SQLAlchemy engine from environment configuration.
+    """Build a SQLAlchemy engine from environment configuration.
 
-	Returns
-	-------
-	sqlalchemy.Engine
-		Engine bound to the configured backend. Reads ``SQL_ECHO`` (default
-		``false``) to toggle SQL statement logging.
-	"""
-	bool_echo = os.getenv("SQL_ECHO", "false").lower() == "true"
-	return create_engine(build_database_url(), echo=bool_echo)
+    Returns
+    -------
+    sqlalchemy.Engine
+            Engine bound to the configured backend. Reads ``SQL_ECHO`` (default
+            ``false``) to toggle SQL statement logging.
+    """
+    bool_echo = os.getenv("SQL_ECHO", "false").lower() == "true"
+    return create_engine(build_database_url(), echo=bool_echo)
 
 
 @type_checker
 def build_session_factory(cls_engine: Engine | None = None) -> Callable[[], Session]:
-	"""Build a ``sessionmaker`` bound to the configured engine.
+    """Build a ``sessionmaker`` bound to the configured engine.
 
-	Parameters
-	----------
-	cls_engine : sqlalchemy.Engine, optional
-		Engine to bind. If ``None``, one is built from the environment.
+    Parameters
+    ----------
+    cls_engine : sqlalchemy.Engine, optional
+            Engine to bind. If ``None``, one is built from the environment.
 
-	Returns
-	-------
-	Callable[[], Session]
-		A factory that returns new ``Session`` instances.
-	"""
-	cls_engine = cls_engine or build_engine()
-	return sessionmaker(bind=cls_engine, expire_on_commit=False)
+    Returns
+    -------
+    Callable[[], Session]
+            A factory that returns new ``Session`` instances.
+    """
+    cls_engine = cls_engine or build_engine()
+    return sessionmaker(bind=cls_engine, expire_on_commit=False)
