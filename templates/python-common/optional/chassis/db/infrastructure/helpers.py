@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from typing import TypedDict
 import uuid
 
 from chassis.db.domain.ports import Record
 from chassis.typing.decorators import type_checker
+
+
+RE_SQL_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 class DsnParts(TypedDict):
@@ -71,6 +75,32 @@ def validate_not_flag(value: str, label: str) -> None:
     """
     if value.startswith("-"):
         raise ValueError(f"{label} must not start with '-' (got {value!r})")
+
+
+@type_checker
+def validate_sql_identifier(value: str, label: str) -> None:
+    """Reject a table or column name that is not a plain SQL identifier.
+
+    The handlers interpolate ``table`` and ``id_field`` into SQL text, because a driver cannot
+    bind an identifier as a parameter. They come from configuration, so this is not an
+    injection path today, but nothing enforced it. Call this once, in the handler constructor,
+    before the first statement is built; the ``# noqa: S608`` on those statements is then
+    justified rather than assumed.
+
+    Parameters
+    ----------
+    value : str
+        Name about to be placed in SQL text.
+    label : str
+        Human-readable name used in the raised error message.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not ``[A-Za-z_][A-Za-z0-9_]*``.
+    """
+    if not RE_SQL_IDENTIFIER.fullmatch(value):
+        raise ValueError(f"{label} must match [A-Za-z_][A-Za-z0-9_]* (got {value!r})")
 
 
 @type_checker
