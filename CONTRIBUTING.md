@@ -87,6 +87,8 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
    - Maintain test fixtures for complex scenarios
    - Recommended to use UNIT_TEST_TEMPLATE.md for AI generation of unit tests, in order to implement test-driven development best practices and follow project standards
 
+5. **GitGuardian exceptions**: a false positive in the secret scan is silenced in the root `.gitguardian.yaml` (`secret.ignored_matches`), never by editing history. Every entry needs a `name` stating why the match is not a credential.
+
 ## Cross-Language Quality Parity
 
 BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality
@@ -101,6 +103,12 @@ happening silently:
    `type: ignore`, `codespell:ignore` — blueprintx#303 exempts these explicitly). A config file
    (`ruff.toml`, `eslint.config.js`) may carry the rule line plus a short pointer comment; the
    long justification belongs in the docs, not inline.
+
+**The rules themselves live in `quality-rules.yaml` at the repo root** (blueprintx#432) — one
+entry per rule, with its per-language `tool`/`rule` (or an explicit `status: not-implemented` /
+`overridden_by:`), validated by `templates/python-common/bin/check_quality_rules.py` so the
+table cannot silently drift from the config it describes. The *reason* behind each entry lives
+in [`docs/quality-rules.md`](docs/quality-rules.md); a new rule enters both, never just one.
 
 **Precedence order when a house rule and a language standard conflict:**
 
@@ -178,6 +186,37 @@ its first cell, so one fresh row never implies the other rows were re-measured w
 Update the date in this heading when the WHOLE table is re-measured, so the next reader knows whether the gap
 narrowed or widened.
 
+### Rules scoped to BlueprintX, not inherited by scaffolds
+
+Parity is the default, and it is about **languages**, not about the BlueprintX/generated-project
+boundary. A few rules govern how *this repository* is written and deliberately stop at the edge
+of `templates/`. When that is the answer, it is written down here — "we chose not to" has to be
+as visible as "we did", or the next reader re-opens a settled question as if it were an
+oversight.
+
+| Rule | Scope | Why it stops here |
+|---|---|---|
+| **Prose language is en-US** (blueprintx#194) | BlueprintX's own prose | A generated project may legitimately be bilingual. `templates/python-common/bin/check_comment_language.py` is locale-agnostic *by design* — that is a feature of the shipped gate, not an omission. |
+| **The `docs/` boundary** — `bin/ci/check_docs_boundary.sh` (blueprintx#536, scoped by #576) | BlueprintX's own `docs/` | Two reasons, and either alone would be enough. **(1)** The same path means opposite things on the two sides: `docs/backlog/` at this root is the violation the rule names, while inside `templates/<tier>/` it is a shipped product surface with its own gate (`templates/python-common/bin/check_backlog_ledger.py`, wired into that tier's pre-commit + CI), present in five tiers today — `ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`. A guard that cannot tell them apart is worse than no guard: it condemns a feature the repo deliberately ships. **(2)** A generated project's `docs/` answers to its own authors, exactly as its prose language does. |
+
+Two consequences worth stating, because both were live options that were rejected:
+
+- **No carve-out.** "Walk `templates/*/docs/` with `backlog/` exempted" was option (a) and would
+  make BlueprintX the authority over a downstream project's `docs/` layout, for the sake of a
+  rule the downstream project never agreed to. The carve-out list would then have to track every
+  directory a skeleton legitimately ships — a second, drifting copy of the skeletons' contents.
+- **No opt-in knob.** A configurable boundary the generated project inherits was option (c), and
+  `check_docs_boundary.sh` therefore takes **no `--root` flag**, unlike the rest of the gate
+  family. Under this decision there is only ever one tree to walk. A knob nothing turns is an
+  invitation to widen the scope without re-deciding it, and the widening would be invisible in
+  review as a one-word config change.
+
+`tests/test_check_docs_boundary.sh` asserts the scope
+(`test_templates_tree_is_deliberately_not_walked`): a planted violation under
+`templates/<tier>/docs/`, alongside a tier's real `docs/backlog/`, must leave the gate green.
+Re-pointing the gate at `templates/` turns that case red rather than quietly failing the repo
+for a feature it ships.
+
 ## Pull Request Process
 
 1. **Create an Issue First**:
@@ -218,6 +257,39 @@ changed files (`Review skipped: N files exceed the limit of 100`), and a PR in t
 never merge. Over the 100 most recent PRs, exactly **1** exceeded even 90 files, and the
 largest legitimate PR in that set was 59 files — so 90 leaves headroom on both sides without
 being a rule nobody pays.
+
+### GitHub Actions are pinned by commit SHA — blueprintx#369
+
+Every remote action reference in a workflow — first-party `actions/*` included — is pinned to
+the full 40-character commit SHA of a released tag, with that tag as a trailing comment:
+
+```yaml
+- uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+```
+
+Enforced by `bin/ci/check_actions.sh` (`check_action_pins`) over every workflow shipped in
+`templates/`, in both pre-commit (`lint-actions`) and CI. A tag reference, a branch reference,
+a short SHA, or a SHA without the version comment all fail naming the file and line;
+`tests/test_check_actions_pins.sh` is the should-fail witness for each shape.
+
+Why the SHA and not the tag: a tag is a movable pointer. If `v4` moves — by compromise or a
+maintainer force-push — the workflow runs different code with no diff in the repo and no
+signal anywhere. The sharpest case is `secret_scan.yaml`, which runs `checkout` before
+`gitleaks`: a moved tag rewrites the workspace before the scanner reads it. `actions/*` is
+not exempt, because `actions/cache@v3` — a version GitHub stopped running — already sat in
+three tiers until `check_actions.sh`'s first run found it: the org being trusted is not the
+same as the reference being stable.
+
+Why the trailing `# vX.Y.Z` is mandatory, not decoration: pinning alone stops security patches
+arriving. Dependabot's `github-actions` ecosystem (already configured in
+`templates/python-common/.github/dependabot.yml` and this repo's own) reads that comment to
+know which version a SHA stands for, and rewrites both SHA and comment when it bumps. A bare
+SHA is a pin Dependabot cannot update — worse than the tag it replaced.
+
+Measured 2026-09-20 when the rule was adopted: **83 references across 25 template workflows,
+12 distinct `action@tag` pairs, 0 pinned**. Resolve a new SHA from the real tag
+(`git ls-remote --tags https://github.com/<owner>/<repo>` shows the peeled `^{}` commit of an
+annotated tag), never from memory or another repo's copy.
 
 ## Ruff Rule Adoption Log
 

@@ -40,36 +40,36 @@ _type_check = beartype(conf=CONF)
 
 
 def validate_type(value: Any, expected_type: Any, param_name: str) -> None:
-	"""Raise ``TypeError`` when ``value`` does not satisfy ``expected_type``.
+    """Raise ``TypeError`` when ``value`` does not satisfy ``expected_type``.
 
-	Parameters
-	----------
-	value : Any
-		Value to validate.
-	expected_type : Any
-		Annotation to check against.
-	param_name : str
-		Parameter name shown in the error message.
+    Parameters
+    ----------
+    value : Any
+            Value to validate.
+    expected_type : Any
+            Annotation to check against.
+    param_name : str
+            Parameter name shown in the error message.
 
-	Raises
-	------
-	TypeError
-		When the value does not match the expected type.
-	"""
-	die_if_unbearable(value, expected_type, conf=CONF, exception_prefix=f"{param_name} ")
+    Raises
+    ------
+    TypeError
+            When the value does not match the expected type.
+    """
+    die_if_unbearable(value, expected_type, conf=CONF, exception_prefix=f"{param_name} ")
 
 
 def create_type_checked_method(original_method: Callable[..., Any]) -> Callable[..., Any]:
-	"""Wrap ``original_method`` so each call validates its argument types.
+    """Wrap ``original_method`` so each call validates its argument types.
 
-	Parameters
-	----------
-	original_method : Callable[..., Any]
-		Function or method to wrap.
+    Parameters
+    ----------
+    original_method : Callable[..., Any]
+            Function or method to wrap.
 
-	Returns
-	-------
-	Callable[..., Any]
-		Wrapper that validates argument types before delegating.
-	"""
-	return _type_check(original_method)
+    Returns
+    -------
+    Callable[..., Any]
+            Wrapper that validates argument types before delegating.
+    """
+    return _type_check(original_method)

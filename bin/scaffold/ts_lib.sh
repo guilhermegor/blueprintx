@@ -284,6 +284,7 @@ copy_common_templates() {
         > "$project_path/.github/workflows/release-npm.yml"
 
     copy_static_ts_lib_files "$project_path"
+    copy_repo_rules_provisioner "$project_path" "$COMMON_TEMPLATE_ROOT/bin/required-checks.txt"
     copy_shared_ts_source "$project_path"
 
     print_status "success" "Common templates applied"

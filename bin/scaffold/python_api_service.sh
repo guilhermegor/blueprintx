@@ -181,7 +181,9 @@ copy_mkdocs_templates() {
 
     print_status "info" "Copying MkDocs templates..."
 
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
+    # Falls back to en when a scaffold script is run directly, without the menu.
+    export DOCS_LOCALE="${DOCS_LOCALE:-en}"
+    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/api-service-native-db/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \
@@ -400,6 +402,9 @@ copy_global_config() {
     # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_graph_gate.py" "$project_path/tests/unit/test_migration_graph_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" "$project_path/tests/unit/test_quality_rules_gate.py"
+    # Companion test for check_one_assert.py (#544) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 

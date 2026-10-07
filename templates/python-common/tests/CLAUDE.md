@@ -93,18 +93,18 @@ from pathlib import Path
 
 
 def load_gate(str_name: str) -> object:
-	"""Load a bin/ gate by file path so tests import the shipped file itself."""
-	path_gate = Path(__file__).parents[2] / "bin" / f"{str_name}.py"
-	cls_spec = importlib.util.spec_from_file_location(str_name, path_gate)
-	# Both can be None — a missing file, or a loader-less spec. Without this guard the
-	# failure is `AttributeError: 'NoneType' has no attribute 'exec_module'`, which names
-	# neither the gate nor the path and reads like a bug in the test rather than a renamed
-	# or deleted file.
-	if cls_spec is None or cls_spec.loader is None:
-		raise ImportError(f"cannot load gate from {path_gate}")
-	cls_module = importlib.util.module_from_spec(cls_spec)
-	cls_spec.loader.exec_module(cls_module)
-	return cls_module
+    """Load a bin/ gate by file path so tests import the shipped file itself."""
+    path_gate = Path(__file__).parents[2] / "bin" / f"{str_name}.py"
+    cls_spec = importlib.util.spec_from_file_location(str_name, path_gate)
+    # Both can be None — a missing file, or a loader-less spec. Without this guard the
+    # failure is `AttributeError: 'NoneType' has no attribute 'exec_module'`, which names
+    # neither the gate nor the path and reads like a bug in the test rather than a renamed
+    # or deleted file.
+    if cls_spec is None or cls_spec.loader is None:
+        raise ImportError(f"cannot load gate from {path_gate}")
+    cls_module = importlib.util.module_from_spec(cls_spec)
+    cls_spec.loader.exec_module(cls_module)
+    return cls_module
 ```
 
 Importing the file the project actually ships is the point: a copy pasted into `tests/`
@@ -112,8 +112,8 @@ passes forever while the shipped gate rots.
 
 ## Formatting (must pass `poe lint`)
 
-- **Tabs, not spaces** — `ruff.toml` sets `indent-style = "tab"`. The most common lint
-  failure is a 4-space-indented test file. Indent every level with one tab.
+- **4-space indent** — `ruff.toml` sets `indent-style = "space"`. Let `ruff format` handle
+  it; a hand-indented test file is the most common source of drift from this rule.
 - **Double quotes** everywhere (`quote-style = "double"`).
 - **Type annotations on every function**, including `-> None` on tests and fixtures
   (flake8-annotations is strict).
@@ -143,25 +143,62 @@ Use comment-banner sections in this order (omit a section if empty):
 
 - **Name**: `test_<unit>_<scenario>_<expected_outcome>` — e.g.
   `test_render_missing_parent_dir_creates_it`.
-- **One BEHAVIOUR per test — not one assert.** Several asserts pinning different facets of the
-  **same** behaviour (a value and its dtype; a rendered message and the absence of a secret in
-  it) are one behaviour and belong in one test — splitting them duplicates the whole *arrange*
-  to prove nothing new. Two asserts exercising two **independent** code paths are two tests.
-  The test to apply: **if this test fails, does its name say what broke?** If yes, the asserts
-  are angles on one fact. If a reader has to open the test body to find out which of several
-  unrelated things failed, split it.
+- **A UNIT test has exactly ONE assertion site. An INTEGRATION test has one BEHAVIOUR, and may
+  need several.** The split is the rule; it is enforced, not advisory, and
+  `bin/check_one_assert.py` is what enforces it (blueprintx#544).
 
-  This is not only prose: `bin/check_complexity.sh` caps `tests/` at cyclomatic complexity
-  **1** — the same argument one level up. A test with a *branch* tests two paths and the green
-  never says which one ran; a test with several asserts on one behaviour has no branch, so it
-  stays under the cap. Measured 2026-09-14 (AST assert-count over this tree): 768 tests, 205
-  (27%) with more than one assert — confirms the rule people actually follow is BEHAVIOUR, not
-  assert count, and corrects blueprintx#429's own "554 / 31%" as stale. The one narrow,
-  decidable slice of "one assert hides two facts" — `assert a and b`, where a failure can't say
-  which half broke — is already caught by ruff's `PT018` (0 violations in this tree); that is
-  the linter's job, not this paragraph's. See blueprintx#429/#431 before adding a hand-rolled
-  assert-counting gate: a ceiling on assert count would fail the legitimate multi-facet case
-  above.
+  **Why one assert in `tests/unit/`.** A test with two asserts that goes red does not say which
+  behaviour broke — the failure names a line, and the reader has to reconstruct which of two
+  claims the code stopped honouring. Worse, the *green* never says which one ran: an assert
+  placed after an early `return`, a `raise`, or a `pytest.raises` block is never reached, and
+  a passing suite reports that unexecuted claim as proven. One assert per unit test makes the
+  red name the behaviour and the green mean exactly one thing.
+
+  **Why `tests/integration/` stays on one behaviour.** An integration test legitimately asserts
+  a *sequence* of observable effects: one HTTP call, several consequences (a row written, a
+  status returned, a webhook fired). Splitting those re-runs the whole expensive *arrange* to
+  prove no new fact. That is the argument the old rule was built on, and it is still correct —
+  for that suite. It is not correct for a unit test, where the arrange is cheap and a fixture
+  or `parametrize` carries it for free.
+
+  **The measurement is why the split is enforceable rather than aspirational.** Re-measured
+  2026-09-20 (AST assertion-site count over `templates/**`, counting `assert`, `assert_*()`
+  calls, and `raises`/`warns` context managers — the same counter the gate uses):
+
+  | suite | tests | 0 sites | exactly 1 | **more than 1** |
+  |---|---|---|---|---|
+  | `tests/unit/` | 828 | 1 | 626 | **201 (24%)** |
+  | `tests/integration/` | 68 | 0 | 16 | **52 (76%)** |
+
+  At 24% the unit rule is a real but finishable remediation. At 76% the same rule on
+  integration tests would be a wall — and a gate at a threshold nobody pays is a gate nobody
+  keeps. (This supersedes blueprintx#429's "554 / 31%" and #431's "188 / 33%"; both are stale,
+  do not re-cite them.)
+
+  **Splitting is where this goes wrong.** A mechanical split that copies the *arrange* into N
+  near-identical tests is worse than the multi-assert original. Two patterns carry it instead,
+  in this order:
+
+  1. **`@pytest.mark.parametrize`** when the asserts are the *same* assertion over different
+     inputs or different attributes of one result. One test function, N cases, each named in
+     the failure output.
+  2. **A scoped fixture** when the asserts are *different* assertions over one expensive
+     artifact — see "Expensive shared setup" below. That section is not repealed by this rule;
+     it is what makes this rule affordable.
+
+  **The escape hatch, for the unit test that genuinely needs two.** `# one-assert-ok: <reason>`
+  anywhere inside the function exempts it; the reason is **required** (a bare marker is
+  rejected), same shape as `# complexity-ok:` / `orm-guard-ok:` / `sql-guard-ok:`. Expect it to
+  be rare — 76% of unit tests already comply without it.
+
+  **The complexity cap still applies, and a split must not evade it.** `bin/check_complexity.sh`
+  caps `tests/` at cyclomatic complexity **1** — the same argument one level up: a test with a
+  *branch* tests two paths and the green never says which ran. Reaching one assert by
+  introducing a branch (a loop over cases, an `if` selecting the expected value) trades one
+  violation for another; `parametrize` is the form that adds cases without adding paths.
+
+  One narrow slice is **not** this gate's job: `assert a and b`, where a failure cannot say
+  which half broke, is ruff's `PT018` (0 violations in this tree). Do not re-implement it.
 - **Mock at the boundary, not inside business logic.** Patch the filesystem, DB cursor/session,
   HTTP client, or webhook — never the function under test. Use `pytest-mock`'s `mocker`
   (`mocker.patch`, `mocker.patch.object`); use `tmp_path` for real-but-disposable files.
@@ -218,10 +255,10 @@ module- or session-scoped fixture instead of rebuilding it per test:
 ```python
 @pytest.fixture(scope="module")
 def path_rendered(tmp_path_factory: pytest.TempPathFactory) -> Path:
-	"""Render the report once for the whole module (expensive build shared)."""
-	path_out = tmp_path_factory.mktemp("render") / "report.xlsx"
-	RenderToExcel().write(df_sample(), path_out)
-	return path_out
+    """Render the report once for the whole module (expensive build shared)."""
+    path_out = tmp_path_factory.mktemp("render") / "report.xlsx"
+    RenderToExcel().write(df_sample(), path_out)
+    return path_out
 ```
 
 The smell this fixes is "redundant expensive setup masquerading as independent coverage" —
@@ -314,7 +351,7 @@ import yaml
 
 
 str_digest = hashlib.sha256(
-	json.dumps(yaml.safe_load(str_text), sort_keys=True, default=str).encode()
+    json.dumps(yaml.safe_load(str_text), sort_keys=True, default=str).encode()
 ).hexdigest()
 ```
 
@@ -387,12 +424,12 @@ _MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
 
 
 def _run_gate(path_root: Path, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV) -> ...:
-	dict_env = dict(os.environ)
-	dict_env.pop("FORCE_COLOR", None)      # unrolled: a loop costs complexity, and tests/ is capped at 1
-	dict_env.pop("CLICOLOR_FORCE", None)
-	dict_env.pop("NO_COLOR", None)
-	dict_env.update(dict_extra)
-	return subprocess.run(..., env=dict_env, check=False)
+    dict_env = dict(os.environ)
+    dict_env.pop("FORCE_COLOR", None)      # unrolled: a loop costs complexity, and tests/ is capped at 1
+    dict_env.pop("CLICOLOR_FORCE", None)
+    dict_env.pop("NO_COLOR", None)
+    dict_env.update(dict_extra)
+    return subprocess.run(..., env=dict_env, check=False)
 ```
 
 Measured (blueprintx#254): nine green subprocess tests for `check_complexity.sh` went **red on a
