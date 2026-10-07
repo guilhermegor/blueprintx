@@ -49,10 +49,10 @@ from .step_handlers import STEP_KINDS, run_browser_steps
 
 
 __all__ = [
-	"STEP_KINDS",
-	"BrowserPage",
-	"BrowserStep",
-	"BrowserStepError",
-	"resolve_placeholders",
-	"run_browser_steps",
+    "STEP_KINDS",
+    "BrowserPage",
+    "BrowserStep",
+    "BrowserStepError",
+    "resolve_placeholders",
+    "run_browser_steps",
 ]
