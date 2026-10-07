@@ -278,7 +278,7 @@ cls_storage = build_storage_handler()
 
 Supported schema-less backends: `json`, `csv`, `joblib`.
 
-**`JoblibHandler`** stores immutable binary artifacts. Each artifact is named `name_YYYYMMDD_HHMMSS_{sha256_prefix8}.joblib`. Three-factor integrity on load: SHA256 prefix match, `_saved_at` metadata check, optional HMAC sidecar (set `JOBLIB_SECRET_KEY` in `.env`). `update()` raises `NotImplementedError` — always create a new artifact with `create()`.
+**`JoblibHandler`** stores immutable binary artifacts. Each artifact is named `name_YYYYMMDD_HHMMSS_{sha256_prefix8}.joblib`. Three-factor integrity on load: SHA256 prefix match, `_saved_at` metadata check, optional HMAC sidecar (set `JOBLIB_SECRET_KEY` in `.env`). `update()` raises `NotImplementedError` — always create a new artifact with `create()`. A `record_id` must be exactly that shape. `create()` turns each `_` in `_name` into `-` and then checks the result: only lowercase letters, digits and `-` are accepted (`my_model` becomes `my-model`), and anything else (uppercase letters, a path separator, `..`) raises `ValueError`, so no call can leave the store directory.
 
 **`SanityCheck`** (`chassis/db_wschema/infrastructure/sanity_check.py`) — post-load semantic validator:
 

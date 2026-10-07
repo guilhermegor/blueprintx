@@ -247,6 +247,12 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
 
+      - id: docs-locale-prompt-tests
+        name: docs-locale prompt should-fail regression tests (blueprintx#247)
+        entry: bash tests/test_docs_locale_prompt.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/blueprintx\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
       - id: spec-answers-tests
         name: --spec regression tests (blueprintx#629)
         entry: bash tests/test_spec_answers.sh
