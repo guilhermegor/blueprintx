@@ -412,6 +412,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#documentation-locale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation locale
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#blueprintx-flags" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1751,6 +1762,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#documentation-locale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation locale
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#blueprintx-flags" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1821,7 +1843,7 @@
 <tbody>
 <tr>
 <td><code>make new</code></td>
-<td>Interactive scaffolder — prompts for language, skeleton, and project name.</td>
+<td>Interactive scaffolder — prompts for language, skeleton, project name, license, and documentation locale.</td>
 </tr>
 <tr>
 <td><code>make preview</code></td>
@@ -1841,6 +1863,25 @@
 </tr>
 </tbody>
 </table>
+<h2 id="documentation-locale">Documentation locale<a class="headerlink" href="#documentation-locale" title="Permanent link">&para;</a></h2>
+<p>The last <code>make new</code> prompt asks which language the <strong>generated project's</strong> <code>README.md</code> and
+<code>docs/</code> pages are meant to be written in — <code>en</code> (default) or <code>pt-BR</code>. The value reaches the scaffold as
+<code>DOCS_LOCALE</code>, next to <code>LICENSE_CHOICE</code>, and every MkDocs-bearing Python skeleton renders it
+into <code>theme.language</code> in the project's <code>mkdocs.yml</code>, so Material's search and UI strings
+follow the pages. Running a <code>bin/scaffold/*.sh</code> script directly, without the menu, falls back
+to <code>en</code>.</p>
+<p>Three things the choice does <strong>not</strong> change:</p>
+<ul>
+<li><strong>The shipped page text.</strong> The templates are English; <code>pt-BR</code> sets the MkDocs UI language
+  and the project's declared locale, and translating the pages is left to the project.</li>
+<li><strong>Code stays English in every locale.</strong> Comments and docstrings are English whether the
+  docs are <code>en</code> or <code>pt-BR</code>; the generated project's <code>bin/check_comment_language.py</code> enforces
+  that boundary and never reads <code>docs/</code>, which is why it needs no locale setting of its own.</li>
+<li><strong>BlueprintX's own prose.</strong> This repository is en-US with no exceptions (blueprintx#194).
+  The prompt describes the project being created, not the tool creating it.</li>
+</ul>
+<p>Only MkDocs skeletons consume the value today; <code>ts-lib</code> (Docusaurus), <code>react-spa-webpack</code> and
+<code>bash-cli</code> receive <code>DOCS_LOCALE</code> and ignore it.</p>
 <h2 id="blueprintx-flags"><code>blueprintx</code> flags<a class="headerlink" href="#blueprintx-flags" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
