@@ -30,7 +30,7 @@ import sys
 
 
 _ALLOWED_VERBS = frozenset(
-	{"create", "drop", "add", "remove", "rename", "change", "backfill", "seed"}
+    {"create", "drop", "add", "remove", "rename", "change", "backfill", "seed"}
 )
 
 _RE_FILENAME = re.compile(r"^\d{8}_[0-9a-f]+_(?P<slug>.+)\.py$")
@@ -41,110 +41,110 @@ _PATH_MIGRATIONS = pathlib.Path("migrations/versions")
 
 
 def _slug_verb(str_slug: str) -> str:
-	"""Return the leading verb token of a migration slug.
+    """Return the leading verb token of a migration slug.
 
-	Parameters
-	----------
-	str_slug : str
-		The migration slug (filename minus date/rev/extension).
+    Parameters
+    ----------
+    str_slug : str
+        The migration slug (filename minus date/rev/extension).
 
-	Returns
-	-------
-	str
-		Everything before the first underscore.
-	"""
-	return str_slug.split("_", 1)[0]
+    Returns
+    -------
+    str
+        Everything before the first underscore.
+    """
+    return str_slug.split("_", 1)[0]
 
 
 def _has_escape_hatch(path_file: pathlib.Path) -> bool:
-	"""Return whether the file carries a reasoned ``migration-slug-ok:`` pragma.
+    """Return whether the file carries a reasoned ``migration-slug-ok:`` pragma.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		The migration file to scan.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The migration file to scan.
 
-	Returns
-	-------
-	bool
-		True when a pragma with a reason appears in the file's first few lines.
-	"""
-	list_lines = path_file.read_text(encoding="utf-8").splitlines()[:_INT_ESCAPE_SCAN_LINES]
-	return bool(_RE_ESCAPE.search("\n".join(list_lines)))
+    Returns
+    -------
+    bool
+        True when a pragma with a reason appears in the file's first few lines.
+    """
+    list_lines = path_file.read_text(encoding="utf-8").splitlines()[:_INT_ESCAPE_SCAN_LINES]
+    return bool(_RE_ESCAPE.search("\n".join(list_lines)))
 
 
 def check_file(path_file: pathlib.Path) -> int:
-	"""Report a migration filename's slug-verb violation, if any.
+    """Report a migration filename's slug-verb violation, if any.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		A migration version file.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        A migration version file.
 
-	Returns
-	-------
-	int
-		1 when the filename fails the shape or verb check and carries no escape hatch,
-		0 otherwise.
-	"""
-	cls_match = _RE_FILENAME.match(path_file.name)
-	if cls_match is None:
-		print(
-			f"❌ {path_file}: filename does not match <date>_<rev>_<slug>.py "
-			f"(ddd-service-orm-db/alembic.ini's file_template) — cannot verify the slug"
-		)
-		return 1
-	str_slug = cls_match.group("slug")
-	if _slug_verb(str_slug) in _ALLOWED_VERBS or _has_escape_hatch(path_file):
-		return 0
-	print(
-		f"❌ {path_file}: slug '{str_slug}' does not start with a known verb "
-		f"({', '.join(sorted(_ALLOWED_VERBS))}). Rename the migration message, or add "
-		f"'# migration-slug-ok: <reason>' near the top of the file."
-	)
-	return 1
+    Returns
+    -------
+    int
+        1 when the filename fails the shape or verb check and carries no escape hatch,
+        0 otherwise.
+    """
+    cls_match = _RE_FILENAME.match(path_file.name)
+    if cls_match is None:
+        print(
+            f"❌ {path_file}: filename does not match <date>_<rev>_<slug>.py "
+            f"(ddd-service-orm-db/alembic.ini's file_template) — cannot verify the slug"
+        )
+        return 1
+    str_slug = cls_match.group("slug")
+    if _slug_verb(str_slug) in _ALLOWED_VERBS or _has_escape_hatch(path_file):
+        return 0
+    print(
+        f"❌ {path_file}: slug '{str_slug}' does not start with a known verb "
+        f"({', '.join(sorted(_ALLOWED_VERBS))}). Rename the migration message, or add "
+        f"'# migration-slug-ok: <reason>' near the top of the file."
+    )
+    return 1
 
 
 def _version_files() -> list:
-	"""Collect migration version files to check.
+    """Collect migration version files to check.
 
-	Returns
-	-------
-	list of pathlib.Path
-		Every ``*.py`` file under ``migrations/versions/``, excluding ``__init__.py``.
-	"""
-	return sorted(p for p in _PATH_MIGRATIONS.glob("*.py") if p.name != "__init__.py")
+    Returns
+    -------
+    list of pathlib.Path
+        Every ``*.py`` file under ``migrations/versions/``, excluding ``__init__.py``.
+    """
+    return sorted(p for p in _PATH_MIGRATIONS.glob("*.py") if p.name != "__init__.py")
 
 
 def main() -> int:
-	"""Run the gate against ``migrations/versions/`` relative to the current directory.
+    """Run the gate against ``migrations/versions/`` relative to the current directory.
 
-	Returns
-	-------
-	int
-		Process exit code: 0 when the tier ships no migrations, has none yet, or every
-		slug passes; 1 when any slug fails.
-	"""
-	if not _PATH_MIGRATIONS.exists():
-		print("✅ migration slug gate: no migrations/versions/ in this tier — skipping")
-		return 0
+    Returns
+    -------
+    int
+        Process exit code: 0 when the tier ships no migrations, has none yet, or every
+        slug passes; 1 when any slug fails.
+    """
+    if not _PATH_MIGRATIONS.exists():
+        print("✅ migration slug gate: no migrations/versions/ in this tier — skipping")
+        return 0
 
-	list_files = _version_files()
-	if not list_files:
-		print("✅ migration slug gate: 0 migration files found — nothing to check")
-		return 0
+    list_files = _version_files()
+    if not list_files:
+        print("✅ migration slug gate: 0 migration files found — nothing to check")
+        return 0
 
-	int_total = sum(check_file(path_file) for path_file in list_files)
-	if int_total == 0:
-		print(f"✅ migration slug gate: {len(list_files)} file(s) checked, 0 findings")
-	return 1 if int_total > 0 else 0
+    int_total = sum(check_file(path_file) for path_file in list_files)
+    if int_total == 0:
+        print(f"✅ migration slug gate: {len(list_files)} file(s) checked, 0 findings")
+    return 1 if int_total > 0 else 0
 
 
 if __name__ == "__main__":
-	# Windows' stdout defaults to cp1252, which cannot encode the glyphs this script prints —
-	# see check_dtypes.py's identical fix for the always_run hook it would otherwise crash.
-	for cls_stream in (sys.stdout, sys.stderr):
-		if hasattr(cls_stream, "reconfigure"):
-			cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    # Windows' stdout defaults to cp1252, which cannot encode the glyphs this script prints —
+    # see check_dtypes.py's identical fix for the always_run hook it would otherwise crash.
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
-	sys.exit(main())
+    sys.exit(main())

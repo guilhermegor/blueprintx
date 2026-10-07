@@ -36,12 +36,12 @@ from urllib.parse import urlsplit
 # DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
 # import (no redefinition); at runtime the try/except picks whichever layout shipped.
 if TYPE_CHECKING:
-	from utils.typing import type_checker
+    from utils.typing import type_checker
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 # A cleartext endpoint is only a credential leak when there is a credential to leak, and only
@@ -53,138 +53,138 @@ _TUPLE_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 @type_checker
 def _signal_override(str_signal_var: str, str_generic_var: str) -> str:
-	"""Resolve a signal-specific OTLP variable over its generic fallback.
+    """Resolve a signal-specific OTLP variable over its generic fallback.
 
-	⚠️ Presence decides, never truthiness. ``OTLPLogExporter`` reads the environment when it
-	is constructed and honours a signal-specific variable that is SET BUT EMPTY — an `or`
-	chain does not, because ``""`` is falsy, so it silently falls through to the generic
-	value. That divergence is the whole defect: the caller would then vet an endpoint the
-	exporter is not using, and could report credentials as safe that are in fact sent
-	nowhere, or unsafe when they are not sent at all.
+    ⚠️ Presence decides, never truthiness. ``OTLPLogExporter`` reads the environment when it
+    is constructed and honours a signal-specific variable that is SET BUT EMPTY — an `or`
+    chain does not, because ``""`` is falsy, so it silently falls through to the generic
+    value. That divergence is the whole defect: the caller would then vet an endpoint the
+    exporter is not using, and could report credentials as safe that are in fact sent
+    nowhere, or unsafe when they are not sent at all.
 
-	Parameters
-	----------
-	str_signal_var : str
-		Name of the signal-specific variable (``OTEL_EXPORTER_OTLP_LOGS_*``).
-	str_generic_var : str
-		Name of the generic fallback variable (``OTEL_EXPORTER_OTLP_*``).
+    Parameters
+    ----------
+    str_signal_var : str
+        Name of the signal-specific variable (``OTEL_EXPORTER_OTLP_LOGS_*``).
+    str_generic_var : str
+        Name of the generic fallback variable (``OTEL_EXPORTER_OTLP_*``).
 
-	Returns
-	-------
-	str
-		The effective value, stripped; ``""`` when neither variable is set.
+    Returns
+    -------
+    str
+        The effective value, stripped; ``""`` when neither variable is set.
 
-	Examples
-	--------
-	>>> isinstance(_signal_override("A_MISSING_VAR", "ANOTHER_MISSING_VAR"), str)
-	True
-	"""
-	str_signal = os.getenv(str_signal_var)
-	if str_signal is not None:
-		return str_signal.strip()
-	return (os.getenv(str_generic_var) or "").strip()
+    Examples
+    --------
+    >>> isinstance(_signal_override("A_MISSING_VAR", "ANOTHER_MISSING_VAR"), str)
+    True
+    """
+    str_signal = os.getenv(str_signal_var)
+    if str_signal is not None:
+        return str_signal.strip()
+    return (os.getenv(str_generic_var) or "").strip()
 
 
 @type_checker
 def _effective_otlp_logs_config() -> tuple[str, bool]:
-	"""Resolve the endpoint and whether credential headers are set, honouring precedence.
+    """Resolve the endpoint and whether credential headers are set, honouring precedence.
 
-	⚠️ The signal-specific variables OVERRIDE the generic ones (OTel spec). Reading only
-	``OTEL_EXPORTER_OTLP_ENDPOINT``/``_HEADERS`` therefore answers about a configuration the
-	SDK may not be using — it would miss a project that sets only ``..._LOGS_...``, and the
-	miss is silent in both directions: no export where one was configured, or no TLS check
-	where credentials are in fact being sent. Precedence is resolved by ``_signal_override``,
-	which keys on PRESENCE so a set-but-empty override is preserved rather than skipped.
+    ⚠️ The signal-specific variables OVERRIDE the generic ones (OTel spec). Reading only
+    ``OTEL_EXPORTER_OTLP_ENDPOINT``/``_HEADERS`` therefore answers about a configuration the
+    SDK may not be using — it would miss a project that sets only ``..._LOGS_...``, and the
+    miss is silent in both directions: no export where one was configured, or no TLS check
+    where credentials are in fact being sent. Precedence is resolved by ``_signal_override``,
+    which keys on PRESENCE so a set-but-empty override is preserved rather than skipped.
 
-	Returns
-	-------
-	tuple[str, bool]
-		The effective logs endpoint (``""`` when unset) and whether any headers are set.
+    Returns
+    -------
+    tuple[str, bool]
+        The effective logs endpoint (``""`` when unset) and whether any headers are set.
 
-	Examples
-	--------
-	>>> isinstance(_effective_otlp_logs_config(), tuple)
-	True
-	"""
-	str_endpoint = _signal_override(
-		"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "OTEL_EXPORTER_OTLP_ENDPOINT"
-	)
-	str_headers = _signal_override("OTEL_EXPORTER_OTLP_LOGS_HEADERS", "OTEL_EXPORTER_OTLP_HEADERS")
-	return str_endpoint, bool(str_headers)
+    Examples
+    --------
+    >>> isinstance(_effective_otlp_logs_config(), tuple)
+    True
+    """
+    str_endpoint = _signal_override(
+        "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "OTEL_EXPORTER_OTLP_ENDPOINT"
+    )
+    str_headers = _signal_override("OTEL_EXPORTER_OTLP_LOGS_HEADERS", "OTEL_EXPORTER_OTLP_HEADERS")
+    return str_endpoint, bool(str_headers)
 
 
 @type_checker
 def _is_cleartext_with_credentials(str_endpoint: str, bool_has_headers: bool) -> bool:
-	"""Report whether credentials would be sent over an unencrypted, off-host connection.
+    """Report whether credentials would be sent over an unencrypted, off-host connection.
 
-	Parameters
-	----------
-	str_endpoint : str
-		The effective OTLP logs endpoint.
-	bool_has_headers : bool
-		Whether ``OTEL_EXPORTER_OTLP_[LOGS_]HEADERS`` carries anything.
+    Parameters
+    ----------
+    str_endpoint : str
+        The effective OTLP logs endpoint.
+    bool_has_headers : bool
+        Whether ``OTEL_EXPORTER_OTLP_[LOGS_]HEADERS`` carries anything.
 
-	Returns
-	-------
-	bool
-		``True`` when the exporter must not be started.
+    Returns
+    -------
+    bool
+        ``True`` when the exporter must not be started.
 
-	Examples
-	--------
-	>>> _is_cleartext_with_credentials("http://collector.example:4318", True)
-	True
-	>>> _is_cleartext_with_credentials("http://localhost:4318", True)
-	False
-	>>> _is_cleartext_with_credentials("http://collector.example:4318", False)
-	False
-	"""
-	if not bool_has_headers or not str_endpoint:
-		return False
-	try:
-		str_hostname = urlsplit(str_endpoint).hostname
-	except ValueError:
-		# Unparseable endpoint + credentials: refuse. See docs/observability.md.
-		return True
-	return not str_endpoint.startswith("https://") and str_hostname not in _TUPLE_LOOPBACK_HOSTS
+    Examples
+    --------
+    >>> _is_cleartext_with_credentials("http://collector.example:4318", True)
+    True
+    >>> _is_cleartext_with_credentials("http://localhost:4318", True)
+    False
+    >>> _is_cleartext_with_credentials("http://collector.example:4318", False)
+    False
+    """
+    if not bool_has_headers or not str_endpoint:
+        return False
+    try:
+        str_hostname = urlsplit(str_endpoint).hostname
+    except ValueError:
+        # Unparseable endpoint + credentials: refuse. See docs/observability.md.
+        return True
+    return not str_endpoint.startswith("https://") and str_hostname not in _TUPLE_LOOPBACK_HOSTS
 
 
 @type_checker
 def _exportable_endpoint(logger: logging.Logger) -> str:
-	"""Return the endpoint to export to, or ``""`` when export must not start.
+    """Return the endpoint to export to, or ``""`` when export must not start.
 
-	⚠️ The refusal WARNS rather than returning quietly. The install below is deliberately
-	fire-and-forget, so a silent refusal here would look identical to a working exporter that
-	simply never delivers: the user configured export, saw no error, and gets no logs. That is
-	the silent wrong answer this seam is otherwise careful to avoid.
+    ⚠️ The refusal WARNS rather than returning quietly. The install below is deliberately
+    fire-and-forget, so a silent refusal here would look identical to a working exporter that
+    simply never delivers: the user configured export, saw no error, and gets no logs. That is
+    the silent wrong answer this seam is otherwise careful to avoid.
 
-	Parameters
-	----------
-	logger : logging.Logger
-		The logger the warning is written to.
+    Parameters
+    ----------
+    logger : logging.Logger
+        The logger the warning is written to.
 
-	Returns
-	-------
-	str
-		The effective endpoint, or ``""``.
+    Returns
+    -------
+    str
+        The effective endpoint, or ``""``.
 
-	Examples
-	--------
-	>>> import logging
-	>>> isinstance(_exportable_endpoint(logging.getLogger("app")), str)
-	True
-	"""
-	str_endpoint, bool_has_headers = _effective_otlp_logs_config()
-	if _is_cleartext_with_credentials(str_endpoint, bool_has_headers):
-		# The endpoint is named because the fix is to change it; the header VALUES never are,
-		# since they are the credential this guard exists to protect.
-		logger.warning(
-			"OTel log export refused: OTLP headers are set but the endpoint %r is neither "
-			"https:// nor loopback, so the credentials would cross the network in cleartext. "
-			"Use an https:// endpoint, or drop the headers for a local collector.",
-			str_endpoint,
-		)
-		return ""
-	return str_endpoint
+    Examples
+    --------
+    >>> import logging
+    >>> isinstance(_exportable_endpoint(logging.getLogger("app")), str)
+    True
+    """
+    str_endpoint, bool_has_headers = _effective_otlp_logs_config()
+    if _is_cleartext_with_credentials(str_endpoint, bool_has_headers):
+        # The endpoint is named because the fix is to change it; the header VALUES never are,
+        # since they are the credential this guard exists to protect.
+        logger.warning(
+            "OTel log export refused: OTLP headers are set but the endpoint %r is neither "
+            "https:// nor loopback, so the credentials would cross the network in cleartext. "
+            "Use an https:// endpoint, or drop the headers for a local collector.",
+            str_endpoint,
+        )
+        return ""
+    return str_endpoint
 
 
 # CWE-319, and the reason it is not covered by the cleartext guard above: that guard vets the
@@ -198,100 +198,100 @@ def _exportable_endpoint(logger: logging.Logger) -> str:
 # guards to prevent. The raise is caught by the fire-and-forget handler in the caller.
 @type_checker
 def _reject_credential_forwarding_redirects(cls_exporter: object) -> None:
-	"""Refuse to follow redirects, so credential headers cannot reach another host.
+    """Refuse to follow redirects, so credential headers cannot reach another host.
 
-	Parameters
-	----------
-	cls_exporter : object
-		The ``OTLPLogExporter`` whose underlying ``requests`` session is hardened.
+    Parameters
+    ----------
+    cls_exporter : object
+        The ``OTLPLogExporter`` whose underlying ``requests`` session is hardened.
 
-	Returns
-	-------
-	None
+    Returns
+    -------
+    None
 
-	Raises
-	------
-	RuntimeError
-		When the exporter exposes no session to harden — see the note above the function.
-	"""
-	cls_session = getattr(cls_exporter, "_session", None)
-	if cls_session is None:
-		raise RuntimeError(
-			"OTLPLogExporter exposes no _session, so redirect-based credential forwarding "
-			"(CWE-319) cannot be blocked; refusing to start the exporter"
-		)
-	cls_session.max_redirects = 0
+    Raises
+    ------
+    RuntimeError
+        When the exporter exposes no session to harden — see the note above the function.
+    """
+    cls_session = getattr(cls_exporter, "_session", None)
+    if cls_session is None:
+        raise RuntimeError(
+            "OTLPLogExporter exposes no _session, so redirect-based credential forwarding "
+            "(CWE-319) cannot be blocked; refusing to start the exporter"
+        )
+    cls_session.max_redirects = 0
 
 
 @type_checker
 def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one guard, one sink
-	"""Build the OTLP logger provider and attach its handler to ``logger``.
+    """Build the OTLP logger provider and attach its handler to ``logger``.
 
-	Split out of :func:`configure_otel_logging` so the opt-out guard (env unset) and the
-	fire-and-forget failure guard each carry their own single branch — two responsibilities,
-	not one function doing both.
+    Split out of :func:`configure_otel_logging` so the opt-out guard (env unset) and the
+    fire-and-forget failure guard each carry their own single branch — two responsibilities,
+    not one function doing both.
 
-	Parameters
-	----------
-	logger : logging.Logger
-		The logger the OTel handler is added to (never replaces its existing handlers).
+    Parameters
+    ----------
+    logger : logging.Logger
+        The logger the OTel handler is added to (never replaces its existing handlers).
 
-	Returns
-	-------
-	None
-	"""
-	# Fire-and-forget, deliberately. A failure here must never become an application outage —
-	# raising would turn an unreachable OTel collector into a crashed scaffolded project, and
-	# the FileHandler above already gives the message somewhere to land either way. This is
-	# the ONE place a silently swallowed error is the correct choice.
-	try:
-		from opentelemetry._logs import set_logger_provider
-		from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-		from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-		from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-		from opentelemetry.sdk.resources import Resource
+    Returns
+    -------
+    None
+    """
+    # Fire-and-forget, deliberately. A failure here must never become an application outage —
+    # raising would turn an unreachable OTel collector into a crashed scaffolded project, and
+    # the FileHandler above already gives the message somewhere to land either way. This is
+    # the ONE place a silently swallowed error is the correct choice.
+    try:
+        from opentelemetry._logs import set_logger_provider
+        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+        from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+        from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+        from opentelemetry.sdk.resources import Resource
 
-		# The SDK classes below already read the standard OTEL environment variables for the
-		# endpoint, headers, service name and resource attributes on their own, so none of
-		# that is passed explicitly — reimplementing the lookup would be a second, driftable
-		# copy of it.
-		cls_exporter = OTLPLogExporter()
-		_reject_credential_forwarding_redirects(cls_exporter)
-		cls_provider = LoggerProvider(resource=Resource.create())
-		cls_provider.add_log_record_processor(BatchLogRecordProcessor(cls_exporter))
-		set_logger_provider(cls_provider)
-		logger.addHandler(LoggingHandler(logger_provider=cls_provider))
-	except Exception as cls_exc:  # noqa: BLE001 — see the fire-and-forget note above
-		logger.warning("OTel log export not started: %s", cls_exc)
+        # The SDK classes below already read the standard OTEL environment variables for the
+        # endpoint, headers, service name and resource attributes on their own, so none of
+        # that is passed explicitly — reimplementing the lookup would be a second, driftable
+        # copy of it.
+        cls_exporter = OTLPLogExporter()
+        _reject_credential_forwarding_redirects(cls_exporter)
+        cls_provider = LoggerProvider(resource=Resource.create())
+        cls_provider.add_log_record_processor(BatchLogRecordProcessor(cls_exporter))
+        set_logger_provider(cls_provider)
+        logger.addHandler(LoggingHandler(logger_provider=cls_provider))
+    except Exception as cls_exc:  # noqa: BLE001 — see the fire-and-forget note above
+        logger.warning("OTel log export not started: %s", cls_exc)
 
 
 @type_checker
 def configure_otel_logging(logger: logging.Logger) -> None:
-	"""Attach an OTLP log handler to ``logger`` when a collector endpoint is configured.
+    """Attach an OTLP log handler to ``logger`` when a collector endpoint is configured.
 
-	Opt-in and additive. With both ``OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`` and
-	``OTEL_EXPORTER_OTLP_ENDPOINT`` unset (the default — nothing
-	prompts for it unless the OTel scaffold question was answered yes), this returns
-	immediately: no ``opentelemetry`` import is even attempted, so a project that declined the
-	prompt never pays for a dependency it did not install and never sends a byte over the
-	network. With the endpoint set, the handler is ADDED to ``logger`` alongside whatever it
-	already carries — the ``logging.FileHandler`` from ``utils.logs.CreateLog.basic_conf``
-	keeps writing to the local log file exactly as before.
+    Opt-in and additive. With both ``OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`` and
+    ``OTEL_EXPORTER_OTLP_ENDPOINT`` unset (the default — nothing
+    prompts for it unless the OTel scaffold question was answered yes), this returns
+    immediately: no ``opentelemetry`` import is even attempted, so a project that declined the
+    prompt never pays for a dependency it did not install and never sends a byte over the
+    network. With the endpoint set, the handler is ADDED to ``logger`` alongside whatever it
+    already carries — the ``logging.FileHandler`` from ``utils.logs.CreateLog.basic_conf``
+    keeps writing to the local log file exactly as before.
 
-	Parameters
-	----------
-	logger : logging.Logger
-		The project logger to export from (e.g. ``config.startup.LOGGER``).
+    Parameters
+    ----------
+    logger : logging.Logger
+        The project logger to export from (e.g. ``config.startup.LOGGER``).
 
-	Returns
-	-------
-	None
+    Returns
+    -------
+    None
 
-	Examples
-	--------
-	>>> import logging
-	>>> configure_otel_logging(logging.getLogger("app"))
-	"""
-	if not _exportable_endpoint(logger):
-		return
-	_install_otel_handler(logger)
+    Examples
+    --------
+    >>> import logging
+    >>> configure_otel_logging(logging.getLogger("app"))
+    """
+    if not _exportable_endpoint(logger):
+        return
+    _install_otel_handler(logger)

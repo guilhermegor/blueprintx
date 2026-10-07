@@ -52,244 +52,244 @@ _INT_FLAG_WITH_VALUE = 2
 # run from inside a parallel-agent worktree must not sweep an older checkout under
 # `.claude/worktrees/agent-*` into the scan (blueprintx#331).
 _TUPLE_SKIP_DIRS = (
-	".claude",
-	".git",
-	".mypy_cache",
-	".pytest_cache",
-	".ruff_cache",
-	".venv",
-	"__pycache__",
-	"node_modules",
+    ".claude",
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "node_modules",
 )
 
 
 def resolve_vulture() -> ModuleType | None:
-	"""Import ``vulture``, treating its absence as an expected skip.
+    """Import ``vulture``, treating its absence as an expected skip.
 
-	Returns
-	-------
-	ModuleType or None
-		The imported ``vulture`` package, or ``None`` when it is not installed — this gate
-		is not yet wired into any tier's dependency table, so a missing import is a
-		legitimate, non-fatal skip rather than broken discovery.
-	"""
-	try:
-		import vulture
-	except ImportError:
-		return None
-	return vulture
+    Returns
+    -------
+    ModuleType or None
+        The imported ``vulture`` package, or ``None`` when it is not installed — this gate
+        is not yet wired into any tier's dependency table, so a missing import is a
+        legitimate, non-fatal skip rather than broken discovery.
+    """
+    try:
+        import vulture
+    except ImportError:
+        return None
+    return vulture
 
 
 def discover_python_files(path_src: pathlib.Path) -> list:
-	"""Return every ``.py`` file under ``path_src``, skipping vendored/generated trees.
+    """Return every ``.py`` file under ``path_src``, skipping vendored/generated trees.
 
-	Parameters
-	----------
-	path_src : pathlib.Path
-		The tier's ``src/`` directory.
+    Parameters
+    ----------
+    path_src : pathlib.Path
+        The tier's ``src/`` directory.
 
-	Returns
-	-------
-	list
-		Sorted ``pathlib.Path`` entries.
-	"""
-	# Compare parts RELATIVE TO path_src, never path_file.parts directly. This gate's own
-	# `--root` is routinely pointed at a checkout living under `.claude/worktrees/agent-*`
-	# (a parallel-agent worktree), so an absolute path's parts always contain `.claude` —
-	# an ancestor-based match would then skip every file on every such run, the exact
-	# self-inflicted vacuous-audit failure blueprintx#331 exists to catch.
-	return sorted(
-		path_file
-		for path_file in path_src.rglob("*.py")
-		if not any(
-			str_part in _TUPLE_SKIP_DIRS for str_part in path_file.relative_to(path_src).parts
-		)
-	)
+    Returns
+    -------
+    list
+        Sorted ``pathlib.Path`` entries.
+    """
+    # Compare parts RELATIVE TO path_src, never path_file.parts directly. This gate's own
+    # `--root` is routinely pointed at a checkout living under `.claude/worktrees/agent-*`
+    # (a parallel-agent worktree), so an absolute path's parts always contain `.claude` —
+    # an ancestor-based match would then skip every file on every such run, the exact
+    # self-inflicted vacuous-audit failure blueprintx#331 exists to catch.
+    return sorted(
+        path_file
+        for path_file in path_src.rglob("*.py")
+        if not any(
+            str_part in _TUPLE_SKIP_DIRS for str_part in path_file.relative_to(path_src).parts
+        )
+    )
 
 
 def run_vulture(cls_vulture: ModuleType, list_files: list) -> list:
-	"""Scan an explicit file list and return every finding at or above the report floor.
+    """Scan an explicit file list and return every finding at or above the report floor.
 
-	Parameters
-	----------
-	cls_vulture : ModuleType
-		The imported ``vulture`` package.
-	list_files : list
-		The ``pathlib.Path`` files to scan — already filtered by
-		:func:`discover_python_files`.
+    Parameters
+    ----------
+    cls_vulture : ModuleType
+        The imported ``vulture`` package.
+    list_files : list
+        The ``pathlib.Path`` files to scan — already filtered by
+        :func:`discover_python_files`.
 
-	Returns
-	-------
-	list
-		``vulture.core.Item`` findings at or above ``_REPORT_MIN_CONFIDENCE``, vulture's
-		own sort order (by file, then line).
+    Returns
+    -------
+    list
+        ``vulture.core.Item`` findings at or above ``_REPORT_MIN_CONFIDENCE``, vulture's
+        own sort order (by file, then line).
 
-	Raises
-	------
-	RuntimeError
-		When vulture could not read or parse one of the files. It records that as an
-		``InvalidInput`` exit code and carries on, so returning its findings anyway would
-		report a clean tree for a file that was never scanned.
-	"""
-	# Scavenge the EXPLICIT file list rather than the directory. vulture's own `exclude`
-	# matches against the full (often absolute) path string — and this gate's own `--root`
-	# is routinely a checkout living under `.claude/worktrees/agent-*`, so a `.claude`
-	# exclude pattern would match every real file too, not just a nested worktree copy.
-	# `discover_python_files` already filtered correctly (relative to path_src), so handing
-	# vulture that filtered list needs no second, differently-scoped exclude at all.
-	cls_scanner = cls_vulture.Vulture()
-	cls_scanner.scavenge([str(path_file) for path_file in list_files])
-	if cls_scanner.exit_code == cls_vulture.core.ExitCode.InvalidInput:
-		raise RuntimeError("vulture could not read or parse at least one file under src/")
-	return cls_scanner.get_unused_code(min_confidence=_REPORT_MIN_CONFIDENCE)
+    Raises
+    ------
+    RuntimeError
+        When vulture could not read or parse one of the files. It records that as an
+        ``InvalidInput`` exit code and carries on, so returning its findings anyway would
+        report a clean tree for a file that was never scanned.
+    """
+    # Scavenge the EXPLICIT file list rather than the directory. vulture's own `exclude`
+    # matches against the full (often absolute) path string — and this gate's own `--root`
+    # is routinely a checkout living under `.claude/worktrees/agent-*`, so a `.claude`
+    # exclude pattern would match every real file too, not just a nested worktree copy.
+    # `discover_python_files` already filtered correctly (relative to path_src), so handing
+    # vulture that filtered list needs no second, differently-scoped exclude at all.
+    cls_scanner = cls_vulture.Vulture()
+    cls_scanner.scavenge([str(path_file) for path_file in list_files])
+    if cls_scanner.exit_code == cls_vulture.core.ExitCode.InvalidInput:
+        raise RuntimeError("vulture could not read or parse at least one file under src/")
+    return cls_scanner.get_unused_code(min_confidence=_REPORT_MIN_CONFIDENCE)
 
 
 def classify_findings(list_items: list) -> tuple:
-	"""Split vulture's items into the gating tier and the report-only tier.
+    """Split vulture's items into the gating tier and the report-only tier.
 
-	Parameters
-	----------
-	list_items : list
-		Every ``vulture.core.Item`` at or above ``_REPORT_MIN_CONFIDENCE``.
+    Parameters
+    ----------
+    list_items : list
+        Every ``vulture.core.Item`` at or above ``_REPORT_MIN_CONFIDENCE``.
 
-	Returns
-	-------
-	tuple
-		``(list_gate, list_report)`` — items at/above ``_GATE_MIN_CONFIDENCE`` fail the
-		build; the rest (60-79% confidence) are informational only.
-	"""
-	list_gate = [
-		cls_item for cls_item in list_items if cls_item.confidence >= _GATE_MIN_CONFIDENCE
-	]
-	list_report = [
-		cls_item for cls_item in list_items if cls_item.confidence < _GATE_MIN_CONFIDENCE
-	]
-	return list_gate, list_report
+    Returns
+    -------
+    tuple
+        ``(list_gate, list_report)`` — items at/above ``_GATE_MIN_CONFIDENCE`` fail the
+        build; the rest (60-79% confidence) are informational only.
+    """
+    list_gate = [
+        cls_item for cls_item in list_items if cls_item.confidence >= _GATE_MIN_CONFIDENCE
+    ]
+    list_report = [
+        cls_item for cls_item in list_items if cls_item.confidence < _GATE_MIN_CONFIDENCE
+    ]
+    return list_gate, list_report
 
 
 def print_report_tier(list_report: list) -> None:
-	"""Print the 60-79% confidence findings as non-gating information, to stdout.
+    """Print the 60-79% confidence findings as non-gating information, to stdout.
 
-	Parameters
-	----------
-	list_report : list
-		Contextual ``vulture.core.Item`` findings — real signal on an aged project,
-		expected noise on a fresh scaffold.
-	"""
-	if not list_report:
-		return
-	print(
-		f"ℹ️  {len(list_report)} contextual (60-79% confidence) finding(s) — informational "
-		f"only, never gating. Expected/noisy on a fresh scaffold (a shipped seam with no "
-		f"caller yet); worth reading manually on a project old enough to have real callers:"
-	)
-	for cls_item in list_report:
-		print(f"    {cls_item.get_report()}")
+    Parameters
+    ----------
+    list_report : list
+        Contextual ``vulture.core.Item`` findings — real signal on an aged project,
+        expected noise on a fresh scaffold.
+    """
+    if not list_report:
+        return
+    print(
+        f"ℹ️  {len(list_report)} contextual (60-79% confidence) finding(s) — informational "
+        f"only, never gating. Expected/noisy on a fresh scaffold (a shipped seam with no "
+        f"caller yet); worth reading manually on a project old enough to have real callers:"
+    )
+    for cls_item in list_report:
+        print(f"    {cls_item.get_report()}")
 
 
 def print_gate_tier(list_gate: list) -> None:
-	"""Print the >=80% confidence findings as gating failures, to stderr.
+    """Print the >=80% confidence findings as gating failures, to stderr.
 
-	Parameters
-	----------
-	list_gate : list
-		Provable ``vulture.core.Item`` findings — an assigned-but-unread local, an
-		unreachable branch.
-	"""
-	for cls_item in list_gate:
-		print(f"❌ {cls_item.get_report()}", file=sys.stderr)
-	print(
-		f"\n{len(list_gate)} dead-code finding(s) at >={_GATE_MIN_CONFIDENCE}% confidence. "
-		f"These are provable from the file alone — delete the code, or it is not truly "
-		f"unreferenced and the call site is missing.",
-		file=sys.stderr,
-	)
+    Parameters
+    ----------
+    list_gate : list
+        Provable ``vulture.core.Item`` findings — an assigned-but-unread local, an
+        unreachable branch.
+    """
+    for cls_item in list_gate:
+        print(f"❌ {cls_item.get_report()}", file=sys.stderr)
+    print(
+        f"\n{len(list_gate)} dead-code finding(s) at >={_GATE_MIN_CONFIDENCE}% confidence. "
+        f"These are provable from the file alone — delete the code, or it is not truly "
+        f"unreferenced and the call site is missing.",
+        file=sys.stderr,
+    )
 
 
 def run_gate(cls_vulture: ModuleType, list_files: list) -> int:
-	"""Scan the files, print both tiers, and return the gate's exit code.
+    """Scan the files, print both tiers, and return the gate's exit code.
 
-	Parameters
-	----------
-	cls_vulture : ModuleType
-		The imported ``vulture`` package.
-	list_files : list
-		The ``pathlib.Path`` files to scan.
+    Parameters
+    ----------
+    cls_vulture : ModuleType
+        The imported ``vulture`` package.
+    list_files : list
+        The ``pathlib.Path`` files to scan.
 
-	Returns
-	-------
-	int
-		0 when nothing gates, 1 on a >=80% confidence finding or when vulture could not
-		scan a file (an unscanned file is not a clean one).
-	"""
-	try:
-		list_findings = run_vulture(cls_vulture, list_files)
-	except RuntimeError as err:
-		print(f"❌ check_dead_code: {err} — refusing to report a clean tree.", file=sys.stderr)
-		return 1
-	list_gate, list_report = classify_findings(list_findings)
-	print_report_tier(list_report)
-	if list_gate:
-		print_gate_tier(list_gate)
-		return 1
+    Returns
+    -------
+    int
+        0 when nothing gates, 1 on a >=80% confidence finding or when vulture could not
+        scan a file (an unscanned file is not a clean one).
+    """
+    try:
+        list_findings = run_vulture(cls_vulture, list_files)
+    except RuntimeError as err:
+        print(f"❌ check_dead_code: {err} — refusing to report a clean tree.", file=sys.stderr)
+        return 1
+    list_gate, list_report = classify_findings(list_findings)
+    print_report_tier(list_report)
+    if list_gate:
+        print_gate_tier(list_gate)
+        return 1
 
-	print(
-		f"dead-code gate OK: {len(list_files)} .py file(s) scanned, 0 finding(s) at "
-		f">={_GATE_MIN_CONFIDENCE}% confidence."
-	)
-	return 0
+    print(
+        f"dead-code gate OK: {len(list_files)} .py file(s) scanned, 0 finding(s) at "
+        f">={_GATE_MIN_CONFIDENCE}% confidence."
+    )
+    return 0
 
 
 def main(list_argv: list) -> int:
-	"""Run the dead-code gate over ``<root>/src`` and report both tiers.
+    """Run the dead-code gate over ``<root>/src`` and report both tiers.
 
-	Parameters
-	----------
-	list_argv : list
-		CLI arguments; ``--root <dir>`` overrides the working directory as the tier root.
-		BlueprintX's own root ships no runtime ``src/`` and self-skips — see the module
-		docstring for why that is a legitimate skip, not a failure.
+    Parameters
+    ----------
+    list_argv : list
+        CLI arguments; ``--root <dir>`` overrides the working directory as the tier root.
+        BlueprintX's own root ships no runtime ``src/`` and self-skips — see the module
+        docstring for why that is a legitimate skip, not a failure.
 
-	Returns
-	-------
-	int
-		0 when nothing gates (including every legitimate skip), 1 on a >=80% confidence
-		finding, on broken discovery (``src/`` exists but holds zero ``.py`` files), or when
-		vulture could not scan a file (an unscanned file is not a clean one).
-	"""
-	path_root = pathlib.Path(".").resolve()
-	if list_argv[:1] == ["--root"]:
-		if len(list_argv) < _INT_FLAG_WITH_VALUE:
-			print("❌ --root needs a directory", file=sys.stderr)
-			return 1
-		path_root = pathlib.Path(list_argv[1]).resolve()
+    Returns
+    -------
+    int
+        0 when nothing gates (including every legitimate skip), 1 on a >=80% confidence
+        finding, on broken discovery (``src/`` exists but holds zero ``.py`` files), or when
+        vulture could not scan a file (an unscanned file is not a clean one).
+    """
+    path_root = pathlib.Path(".").resolve()
+    if list_argv[:1] == ["--root"]:
+        if len(list_argv) < _INT_FLAG_WITH_VALUE:
+            print("❌ --root needs a directory", file=sys.stderr)
+            return 1
+        path_root = pathlib.Path(list_argv[1]).resolve()
 
-	path_src = path_root / "src"
-	if not path_src.is_dir():
-		print(
-			f"check_dead_code: no {path_src} — nothing for the dead-code gate to check "
-			f"(e.g. BlueprintX's own root, which ships no runtime src/)."
-		)
-		return 0
+    path_src = path_root / "src"
+    if not path_src.is_dir():
+        print(
+            f"check_dead_code: no {path_src} — nothing for the dead-code gate to check "
+            f"(e.g. BlueprintX's own root, which ships no runtime src/)."
+        )
+        return 0
 
-	list_files = discover_python_files(path_src)
-	if not list_files:
-		print(f"check_dead_code: found ZERO .py files under {path_src}", file=sys.stderr)
-		return 1
+    list_files = discover_python_files(path_src)
+    if not list_files:
+        print(f"check_dead_code: found ZERO .py files under {path_src}", file=sys.stderr)
+        return 1
 
-	cls_vulture = resolve_vulture()
-	if cls_vulture is None:
-		print(
-			"check_dead_code: vulture is not installed — skipping (not yet wired into any "
-			"tier's dependency table, blueprintx#332 follow-up)."
-		)
-		return 0
+    cls_vulture = resolve_vulture()
+    if cls_vulture is None:
+        print(
+            "check_dead_code: vulture is not installed — skipping (not yet wired into any "
+            "tier's dependency table, blueprintx#332 follow-up)."
+        )
+        return 0
 
-	return run_gate(cls_vulture, list_files)
+    return run_gate(cls_vulture, list_files)
 
 
 if __name__ == "__main__":
-	for cls_stream in (sys.stdout, sys.stderr):
-		if hasattr(cls_stream, "reconfigure"):
-			cls_stream.reconfigure(encoding="utf-8", errors="replace")
-	sys.exit(main(sys.argv[1:]))
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    sys.exit(main(sys.argv[1:]))
