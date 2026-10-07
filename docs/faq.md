@@ -45,6 +45,21 @@ by language: for Python copy `templates/python-common/.review-bots.yaml` to the 
 TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
+## The scaffolder offered me a kanban board and labels — what does it do?
+
+After it creates the GitHub repo, the scaffolder creates the house labels (`type:task`,
+`type:research`, `type:grilling`, `hitl`, `afk`, `oracle:strong`, `oracle:weak`,
+`do-not-merge`) and asks whether to create a `<repo> kanban` GitHub Project. Answer yes and it
+creates the board, links it to the repo, sets `Status` to Backlog / Ready / In progress / In
+review / Done, and adds `Priority`, `Size`, `Estimate`, `Start date`, `Target date` and
+`Points`. Visibility defaults to the repo's own.
+
+It is safe to re-run: labels use `--force`, an existing `<repo> kanban` board is skipped, and two
+boards with that title are reported, never guessed between. A token without the `project` scope
+prints `gh auth refresh -s project` and scaffolding carries on. Views and the built-in workflows
+(auto-add items, item closed to Done) have no public API, so enable them at the URL the
+scaffolder prints (`.../projects/<n>/workflows`).
+
 ## How is BlueprintX itself versioned?
 
 The version is the git tag. Cut a release from the **Release** GitHub Action (enter the version
