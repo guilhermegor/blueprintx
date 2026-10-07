@@ -22,7 +22,9 @@
     "test:e2e:frontend": "playwright test",
     "test:e2e:frontend:update": "playwright test --update-snapshots",
     "test:e2e:frontend:ui": "playwright test --ui",
-    "context:export": "bash bin/export_repo_content.sh"
+    "context:export": "bash bin/export_repo_content.sh",
+    "repo:rules": "bash bin/enable_repo_rules.sh",
+    "repo:rules:verify": "bash bin/enable_repo_rules.sh verify"
   },
   "keywords": [],
   "author": "",
@@ -44,7 +46,7 @@
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.60.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.6.3",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/jest": "^30.0.0",

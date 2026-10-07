@@ -15,13 +15,23 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `cli-reference.md` | Utility page | Every BlueprintX command: `make` targets + `blueprintx` CLI flags |
 | `faq.md` | Utility page | Common questions about using and extending BlueprintX |
 | `troubleshooting.md` | Utility page | What broke while wiring this site's brand assets/routing, the cause, the fix, and which of those fixes were decided against scaffolding into `templates/` |
+| `offline-wheelhouse.md` | Utility page | How a scaffolded Python project installs offline — `poe wheelhouse` / `wheelhouse_assemble`, target-env selection, manifest/split-part payload (blueprintx#299) |
 | `secret-scanning.md` | Utility page | Secret scanning per tier — the measured gitleaks-vs-GitGuardian comparison behind gitleaks being the default, plus the GitGuardian (`ggshield`) opt-in: how to enable it at scaffold time, how it propagates the key, and how to opt in after the fact |
 | `complexity-ceilings-measured.md` | Utility page | Why the complexity ceilings are 1/2/8 per tree — per-construct ruff mccabe measurements (`and`/`or`/`assert` free, a second decision point costs) and why radon's scale was not adopted (blueprintx#425) |
 | `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, release) |
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
 | `coverage-floor.md` | Utility page | Design record for `bin/check_coverage_floor.py` (blueprintx#149) — why `.coveragerc`'s `omit` list needed a code-derived floor, how it derives one, and why it stays deliberately coarse |
+| `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239) |
+| `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |
+| `quality-rules.md` | Utility page | The machine-readable quality-rule registry (`quality-rules.yaml`) and the gate that keeps it honest — one entry per rule, with the intent each ceiling encodes (blueprintx#432) |
+| `quality-gate-blind-spots.md` | Utility page | Measured audit of what the quality gates cannot see (blueprintx#169) |
+| `required-status-checks.md` | Utility page | Which checks `REQUIRED_CHECKS` should seed per scaffolded tier (blueprintx#164) |
+| `skeletons.md` | Skeleton overview | API Service (Native DB) — hexagonal HTTP service with a transport layer |
+| `skeletons/bash-cli.md` | Skeleton overview | Standalone Bash CLI starter (`bash-cli`), git-tag versioned, bats + shellcheck |
 | `sonarqube-evaluation.md` | Utility page | Decision record — SonarQube audited against the gates already running here (ruff, `check_*` family, ESLint, gitleaks, Dependabot, CodeQL); recommendation and why |
+| `ci-scanner-gap-analysis.md` | Utility page | Measured evaluation (blueprintx#305) of an external scanner stack against the gates already running here, each tool installed and run locally; deliberately not the adoption PR |
+| `spec-answers.md` | Utility page | Named-key spec answers (`--spec`): answering scaffold prompts by key instead of stdin position, so adding a prompt cannot silently shift every stored answer (blueprintx#481) |
 | `py-ddd-service-native-db.md` | Skeleton overview | DDD hexagonal scaffold using native DB drivers (psycopg2, sqlite3, etc.) |
 | `py-ddd-service-orm-db.md` | Skeleton overview | DDD hexagonal scaffold using SQLAlchemy ORM |
 | `py-mvc-service-native-db.md` | Skeleton overview | Layered MVC scaffold using native DB drivers (script/pipeline style) |
@@ -52,6 +62,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 |-----------|----------|
 | `py-examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
 | `py-examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
+| `skeletons/` | Skeleton overviews that live in a subfolder (`bash-cli.md`) |
 | `superpowers/` | **Non-published** internal specs and plans. Excluded from the built site — see below. |
 
 Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
@@ -151,7 +162,9 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `get-started.md` | First-run guide | Numbered setup steps, requirements, feature highlights |
 | `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
 | `coverage-floor.md` | Gate design record | What the gate enforces, why `fail_under` alone is insufficient, the coarse-by-design boundary, and what stays out of scope |
+| `offline-wheelhouse.md` | Air-gapped install record | The three subcommands (`select`/`pack`/`assemble`), what the manifest authenticates and what it does not, the part-splitting contract, and the target-triple inputs the selector resolves markers against |
 | `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
+| `quality-rules.md` | Quality-rule registry record | What the gate decides vs leaves to review, one section per rule id (the `docs:` anchors) |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
