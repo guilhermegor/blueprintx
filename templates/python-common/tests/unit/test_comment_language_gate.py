@@ -511,6 +511,32 @@ def test_bare_root_flag_fails_instead_of_checking_nothing(
     assert "--root needs a directory" in str_out, f"failed without naming the reason: {str_out!r}"
 
 
+def test_missing_root_directory_fails_instead_of_checking_nothing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """``--root`` naming a directory that does not exist must exit non-zero.
+
+    Every named file's read then raises ``OSError``, `file_problems` returns no problem, and
+    the gate used to exit 0 having checked nothing — the success-for-checking-nothing outcome
+    of blueprintx#247 again, through a path the bare-flag fix did not cover.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            A parent under which the missing root is named but never created.
+    capsys : pytest.CaptureFixture
+            Captures the gate's message, so the assertion names the reason and not only
+            the exit code.
+    """
+    int_status = gate.main(["--root", str(tmp_path / "nonexistent"), "a.py"])
+    str_out = capsys.readouterr().out
+
+    assert (int_status, "is not a directory" in str_out) == (1, True), (
+        f"status {int_status}, output {str_out!r}"
+    )
+
+
 @pytest.mark.parametrize("list_argv", [["a.py", "--root", "x"], ["--root=x"]])
 def test_misplaced_root_flag_fails_instead_of_checking_nothing(
     list_argv: list[str],

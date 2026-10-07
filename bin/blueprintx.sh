@@ -533,6 +533,14 @@ prompt_docs_locale() {
     esac
 }
 
+# The locales prompt_docs_locale offers; the --spec flow validates against the same two.
+is_valid_docs_locale() {
+    case "$1" in
+        en|pt-BR) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 create_project() {
     local project_root="$1"
     local project_name="$2"
@@ -567,7 +575,7 @@ create_project() {
 
 # Validate spec values against the chosen skeleton before any file is written: a bad value would
 # otherwise reach the scaffold, which reads a nonexistent license template after the project
-# dir already exists. Reads LANG_CHOICE, SKELETON_CHOICE and LICENSE_CHOICE.
+# dir already exists. Reads LANG_CHOICE, SKELETON_CHOICE, LICENSE_CHOICE and DOCS_LOCALE.
 validate_spec_answers() {
     local skeleton_language
     skeleton_language=$(grep '^language=' "$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta" | cut -d= -f2-)
@@ -575,6 +583,8 @@ validate_spec_answers() {
         || exit_error "--spec: skeleton '$SKELETON_CHOICE' is a '$skeleton_language' skeleton, not '$LANG_CHOICE'."
     [ -f "$TEMPLATES_ROOT/licenses/$LICENSE_CHOICE" ] \
         || exit_error "--spec: unknown license '$LICENSE_CHOICE' (no templates/licenses/$LICENSE_CHOICE)."
+    is_valid_docs_locale "$DOCS_LOCALE" \
+        || exit_error "--spec: 'docs_locale' must be en or pt-BR, got '$DOCS_LOCALE'."
     # A bad y/n value must stop the run here, in the main shell: spec_yn used to turn it into "n".
     if spec_skeleton_supported "$SKELETON_CHOICE"; then
         spec_validate_answers "$SKELETON_CHOICE" "$SPEC_FILE" \
@@ -614,7 +624,7 @@ scaffold_from_spec() {
 
     spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
         | GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
-            LICENSE_CHOICE="$LICENSE_CHOICE" \
+            LICENSE_CHOICE="$LICENSE_CHOICE" DOCS_LOCALE="$DOCS_LOCALE" \
             bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION"
 }
 
@@ -639,6 +649,7 @@ run_create_flow_from_spec() {
     [ -f "$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta" ] \
         || exit_error "--spec: unknown skeleton '$SKELETON_CHOICE'."
     LICENSE_CHOICE=$(spec_get "$SPEC_FILE" license MIT)
+    DOCS_LOCALE=$(spec_get "$SPEC_FILE" docs_locale en)
 
     validate_spec_answers
 
@@ -649,6 +660,7 @@ run_create_flow_from_spec() {
         print_status "config" "language=$LANG_CHOICE"
         print_status "config" "skeleton=$SKELETON_CHOICE"
         print_status "config" "license=$LICENSE_CHOICE"
+        print_status "config" "docs_locale=$DOCS_LOCALE"
         if spec_skeleton_supported "$SKELETON_CHOICE"; then
             spec_describe_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
                 | while IFS= read -r line; do print_status "config" "$line"; done

@@ -602,7 +602,9 @@ def split_root_option(list_argv: list) -> tuple:
     Raises
     ------
     ValueError
-            When ``--root`` is passed with no directory after it, or anywhere but first.
+            When ``--root`` is passed with no directory after it, names a directory that does
+            not exist, or sits anywhere but first. A missing root makes every named file's read
+            fail, no problem is reported, and the gate exits 0 having checked nothing.
             Returning it as a filename instead makes the gate print success for having checked
             nothing — measured on blueprintx#247: `check_comment_language.py --root` exited 0.
             `check_function_length.py`, the seam this mirrors, already rejects the same argv.
@@ -611,7 +613,11 @@ def split_root_option(list_argv: list) -> tuple:
         if len(list_argv) < _INT_FLAG_WITH_VALUE or not list_argv[1]:
             msg = "--root needs a directory"
             raise ValueError(msg)
-        return pathlib.Path(list_argv[1]).resolve(), list_argv[2:]
+        path_root = pathlib.Path(list_argv[1]).resolve()
+        if not path_root.is_dir():
+            msg = f"--root {list_argv[1]} is not a directory"
+            raise ValueError(msg)
+        return path_root, list_argv[2:]
     if any(str_arg == "--root" or str_arg.startswith("--root=") for str_arg in list_argv):
         msg = "--root must be the first argument, as `--root <dir>`"
         raise ValueError(msg)
