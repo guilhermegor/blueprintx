@@ -258,6 +258,34 @@ never merge. Over the 100 most recent PRs, exactly **1** exceeded even 90 files,
 largest legitimate PR in that set was 59 files — so 90 leaves headroom on both sides without
 being a rule nobody pays.
 
+### PR template layout — blueprintx#587
+
+`bin/ci/check_pr_template.sh` checks a PR body against the layout
+`.github/PULL_REQUEST_TEMPLATE.md` declares, not just its five `##` headings. It runs in CI
+(the `pr-template` job, reading the live body from the API) and its should-fail tests run in
+pre-commit and CI. The contract is walked out of the template itself, so editing the template
+changes what the gate enforces; only the split below is recorded in the script, because
+syntax cannot say which labels are optional.
+
+A heading or `**Label**:` must start its line (prose, fenced code and HTML comments do not
+count), carry content, and not be the template's own placeholder text left in place.
+
+| Element | Rule | Why |
+|---|---|---|
+| The five `##` sections, `**What**` / `**Why**` / `**How**`, `**Reviewer Focus**` | **Mandatory** | Every PR has a motivation, a mechanism and something a reviewer should look at first. |
+| `**Added**` / `**Updated**` / `**Fixed**` | At least **one** filled under Changes Made | A PR changes something, but which verb applies depends on the PR; `**Fixed**` alone is only true when an issue is fixed. |
+| `### Manual Testing` / `### Automated Testing` | Mandatory **unless** `**Not Applicable**` explains the gap | A docs-only change has no manual run; forcing the subsection would produce filler. |
+| `**Not Applicable**` | Required **exactly when** a testing subsection is not filled in | It is the stated reason for skipping, so it is demanded only when something is skipped. |
+| `**Dependencies**` / `**Follow-up**` | **Optional**, may be deleted | Most PRs have neither; requiring them yields text that looks answered and is not. Left as the template text, they fail. |
+
+Bot authors (`dependabot[bot]` and any other `[bot]` login) are exempt: they create PRs
+server-side and cannot write prose fields, and an unfixable red teaches everyone to ignore the
+gate. The local `pr_template_guard.sh` hook stays as the fast pre-flight; CI covers the PRs it
+cannot see (the web UI, Dependabot, API-created PRs).
+
+The job is **not yet a required check**. As with #507 and #535, it becomes one once the open-PR
+population is clean, because requiring a gate that most open PRs fail blocks them all at once.
+
 ### GitHub Actions are pinned by commit SHA — blueprintx#369
 
 Every remote action reference in a workflow — first-party `actions/*` included — is pinned to

@@ -281,6 +281,13 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/check_docs_boundary\.sh|tests/test_check_docs_boundary\.sh)$
 
+      - id: pr-template-tests
+        name: check_pr_template.sh should-fail regression tests (blueprintx#587)
+        entry: bash tests/test_check_pr_template.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_pr_template\.sh|tests/test_check_pr_template\.sh|\.github/PULL_REQUEST_TEMPLATE\.md)$
+
       - id: version-sync
         name: version sync (pyproject vs CLI)
         entry: bash bin/ci/check_version_sync.sh
