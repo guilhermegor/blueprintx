@@ -17,17 +17,17 @@ from typing import TYPE_CHECKING
 # the redefinition once actually checked, so this branch can't pick either layout
 # (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
-	from typing import TypeVar
+    from typing import TypeVar
 
-	_F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F", bound=Callable[..., object])
 
-	def type_checker(fn: _F) -> _F:
-		"""Type-only stub — see src/utils/CLAUDE.md."""
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
 else:
-	try:
-		from utils.typing import type_checker
-	except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-		from chassis.typing import type_checker
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+        from chassis.typing import type_checker
 
 
 _DEFAULT_MAX_ATTEMPTS: int = 3
@@ -39,49 +39,49 @@ _DEFAULT_STRATEGY: str = "exponential"
 # is the single source of the valid strategy names (``_STRATEGIES`` is derived from its keys),
 # so a fourth strategy is one entry rather than a branch plus a divergent name set elsewhere.
 _STRATEGY_WAITS: dict[str, Callable[[float, float, int], float]] = {
-	"exponential": lambda base, factor, attempt: base * factor ** (attempt - 1),
-	"linear": lambda base, factor, attempt: base * attempt,
-	"constant": lambda base, factor, attempt: base,
+    "exponential": lambda base, factor, attempt: base * factor ** (attempt - 1),
+    "linear": lambda base, factor, attempt: base * attempt,
+    "constant": lambda base, factor, attempt: base,
 }
 _STRATEGIES: frozenset[str] = frozenset(_STRATEGY_WAITS)
 
 
 @type_checker
 def _compute_backoff_wait(
-	str_strategy: str,
-	float_base_wait_s: float,
-	float_factor: float,
-	int_attempt: int,
-	float_max_wait_s: float | None,
+    str_strategy: str,
+    float_base_wait_s: float,
+    float_factor: float,
+    int_attempt: int,
+    float_max_wait_s: float | None,
 ) -> float:
-	"""Return the seconds to wait before the retry that follows ``int_attempt``.
+    """Return the seconds to wait before the retry that follows ``int_attempt``.
 
-	``int_attempt`` is the 1-indexed number of the attempt that just failed, so the first
-	retry (``int_attempt == 1``) waits ``float_base_wait_s`` under every strategy; later
-	retries diverge by strategy. The result is clamped to ``float_max_wait_s`` when that cap
-	is set, so an exponential schedule cannot grow without bound.
+    ``int_attempt`` is the 1-indexed number of the attempt that just failed, so the first
+    retry (``int_attempt == 1``) waits ``float_base_wait_s`` under every strategy; later
+    retries diverge by strategy. The result is clamped to ``float_max_wait_s`` when that cap
+    is set, so an exponential schedule cannot grow without bound.
 
-	Parameters
-	----------
-	str_strategy : str
-		One of ``"exponential"`` (``base * factor ** (attempt - 1)``), ``"linear"``
-		(``base * attempt``), or ``"constant"`` (``base``).
-	float_base_wait_s : float
-		The base wait, in seconds — the wait before the first retry under every strategy.
-	float_factor : float
-		The exponential growth factor; used only by the ``"exponential"`` strategy.
-	int_attempt : int
-		The 1-indexed number of the attempt that just failed.
-	float_max_wait_s : float or None
-		Optional upper bound applied to the computed wait; ``None`` leaves it uncapped.
+    Parameters
+    ----------
+    str_strategy : str
+            One of ``"exponential"`` (``base * factor ** (attempt - 1)``), ``"linear"``
+            (``base * attempt``), or ``"constant"`` (``base``).
+    float_base_wait_s : float
+            The base wait, in seconds — the wait before the first retry under every strategy.
+    float_factor : float
+            The exponential growth factor; used only by the ``"exponential"`` strategy.
+    int_attempt : int
+            The 1-indexed number of the attempt that just failed.
+    float_max_wait_s : float or None
+            Optional upper bound applied to the computed wait; ``None`` leaves it uncapped.
 
-	Returns
-	-------
-	float
-		The (optionally capped) number of seconds to wait before the next attempt.
-	"""
-	# str_strategy is validated by RetryPolicy, so the lookup always hits.
-	float_wait = _STRATEGY_WAITS[str_strategy](float_base_wait_s, float_factor, int_attempt)
-	if float_max_wait_s is None:
-		return float_wait
-	return min(float_wait, float_max_wait_s)
+    Returns
+    -------
+    float
+            The (optionally capped) number of seconds to wait before the next attempt.
+    """
+    # str_strategy is validated by RetryPolicy, so the lookup always hits.
+    float_wait = _STRATEGY_WAITS[str_strategy](float_base_wait_s, float_factor, int_attempt)
+    if float_max_wait_s is None:
+        return float_wait
+    return min(float_wait, float_max_wait_s)
