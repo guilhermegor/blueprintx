@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db.infrastructure.helpers import ensure_id, validate_sql_identifier
 
 
 class SQLiteDatabaseHandler(DatabaseHandler):
@@ -26,6 +27,8 @@ class SQLiteDatabaseHandler(DatabaseHandler):
     def __init__(self, db_path: str | Path, table: str = "records", id_field: str = "id") -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        validate_sql_identifier(table, "table")
+        validate_sql_identifier(id_field, "id_field")
         self.table = table
         self.id_field = id_field
         self._ensure_table()
@@ -45,7 +48,7 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         """
         record = ensure_id(record, self.id_field)
         json_payload = json.dumps(record)
-        with self._connect() as cls_conn:
+        with closing(self._connect()) as cls_conn, cls_conn:
             cls_conn.execute(
                 f"INSERT OR REPLACE INTO {self.table} ({self.id_field}, data) VALUES (?, ?)",  # noqa: S608
                 (record[self.id_field], json_payload),
@@ -65,7 +68,7 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         Record or None
             Stored record when present, otherwise ``None``.
         """
-        with self._connect() as cls_conn:
+        with closing(self._connect()) as cls_conn, cls_conn:
             cls_cursor = cls_conn.execute(
                 f"SELECT data FROM {self.table} WHERE {self.id_field} = ?",  # noqa: S608
                 (record_id,),
@@ -94,7 +97,7 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         Record or None
             Updated record when it exists, otherwise ``None``.
         """
-        with self._connect() as cls_conn:
+        with closing(self._connect()) as cls_conn, cls_conn:
             cls_conn.execute("BEGIN IMMEDIATE")
             cls_cursor = cls_conn.execute(
                 f"SELECT data FROM {self.table} WHERE {self.id_field} = ?",  # noqa: S608
@@ -124,7 +127,7 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         bool
             ``True`` when a record was deleted, ``False`` otherwise.
         """
-        with self._connect() as cls_conn:
+        with closing(self._connect()) as cls_conn, cls_conn:
             cls_cursor = cls_conn.execute(
                 f"DELETE FROM {self.table} WHERE {self.id_field} = ?",  # noqa: S608
                 (record_id,),
@@ -143,7 +146,10 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         """
         path_target = Path(target_path)
         path_target.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as cls_source, sqlite3.connect(path_target) as cls_dest:
+        with (
+            closing(self._connect()) as cls_source,
+            closing(sqlite3.connect(path_target)) as cls_dest,
+        ):
             cls_source.backup(cls_dest)
         return path_target
 
@@ -162,7 +168,7 @@ class SQLiteDatabaseHandler(DatabaseHandler):
 
     def _ensure_table(self) -> None:
         """Create the backing table when it does not exist."""
-        with self._connect() as cls_conn:
+        with closing(self._connect()) as cls_conn, cls_conn:
             cls_conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS {self.table} (
