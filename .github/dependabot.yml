@@ -46,6 +46,10 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
+      eslint: # first match wins: @eslint/js moves in lockstep with eslint, majors included
+        patterns:
+          - "eslint"
+          - "@eslint/js"
       minor-and-patch:
         patterns:
           - "*"
