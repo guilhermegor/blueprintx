@@ -106,16 +106,16 @@ DICT_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 # gate's `--root` is overridable to the real repo root, which commonly sits
 # under a `.claude/worktrees/<agent>/` copy of itself).
 TUPLE_SKIP_DIRS = (
-	".git",
-	".claude",
-	".mypy_cache",
-	".pytest_cache",
-	".ruff_cache",
-	".venv",
-	"__pycache__",
-	"htmlcov",
-	"node_modules",
-	"site",
+    ".git",
+    ".claude",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "htmlcov",
+    "node_modules",
+    "site",
 )
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -144,425 +144,425 @@ STR_TEST_SECTION_RULE = "--------------------------"
 
 
 def load_allowlist() -> tuple:
-	"""Read the QA-suppression allowlist data file.
+    """Read the QA-suppression allowlist data file.
 
-	Returns
-	-------
-	tuple of str
-		Every non-blank, non-``#``-prefixed line, in file order. A missing file
-		is a configuration error worth a loud failure, not a silent empty list —
-		see ``main``'s zero-discovery guard for the same principle applied here.
-	"""
-	str_text = PATH_ALLOWLIST.read_text(encoding="utf-8")
-	return tuple(
-		str_line.strip()
-		for str_line in str_text.splitlines()
-		if str_line.strip() and not str_line.lstrip().startswith("#")
-	)
+    Returns
+    -------
+    tuple of str
+        Every non-blank, non-``#``-prefixed line, in file order. A missing file
+        is a configuration error worth a loud failure, not a silent empty list —
+        see ``main``'s zero-discovery guard for the same principle applied here.
+    """
+    str_text = PATH_ALLOWLIST.read_text(encoding="utf-8")
+    return tuple(
+        str_line.strip()
+        for str_line in str_text.splitlines()
+        if str_line.strip() and not str_line.lstrip().startswith("#")
+    )
 
 
 def is_pragma_line(str_content: str, tuple_allowlist: tuple) -> bool:
-	"""Return whether a comment line is machine-read configuration, not prose.
+    """Return whether a comment line is machine-read configuration, not prose.
 
-	Parameters
-	----------
-	str_content : str
-		The comment's text, marker already stripped.
-	tuple_allowlist : tuple of str
-		Suppression substrings from ``load_allowlist``.
+    Parameters
+    ----------
+    str_content : str
+        The comment's text, marker already stripped.
+    tuple_allowlist : tuple of str
+        Suppression substrings from ``load_allowlist``.
 
-	Returns
-	-------
-	bool
-		True when the line carries a QA suppression pragma or a structural
-		exemption (SPDX header, generated-file banner) and must break — never
-		extend — a comment run.
-	"""
-	return any(str_pragma in str_content for str_pragma in tuple_allowlist)
+    Returns
+    -------
+    bool
+        True when the line carries a QA suppression pragma or a structural
+        exemption (SPDX header, generated-file banner) and must break — never
+        extend — a comment run.
+    """
+    return any(str_pragma in str_content for str_pragma in tuple_allowlist)
 
 
 def line_breaks_run(int_line: int, str_raw: str, str_content: str, tuple_allowlist: tuple) -> bool:
-	"""Return whether a comment line BREAKS a run rather than extending it.
+    """Return whether a comment line BREAKS a run rather than extending it.
 
-	Shared by ``marker_blocks`` and ``python_blocks`` so the structural/pragma
-	test has one body — the same reason ``check_codespell_sync.sh`` exists.
+    Shared by ``marker_blocks`` and ``python_blocks`` so the structural/pragma
+    test has one body — the same reason ``check_codespell_sync.sh`` exists.
 
-	Parameters
-	----------
-	int_line : int
-		The line's 1-indexed position in the file.
-	str_raw : str
-		The comment token including its marker (``#!/usr/bin/env python`` or
-		the raw tokenize string) — only the shebang form needs the marker.
-	str_content : str
-		The comment's text, marker already stripped.
-	tuple_allowlist : tuple of str
-		Suppression substrings from ``load_allowlist``.
+    Parameters
+    ----------
+    int_line : int
+        The line's 1-indexed position in the file.
+    str_raw : str
+        The comment token including its marker (``#!/usr/bin/env python`` or
+        the raw tokenize string) — only the shebang form needs the marker.
+    str_content : str
+        The comment's text, marker already stripped.
+    tuple_allowlist : tuple of str
+        Suppression substrings from ``load_allowlist``.
 
-	Returns
-	-------
-	bool
-		True for a shebang, an encoding declaration, or a QA suppression pragma.
-	"""
-	bool_structural = int_line <= INT_STRUCTURAL_LINE_LIMIT and (
-		str_raw.startswith("#!") or bool(RE_ENCODING_DECL.search(str_content))
-	)
-	return bool_structural or is_pragma_line(str_content, tuple_allowlist)
+    Returns
+    -------
+    bool
+        True for a shebang, an encoding declaration, or a QA suppression pragma.
+    """
+    bool_structural = int_line <= INT_STRUCTURAL_LINE_LIMIT and (
+        str_raw.startswith("#!") or bool(RE_ENCODING_DECL.search(str_content))
+    )
+    return bool_structural or is_pragma_line(str_content, tuple_allowlist)
 
 
 def _flush_block(list_out: list, int_start: int, list_block: list) -> list:
-	"""Append a non-empty block to ``list_out`` and return a fresh empty block.
+    """Append a non-empty block to ``list_out`` and return a fresh empty block.
 
-	Parameters
-	----------
-	list_out : list
-		The accumulator both ``marker_blocks`` and ``python_blocks`` build.
-	int_start : int
-		The block's first line number.
-	list_block : list
-		The block's content lines so far.
+    Parameters
+    ----------
+    list_out : list
+        The accumulator both ``marker_blocks`` and ``python_blocks`` build.
+    int_start : int
+        The block's first line number.
+    list_block : list
+        The block's content lines so far.
 
-	Returns
-	-------
-	list
-		Always ``[]`` — the caller reassigns its running block to this.
-	"""
-	if list_block:
-		list_out.append((int_start, list_block))
-	return []
+    Returns
+    -------
+    list
+        Always ``[]`` — the caller reassigns its running block to this.
+    """
+    if list_block:
+        list_out.append((int_start, list_block))
+    return []
 
 
 def marker_for(path_file: pathlib.Path) -> str:
-	"""Return the comment marker for a file, or "" when the type is unsupported.
+    """Return the comment marker for a file, or "" when the type is unsupported.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		The file being checked.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The file being checked.
 
-	Returns
-	-------
-	str
-		``"#"`` or ``"//"``; empty when nothing here budgets this file's type.
-	"""
-	bool_hash_file = path_file.name == "Makefile" or path_file.suffix in DICT_HASH_SUFFIXES
-	if bool_hash_file or path_file.suffix == ".py":
-		return "#"
-	if path_file.suffix in DICT_SLASH_SUFFIXES:
-		return "//"
-	return ""
+    Returns
+    -------
+    str
+        ``"#"`` or ``"//"``; empty when nothing here budgets this file's type.
+    """
+    bool_hash_file = path_file.name == "Makefile" or path_file.suffix in DICT_HASH_SUFFIXES
+    if bool_hash_file or path_file.suffix == ".py":
+        return "#"
+    if path_file.suffix in DICT_SLASH_SUFFIXES:
+        return "//"
+    return ""
 
 
 def marker_blocks(str_source: str, str_marker: str) -> list:
-	"""Return consecutive comment-line runs, pragma and structural lines excluded.
+    """Return consecutive comment-line runs, pragma and structural lines excluded.
 
-	⚠️ A pragma or structural line does not just fail to COUNT — it BREAKS the
-	run, the same way a blank or code line would. Two five-line rationale blocks
-	separated by one ``# noqa`` are two five-line findings, never one eleven-line
-	finding, because the pragma line is not prose the owner would ever move to
-	``docs/``.
+    ⚠️ A pragma or structural line does not just fail to COUNT — it BREAKS the
+    run, the same way a blank or code line would. Two five-line rationale blocks
+    separated by one ``# noqa`` are two five-line findings, never one eleven-line
+    finding, because the pragma line is not prose the owner would ever move to
+    ``docs/``.
 
-	Parameters
-	----------
-	str_source : str
-		The file's text.
-	str_marker : str
-		``"#"`` or ``"//"``.
+    Parameters
+    ----------
+    str_source : str
+        The file's text.
+    str_marker : str
+        ``"#"`` or ``"//"``.
 
-	Returns
-	-------
-	list of tuple
-		``(int_start_line, list_of_content_lines)`` per block, 1-indexed.
-	"""
-	tuple_allowlist = load_allowlist()
-	list_out: list = []
-	list_block: list = []
-	int_start = 0
-	for int_line, str_line in enumerate(str_source.splitlines(), 1):
-		str_stripped = str_line.lstrip()
-		if not str_stripped.startswith(str_marker):
-			list_block = _flush_block(list_out, int_start, list_block)
-			continue
-		str_content = str_stripped[len(str_marker) :]
-		if line_breaks_run(int_line, str_stripped, str_content, tuple_allowlist):
-			list_block = _flush_block(list_out, int_start, list_block)
-			continue
-		if not list_block:
-			int_start = int_line
-		list_block.append(str_content)
-	if list_block:
-		list_out.append((int_start, list_block))
-	return list_out
+    Returns
+    -------
+    list of tuple
+        ``(int_start_line, list_of_content_lines)`` per block, 1-indexed.
+    """
+    tuple_allowlist = load_allowlist()
+    list_out: list = []
+    list_block: list = []
+    int_start = 0
+    for int_line, str_line in enumerate(str_source.splitlines(), 1):
+        str_stripped = str_line.lstrip()
+        if not str_stripped.startswith(str_marker):
+            list_block = _flush_block(list_out, int_start, list_block)
+            continue
+        str_content = str_stripped[len(str_marker) :]
+        if line_breaks_run(int_line, str_stripped, str_content, tuple_allowlist):
+            list_block = _flush_block(list_out, int_start, list_block)
+            continue
+        if not list_block:
+            int_start = int_line
+        list_block.append(str_content)
+    if list_block:
+        list_out.append((int_start, list_block))
+    return list_out
 
 
 def python_blocks(str_source: str) -> list:
-	"""Return Python ``#`` comment blocks via ``tokenize``, docstrings excluded.
+    """Return Python ``#`` comment blocks via ``tokenize``, docstrings excluded.
 
-	Docstrings are documentation, not the comment volume this gate bounds — the
-	issue's own measured table excludes them from the ``.py`` figure for the same
-	reason. A pragma line (``# noqa`` et al.) breaks a block exactly as in
-	``marker_blocks``.
+    Docstrings are documentation, not the comment volume this gate bounds — the
+    issue's own measured table excludes them from the ``.py`` figure for the same
+    reason. A pragma line (``# noqa`` et al.) breaks a block exactly as in
+    ``marker_blocks``.
 
-	Parameters
-	----------
-	str_source : str
-		Python source text.
+    Parameters
+    ----------
+    str_source : str
+        Python source text.
 
-	Returns
-	-------
-	list of tuple
-		``(int_start_line, list_of_content_lines)`` per block; empty when the
-		source cannot be tokenised — a syntax error is ruff's finding, not this
-		gate's.
-	"""
-	tuple_allowlist = load_allowlist()
-	list_out: list = []
-	list_block: list = []
-	int_start = 0
-	int_previous = -2
-	try:
-		for cls_token in tokenize.generate_tokens(iter(str_source.splitlines(True)).__next__):
-			if cls_token.type != tokenize.COMMENT:
-				continue
-			int_line = cls_token.start[0]
-			str_content = cls_token.string.lstrip("#")
-			if line_breaks_run(int_line, cls_token.string, str_content, tuple_allowlist):
-				list_block = _flush_block(list_out, int_start, list_block)
-				int_previous = int_line
-				continue
-			if int_line != int_previous + 1 and list_block:
-				list_block = _flush_block(list_out, int_start, list_block)
-			if not list_block:
-				int_start = int_line
-			list_block.append(str_content)
-			int_previous = int_line
-	except (tokenize.TokenError, IndentationError, SyntaxError):
-		return []
-	if list_block:
-		list_out.append((int_start, list_block))
-	return list_out
+    Returns
+    -------
+    list of tuple
+        ``(int_start_line, list_of_content_lines)`` per block; empty when the
+        source cannot be tokenised — a syntax error is ruff's finding, not this
+        gate's.
+    """
+    tuple_allowlist = load_allowlist()
+    list_out: list = []
+    list_block: list = []
+    int_start = 0
+    int_previous = -2
+    try:
+        for cls_token in tokenize.generate_tokens(iter(str_source.splitlines(True)).__next__):
+            if cls_token.type != tokenize.COMMENT:
+                continue
+            int_line = cls_token.start[0]
+            str_content = cls_token.string.lstrip("#")
+            if line_breaks_run(int_line, cls_token.string, str_content, tuple_allowlist):
+                list_block = _flush_block(list_out, int_start, list_block)
+                int_previous = int_line
+                continue
+            if int_line != int_previous + 1 and list_block:
+                list_block = _flush_block(list_out, int_start, list_block)
+            if not list_block:
+                int_start = int_line
+            list_block.append(str_content)
+            int_previous = int_line
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return []
+    if list_block:
+        list_out.append((int_start, list_block))
+    return list_out
 
 
 def has_valid_escape(list_lines: list) -> bool:
-	"""Return whether a block carries ``# comment-budget-ok: <reason>``.
+    """Return whether a block carries ``# comment-budget-ok: <reason>``.
 
-	Mirrors ``check_complexity.sh``'s ``STR_ALLOW_MARKER`` handling exactly: a
-	bare marker with no text after the colon does not exempt anything.
+    Mirrors ``check_complexity.sh``'s ``STR_ALLOW_MARKER`` handling exactly: a
+    bare marker with no text after the colon does not exempt anything.
 
-	Parameters
-	----------
-	list_lines : list of str
-		A block's content lines.
+    Parameters
+    ----------
+    list_lines : list of str
+        A block's content lines.
 
-	Returns
-	-------
-	bool
-		True when the marker is present and followed by a non-empty reason.
-	"""
-	str_joined = "\n".join(list_lines)
-	if STR_ESCAPE not in str_joined:
-		return False
-	# `.splitlines()` on the tail after the marker is EMPTY, not `[""]`, when the
-	# marker is the very last text in the block — a bare `# comment-budget-ok:`
-	# with no trailing newline and no reason. `[0]` on that crashed the first
-	# draft instead of doing what a bare marker must do: fail the exemption.
-	list_after_marker = str_joined.split(STR_ESCAPE, 1)[1].splitlines()
-	str_reason = list_after_marker[0].strip() if list_after_marker else ""
-	return bool(str_reason)
+    Returns
+    -------
+    bool
+        True when the marker is present and followed by a non-empty reason.
+    """
+    str_joined = "\n".join(list_lines)
+    if STR_ESCAPE not in str_joined:
+        return False
+    # `.splitlines()` on the tail after the marker is EMPTY, not `[""]`, when the
+    # marker is the very last text in the block — a bare `# comment-budget-ok:`
+    # with no trailing newline and no reason. `[0]` on that crashed the first
+    # draft instead of doing what a bare marker must do: fail the exemption.
+    list_after_marker = str_joined.split(STR_ESCAPE, 1)[1].splitlines()
+    str_reason = list_after_marker[0].strip() if list_after_marker else ""
+    return bool(str_reason)
 
 
 def is_test_module(path_file: pathlib.Path) -> bool:
-	"""Return whether a path is a Python test module.
+    """Return whether a path is a Python test module.
 
-	The test-section-banner exemption is scoped to these files and no others:
-	the convention comes from ``tests/CLAUDE.md`` and was measured
-	(blueprintx#466) to occur only in ``.py`` test modules. A production
-	``.py``, a Makefile, a shell script or a ``.ts`` file carrying the same
-	triple is a decorative banner, not a mandated section header
-	(blueprintx#479).
+    The test-section-banner exemption is scoped to these files and no others:
+    the convention comes from ``tests/CLAUDE.md`` and was measured
+    (blueprintx#466) to occur only in ``.py`` test modules. A production
+    ``.py``, a Makefile, a shell script or a ``.ts`` file carrying the same
+    triple is a decorative banner, not a mandated section header
+    (blueprintx#479).
 
-	Identified by pytest's OWN discovery convention — a ``tests`` path segment
-	or a ``test_`` filename prefix — not by directory alone. Directory alone
-	was the first draft and it was wrong: the four
-	``optional/multi_pipeline/test_pipeline.py`` templates are real test
-	modules shipped outside any ``tests/`` tree, and scoping to the directory
-	flagged 6 mandated banners in them.
+    Identified by pytest's OWN discovery convention — a ``tests`` path segment
+    or a ``test_`` filename prefix — not by directory alone. Directory alone
+    was the first draft and it was wrong: the four
+    ``optional/multi_pipeline/test_pipeline.py`` templates are real test
+    modules shipped outside any ``tests/`` tree, and scoping to the directory
+    flagged 6 mandated banners in them.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		The file being checked.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The file being checked.
 
-	Returns
-	-------
-	bool
-		True for a ``.py`` file pytest would collect as a test module.
-	"""
-	if path_file.suffix != ".py":
-		return False
-	return "tests" in path_file.parts or path_file.name.startswith("test_")
+    Returns
+    -------
+    bool
+        True for a ``.py`` file pytest would collect as a test module.
+    """
+    if path_file.suffix != ".py":
+        return False
+    return "tests" in path_file.parts or path_file.name.startswith("test_")
 
 
 def is_exempt_section_banner(list_lines: list, int_index: int) -> bool:
-	"""Return whether a triple at ``int_index`` is the mandated test-section banner.
+    """Return whether a triple at ``int_index`` is the mandated test-section banner.
 
-	Matched on the FULL triple, not on any line containing 26 dashes, so a
-	lone rule line elsewhere gets no special treatment. The lines still count
-	toward the block's run length (see ``banner_findings`` — this only
-	suppresses the FINDING, never the block accumulation).
+    Matched on the FULL triple, not on any line containing 26 dashes, so a
+    lone rule line elsewhere gets no special treatment. The lines still count
+    toward the block's run length (see ``banner_findings`` — this only
+    suppresses the FINDING, never the block accumulation).
 
-	Parameters
-	----------
-	list_lines : list of str
-		The block's content lines.
-	int_index : int
-		Index of the triple's opening rule line.
+    Parameters
+    ----------
+    list_lines : list of str
+        The block's content lines.
+    int_index : int
+        Index of the triple's opening rule line.
 
-	Returns
-	-------
-	bool
-		True when both outer lines are exactly ``STR_TEST_SECTION_RULE``.
-	"""
-	return (
-		list_lines[int_index].strip() == STR_TEST_SECTION_RULE
-		and list_lines[int_index + 2].strip() == STR_TEST_SECTION_RULE
-	)
+    Returns
+    -------
+    bool
+        True when both outer lines are exactly ``STR_TEST_SECTION_RULE``.
+    """
+    return (
+        list_lines[int_index].strip() == STR_TEST_SECTION_RULE
+        and list_lines[int_index + 2].strip() == STR_TEST_SECTION_RULE
+    )
 
 
 def banner_findings(
-	int_start: int, list_lines: list, bool_allow_section_banner: bool = False
+    int_start: int, list_lines: list, bool_allow_section_banner: bool = False
 ) -> list:
-	"""Return the decorative-banner defects inside one comment block.
+    """Return the decorative-banner defects inside one comment block.
 
-	A punctuation-only line is a banner on its own; one flanked by two banner
-	lines is the ``rule / SECTION NAME / rule`` triple the issue names by
-	example, reported as a single three-line finding — except the exact
-	tests/CLAUDE.md test-section-banner triple in a Python test module,
-	which is exempt (see ``is_exempt_section_banner`` and ``is_test_module``).
+    A punctuation-only line is a banner on its own; one flanked by two banner
+    lines is the ``rule / SECTION NAME / rule`` triple the issue names by
+    example, reported as a single three-line finding — except the exact
+    tests/CLAUDE.md test-section-banner triple in a Python test module,
+    which is exempt (see ``is_exempt_section_banner`` and ``is_test_module``).
 
-	Parameters
-	----------
-	int_start : int
-		The block's first line number.
-	list_lines : list of str
-		The block's content lines.
-	bool_allow_section_banner : bool, optional
-		Whether the ``tests/CLAUDE.md`` section-banner exemption applies to this
-		file. Defaults to False so an unclassified caller gets the strict
-		behaviour: the exemption is opt-in per file type, never the fallback.
+    Parameters
+    ----------
+    int_start : int
+        The block's first line number.
+    list_lines : list of str
+        The block's content lines.
+    bool_allow_section_banner : bool, optional
+        Whether the ``tests/CLAUDE.md`` section-banner exemption applies to this
+        file. Defaults to False so an unclassified caller gets the strict
+        behaviour: the exemption is opt-in per file type, never the fallback.
 
-	Returns
-	-------
-	list of tuple
-		``(int_line, int_span)`` per decorative banner found.
-	"""
-	list_out = []
-	int_index = 0
-	while int_index < len(list_lines):
-		bool_this = bool(RE_BANNER_LINE.match(list_lines[int_index]))
-		bool_triple = (
-			int_index + 2 < len(list_lines)
-			and bool_this
-			and not RE_BANNER_LINE.match(list_lines[int_index + 1])
-			and list_lines[int_index + 1].strip()
-			and bool(RE_BANNER_LINE.match(list_lines[int_index + 2]))
-		)
-		if bool_triple:
-			bool_exempt = bool_allow_section_banner and is_exempt_section_banner(
-				list_lines, int_index
-			)
-			if not bool_exempt:
-				list_out.append((int_start + int_index, INT_BANNER_TRIPLE))
-			int_index += INT_BANNER_TRIPLE
-			continue
-		if bool_this:
-			list_out.append((int_start + int_index, 1))
-		int_index += 1
-	return list_out
+    Returns
+    -------
+    list of tuple
+        ``(int_line, int_span)`` per decorative banner found.
+    """
+    list_out = []
+    int_index = 0
+    while int_index < len(list_lines):
+        bool_this = bool(RE_BANNER_LINE.match(list_lines[int_index]))
+        bool_triple = (
+            int_index + 2 < len(list_lines)
+            and bool_this
+            and not RE_BANNER_LINE.match(list_lines[int_index + 1])
+            and list_lines[int_index + 1].strip()
+            and bool(RE_BANNER_LINE.match(list_lines[int_index + 2]))
+        )
+        if bool_triple:
+            bool_exempt = bool_allow_section_banner and is_exempt_section_banner(
+                list_lines, int_index
+            )
+            if not bool_exempt:
+                list_out.append((int_start + int_index, INT_BANNER_TRIPLE))
+            int_index += INT_BANNER_TRIPLE
+            continue
+        if bool_this:
+            list_out.append((int_start + int_index, 1))
+        int_index += 1
+    return list_out
 
 
 def file_problems(path_file: pathlib.Path) -> list:
-	"""Return every finding for one file: long runs and decorative banners.
+    """Return every finding for one file: long runs and decorative banners.
 
-	Parameters
-	----------
-	path_file : pathlib.Path
-		The file to check. An unsupported type yields nothing.
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The file to check. An unsupported type yields nothing.
 
-	Returns
-	-------
-	list of str
-		Human-readable findings; empty when the file is clean.
-	"""
-	str_marker = marker_for(path_file)
-	if not str_marker:
-		return []
-	try:
-		str_source = path_file.read_text(encoding="utf-8")
-	except (OSError, UnicodeDecodeError):
-		return []
+    Returns
+    -------
+    list of str
+        Human-readable findings; empty when the file is clean.
+    """
+    str_marker = marker_for(path_file)
+    if not str_marker:
+        return []
+    try:
+        str_source = path_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
 
-	try:
-		str_shown = str(path_file.relative_to(PATH_ROOT))
-	except ValueError:
-		str_shown = str(path_file)
+    try:
+        str_shown = str(path_file.relative_to(PATH_ROOT))
+    except ValueError:
+        str_shown = str(path_file)
 
-	list_blocks = (
-		python_blocks(str_source)
-		if path_file.suffix == ".py"
-		else marker_blocks(str_source, str_marker)
-	)
+    list_blocks = (
+        python_blocks(str_source)
+        if path_file.suffix == ".py"
+        else marker_blocks(str_source, str_marker)
+    )
 
-	list_problems = []
-	for int_start, list_lines in list_blocks:
-		int_length = len(list_lines)
-		bool_hatched = has_valid_escape(list_lines)
-		if int_length > INT_MAX_RUN and not bool_hatched:
-			list_problems.append(
-				f"{str_shown}:{int_start}: comment block is {int_length} lines "
-				f"(max {INT_MAX_RUN}) — move the explanation to docs/, README.md or "
-				f"CONTRIBUTING.md, leave one line pointing at it; escape hatch: "
-				f"# {STR_ESCAPE} <reason>"
-			)
-		if not bool_hatched:
-			for int_line, int_span in banner_findings(
-				int_start, list_lines, is_test_module(path_file)
-			):
-				str_shape = (
-					"rule/title/rule" if int_span == INT_BANNER_TRIPLE else "punctuation-only line"
-				)
-				list_problems.append(
-					f"{str_shown}:{int_line}: decorative banner ({str_shape}) — delete it, "
-					f"the code beneath it already says this"
-				)
-	return list_problems
+    list_problems = []
+    for int_start, list_lines in list_blocks:
+        int_length = len(list_lines)
+        bool_hatched = has_valid_escape(list_lines)
+        if int_length > INT_MAX_RUN and not bool_hatched:
+            list_problems.append(
+                f"{str_shown}:{int_start}: comment block is {int_length} lines "
+                f"(max {INT_MAX_RUN}) — move the explanation to docs/, README.md or "
+                f"CONTRIBUTING.md, leave one line pointing at it; escape hatch: "
+                f"# {STR_ESCAPE} <reason>"
+            )
+        if not bool_hatched:
+            for int_line, int_span in banner_findings(
+                int_start, list_lines, is_test_module(path_file)
+            ):
+                str_shape = (
+                    "rule/title/rule" if int_span == INT_BANNER_TRIPLE else "punctuation-only line"
+                )
+                list_problems.append(
+                    f"{str_shown}:{int_line}: decorative banner ({str_shape}) — delete it, "
+                    f"the code beneath it already says this"
+                )
+    return list_problems
 
 
 def audit_paths() -> list:
-	"""Discover every checkable file under the repository root.
+    """Discover every checkable file under the repository root.
 
-	Returns
-	-------
-	list of pathlib.Path
-		Sorted paths across every supported extension plus extensionless
-		``Makefile``, skipping vendored and generated trees. Compares path parts
-		RELATIVE TO ``PATH_ROOT`` — see ``check_function_length.py`` for why an
-		ancestor-based match would self-defeat under a `.claude/worktrees/` copy.
-	"""
-	tuple_suffixes = (".py", *DICT_HASH_SUFFIXES, *DICT_SLASH_SUFFIXES)
-	list_paths = []
-	for str_suffix in tuple_suffixes:
-		for path_file in PATH_ROOT.rglob(f"*{str_suffix}"):
-			if not any(
-				str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
-			):
-				list_paths.append(path_file)
-	for path_file in PATH_ROOT.rglob("Makefile"):
-		if not any(
-			str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
-		):
-			list_paths.append(path_file)
-	return sorted(set(list_paths))
+    Returns
+    -------
+    list of pathlib.Path
+        Sorted paths across every supported extension plus extensionless
+        ``Makefile``, skipping vendored and generated trees. Compares path parts
+        RELATIVE TO ``PATH_ROOT`` — see ``check_function_length.py`` for why an
+        ancestor-based match would self-defeat under a `.claude/worktrees/` copy.
+    """
+    tuple_suffixes = (".py", *DICT_HASH_SUFFIXES, *DICT_SLASH_SUFFIXES)
+    list_paths = []
+    for str_suffix in tuple_suffixes:
+        for path_file in PATH_ROOT.rglob(f"*{str_suffix}"):
+            if not any(
+                str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
+            ):
+                list_paths.append(path_file)
+    for path_file in PATH_ROOT.rglob("Makefile"):
+        if not any(
+            str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
+        ):
+            list_paths.append(path_file)
+    return sorted(set(list_paths))
 
 
 # `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
@@ -570,62 +570,62 @@ _INT_FLAG_WITH_VALUE = 2
 
 
 def main(list_argv: list) -> int:
-	"""Check every named file for an over-long comment run or a decorative banner.
+    """Check every named file for an over-long comment run or a decorative banner.
 
-	Parameters
-	----------
-	list_argv : list of str
-		Filenames, as pre-commit passes them. Empty means audit the whole
-		repository; ``--root <dir>`` (first, like the other `--root`-enabled
-		gates) repoints the audit and every relative-path display.
+    Parameters
+    ----------
+    list_argv : list of str
+        Filenames, as pre-commit passes them. Empty means audit the whole
+        repository; ``--root <dir>`` (first, like the other `--root`-enabled
+        gates) repoints the audit and every relative-path display.
 
-	Returns
-	-------
-	int
-		0 when every file is clean, 1 on a violation.
-	"""
-	global PATH_ROOT  # noqa: PLW0603 -- see check_function_length.py for the same accepted pattern
-	if list_argv[:1] == ["--root"]:
-		if len(list_argv) < _INT_FLAG_WITH_VALUE:
-			print("❌ --root needs a directory")
-			return 1
-		PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
-		list_argv = list_argv[2:]
+    Returns
+    -------
+    int
+        0 when every file is clean, 1 on a violation.
+    """
+    global PATH_ROOT  # noqa: PLW0603 -- see check_function_length.py for the same accepted pattern
+    if list_argv[:1] == ["--root"]:
+        if len(list_argv) < _INT_FLAG_WITH_VALUE:
+            print("❌ --root needs a directory")
+            return 1
+        PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
+        list_argv = list_argv[2:]
 
-	bool_audit = not list_argv
-	list_paths = (
-		[pathlib.Path(str_name).resolve() for str_name in list_argv]
-		if list_argv
-		else audit_paths()
-	)
+    bool_audit = not list_argv
+    list_paths = (
+        [pathlib.Path(str_name).resolve() for str_name in list_argv]
+        if list_argv
+        else audit_paths()
+    )
 
-	# Zero discovered files in audit mode is a failure, not a pass, matching every
-	# sibling gate in this family.
-	if bool_audit and not list_paths:
-		print(
-			f"❌ no supported file found under {PATH_ROOT} — this gate would pass vacuously. "
-			f"Check DICT_HASH_SUFFIXES/DICT_SLASH_SUFFIXES and TUPLE_SKIP_DIRS against the layout."
-		)
-		return 1
+    # Zero discovered files in audit mode is a failure, not a pass, matching every
+    # sibling gate in this family.
+    if bool_audit and not list_paths:
+        print(
+            f"❌ no supported file found under {PATH_ROOT} — this gate would pass vacuously. "
+            f"Check DICT_HASH_SUFFIXES/DICT_SLASH_SUFFIXES and TUPLE_SKIP_DIRS against the layout."
+        )
+        return 1
 
-	list_problems = []
-	for path_file in list_paths:
-		list_problems.extend(file_problems(path_file))
-	for str_problem in list_problems:
-		print(str_problem)
+    list_problems = []
+    for path_file in list_paths:
+        list_problems.extend(file_problems(path_file))
+    for str_problem in list_problems:
+        print(str_problem)
 
-	if not list_problems:
-		print(f"✅ comment budget OK ({len(list_paths)} file(s) checked)")
-		return 0
+    if not list_problems:
+        print(f"✅ comment budget OK ({len(list_paths)} file(s) checked)")
+        return 0
 
-	print(
-		f"\n{len(list_problems)} finding(s). A long block: move it to docs/, README.md or "
-		f"CONTRIBUTING.md and leave one line pointing at it. A decorative banner: delete it. "
-		f"Never touch a QA suppression — noqa, type: ignore, complexity-ok and friends are exempt "
-		f"by design (see comment_budget_allowlist.txt)."
-	)
-	return 1
+    print(
+        f"\n{len(list_problems)} finding(s). A long block: move it to docs/, README.md or "
+        f"CONTRIBUTING.md and leave one line pointing at it. A decorative banner: delete it. "
+        f"Never touch a QA suppression — noqa, type: ignore, complexity-ok and friends are exempt "
+        f"by design (see comment_budget_allowlist.txt)."
+    )
+    return 1
 
 
 if __name__ == "__main__":
-	sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:]))
