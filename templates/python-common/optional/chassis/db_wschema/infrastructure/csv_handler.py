@@ -9,6 +9,7 @@ import shutil
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db_wschema.infrastructure._row_ops import apply_update, find_row
 
 
 class CSVDatabaseHandler(DatabaseHandler):
@@ -61,10 +62,7 @@ class CSVDatabaseHandler(DatabaseHandler):
         Record or None
                 Matching record when found, otherwise ``None``.
         """
-        for dict_row in self._read_all():
-            if str(dict_row.get(self.id_field)) == str(record_id):
-                return dict_row
-        return None
+        return find_row(self._read_all(), self.id_field, record_id)
 
     def update(self, record_id: str, updates: Record) -> Record | None:
         """Update a stored record.
@@ -81,17 +79,7 @@ class CSVDatabaseHandler(DatabaseHandler):
         Record or None
                 Updated record when it exists, otherwise ``None``.
         """
-        dict_updated: Record | None = None
-        list_rows: list[Record] = []
-        for dict_row in self._read_all():
-            # A separate name rather than rebinding the loop variable — dict_row would then
-            # mean two different things in one body, the row as READ and the row as it will
-            # be WRITTEN, and a later edit between the two reads whichever it happens to hit.
-            dict_out = dict_row
-            if str(dict_row.get(self.id_field)) == str(record_id):
-                dict_out = {**dict_row, **updates, self.id_field: record_id}
-                dict_updated = dict_out
-            list_rows.append(dict_out)
+        list_rows, dict_updated = apply_update(self._read_all(), self.id_field, record_id, updates)
         if dict_updated is not None:
             self._write_all(list_rows)
         return dict_updated
@@ -156,5 +144,4 @@ class CSVDatabaseHandler(DatabaseHandler):
         with self.file_path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=list_fieldnames)
             writer.writeheader()
-            for dict_row in list_rows:
-                writer.writerow(dict_row)
+            writer.writerows(list_rows)

@@ -8,6 +8,7 @@ import shutil
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db_wschema.infrastructure._row_ops import apply_update, find_row
 
 
 class JSONDatabaseHandler(DatabaseHandler):
@@ -60,10 +61,7 @@ class JSONDatabaseHandler(DatabaseHandler):
         Record or None
                 Stored record when present, otherwise ``None``.
         """
-        for dict_row in self._read_all():
-            if str(dict_row.get(self.id_field)) == str(record_id):
-                return dict_row
-        return None
+        return find_row(self._read_all(), self.id_field, record_id)
 
     def update(self, record_id: str, updates: Record) -> Record | None:
         """Update an existing record.
@@ -80,17 +78,7 @@ class JSONDatabaseHandler(DatabaseHandler):
         Record or None
                 Updated record when found, otherwise ``None``.
         """
-        list_rows: list[Record] = []
-        dict_updated: Record | None = None
-        for dict_row in self._read_all():
-            # A separate name rather than rebinding the loop variable — dict_row would then
-            # mean two different things in one body, the row as READ and the row as it will
-            # be WRITTEN, and a later edit between the two reads whichever it happens to hit.
-            dict_out = dict_row
-            if str(dict_row.get(self.id_field)) == str(record_id):
-                dict_out = {**dict_row, **updates, self.id_field: record_id}
-                dict_updated = dict_out
-            list_rows.append(dict_out)
+        list_rows, dict_updated = apply_update(self._read_all(), self.id_field, record_id, updates)
         if dict_updated is not None:
             self._write_all(list_rows)
         return dict_updated
@@ -136,9 +124,7 @@ class JSONDatabaseHandler(DatabaseHandler):
         if not self.file_path.exists():
             return []
         str_content = self.file_path.read_text(encoding="utf-8")
-        if not str_content.strip():
-            return []
-        return list(json.loads(str_content))
+        return list(json.loads(str_content)) if str_content.strip() else []
 
     def _write_all(self, rows: list[Record]) -> None:
         """Write all records to disk, replacing existing content.
