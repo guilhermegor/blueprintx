@@ -15,6 +15,8 @@ import ast
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
 
 # --------------------------
 # Module Utilities
@@ -139,29 +141,53 @@ def test_every_config_read_before_the_logger_is_guarded() -> None:
     )
 
 
-def test_a_captured_config_failure_is_reported_and_exits() -> None:
-    """Capturing the failure is only half the fix — it must still be reported and abort.
+def _error_branch_source() -> str:
+    """Return the dumped body of the branch that acts on the captured config failure.
 
-    Swallowing the error and running on fallback config is strictly worse than the original
-    crash: the job would run against values nobody configured.
+    Bind the assertions to the error branch itself. A substring search over everything
+    after the LOGGER assignment passes just as well when some unrelated branch logs, writes
+    to stderr and exits — it would prove the file contains those calls, not that THIS
+    failure reaches them.
+
+    Returns
+    -------
+    str
+        The ``ast.dump`` of each statement in the branch.
     """
     cls_tree = _startup_tree()
-
-    # Bind the assertions to the error branch itself. A substring search over everything
-    # after the LOGGER assignment passes just as well when some unrelated branch logs, writes
-    # to stderr and exits — it would prove the file contains those calls, not that THIS
-    # failure reaches them.
     list_branches = [
         cls_node
         for cls_node in cls_tree.body
         if isinstance(cls_node, ast.If) and "_str_config_error" in ast.dump(cls_node.test)
     ]
-    assert list_branches, "the captured config failure is no longer acted on"
+    return "\n".join(ast.dump(cls_stmt) for cls_stmt in list_branches[0].body)
 
-    str_branch = "\n".join(ast.dump(cls_stmt) for cls_stmt in list_branches[0].body)
-    assert "critical" in str_branch, "the captured failure is never written to the log"
-    assert "stderr" in str_branch, "the captured failure never reaches stderr"
-    assert "SystemExit" in str_branch, "the run continues on fallback configuration"
+
+@pytest.mark.parametrize(
+    ("str_needle", "str_reason"),
+    [
+        ("critical", "the captured failure is never written to the log"),
+        ("stderr", "the captured failure never reaches stderr"),
+        ("SystemExit", "the run continues on fallback configuration"),
+    ],
+)
+def test_a_captured_config_failure_is_reported_and_exits(
+    str_needle: str, str_reason: str
+) -> None:
+    """Capturing the failure is only half the fix — it must still be reported and abort.
+
+    Swallowing the error and running on fallback config is strictly worse than the original
+    crash: the job would run against values nobody configured. A missing branch raises
+    ``IndexError`` in the helper, which fails the test too.
+
+    Parameters
+    ----------
+    str_needle : str
+        What the error branch must contain.
+    str_reason : str
+        What a missing needle would mean.
+    """
+    assert str_needle in _error_branch_source(), str_reason
 
 
 def test_the_failable_block_catches_exception_not_baseexception() -> None:
@@ -186,7 +212,6 @@ def test_the_failable_block_catches_exception_not_baseexception() -> None:
             for cls_inner in ast.walk(cls_node)
         )
     ]
-    assert list_config_tries, "the failable config block is no longer wrapped"
     # Flatten first, then assert once on the collected names. The loop form asserted N times
     # behind one green and stopped at the first bad handler; this reports every offender, and
     # keeps the test at the complexity 1 this tree is capped at.
@@ -195,7 +220,8 @@ def test_the_failable_block_catches_exception_not_baseexception() -> None:
         for cls_try in list_config_tries
         for cls_handler in cls_try.handlers
     ]
-    assert list_caught, "the failable config block catches nothing"
+    # An unwrapped block or one that catches nothing leaves list_caught empty, which fails
+    # the equality below too.
     assert set(list_caught) == {"Exception"}, (
         f"the config read must catch Exception, never BaseException — found {list_caught}"
     )
