@@ -661,7 +661,7 @@ jobs:
       - name: Install Poetry
         run: python -m pip install poetry
 
-      - name: Real scaffold with the storage opt-in, then lint + unit tests
+      - name: Real scaffold with the storage opt-in, then lint + tests
         env:
           GITHUB_USERNAME: ci-bot
           SKELETON: ${{ matrix.skeleton }}

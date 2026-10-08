@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -215,12 +216,17 @@ def test_a_created_record_can_be_deleted(cls_store: JoblibHandler) -> None:
     assert cls_store.delete(str_record_id) is True
 
 
-def test_the_default_codec_needs_no_extra_package(tmp_path: Path) -> None:
-    """A handler built with no ``compress=`` round-trips: the default codec ships with Python.
+def test_the_default_codec_needs_no_extra_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A handler built with no ``compress=`` round-trips with ``lz4`` made unimportable.
 
     The old ``("lz4", 3)`` default raised ``LZ4 is not installed`` in a generated project,
-    because no tier declares ``lz4`` (blueprintx#650).
+    because no tier declares ``lz4`` (blueprintx#650). Blocking the module keeps this a real
+    witness even where ``lz4`` happens to be installed transitively.
     """
+    monkeypatch.setitem(sys.modules, "lz4", None)
+    monkeypatch.setitem(sys.modules, "lz4.frame", None)
     cls_default = JoblibHandler(tmp_path / "default")
 
     assert cls_default.read(cls_default.create({"_name": "plain", "value": 5}))["value"] == 5

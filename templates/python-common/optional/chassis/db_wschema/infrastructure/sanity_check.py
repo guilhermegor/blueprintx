@@ -80,7 +80,7 @@ class SanityCheck:
                 If any attribute in ``required_attrs`` is absent from ``obj``.
         """
         str_missing = next(
-            (str_a for str_a in self.required_attrs if not hasattr(obj, str_a)), None
+            (str_attr for str_attr in self.required_attrs if not hasattr(obj, str_attr)), None
         )
         if str_missing is not None:
             raise AttributeError(f"Loaded object missing required attribute: {str_missing!r}")

@@ -72,10 +72,14 @@ def _apply_update(
             matched, which tells the caller there is nothing to write).
     """
     list_out = [
-        {**row, **dict_updates, str_id_field: record_id}
-        if _row_has_id(row, str_id_field, record_id)
-        else row
-        for row in list_rows
+        {**dict_row, **dict_updates, str_id_field: record_id}
+        if _row_has_id(dict_row, str_id_field, record_id)
+        else dict_row
+        for dict_row in list_rows
     ]
-    list_hits = [out for out, row in zip(list_out, list_rows, strict=True) if out is not row]
+    list_hits = [
+        dict_out
+        for dict_out, dict_row in zip(list_out, list_rows, strict=True)
+        if dict_out is not dict_row
+    ]
     return list_out, next(reversed(list_hits), None)
