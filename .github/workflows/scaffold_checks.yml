@@ -77,6 +77,24 @@ jobs:
       - name: Verify INCLUDE_REVIEW_BOT_ROSTER=false omits the roster on all three scaffold shapes
         run: bash bin/ci/check_review_bot_roster_optout.sh
 
+  docs-gap:
+    name: Docs gap — published pages registered in nav and index
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # Same shape as function-length below (ONE implementation, run over this repo via
+      # --root, blueprintx#340), except the gate imports pathspec to honour mkdocs'
+      # exclude_docs exactly as mkdocs does, so it must be installed first.
+      - name: Install pathspec and pyyaml
+        run: python3 -m pip install pathspec pyyaml
+
+      - name: Check every published docs page reaches mkdocs nav and the docs/CLAUDE.md index
+        run: python3 templates/python-common/bin/check_docs_gap.py --root .
+
   function-length:
     name: Function length — 60 lines, docstring excluded
     runs-on: ubuntu-latest
@@ -191,6 +209,20 @@ jobs:
       # function-length above.
       - name: Check docs-cited symbols and import paths across docs/
         run: python3 templates/python-common/bin/check_docs_code_refs.py --root .
+
+  quality-rules:
+    name: quality-rules.yaml validation (blueprintx#432)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # No dependency and no setup-python step: stdlib-only re/pathlib, same as the other
+      # ONE-implementation gates above.
+      - name: Validate the quality-rules registry against the templates it describes
+        run: python3 templates/python-common/bin/check_quality_rules.py --root .
 
   test-copy-lists:
     name: Shared test copy lists — scaffolds vs python-common
@@ -387,6 +419,9 @@ jobs:
       - name: Should-fail regression tests for validate_meta.sh
         run: bash tests/test_validate_meta.sh
 
+      - name: Should-fail regression tests for the docs-locale prompt
+        run: bash tests/test_docs_locale_prompt.sh
+
   spec-answers:
     name: --spec regression tests
     runs-on: ubuntu-latest
@@ -409,7 +444,10 @@ jobs:
           persist-credentials: false
 
       - name: Check .specs/ layout (blueprintx#447)
-        run: bash bin/ci/check_specs_structure.sh
+        run: bash bin/ci/check_specs_structure.sh --root .
+
+      - name: Run the .specs/ structure should-fail suite (blueprintx#583)
+        run: bash tests/test_check_specs_structure.sh
 
   docs-boundary:
     name: docs/ boundary guard

@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import io
 from pathlib import Path
+import re
 import shutil
 import uuid
 
@@ -21,224 +22,337 @@ _TS_FMT = "%Y%m%d_%H%M%S"
 # length derive from this one number, so they cannot drift apart.
 _INT_RECORD_ID_PARTS = 4
 
+# Every path this store opens is built from a record_id, and a record_id arrives from the
+# caller. A full match on the documented shape is what makes it a single filename component:
+# no separator, no `..`, no drive. The name charset is the one `create()` can produce.
+_RE_NAME = re.compile(r"[a-z0-9-]+")
+_RE_RECORD_ID = re.compile(r"[a-z0-9-]+_\d{8}_\d{6}_[0-9a-f]{8}")
+
 
 class JoblibHandler(DatabaseHandler):
-	"""Immutable binary artifact store backed by joblib with integrity verification.
+    """Immutable binary artifact store backed by joblib with integrity verification.
 
-	Each artifact is stored as a single file named
-	``{name}_{YYYYMMDD_HHMMSS}_{sha256_prefix8}.joblib``.
+    Each artifact is stored as a single file named
+    ``{name}_{YYYYMMDD_HHMMSS}_{sha256_prefix8}.joblib``.
 
-	**Three-factor integrity check on every load:**
+    **Three-factor integrity check on every load:**
 
-	1. SHA256 prefix in filename — first 8 hex chars of SHA256(bytes) must match the
-	   suffix embedded in the filename.
-	2. ``_saved_at`` metadata — the ``_saved_at`` field injected at save time must match
-	   the timestamp segment of the filename.
-	3. HMAC sidecar (optional) — when ``secret_key`` is set, a ``.sig`` sidecar is written
-	   and verified on load; protects against an adversary who controls the filesystem.
+    1. SHA256 prefix in filename — first 8 hex chars of SHA256(bytes) must match the
+       suffix embedded in the filename.
+    2. ``_saved_at`` metadata — the ``_saved_at`` field injected at save time must match
+       the timestamp segment of the filename.
+    3. HMAC sidecar (optional) — when ``secret_key`` is set, a ``.sig`` sidecar is written
+       and verified on load; protects against an adversary who controls the filesystem.
 
-	``update()`` is intentionally not supported — artifacts are immutable. Save a new
-	version by calling ``create()`` again.
+    ``update()`` is intentionally not supported — artifacts are immutable. Save a new
+    version by calling ``create()`` again.
 
-	Parameters
-	----------
-	dir_path : str or Path
-		Directory where artifact files are stored.
-	compress : tuple of (str, int), optional
-		Joblib compression codec and level, by default ``("lz4", 3)``.
-	secret_key : bytes or None, optional
-		Key for HMAC-SHA256 signing. When ``None`` only SHA256 + metadata checks run.
-	"""
+    Parameters
+    ----------
+    dir_path : str or Path
+            Directory where artifact files are stored.
+    compress : tuple of (str, int), optional
+            Joblib compression codec and level, by default ``("lz4", 3)``.
+    secret_key : bytes or None, optional
+            Key for HMAC-SHA256 signing. When ``None`` only SHA256 + metadata checks run.
+    """
 
-	def __init__(
-		self,
-		dir_path: str | Path,
-		compress: tuple[str, int] = ("lz4", 3),
-		secret_key: bytes | None = None,
-	) -> None:
-		self._dir = Path(dir_path)
-		self._dir.mkdir(parents=True, exist_ok=True)
-		self._compress = compress
-		self._key = secret_key
+    def __init__(
+        self,
+        dir_path: str | Path,
+        compress: tuple[str, int] = ("lz4", 3),
+        secret_key: bytes | None = None,
+    ) -> None:
+        self._dir = Path(dir_path)
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self._compress = compress
+        self._key = secret_key
 
-	def create(self, record: Record) -> str:
-		"""Persist a new artifact and return its unique identifier.
+    def create(self, record: Record) -> str:
+        """Persist a new artifact and return its unique identifier.
 
-		The record may contain a ``"_name"`` key (kebab-case, no underscores) to make
-		the filename human-readable. A UUID hex is used when ``"_name"`` is absent.
+        The record may contain a ``"_name"`` key (kebab-case, no underscores) to make
+        the filename human-readable. A UUID hex is used when ``"_name"`` is absent.
 
-		Parameters
-		----------
-		record : Record
-			Data to persist. ``_saved_at`` is injected automatically.
+        Parameters
+        ----------
+        record : Record
+                Data to persist. ``_saved_at`` is injected automatically.
 
-		Returns
-		-------
-		str
-			Artifact identifier of the form ``{name}_{YYYYMMDD_HHMMSS}_{sha256_prefix8}``.
-		"""
-		str_name = str(record.get("_name", uuid.uuid4().hex)).replace("_", "-")
-		str_ts = datetime.utcnow().strftime(_TS_FMT)
-		dict_record = {**record, "_saved_at": str_ts}
-		bytes_data = self._to_bytes(dict_record)
-		str_sha256 = hashlib.sha256(bytes_data).hexdigest()[:8]
-		str_record_id = f"{str_name}_{str_ts}_{str_sha256}"
-		(self._dir / f"{str_record_id}.joblib").write_bytes(bytes_data)
-		if self._key:
-			bytes_sig = hmac.new(self._key, bytes_data, hashlib.sha256).digest()
-			(self._dir / f"{str_record_id}.sig").write_bytes(bytes_sig)
-		return str_record_id
+        Returns
+        -------
+        str
+                Artifact identifier of the form ``{name}_{YYYYMMDD_HHMMSS}_{sha256_prefix8}``.
 
-	def read(self, record_id: str) -> Record | None:
-		"""Load and verify an artifact by its identifier.
+        Raises
+        ------
+        ValueError
+                If ``_name`` (after ``_`` becomes ``-``) is not lowercase letters, digits and
+                ``-``. A name with a separator or ``..`` would write outside the store.
+        """
+        str_raw_name = str(record.get("_name", uuid.uuid4().hex))
+        str_name = self._validate_name(str_raw_name.replace("_", "-"))
+        str_ts = datetime.utcnow().strftime(_TS_FMT)
+        dict_record = {**record, "_saved_at": str_ts}
+        bytes_data = self._to_bytes(dict_record)
+        str_sha256 = hashlib.sha256(bytes_data).hexdigest()[:8]
+        str_record_id = f"{str_name}_{str_ts}_{str_sha256}"
+        self._artifact_path(str_record_id, ".joblib").write_bytes(bytes_data)
+        if self._key:
+            bytes_sig = hmac.new(self._key, bytes_data, hashlib.sha256).digest()
+            self._artifact_path(str_record_id, ".sig").write_bytes(bytes_sig)
+        return str_record_id
 
-		Parameters
-		----------
-		record_id : str
-			Identifier returned by ``create()``.
+    def read(self, record_id: str) -> Record | None:
+        """Load and verify an artifact by its identifier.
 
-		Returns
-		-------
-		Record or None
-			Loaded artifact when found and all integrity checks pass.
+        Parameters
+        ----------
+        record_id : str
+                Identifier returned by ``create()``.
 
-		Raises
-		------
-		ValueError
-			If any integrity factor fails.
-		"""
-		path_artifact = self._dir / f"{record_id}.joblib"
-		if not path_artifact.exists():
-			return None
-		bytes_data = path_artifact.read_bytes()
-		self._verify(record_id, bytes_data)
-		buf = io.BytesIO(bytes_data)
-		return joblib.load(buf)  # noqa: S301
+        Returns
+        -------
+        Record or None
+                Loaded artifact when found and all integrity checks pass.
 
-	def update(self, record_id: str, updates: Record) -> Record | None:
-		"""Not supported — artifacts are immutable.
+        Raises
+        ------
+        ValueError
+                If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
+                component, or any integrity factor fails.
+        """
+        path_artifact = self._artifact_path(record_id, ".joblib")
+        if not path_artifact.exists():
+            return None
+        bytes_data = path_artifact.read_bytes()
+        self._verify(record_id, bytes_data)
+        buf = io.BytesIO(bytes_data)
+        return joblib.load(buf)  # noqa: S301
 
-		Raises
-		------
-		NotImplementedError
-			Always. Call ``create()`` to save a new version.
-		"""
-		raise NotImplementedError(
-			"JoblibHandler stores immutable artifacts — call create() to save a new version"
-		)
+    def update(self, record_id: str, updates: Record) -> Record | None:
+        """Not supported — artifacts are immutable.
 
-	def delete(self, record_id: str) -> bool:
-		"""Remove an artifact and its optional signature sidecar.
+        Raises
+        ------
+        NotImplementedError
+                Always. Call ``create()`` to save a new version.
+        """
+        raise NotImplementedError(
+            "JoblibHandler stores immutable artifacts — call create() to save a new version"
+        )
 
-		Parameters
-		----------
-		record_id : str
-			Identifier of the artifact to remove.
+    def delete(self, record_id: str) -> bool:
+        """Remove an artifact and its optional signature sidecar.
 
-		Returns
-		-------
-		bool
-			``True`` when the artifact existed and was removed.
-		"""
-		path_artifact = self._dir / f"{record_id}.joblib"
-		if not path_artifact.exists():
-			return False
-		path_artifact.unlink()
-		path_sig = self._dir / f"{record_id}.sig"
-		if path_sig.exists():
-			path_sig.unlink()
-		return True
+        Parameters
+        ----------
+        record_id : str
+                Identifier of the artifact to remove.
 
-	def backup(self, target_path: str | Path) -> Path:
-		"""Copy the entire artifact directory to a new location.
+        Returns
+        -------
+        bool
+                ``True`` when the artifact existed and was removed.
 
-		Parameters
-		----------
-		target_path : str or Path
-			Destination directory.
+        Raises
+        ------
+        ValueError
+                If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
+                component.
+        """
+        # Both paths are confined BEFORE anything is unlinked: resolving the sidecar after
+        # the artifact is gone would leave the store half-deleted when the sidecar is refused.
+        path_artifact = self._artifact_path(record_id, ".joblib")
+        path_sig = self._artifact_path(record_id, ".sig")
+        if not path_artifact.exists():
+            return False
+        path_artifact.unlink()
+        if path_sig.exists():
+            path_sig.unlink()
+        return True
 
-		Returns
-		-------
-		Path
-			Path to the created backup directory.
-		"""
-		path_target = Path(target_path)
-		shutil.copytree(str(self._dir), str(path_target), dirs_exist_ok=True)
-		return path_target
+    def backup(self, target_path: str | Path) -> Path:
+        """Copy the entire artifact directory to a new location.
 
-	def close(self) -> None:
-		"""No-op for file-based storage."""
+        Parameters
+        ----------
+        target_path : str or Path
+                Destination directory.
 
-	def list_all(self) -> list[str]:
-		"""Return identifiers for all artifacts in the store.
+        Returns
+        -------
+        Path
+                Path to the created backup directory.
+        """
+        path_target = Path(target_path)
+        shutil.copytree(str(self._dir), str(path_target), dirs_exist_ok=True)
+        return path_target
 
-		Returns
-		-------
-		list of str
-			Artifact identifiers (filenames without the ``.joblib`` extension).
-		"""
-		return [path_f.stem for path_f in sorted(self._dir.glob("*.joblib"))]
+    def close(self) -> None:
+        """No-op for file-based storage."""
 
-	def _to_bytes(self, record: Record) -> bytes:
-		"""Serialize a record to compressed joblib bytes.
+    def list_all(self) -> list[str]:
+        """Return identifiers for all artifacts in the store.
 
-		Parameters
-		----------
-		record : Record
-			Data to serialize.
+        Returns
+        -------
+        list of str
+                Artifact identifiers (filenames without the ``.joblib`` extension).
+        """
+        return [path_f.stem for path_f in sorted(self._dir.glob("*.joblib"))]
 
-		Returns
-		-------
-		bytes
-			Compressed serialized bytes.
-		"""
-		buf = io.BytesIO()
-		joblib.dump(record, buf, compress=self._compress)
-		return buf.getvalue()
+    @staticmethod
+    def _validate_name(str_name: str) -> str:
+        """Return ``str_name`` unchanged when it is a safe kebab-case name.
 
-	def _verify(self, record_id: str, bytes_data: bytes) -> None:
-		"""Run all three integrity checks and raise on the first failure.
+        Parameters
+        ----------
+        str_name : str
+                Artifact name, already normalized with ``_`` replaced by ``-``.
 
-		Parameters
-		----------
-		record_id : str
-			Artifact identifier, used to extract expected hash and timestamp.
-		bytes_data : bytes
-			Raw bytes read from the artifact file.
+        Returns
+        -------
+        str
+                The same name.
 
-		Raises
-		------
-		ValueError
-			If record_id format is invalid, SHA256 prefix mismatches,
-			``_saved_at`` metadata mismatches, or HMAC verification fails.
-		"""
-		# ⚠️ The split count and the expected length are ONE fact — a record_id is
-		# `<name>_<date>_<time>_<sha8>`, so it splits into _INT_RECORD_ID_PARTS pieces on the
-		# last _INT_RECORD_ID_PARTS - 1 separators. Written as two bare numbers they can drift
-		# apart, and the failure is a confusing "invalid format" on a valid id.
-		list_parts = record_id.rsplit("_", _INT_RECORD_ID_PARTS - 1)
-		if len(list_parts) != _INT_RECORD_ID_PARTS:
-			raise ValueError(f"Invalid record_id format: {record_id!r}")
-		str_sha256_expected = list_parts[-1]
-		str_sha256_actual = hashlib.sha256(bytes_data).hexdigest()[:8]
-		if str_sha256_expected != str_sha256_actual:
-			raise ValueError(
-				f"SHA256 prefix mismatch for {record_id!r} — file may be corrupted or substituted"
-			)
-		if self._key:
-			path_sig = self._dir / f"{record_id}.sig"
-			if not path_sig.exists():
-				raise ValueError(f"HMAC signature missing for {record_id!r}")
-			bytes_sig_stored = path_sig.read_bytes()
-			bytes_sig_actual = hmac.new(self._key, bytes_data, hashlib.sha256).digest()
-			if not hmac.compare_digest(bytes_sig_stored, bytes_sig_actual):
-				raise ValueError(
-					f"HMAC verification failed for {record_id!r} — file may be tampered"
-				)
-		buf = io.BytesIO(bytes_data)
-		dict_record = joblib.load(buf)  # noqa: S301
-		str_ts_expected = f"{list_parts[-3]}_{list_parts[-2]}"
-		if dict_record.get("_saved_at") != str_ts_expected:
-			raise ValueError(
-				f"_saved_at metadata mismatch for {record_id!r} — content may be tampered"
-			)
+        Raises
+        ------
+        ValueError
+                If the name is empty or has any character outside ``[a-z0-9-]``.
+        """
+        if not _RE_NAME.fullmatch(str_name):
+            raise ValueError(f"Invalid _name {str_name!r}: use lowercase letters, digits and '-'")
+        return str_name
+
+    def _artifact_path(self, record_id: str, str_suffix: str) -> Path:
+        """Build the path of one artifact file, refusing anything outside the store.
+
+        Parameters
+        ----------
+        record_id : str
+                Artifact identifier from the caller.
+        str_suffix : str
+                File suffix, ``.joblib`` or ``.sig``.
+
+        Returns
+        -------
+        Path
+                ``<store>/<record_id><suffix>``, guaranteed to resolve inside the store.
+
+        Raises
+        ------
+        ValueError
+                If ``record_id`` is not the documented shape, or the path resolves outside
+                the store (a symlink planted inside it, for instance).
+        """
+        self._validate_record_id(record_id)
+        return self._confined(self._dir / f"{record_id}{str_suffix}")
+
+    @staticmethod
+    def _validate_record_id(record_id: str) -> None:
+        """Raise unless ``record_id`` is ``{kebab-name}_{YYYYMMDD}_{HHMMSS}_{sha8}``.
+
+        Parameters
+        ----------
+        record_id : str
+                Artifact identifier from the caller.
+
+        Raises
+        ------
+        ValueError
+                If it is not a full match of the documented shape. That shape has no path
+                separator, so a match is a single filename component.
+        """
+        if not _RE_RECORD_ID.fullmatch(record_id):
+            raise ValueError(f"Invalid record_id format: {record_id!r}")
+
+    def _confined(self, path_candidate: Path) -> Path:
+        """Return ``path_candidate`` when it resolves inside the store directory.
+
+        Defense in depth behind the id shape check: it catches a symlink inside the store
+        that points elsewhere, which no string check on the id can see.
+
+        Parameters
+        ----------
+        path_candidate : Path
+                Path built from a validated id.
+
+        Returns
+        -------
+        Path
+                The same path.
+
+        Raises
+        ------
+        ValueError
+                If it resolves outside the store directory.
+        """
+        if not path_candidate.resolve().is_relative_to(self._dir.resolve()):
+            raise ValueError(f"Path escapes the artifact store: {str(path_candidate)!r}")
+        return path_candidate
+
+    def _to_bytes(self, record: Record) -> bytes:
+        """Serialize a record to compressed joblib bytes.
+
+        Parameters
+        ----------
+        record : Record
+                Data to serialize.
+
+        Returns
+        -------
+        bytes
+                Compressed serialized bytes.
+        """
+        buf = io.BytesIO()
+        joblib.dump(record, buf, compress=self._compress)
+        return buf.getvalue()
+
+    def _verify(self, record_id: str, bytes_data: bytes) -> None:
+        """Run all three integrity checks and raise on the first failure.
+
+        Parameters
+        ----------
+        record_id : str
+                Artifact identifier, used to extract expected hash and timestamp.
+        bytes_data : bytes
+                Raw bytes read from the artifact file.
+
+        Raises
+        ------
+        ValueError
+                If record_id format is invalid, SHA256 prefix mismatches,
+                ``_saved_at`` metadata mismatches, or HMAC verification fails.
+        """
+        self._validate_record_id(record_id)
+        # ⚠️ The split count and the expected length are ONE fact — a record_id is
+        # `<name>_<date>_<time>_<sha8>`, so it splits into _INT_RECORD_ID_PARTS pieces on the
+        # last _INT_RECORD_ID_PARTS - 1 separators. Written as two bare numbers they can drift
+        # apart, and the failure is a confusing "invalid format" on a valid id.
+        list_parts = record_id.rsplit("_", _INT_RECORD_ID_PARTS - 1)
+        if len(list_parts) != _INT_RECORD_ID_PARTS:
+            raise ValueError(f"Invalid record_id format: {record_id!r}")
+        str_sha256_expected = list_parts[-1]
+        str_sha256_actual = hashlib.sha256(bytes_data).hexdigest()[:8]
+        if str_sha256_expected != str_sha256_actual:
+            raise ValueError(
+                f"SHA256 prefix mismatch for {record_id!r} — file may be corrupted or substituted"
+            )
+        if self._key:
+            path_sig = self._artifact_path(record_id, ".sig")
+            if not path_sig.exists():
+                raise ValueError(f"HMAC signature missing for {record_id!r}")
+            bytes_sig_stored = path_sig.read_bytes()
+            bytes_sig_actual = hmac.new(self._key, bytes_data, hashlib.sha256).digest()
+            if not hmac.compare_digest(bytes_sig_stored, bytes_sig_actual):
+                raise ValueError(
+                    f"HMAC verification failed for {record_id!r} — file may be tampered"
+                )
+        buf = io.BytesIO(bytes_data)
+        dict_record = joblib.load(buf)  # noqa: S301
+        str_ts_expected = f"{list_parts[-3]}_{list_parts[-2]}"
+        if dict_record.get("_saved_at") != str_ts_expected:
+            raise ValueError(
+                f"_saved_at metadata mismatch for {record_id!r} — content may be tampered"
+            )

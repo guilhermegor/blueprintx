@@ -159,6 +159,7 @@ DICT_EXPECTED_ABSENT = {
         "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
         # ⚠️ NOT a clean exclusion — see the identical note under python_ddd_service.sh below.
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_ddd_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
@@ -168,6 +169,7 @@ DICT_EXPECTED_ABSENT = {
         # its test has no cp line in any scaffold yet: bin/scaffold/*.sh was held by another
         # open PR when this test landed. Wiring the cp line is a follow-up — see #308's PR body.
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     # fastapi pulls pydantic in transitively, but that is not the same claim as #267's "declare
     # it as a direct dependency" — and the module the test imports (src/config/schemas/, #267)
@@ -175,21 +177,25 @@ DICT_EXPECTED_ABSENT = {
     "python_api_service.sh": {
         "test_config_schemas_example.py": "schemas/ seam not yet wired (#267); no src/config/schemas/ module",
         "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_ddd_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_mvc_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_mvc_service_orm.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
+        "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
 }
 

@@ -24,38 +24,38 @@ _VALID_LOG_LEVELS: frozenset[str] = frozenset({"info", "warning", "error", "crit
 
 
 class LogsEmitter(LogEmitter):
-	""":class:`LogEmitter` backed by the project's rich :class:`CreateLog` printer.
+    """:class:`LogEmitter` backed by the project's rich :class:`CreateLog` printer.
 
-	With no logger injected the rich line is printed to the screen; with a logger injected the
-	message is routed there, prefixed with the reconstructed caller context. Callers depend only
-	on ``log_message`` and may inject any replacement, so the seam stays overridable.
-	"""
+    With no logger injected the rich line is printed to the screen; with a logger injected the
+    message is routed there, prefixed with the reconstructed caller context. Callers depend only
+    on ``log_message`` and may inject any replacement, so the seam stays overridable.
+    """
 
-	def __init__(self, cls_logger: logging.Logger | None = None) -> None:
-		"""Build a rich emitter, optionally over an injected logger.
+    def __init__(self, cls_logger: logging.Logger | None = None) -> None:
+        """Build a rich emitter, optionally over an injected logger.
 
-		Parameters
-		----------
-		cls_logger : logging.Logger, optional
-			The standard-library logger to route to. When ``None`` (the default) the rich line
-			is printed to the screen instead.
-		"""
-		super().__init__(cls_logger)
-		self._cls_create_log = CreateLog()
+        Parameters
+        ----------
+        cls_logger : logging.Logger, optional
+                The standard-library logger to route to. When ``None`` (the default) the rich line
+                is printed to the screen instead.
+        """
+        super().__init__(cls_logger)
+        self._cls_create_log = CreateLog()
 
-	def log_message(self, str_message: str, str_level: str) -> None:
-		"""Emit ``str_message`` at ``str_level`` through the rich printer.
+    def log_message(self, str_message: str, str_level: str) -> None:
+        """Emit ``str_message`` at ``str_level`` through the rich printer.
 
-		Parameters
-		----------
-		str_message : str
-			The message to emit.
-		str_level : str
-			The level name; an unrecognised level falls back to ``"warning"`` (mirroring the
-			forgiving behaviour of the base :class:`LogEmitter`).
-		"""
-		str_normalized = str_level.lower()
-		log_level = cast(
-			LogLevel, str_normalized if str_normalized in _VALID_LOG_LEVELS else "warning"
-		)
-		self._cls_create_log.log_message(self._cls_logger, str_message, log_level)
+        Parameters
+        ----------
+        str_message : str
+                The message to emit.
+        str_level : str
+                The level name; an unrecognised level falls back to ``"warning"`` (mirroring the
+                forgiving behaviour of the base :class:`LogEmitter`).
+        """
+        str_normalized = str_level.lower()
+        log_level = cast(
+            LogLevel, str_normalized if str_normalized in _VALID_LOG_LEVELS else "warning"
+        )
+        self._cls_create_log.log_message(self._cls_logger, str_message, log_level)
