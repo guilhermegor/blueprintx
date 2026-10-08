@@ -1692,3 +1692,56 @@ def test_completion_is_seen_past_the_display_budget() -> None:
         _ROSTER_NORMALISED,
         _HEAD_DATE,
     )
+
+
+_MARKER = "Fallback review — runtime: codex"
+_TUPLE_MARKERS = ("fallback review — runtime:",)
+
+
+def _marker_comment(str_association: str) -> dict:
+    return {
+        "author": {"login": "someone"},
+        "authorAssociation": str_association,
+        "body": f"{_MARKER}\nno findings",
+        "createdAt": "2099-01-01T00:00:00Z",
+    }
+
+
+def _missing_with(list_notices: list[dict], tuple_markers: tuple[str, ...]) -> str | None:
+    return _load_gate().find_missing_review_problem(
+        [],
+        {"coderabbitai"},
+        "someone-else",
+        str_head_oid=_HEAD,
+        list_notices=list_notices,
+        str_head_date=_HEAD_DATE,
+        tuple_markers=tuple_markers,
+    )
+
+
+def test_ladder_marker_from_a_collaborator_is_accepted() -> None:
+    """A trusted commenter's marker proves a fallback review ran."""
+    assert _missing_with([_marker_comment("COLLABORATOR")], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_from_an_outsider_is_rejected() -> None:
+    """An outside commenter cannot forge the marker."""
+    assert _missing_with([_marker_comment("NONE")], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_without_the_roster_row_changes_nothing() -> None:
+    """No `comment-marker` row, no behaviour change."""
+    assert _missing_with([_marker_comment("OWNER")], ()) is not None
+
+
+def test_load_comment_markers_reads_only_marker_rows(tmp_path: Path) -> None:
+    """A marker row has no login, so the login roster is untouched."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n"
+        "  - login: coderabbitai[bot]\n    posts: threads\n"
+        "  - kind: comment-marker\n    marker: \"Fallback review — runtime:\"\n",
+        encoding="utf-8",
+    )
+    cls_gate = _load_gate()
+    assert cls_gate.load_comment_markers(tmp_path) == _TUPLE_MARKERS
+    assert cls_gate.load_roster(tmp_path) == {"coderabbitai": "threads"}

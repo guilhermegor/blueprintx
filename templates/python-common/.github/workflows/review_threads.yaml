@@ -68,6 +68,9 @@ on:
   pull_request:
   pull_request_review:
   pull_request_review_comment:
+  # A clean review and a ladder fallback review arrive only as issue comments (docs/faq.md).
+  issue_comment:
+    types: [created, edited]
 
 permissions:
   contents: read
@@ -103,6 +106,10 @@ jobs:
     name: Review threads answered
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # `issue_comment` also fires for plain issues, where there is no PR to audit.
+    if: >-
+      github.event_name != 'issue_comment' ||
+      github.event.issue.pull_request != null
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -126,7 +133,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           # BOTH halves — see the KNOWN CEILING block at the top of the file for the trade.
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python bin/check_review_threads.py
@@ -145,5 +152,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash bin/rerun_stale_gate_runs.sh
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          str_head="$EVENT_HEAD_SHA"
+          if [ -z "$str_head" ]; then
+            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          fi
+          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
+          HEAD_SHA="$str_head" bash bin/rerun_stale_gate_runs.sh

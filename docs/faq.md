@@ -45,6 +45,16 @@ by language: for Python copy `templates/python-common/.review-bots.yaml` to the 
 TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
+### How does a fallback (ladder) review satisfy the gate?
+
+A roster row with `kind: comment-marker` and a `marker:` string (here `Fallback review — runtime:`)
+lets a plain issue comment count as a review. The comment must contain the marker, be posted
+after the head commit, and come from an `OWNER`, `MEMBER` or `COLLABORATOR` (GitHub's
+`authorAssociation`), so an outside commenter cannot forge it. The row has no `login:` and is
+ignored when absent. Like a clean-review notice, it proves a review ran, never that a thread was
+answered. The workflow needs the `issue_comment` trigger to re-run on that comment. See
+blueprintx#593.
+
 ## How is BlueprintX itself versioned?
 
 The version is the git tag. Cut a release from the **Release** GitHub Action (enter the version

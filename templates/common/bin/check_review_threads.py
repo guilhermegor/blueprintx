@@ -199,7 +199,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
-      comments(last:100) { nodes { author { login } body createdAt } }
+      comments(last:100) { nodes { author { login } authorAssociation body createdAt } }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
@@ -794,6 +794,65 @@ def reviewer_declared_completion(
     return bool(str_when) and str_when >= str_head_date
 
 
+_KIND_COMMENT_MARKER = "comment-marker"
+_SET_TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+
+
+def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
+    """Return the ``kind: comment-marker`` strings declared by the roster.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+            Repository root holding ``.review-bots.yaml``.
+
+    Returns
+    -------
+    tuple of str
+            Lower-cased marker strings; empty when the file, the key or the row is absent, so a
+            roster without the row behaves exactly as before. Rationale: docs/faq.md.
+    """
+    path_roster = path_root / _ROSTER_FILE
+    if yaml is None or not path_roster.is_file():
+        return ()
+    dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
+    return tuple(
+        str(d["marker"]).strip().casefold()
+        for d in (dict_yaml.get("reviewers") or [])
+        if d.get("kind") == _KIND_COMMENT_MARKER and str(d.get("marker") or "").strip()
+    )
+
+
+def ladder_marker_declared(
+    list_notices: list[dict], tuple_markers: tuple[str, ...], str_head_date: str = ""
+) -> bool:
+    """Return whether a trusted commenter posted a roster marker after the head commit.
+
+    Parameters
+    ----------
+    list_notices : list of dict
+            The PR's issue comments, each with ``authorAssociation``, ``body``, ``createdAt``.
+    tuple_markers : tuple of str
+            Lower-cased markers from :func:`load_comment_markers`.
+    str_head_date : str, optional
+            ISO-8601 ``committedDate`` of the head commit; empty fails closed.
+
+    Returns
+    -------
+    bool
+            ``True`` only for an OWNER/MEMBER/COLLABORATOR comment carrying a marker and
+            postdating the head, so an outside commenter cannot forge it.
+    """
+    if not str_head_date:
+        return False
+    return any(
+        d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
+        and (d.get("createdAt") or "") >= str_head_date
+        and any(str_marker in (d.get("body") or "").casefold() for str_marker in tuple_markers)
+        for d in list_notices
+    )
+
+
 # ⚠️ THE FILE-CAP MESSAGE IS A THIRD SENTENCE, NOT A THIRD VERDICT (blueprintx#433).
 #
 # Both branches below are FAILURES — a file-cap decline must never read as a pass, or the
@@ -858,6 +917,7 @@ def find_missing_review_problem(
     str_head_oid: str,
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
+    tuple_markers: tuple[str, ...] = (),
 ) -> str | None:
     """Return a problem when no declared reviewer ever reported on this PR's HEAD.
 
@@ -881,6 +941,8 @@ def find_missing_review_problem(
             against, which is the vacuous pass this parameter exists to remove.
     list_notices : list of dict, optional
             The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
+    tuple_markers : tuple of str, optional
+            Roster ``comment-marker`` strings; see :func:`ladder_marker_declared`.
 
     Returns
     -------
@@ -906,6 +968,9 @@ def find_missing_review_problem(
 
     if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
         # A CLEAN review is not a missing one — see the COMPLETION block above the function.
+        return None
+
+    if ladder_marker_declared(list_notices or [], tuple_markers, str_head_date):
         return None
 
     # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
@@ -1202,6 +1267,7 @@ def main(list_argv: list[str] | None = None) -> int:
         (dict_pr.get("author") or {}).get("login") or "",
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=list_notices,
+        tuple_markers=load_comment_markers(path_root),
         str_head_date=(
             ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit") or {}).get(
                 "committedDate"
