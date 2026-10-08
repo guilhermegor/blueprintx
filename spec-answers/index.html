@@ -2046,11 +2046,17 @@ file is a valid (all-default) spec.</p>
 </table>
 <h2 id="value-rules-and-flags">Value rules and flags<a class="headerlink" href="#value-rules-and-flags" title="Permanent link">&para;</a></h2>
 <ul>
+<li><strong>Values are trimmed.</strong> Leading and trailing whitespace, including the <code>\r</code> a spec saved with
+  CRLF line endings leaves on every line, is stripped from every value, so <code>otel=yes</code> reads the
+  same on Windows. Whitespace inside a value is kept. A value that is blank after trimming
+  means the key's default, for every key. Keys are not trimmed: write <code>otel=yes</code>, never
+  <code>otel=yes</code> or <code>otel = yes</code>, or the line is ignored and the default applies.</li>
 <li><strong>y/n keys</strong> take <code>y</code>/<code>yes</code>/<code>true</code> or <code>n</code>/<code>no</code>/<code>false</code>, in any case; an empty value means the
   key's default. Any other value (for example <code>maybe</code>, or a mistyped <code>yes</code>) <strong>stops the run before anything is
   created</strong>, naming the key. It is never read as <code>n</code>.</li>
 <li><strong><code>--dev</code></strong> scaffolds into a fresh temp directory instead of <code>project_root</code>/<code>$PWD</code>, and
-  <strong><code>--clean</code></strong> (with <code>--dev</code>) deletes it on exit — the same as the interactive flow. With <code>--dev</code>,
+  <strong><code>--clean</code></strong> (with <code>--dev</code>) deletes it on exit — the same as the interactive flow, and the
+  closing notice says the printed project path will not exist afterwards. With <code>--dev</code>,
   <code>project_root</code> is ignored.</li>
 <li><strong><code>--dry-run</code></strong> prints the resolved answers and the structure, and creates nothing.</li>
 </ul>
@@ -2205,7 +2211,12 @@ name, language, skeleton, license, …); their scaffold-internal prompts stay in
 until a named-key map is added for them, the same way the five Python tiers were —
 <code>spec_skeleton_supported</code> returns <code>false</code> for them today. <code>blueprintx new --spec</code> <strong>refuses</strong>
 such a skeleton before creating anything (a half-interactive run would hang an unattended
-caller); <code>--spec ... --dry-run</code> still reports the resolved top-level answers with a warning.</p>
+caller); <code>--spec ... --dry-run</code> still reports the resolved top-level answers with a warning.
+The refusal is deliberately unconditional, not "only when stdin is not a terminal" (considered
+in #636): <code>--spec</code> exists to run without a person, and a spec whose internal answers are
+silently ignored in favour of live prompts would be a different, half-honoured contract.
+<code>--spec</code> names a skeleton by exact equality, so two supported names joined by a space do not
+match.</p>
 <h2 id="used-by-ci">Used by CI<a class="headerlink" href="#used-by-ci" title="Permanent link">&para;</a></h2>
 <p><code>bin/ci/scaffold_lint_test.sh &lt;skeleton&gt;</code> drives its scaffold through
 <code>spec_stdin_for_skeleton</code> (all-default: decline every opt-in, no remote — the same
