@@ -45,6 +45,25 @@ by language: for Python copy `templates/python-common/.review-bots.yaml` to the 
 TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
+## How does a scaffolded repo close the issue a merged PR delivered?
+
+Every GitHub-connected scaffold ships `.github/workflows/close-linked-issues.yml` (blueprintx#604).
+GitHub's own `Closes #N` linking can come back empty (a non-default base branch, a `Closes: #N`
+with a colon, a bot-performed merge), which leaves the issue open and keeps a Projects "Item closed"
+-> Done automation from firing. On a merged same-repo PR the workflow closes:
+
+- the issue number in the branch name, `<type>/<N>-<slug>` first, with a trailing `-N` as the
+  fallback only when that form is absent (`feat/12-add-thing` closes issue 12, `fix/thing-25`
+  closes issue 25);
+- every `#N` after `Closes`, `Fixes` or `Resolves` in the PR body (colon allowed).
+
+It deliberately skips `dependabot/*` and `renovate/*` branches (a trailing `-4` there is a version,
+not an issue), the PR's own number, any number that is a PR, and `owner/repo#N` references, which
+point at another repository. A fork PR is skipped too: its token is read-only. The branch name and
+PR body are untrusted text and reach the script only through `env:`. It complements, and does not
+replace, the Projects "Item closed -> Done" workflow. It is dropped with the rest of `.github/` in
+offline mode.
+
 ## How is BlueprintX itself versioned?
 
 The version is the git tag. Cut a release from the **Release** GitHub Action (enter the version
