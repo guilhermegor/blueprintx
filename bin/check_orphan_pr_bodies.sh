@@ -13,7 +13,7 @@
 # Fails closed: anything undecidable (forge unreadable, no origin, body under 40 characters,
 # ambiguous or near match) is UNKNOWN, never ORPHAN, and never a silent skip.
 #
-# Usage: bash bin/check_orphan_pr_bodies.sh [git-dir]
+# Usage: bash bin/check_orphan_pr_bodies.sh [git-dir]   (origin is read from that git-dir)
 # Env:   BLUEPRINTX_REPO=owner/name  overrides the slug parsed from `origin`.
 # Exit:  0 all MATCHED | 1 ORPHAN found | 2 could not decide (UNKNOWN, forge or input unreadable)
 
@@ -34,7 +34,7 @@ fi
 
 str_repo="${BLUEPRINTX_REPO:-}"
 if [ -z "$str_repo" ]; then
-	str_url="$(git remote get-url origin 2>/dev/null || true)"
+	str_url="$(git --git-dir="$str_gitdir" remote get-url origin 2>/dev/null || true)"
 	str_repo="$(printf '%s' "$str_url" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
 fi
 
@@ -117,13 +117,16 @@ list_files = sorted(pathlib.Path(sys.argv[1]).glob("*.md"))
 if not list_files:
     print(f"no *.md bodies in {sys.argv[1]}")
 for path_md in list_files:
-    cls_stat = path_md.stat()
-    str_verdict = "UNKNOWN"
-    if bool_ok:
-        str_verdict = verdict(norm(path_md.read_text(encoding="utf-8", errors="replace")), list_forge)
+    str_verdict, int_size, int_age = "UNKNOWN (unreadable body)", 0, 0
+    try:
+        cls_stat = path_md.stat()
+        int_size, int_age = cls_stat.st_size, int((time.time() - cls_stat.st_mtime) // 86400)
+        str_text = path_md.read_text(encoding="utf-8")
+        str_verdict = verdict(norm(str_text), list_forge) if bool_ok else "UNKNOWN"
+    except (OSError, UnicodeDecodeError):
+        pass  # dangling symlink, permissions or non-UTF-8 bytes: undecidable, never ORPHAN
     int_orphans += str_verdict == "ORPHAN"
     int_unknown += str_verdict.startswith("UNKNOWN")
-    int_age = int((time.time() - cls_stat.st_mtime) // 86400)
-    print(f"{path_md}\t{cls_stat.st_size}B\t{int_age}d\t{str_verdict}")
+    print(f"{path_md}\t{int_size}B\t{int_age}d\t{str_verdict}")
 sys.exit(2 if int_unknown else 1 if int_orphans else 0)
 PY

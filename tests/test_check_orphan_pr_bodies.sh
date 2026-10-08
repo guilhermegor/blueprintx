@@ -20,6 +20,7 @@ mkdir -p "$str_tmp/bin" "$str_tmp/gitdir" "$str_tmp/norepo" "$str_tmp/plain"
 cat > "$str_tmp/bin/gh" <<'STUB'
 #!/bin/bash
 [ -z "${STUB_GH_FAIL:-}" ] || { echo "HTTP 403: rate limit" >&2; exit 1; }
+[ -z "${STUB_GH_ARGS:-}" ] || echo "$*" > "$STUB_GH_ARGS"
 cat "$STUB_GH_OUT"
 STUB
 chmod +x "$str_tmp/bin/gh"
@@ -97,6 +98,36 @@ unset BLUEPRINTX_REPO
 RUN_CWD="$str_tmp/norepo" RUN_DIR="" run_case "missing origin is UNKNOWN, exit 2" 2 "UNKNOWN" "$BODY_A"
 GIT_CEILING_DIRECTORIES="$str_tmp" RUN_CWD="$str_tmp/plain" RUN_DIR="" run_case \
     "outside a repo exits 2" 2 "not inside a git repository" "$BODY_A"
+
+# The forge slug comes from the scanned git-dir's origin, never from the caller's cwd repo.
+git -C "$str_tmp/plain" init -q
+git -C "$str_tmp/plain" remote add origin https://github.com/other/cwd-repo.git
+git -C "$str_tmp/norepo" remote add origin https://github.com/scanned/repo.git
+RUN_CWD="$str_tmp/plain" RUN_DIR="$str_tmp/norepo/.git" STUB_GH_ARGS="$str_tmp/args" \
+    run_case "origin is read from the scanned git-dir" 0 "MATCHED #561" "$BODY_A"
+if ! grep -q 'repos/scanned/repo/' "$str_tmp/args"; then
+    echo "FAIL: forge queried the wrong repo: $(cat "$str_tmp/args")" >&2
+    int_failures=$((int_failures + 1))
+fi
+
+# Unreadable local bodies are UNKNOWN (exit 2), never a traceback and never a false ORPHAN.
+check_bad_body() {
+    local str_name="$1" int_rc=0 str_out
+    str_out="$(cd "$str_tmp" && PATH="$str_tmp/bin:$PATH" STUB_GH_OUT="$str_tmp/one.json" \
+        BLUEPRINTX_REPO=o/r bash "$SCRIPT" "$str_tmp/gitdir" 2>&1)" || int_rc=$?
+    if [ "$int_rc" -ne 2 ] || [[ "$str_out" != *"UNKNOWN (unreadable body)"* ]]; then
+        echo "FAIL: $str_name (exit $int_rc; output: $str_out)" >&2
+        int_failures=$((int_failures + 1))
+    else
+        echo "PASS: $str_name"
+    fi
+}
+rm -f "$str_tmp"/gitdir/*.md
+ln -s "$str_tmp/nowhere" "$str_tmp/gitdir/dangling.md"
+check_bad_body "dangling symlink body is UNKNOWN, exit 2"
+rm -f "$str_tmp"/gitdir/*.md
+printf '\xff\xfe not utf-8 %s\n' "$BODY_B" > "$str_tmp/gitdir/binary.md"
+check_bad_body "non-UTF-8 body is UNKNOWN, exit 2"
 
 if [ "$int_failures" -ne 0 ]; then
     echo "$int_failures case(s) failed" >&2
