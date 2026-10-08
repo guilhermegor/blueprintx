@@ -1976,7 +1976,7 @@ then with <code>--cov-branch</code> on the same suite:</p>
 <td><code>mvc-service-orm-db</code></td>
 <td>76%</td>
 <td>76%</td>
-<td>already below the floor before <code>branch = True</code>; not introduced by it</td>
+<td>already below the floor before <code>branch = True</code>; closed in #617, now 95% (see below)</td>
 </tr>
 <tr>
 <td><code>lib-minimal</code></td>
@@ -1990,11 +1990,17 @@ then with <code>--cov-branch</code> on the same suite:</p>
 floor is shared by every tier that copies this file, so setting it to the worst tier (76)
 would silently loosen it for <code>mvc-service-native-db</code> (81%) and for the DDD tiers' first real
 capability code. Turning branch coverage on dropped no tier below its statement-only figure.</p>
-<p>The one finding is a <strong>pre-existing gap</strong>: <code>mvc-service-orm-db</code> measures 76% against an 80
-floor, in <code>model/example_entity.py</code> and <code>controller/_pipeline.py</code> (untaken branches). Closing
-it means new tests for those two files, tracked in
-<a href="https://github.com/guilhermegor/blueprintx/issues/617">#617</a>. Note that
-<code>poe unit_tests</code> does not pass <code>--cov</code>; the floor is compared only by the pre-commit
+<p>The one finding was a <strong>pre-existing gap</strong>: <code>mvc-service-orm-db</code> measured 76.10% against an 80
+floor, with the misses in <code>model/example_entity.py</code> (57%) and <code>controller/_pipeline.py</code> (75%)
+(blueprintx#617). They were not neglected branches. <code>ExampleEntity</code> imported <code>pandas</code> under
+<code>TYPE_CHECKING</code> while carrying the runtime <code>TypeChecker</code>, so beartype could not resolve
+<code>-&gt; pd.DataFrame</code> and <code>fetch_all</code> raised on every call: the shipped <code>run()</code> never worked, and
+nothing exercised the read, render or summary phases. The fix imports <code>pandas</code> for real
+(annotation-only per the layer policy) and adds tests for the model and every orchestrator
+phase. The same scaffold now measures <strong>95.12%</strong> with <code>branch = True</code>, 1058 unit tests passing.
+<code>src/controller/main.py</code> (10 statements) stays at 0%: it is a script-style entry point that
+defines no functions, so covering it would mean running the whole pipeline at import time.
+Note that <code>poe unit_tests</code> does not pass <code>--cov</code>; the floor is compared only by the pre-commit
 <code>coverage-check</code> hook and the CI coverage gate.</p>
 <p><code>lib-minimal</code> ships its own <code>.coveragerc</code> and sets <code>branch = True</code> there too, so the metric
 means the same thing in every tier. It declares no <code>fail_under</code>, which this change leaves as is.</p>
