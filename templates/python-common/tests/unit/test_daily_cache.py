@@ -305,9 +305,7 @@ def test_a_failed_download_never_publishes_a_partial_file(path_failed_cache: Pat
     assert not path_failed_cache.exists()
 
 
-def test_a_failed_download_leaves_no_staging_file(
-    path_failed_cache: Path, tmp_path: Path
-) -> None:
+def test_a_failed_download_leaves_no_staging_file(path_failed_cache: Path, tmp_path: Path) -> None:
     """The staging file must not linger, or the cache fills with debris nobody reads.
 
     Parameters

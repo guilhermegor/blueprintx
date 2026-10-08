@@ -70,7 +70,7 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
 
 @pytest.fixture
 def list_over_ceiling_problems(tmp_path: Path) -> list[str]:
-    """Findings for a Python function whose CODE exceeds the ceiling.
+    """Return the findings for a Python function whose CODE exceeds the ceiling.
 
     Parameters
     ----------

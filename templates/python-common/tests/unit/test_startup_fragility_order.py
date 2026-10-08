@@ -171,9 +171,7 @@ def _error_branch_source() -> str:
         ("SystemExit", "the run continues on fallback configuration"),
     ],
 )
-def test_a_captured_config_failure_is_reported_and_exits(
-    str_needle: str, str_reason: str
-) -> None:
+def test_a_captured_config_failure_is_reported_and_exits(str_needle: str, str_reason: str) -> None:
     """Capturing the failure is only half the fix — it must still be reported and abort.
 
     Swallowing the error and running on fallback config is strictly worse than the original

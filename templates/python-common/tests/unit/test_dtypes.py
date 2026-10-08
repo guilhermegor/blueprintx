@@ -51,7 +51,7 @@ def test_apply_dtypes_str_declaration_keeps_missing_values_na() -> None:
 
 @pytest.fixture
 def series_str_with_blank() -> pd.Series:
-    """A ``"str"``-declared column holding one value and one blank.
+    """Build a ``"str"``-declared column holding one value and one blank.
 
     Returns
     -------

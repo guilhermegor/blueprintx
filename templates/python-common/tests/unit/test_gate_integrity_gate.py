@@ -225,7 +225,7 @@ _STR_WORKFLOW_BASE = (
 
 @pytest.fixture
 def list_precommit_310_problems() -> list[str]:
-    """Findings for #310's merge shape: ``check-secrets`` kept, ``gate-integrity`` dropped.
+    """Return the findings for #310's shape: ``check-secrets`` kept, ``gate-integrity`` dropped.
 
     Returns
     -------
@@ -306,7 +306,7 @@ def test_precommit_unrelated_addition_alone_is_clean() -> None:
 
 @pytest.fixture
 def list_workflow_312_problems() -> list[str]:
-    """Findings for #312's merge shape: ``docs-code-refs`` kept, ``gate-integrity`` dropped.
+    """Return the findings for #312's shape: ``docs-code-refs`` kept, ``gate-integrity`` dropped.
 
     Returns
     -------

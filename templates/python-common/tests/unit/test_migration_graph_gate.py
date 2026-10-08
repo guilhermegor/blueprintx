@@ -175,9 +175,7 @@ def str_two_heads_err(
     return capsys.readouterr().err
 
 
-@pytest.mark.parametrize(
-    "str_needle", ["branch_a", "branch_b", "2 head revisions present"]
-)
+@pytest.mark.parametrize("str_needle", ["branch_a", "branch_b", "2 head revisions present"])
 def test_two_heads_message_names_both_head_revisions(
     str_two_heads_err: str, str_needle: str
 ) -> None:

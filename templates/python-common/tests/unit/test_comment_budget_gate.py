@@ -461,7 +461,8 @@ def test_a_production_python_file_banner_is_named_a_decorative_banner(
     path_dir.mkdir()
     path_file = path_dir / "service.py"
     str_rule = "# " + "-" * 26 + "\n"
-    path_file.write_text(str_rule + "# Helpers\n" + str_rule + "def run() -> None:\n\treturn None\n")
+    str_code = "def run() -> None:\n\treturn None\n"
+    path_file.write_text(str_rule + "# Helpers\n" + str_rule + str_code)
     assert "decorative banner (rule/title/rule)" in gate.file_problems(path_file)[0]
 
 

@@ -69,7 +69,7 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
 
 @pytest.fixture
 def list_whereless_delete_problems(tmp_path: Path) -> list[str]:
-    """Findings for a bare Core ``delete(...)`` with no ``.where()``.
+    """Return the findings for a bare Core ``delete(...)`` with no ``.where()``.
 
     Parameters
     ----------
@@ -154,7 +154,7 @@ def test_whereless_core_delete_with_where_passes(tmp_path: Path) -> None:
 
 @pytest.fixture
 def list_whereless_update_problems(tmp_path: Path) -> list[str]:
-    """Findings for ``update(...).values(...)`` with no ``.where()``.
+    """Return the findings for ``update(...).values(...)`` with no ``.where()``.
 
     Parameters
     ----------
@@ -201,7 +201,7 @@ def test_whereless_core_update_finding_names_the_hazard(
 
 @pytest.fixture
 def list_query_delete_problems(tmp_path: Path) -> list[str]:
-    """Findings for ``session.query(Model).delete()`` with no ``.filter()``.
+    """Return the findings for ``session.query(Model).delete()`` with no ``.filter()``.
 
     Parameters
     ----------
@@ -299,7 +299,7 @@ def test_no_sqlalchemy_import_skips_the_whereless_check(tmp_path: Path) -> None:
 
 @pytest.fixture
 def list_nolock_literal_problems(tmp_path: Path) -> list[str]:
-    """Findings for a ``WITH (NOLOCK)`` hint inside a Python string literal.
+    """Return the findings for a ``WITH (NOLOCK)`` hint inside a Python string literal.
 
     Parameters
     ----------
@@ -370,7 +370,7 @@ def test_nolock_finding_names_the_escape_hatch(
 
 @pytest.fixture
 def list_nolock_sql_file_problems(tmp_path: Path) -> list[str]:
-    """Findings for a ``WITH (NOLOCK)`` hint in a raw ``.sql`` file.
+    """Return the findings for a ``WITH (NOLOCK)`` hint in a raw ``.sql`` file.
 
     Parameters
     ----------
@@ -413,7 +413,7 @@ def test_nolock_in_sql_file_finding_names_the_hint(
 
 @pytest.fixture
 def list_second_nolock_problems(tmp_path: Path) -> list[str]:
-    """Findings for a literal whose first hint carries a hatch and second does not.
+    """Return the findings for a literal whose first hint carries a hatch and second does not.
 
     Parameters
     ----------
@@ -463,7 +463,7 @@ def test_second_nolock_finding_points_at_the_unannotated_line(
 
 @pytest.fixture
 def list_split_nolock_problems(tmp_path: Path) -> list[str]:
-    """Findings for a hint broken after ``WITH`` across two lines.
+    """Return the findings for a hint broken after ``WITH`` across two lines.
 
     Parameters
     ----------

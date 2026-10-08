@@ -67,7 +67,7 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
 
 @pytest.fixture
 def tuple_masked_cpf_sql(tmp_path: Path) -> tuple:
-    """Findings for a hardcoded masked CPF inside a SQL string literal.
+    """Return the findings for a hardcoded masked CPF inside a SQL string literal.
 
     Parameters
     ----------

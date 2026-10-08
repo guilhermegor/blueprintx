@@ -68,7 +68,7 @@ def _python_file(path_dir: Path, str_source: str, str_name: str = "sample.py") -
 
 @pytest.fixture
 def list_bitwise_and_problems(tmp_path: Path) -> list[str]:
-    """Findings for ``&`` inside ``.where(...)``.
+    """Return the findings for ``&`` inside ``.where(...)``.
 
     Parameters
     ----------
@@ -239,7 +239,7 @@ def test_single_declarative_base_passes(tmp_path: Path, monkeypatch: pytest.Monk
 
 @pytest.fixture
 def list_create_all_problems(tmp_path: Path) -> list[str]:
-    """Findings for ``Base.metadata.create_all(...)`` at import time.
+    """Return the findings for ``Base.metadata.create_all(...)`` at import time.
 
     Parameters
     ----------
@@ -305,7 +305,7 @@ def test_unrelated_create_all_method_is_not_flagged(tmp_path: Path) -> None:
 
 @pytest.fixture
 def list_two_mixin_problems(tmp_path: Path) -> list[str]:
-    """Findings for two mixins that both declare ``__table_args__``.
+    """Return the findings for two mixins that both declare ``__table_args__``.
 
     SQLAlchemy does not concatenate them. Attribute lookup takes ``MixinA``'s and drops
     ``MixinB``'s whole declaration, so the shared ``uq_x`` name never collides at runtime and
@@ -391,7 +391,7 @@ def test_pandas_mask_on_a_df_receiver_is_not_flagged(tmp_path: Path) -> None:
 
 @pytest.fixture
 def list_distinct_names_problems(tmp_path: Path) -> list[str]:
-    """Findings for two mixins declaring ``__table_args__`` with DISTINCT constraint names.
+    """Return the findings for two mixins declaring ``__table_args__`` with DISTINCT names.
 
     Parameters
     ----------
@@ -460,7 +460,7 @@ def test_one_mixin_declaring_table_args_is_clean(tmp_path: Path) -> None:
 
 @pytest.fixture
 def list_duplicate_name_problems(tmp_path: Path) -> list[str]:
-    """Findings for two constraints sharing a ``name=`` inside ONE ``__table_args__``.
+    """Return the findings for two constraints sharing a ``name=`` inside ONE ``__table_args__``.
 
     A genuine collision: both are real, both reach the table, and one loses.
 
@@ -514,7 +514,7 @@ def test_duplicate_name_finding_names_the_constraint(
 
 @pytest.fixture
 def list_empty_table_args_problems(tmp_path: Path) -> list[str]:
-    """Findings for a mixin declaring an empty ``__table_args__`` before another.
+    """Return the findings for a mixin declaring an empty ``__table_args__`` before another.
 
     Declaring an empty tuple is a declaration: it shadows, and must be reported. This is why
     declaration presence is tracked separately from the list of names — an empty name list

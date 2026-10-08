@@ -155,6 +155,8 @@ _CASES_MULTILINE_IMPORT = pytest.mark.parametrize(
         ),
     ],
 )
+
+
 @_CASES_MULTILINE_IMPORT
 def test_a_comment_never_shortens_a_multiline_import(
     list_body: list[str], list_expected: list[str]

@@ -43,7 +43,7 @@ def df_typed_read(tmp_path: Path) -> object:
 
     Returns
     -------
-    pandas.DataFrame
+    object
         The typed frame.
     """
     pytest.importorskip("pandas")
@@ -57,7 +57,7 @@ def test_read_table_keeps_the_contract_columns(df_typed_read: object) -> None:
 
     Parameters
     ----------
-    df_typed_read : pandas.DataFrame
+    df_typed_read : object
         The typed frame.
     """
     assert list(df_typed_read.columns) == ["code", "amount"]
@@ -68,7 +68,7 @@ def test_read_table_types_the_code_column_as_string(df_typed_read: object) -> No
 
     Parameters
     ----------
-    df_typed_read : pandas.DataFrame
+    df_typed_read : object
         The typed frame.
     """
     pd = pytest.importorskip("pandas")
@@ -80,7 +80,7 @@ def test_read_table_types_the_amount_column_as_int64(df_typed_read: object) -> N
 
     Parameters
     ----------
-    df_typed_read : pandas.DataFrame
+    df_typed_read : object
         The typed frame.
     """
     assert str(df_typed_read["amount"].dtype) == "int64"
@@ -91,7 +91,7 @@ def test_read_table_keeps_the_first_code_value(df_typed_read: object) -> None:
 
     Parameters
     ----------
-    df_typed_read : pandas.DataFrame
+    df_typed_read : object
         The typed frame.
     """
     assert df_typed_read["code"].iloc[0] == "ABC"
@@ -113,7 +113,7 @@ def df_padded_read(tmp_path: Path) -> object:
 
     Returns
     -------
-    pandas.DataFrame
+    object
         The frame read as text.
     """
     path_csv = tmp_path / "padded.csv"
@@ -127,7 +127,7 @@ def test_read_table_reads_as_text_preserving_zero_padding(df_padded_read: object
 
     Parameters
     ----------
-    df_padded_read : pandas.DataFrame
+    df_padded_read : object
         The frame read as text.
     """
     assert df_padded_read["code"].tolist() == ["007", "042"]
@@ -138,7 +138,7 @@ def test_read_table_reads_as_text_preserving_decimals(df_padded_read: object) ->
 
     Parameters
     ----------
-    df_padded_read : pandas.DataFrame
+    df_padded_read : object
         The frame read as text.
     """
     assert df_padded_read["amount"].tolist() == ["1000.50", "0.10"]
@@ -298,7 +298,7 @@ def df_quote_none_read(tmp_path: Path) -> object:
 
     Returns
     -------
-    pandas.DataFrame
+    object
         The frame read with ``QUOTE_NONE``.
     """
     path_csv = _write_malformed_quote_csv(tmp_path)
@@ -312,7 +312,7 @@ def test_read_table_quote_none_keeps_every_row(df_quote_none_read: object) -> No
 
     Parameters
     ----------
-    df_quote_none_read : pandas.DataFrame
+    df_quote_none_read : object
         The frame read with ``QUOTE_NONE``.
     """
     assert len(df_quote_none_read) == 3
@@ -323,7 +323,7 @@ def test_read_table_quote_none_keeps_the_stray_quote_literal(df_quote_none_read:
 
     Parameters
     ----------
-    df_quote_none_read : pandas.DataFrame
+    df_quote_none_read : object
         The frame read with ``QUOTE_NONE``.
     """
     assert df_quote_none_read["note"].iloc[1] == '"parecer aprovado'
@@ -336,7 +336,7 @@ def test_read_table_quote_none_reads_the_amounts_after_the_stray_quote(
 
     Parameters
     ----------
-    df_quote_none_read : pandas.DataFrame
+    df_quote_none_read : object
         The frame read with ``QUOTE_NONE``.
     """
     assert df_quote_none_read["amount"].tolist() == ["10", "20", "30"]
@@ -359,7 +359,7 @@ def df_json_read(tmp_path: Path) -> object:
 
     Returns
     -------
-    pandas.DataFrame
+    object
         The frame read as text.
     """
     path_json = tmp_path / "money.json"
@@ -376,7 +376,7 @@ def test_read_table_json_preserves_zero_padding(df_json_read: object) -> None:
 
     Parameters
     ----------
-    df_json_read : pandas.DataFrame
+    df_json_read : object
         The frame read as text.
     """
     assert df_json_read["code"].tolist() == ["007", "042"]
@@ -387,7 +387,7 @@ def test_read_table_json_preserves_decimal_scale(df_json_read: object) -> None:
 
     Parameters
     ----------
-    df_json_read : pandas.DataFrame
+    df_json_read : object
         The frame read as text.
     """
     assert df_json_read["amount"].tolist() == ["1000.50", "0.10"]
@@ -419,7 +419,7 @@ def df_wide_read(tmp_path: Path) -> object:
 
     Returns
     -------
-    pandas.DataFrame
+    object
         The frame read.
     """
     path_json = tmp_path / "wide.json"
@@ -438,7 +438,7 @@ def test_positional_payload_drops_a_surplus_position_that_is_empty_everywhere(
 
     Parameters
     ----------
-    df_wide_read : pandas.DataFrame
+    df_wide_read : object
         The frame read.
     """
     assert list(df_wide_read.columns) == ["code", "amount"]
@@ -451,7 +451,7 @@ def test_positional_payload_keeps_the_declared_values_when_dropping_the_surplus(
 
     Parameters
     ----------
-    df_wide_read : pandas.DataFrame
+    df_wide_read : object
         The frame read.
     """
     assert df_wide_read["amount"].tolist() == ["10", "20"]

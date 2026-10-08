@@ -68,7 +68,7 @@ def _test_file(path_dir: Path, str_source: str) -> Path:
 
 @pytest.fixture
 def list_unjustified_module_scope(tmp_path: Path) -> list[str]:
-    """Findings for a module-scope fixture that carries no written reason.
+    """Return the findings for a module-scope fixture that carries no written reason.
 
     Parameters
     ----------
