@@ -13,14 +13,19 @@ direct vendor call, which is the point of a reference example.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+import pandas as pd
 
 from utils.frames import from_cursor
 from utils.typing import TypeChecker
 
 
-if TYPE_CHECKING:
-    import pandas as pd
+# ``pandas`` is imported for real (not TYPE_CHECKING-only): ``ExampleEntity`` carries the
+# runtime ``TypeChecker``, whose beartype check resolves ``-> pd.DataFrame`` against this
+# module's globals at call time, and an unbound ``pd`` made ``fetch_all`` raise
+# ``BeartypeCallHintForwardRefException`` on every call (blueprintx#667). Still
+# annotation-only per .layer-policy.yaml: ``pd`` is never called, only used as a type.
 
 
 # Declare the column types on load — never trust pandas' inference (a zero-padded
