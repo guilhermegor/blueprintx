@@ -824,7 +824,10 @@ def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
 
 
 def ladder_marker_declared(
-    list_notices: list[dict], tuple_markers: tuple[str, ...], str_head_date: str = ""
+    list_notices: list[dict],
+    tuple_markers: tuple[str, ...],
+    str_head_date: str = "",
+    str_head_oid: str = "",
 ) -> bool:
     """Return whether a trusted commenter posted a roster marker after the head commit.
 
@@ -837,19 +840,25 @@ def ladder_marker_declared(
             only, so a quotation on a later line is not a review.
     str_head_date : str, optional
             ISO-8601 ``committedDate`` of the head commit; empty fails closed.
+    str_head_oid : str, optional
+            The head commit SHA. The ladder writes ``Reviewed head: <sha>`` on the second line
+            of its comment, which must name this SHA; empty fails closed.
 
     Returns
     -------
     bool
             ``True`` only for an OWNER/MEMBER/COLLABORATOR comment carrying a marker and
-            postdating the head, so an outside commenter cannot forge it.
+            postdating the head, whose second line names the head SHA, so an outside
+            commenter cannot forge it and a review of an older head cannot be reused.
     """
-    if not str_head_date:
+    if not str_head_date or not str_head_oid:
         return False
+    str_reviewed = f"reviewed head: {str_head_oid}".casefold()
     return any(
         d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
         and (d.get("createdAt") or "") >= str_head_date
         and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
+        and (d.get("body") or "").lstrip().casefold().splitlines()[1:2] == [str_reviewed]
         for d in list_notices
     )
 
@@ -971,7 +980,7 @@ def find_missing_review_problem(
         # A CLEAN review is not a missing one — see the COMPLETION block above the function.
         return None
 
-    if ladder_marker_declared(list_notices or [], tuple_markers, str_head_date):
+    if ladder_marker_declared(list_notices or [], tuple_markers, str_head_date, str_head_oid):
         return None
 
     # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this

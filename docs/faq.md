@@ -48,7 +48,8 @@ a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 ### How does a fallback (ladder) review satisfy the gate?
 
 A roster row with `kind: comment-marker` and a `marker:` string (here `Fallback review — runtime:`)
-lets a plain issue comment count as a review. The comment must contain the marker, be posted
+lets a plain issue comment count as a review. The comment must start with the marker, name the head SHA on its
+second line (`Reviewed head: <sha>`), be posted
 after the head commit, and come from an `OWNER`, `MEMBER` or `COLLABORATOR` (GitHub's
 `authorAssociation`), so an outside commenter cannot forge it. The row has no `login:` and is
 ignored when absent. Like a clean-review notice, it proves a review ran, never that a thread was

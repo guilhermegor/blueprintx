@@ -1702,7 +1702,7 @@ def _marker_comment(str_association: str) -> dict:
     return {
         "author": {"login": "someone"},
         "authorAssociation": str_association,
-        "body": f"{_MARKER}\nno findings",
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\nno findings",
         "createdAt": "2099-01-01T00:00:00Z",
     }
 
@@ -1744,6 +1744,12 @@ def test_ladder_marker_older_than_the_head_is_rejected() -> None:
     """A marker posted before the head commit describes superseded code."""
     dict_old = {**_marker_comment("OWNER"), "createdAt": "2000-01-01T00:00:00Z"}
     assert _missing_with([dict_old], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_for_another_head_is_rejected() -> None:
+    """A marker whose `Reviewed head:` line names a different SHA is not this head's review."""
+    dict_other = {**_marker_comment("OWNER"), "body": f"{_MARKER}\nReviewed head: {'0' * 40}"}
+    assert _missing_with([dict_other], _TUPLE_MARKERS) is not None
 
 
 @pytest.fixture
