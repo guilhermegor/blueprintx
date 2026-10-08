@@ -21,6 +21,10 @@ source "$REPO_ROOT/bin/lib/common.sh"
 
 int_failures=0
 
+# Run from a pre-commit hook these point at the REAL repo, and the sandbox work trees below
+# would write into its index (a stray docs/x-lessons.md staged in the commit).
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+
 make_sandbox() {
     # Prints the path of a fresh fake repo root: a copy of the real
     # check_docs_boundary.sh under bin/ci/, no docs/ yet — the caller populates it.
@@ -262,6 +266,37 @@ test_templates_tree_is_deliberately_not_walked() {
     fi
 }
 
+make_git_sandbox() {
+    # A sandbox that is a real work tree ignoring docs/x-lessons.md.
+    local str_root
+    str_root="$(make_sandbox)"
+    /usr/bin/git -C "$str_root" init -q
+    printf 'docs/x-lessons.md\n' > "$str_root/.gitignore"
+    mkdir -p "$str_root/docs"
+    printf '# Hello\n' > "$str_root/docs/index.md"
+    printf 'x\n' > "$str_root/docs/x-lessons.md"
+    printf '%s' "$str_root"
+}
+
+test_git_ignored_lessons_file_passes() {
+    expect_gate "git-ignored lessons file" "$(make_git_sandbox)" "pass" "docs/ boundary is clean"
+}
+
+test_unignored_lessons_file_still_fails() {
+    local str_root
+    str_root="$(make_git_sandbox)"
+    : > "$str_root/.gitignore"
+    expect_gate "untracked, non-ignored lessons file" "$str_root" "fail" "docs/x-lessons.md"
+}
+
+test_tracked_lessons_file_still_fails() {
+    local str_root
+    str_root="$(make_git_sandbox)"
+    : > "$str_root/.gitignore"
+    /usr/bin/git -C "$str_root" add docs/x-lessons.md
+    expect_gate "tracked lessons file" "$str_root" "fail" "docs/x-lessons.md"
+}
+
 main() {
     test_no_docs_dir_is_a_skip
     test_clean_docs_passes
@@ -277,6 +312,9 @@ main() {
     test_empty_docs_dir_fails
     test_unreadable_docs_dir_fails
     test_templates_tree_is_deliberately_not_walked
+    test_git_ignored_lessons_file_passes
+    test_unignored_lessons_file_still_fails
+    test_tracked_lessons_file_still_fails
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures check_docs_boundary.sh regression assertion(s) failed"

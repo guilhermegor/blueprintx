@@ -120,11 +120,21 @@ is_denied() {
     return 1
 }
 
+is_git_ignored() {
+    # Judge what git would publish (blueprintx#632). Outside a work tree check-ignore exits
+    # 128, which is "not ignored" — the plain-directory test sandboxes rely on it.
+    git -C "$REPO_ROOT" check-ignore -q -- "$1" 2>/dev/null
+}
+
 walk() {
     # $1 = absolute directory to walk.
     local dir="$1" entry rel reason
     for entry in "$dir"/*; do
         [ -e "$entry" ] || continue
+        # An ignored entry is skipped whole, like a denied directory.
+        if is_git_ignored "$entry"; then
+            continue
+        fi
         rel="${entry#"$DOCS_DIR"/}"
         checked=$((checked + 1))
         if reason="$(is_denied "$rel")"; then
