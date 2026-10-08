@@ -178,9 +178,9 @@ def test_daily_cache_path_keys_on_the_reference_date(tmp_path: Path) -> None:
 
 
 def test_download_daily_fetches_on_a_miss(tmp_path: Path) -> None:
-    """A first call with no cached file downloads and writes it."""
+    """A first call with no cached file downloads it."""
     fn_download, list_calls = _fake_download()
-    path_out = download_daily(
+    download_daily(
         "https://example.com/a.csv",
         tmp_path / "cache",
         "src",
@@ -189,6 +189,19 @@ def test_download_daily_fetches_on_a_miss(tmp_path: Path) -> None:
         fn_download=fn_download,
     )
     assert list_calls == ["https://example.com/a.csv"]
+
+
+def test_download_daily_writes_the_payload_on_a_miss(tmp_path: Path) -> None:
+    """A first call with no cached file writes the downloaded bytes."""
+    fn_download, _ = _fake_download()
+    path_out = download_daily(
+        "https://example.com/a.csv",
+        tmp_path / "cache",
+        "src",
+        date(2026, 8, 17),
+        ".csv",
+        fn_download=fn_download,
+    )
     assert path_out.read_bytes() == b"payload"
 
 
@@ -254,32 +267,80 @@ def test_download_daily_treats_a_zero_byte_file_as_a_miss(tmp_path: Path) -> Non
     assert len(list_calls) == 1
 
 
-def test_a_failed_download_never_publishes_a_partial_file(tmp_path: Path) -> None:
-    """A download that dies mid-write leaves NO cache file behind.
+@pytest.fixture
+def path_failed_cache(tmp_path: Path) -> Path:
+    """Run a download that dies mid-write and return the final cache path it never published.
 
-    The zero-byte guard only catches the empty case. A *truncated non-empty* artifact would be
-    served as a hit and reach the parser, so the file must become visible under its final name
-    only after the download completed — and the staging file must not linger either, or the
-    cache directory fills with debris nobody ever reads.
+    The failure itself is arranged here, so each test below asserts one fact about the
+    aftermath instead of repeating the ``raises`` block.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        The cache directory.
+
+    Returns
+    -------
+    pathlib.Path
+        The cache path the download would have published.
     """
     path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
     with pytest.raises(OSError, match="connection dropped"):
         _call_download(tmp_path, _download_that_dies_midway)
-    assert not path_cached.exists()
+    return path_cached
+
+
+def test_a_failed_download_never_publishes_a_partial_file(path_failed_cache: Path) -> None:
+    """A download that dies mid-write leaves NO cache file behind.
+
+    The zero-byte guard only catches the empty case. A *truncated non-empty* artifact would be
+    served as a hit and reach the parser, so the file must become visible under its final name
+    only after the download completed.
+
+    Parameters
+    ----------
+    path_failed_cache : pathlib.Path
+        The cache path the failed download would have published.
+    """
+    assert not path_failed_cache.exists()
+
+
+def test_a_failed_download_leaves_no_staging_file(
+    path_failed_cache: Path, tmp_path: Path
+) -> None:
+    """The staging file must not linger, or the cache fills with debris nobody reads.
+
+    Parameters
+    ----------
+    path_failed_cache : pathlib.Path
+        Forces the failed download to have happened.
+    tmp_path : pathlib.Path
+        The cache directory.
+    """
     assert list(tmp_path.glob("*.part")) == []
 
 
-def test_an_empty_download_does_not_replace_a_good_cache_entry(tmp_path: Path) -> None:
-    """A zero-byte download raises instead of publishing over a valid file.
+@pytest.fixture
+def path_good_cache(tmp_path: Path) -> Path:
+    """Seed a valid cache entry, then attempt an empty download over it.
 
-    Publishing it would contradict the module's own zero-byte-as-miss contract: the next call
-    would treat the empty file as a miss and refetch, but this call already returned its path
-    to a caller who is about to parse nothing.
+    Publishing the empty download would contradict the module's own zero-byte-as-miss
+    contract: the next call would treat the empty file as a miss and refetch, but this call
+    already returned its path to a caller who is about to parse nothing.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        The cache directory.
+
+    Returns
+    -------
+    pathlib.Path
+        The cache path holding the good entry.
     """
     path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
     path_cached.parent.mkdir(parents=True, exist_ok=True)
     path_cached.write_bytes(b"good bytes")
-
     with pytest.raises(OSError, match="empty artifact"):
         download_daily(
             "https://example.com/a.csv",
@@ -290,7 +351,18 @@ def test_an_empty_download_does_not_replace_a_good_cache_entry(tmp_path: Path) -
             bool_use_cache=False,
             fn_download=_download_that_writes_nothing,
         )
-    assert path_cached.read_bytes() == b"good bytes"
+    return path_cached
+
+
+def test_an_empty_download_does_not_replace_a_good_cache_entry(path_good_cache: Path) -> None:
+    """A zero-byte download raises instead of publishing over a valid file.
+
+    Parameters
+    ----------
+    path_good_cache : pathlib.Path
+        The cache path holding the good entry, after the empty download was refused.
+    """
+    assert path_good_cache.read_bytes() == b"good bytes"
 
 
 def test_download_daily_creates_the_cache_directory(tmp_path: Path) -> None:
@@ -308,17 +380,47 @@ def test_download_daily_creates_the_cache_directory(tmp_path: Path) -> None:
     assert path_dir.is_dir()
 
 
-def test_download_daily_logs_which_branch_ran(tmp_path: Path) -> None:
-    """Hit and miss are distinguishable in the log."""
-    # A cache silent about hit-vs-network cannot be told from one that never engaged, and
-    # "why is this data stale?" becomes unanswerable from the log alone.
+@pytest.fixture
+def run_miss_then_hit(tmp_path: Path) -> tuple:
+    """Call the cache twice for one reference day: a miss, then a hit.
+
+    A cache silent about hit-vs-network cannot be told from one that never engaged, and
+    "why is this data stale?" becomes unanswerable from the log alone.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        The cache directory.
+
+    Returns
+    -------
+    tuple
+        ``(list_calls, cls_emitter)`` — the download log and the recording emitter.
+    """
     cls_emitter = _RecordingEmitter()
     fn_download, list_calls = _fake_download()
-
     _call_download(tmp_path, fn_download, cls_logger=cls_emitter)  # miss
     _call_download(tmp_path, fn_download, cls_logger=cls_emitter)  # hit
+    return list_calls, cls_emitter
+
+
+def test_download_daily_hits_the_network_once_across_a_miss_and_a_hit(
+    run_miss_then_hit: tuple,
+) -> None:
+    """Only the miss downloads."""
+    list_calls, _ = run_miss_then_hit
     assert list_calls == ["https://example.com/a.csv"]
+
+
+def test_download_daily_logs_the_miss(run_miss_then_hit: tuple) -> None:
+    """The first call logs a miss."""
+    _, cls_emitter = run_miss_then_hit
     assert "miss" in cls_emitter.list_messages[0]
+
+
+def test_download_daily_logs_the_hit(run_miss_then_hit: tuple) -> None:
+    """The second call logs a HIT."""
+    _, cls_emitter = run_miss_then_hit
     assert "HIT" in cls_emitter.list_messages[1]
 
 
@@ -341,7 +443,14 @@ def test_drift_driver_does_not_use_the_daily_cache() -> None:
     """
     str_source = _PATH_DRIFT_DRIVER.read_text(encoding="utf-8")
     assert "daily_cache" not in str_source
-    assert "download_daily" not in str_source
+
+
+@pytest.mark.skipif(
+    not _PATH_DRIFT_DRIVER.is_file(), reason="drift driver ships to service tiers only"
+)
+def test_drift_driver_does_not_call_download_daily() -> None:
+    """The drift driver never calls ``download_daily`` either (see the test above)."""
+    assert "download_daily" not in _PATH_DRIFT_DRIVER.read_text(encoding="utf-8")
 
 
 def test_download_daily_rejects_a_datetime_as_the_reference_date(tmp_path: Path) -> None:

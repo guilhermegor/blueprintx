@@ -145,9 +145,30 @@ def test_widened_omit_swallows_new_capability_logic_is_flagged(
     )
     _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
     monkeypatch.chdir(path_root)
-    assert _load_gate().main() == 1
+    _load_gate().main()
     str_err = capsys.readouterr().err
     assert "orders/domain/service.py" in str_err
+
+
+def test_widened_omit_swallowing_new_capability_logic_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same widened-omit probe exits 1, not 0.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway project root.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate from the project root.
+    """
+    path_root = _project(
+        tmp_path,
+        "    src/capabilities/example_feature/*\n    src/capabilities/*\n",
+    )
+    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    monkeypatch.chdir(path_root)
+    assert _load_gate().main() == 1
 
 
 def test_single_misomitted_file_in_a_narrowly_excluded_capability_is_flagged(
@@ -170,8 +191,31 @@ def test_single_misomitted_file_in_a_narrowly_excluded_capability_is_flagged(
     )
     _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
     monkeypatch.chdir(path_root)
-    assert _load_gate().main() == 1
+    _load_gate().main()
     assert "orders/domain/service.py" in capsys.readouterr().err
+
+
+def test_single_misomitted_file_in_a_narrowly_excluded_capability_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same single mis-omitted module makes the gate exit 1.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway project root.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate from the project root.
+    """
+    path_root = _project(
+        tmp_path,
+        "    src/capabilities/example_feature/*\n"
+        "    src/capabilities/*/infrastructure/*\n"
+        "    src/capabilities/orders/domain/service.py\n",
+    )
+    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    monkeypatch.chdir(path_root)
+    assert _load_gate().main() == 1
 
 
 def test_enum_only_module_is_never_in_the_must_cover_set(tmp_path: Path) -> None:

@@ -112,18 +112,18 @@ def test_a_genuinely_absent_name_is_still_reported(path_src: pathlib.Path) -> No
     a finding — otherwise the two fixes above would have silently disabled the check.
     """
     str_problem = cls_gate.candidate_problem(path_src, "chassis", ["nonexistent"])
-    assert str_problem is not None
+    # `in None` raises, so a missing finding fails here too.
     assert "nonexistent" in str_problem
 
 
 def test_an_absent_module_is_still_reported(path_src: pathlib.Path) -> None:
     """A module that does not resolve at all remains a finding."""
     str_problem = cls_gate.candidate_problem(path_src, "no_such_package", ["anything"])
-    assert str_problem is not None
+    # `in None` raises, so a missing finding fails here too.
     assert "module not found" in str_problem
 
 
-@pytest.mark.parametrize(
+_CASES_MULTILINE_IMPORT = pytest.mark.parametrize(
     ("list_body", "list_expected"),
     [
         (
@@ -155,6 +155,7 @@ def test_an_absent_module_is_still_reported(path_src: pathlib.Path) -> None:
         ),
     ],
 )
+@_CASES_MULTILINE_IMPORT
 def test_a_comment_never_shortens_a_multiline_import(
     list_body: list[str], list_expected: list[str]
 ) -> None:
@@ -169,8 +170,23 @@ def test_a_comment_never_shortens_a_multiline_import(
     ordinary annotated import in the second case triggers with no exotic syntax at all.
     """
     list_statements = cls_gate.import_statements(list_body, 1)
-    assert len(list_statements) == 1
     assert cls_gate.parse_names(list_statements[0][2]) == list_expected
+
+
+@_CASES_MULTILINE_IMPORT
+def test_a_multiline_import_is_one_statement_whatever_comments_sit_in_it(
+    list_body: list[str], list_expected: list[str]
+) -> None:
+    """A parenthesised import with interleaved comments is still ONE statement.
+
+    Parameters
+    ----------
+    list_body : list[str]
+        The import's source lines.
+    list_expected : list[str]
+        Unused here; shared with the sibling test's cases.
+    """
+    assert len(cls_gate.import_statements(list_body, 1)) == 1
 
 
 def test_strip_inline_comment_leaves_an_uncommented_line_alone() -> None:
