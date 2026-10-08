@@ -1,0 +1,89 @@
+# AGENTS.md
+
+This file provides guidance to AI coding agents (Claude Code, Codex, Cursor) working with code in this repository.
+
+## Engineering principles
+
+See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+
+## Shared conventions
+
+The boundary rules, data-handling guardrails, runtime type-checking notes, naming and
+file-naming conventions, tooling summary and the project-memory rule are shared by every
+BlueprintX skeleton and live in `.claude/CLAUDE.md` (loaded alongside this file; single
+source: `templates/common/CLAUDE.md`). This file keeps only what is specific to this skeleton.
+
+## What this template is
+
+A **DDD / hexagonal-architecture service skeleton** using **SQLAlchemy ORM** (≥2.0). Supports any SQLAlchemy-compatible database (PostgreSQL, MySQL, SQLite, Oracle, MSSQL). It is scaffolded by BlueprintX into a new project directory — the files here are the authoritative template source, not a running project.
+
+The `pyproject.toml` uses `${VARIABLE}` placeholders resolved via `envsubst` at scaffold time. Do not replace them with literal values.
+
+**Scaffold-injected vs authored.** Some code is *not* authored in this skeleton dir — it is injected by the scaffold so it stays a single source of truth:
+- `src/config/{startup.py,inputs.yaml,outputs.yaml}` — the **global config** copied from `templates/python-common/src/config/`. Edit it there, not here.
+- `src/chassis/db_wschema/` (plus its `chassis/db/` dependency) — **opt-in** schema-less storage (the "schema-less file storage?" prompt). This ORM skeleton's own `db_schema` does not use `chassis/db`, so both are injected together only when storage is chosen. Source in `templates/python-common/optional/chassis/`.
+- `src/chassis/webhook/` — **opt-in** (the webhook prompt); a port-based provider from `templates/python-common/optional/webhook/`.
+- `src/chassis/typing/` — **always injected**: the runtime type-checking engine (`TypeChecker`, `ProtocolTypeCheckerMeta`, `@type_checker`); source in `templates/python-common/optional/typing/`. **Backed by `beartype`** (`validate.py` is a thin adapter — do not reimplement it): violations raise `TypeError`, `bool` is not accepted as `int`, mocks must be `spec=`-ed, and container checks are sampled O(1). The tunable policy lives in **`chassis/typing/policy.py`** (edit the knobs there, not the adapter; ⚠️ keep `VIOLATION_TYPE` = `TypeError` — it is load-bearing). (The MVC tiers receive the same engine as `utils/typing`.)
+
+## Layer boundaries (strict — do not cross)
+
+| Layer | Location | Rule |
+|-------|----------|------|
+| Domain | `src/capabilities/<feature>/domain/` | Pure Python only. No I/O, no ORM imports. `entities.py` (DB shape), `dto.py` (network shape), `enums.py` (types), `ports.py` (Protocols). |
+| Application | `src/capabilities/<feature>/application/` | Depends on domain interfaces only. |
+| Infrastructure | `src/capabilities/<feature>/infrastructure/` | Implements domain ports using `Session`-backed repositories. |
+| Chassis infra | `src/chassis/db_schema/infrastructure/` | `Base`, `DatabaseSession`, `Repository` ABC, `SQLAlchemyRecordRepository`, ORM models. |
+| Chassis application | `src/chassis/db_schema/application/` | `build_database_session()` factory — reads `DB_BACKEND` env. |
+
+## Domain file conventions
+
+Each capability domain uses four files with distinct responsibilities:
+
+| File | Purpose | Example |
+|------|---------|---------|
+| `entities.py` | Persistence shape — maps to a DB row. Has `id`, timestamps, status. | `Note` dataclass |
+| `dto.py` | Network shape — what goes over the wire. Inbound (no `id`) and outbound. | `NoteCreateDTO`, `NoteResponseDTO` |
+| `enums.py` | Domain-typed constants used by entities and DTOs. | `NoteStatus` |
+| `ports.py` | `Protocol` interfaces the infrastructure must satisfy. No inheritance required. | `NoteRepository` |
+
+**`ports.py` uses `Protocol`, not `ABC`** — infrastructure adapters satisfy the contract structurally (duck typing) without importing or inheriting from the domain. This maximises hexagonal decoupling and lets `MagicMock` satisfy ports in tests without any setup.
+
+## Key abstractions
+
+**`Base`** (`src/chassis/db_schema/infrastructure/base.py`):  
+`DeclarativeBase` subclass. All ORM models inherit from it. `DatabaseSession.create_tables()` / `drop_tables()` operate on `Base.metadata`.
+
+**`DatabaseSession`** (`src/chassis/db_schema/infrastructure/base.py`):  
+Session manager. Use `.session()` for explicit context or `.get_session()` (generator) for FastAPI `Depends` injection.
+
+**`Repository` ABC** (`src/chassis/db_schema/infrastructure/base.py`):  
+Abstract CRUD contract (`add / get / update / delete / list_all`). Uses `ABC` (not `Protocol`) because shared session-handling logic lives in the base. Feature repositories extend it and receive a `Session` via constructor (DI — never call `DatabaseSession` directly inside a repository).
+
+**`SQLAlchemyRecordRepository`** (`src/chassis/db_schema/infrastructure/repository.py`):  
+Generic implementation that stores any dict as a JSON blob in `RecordModel`. Serves as the reference implementation to copy and adapt per feature.
+
+**`RecordModel`** (`src/chassis/db_schema/infrastructure/models.py`):  
+The included ORM model. Define feature-specific models by inheriting from `Base` in `src/chassis/db_schema/infrastructure/models.py` (or a feature-local models file imported into it).
+
+## Adding a new capability
+
+1. Create `src/capabilities/<feature>/{domain,application,infrastructure}/__init__.py`.
+2. Add `enums.py` for domain types, `entities.py` for the persistence model, `dto.py` for API shapes, `ports.py` for `Protocol` interfaces.
+3. Write use-cases in `application/use_cases.py` — accept port Protocols as constructor args (DI).
+4. Add a feature-specific ORM model to `src/chassis/db_schema/infrastructure/models.py`.
+5. Implement the domain port in `infrastructure/repositories.py` extending `Repository`; accept a `Session` in `__init__`.
+6. Wire in `main.py`: create a `DatabaseSession`, call `create_tables()`, pass sessions into repos.
+7. One class per file. No framework or SQLAlchemy imports in `domain/` or `application/`.
+
+## Adding a new chassis provider
+
+Create a new subfolder under `src/chassis/` (e.g. `queues/`, `cache/`) following the same DDD layout:
+`domain/`, `application/`, `infrastructure/`. Each provider is self-contained and exposes a clean interface consumed by capabilities.
+
+## Session lifecycle rule
+
+Always **commit outside** the repository: use-cases call `session.commit()` after the repo method returns, or the caller controls the transaction. Repositories call `session.flush()` to assign IDs without committing. Never call `session.commit()` inside a repository method.
+
+## Explicit column typing & Brazilian identifiers
+
+Every DataFrame or SQL-to-memory load must declare its column types via a dtype dict passed to `apply_dtypes` (`utils.dtypes`) — never rely on pandas' inference (it turns a zero-padded code into an int and a mixed column into `object`). `apply_dtypes` also takes optional `list_date_cols` / `list_datetime_cols`. For CNPJ/CPF use `utils.br_identifiers` (`mask_*`, `unmask_*`, `is_valid_*`); the CNPJ helpers are alphanumeric-aware for the 2026 format. These plus `utils.decimals` (`to_decimal`, ROUND_DOWN default), `utils.logs` (`log_message`), `utils.text` (`normalize_text`), `utils.paths` (`is_windows_path`/`resolve_path`/`ensure_dir`), `utils.signatures`, and `utils.dates` (ANBIMA business-day helpers) all ship from `templates/python-common/src/utils/`. The BR calendar comes from the `wwdates` dependency (wrapped by `utils.dates`).
