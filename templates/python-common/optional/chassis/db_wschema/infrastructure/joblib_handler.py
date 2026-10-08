@@ -52,7 +52,8 @@ class JoblibHandler(DatabaseHandler):
     dir_path : str or Path
             Directory where artifact files are stored.
     compress : tuple of (str, int), optional
-            Joblib compression codec and level, by default ``("lz4", 3)``.
+            Joblib compression codec and level, by default ``("zlib", 3)`` — zlib is in the
+            standard library, where ``lz4`` is a dependency no tier declares (blueprintx#650).
     secret_key : bytes or None, optional
             Key for HMAC-SHA256 signing. When ``None`` only SHA256 + metadata checks run.
     """
@@ -60,7 +61,7 @@ class JoblibHandler(DatabaseHandler):
     def __init__(
         self,
         dir_path: str | Path,
-        compress: tuple[str, int] = ("lz4", 3),
+        compress: tuple[str, int] = ("zlib", 3),
         secret_key: bytes | None = None,
     ) -> None:
         self._dir = Path(dir_path)
@@ -168,8 +169,7 @@ class JoblibHandler(DatabaseHandler):
         if not path_artifact.exists():
             return False
         path_artifact.unlink()
-        if path_sig.exists():
-            path_sig.unlink()
+        path_sig.unlink(missing_ok=True)
         return True
 
     def backup(self, target_path: str | Path) -> Path:
@@ -326,33 +326,128 @@ class JoblibHandler(DatabaseHandler):
                 ``_saved_at`` metadata mismatches, or HMAC verification fails.
         """
         self._validate_record_id(record_id)
-        # ⚠️ The split count and the expected length are ONE fact — a record_id is
-        # `<name>_<date>_<time>_<sha8>`, so it splits into _INT_RECORD_ID_PARTS pieces on the
-        # last _INT_RECORD_ID_PARTS - 1 separators. Written as two bare numbers they can drift
-        # apart, and the failure is a confusing "invalid format" on a valid id.
-        list_parts = record_id.rsplit("_", _INT_RECORD_ID_PARTS - 1)
-        if len(list_parts) != _INT_RECORD_ID_PARTS:
-            raise ValueError(f"Invalid record_id format: {record_id!r}")
-        str_sha256_expected = list_parts[-1]
-        str_sha256_actual = hashlib.sha256(bytes_data).hexdigest()[:8]
-        if str_sha256_expected != str_sha256_actual:
+        self._check_sha256(record_id, bytes_data)
+        self._check_hmac(record_id, bytes_data)
+        self._check_saved_at(record_id, bytes_data)
+
+    @staticmethod
+    def _id_parts(record_id: str) -> list[str]:
+        """Split a validated ``record_id`` into name, date, time and hash.
+
+        Parameters
+        ----------
+        record_id : str
+                Identifier that already passed ``_validate_record_id``.
+
+        Returns
+        -------
+        list of str
+                ``_INT_RECORD_ID_PARTS`` pieces, split on the last separators so the
+                count and the format cannot drift apart.
+        """
+        return record_id.rsplit("_", _INT_RECORD_ID_PARTS - 1)
+
+    def _check_sha256(self, record_id: str, bytes_data: bytes) -> None:
+        """Raise unless the id's hash segment is the SHA-256 prefix of ``bytes_data``.
+
+        Parameters
+        ----------
+        record_id : str
+                Validated artifact identifier.
+        bytes_data : bytes
+                Raw bytes read from the artifact file.
+
+        Raises
+        ------
+        ValueError
+                If the prefix differs.
+        """
+        if self._id_parts(record_id)[-1] != hashlib.sha256(bytes_data).hexdigest()[:8]:
             raise ValueError(
                 f"SHA256 prefix mismatch for {record_id!r} — file may be corrupted or substituted"
             )
-        if self._key:
-            path_sig = self._artifact_path(record_id, ".sig")
-            if not path_sig.exists():
-                raise ValueError(f"HMAC signature missing for {record_id!r}")
-            bytes_sig_stored = path_sig.read_bytes()
-            bytes_sig_actual = hmac.new(self._key, bytes_data, hashlib.sha256).digest()
-            if not hmac.compare_digest(bytes_sig_stored, bytes_sig_actual):
-                raise ValueError(
-                    f"HMAC verification failed for {record_id!r} — file may be tampered"
-                )
-        buf = io.BytesIO(bytes_data)
-        dict_record = joblib.load(buf)  # noqa: S301
+
+    def _check_hmac(self, record_id: str, bytes_data: bytes) -> None:
+        """Verify the ``.sig`` sidecar when a ``secret_key`` is configured.
+
+        Parameters
+        ----------
+        record_id : str
+                Validated artifact identifier.
+        bytes_data : bytes
+                Raw bytes read from the artifact file.
+
+        Raises
+        ------
+        ValueError
+                If the sidecar is missing or does not match.
+        """
+        if not self._key:
+            return
+        self._check_signature(self._key, record_id, bytes_data)
+
+    def _check_signature(self, bytes_key: bytes, record_id: str, bytes_data: bytes) -> None:
+        """Raise unless the stored signature equals the HMAC of ``bytes_data``.
+
+        Parameters
+        ----------
+        bytes_key : bytes
+                The configured ``secret_key``.
+        record_id : str
+                Validated artifact identifier.
+        bytes_data : bytes
+                Raw bytes read from the artifact file.
+
+        Raises
+        ------
+        ValueError
+                If the sidecar is missing or does not match.
+        """
+        bytes_sig_actual = hmac.new(bytes_key, bytes_data, hashlib.sha256).digest()
+        if not hmac.compare_digest(self._stored_signature(record_id), bytes_sig_actual):
+            raise ValueError(f"HMAC verification failed for {record_id!r} — file may be tampered")
+
+    def _stored_signature(self, record_id: str) -> bytes:
+        """Read the ``.sig`` sidecar of an artifact.
+
+        Parameters
+        ----------
+        record_id : str
+                Validated artifact identifier.
+
+        Returns
+        -------
+        bytes
+                The stored signature.
+
+        Raises
+        ------
+        ValueError
+                If the sidecar does not exist.
+        """
+        path_sig = self._artifact_path(record_id, ".sig")
+        if not path_sig.exists():
+            raise ValueError(f"HMAC signature missing for {record_id!r}")
+        return path_sig.read_bytes()
+
+    def _check_saved_at(self, record_id: str, bytes_data: bytes) -> None:
+        """Raise unless the payload's ``_saved_at`` equals the id's timestamp segment.
+
+        Parameters
+        ----------
+        record_id : str
+                Validated artifact identifier.
+        bytes_data : bytes
+                Raw bytes read from the artifact file.
+
+        Raises
+        ------
+        ValueError
+                If the metadata differs from the id.
+        """
+        list_parts = self._id_parts(record_id)
         str_ts_expected = f"{list_parts[-3]}_{list_parts[-2]}"
-        if dict_record.get("_saved_at") != str_ts_expected:
+        if joblib.load(io.BytesIO(bytes_data)).get("_saved_at") != str_ts_expected:  # noqa: S301
             raise ValueError(
                 f"_saved_at metadata mismatch for {record_id!r} — content may be tampered"
             )

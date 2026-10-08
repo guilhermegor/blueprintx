@@ -1,0 +1,4 @@
+# Answers the "schema-less storage" opt-in with yes, so scaffold_lint_test.sh lints and tests the
+# chassis/db_wschema files that ship ONLY on that opt-in (blueprintx#650). KEY=value, same
+# convention as bin/lib/spec.sh.
+storage=y
