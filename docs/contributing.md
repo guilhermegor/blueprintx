@@ -83,8 +83,9 @@ label and the `Blocked by` field sit still until the reconciler (`roadmap_unbloc
   everything at #601 holds work that is in fact ready.
 - A `decision:` blocker is never auto-cleared; only a person removes it. That is deliberate.
 - A board Status alone is not durable: the reconciler clears any item it reads as blocked by
-  nothing. Each blocked item needs the label plus either a native `blocked_by` entry or the
-  `**Blocked by:**` line.
+  nothing. Each blocked item needs the label plus the `**Blocked by:**` body line (the issue
+  template guard rejects a `state:blocked` issue without it). A native `blocked_by` entry is an
+  additional mirror where supported, never a replacement for the body line.
 
 **Board.** The kanban board's `Status` options read
 `Blocked | Backlog | Ready | In progress | In review | Done` (`Blocked` first, as on every board
