@@ -1,8 +1,10 @@
-r"""Keep comments and docstrings in English, while published documentation stays Portuguese.
+r"""Keep comments and docstrings in English, whatever locale the published documentation uses.
 
 The root ``CLAUDE.md`` draws the boundary at *documentation for a reader* × *code*: ``README.md``
-and every page under ``docs/`` is Portuguese; docstrings, comments, symbol names, commit messages
-and CI output are English.
+and every page under ``docs/`` are written in the locale chosen at scaffold time (``DOCS_LOCALE``,
+``en`` or ``pt-BR``); docstrings, comments, symbol names, commit messages and CI output are
+English in every locale. The gate never reads ``docs/``, so the choice does not change what it
+checks — it only records which language the pages are allowed to be in.
 
 ⚠️ **This gate enforces only the first two of those** — comments and docstrings. Symbol names,
 commit messages and CI output share the convention but are checked by nothing here, so do not
@@ -221,12 +223,12 @@ def _blank(cls_match: re.Match) -> str:
     Parameters
     ----------
     cls_match : re.Match
-        The span being redacted.
+            The span being redacted.
 
     Returns
     -------
     str
-        A run of spaces the same length as the match, so line and column offsets survive.
+            A run of spaces the same length as the match, so line and column offsets survive.
     """
     return " " * len(cls_match.group(0))
 
@@ -241,13 +243,13 @@ def redact(str_text: str) -> str:
     Parameters
     ----------
     str_text : str
-        A comment block, markers already stripped.
+            A comment block, markers already stripped.
 
     Returns
     -------
     str
-        The same text with escaped lines, terms of art, quoted/backticked spans, URLs, dotted
-        tokens and ALL-CAPS acronyms replaced by spaces.
+            The same text with escaped lines, terms of art, quoted/backticked spans, URLs, dotted
+            tokens and ALL-CAPS acronyms replaced by spaces.
     """
     # The escape works one line at a time and never per block, because a block is joined from
     # consecutive comment lines — letting one escaped line silence its neighbours would quietly
@@ -270,13 +272,13 @@ def portuguese_words(str_text: str) -> list:
     Parameters
     ----------
     str_text : str
-        One comment block's text, markers already stripped.
+            One comment block's text, markers already stripped.
 
     Returns
     -------
     list of str
-        The matched words in order of appearance, de-duplicated; empty when the text reads as
-        English, quotes its Portuguese, or carries the escape marker.
+            The matched words in order of appearance, de-duplicated; empty when the text reads as
+            English, quotes its Portuguese, or carries the escape marker.
     """
     list_hits = []
     for str_word in RE_WORD.findall(redact(str_text).lower()):
@@ -301,14 +303,14 @@ def marker_comments(str_source: str, str_marker: str) -> list:
     Parameters
     ----------
     str_source : str
-        The file's text.
+            The file's text.
     str_marker : str
-        The comment marker (``#`` or ``--``).
+            The comment marker (``#`` or ``--``).
 
     Returns
     -------
     list of tuple
-        One ``(int_line, str_text)`` pair per block, the line being where the block starts.
+            One ``(int_line, str_text)`` pair per block, the line being where the block starts.
     """
     list_out = []
     list_block: list = []
@@ -338,14 +340,14 @@ def python_comments(str_source: str) -> list:
     Parameters
     ----------
     str_source : str
-        The file's text.
+            The file's text.
 
     Returns
     -------
     list of tuple
-        One ``(int_line, str_text)`` pair per comment and per docstring, 1-indexed. A file that
-        does not parse yields nothing — a syntax error is ruff's finding to report, not this
-        gate's.
+            One ``(int_line, str_text)`` pair per comment and per docstring, 1-indexed. A file that
+            does not parse yields nothing — a syntax error is ruff's finding to report, not this
+            gate's.
     """
     # Two independent extractions, each with its own parser and its own failure mode: `#`
     # comments come from tokenize, docstrings from the AST. They were one body, so a tokenize
@@ -363,12 +365,12 @@ def _comment_blocks(str_source: str) -> list:
     Parameters
     ----------
     str_source : str
-        Python source text.
+            Python source text.
 
     Returns
     -------
     list
-        ``(first_line, block_text)`` pairs; empty when the source cannot be tokenised.
+            ``(first_line, block_text)`` pairs; empty when the source cannot be tokenised.
     """
     list_out: list = []
     list_block: list = []
@@ -399,12 +401,12 @@ def _docstring_blocks(str_source: str) -> list:
     Parameters
     ----------
     str_source : str
-        Python source text.
+            Python source text.
 
     Returns
     -------
     list
-        ``(line, docstring)`` pairs; empty when the source cannot be parsed.
+            ``(line, docstring)`` pairs; empty when the source cannot be parsed.
     """
     try:
         cls_tree = ast.parse(str_source)
@@ -424,9 +426,9 @@ def _line_offset(str_text: str, str_word: str) -> int:
     Parameters
     ----------
     str_text : str
-        The whole comment block.
+            The whole comment block.
     str_word : str
-        The matched word.
+            The matched word.
 
     Returns
     -------
@@ -450,14 +452,14 @@ def _excerpt_around(str_text: str, str_word: str) -> str:
     Parameters
     ----------
     str_text : str
-        The whole comment block.
+            The whole comment block.
     str_word : str
-        The first matched word.
+            The first matched word.
 
     Returns
     -------
     str
-        Up to ~35 characters either side of the match, whitespace collapsed.
+            Up to ~35 characters either side of the match, whitespace collapsed.
     """
     str_flat = " ".join(str_text.split())
     int_at = str_flat.lower().find(str_word)
@@ -474,14 +476,14 @@ def _display_path(path_file: pathlib.Path) -> str:
     Parameters
     ----------
     path_file : pathlib.Path
-        The file being reported.
+            The file being reported.
 
     Returns
     -------
     str
-        Repo-relative when the file lives inside the repository, absolute otherwise. A file
-        outside the repo is legitimate (a test invoking the gate on a temp file), so this must
-        never raise.
+            Repo-relative when the file lives inside the repository, absolute otherwise. A file
+            outside the repo is legitimate (a test invoking the gate on a temp file), so this must
+            never raise.
     """
     try:
         return str(path_file.relative_to(PATH_ROOT))
@@ -495,12 +497,12 @@ def file_problems(path_file: pathlib.Path) -> list:
     Parameters
     ----------
     path_file : pathlib.Path
-        The file to read. An unsupported extension yields nothing.
+            The file to read. An unsupported extension yields nothing.
 
     Returns
     -------
     list of str
-        One ``path:line: words -- text`` message per offending comment.
+            One ``path:line: words -- text`` message per offending comment.
     """
     bool_python = path_file.suffix == ".py"
     str_marker = DICT_MARKERS.get(path_file.suffix, "")
@@ -536,9 +538,9 @@ def tracked_files() -> list:
     Returns
     -------
     list of pathlib.Path
-        Tracked paths, relative to ``PATH_ROOT``. Empty when `git` is unavailable or
-        ``PATH_ROOT`` is not inside a work tree — the caller's zero-discovery guard turns that
-        into a failure rather than a silent pass.
+            Tracked paths, relative to ``PATH_ROOT``. Empty when `git` is unavailable or
+            ``PATH_ROOT`` is not inside a work tree — the caller's zero-discovery guard turns that
+            into a failure rather than a silent pass.
     """
     try:
         # Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
@@ -577,22 +579,77 @@ def audit_paths() -> list:
     return sorted(set(list_paths))
 
 
+# `--root <dir>` is two argv entries; anything shorter is a flag with its value missing.
+_INT_FLAG_WITH_VALUE = 2
+
+
+def split_root_option(list_argv: list) -> tuple:
+    """Peel ``--root <dir>`` off the argv, the same seam ``check_function_length.py`` exposes.
+
+    It lets BlueprintX run this very file over its own tree instead of keeping a second copy:
+    ``PATH_ROOT`` otherwise resolves to the directory the script ships in.
+
+    Parameters
+    ----------
+    list_argv : list of str
+            Raw argv, minus the program name.
+
+    Returns
+    -------
+    tuple of (pathlib.Path or None, list of str)
+            The requested root (``None`` when absent) and the remaining filenames.
+
+    Raises
+    ------
+    ValueError
+            When ``--root`` is passed with no directory after it, names a directory that does
+            not exist, or sits anywhere but first. A missing root makes every named file's read
+            fail, no problem is reported, and the gate exits 0 having checked nothing.
+            Returning it as a filename instead makes the gate print success for having checked
+            nothing — measured on blueprintx#247: `check_comment_language.py --root` exited 0.
+            `check_function_length.py`, the seam this mirrors, already rejects the same argv.
+    """
+    if list_argv[:1] == ["--root"]:
+        if len(list_argv) < _INT_FLAG_WITH_VALUE or not list_argv[1]:
+            msg = "--root needs a directory"
+            raise ValueError(msg)
+        path_root = pathlib.Path(list_argv[1]).resolve()
+        if not path_root.is_dir():
+            msg = f"--root {list_argv[1]} is not a directory"
+            raise ValueError(msg)
+        return path_root, list_argv[2:]
+    if any(str_arg == "--root" or str_arg.startswith("--root=") for str_arg in list_argv):
+        msg = "--root must be the first argument, as `--root <dir>`"
+        raise ValueError(msg)
+    return None, list_argv
+
+
 def main(list_argv: list) -> int:
     """Check every named file's comments for Portuguese prose.
 
     Parameters
     ----------
     list_argv : list of str
-        Filenames, as pre-commit passes them. Empty means audit the whole repository.
+            Optional leading ``--root <dir>``, then filenames as pre-commit passes them. No
+            filenames means audit the whole repository under the root.
 
     Returns
     -------
     int
-        0 when every comment reads as English, 1 on a violation.
+            0 when every comment reads as English, 1 on a violation.
     """
+    global PATH_ROOT  # noqa: PLW0603 -- the one rebind point for the module-wide root
+    try:
+        path_root, list_argv = split_root_option(list_argv)
+    except ValueError as cls_err:
+        print(f"\u274c {cls_err}")
+        return 1
+    if path_root is not None:
+        PATH_ROOT = path_root
     bool_audit = not list_argv
+    path_base = path_root or pathlib.Path.cwd()
     list_paths = (
-        [pathlib.Path(str_name).resolve() for str_name in list_argv]
+        [(path_base / str_name).resolve() for str_name in list_argv]
         if list_argv
         else audit_paths()
     )
@@ -623,9 +680,9 @@ def main(list_argv: list) -> int:
     if list_problems:
         print(
             f"\n{len(list_problems)} comment(s) read as Portuguese. Comments, docstrings and "
-            f"symbol names are English (root CLAUDE.md, 'Documentation language'); README.md and "
-            f"docs/ are Portuguese. If a flagged line is genuinely English and merely quotes "
-            f"Portuguese text, add {STR_ESCAPE} to it rather than rewording the sentence."
+            f"symbol names are English; only README.md and docs/ follow the project's "
+            f"locale. If a flagged line is English and merely quotes Portuguese text, add "
+            f"{STR_ESCAPE} to it rather than rewording the sentence."
         )
     return 1 if list_problems else 0
 

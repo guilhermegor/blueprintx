@@ -138,6 +138,8 @@ create_python_files() {
     # interpolation, which sees unexported variables; envsubst does not.
     # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    # Companion test for check_one_assert.py (#544) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
 
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_main.py.tmpl" \
@@ -530,6 +532,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_function_length_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
         "$project_path/tests/unit/test_comment_budget_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" \
+        "$project_path/tests/unit/test_quality_rules_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_wheelhouse_select.py" \
         "$project_path/tests/unit/test_wheelhouse_select.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
@@ -650,7 +654,9 @@ copy_mkdocs_templates() {
 
     print_status "info" "Copying MkDocs templates..."
 
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
+    # Falls back to en when a scaffold script is run directly, without the menu.
+    export DOCS_LOCALE="${DOCS_LOCALE:-en}"
+    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \

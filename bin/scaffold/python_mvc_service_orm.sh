@@ -188,7 +188,9 @@ copy_mkdocs_templates() {
 
     print_status "info" "Copying MkDocs templates..."
 
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
+    # Falls back to en when a scaffold script is run directly, without the menu.
+    export DOCS_LOCALE="${DOCS_LOCALE:-en}"
+    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \
@@ -468,6 +470,8 @@ conditional_copy_email() {
 # one layer down: it exercises PipelineOrchestrator's LabelEnricher degradation path, and
 # LabelEnricher is reached only from the single _pipeline.py this function removes. There is no
 # multi-intent equivalent to point it at, so a replacement would be a test of nothing.
+# tests/unit/test_pipeline_phases.py is deleted for the same reason: it drives the single
+# PipelineOrchestrator's phases (blueprintx#617).
 conditional_apply_multi_pipeline() {
     local project_path="$1"
     if [[ "$INCLUDE_MULTI_PIPELINE" != "true" ]]; then return; fi
@@ -480,6 +484,7 @@ conditional_apply_multi_pipeline() {
     cp "$mp_root/main.py" "$controller_dir/main.py"
     cp "$mp_root/test_pipeline.py" "$project_path/tests/unit/test_pipeline.py"
     rm -f "$project_path/tests/unit/test_pipeline_enrichment.py"
+    rm -f "$project_path/tests/unit/test_pipeline_phases.py"
     rm -f "$controller_dir/_pipeline.py"
     sed_inplace 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
     local intent_env
@@ -513,6 +518,9 @@ copy_global_config() {
     fi
     # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" "$project_path/tests/unit/test_quality_rules_gate.py"
+    # Companion test for check_one_assert.py (#544) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 

@@ -131,8 +131,9 @@ test_dev_clean_uses_a_temp_root_and_removes_it() {
     int_rc=$?
     str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | tr -d '\r' | tail -1)"
     str_temp="$(sed 's/\x1b\[[0-9;]*m//g' <<<"$str_temp")"
-    if [ "$int_rc" -eq 0 ] && [ -n "$str_temp" ] && [ ! -e "$str_temp" ] && [ ! -e "$root" ]; then
-        pass "--spec --dev --clean scaffolds into a temp root, ignores project_root, and cleans up"
+    if [ "$int_rc" -eq 0 ] && [[ "$str_temp" == "$WORK_DIR"/* ]] && [ ! -e "$str_temp" ] && [ ! -e "$root" ] \
+        && [[ "$out" == *"deleted on exit"* ]]; then
+        pass "--spec --dev --clean scaffolds into a temp root, ignores project_root, cleans up, and says so"
     else
         fail "--dev --clean" "rc=$int_rc temp='$str_temp' exists=$([ -e "$str_temp" ] && echo yes || echo no) root-made=$([ -e "$root" ] && echo yes || echo no)"
     fi
@@ -145,10 +146,129 @@ test_dev_without_clean_preserves_the_temp_root() {
     out="$(run_blueprintx new --spec "$file" --dev)"
     int_rc=$?
     str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
-    if [ "$int_rc" -eq 0 ] && [ -n "$str_temp" ] && [ -d "$str_temp/spec-probe" ] && [ ! -e "$root" ]; then
+    if [ "$int_rc" -eq 0 ] && [[ "$str_temp" == "$WORK_DIR"/* ]] && [ -d "$str_temp/spec-probe" ] && [ ! -e "$root" ]; then
         pass "--spec --dev keeps the temp root and the project inside it"
     else
         fail "--dev" "rc=$int_rc temp='$str_temp' project-in-temp=$([ -d "$str_temp/spec-probe" ] && echo yes || echo no)"
+    fi
+}
+
+test_bad_docs_locale_stops_before_anything_is_created() {
+    local file root out int_rc
+    root="$WORK_DIR/bad-locale-root"
+    file="$(write_spec bad-locale lib-minimal "project_root=$root" "docs_locale=pt-br")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'docs_locale' must be en or pt-BR"* && ! -e "$root" ]]; then
+        pass "an unknown docs_locale refuses the run, naming the key, and creates nothing"
+    else
+        fail "bad docs_locale refusal" "rc=$int_rc, root exists or message missing: ${out: -300}"
+    fi
+}
+
+# Reads the generated mkdocs.yml: the placeholder only renders when DOCS_LOCALE reaches the scaffold.
+spec_docs_language() {
+    # spec_docs_language <name> [extra spec lines...]; prints the `language:` the project got.
+    local name="$1" file out str_temp
+    shift
+    file="$(write_spec "$name" lib-minimal "$@")"
+    out="$(run_blueprintx new --spec "$file" --dev)"
+    str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
+    sed -n 's/^  language: //p' "$str_temp/spec-probe/mkdocs.yml" 2>/dev/null
+}
+
+test_docs_locale_reaches_the_scaffold() {
+    local str_got
+    str_got="$(spec_docs_language docs-pt "docs_locale=pt-BR")"
+    if [ "$str_got" = "pt-BR" ]; then
+        pass "docs_locale=pt-BR in a spec renders language: pt-BR in the generated mkdocs.yml"
+    else
+        fail "docs_locale pass-through" "generated mkdocs.yml language='$str_got' (expected pt-BR)"
+    fi
+}
+
+test_absent_docs_locale_defaults_to_en() {
+    local str_got
+    str_got="$(spec_docs_language docs-default)"
+    if [ "$str_got" = "en" ]; then
+        pass "a spec with no docs_locale renders language: en, the prompt's default"
+    else
+        fail "docs_locale default" "generated mkdocs.yml language='$str_got' (expected en)"
+    fi
+}
+
+test_spec_values_are_trimmed_so_a_crlf_spec_works() {
+    local file="$WORK_DIR/crlf.spec" str_yn str_license
+    printf 'otel=yes\r\nlicense=MIT \r\n' >"$file"
+    str_yn="$(yn_in_subshell "$file" otel n | cut -d'|' -f1-2)"
+    str_license="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        printf "<%s>" "$(spec_get "$2" license)"' _ "$REPO_ROOT" "$file")"
+    if [ "$str_yn" = "y|0" ] && [ "$str_license" = "<MIT>" ]; then
+        pass "a CRLF spec: 'yes\\r' reads as y and 'MIT \\r' as MIT"
+    else
+        fail "CRLF trim" "yn=$str_yn license=$str_license"
+    fi
+}
+
+test_yn_keys_read_by_callers_match_the_key_map() {
+    local str_called str_mapped str_unparsed
+    # A call site the sed below cannot read (a variable default, two calls on one line) would
+    # escape the comparison, so any such line fails the test. The validator's generic call is
+    # the one allowed exception.
+    str_unparsed="$(grep -n 'spec_yn "\$' "$REPO_ROOT/bin/lib/spec.sh" \
+        | grep -vE '^[0-9]+:[[:space:]]*#' \
+        | grep -v '"\$key" "\$default"' \
+        | grep -vE '^[0-9]+:[^#]*spec_yn "\$[a-z0-9]*" [a-z_]+ [yn]([^a-z_]|$)' \
+        ; grep -n 'spec_yn .*spec_yn ' "$REPO_ROOT/bin/lib/spec.sh")" || true
+    if [ -n "$str_unparsed" ]; then
+        fail "key map vs callers" "call site(s) the check cannot parse: $str_unparsed"
+        return
+    fi
+    # Every `spec_yn "$x" <key> <default>` call site in the answer emitters, as "key:default".
+    str_called="$(sed -n '/^[[:space:]]*#/d; s/.*spec_yn "\$[a-z0-9]*" \([a-z_]*\) \([yn]\).*/\1:\2/p' "$REPO_ROOT/bin/lib/spec.sh" | sort -u)"
+    # Every y/n entry of the key map across all supported skeletons.
+    str_mapped="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        for sk in $_SPEC_SUPPORTED_SKELETONS; do _spec_key_map "$sk"; done' _ "$REPO_ROOT" \
+        | grep -E ':[yn]$' | sort -u)"
+    if [ -n "$str_called" ] && [ "$str_called" = "$str_mapped" ]; then
+        pass "the y/n keys the emitters read are exactly the y/n entries of the key map"
+    else
+        fail "key map vs callers" "only in callers: $(comm -23 <(echo "$str_called") <(echo "$str_mapped") | tr '\n' ' ') only in map: $(comm -13 <(echo "$str_called") <(echo "$str_mapped") | tr '\n' ' ')"
+    fi
+}
+
+test_skeleton_match_is_exact() {
+    local str_res
+    str_res="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        for n in "lib-minimal" "ddd-service-native-db ddd-service-orm-db" "lib-minimal " "lib-*" "LIB-MINIMAL" ""; do
+            spec_skeleton_supported "$n" && printf "[%s] " "$n"
+        done' _ "$REPO_ROOT")"
+    if [ "$str_res" = "[lib-minimal] " ]; then
+        pass "spec_skeleton_supported accepts a supported name only, not two joined by a space"
+    else
+        fail "exact skeleton match" "accepted: $str_res"
+    fi
+}
+
+test_a_failed_answer_stream_stops_the_scaffold_flow() {
+    local str_res
+    str_res="$(bash -c '
+        str_repo="$1" str_stub="$2"
+        set --
+        source "$str_repo/bin/blueprintx.sh"
+        mkdir -p "$str_stub/templates/fake"
+        printf "scaffold=fake.sh\n" >"$str_stub/templates/fake/skeleton.meta"
+        printf "touch \"%s/scaffold-ran\"\n" "$str_stub" >"$str_stub/fake.sh"
+        TEMPLATES_ROOT="$str_stub/templates" BLUEPRINTX_ROOT="$str_stub"
+        SKELETON_CHOICE=fake SPEC_FILE=none PROJECT_ROOT="$str_stub" PROJECT_NAME=p PROJECT_DESCRIPTION=d
+        LICENSE_CHOICE=MIT DOCS_LOCALE=en
+        spec_stdin_for_skeleton() { return 1; }
+        scaffold_from_spec' _ "$REPO_ROOT" "$WORK_DIR/stream" 2>&1)" || true
+    if [[ "$str_res" == *"could not resolve the answers for 'fake'"* ]] \
+        && [ ! -e "$WORK_DIR/stream/scaffold-ran" ]; then
+        pass "a failing answer stream stops the flow before the scaffold ever runs"
+    else
+        fail "answer stream status" "got: ${str_res: -300}"
     fi
 }
 
@@ -160,6 +280,13 @@ main() {
     test_unmapped_skeleton_is_refused_before_creating_anything
     test_dev_clean_uses_a_temp_root_and_removes_it
     test_dev_without_clean_preserves_the_temp_root
+    test_spec_values_are_trimmed_so_a_crlf_spec_works
+    test_yn_keys_read_by_callers_match_the_key_map
+    test_skeleton_match_is_exact
+    test_a_failed_answer_stream_stops_the_scaffold_flow
+    test_bad_docs_locale_stops_before_anything_is_created
+    test_docs_locale_reaches_the_scaffold
+    test_absent_docs_locale_defaults_to_en
 
     if [ "$int_failures" -eq 0 ]; then
         echo "All --spec regression tests passed."
