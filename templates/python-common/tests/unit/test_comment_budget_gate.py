@@ -564,6 +564,19 @@ def test_a_lone_rule_line_inside_an_oversized_run_is_flagged_as_a_banner(
     assert any("decorative banner" in str_problem for str_problem in list_split_run_problems)
 
 
+def test_an_oversized_run_split_by_a_rule_line_yields_exactly_two_findings(
+    list_split_run_problems: list[str],
+) -> None:
+    """One run-length finding and one banner finding, nothing more.
+
+    Parameters
+    ----------
+    list_split_run_problems : list[str]
+        The gate's findings for the probe file.
+    """
+    assert len(list_split_run_problems) == 2
+
+
 @pytest.fixture
 def list_triple_run_problems(tmp_path: Path) -> list[str]:
     """Problems for an oversized block wrapped around a valid section-banner triple.

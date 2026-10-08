@@ -183,7 +183,7 @@ def test_load_query_does_not_claim_an_engine_carries_a_misspelled_name(tmp_path:
     """A typo is never reported as existing for some engine."""
     _seed_query(tmp_path, "sqlite", "example__select.sql", "SELECT 1;")
 
-    with pytest.raises(FileNotFoundError, match=r"^(?!.*EXISTS for)"):
+    with pytest.raises(FileNotFoundError, match=r"(?s)^(?!.*EXISTS for)"):
         load_query("exmaple__select.sql", "sqlite", tmp_path)  # codespell:ignore exmaple
 
 
