@@ -32,32 +32,116 @@ def _write_csv(path_dir: Path) -> Path:
     return path_csv
 
 
-def test_read_table_applies_contract_and_dtypes(tmp_path: Path) -> None:
-    """A valid file passes its contract and the declared dtypes are applied."""
+@pytest.fixture
+def df_typed_read(tmp_path: Path) -> object:
+    """Read a valid file through its contract with declared dtypes.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The typed frame.
+    """
+    pytest.importorskip("pandas")
     path_csv = _write_csv(tmp_path)
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
+    return read_table(path_csv, "", {"code": "str", "amount": "int64"}, cls_contract)
+
+
+def test_read_table_keeps_the_contract_columns(df_typed_read: object) -> None:
+    """A valid file passes its contract and keeps its columns.
+
+    Parameters
+    ----------
+    df_typed_read : pandas.DataFrame
+        The typed frame.
+    """
+    assert list(df_typed_read.columns) == ["code", "amount"]
+
+
+def test_read_table_types_the_code_column_as_string(df_typed_read: object) -> None:
+    """The declared ``str`` dtype is applied to ``code``.
+
+    Parameters
+    ----------
+    df_typed_read : pandas.DataFrame
+        The typed frame.
+    """
     pd = pytest.importorskip("pandas")
-    df_out = read_table(path_csv, "", {"code": "str", "amount": "int64"}, cls_contract)
-    assert list(df_out.columns) == ["code", "amount"]
-    assert pd.api.types.is_string_dtype(df_out["code"])  # code typed as string
-    assert str(df_out["amount"].dtype) == "int64"
-    assert df_out["code"].iloc[0] == "ABC"
+    assert pd.api.types.is_string_dtype(df_typed_read["code"])
 
 
-def test_read_table_reads_as_text_preserving_zero_padding_and_decimals(tmp_path: Path) -> None:
-    """A zero-padded code and a money decimal survive the read intact (text-first, no inference).
+def test_read_table_types_the_amount_column_as_int64(df_typed_read: object) -> None:
+    """The declared ``int64`` dtype is applied to ``amount``.
+
+    Parameters
+    ----------
+    df_typed_read : pandas.DataFrame
+        The typed frame.
+    """
+    assert str(df_typed_read["amount"].dtype) == "int64"
+
+
+def test_read_table_keeps_the_first_code_value(df_typed_read: object) -> None:
+    """The first row's code survives typing.
+
+    Parameters
+    ----------
+    df_typed_read : pandas.DataFrame
+        The typed frame.
+    """
+    assert df_typed_read["code"].iloc[0] == "ABC"
+
+
+@pytest.fixture
+def df_padded_read(tmp_path: Path) -> object:
+    """Read a zero-padded code and a money decimal as text.
 
     The regression this guards: reading with pandas' inference (``dtype=None``) parses ``007``
     to the int ``7`` and ``1000.50`` to the float ``1000.5`` *before* typing, and a later
     ``astype`` cannot recover the dropped leading/trailing zeros. Reading as raw text keeps the
     exact source characters, so the declared dtype coerces from ``"007"`` / ``"1000.50"``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The frame read as text.
     """
     path_csv = tmp_path / "padded.csv"
     path_csv.write_text("code;amount\n007;1000.50\n042;0.10\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
-    df_out = read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
-    assert df_out["code"].tolist() == ["007", "042"]  # leading zeros survive
-    assert df_out["amount"].tolist() == ["1000.50", "0.10"]  # trailing zeros survive
+    return read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_read_table_reads_as_text_preserving_zero_padding(df_padded_read: object) -> None:
+    """Leading zeros survive the read.
+
+    Parameters
+    ----------
+    df_padded_read : pandas.DataFrame
+        The frame read as text.
+    """
+    assert df_padded_read["code"].tolist() == ["007", "042"]
+
+
+def test_read_table_reads_as_text_preserving_decimals(df_padded_read: object) -> None:
+    """Trailing zeros survive the read.
+
+    Parameters
+    ----------
+    df_padded_read : pandas.DataFrame
+        The frame read as text.
+    """
+    assert df_padded_read["amount"].tolist() == ["1000.50", "0.10"]
 
 
 def test_read_table_raises_on_missing_required_column(tmp_path: Path) -> None:
@@ -97,6 +181,13 @@ def test_find_file_problems_missing_column_is_fatal_never_a_warning(tmp_path: Pa
     cls_contract = FileContract("data", "data", ("code", "absent"), ())
     cls_report = find_file_problems(cls_contract, path_csv, "")
     assert any("absent" in p for p in cls_report.list_fatal)
+
+
+def test_find_file_problems_missing_column_leaves_warnings_empty(tmp_path: Path) -> None:
+    """A missing required column is not duplicated into ``list_warnings``."""
+    path_csv = _write_csv(tmp_path)
+    cls_contract = FileContract("data", "data", ("code", "absent"), ())
+    cls_report = find_file_problems(cls_contract, path_csv, "")
     assert cls_report.list_warnings == []
 
 
@@ -130,6 +221,14 @@ def test_populated_cnpj_column_with_no_valid_value_is_a_warning_not_fatal(
     cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
     cls_report = find_file_problems(cls_contract, path_csv, "")
     assert any("holds no valid CNPJ" in p for p in cls_report.list_warnings)
+
+
+def test_populated_cnpj_column_with_no_valid_value_is_never_fatal(tmp_path: Path) -> None:
+    """The populated-but-invalid CNPJ column adds nothing to ``list_fatal``."""
+    path_csv = tmp_path / "garbage.csv"
+    path_csv.write_text("cnpj;amount\nnot-a-cnpj;10\nalso-not;20\n", encoding="utf-8")
+    cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
+    cls_report = find_file_problems(cls_contract, path_csv, "")
     assert cls_report.list_fatal == []
 
 
@@ -183,31 +282,85 @@ def _write_malformed_quote_csv(path_dir: Path) -> Path:
     return path_csv
 
 
-def test_read_table_quote_none_reads_malformed_regulatory_dump(tmp_path: Path) -> None:
-    """csv.QUOTE_NONE reads every row of a ``;``-dump whose free-text field has a stray quote.
+@pytest.fixture
+def df_quote_none_read(tmp_path: Path) -> object:
+    """Read a ``;``-dump whose free-text field has a stray quote, with ``QUOTE_NONE``.
 
     Were the ``quoting`` argument not threaded through to the reader, the default
     ``QUOTE_MINIMAL`` would treat the stray ``"`` as a field wrapper and either drop rows or
     raise a tokenizing error — so this positive read passing is itself the proof it is passed
     through (default-quoting corruption is pandas-version dependent, hence not asserted here).
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The frame read with ``QUOTE_NONE``.
     """
     path_csv = _write_malformed_quote_csv(tmp_path)
     cls_contract = FileContract("data", "data", (), ())
     dict_dtypes = {"code": "str", "amount": "str", "note": "str"}
-    df_none = read_table(path_csv, "", dict_dtypes, cls_contract, int_csv_quoting=csv.QUOTE_NONE)
-    assert len(df_none) == 3  # all rows survive; the stray quote is literal text
-    assert df_none["note"].iloc[1] == '"parecer aprovado'
-    assert df_none["amount"].tolist() == ["10", "20", "30"]
+    return read_table(path_csv, "", dict_dtypes, cls_contract, int_csv_quoting=csv.QUOTE_NONE)
 
 
-def test_read_table_json_preserves_zero_padding_and_decimal_scale(tmp_path: Path) -> None:
-    """The JSON branch honours the same "read as text" guarantee the CSV branch does.
+def test_read_table_quote_none_keeps_every_row(df_quote_none_read: object) -> None:
+    """All rows survive; the stray quote is literal text.
+
+    Parameters
+    ----------
+    df_quote_none_read : pandas.DataFrame
+        The frame read with ``QUOTE_NONE``.
+    """
+    assert len(df_quote_none_read) == 3
+
+
+def test_read_table_quote_none_keeps_the_stray_quote_literal(df_quote_none_read: object) -> None:
+    """The row with the stray quote carries it as text.
+
+    Parameters
+    ----------
+    df_quote_none_read : pandas.DataFrame
+        The frame read with ``QUOTE_NONE``.
+    """
+    assert df_quote_none_read["note"].iloc[1] == '"parecer aprovado'
+
+
+def test_read_table_quote_none_reads_the_amounts_after_the_stray_quote(
+    df_quote_none_read: object,
+) -> None:
+    """The columns after the stray quote are read intact.
+
+    Parameters
+    ----------
+    df_quote_none_read : pandas.DataFrame
+        The frame read with ``QUOTE_NONE``.
+    """
+    assert df_quote_none_read["amount"].tolist() == ["10", "20", "30"]
+
+
+@pytest.fixture
+def df_json_read(tmp_path: Path) -> object:
+    """Read a JSON document holding a padded code and a money value as text.
 
     ``read_table``'s docstring promises the file is *always* read as text, never with pandas'
     inference — but the JSON branch used ``pd.read_json``, which infers regardless. Measured:
     it returns ``1000.5`` for a document that literally contains the STRING ``"1000.50"``, and
     ``7`` for ``"007"``. The scale is unrecoverable afterwards, so a money column ingested from
     an API silently lost its cents.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The frame read as text.
     """
     path_json = tmp_path / "money.json"
     path_json.write_text(
@@ -215,10 +368,29 @@ def test_read_table_json_preserves_zero_padding_and_decimal_scale(tmp_path: Path
         encoding="utf-8",
     )
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
-    df_out = read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
-    assert df_out["code"].tolist() == ["007", "042"]  # leading zeros survive
-    # The second row arrives as a bare JSON number — the exact source token still survives.
-    assert df_out["amount"].tolist() == ["1000.50", "0.10"]
+    return read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_read_table_json_preserves_zero_padding(df_json_read: object) -> None:
+    """The JSON branch keeps leading zeros, as the CSV branch does.
+
+    Parameters
+    ----------
+    df_json_read : pandas.DataFrame
+        The frame read as text.
+    """
+    assert df_json_read["code"].tolist() == ["007", "042"]
+
+
+def test_read_table_json_preserves_decimal_scale(df_json_read: object) -> None:
+    """The JSON branch keeps the decimal scale, even for a bare JSON number token.
+
+    Parameters
+    ----------
+    df_json_read : pandas.DataFrame
+        The frame read as text.
+    """
+    assert df_json_read["amount"].tolist() == ["1000.50", "0.10"]
 
 
 def test_padded_column_name_is_stripped_at_the_read_boundary(tmp_path: Path) -> None:
@@ -236,19 +408,53 @@ def test_padded_column_name_is_stripped_at_the_read_boundary(tmp_path: Path) -> 
     assert list(df_out.columns) == ["code", "amount"]
 
 
-def test_positional_payload_drops_a_surplus_position_that_is_empty_everywhere(
-    tmp_path: Path,
-) -> None:
-    """A row wider than its header is tolerated only when the surplus is empty on every row."""
+@pytest.fixture
+def df_wide_read(tmp_path: Path) -> object:
+    """Read a positional payload whose rows are wider than the header, surplus empty.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The frame read.
+    """
     path_json = tmp_path / "wide.json"
     path_json.write_text(
         '{"columns": ["code", "amount"], "rows": [["ABC", "10", null], ["DEF", "20", null]]}',
         encoding="utf-8",
     )
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
-    df_out = read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
-    assert list(df_out.columns) == ["code", "amount"]
-    assert df_out["amount"].tolist() == ["10", "20"]
+    return read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_positional_payload_drops_a_surplus_position_that_is_empty_everywhere(
+    df_wide_read: object,
+) -> None:
+    """A row wider than its header is tolerated only when the surplus is empty on every row.
+
+    Parameters
+    ----------
+    df_wide_read : pandas.DataFrame
+        The frame read.
+    """
+    assert list(df_wide_read.columns) == ["code", "amount"]
+
+
+def test_positional_payload_keeps_the_declared_values_when_dropping_the_surplus(
+    df_wide_read: object,
+) -> None:
+    """Dropping the empty surplus position leaves the declared columns' values intact.
+
+    Parameters
+    ----------
+    df_wide_read : pandas.DataFrame
+        The frame read.
+    """
+    assert df_wide_read["amount"].tolist() == ["10", "20"]
 
 
 def test_positional_payload_raises_when_the_surplus_holds_a_value(tmp_path: Path) -> None:
