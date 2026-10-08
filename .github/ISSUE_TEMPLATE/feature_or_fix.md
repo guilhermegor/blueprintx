@@ -20,7 +20,7 @@ issue-template-guard: require "**Blocked by:**" if-label state:blocked
 
 <!-- What should change, and why. -->
 
-**Blocked by:** <repo#N, repo#N — or: decision: …>   <!-- delete this line unless labelled state:blocked -->
+**Blocked by:** `repo#N`, `repo#N` — or `decision: …`   <!-- delete this line unless labelled state:blocked -->
 
 ## File surface
 

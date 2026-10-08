@@ -68,19 +68,20 @@ kanban board, so it is obvious when to stop here and go finish the upstream.
 `greenfield` (`project-seed.md`), so every repo reads it the same way. The
 [issue template](https://github.com/guilhermegor/blueprintx/blob/main/.github/ISSUE_TEMPLATE/feature_or_fix.md)
 carries the line plus the machine-readable `issue-template-guard:` directive that makes a
-`state:blocked` issue without it get rejected.
+`state:blocked` issue without it get rejected (guard: `issue_template_guard.sh` in `dotfiles-dev`,
+`ai_clients/claude/hooks/`).
 
 **Why a convention and not only GitHub's native `blocked_by`.** The native relationship is
 same-repo only, so a blocker in another repository cannot use it. Where it does apply, nothing
 propagates it: GitHub resolves the dependency when the blocker closes, but the board Status, the
 label and the `Blocked by` field sit still until the reconciler (`roadmap_unblock.sh` in
-`dotfiles-linux-dev`) re-reads them. Mirror issue blockers as native relationships too.
+`dotfiles-linux-dev`) re-reads them. Where the blocker is in the same repository, mirror it as a native relationship too.
 
 **Rules.**
 
-- Name the specific upstream issue whenever one exists. Link the terminal issue (#601) only when
+- Name the specific upstream issue whenever one exists. Link the terminal issue ([#601](https://github.com/guilhermegor/blueprintx/issues/601)) only when
   the blocker really is "not 1.0 yet" — the reconciler clears on the *named* issue, so pointing
-  everything at #601 holds work that is in fact ready.
+  everything at that issue holds work that is in fact ready.
 - A `decision:` blocker is never auto-cleared; only a person removes it. That is deliberate.
 - A board Status alone is not durable: the reconciler clears any item it reads as blocked by
   nothing. Each blocked item needs the label plus the `**Blocked by:**` body line (the issue
