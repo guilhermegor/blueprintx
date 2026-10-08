@@ -1734,14 +1734,23 @@ def test_ladder_marker_without_the_roster_row_changes_nothing() -> None:
     assert _missing_with([_marker_comment("OWNER")], ()) is not None
 
 
-def test_load_comment_markers_reads_only_marker_rows(tmp_path: Path) -> None:
-    """A marker row has no login, so the login roster is untouched."""
+@pytest.fixture
+def path_marker_root(tmp_path: Path) -> Path:
+    """Write a roster holding one reviewer and one marker row."""
     (tmp_path / ".review-bots.yaml").write_text(
         "reviewers:\n"
         "  - login: coderabbitai[bot]\n    posts: threads\n"
-        "  - kind: comment-marker\n    marker: \"Fallback review — runtime:\"\n",
+        '  - kind: comment-marker\n    marker: "Fallback review — runtime:"\n',
         encoding="utf-8",
     )
-    cls_gate = _load_gate()
-    assert cls_gate.load_comment_markers(tmp_path) == _TUPLE_MARKERS
-    assert cls_gate.load_roster(tmp_path) == {"coderabbitai": "threads"}
+    return tmp_path
+
+
+def test_load_comment_markers_reads_the_marker_row(path_marker_root: Path) -> None:
+    """The marker row is returned lower-cased."""
+    assert _load_gate().load_comment_markers(path_marker_root) == _TUPLE_MARKERS
+
+
+def test_load_roster_ignores_the_marker_row(path_marker_root: Path) -> None:
+    """A marker row has no login, so the login roster is untouched."""
+    assert _load_gate().load_roster(path_marker_root) == {"coderabbitai": "threads"}
