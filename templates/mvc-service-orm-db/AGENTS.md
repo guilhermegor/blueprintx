@@ -10,8 +10,10 @@ See @PRINCIPLES.md for the single-responsibility and function-design rules this 
 
 The boundary rules, data-handling guardrails, runtime type-checking notes, naming and
 file-naming conventions, tooling summary and the project-memory rule are shared by every
-BlueprintX skeleton and live in `.claude/CLAUDE.md` (loaded alongside this file; single
-source: `templates/common/CLAUDE.md`). This file keeps only what is specific to this skeleton.
+BlueprintX skeleton and live in `.claude/CLAUDE.md` (single source:
+`templates/common/CLAUDE.md`). Read that file before editing code: only Claude Code
+loads it on its own, other agents must be told to. This file keeps only what is
+specific to this skeleton.
 
 ## What this template is
 
