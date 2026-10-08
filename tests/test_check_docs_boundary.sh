@@ -24,6 +24,8 @@ int_failures=0
 # Run from a pre-commit hook these point at the REAL repo, and the sandbox work trees below
 # would write into its index (a stray docs/x-lessons.md staged in the commit).
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+# Keep a developer's global excludesFile out of the sandbox's ignore verdicts.
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 
 make_sandbox() {
     # Prints the path of a fresh fake repo root: a copy of the real
@@ -292,9 +294,17 @@ test_unignored_lessons_file_still_fails() {
 test_tracked_lessons_file_still_fails() {
     local str_root
     str_root="$(make_git_sandbox)"
-    : > "$str_root/.gitignore"
-    git -C "$str_root" add docs/x-lessons.md
+    git -C "$str_root" add -f docs/x-lessons.md
     expect_gate "tracked lessons file" "$str_root" "fail" "docs/x-lessons.md"
+}
+
+test_git_ignored_directory_is_skipped_whole() {
+    local str_root
+    str_root="$(make_git_sandbox)"
+    mkdir -p "$str_root/docs/backlog"
+    printf 'x\n' > "$str_root/docs/backlog/todo.md"
+    printf 'docs/backlog/\n' >> "$str_root/.gitignore"
+    expect_gate "git-ignored directory" "$str_root" "pass" "docs/ boundary is clean"
 }
 
 main() {
@@ -315,6 +325,7 @@ main() {
     test_git_ignored_lessons_file_passes
     test_unignored_lessons_file_still_fails
     test_tracked_lessons_file_still_fails
+    test_git_ignored_directory_is_skipped_whole
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures check_docs_boundary.sh regression assertion(s) failed"
