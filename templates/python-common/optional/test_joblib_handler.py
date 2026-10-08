@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import contextlib
 from pathlib import Path
-import sys
 
 import pytest
 
@@ -222,11 +221,10 @@ def test_the_default_codec_needs_no_extra_package(
     """A handler built with no ``compress=`` round-trips with ``lz4`` made unimportable.
 
     The old ``("lz4", 3)`` default raised ``LZ4 is not installed`` in a generated project,
-    because no tier declares ``lz4`` (blueprintx#650). Blocking the module keeps this a real
-    witness even where ``lz4`` happens to be installed transitively.
+    because no tier declares ``lz4`` (blueprintx#650). joblib caches its ``lz4`` import at
+    load time, so the witness patches that cached module, not ``sys.modules``.
     """
-    monkeypatch.setitem(sys.modules, "lz4", None)
-    monkeypatch.setitem(sys.modules, "lz4.frame", None)
+    monkeypatch.setattr("joblib.compressor.lz4", None)
     cls_default = JoblibHandler(tmp_path / "default")
 
     assert cls_default.read(cls_default.create({"_name": "plain", "value": 5}))["value"] == 5
