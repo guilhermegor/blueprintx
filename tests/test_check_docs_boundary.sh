@@ -270,7 +270,7 @@ make_git_sandbox() {
     # A sandbox that is a real work tree ignoring docs/x-lessons.md.
     local str_root
     str_root="$(make_sandbox)"
-    /usr/bin/git -C "$str_root" init -q
+    git -C "$str_root" init -q
     printf 'docs/x-lessons.md\n' > "$str_root/.gitignore"
     mkdir -p "$str_root/docs"
     printf '# Hello\n' > "$str_root/docs/index.md"
@@ -293,7 +293,7 @@ test_tracked_lessons_file_still_fails() {
     local str_root
     str_root="$(make_git_sandbox)"
     : > "$str_root/.gitignore"
-    /usr/bin/git -C "$str_root" add docs/x-lessons.md
+    git -C "$str_root" add docs/x-lessons.md
     expect_gate "tracked lessons file" "$str_root" "fail" "docs/x-lessons.md"
 }
 
