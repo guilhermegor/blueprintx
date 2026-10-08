@@ -833,7 +833,8 @@ def ladder_marker_declared(
     list_notices : list of dict
             The PR's issue comments, each with ``authorAssociation``, ``body``, ``createdAt``.
     tuple_markers : tuple of str
-            Lower-cased markers from :func:`load_comment_markers`.
+            Lower-cased markers from :func:`load_comment_markers`; matched at the start of the body
+            only, so a quotation on a later line is not a review.
     str_head_date : str, optional
             ISO-8601 ``committedDate`` of the head commit; empty fails closed.
 
@@ -848,7 +849,7 @@ def ladder_marker_declared(
     return any(
         d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
         and (d.get("createdAt") or "") >= str_head_date
-        and any(str_marker in (d.get("body") or "").casefold() for str_marker in tuple_markers)
+        and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
         for d in list_notices
     )
 

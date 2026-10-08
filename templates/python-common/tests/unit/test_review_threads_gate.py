@@ -1734,6 +1734,18 @@ def test_ladder_marker_without_the_roster_row_changes_nothing() -> None:
     assert _missing_with([_marker_comment("OWNER")], ()) is not None
 
 
+def test_ladder_marker_quoted_on_a_later_line_is_rejected() -> None:
+    """Only the attribution line itself counts, never a quotation of it."""
+    dict_quoted = {**_marker_comment("OWNER"), "body": f"see below\n> {_MARKER}"}
+    assert _missing_with([dict_quoted], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_older_than_the_head_is_rejected() -> None:
+    """A marker posted before the head commit describes superseded code."""
+    dict_old = {**_marker_comment("OWNER"), "createdAt": "2000-01-01T00:00:00Z"}
+    assert _missing_with([dict_old], _TUPLE_MARKERS) is not None
+
+
 @pytest.fixture
 def path_marker_root(tmp_path: Path) -> Path:
     """Write a roster holding one reviewer and one marker row."""
