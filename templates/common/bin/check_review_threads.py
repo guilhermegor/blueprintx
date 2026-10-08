@@ -823,6 +823,28 @@ def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
     )
 
 
+_RE_FINDINGS_LINE = re.compile(r"(\d+) finding\(s\) across \d+ reviewed file\(s\)\.")
+
+
+def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
+    """Return whether a ladder comment's findings line reads zero, failing closed.
+
+    Parameters
+    ----------
+    list_lines : list of str
+            The comment body split into lines.
+
+    Returns
+    -------
+    bool
+            ``True`` only when exactly one line is ``0 finding(s) across N reviewed file(s).``
+            and no line reports a non-zero count. A missing or unparseable line is "has
+            findings", so a prose review never satisfies the gate (blueprintx#630).
+    """
+    list_counts = [m.group(1) for m in map(_RE_FINDINGS_LINE.fullmatch, list_lines) if m]
+    return list_counts == ["0"]
+
+
 def ladder_marker_declared(
     list_notices: list[dict],
     tuple_markers: tuple[str, ...],
@@ -848,7 +870,7 @@ def ladder_marker_declared(
     -------
     bool
             ``True`` only for an OWNER/MEMBER/COLLABORATOR comment carrying a marker and
-            postdating the head, whose second line names the head SHA, so an outside
+            postdating the head, whose second line names the head SHA and which reports zero findings, so an outside
             commenter cannot forge it and a review of an older head cannot be reused.
     """
     if not str_head_date or not str_head_oid:
@@ -859,6 +881,7 @@ def ladder_marker_declared(
         and (d.get("createdAt") or "") >= str_head_date
         and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
         and (d.get("body") or "").lstrip().casefold().splitlines()[1:2] == [str_reviewed]
+        and ladder_reports_zero_findings((d.get("body") or "").strip().splitlines())
         for d in list_notices
     )
 

@@ -1702,7 +1702,7 @@ def _marker_comment(str_association: str) -> dict:
     return {
         "author": {"login": "someone"},
         "authorAssociation": str_association,
-        "body": f"{_MARKER}\nReviewed head: {_HEAD}\nno findings",
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).",
         "createdAt": "2099-01-01T00:00:00Z",
     }
 
@@ -1750,6 +1750,24 @@ def test_ladder_marker_for_another_head_is_rejected() -> None:
     """A marker whose `Reviewed head:` line names a different SHA is not this head's review."""
     dict_other = {**_marker_comment("OWNER"), "body": f"{_MARKER}\nReviewed head: {'0' * 40}"}
     assert _missing_with([dict_other], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_with_findings_is_rejected() -> None:
+    """A ladder review that lists findings must be judged, not auto-accepted (#630)."""
+    dict_found = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+    }
+    assert _missing_with([dict_found], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_without_a_findings_line_is_rejected() -> None:
+    """Unparseable means "has findings": a prose review never passes."""
+    dict_prose = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n- a bug",
+    }
+    assert _missing_with([dict_prose], _TUPLE_MARKERS) is not None
 
 
 @pytest.fixture
