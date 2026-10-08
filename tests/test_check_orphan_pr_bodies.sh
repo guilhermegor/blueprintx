@@ -16,7 +16,8 @@ int_failures=0
 str_tmp="$(mktemp -d)"
 trap 'rm -rf "$str_tmp"' EXIT
 
-mkdir -p "$str_tmp/bin" "$str_tmp/gitdir" "$str_tmp/norepo" "$str_tmp/plain"
+mkdir -p "$str_tmp/bin" "$str_tmp/norepo" "$str_tmp/plain" "$str_tmp/worktree"
+git init -q --bare "$str_tmp/gitdir"
 cat > "$str_tmp/bin/gh" <<'STUB'
 #!/bin/bash
 [ -z "${STUB_GH_FAIL:-}" ] || { echo "HTTP 403: rate limit" >&2; exit 1; }
@@ -50,6 +51,7 @@ forge_json "$str_tmp/dup.json" 561 "$BODY_A" 562 "$BODY_A"
 forge_json "$str_tmp/tmpl.json" 700 "$TEMPLATE"
 forge_json "$str_tmp/ticked.json" 563 "${CHECKLIST/\[ \]/[x]}"
 forge_json "$str_tmp/edited.json" 564 "${BODY_A/orphan/orfan}"
+printf '%s' '{"message":"Not Found"}' > "$str_tmp/shape.json"
 forge_json "$str_tmp/p1.json" 1 "unrelated"
 forge_json "$str_tmp/p2.json" 561 "$BODY_A"
 # --paginate concatenates one JSON array per page.
@@ -66,7 +68,7 @@ run_case() {
     printf '%s\n' "$str_body" > "$str_tmp/gitdir/issue_rmw.md"
     [ -n "${RUN_DIR-$str_tmp/gitdir}" ] && list_arg=("${RUN_DIR-$str_tmp/gitdir}")
     str_out="$(cd "${RUN_CWD:-$str_tmp}" && PATH="$str_tmp/bin:$PATH" \
-        STUB_GH_OUT="$str_tmp/$str_forge" bash "$SCRIPT" "${list_arg[@]}" 2>&1)" || int_rc=$?
+        STUB_GH_OUT="$str_tmp/$str_forge" bash "$SCRIPT" ${list_arg[@]+"${list_arg[@]}"} 2>&1)" || int_rc=$?
     if [ "$int_rc" -ne "$int_want" ] || [[ "$str_out" != *"$str_want"* ]]; then
         echo "FAIL: $str_name (exit $int_rc, want $int_want; output: $str_out)" >&2
         int_failures=$((int_failures + 1))
@@ -90,6 +92,12 @@ run_case "ambiguous match is UNKNOWN, exit 2" 2 "UNKNOWN (ambiguous: #561 #562)"
 STUB_GH_FAIL=1 run_case "gh failure is UNKNOWN, exit 2" 2 "UNKNOWN" "$BODY_A"
 RUN_DIR="$str_tmp/missing" run_case "nonexistent dir exits 2, not a silent green" 2 \
     "no such directory" "$BODY_A"
+
+run_case "an object where a list was expected is UNKNOWN, never exit 1" 2 "UNKNOWN-FORGE" \
+    "$BODY_A" shape.json
+printf '%s\n' "$BODY_A" > "$str_tmp/worktree/README.md"
+RUN_DIR="$str_tmp/worktree" run_case "a worktree dir instead of a git-dir exits 2" 2 \
+    "not a git directory" "$BODY_A"
 
 # git's own exit codes (1, 128) must not leak into the contract: a repo with no origin, and no repo.
 git -C "$str_tmp/norepo" init -q

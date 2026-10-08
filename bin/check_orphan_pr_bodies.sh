@@ -16,6 +16,9 @@
 # Usage: bash bin/check_orphan_pr_bodies.sh [git-dir]   (origin is read from that git-dir)
 # Env:   BLUEPRINTX_REPO=owner/name  overrides the slug parsed from `origin`.
 # Exit:  0 all MATCHED | 1 ORPHAN found | 2 could not decide (UNKNOWN, forge or input unreadable)
+#        2 takes precedence: one UNKNOWN anywhere hides ORPHANs from the code, not from the report.
+# Scope: scans <git-dir>/*.md only (not .git/worktrees/*/). A body mostly built from the PR
+#        template can read UNKNOWN (near #N) instead of ORPHAN: false negative, never false ORPHAN.
 
 set -uo pipefail
 
@@ -29,6 +32,14 @@ if [ -z "$str_gitdir" ]; then
 fi
 [ -d "$str_gitdir" ] || {
 	echo "UNKNOWN: no such directory: $str_gitdir" >&2
+	exit 2
+}
+git --git-dir="$str_gitdir" rev-parse --git-dir >/dev/null 2>&1 || {
+	echo "UNKNOWN: not a git directory (pass the .git dir, not the worktree): $str_gitdir" >&2
+	exit 2
+}
+command -v python3 >/dev/null || {
+	echo "UNKNOWN: python3 is required" >&2
 	exit 2
 }
 
@@ -45,7 +56,7 @@ trap 'rm -rf "$str_forge"' EXIT
 bool_forge_ok=1
 if [ -z "$str_repo" ]; then
 	bool_forge_ok=0
-	echo "UNKNOWN-FORGE: no BLUEPRINTX_REPO and no readable 'origin' remote" >&2
+	echo "UNKNOWN-FORGE: no BLUEPRINTX_REPO and no readable 'origin' remote (parsed slug: '${str_repo}')" >&2
 elif ! gh api --paginate "repos/$str_repo/issues?state=all&per_page=100" \
 	>"$str_forge/all.json" 2>"$str_forge/err"; then
 	bool_forge_ok=0
@@ -108,11 +119,12 @@ list_forge = []
 if bool_ok:
     try:
         list_forge = forge_items(sys.argv[2])
-    except (ValueError, KeyError, OSError) as cls_err:
+    except (ValueError, KeyError, TypeError, OSError) as cls_err:
         bool_ok = False
         print(f"UNKNOWN-FORGE: unparsable forge response: {cls_err}", file=sys.stderr)
 
-int_orphans, int_unknown = 0, 0 if bool_ok else 1
+int_orphans = 0
+int_unknown = 0 if bool_ok else 1
 list_files = sorted(pathlib.Path(sys.argv[1]).glob("*.md"))
 if not list_files:
     print(f"no *.md bodies in {sys.argv[1]}")
@@ -130,3 +142,6 @@ for path_md in list_files:
     print(f"{path_md}\t{int_size}B\t{int_age}d\t{str_verdict}")
 sys.exit(2 if int_unknown else 1 if int_orphans else 0)
 PY
+int_rc=$?
+[ "$int_rc" -le 2 ] || int_rc=2 # an uncaught traceback (exit 1) must never read as ORPHAN
+exit "$int_rc"
