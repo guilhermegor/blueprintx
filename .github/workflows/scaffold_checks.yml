@@ -444,7 +444,10 @@ jobs:
           persist-credentials: false
 
       - name: Check .specs/ layout (blueprintx#447)
-        run: bash bin/ci/check_specs_structure.sh
+        run: bash bin/ci/check_specs_structure.sh --root .
+
+      - name: Run the .specs/ structure should-fail suite (blueprintx#583)
+        run: bash tests/test_check_specs_structure.sh
 
   docs-boundary:
     name: docs/ boundary guard

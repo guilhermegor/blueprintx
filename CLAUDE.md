@@ -66,7 +66,7 @@ never says which ran, while the gates in `bin/` are parsing tools by nature (at 
 74% violating, a number nobody pays and therefore a gate nobody keeps). It does **not**
 reimplement mccabe; ruff already ships it as `C901`, and a hand-rolled counter that treats
 `assert`/`with` as decision points reports 85% of `tests/` violating where the real figure is
-8%. ⚠️ BlueprintX's own tree has no `src/` or `tests/`, so on this side it checks `bin/`
+8%. ⚠️ BlueprintX's own tree has no Python under `src/` or `tests/` (its `tests/` holds bash suites), so on this side it checks `bin/`
 only — it travels with the template it polices rather than earning its keep from what it
 finds here.
 
