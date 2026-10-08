@@ -112,6 +112,35 @@ def test_whereless_core_delete_finding_names_the_hazard(
     assert "delete(...) has no .where()" in list_whereless_delete_problems[0]
 
 
+def test_whereless_core_delete_finding_names_the_file(
+    tmp_path: Path,
+    list_whereless_delete_problems: list[str],
+) -> None:
+    """The finding names the file it was found in.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        The same per-test directory the fixture wrote ``sample.py`` into.
+    list_whereless_delete_problems : list[str]
+        The gate's findings.
+    """
+    assert str(tmp_path / "sample.py") in list_whereless_delete_problems[0]
+
+
+def test_whereless_core_delete_finding_names_the_escape_hatch(
+    list_whereless_delete_problems: list[str],
+) -> None:
+    """The finding tells the reader how to waive it (``sql-guard-ok:``).
+
+    Parameters
+    ----------
+    list_whereless_delete_problems : list[str]
+        The gate's findings.
+    """
+    assert "sql-guard-ok:" in list_whereless_delete_problems[0]
+
+
 def test_whereless_module_qualified_delete_is_reported(tmp_path: Path) -> None:
     """``sa.delete(t)`` is a Core builder, not the ambiguous ``.delete()`` attribute form."""
     path_file = _python_file(
