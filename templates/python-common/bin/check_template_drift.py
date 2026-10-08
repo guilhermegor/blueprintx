@@ -49,6 +49,7 @@ import argparse
 import os
 import pathlib
 import re
+import subprocess
 import sys
 
 
@@ -56,19 +57,18 @@ _PROVENANCE_FILENAME = ".blueprintx-provenance.yaml"
 _SCAFFOLD_LIB_RELPATH = pathlib.Path("bin/lib/scaffold_python_templates.sh")
 _COMMON_TEMPLATE_RELPATH = pathlib.Path("templates/python-common")
 
-# Mirrors the two `cp` shapes scaffold_python_templates.sh actually uses: a single file, and
-# the one wholesale `cp -r DIR/. DEST` directory copy (`bin/`). Both destinations are relative
-# to `$str_project_path`, i.e. the scaffolded project's own root.
-_RE_CP_FILE = re.compile(
-    r'cp\s+"\$(?:COMMON|SHARED)_TEMPLATE_ROOT/([^"]+)"\s+"\$str_project_path/([^"]+)"'
+# One regex for every `cp [flags] SRC DST` the scaffold lib uses. SRC is rooted at
+# `$COMMON_TEMPLATE_ROOT` / `$SHARED_TEMPLATE_ROOT` (braced or not), DST at `$str_project_path`.
+# A SRC ending in `/.` is the wholesale directory-contents form.
+_RE_CP = re.compile(
+    r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?/([^"]+)"\s+'
+    r'"\$\{?str_project_path\}?/([^"]+)"'
 )
 # A backslash-newline is shell line-splicing: one logical command. Spliced out before the
 # cp patterns run, so a wrapped `cp` parses exactly like an unwrapped one.
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
-
-_RE_CP_DIR = re.compile(
-    r'cp\s+-r\s+"\$(?:COMMON|SHARED)_TEMPLATE_ROOT/([^"]+)/\."\s+"\$str_project_path/([^"]+)"'
-)
+_RE_CHAINED_CP = re.compile(r"(?:&&|\|\|)\s*cp\b")
+_RE_ONE_LINE_ESAC = re.compile(r"\besac\s*$")
 
 
 def read_tier(path_root: pathlib.Path) -> str | None:
@@ -110,45 +110,73 @@ def _cp_destinations(str_line: str) -> set[str]:
     set of str
             Destinations matched by the single-file ``cp`` pattern.
     """
-    return {str_dst for _, str_dst in _RE_CP_FILE.findall(str_line)}
+    return {str_dst for _, _, str_dst in _RE_CP.findall(str_line)}
 
 
-def conditional_relpaths(str_lib: str) -> set[str]:
-    """Return destinations copied inside an ``if`` block, which are NOT unconditionally required.
+def conditional_relpaths(str_lib: str, str_flag: str | None = None) -> set[str]:
+    """Return destinations copied under a guard, which are NOT unconditionally required.
 
     ``.review-bots.yaml`` is copied only when ``INCLUDE_REVIEW_BOT_ROSTER`` is true
     (blueprintx#374). Treating it as required made the drift check report a missing file on
-    every project that legitimately declined a reviewer bot — a gate crying wolf about a
-    choice the scaffold offered.
+    every project that legitimately declined a reviewer bot.
 
-    ⚠️ Scoped to what this regex can honestly see: a ``cp`` between an ``if`` and its ``fi``,
-    at any nesting. It does not evaluate the condition — that is
+    Guards recognised: ``if``..``fi`` (any nesting, one-line form included), ``case``..``esac``
+    and ``cond && cp`` / ``cond || cp`` chains. The condition is never evaluated; that is
     :func:`review_bot_roster_enabled`'s job, from the provenance stamp.
 
     Parameters
     ----------
     str_lib : str
             The shared scaffold lib source, line-continuations already spliced.
+    str_flag : str, optional
+            When given, keep only copies under a guard whose line mentions this name.
 
     Returns
     -------
     set of str
-            Project-relative destinations whose ``cp`` sits inside a conditional.
+            Project-relative destinations whose ``cp`` sits under a (matching) guard.
     """
     set_conditional: set[str] = set()
-    int_depth = 0
+    list_guards: list[bool] = []
     for str_line in str_lib.splitlines():
         str_stripped = str_line.strip()
-        if str_stripped.startswith(("if ", "if[", "if[[")) or str_stripped == "if":
-            # A one-line `if ...; then cp ...; fi` opens and closes on the same line: counting
-            # it as an open block would mark every later `cp` conditional, a false green.
-            int_depth += 0 if _RE_ONE_LINE_FI.search(str_stripped) else 1
-            set_conditional.update(_cp_destinations(str_line))
-        elif str_stripped == "fi" or str_stripped.startswith("fi "):
-            int_depth = max(0, int_depth - 1)
-        elif int_depth > 0:
+        str_kind = _line_kind(str_stripped)
+        bool_match = str_flag is None or str_flag in str_stripped
+        if str_kind == "open":
+            list_guards.append(bool_match)
+        elif str_kind == "close" and list_guards:
+            list_guards.pop()
+        bool_guarded = (str_kind in ("open", "oneline", "chain") and bool_match) or (
+            str_kind == "plain" and any(list_guards)
+        )
+        if bool_guarded:
             set_conditional.update(_cp_destinations(str_line))
     return set_conditional
+
+
+def _line_kind(str_stripped: str) -> str:
+    """Classify a stripped lib line by its effect on the guard stack.
+
+    Parameters
+    ----------
+    str_stripped : str
+            One lib line, stripped.
+
+    Returns
+    -------
+    str
+            ``open`` (``if``/``case`` block start), ``oneline`` (a self-closing ``if``/``case``;
+            counting it as open would mark every later ``cp`` conditional, a false green),
+            ``close`` (``fi``/``esac``), ``chain`` (``&& cp`` / ``|| cp``) or ``plain``.
+    """
+    if str_stripped.startswith(("if ", "if[", "case ")) or str_stripped == "if":
+        bool_closed = _RE_ONE_LINE_FI.search(str_stripped) or _RE_ONE_LINE_ESAC.search(
+            str_stripped
+        )
+        return "oneline" if bool_closed else "open"
+    if str_stripped == "fi" or str_stripped.startswith(("fi ", "esac")):
+        return "close"
+    return "chain" if _RE_CHAINED_CP.search(str_stripped) else "plain"
 
 
 def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
@@ -202,23 +230,64 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     if not path_lib.exists():
         return set()
     # Splice shell line-continuations BEFORE matching. A `cp "$SRC/x" \\<newline> "$DST/x"`
-    # is one command to the shell, but `_RE_CP_FILE` stopped at the backslash and skipped
+    # is one command to the shell, but the old file regex stopped at the backslash and skipped
     # it — measured on this branch: 23 destinations found, 52 actually copied, so the
     # drift doctor was blind to 29 of the files it exists to police (blueprintx#109).
     str_lib = _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8"))
-    path_common = path_blueprintx_root / _COMMON_TEMPLATE_RELPATH
+    path_templates = {
+        "COMMON": path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
+        "SHARED": path_blueprintx_root / "templates/common",
+    }
 
     set_conditional = conditional_relpaths(str_lib)
-    set_required = {
-        str_dst for _, str_dst in _RE_CP_FILE.findall(str_lib) if str_dst not in set_conditional
-    }
-    for str_src_dir, str_dst_dir in _RE_CP_DIR.findall(str_lib):
-        path_src_dir = path_common / str_src_dir
-        for path_file in sorted(path_src_dir.rglob("*")):
-            if path_file.is_file() and "__pycache__" not in path_file.parts:
-                str_rel = path_file.relative_to(path_src_dir).as_posix()
-                set_required.add(f"{str_dst_dir}/{str_rel}")
+    set_required: set[str] = set()
+    for str_root, str_src, str_dst in _RE_CP.findall(str_lib):
+        if str_dst in set_conditional:
+            continue
+        path_src = path_templates[str_root] / str_src.removesuffix("/.")
+        if str_src.endswith("/.") or path_src.is_dir():
+            for str_rel in _template_files(path_blueprintx_root, path_src):
+                set_required.add(f"{str_dst}/{str_rel}")
+        else:
+            set_required.add(str_dst)
     return set_required
+
+
+def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) -> list[str]:
+    """List the template files under ``path_dir``, relative to it.
+
+    Tracked files only when the checkout is a git repo: an untracked artifact (a log, an
+    editor swap file) is not a template file and would be a permanent false "missing".
+    Falls back to a walk that skips ``__pycache__`` when git cannot answer.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+            Root of the BlueprintX checkout.
+    path_dir : pathlib.Path
+            The template directory to list.
+
+    Returns
+    -------
+    list of str
+            POSIX paths relative to ``path_dir``.
+    """
+    cls_git = subprocess.run(  # noqa: S603
+        ["git", "-C", str(path_blueprintx_root), "ls-files", "-z", "--", str(path_dir)],  # noqa: S607
+        capture_output=True,
+        check=False,
+    )
+    if cls_git.returncode == 0:
+        return [
+            pathlib.Path(str_f).relative_to(path_dir.relative_to(path_blueprintx_root)).as_posix()
+            for str_f in cls_git.stdout.decode().split("\0")
+            if str_f
+        ]
+    return [
+        path_f.relative_to(path_dir).as_posix()
+        for path_f in sorted(path_dir.rglob("*"))
+        if path_f.is_file() and "__pycache__" not in path_f.parts
+    ]
 
 
 def missing_relpaths(path_root: pathlib.Path, set_required: set[str]) -> list[str]:
@@ -347,7 +416,8 @@ def main(list_argv: list) -> int:
         set_required |= conditional_relpaths(
             _RE_LINE_CONTINUATION.sub(
                 " ", (path_blueprintx / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
-            )
+            ),
+            "INCLUDE_REVIEW_BOT_ROSTER",
         )
 
     list_missing = missing_relpaths(path_root, set_required)

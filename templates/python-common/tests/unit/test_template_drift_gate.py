@@ -8,6 +8,7 @@ project that legitimately opted out.
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -176,3 +177,92 @@ def test_a_copy_from_the_language_agnostic_root_is_required() -> None:
     str_line = 'cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$str_project_path/bin/ship.sh"'
 
     assert gate._cp_destinations(str_line) == {"bin/ship.sh"}
+
+
+def test_a_one_line_and_chain_copy_is_conditional() -> None:
+    """`[[ ... ]] && cp ...` is a guarded copy; demanding it unconditionally is a false report."""
+    str_lib = '[[ "$x" == y ]] && cp "$COMMON_TEMPLATE_ROOT/a.txt" "$str_project_path/a.txt"\n'
+
+    assert gate.conditional_relpaths(str_lib) == {"a.txt"}
+
+
+def test_a_case_arm_copy_is_conditional_and_closes_at_esac() -> None:
+    """A `case` arm is conditional; `esac` must close it so later copies stay required."""
+    str_lib = (
+        'case "$t" in\n'
+        '  a) cp "$COMMON_TEMPLATE_ROOT/a.txt" "$str_project_path/a.txt" ;;\n'
+        "esac\n"
+        'cp "$COMMON_TEMPLATE_ROOT/b.txt" "$str_project_path/b.txt"\n'
+    )
+
+    assert gate.conditional_relpaths(str_lib) == {"a.txt"}
+
+
+def test_braced_variable_names_are_parsed() -> None:
+    """`${COMMON_TEMPLATE_ROOT}` is the same copy as `$COMMON_TEMPLATE_ROOT`."""
+    str_line = 'cp "${COMMON_TEMPLATE_ROOT}/a.txt" "${str_project_path}/a.txt"'
+
+    assert gate._cp_destinations(str_line) == {"a.txt"}
+
+
+@pytest.mark.parametrize("str_flag", ["-a", "-R", "-p"])
+def test_cp_flags_other_than_bare_are_parsed(str_flag: str) -> None:
+    """`cp -a`/`-R`/`-p` of a single file is still a copy the scaffold performs."""
+    str_line = f'cp {str_flag} "$COMMON_TEMPLATE_ROOT/a.txt" "$str_project_path/a.txt"'
+
+    assert gate._cp_destinations(str_line) == {"a.txt"}
+
+
+def test_a_recursive_directory_copy_without_trailing_dot_is_required(tmp_path: Path) -> None:
+    """`cp -r "$SRC/dir" "$DST/dir"` (no `/.`) ships every file under dir."""
+    path_root = _blueprintx_root(tmp_path)
+    path_lib = path_root / gate._SCAFFOLD_LIB_RELPATH
+    path_lib.write_text(
+        'cp -r "$COMMON_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"\n', encoding="utf-8"
+    )
+    path_dir = path_root / gate._COMMON_TEMPLATE_RELPATH / ".specs"
+    path_dir.mkdir(parents=True)
+    (path_dir / "a.md").write_text("x", encoding="utf-8")
+
+    assert gate.required_relpaths(path_root) == {".specs/a.md"}
+
+
+def test_roster_opt_in_adds_back_only_the_roster_guarded_copies() -> None:
+    """A copy guarded by some OTHER condition must not become required by the roster choice."""
+    str_lib = (
+        'if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then\n'
+        '  cp "$COMMON_TEMPLATE_ROOT/r.yaml" "$str_project_path/r.yaml"\n'
+        "fi\n"
+        'if [[ "$tier" == "x" ]]; then\n'
+        '  cp "$COMMON_TEMPLATE_ROOT/t.txt" "$str_project_path/t.txt"\n'
+        "fi\n"
+    )
+
+    assert gate.conditional_relpaths(str_lib, "INCLUDE_REVIEW_BOT_ROSTER") == {"r.yaml"}
+
+
+def test_untracked_files_in_a_git_checkout_are_not_required(tmp_path: Path) -> None:
+    """Only tracked files are template files; a stray untracked one is never 'missing'."""
+    path_root = _blueprintx_root(tmp_path)
+    path_lib = path_root / gate._SCAFFOLD_LIB_RELPATH
+    path_lib.write_text(
+        'cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$str_project_path/bin"\n', encoding="utf-8"
+    )
+    path_bin = path_root / gate._COMMON_TEMPLATE_RELPATH / "bin"
+    path_bin.mkdir(parents=True)
+    (path_bin / "tracked.sh").write_text("x", encoding="utf-8")
+    (path_bin / "stray.log").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=path_root, check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603, S607
+        ["git", "add", "-f", str(path_bin / "tracked.sh")],  # noqa: S607
+        cwd=path_root,
+        check=True,
+    )
+
+    assert gate.required_relpaths(path_root) == {"bin/tracked.sh"}
+
+
+def test_a_flag_without_a_value_fails_loudly() -> None:
+    """A valueless `--root` must not silently fall back to cwd."""
+    with pytest.raises(SystemExit):
+        gate._parse_args(["--root"])
