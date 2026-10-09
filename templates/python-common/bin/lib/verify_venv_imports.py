@@ -169,7 +169,7 @@ def requirement_is_active(str_line: str) -> bool:
         from packaging.markers import Marker
     except ImportError:
         print(f"warning: cannot evaluate marker for {str_line.strip()!r}", file=sys.stderr)
-        return False
+        return True
     return bool(Marker(str_marker).evaluate())
 
 
