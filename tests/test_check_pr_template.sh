@@ -225,6 +225,21 @@ test_structural_label_alone_is_empty_not_filled() {
         '`### Automated Testing` heading: present but empty'
 }
 
+test_optional_label_kept_with_nothing_under_it_fails() {
+    local str_body
+    str_body="$(good_body)"$'\n**Dependencies**:'
+    expect_gate "Dependencies label kept, no content" "$str_body" fail \
+        '`**Dependencies**:` field: present but empty'
+}
+
+test_longer_fence_is_not_closed_by_a_shorter_one() {
+    local str_body
+    str_body="$(without '^## Documentation' '^## Additional')"
+    expect_gate "heading inside a 4-backtick fence holding a 3-backtick line" \
+        "$str_body"$'\n````\n```\n## Documentation\n- fake\n```\n````' fail \
+        '`## Documentation` heading: missing'
+}
+
 test_added_under_the_wrong_section_does_not_count() {
     local str_body
     str_body="$(good_body | sed 's/^\*\*Added\*\*:/Prose only, no field./')"

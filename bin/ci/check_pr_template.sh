@@ -34,7 +34,14 @@ normalize() {
     tr -d '\r' | awk '
         BEGIN { in_comment = 0; in_fence = 0 }
         {
-            if (!in_comment && $0 ~ /^[[:space:]]*(```|~~~)/) { in_fence = !in_fence; next }
+            if (!in_comment && match($0, /^[[:space:]]*(```+|~~~+)/)) {
+                run = substr($0, RSTART, RLENGTH); gsub(/[[:space:]]/, "", run)
+                ch = substr(run, 1, 1)
+                if (!in_fence) { in_fence = 1; f_ch = ch; f_len = length(run); next }
+                rest = substr($0, RSTART + RLENGTH)
+                if (ch == f_ch && length(run) >= f_len && rest ~ /^[[:space:]]*$/) in_fence = 0
+                next
+            }
             if (in_fence) next
             line = $0; out = ""
             while (length(line) > 0) {
@@ -210,6 +217,12 @@ check_optional_not_filler() {
         [ -n "${MAP_PH[$str_key]+x}" ] || continue
         if [ "${MAP_PH[$str_key]}" -gt 0 ]; then
             problem "$(describe "$str_key"): still the template text — fill it in or delete it"
+        fi
+    done
+    for str_key in "${ARR_OPTIONAL[@]}"; do
+        [ -n "${MAP_REAL[$str_key]+x}" ] || continue
+        if [ "${MAP_REAL[$str_key]}" -eq 0 ] && [ "${MAP_PH[$str_key]}" -eq 0 ]; then
+            problem "$(describe "$str_key"): present but empty — fill it in or delete it"
         fi
     done
 }
