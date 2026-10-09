@@ -266,7 +266,7 @@ repos:
         entry: bash tests/test_scaffold_kanban.sh
         language: system
         pass_filenames: false
-        files: ^(bin/lib/scaffold_kanban\.sh|bin/lib/scaffold_git_remote\.sh|tests/test_scaffold_kanban\.sh)$
+        files: ^(bin/lib/(scaffold_kanban|common)\.sh|bin/lib/scaffold_git_remote\.sh|tests/test_scaffold_kanban\.sh)$
 
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)

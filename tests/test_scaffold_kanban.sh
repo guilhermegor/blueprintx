@@ -31,6 +31,11 @@ jq_arg() {
 }
 case "$1 $2" in
 "project list")
+    [ -z "${GH_NOISE:-}" ] || echo "A new release of gh is available" >&2
+    if [ -n "${GH_LIST_FAIL:-}" ]; then
+        echo "error: your authentication token is missing required scopes [read:project]" >&2
+        exit 1
+    fi
     str_json="${GH_PROJECTS:-}"
     [ -n "$str_json" ] || str_json='{"projects":[]}'
     jq -r "$(jq_arg "$@")" <<<"$str_json" ;;
@@ -39,6 +44,7 @@ case "$1 $2" in
         echo "error: your authentication token is missing required scopes [project]" >&2
         exit 1
     fi
+    [ -z "${GH_NOISE:-}" ] || echo "A new release of gh is available" >&2
     echo 7 ;;
 "project field-list") echo "PVTSSF_status" ;;
 "api graphql") cat >>"$GH_LOG.stdin" ;;
@@ -152,6 +158,29 @@ test_a_missing_scope_prints_the_fix_and_carries_on() {
     expect_log "missing scope" "project link" absent
 }
 
+test_a_failed_project_list_still_prints_the_scope_fix() {
+    local str_out
+    str_out="$(run_setup '\n\n' GH_LIST_FAIL=1)"
+    expect_out "list failure" "$str_out" "gh auth refresh -s project"
+    expect_log "list failure" "project create" absent
+}
+
+test_stderr_noise_on_success_never_corrupts_values() {
+    local str_out
+    str_out="$(run_setup '\n' GH_NOISE=1 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":4}]}')"
+    expect_out "noisy list" "$str_out" "already exists (#4)"
+    run_setup '\n\n' GH_NOISE=1 >/dev/null
+    expect_log "noisy create" "project link 7 --owner octo --repo octo/widget" present
+}
+
+test_empty_stdin_means_no_board() {
+    local str_out
+    str_out="$(run_setup '')"
+    expect_log "EOF" "project create" absent
+    expect_log "EOF" "project list" absent
+    expect_out "EOF" "$str_out" "Skipped the kanban board"
+}
+
 main() {
     make_stub
     # Every case must hit the stub: a real `gh` here would try the real GitHub API.
@@ -163,6 +192,9 @@ main() {
     test_an_existing_board_is_skipped_not_duplicated
     test_an_ambiguous_board_is_never_guessed
     test_a_missing_scope_prints_the_fix_and_carries_on
+    test_a_failed_project_list_still_prints_the_scope_fix
+    test_stderr_noise_on_success_never_corrupts_values
+    test_empty_stdin_means_no_board
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
         exit 1

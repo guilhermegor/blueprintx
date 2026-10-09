@@ -22,10 +22,11 @@ do-not-merge|B60205|Hold: must not be merged yet"
 
 scaffold_kanban_scope_hint() {
 	# A token without the `project` scope fails with a 403 / "insufficient scopes"; say how to fix it.
+	# To stderr: callers run inside $(...), where stdout would be swallowed with the value.
 	if grep -qiE 'scope|403|insufficient|read:project' <<<"$1"; then
-		print_status "warning" "The gh token lacks the 'project' scope — run: gh auth refresh -s project"
+		print_status "warning" "The gh token lacks the 'project' scope — run: gh auth refresh -s project" >&2
 	else
-		print_status "warning" "Could not create the kanban board: $1"
+		print_status "warning" "Could not create the kanban board: $1" >&2
 	fi
 }
 
@@ -33,9 +34,9 @@ scaffold_create_house_labels() {
 	# Idempotent and never fatal: a label that cannot be made must not abort scaffolding.
 	local str_slug="$1" str_name str_colour str_desc str_line int_failed=0
 	while IFS='|' read -r str_name str_colour str_desc; do
-		str_line="$str_name"
 		gh label create "$str_name" --repo "$str_slug" --color "$str_colour" \
-			--description "$str_desc" --force >/dev/null 2>&1 || int_failed=$((int_failed + 1))
+			--description "$str_desc" --force >/dev/null 2>&1 ||
+			{ int_failed=$((int_failed + 1)); str_line="$str_name"; }
 	done <<<"$SCAFFOLD_HOUSE_LABELS"
 	if [ "$int_failed" -eq 0 ]; then
 		print_status "success" "House labels created on ${str_slug}"
@@ -63,12 +64,18 @@ scaffold_kanban_find() {
 	# Prints the number of an existing `<repo> kanban` project, matched on the exact title like
 	# kanban_lifecycle.sh's discover_board. Returns 0 none/one found (number may be empty),
 	# 2 when several carry the title (never guess which), 1 when the list cannot be read.
-	local str_owner="$1" str_title="$2" str_numbers int_count
+	local str_owner="$1" str_title="$2" str_numbers int_count str_err
+	str_title="${str_title//\\/\\\\}"
+	str_title="${str_title//\"/\\\"}"
+	str_err="$(mktemp)"
+	# stderr goes to its own file: on success it must never leak into the parsed number.
 	str_numbers="$(gh project list --owner "$str_owner" --format json \
-		--jq ".projects[] | select(.title==\"${str_title}\") | .number" 2>&1)" || {
-		scaffold_kanban_scope_hint "$str_numbers"
+		--jq ".projects[] | select(.title==\"${str_title}\") | .number" 2>"$str_err")" || {
+		scaffold_kanban_scope_hint "$(cat "$str_err")"
+		rm -f "$str_err"
 		return 1
 	}
+	rm -f "$str_err"
 	int_count="$(grep -c . <<<"$str_numbers" || true)"
 	[ "$int_count" -le 1 ] || return 2
 	printf '%s' "$str_numbers"
@@ -95,19 +102,19 @@ scaffold_kanban_fields() {
 	while IFS='|' read -r str_name str_type str_opts; do
 		if [ -n "$str_opts" ]; then
 			gh project field-create "$str_number" --owner "$str_owner" --name "$str_name" \
-				--data-type "$str_type" --single-select-options "$str_opts" >/dev/null 2>&1 || int_failed=1
+				--data-type "$str_type" --single-select-options "$str_opts" >/dev/null 2>&1 ||
+				{ int_failed=1; str_spec="$str_name"; }
 		else
 			gh project field-create "$str_number" --owner "$str_owner" --name "$str_name" \
-				--data-type "$str_type" >/dev/null 2>&1 || int_failed=1
+				--data-type "$str_type" >/dev/null 2>&1 || { int_failed=1; str_spec="$str_name"; }
 		fi
-		str_spec="$str_name"
 	done <<<"Priority|SINGLE_SELECT|P0,P1,P2
 Size|SINGLE_SELECT|XS,S,M,L,XL
 Estimate|NUMBER|
 Start date|DATE|
 Target date|DATE|
 Points|NUMBER|"
-	[ "$int_failed" -eq 0 ] || print_status "warning" "A project field could not be created (last attempted: ${str_spec})"
+	[ "$int_failed" -eq 0 ] || print_status "warning" "A project field could not be created (last failure: ${str_spec})"
 }
 
 scaffold_kanban_url() {
@@ -118,13 +125,15 @@ scaffold_kanban_url() {
 }
 
 scaffold_kanban_create() {
-	local str_slug="$1" str_owner="$2" str_title="$3" str_vis="$4" str_out str_number
-	str_out="$(gh project create --owner "$str_owner" --title "$str_title" --format json \
-		--jq '.number' 2>&1)" || {
-		scaffold_kanban_scope_hint "$str_out"
+	local str_slug="$1" str_owner="$2" str_title="$3" str_vis="$4" str_number str_err
+	str_err="$(mktemp)"
+	str_number="$(gh project create --owner "$str_owner" --title "$str_title" --format json \
+		--jq '.number' 2>"$str_err")" || {
+		scaffold_kanban_scope_hint "$(cat "$str_err")"
+		rm -f "$str_err"
 		return 1
 	}
-	str_number="$str_out"
+	rm -f "$str_err"
 	gh project edit "$str_number" --owner "$str_owner" --visibility "$str_vis" >/dev/null 2>&1 ||
 		print_status "warning" "Could not set the board's visibility to ${str_vis}"
 	gh project link "$str_number" --owner "$str_owner" --repo "$str_slug" >/dev/null 2>&1 ||
@@ -147,7 +156,7 @@ scaffold_kanban_setup() {
 
 	scaffold_create_house_labels "$str_slug"
 
-	read -r -p "$(prompt_main "Create a '${str_title}' GitHub Project linked to this repo? [Y/n]: ")" str_answer || true
+	read -r -p "$(prompt_main "Create a '${str_title}' GitHub Project linked to this repo? [Y/n]: ")" str_answer || str_answer=n # EOF is no: never create a GitHub Project unasked
 	case "$str_answer" in
 	n | N)
 		print_status "info" "Skipped the kanban board"
