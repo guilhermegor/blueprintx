@@ -870,8 +870,9 @@ def ladder_marker_declared(
     -------
     bool
             ``True`` only for an OWNER/MEMBER/COLLABORATOR comment carrying a marker and
-            postdating the head, whose second line names the head SHA and which reports zero findings, so an outside
-            commenter cannot forge it and a review of an older head cannot be reused.
+            postdating the head, whose second line names the head SHA and which reports zero
+            findings, so an outside commenter cannot forge it and a review of an older head
+            cannot be reused.
     """
     if not str_head_date or not str_head_oid:
         return False
