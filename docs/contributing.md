@@ -104,9 +104,10 @@ this convention has been applied to), with a `Blocked by` text field.
     snapshot length equals the count. Send every option with its existing `id` (only the new
     `Blocked` has none), pass the payload as a `{query, variables}` body via
     `gh api graphql --input <file>`, then diff per item id against the snapshot. If the diff
-    shows any wiped Status, stop and restore each one from the snapshot with
-    `updateProjectV2ItemFieldValue` (its `singleSelectOptionId` is the snapshot's stored option
-    id), then re-diff until it is empty.
+    shows any wiped Status, stop and restore each one with `updateProjectV2ItemFieldValue`.
+    Its `singleSelectOptionId` must be an option that exists now, and a wipe means the old ids
+    were replaced, so map each item's saved Status label to the field's current option id
+    (re-read the field's options first). Then re-diff until the diff is empty.
 
 ## Releasing
 
