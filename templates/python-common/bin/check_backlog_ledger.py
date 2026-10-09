@@ -1,7 +1,7 @@
 """Enforce the per-branch work-ledger convention structurally, not by memory.
 
 A branch whose cumulative diff touches a **non-trivial** path must add a work ledger under
-``docs/backlog/<kebab>_YYYYMMDD_HHMMSS.md`` carrying at least one ``- [ ]`` / ``- [x]`` checkbox.
+``.specs/backlog/<kebab>_YYYYMMDD_HHMMSS.md`` carrying at least one ``- [ ]`` / ``- [x]`` checkbox.
 It was the last rule of the flow enforced by memory in a repo that makes every other convention
 structural, so it is wired into both pre-commit and CI (gate parity), like ``check_typing.py``.
 
@@ -113,9 +113,9 @@ def pr_author_login() -> str:
 # routine and a ledger for them would be noise nobody reads.
 LEDGER_CLASSES = frozenset({"src", "ci"})
 
-LEDGER_DIR = "docs/backlog"
+LEDGER_DIR = ".specs/backlog"
 # <kebab-topic>_YYYYMMDD_HHMMSS.md
-LEDGER_RE = re.compile(r"^docs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.md$")
+LEDGER_RE = re.compile(r"^\.specs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.md$")
 CHECKBOX_RE = re.compile(r"^\s*[-*]\s+\[[ xX]\]", re.M)
 
 _BIN = pathlib.Path(__file__).resolve().parent

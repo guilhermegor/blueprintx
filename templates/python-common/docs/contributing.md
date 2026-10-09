@@ -211,6 +211,6 @@ the accepted cost of not needing a personal access token.
 ### The work-ledger gate
 
 `bin/check_backlog_ledger.py` (pre-commit + CI) fails a branch that touches `src/` or CI paths but
-adds no `docs/backlog/<kebab>_YYYYMMDD_HHMMSS.md` ledger with a `- [ ]` checklist — making the
+adds no `.specs/backlog/<kebab>_YYYYMMDD_HHMMSS.md` ledger with a `- [ ]` checklist — making the
 per-branch work-ledger convention structural instead of a thing you remember. Routine
 docs/deps/tests-only branches need none.

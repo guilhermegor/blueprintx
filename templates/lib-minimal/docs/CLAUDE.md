@@ -14,12 +14,10 @@ Keep such working documents under a folder that is excluded from the build via
 
 ```yaml
 exclude_docs: |
-  backlog/        # work-to-do backlogs, follow-up notes — never published
 ```
 
-- `docs/backlog/` — work-to-do backlogs and follow-up notes. **Not** added to
-  `nav:`, **not** part of the published site. For any non-trivial branch, keep a
-  **per-branch work ledger** here at `docs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md`
+- `.specs/backlog/` — work-to-do backlogs and follow-up notes (outside `docs/`, so never published). For any non-trivial branch, keep a
+  **per-branch work ledger** here at `.specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md`
   (timestamped filename, set at creation, never renamed) recording **what was done**
   and **what remains / is open**, updated as the work proceeds. Tracked in git but
   excluded from the site, so knowledge survives across sessions. Distinct from

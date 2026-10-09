@@ -345,10 +345,10 @@ repos:
         pass_filenames: false
 
       # Structural gate for the per-branch work-ledger convention: a branch whose cumulative diff
-      # touches src/ or ci paths must add docs/backlog/<kebab>_YYYYMMDD_HHMMSS.md with a checklist.
+      # touches src/ or ci paths must add .specs/backlog/<kebab>_YYYYMMDD_HHMMSS.md with a checklist.
       # Diffs the INDEX against merge-base so a staged-but-uncommitted ledger counts.
       - id: check-backlog-ledger
-        name: work-ledger (docs/backlog) check
+        name: work-ledger (.specs/backlog) check
         entry: bash bin/poetry_exec.sh run python bin/check_backlog_ledger.py
         language: system
         pass_filenames: false

@@ -684,12 +684,11 @@ copy_mkdocs_templates() {
         "$project_path/docs/contributing.md"
     cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
-    # Non-published docs/ authoring guide + the excluded backlog folder.
+    # Non-published docs/ authoring guide + the .specs/backlog ledger folder.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
-    mkdir -p "$project_path/docs/backlog"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/backlog/.keep" \
-        "$project_path/docs/backlog/.keep"
+    mkdir -p "$project_path/.specs/backlog"
+    touch "$project_path/.specs/backlog/.keep"
 
 
     print_status "success" "MkDocs templates copied"

@@ -97,19 +97,19 @@ def test_membership_is_asked_per_path_not_over_the_whole_list() -> None:
 def test_a_valid_ledger_satisfies_the_branch() -> None:
     """A correctly named ledger clears the requirement."""
     assert (
-        ledger.find_ledger_problems(["src/a.py", "docs/backlog/my-topic_20260720_101500.md"]) == []
+        ledger.find_ledger_problems(["src/a.py", ".specs/backlog/my-topic_20260720_101500.md"]) == []
     )
 
 
 def test_missing_ledger_is_reported() -> None:
     """A src-touching branch with no ledger fails, and the message says what to create."""
-    assert "docs/backlog" in _first_problem(ledger.find_ledger_problems(["src/a.py"]))
+    assert ".specs/backlog" in _first_problem(ledger.find_ledger_problems(["src/a.py"]))
 
 
 def test_ledger_name_must_be_kebab_plus_timestamp() -> None:
     """A misnamed ledger is rejected — the timestamped kebab name is the convention."""
     assert "kebab" in _first_problem(
-        ledger.find_ledger_problems(["src/a.py", "docs/backlog/BadName.md"])
+        ledger.find_ledger_problems(["src/a.py", ".specs/backlog/BadName.md"])
     )
 
 
