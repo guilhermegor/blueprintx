@@ -905,10 +905,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#ddd-tiers-ddd-service-native-db-ddd-service-orm-db" class="md-nav__link">
+  <a href="#ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db" class="md-nav__link">
     <span class="md-ellipsis">
       
-        DDD tiers (ddd-service-native-db, ddd-service-orm-db)
+        DDD and API tiers (ddd-service-native-db, ddd-service-orm-db, api-service-native-db)
       
     </span>
   </a>
@@ -1857,10 +1857,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#ddd-tiers-ddd-service-native-db-ddd-service-orm-db" class="md-nav__link">
+  <a href="#ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db" class="md-nav__link">
     <span class="md-ellipsis">
       
-        DDD tiers (ddd-service-native-db, ddd-service-orm-db)
+        DDD and API tiers (ddd-service-native-db, ddd-service-orm-db, api-service-native-db)
       
     </span>
   </a>
@@ -2067,9 +2067,13 @@ themselves (<code>bin/scaffold/python_*.sh</code>) still read positional stdin a
 are not edited by this mechanism — so when one of them gains a new prompt, updating that
 one function is what keeps every spec-driven caller correct, instead of every stored
 answer string everywhere.</p>
-<p>Named-key support ships per skeleton. Today: the five Python tiers. Call
+<p>Named-key support ships per skeleton. Today: the six Python tiers. Call
 <code>spec_skeleton_supported &lt;skeleton&gt;</code> to check before relying on <code>spec_stdin_for_skeleton</code>.</p>
-<h3 id="ddd-tiers-ddd-service-native-db-ddd-service-orm-db">DDD tiers (<code>ddd-service-native-db</code>, <code>ddd-service-orm-db</code>)<a class="headerlink" href="#ddd-tiers-ddd-service-native-db-ddd-service-orm-db" title="Permanent link">&para;</a></h3>
+<h3 id="ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db">DDD and API tiers (<code>ddd-service-native-db</code>, <code>ddd-service-orm-db</code>, <code>api-service-native-db</code>)<a class="headerlink" href="#ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db" title="Permanent link">&para;</a></h3>
+<p><code>api-service-native-db</code> asks the same prompts in the same order as the DDD tiers, so it shares
+their key map (blueprintx#668). <code>tests/test_spec_answers.sh</code> compares the two scaffold scripts'
+prompt sequences, so a prompt added to one of them fails there instead of silently misaligning
+the stored answers.</p>
 <table>
 <thead>
 <tr>
@@ -2087,7 +2091,7 @@ answer string everywhere.</p>
 <tr>
 <td><code>storage</code></td>
 <td><code>n</code></td>
-<td>Schema-less file storage (JSON/CSV/joblib). DDD-only.</td>
+<td>Schema-less file storage (JSON/CSV/joblib). DDD and API tiers; MVC has no such prompt.</td>
 </tr>
 <tr>
 <td><code>data_dir</code></td>
@@ -2208,7 +2212,7 @@ here — scope note from blueprintx#481.</p>
 <p><code>react-spa-webpack</code>, <code>ts-lib</code>, and any future non-Python skeleton have no entry in
 <code>spec_stdin_for_skeleton</code> yet. <code>--spec</code> still resolves their top-level answers (project
 name, language, skeleton, license, …); their scaffold-internal prompts stay interactive
-until a named-key map is added for them, the same way the five Python tiers were —
+until a named-key map is added for them, the same way the six Python tiers were —
 <code>spec_skeleton_supported</code> returns <code>false</code> for them today. <code>blueprintx new --spec</code> <strong>refuses</strong>
 such a skeleton before creating anything (a half-interactive run would hang an unattended
 caller); <code>--spec ... --dry-run</code> still reports the resolved top-level answers with a warning.
