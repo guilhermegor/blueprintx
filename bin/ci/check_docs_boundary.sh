@@ -120,14 +120,16 @@ is_denied() {
     return 1
 }
 
+# Judge what git would publish (blueprintx#632), but only in a repo whose top level IS
+# REPO_ROOT: an enclosing repo's .gitignore must not decide for a plain directory inside it.
+# Computed once; a non-repo or an enclosed dir leaves every entry "not ignored".
+bool_own_repo=0
+if [ -z "$(git -C "$REPO_ROOT" rev-parse --show-prefix 2>/dev/null || echo x)" ]; then
+    bool_own_repo=1
+fi
+
 is_git_ignored() {
-    # Judge what git would publish (blueprintx#632). Outside a work tree check-ignore exits
-    # 128, which is "not ignored" — the plain-directory test sandboxes rely on it.
-    # Only trust a repo whose top level IS REPO_ROOT: an enclosing repo's .gitignore must not
-    # decide the verdict for a plain directory that merely sits inside it.
-    local str_prefix
-    str_prefix="$(git -C "$REPO_ROOT" rev-parse --show-prefix 2>/dev/null)" || return 1
-    [ -z "$str_prefix" ] || return 1
+    [ "$bool_own_repo" -eq 1 ] || return 1
     git -C "$REPO_ROOT" check-ignore -q -- "$1" 2>/dev/null
 }
 
