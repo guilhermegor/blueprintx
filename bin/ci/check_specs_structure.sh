@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Validates the .specs/ layout (blueprintx#447, #583). One implementation, two callers: this
-# repo's own tree (default) or any tree via `--root <dir>`, as the other gates take it.
+# repo's own tree and every generated project, which gets this file copied to its bin/ at
+# scaffold time (there is no second copy under templates/). Either way the tree is `--root <dir>`;
+# without it the root is two levels up from bin/ci/ here, one level up from bin/ in a project.
 # .specs/CLAUDE.md is the human-facing version of every rule below; each is checked, not claimed.
 #
 #   1. If .specs/ exists, .specs/CLAUDE.md must exist.
@@ -20,7 +22,10 @@ set -euo pipefail
 # yielding the literal pattern as a filename.
 shopt -s dotglob nullglob
 
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+case "$(basename "$(dirname "$0")")" in
+    ci) REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)" ;;
+    *) REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)" ;;
+esac
 if [ "${1:-}" = "--root" ]; then
     # A missing --root must fail: every later check would see "no .specs/" and report success.
     [ -n "${2:-}" ] && [ -d "$2" ] || {

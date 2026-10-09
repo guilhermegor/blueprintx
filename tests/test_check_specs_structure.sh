@@ -200,7 +200,48 @@ test_backlog_rules() {
     expect "directory inside backlog/" "$str_root" fail "is not a file"
 }
 
+test_shipped_skeleton_passes() {
+    # The tree every scaffold copies (blueprintx#446): the gate must accept what BlueprintX ships.
+    local str_root
+    str_root="$(mktemp -d)"
+    cp -r "$REPO_ROOT/templates/common/.specs" "$str_root/.specs"
+    expect "the scaffold's shipped .specs/" "$str_root" pass "layout is valid"
+    str_root="$(mktemp -d)"
+    cp -r "$REPO_ROOT/templates/common/.specs" "$str_root/.specs"
+    touch "$str_root/.specs/spec.md"
+    expect "the retired top-level spec.md" "$str_root" fail "unexpected top-level entry .specs/spec.md"
+}
+
+run_default_root() {
+    # Runs the project-layout copy of the gate with no --root, from an unrelated cwd, so a
+    # cwd-derived default would pass where a script-location-derived one fails.
+    (cd / && bash "$1/bin/check_specs_structure.sh" 2>&1)
+}
+
+test_default_root_follows_the_script_location() {
+    local str_root str_out str_got="pass"
+    str_root="$(mktemp -d)"
+    mkdir -p "$str_root/bin" "$str_root/.specs/features"
+    printf '# specs\n' >"$str_root/.specs/CLAUDE.md"
+    cp "$GATE" "$str_root/bin/check_specs_structure.sh"
+    str_out="$(run_default_root "$str_root")" || str_got="fail"
+    if [ "$str_got" != "pass" ]; then
+        print_status "error" "default root, valid project tree -> $str_got: $str_out"
+        int_failures=$((int_failures + 1))
+    fi
+    touch "$str_root/.specs/notes.md"
+    str_got="pass"
+    str_out="$(run_default_root "$str_root")" || str_got="fail"
+    if [ "$str_got" != "fail" ] || ! printf '%s' "$str_out" | grep -qF -- "unexpected top-level entry .specs/notes.md"; then
+        print_status "error" "default root, stray note -> $str_got: $str_out"
+        int_failures=$((int_failures + 1))
+    fi
+    rm -rf "$str_root"
+}
+
 main() {
+    test_shipped_skeleton_passes
+    test_default_root_follows_the_script_location
     test_valid_tree_passes
     test_no_specs_dir_is_a_skip
     test_missing_root_fails

@@ -428,7 +428,8 @@ with an empty `closingIssuesReferences`, so #355 never closed) in a cheaper file
 team-reviewable record of what was done and why. When complete, tick the last box and add
 a short "Completed — kept as a record" note instead of removing the file. `.specs/` is
 outside the MkDocs source tree entirely, so nothing has to be excluded to keep it
-unpublished. `bin/ci/check_specs_structure.sh` enforces the layout. (Lesson:
+unpublished. `bin/ci/check_specs_structure.sh` enforces the layout, here via `--root .` and in every
+Python scaffold as a copy of that same file. (Lesson:
 persist-todo-in-docs-backlog, written when trackers lived in `docs/backlog/`; they moved
 in blueprintx#575.)
 
