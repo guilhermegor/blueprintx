@@ -1026,7 +1026,7 @@ _RE_BODY_COUNT = re.compile(r"\b[1-9]\d*\s+findings?\b", re.IGNORECASE)
 _RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
 _STR_CLEAN_LINE = (
     r"^[^\w\n]*(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
-    r"|(?:critical|major|minor|blocker|nitpick)[^\w\n]*(?:none|n/?a|no\b)[^\n]*)[^\w\n]*$"
+    r"|(?:critical|major|minor|blocker|nitpick)[^\w\n]*(?:none|n/?a|no)(?:\s+(?:found|issues?|findings?))?)[^\w\n]*$"
 )
 # A clean line must BE the line ("No major issues."), never a phrase inside a longer one
 # ("parse() has no known bugs on ASCII but crashes"), or it would mask a real finding.

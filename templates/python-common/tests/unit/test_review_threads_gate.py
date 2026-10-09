@@ -1739,6 +1739,8 @@ def test_review_body_findings_from_a_non_roster_author_are_ignored() -> None:
         "## Findings\n\n- the loop swallows the error",
         "## Findings\n- `parse()` has no known bugs on ASCII but crashes on empty input",
         "No findings in a.py.\n**Major** — b.py swallows the error.",
+        "- **Major:** no input validation in parse(), RCE via crafted path",
+        "**Critical** — None of the callers check the return code, data loss",
     ],
 )
 def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
@@ -1759,6 +1761,7 @@ def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
         "No **Major** issues.",
         "- **Critical:** none",
         "Minor: none found",
+        "Major: none",
     ],
 )
 def test_review_body_reporting_no_findings_stays_green(str_body: str) -> None:
