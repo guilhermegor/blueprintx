@@ -876,6 +876,7 @@ def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     _git_in(tmp_path, "init", "-q", "--initial-branch=main")
     _git_in(tmp_path, "config", "user.email", "t@example.com")
     _git_in(tmp_path, "config", "user.name", "t")
+    _git_in(tmp_path, "config", "commit.gpgsign", "false")
     _git_in(tmp_path, "commit", "-q", "--allow-empty", "-m", "seed")
     _git_in(tmp_path, "checkout", "-q", "-b", "feature")
     (tmp_path / "own").write_text("own", encoding="utf-8")
