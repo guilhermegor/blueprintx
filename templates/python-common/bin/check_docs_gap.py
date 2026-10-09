@@ -169,17 +169,19 @@ def _walk_markdown(path_docs: pathlib.Path) -> list[pathlib.Path]:
     Returns
     -------
     list of pathlib.Path
-        Markdown files, unsorted. A directory whose real path was already visited is
-        pruned, so a link back to an ancestor cannot loop.
+        Markdown files, unsorted. A directory whose real path is an ancestor on its own
+        branch is pruned, so a link back cannot loop; sibling aliases are all kept.
     """
     list_found = []
-    set_seen: set[str] = set()
+    dict_ancestors: dict[str, frozenset[str]] = {str(path_docs): frozenset()}
     for str_dir, list_dirs, list_files in os.walk(path_docs, followlinks=True):
         str_real = os.path.realpath(str_dir)
-        if str_real in set_seen:
+        set_ancestors = dict_ancestors[str_dir]
+        if str_real in set_ancestors:
             list_dirs.clear()
             continue
-        set_seen.add(str_real)
+        for str_sub in list_dirs:
+            dict_ancestors[os.path.join(str_dir, str_sub)] = set_ancestors | {str_real}
         list_found.extend(
             pathlib.Path(str_dir) / str_f for str_f in list_files if str_f.endswith(".md")
         )

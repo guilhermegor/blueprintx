@@ -378,3 +378,16 @@ def test_symlink_loop_terminates(tmp_path: pathlib.Path) -> None:
     (path_root / "docs" / "loop").symlink_to(path_root / "docs", target_is_directory=True)
     list_pages = cls_gate.published_pages(path_root / "docs", cls_gate.unpublished_specs({}))
     assert list_pages == ["index.md"]
+
+
+def test_two_symlink_aliases_of_one_directory_are_both_found(tmp_path: pathlib.Path) -> None:
+    """MkDocs publishes each docs-relative alias, so a shared real path is not deduped."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    path_docs = path_root / "docs"
+    (path_docs / "pages").mkdir()
+    (path_docs / "pages" / "file.md").write_text("# F", encoding="utf-8")
+    (path_docs / "alias").symlink_to(path_docs / "pages", target_is_directory=True)
+    (path_docs / "pages" / "loop").symlink_to(path_docs, target_is_directory=True)
+    list_pages = cls_gate.published_pages(path_docs, cls_gate.unpublished_specs({}))
+    assert "alias/file.md" in list_pages
+    assert "pages/file.md" in list_pages
