@@ -87,6 +87,17 @@ without() {
         !skipping { print }'
 }
 
+with_not_applicable() {
+    # stdin: a body. Adds **Not Applicable**: (+ optional $1 line) right after the Automated
+    # Testing content, where the template puts it: fields are keyed by section, so placement
+    # matters.
+    awk -v txt="$1" '
+        { print }
+        /^- tests\/test_check_pr_template.sh/ {
+            print ""; print "**Not Applicable**:"; if (txt != "") print txt
+        }'
+}
+
 test_complete_body_passes() {
     expect_gate "complete body, conditional fields omitted" "$(good_body)" pass
 }
@@ -151,16 +162,14 @@ test_missing_testing_subsection_needs_not_applicable() {
 
 test_not_applicable_excuses_a_missing_testing_subsection() {
     local str_body
-    str_body="$(without '^### Manual Testing' '^### Automated')"
-    expect_gate "no Manual Testing, but Not Applicable explains it" \
-        "$str_body"$'\n**Not Applicable**:\n- Documentation-only change.' pass
+    str_body="$(without '^### Manual Testing' '^### Automated' | with_not_applicable '- Documentation-only change.')"
+    expect_gate "no Manual Testing, but Not Applicable explains it" "$str_body" pass
 }
 
 test_empty_not_applicable_does_not_excuse() {
     local str_body
-    str_body="$(without '^### Manual Testing' '^### Automated')"
-    expect_gate "Not Applicable present but empty" \
-        "$str_body"$'\n**Not Applicable**:' fail '`### Manual Testing` heading'
+    str_body="$(without '^### Manual Testing' '^### Automated' | with_not_applicable '')"
+    expect_gate "Not Applicable present but empty" "$str_body" fail '`### Manual Testing` heading'
 }
 
 test_change_group_needs_one_filled_member() {
@@ -187,6 +196,71 @@ test_optional_field_left_as_template_text_fails() {
     str_body="$(good_body)"$'\n**Follow-up**:\n- Tech debt: [Brief note].'
     expect_gate "Follow-up left as the template placeholder" "$str_body" fail \
         '`**Follow-up**:` field: still the template text'
+}
+
+test_automated_testing_left_as_template_text_fails() {
+    # blueprintx#672: the old parser credited **Not Applicable** text to the open ### too, so
+    # an Automated Testing left verbatim stopped matching the template and counted as filled.
+    local str_body str_tpl
+    str_tpl="$(awk '/^### Automated Testing/ { f = 1; next } /^\*\*Not Applicable/ { f = 0 } f' \
+        "$REPO_ROOT/.github/PULL_REQUEST_TEMPLATE.md")"
+    str_body="$(good_body | awk -v tpl="$str_tpl" '
+        /^- tests\/test_check_pr_template.sh/ { print tpl; next } { print }')"
+    expect_gate "Automated Testing left exactly as the template, no Not Applicable" "$str_body" fail \
+        '`### Automated Testing` heading: still the template text'
+}
+
+test_added_under_the_wrong_section_does_not_count() {
+    local str_body
+    str_body="$(good_body | sed 's/^\*\*Added\*\*:/Prose only, no field./')"
+    str_body="$str_body"$'\n**Added**:\n- misplaced under Additional Notes.'
+    expect_gate "**Added** only under Additional Notes" "$str_body" fail \
+        'none of Added, Updated or Fixed is filled in'
+}
+
+test_one_leftover_placeholder_line_fails() {
+    local str_body
+    str_body="$(good_body | sed 's/^- bin\/ci\/check_pr_template.sh\./&\n- New template file: [Path]./')"
+    expect_gate "Added with a real line and one placeholder line left" "$str_body" fail \
+        '`**Added**:` field: still the template text'
+}
+
+test_optional_field_with_placeholder_plus_real_line_fails() {
+    local str_body
+    str_body="$(good_body)"$'\n**Follow-up**:\n- Tech debt: [Brief note].\n- Wire it as required.'
+    expect_gate "Follow-up: placeholder kept beside a real line" "$str_body" fail \
+        '`**Follow-up**:` field: still the template text'
+}
+
+test_bold_label_variants_are_accepted() {
+    local str_body
+    str_body="$(good_body | sed -e 's/^\*\*What\*\*:/**What:**/' -e 's/^\*\*Why\*\*:/**Why** :/')"
+    expect_gate "**What:** and **Why** : render like **What**:" "$str_body" pass
+}
+
+test_tilde_fence_hides_headings() {
+    local str_body
+    str_body="$(without '^## Documentation' '^## Additional')"
+    expect_gate "heading only inside a ~~~ fence" \
+        "$str_body"$'\n~~~\n## Documentation\n- fake\n~~~' fail '`## Documentation` heading: missing'
+}
+
+test_comment_opener_inside_a_fence_does_not_swallow_the_body() {
+    local str_body
+    str_body="$(good_body | sed 's/^\*\*How\*\*:.*/&\n```html\n<!-- a snippet\n```/')"
+    expect_gate "a literal <!-- inside a fenced block" "$str_body" pass
+}
+
+test_thematic_break_inside_a_field_keeps_its_content() {
+    local str_body
+    str_body="$(good_body | sed 's/^\*\*Added\*\*:/&\n---/')"
+    expect_gate "--- between **Added**: and its list" "$str_body" pass
+}
+
+test_indented_heading_is_reported_as_placement() {
+    local str_body
+    str_body="$(good_body | sed 's/^## Documentation/  ## Documentation/')"
+    expect_gate "## Documentation indented" "$str_body" fail 'not found at the start of a line'
 }
 
 test_empty_body_fails_for_a_human() {

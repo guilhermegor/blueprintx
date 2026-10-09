@@ -308,13 +308,16 @@ being a rule nobody pays.
 
 `bin/ci/check_pr_template.sh` checks a PR body against the layout
 `.github/PULL_REQUEST_TEMPLATE.md` declares, not just its five `##` headings. It runs in CI
-(the `pr-template` job, reading the live body from the API) and its should-fail tests run in
+(the `pr-template` job in `pr_template.yml`, reading the live body from the API and re-running
+when the body is edited) and its should-fail tests run in
 pre-commit and CI. The contract is walked out of the template itself, so editing the template
 changes what the gate enforces; only the split below is recorded in the script, because
 syntax cannot say which labels are optional.
 
 A heading or `**Label**:` must start its line (prose, fenced code and HTML comments do not
-count), carry content, and not be the template's own placeholder text left in place.
+count; `**Label:**` and `**Label** :` are accepted, a list marker, indent or `> ` quote is
+not), carry content, and leave none of the template's own placeholder lines in place. Fields
+are matched per `##` section, so an `**Added**:` under the wrong section does not count.
 
 | Element | Rule | Why |
 |---|---|---|
