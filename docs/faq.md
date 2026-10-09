@@ -51,6 +51,17 @@ The version is the git tag. Cut a release from the **Release** GitHub Action (en
 once); `blueprintx --version` resolves it via `git describe` from a checkout, or a stamped
 literal for a packaged install. See the [Changelog](changelog.md).
 
+## Does a review that only has a body need an answer?
+
+Yes. A roster reviewer that posts findings as the review **body**, with no inline thread, used
+to satisfy `Review threads answered` unread, because the gate only counted threads (16 PRs
+merged that way on 2026-10-05, blueprintx#630). Now a roster review of the head whose body
+carries a severity marker (`Major`, `Critical`, `Minor`, `Blocker`, `Nitpick`, or a
+red/orange/yellow circle), a non-zero `N finding(s)` count, or a findings heading needs a
+reply of at least 100 characters from outside the roster, posted **after** the review. A body
+that says `No findings` or `No blocking bugs` stays green. A review body has no thread, so the
+reply is a PR comment and nothing else needs resolving. Re-run the check after replying.
+
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.

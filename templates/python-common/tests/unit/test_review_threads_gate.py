@@ -1619,6 +1619,126 @@ def test_print_thread_verdict_json_fail_carries_the_problems(
     assert json.loads(capsys.readouterr().out)["problems"] == ["src/thing.py: thread is open"]
 
 
+# --------------------------
+# Review BODY findings need a reply too (blueprintx#630)
+# --------------------------
+
+_BODY_ROSTER = {"coderabbitai"}
+_BODY_MAJOR = "**Major** — the retry loop swallows the final error."
+_BODY_SUBMITTED = "2026-01-02T00:00:00Z"
+_BODY_AFTER = "2026-01-03T00:00:00Z"
+_BODY_REPLY = "Fixed in the next commit: the loop now re-raises the last error. " + "x" * 60
+
+
+def _body_review(str_body: str | None, str_login: str = "coderabbitai[bot]") -> dict:
+    """Build a submitted review on the head carrying a body, as the ladder posts them."""
+    return {
+        "author": {"login": str_login},
+        "commit": {"oid": _HEAD},
+        "body": str_body,
+        "submittedAt": _BODY_SUBMITTED,
+    }
+
+
+def _body_problems(list_reviews: list[dict], list_notices: list[dict]) -> list[str]:
+    return _load_gate().find_review_body_problems(
+        list_reviews, list_notices, _BODY_ROSTER, str_head_oid=_HEAD
+    )
+
+
+def test_review_body_with_findings_and_no_reply_is_a_problem() -> None:
+    """A severity marker in a review body with nobody answering it must fail (#630)."""
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], [])) == 1
+
+
+def test_review_body_with_findings_answered_after_it_passes() -> None:
+    """A substantive non-roster reply posted after the review answers it."""
+    list_notices = [_notice("someone", _BODY_REPLY, _BODY_AFTER)]
+    assert _body_problems([_body_review(_BODY_MAJOR)], list_notices) == []
+
+
+def test_review_body_reply_shorter_than_the_bar_is_a_problem() -> None:
+    """The thread bar applies: 99 characters is not an answer."""
+    list_notices = [_notice("someone", "x" * 99, _BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+
+
+def test_review_body_reply_posted_before_the_review_is_a_problem() -> None:
+    """A reply that predates the review cannot be an answer to it."""
+    list_notices = [_notice("someone", _BODY_REPLY, "2026-01-01T12:00:00Z")]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+
+
+def test_review_body_reply_from_the_roster_is_a_problem() -> None:
+    """A reviewer replying to itself is not an answer, same as in a thread."""
+    list_notices = [_notice("coderabbitai[bot]", _BODY_REPLY, _BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+
+
+def test_review_body_findings_on_a_superseded_commit_are_not_this_checks_concern() -> None:
+    """Only the head's reviews count; a stale review is the missing-review check's job."""
+    dict_stale = {**_body_review(_BODY_MAJOR), "commit": {"oid": _SUPERSEDED}}
+    assert _body_problems([dict_stale], []) == []
+
+
+def test_review_body_findings_from_a_non_roster_author_are_ignored() -> None:
+    """Only a roster reviewer's body is held to the bar."""
+    assert _body_problems([_body_review(_BODY_MAJOR, "someone")], []) == []
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    [
+        "**Major** — x",
+        "🟠 Major: x",
+        "[Critical] x",
+        "Severity: major",
+        "- **Minor**: x",
+        "2 finding(s) across 3 reviewed file(s).",
+        "## Findings\n\n- the loop swallows the error",
+    ],
+)
+def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
+    """Each shape a reviewer writes findings in must demand an answer."""
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    [
+        "",
+        "LGTM.",
+        "No findings.",
+        "No blocking bugs found.",
+        "No major issues.",
+        "0 finding(s) across 3 reviewed file(s).",
+        "## Findings\n\nNo findings.",
+    ],
+)
+def test_review_body_reporting_no_findings_stays_green(str_body: str) -> None:
+    """A clean review is not a finding: it needs no reply."""
+    assert _body_problems([_body_review(str_body)], []) == []
+
+
+def test_review_body_that_is_null_stays_green() -> None:
+    """GitHub returns a null-ish body for an approval with no text."""
+    assert _body_problems([_body_review(None)], []) == []
+
+
+def test_review_query_asks_for_the_body_and_the_time() -> None:
+    """Without ``body`` and ``submittedAt`` the check would read an empty review."""
+    str_query = _load_gate()._QUERY
+    assert "body submittedAt" in str_query
+
+
+def test_print_review_body_problems_json_carries_the_reason(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The JSON verdict names the failure so a caller never greps prose."""
+    _load_gate()._print_review_body_problems(True, ["a review body is unanswered"])
+    assert json.loads(capsys.readouterr().out)["reason"] == "unanswered_review_body"
+
+
 # ⚠️ WITNESS FOR blueprintx#372 — THE DISPLAY BUDGET MUST NOT REACH A MATCHER.
 #
 # `summarise_reviewer_notice` cuts the notice to 200 chars so a failure message stays readable.

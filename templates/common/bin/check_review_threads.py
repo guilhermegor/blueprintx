@@ -205,7 +205,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login } commit { oid } }
+        nodes { author { login } commit { oid } body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
       reviewThreads(first:100, after:$tc) {
@@ -1016,6 +1016,96 @@ def find_thread_problems(
     return list_problems
 
 
+# A review BODY carries findings the thread count cannot see (blueprintx#630, docs/faq.md).
+_RE_BODY_SEVERITY = re.compile(
+    r"🔴|🟠|🟡|[\[(*]\s*(?:critical|major|minor|blocker|nitpick)\b|\bseverity\s*:\s*\w"
+    r"|^\W*(?:critical|major|minor|blocker|nitpick)\b\s*[:—-]",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_BODY_COUNT = re.compile(r"\b[1-9]\d*\s+findings?\b", re.IGNORECASE)
+_RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
+_RE_BODY_CLEAN = re.compile(r"\bno\s+(?:\w+\s+)?(?:findings?|issues?|bugs?|problems?)\b", re.I)
+
+
+def review_body_has_findings(str_body: str | None) -> bool:
+    """Return whether a review body lists findings rather than reporting none.
+
+    Parameters
+    ----------
+    str_body : str or None
+            The submitted review's body.
+
+    Returns
+    -------
+    bool
+            ``True`` for a severity marker or a non-zero finding count; a bare findings
+            heading counts too unless the body says there are none. Empty is clean.
+    """
+    str_text = str_body or ""
+    return bool(
+        _RE_BODY_SEVERITY.search(str_text)
+        or _RE_BODY_COUNT.search(str_text)
+        or (_RE_BODY_HEADING.search(str_text) and not _RE_BODY_CLEAN.search(str_text))
+    )
+
+
+def _answered_after(
+    list_notices: list[dict], set_roster: set[str], str_when: str, int_min_chars: int
+) -> bool:
+    """Return whether a non-roster comment of at least ``int_min_chars`` postdates ``str_when``."""
+    return bool(str_when) and any(
+        normalise_login((d.get("author") or {}).get("login") or "") not in set_roster
+        and len((d.get("body") or "").strip()) >= int_min_chars
+        and (d.get("createdAt") or "") > str_when
+        for d in list_notices
+    )
+
+
+def find_review_body_problems(
+    list_reviews: list[dict],
+    list_notices: list[dict],
+    set_roster: set[str],
+    int_min_chars: int = _MIN_REPLY_CHARS,
+    *,
+    str_head_oid: str,
+) -> list[str]:
+    """Return one problem per head review whose body lists findings nobody answered.
+
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews with ``author``, ``commit``, ``body`` and ``submittedAt``.
+    list_notices : list of dict
+            The PR's issue comments, where the author's reply to a review body lands.
+    set_roster : set of str
+            Logins that count as reviewers rather than as answers.
+    int_min_chars : int, optional
+            Minimum length for a reply to count, the same bar a thread reply meets.
+    str_head_oid : str, keyword-only
+            The PR's ``headRefOid``; only reviews of this commit are held to the bar. Empty
+            examines every review, the stricter side.
+
+    Returns
+    -------
+    list of str
+            Human-readable problems; empty when every findings body was answered after it was
+            submitted. A missing ``submittedAt`` fails closed.
+    """
+    set_roster = {normalise_login(s) for s in set_roster}
+    return [
+        f"{(d.get('author') or {}).get('login')}'s review of the head lists findings in its "
+        f"body and nobody outside the reviewer roster replied after it — "
+        f"{(d['body'].strip().splitlines() or [''])[0][:90]}"
+        for d in list_reviews
+        if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
+        and (not str_head_oid or ((d.get("commit") or {}).get("oid") or "") == str_head_oid)
+        and review_body_has_findings(d.get("body"))
+        and not _answered_after(
+            list_notices, set_roster, d.get("submittedAt") or "", int_min_chars
+        )
+    ]
+
+
 def report_verdict(
     list_problems: list[str],
     int_threads: int,
@@ -1132,6 +1222,25 @@ def _print_missing_review(
     return 1
 
 
+def _print_review_body_problems(bool_json: bool, list_problems: list[str]) -> int:
+    """Print the unanswered-review-body failure in the requested representation; return ``1``."""
+    if bool_json:
+        print(
+            json.dumps(
+                {"status": "fail", "reason": "unanswered_review_body", "problems": list_problems}
+            )
+        )
+        return 1
+    for str_problem in list_problems:
+        print(f"❌ {str_problem}")
+    print(
+        f"\nReply (at least {_MIN_REPLY_CHARS} characters) on the PR after the review, saying "
+        "what changed and why, then re-run this check. A review body has no thread to resolve, "
+        "so the reply is the whole answer (blueprintx#630)."
+    )
+    return 1
+
+
 def _print_thread_verdict(
     bool_json: bool, list_problems: list[str], int_threads: int, bool_require_resolved: bool
 ) -> int:
@@ -1149,6 +1258,22 @@ def _print_thread_verdict(
         )
         return 1 if list_problems else 0
     return report_verdict(list_problems, int_threads, bool_require_resolved)
+
+
+def _head_committed_date(dict_pr: dict) -> str:
+    """Return the head commit's ``committedDate``, or ``""`` when the query did not carry it."""
+    dict_commit = ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit")) or {}
+    return dict_commit.get("committedDate") or ""
+
+
+def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[str]) -> list[str]:
+    """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
+    return find_review_body_problems(
+        dict_pr.get("reviews", {}).get("nodes", []),
+        list_notices,
+        set_roster,
+        str_head_oid=dict_pr.get("headRefOid") or "",
+    )
 
 
 def main(list_argv: list[str] | None = None) -> int:
@@ -1202,15 +1327,14 @@ def main(list_argv: list[str] | None = None) -> int:
         (dict_pr.get("author") or {}).get("login") or "",
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=list_notices,
-        str_head_date=(
-            ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit") or {}).get(
-                "committedDate"
-            )
-            or ""
-        ),
+        str_head_date=_head_committed_date(dict_pr),
     )
     if str_missing:
         return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
+
+    list_body_problems = _unanswered_bodies(dict_pr, list_notices, set_roster)
+    if list_body_problems:
+        return _print_review_body_problems(bool_json, list_body_problems)
 
     # Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
     # See the SUPERSEDED block above `main` for why CI stopped passing 0.
