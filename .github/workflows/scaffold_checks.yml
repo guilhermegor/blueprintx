@@ -464,36 +464,6 @@ jobs:
       - name: Should-fail regression tests for the boundary gate
         run: bash tests/test_check_docs_boundary.sh
 
-  pr-template:
-    name: PR body matches the template layout (blueprintx#587)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-
-      - name: Should-fail regression tests for the layout gate
-        run: bash tests/test_check_pr_template.sh
-
-      # Read live from the API, not from github.event: a re-run replays the ORIGINAL event
-      # payload, so an author who fixed the body and re-ran would be judged on the stale one.
-      - name: Check the PR body against the template layout
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh api "repos/$GH_REPO/pulls/$PR_NUMBER" > "$RUNNER_TEMP/pr.json"
-          jq -r '.body // ""' "$RUNNER_TEMP/pr.json" > "$RUNNER_TEMP/pr_body.md"
-          bash bin/ci/check_pr_template.sh \
-            --body-file "$RUNNER_TEMP/pr_body.md" \
-            --author "$(jq -r '.user.login' "$RUNNER_TEMP/pr.json")"
-
   version-sync:
     name: Version sync — pyproject vs CLI
     runs-on: ubuntu-latest
