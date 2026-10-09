@@ -22,9 +22,10 @@ set -euo pipefail
 # yielding the literal pattern as a filename.
 shopt -s dotglob nullglob
 
-case "$(basename "$(dirname "$0")")" in
-ci) REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)" ;;
-*) REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)" ;;
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+case "$(basename "$SCRIPT_DIR")" in
+ci) REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)" ;;
+*) REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)" ;;
 esac
 if [ "${1:-}" = "--root" ]; then
 	# A missing --root must fail: every later check would see "no .specs/" and report success.

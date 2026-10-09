@@ -239,7 +239,25 @@ test_default_root_follows_the_script_location() {
     rm -rf "$str_root"
 }
 
+test_default_root_from_inside_bin_ci() {
+    # `cd bin/ci && bash check_specs_structure.sh` makes $0's dirname "." — the root must still
+    # resolve to the repo, or the gate says "nothing to check" and passes (CodeRabbit, #696).
+    local str_root str_out str_got="pass"
+    str_root="$(mktemp -d)"
+    mkdir -p "$str_root/bin/ci" "$str_root/.specs/features"
+    printf '# specs\n' >"$str_root/.specs/CLAUDE.md"
+    touch "$str_root/.specs/notes.md"
+    cp "$GATE" "$str_root/bin/ci/check_specs_structure.sh"
+    str_out="$(cd "$str_root/bin/ci" && bash check_specs_structure.sh 2>&1)" || str_got="fail"
+    if [ "$str_got" != "fail" ] || ! printf '%s' "$str_out" | grep -qF -- "unexpected top-level entry .specs/notes.md"; then
+        print_status "error" "default root from inside bin/ci -> $str_got: $str_out"
+        int_failures=$((int_failures + 1))
+    fi
+    rm -rf "$str_root"
+}
+
 main() {
+    test_default_root_from_inside_bin_ci
     test_shipped_skeleton_passes
     test_default_root_follows_the_script_location
     test_valid_tree_passes
