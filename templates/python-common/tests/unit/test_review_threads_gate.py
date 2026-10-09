@@ -1696,6 +1696,12 @@ def test_review_body_reply_from_a_graphql_bot_is_a_problem() -> None:
     assert len(_body_problems([_body_review(_BODY_MAJOR)], [dict_bot])) == 1
 
 
+def test_review_body_reply_from_a_null_author_is_a_problem() -> None:
+    """A deleted (ghost) account is not a known human; it fails closed."""
+    dict_ghost = {"author": None, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], [dict_ghost])) == 1
+
+
 def test_review_body_reply_from_a_rest_bot_login_is_a_problem() -> None:
     """A ``[bot]`` login that is not on the roster is still not an answer."""
     list_notices = [_notice("github-actions[bot]", _BODY_REPLY, _BODY_AFTER)]
@@ -1762,6 +1768,15 @@ def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
         "- **Critical:** none",
         "Minor: none found",
         "Major: none",
+        "Severity: none",
+        "Severity: n/a",
+        "## Issues\n\nNone.",
+        "## Issues\nNone found.",
+        "This is a *minor* cleanup, LGTM.",
+        "Approved (minor nits only, all optional).",
+        "Addressed 2 findings from the prior round; nothing new.",
+        "_🧹 Nitpick_ | _🔵 Trivial_",
+        "- **Nitpick:** rename x",
     ],
 )
 def test_review_body_reporting_no_findings_stays_green(str_body: str) -> None:

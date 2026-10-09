@@ -1017,16 +1017,27 @@ def find_thread_problems(
 
 
 # A review BODY carries findings the thread count cannot see (blueprintx#630, docs/faq.md).
+_STR_SEVERITY = r"critical|major|minor|blocker"
+# Nitpick and Trivial are deliberately absent: optional by definition, so they need no reply.
+# A marker counts only at the START of a line (after a list marker), as bold or a bracket, so
+# "a *minor* cleanup" and "(minor nits only)" in prose are not findings.
 _RE_BODY_SEVERITY = re.compile(
-    r"🔴|🟠|🟡|[\[(*]\s*(?:critical|major|minor|blocker|nitpick)\b|\bseverity\s*:\s*\w"
-    r"|^\W*(?:critical|major|minor|blocker|nitpick)\b\s*[:—-]",
+    rf"🔴|🟠|🟡|\bseverity\s*:\s*\w"
+    rf"|^[^\w\n]*(?:\d+[.)]\s*)?(?:\*\*|\[)\s*(?:{_STR_SEVERITY})\b"
+    rf"|^\W*(?:{_STR_SEVERITY})\b\s*[:—-]",
     re.IGNORECASE | re.MULTILINE,
 )
-_RE_BODY_COUNT = re.compile(r"\b[1-9]\d*\s+findings?\b", re.IGNORECASE)
+# A count counts only as a statement of what the review found, not "Addressed 2 findings".
+_RE_BODY_COUNT = re.compile(
+    r"^[^\w\n]*(?:(?:found|posted|reported|with|has|have)\s+)?[1-9]\d*\s+findings?\b",
+    re.IGNORECASE | re.MULTILINE,
+)
 _RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
 _STR_CLEAN_LINE = (
     r"^[^\w\n]*(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
-    r"|(?:critical|major|minor|blocker|nitpick)[^\w\n]*(?:none|n/?a|no)(?:\s+(?:found|issues?|findings?))?)[^\w\n]*$"
+    rf"|none(?:\s+found)?"
+    rf"|(?:{_STR_SEVERITY}|nitpick|severity)[^\w\n]*(?:none|n/?a|no)"
+    r"(?:\s+(?:found|issues?|findings?))?)[^\w\n]*$"
 )
 # A clean line must BE the line ("No major issues."), never a phrase inside a longer one
 # ("parse() has no known bugs on ASCII but crashes"), or it would mask a real finding.
@@ -1084,10 +1095,12 @@ def _answered_after(
 
     Bots never answer: GraphQL reports ``__typename`` ``Bot`` (and REST a ``[bot]`` suffix) for
     GitGuardian, ``github-actions`` and the like, and one of those clearing findings unread is
-    the #630 failure again.
+    the #630 failure again. A null author (a deleted "ghost" account) is not a known human
+    either, so it fails closed like a missing ``submittedAt``.
     """
     return bool(str_when) and any(
-        normalise_login((d.get("author") or {}).get("login") or "") not in set_roster
+        bool((d.get("author") or {}).get("login"))
+        and normalise_login((d.get("author") or {}).get("login") or "") not in set_roster
         and (d.get("author") or {}).get("__typename") != "Bot"
         and not ((d.get("author") or {}).get("login") or "").endswith(_BOT_SUFFIX)
         and len((d.get("body") or "").strip()) >= int_min_chars

@@ -59,16 +59,20 @@ merged that way on 2026-10-05, blueprintx#630). Now a roster review (on any comm
 are; a `DISMISSED` one is skipped) whose body has one of these shapes needs a reply:
 
 - a severity emoji (red, orange or yellow circle);
-- `Major`, `Critical`, `Minor`, `Blocker` or `Nitpick` inside `[ ]`, `( )` or `*...*`, or at the
-  start of a line before `:`, a dash or an em dash;
-- `Severity: <word>`, or a non-zero `N finding(s)` count;
+- `Major`, `Critical`, `Minor` or `Blocker` as bold (`**Major**`) or in brackets at the START of
+  a line, or at the start of a line before `:`, a dash or an em dash;
+- `Severity: <word>`, or a count that opens a line (`2 finding(s)`, `Found 2 findings`);
 - a `Findings`, `Issues` or `Problems` heading.
 
-A bare "major" in prose is not matched. A line that is only `No findings.`, `No blocking bugs
-found.` or `Minor: none` (and a findings heading directly followed by one) is clean; the same
-words inside a longer sentence are not. The tests in `test_review_threads_gate.py` list every
-shape. The reply is a PR comment of at least 100 characters from a **human** (a bot, even one
-outside the roster, never counts), posted **after** the review; one reply after the latest
+Nitpick and Trivial lines (CodeRabbit's `Nitpick` and `Trivial` markers) never need a reply:
+they are optional, and requiring one would re-red the gate on most CodeRabbit reviews. Prose
+such as "a *minor* cleanup" or "Addressed 2 findings" is not matched. A line that is only
+`No findings.`, `No blocking bugs found.`, `Minor: none`, `Severity: n/a` or `None.` (and a
+findings heading directly followed by one) is clean; the same words inside a longer sentence
+are not. The tests in `test_review_threads_gate.py` list every shape. Be aware the rule is
+weaker than a thread: ANY 100-character comment from a human account, posted after the review,
+answers every earlier body, and nothing ties it to a finding. A deleted (ghost) author or a
+bot never counts. The reply is a PR comment, posted **after** the review; one reply after the latest
 findings body answers the earlier ones. A body has no thread, so nothing needs resolving. When
 threads are also open, the failure lists both. Re-run the check after replying.
 
