@@ -259,7 +259,7 @@ repos:
         entry: bash tests/test_spec_answers.sh
         language: system
         pass_filenames: false
-        files: ^(bin/lib/spec\.sh|bin/blueprintx\.sh|tests/test_spec_answers\.sh)$
+        files: ^(bin/lib/(spec|common)\.sh|bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
 
       - id: scaffold-kanban-tests
         name: scaffold kanban board and labels should-fail tests (blueprintx#592)
@@ -270,10 +270,17 @@ repos:
 
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)
-        entry: bash bin/ci/check_specs_structure.sh
+        entry: bash bin/ci/check_specs_structure.sh --root .
         language: system
         pass_filenames: false
         always_run: true
+
+      - id: specs-structure-tests
+        name: .specs/ structure guard should-fail regression tests (blueprintx#583)
+        entry: bash tests/test_check_specs_structure.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_specs_structure\.sh|tests/test_check_specs_structure\.sh|bin/lib/common\.sh)$
 
       - id: docs-boundary
         name: docs/ boundary guard (working material stays out of docs/, blueprintx#536)

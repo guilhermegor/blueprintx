@@ -93,7 +93,8 @@ done
     exit 1
 }
 
-echo "::group::Scaffold $SKELETON (offline, no opt-ins)"
+str_opt_label="${SCAFFOLD_SPEC_FILE:+opt-ins from $SCAFFOLD_SPEC_FILE}"
+echo "::group::Scaffold $SKELETON (offline, ${str_opt_label:-no opt-ins})"
 # Driven by bin/lib/spec.sh (#481) instead of a blind positional `printf`: a
 # stdin stream built from NAMED keys (defaulting to "decline everything, no
 # remote"), so a scaffold script gaining a new prompt fails loudly in

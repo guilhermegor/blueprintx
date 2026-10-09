@@ -13,8 +13,7 @@ for this path rather than the example fixed (blueprintx#172).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+import pandas as pd
 from sqlalchemy import Engine, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -22,8 +21,7 @@ from utils.frames import from_records
 from utils.typing import TypeChecker
 
 
-if TYPE_CHECKING:
-    import pandas as pd
+# Runtime import on purpose, not TYPE_CHECKING: see docs/coverage-floor.md (blueprintx#617).
 
 
 # Declare the column types on load — never trust pandas' inference (a zero-padded
