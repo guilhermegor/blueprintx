@@ -250,6 +250,22 @@ test_skeleton_match_is_exact() {
     fi
 }
 
+test_every_python_tier_has_a_prompt_map() {
+    local str_res str_meta str_name
+    for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
+        grep -q '^language=python$' "$str_meta" || continue
+        str_name="$(basename "$(dirname "$str_meta")")"
+        bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+            spec_skeleton_supported "$2" && spec_stdin_for_skeleton "$2" /dev/null >/dev/null' \
+            _ "$REPO_ROOT" "$str_name" 2>/dev/null || str_res+="$str_name "
+    done
+    if [ -z "${str_res:-}" ]; then
+        pass "every Python tier in templates/ has a named-key prompt map (blueprintx#691)"
+    else
+        fail "unmapped Python tier" "no prompt map for: $str_res"
+    fi
+}
+
 test_a_failed_answer_stream_stops_the_scaffold_flow() {
     local str_res
     str_res="$(bash -c '
@@ -283,6 +299,7 @@ main() {
     test_spec_values_are_trimmed_so_a_crlf_spec_works
     test_yn_keys_read_by_callers_match_the_key_map
     test_skeleton_match_is_exact
+    test_every_python_tier_has_a_prompt_map
     test_a_failed_answer_stream_stops_the_scaffold_flow
     test_bad_docs_locale_stops_before_anything_is_created
     test_docs_locale_reaches_the_scaffold

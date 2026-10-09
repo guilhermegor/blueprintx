@@ -191,7 +191,7 @@ _spec_answer_publish_targets() {
 # support ships incrementally, tier by tier — see docs/spec-answers.md for
 # what is mapped and what remains a follow-up.
 
-_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db lib-minimal"
+_SPEC_SUPPORTED_SKELETONS="api-service-native-db ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db lib-minimal"
 
 spec_skeleton_supported() {
     local str_name
@@ -222,7 +222,7 @@ spec_stdin_for_skeleton() {
     # scaffold_from_spec also reads this function's own status from PIPESTATUS.
     spec_validate_answers "$skeleton" "$file" || return 1
     case "$skeleton" in
-        ddd-service-native-db | ddd-service-orm-db)
+        api-service-native-db | ddd-service-native-db | ddd-service-orm-db)
             _spec_answer_docker_compose "$file"
             _spec_answer_storage "$file"
             _spec_answer_data_dir "$file"
@@ -264,7 +264,7 @@ _spec_key_map() {
     local skeleton="$1"
     local -a keys=()
     case "$skeleton" in
-        ddd-service-native-db | ddd-service-orm-db)
+        api-service-native-db | ddd-service-native-db | ddd-service-orm-db)
             keys=(docker_compose:n docker_db_backend:postgresql storage:n \
                 data_dir:n data_dir_base:logs data_dir_dated:n \
                 webhook:n webhook_platform:teams otel:n \

@@ -83,10 +83,10 @@ are not edited by this mechanism — so when one of them gains a new prompt, upd
 one function is what keeps every spec-driven caller correct, instead of every stored
 answer string everywhere.
 
-Named-key support ships per skeleton. Today: the five Python tiers. Call
+Named-key support ships per skeleton. Today: the six Python tiers. Call
 `spec_skeleton_supported <skeleton>` to check before relying on `spec_stdin_for_skeleton`.
 
-### DDD tiers (`ddd-service-native-db`, `ddd-service-orm-db`)
+### DDD and API tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `api-service-native-db`)
 
 | Key | Default | Notes |
 |---|---|---|
@@ -137,7 +137,7 @@ here — scope note from blueprintx#481.
 `react-spa-webpack`, `ts-lib`, and any future non-Python skeleton have no entry in
 `spec_stdin_for_skeleton` yet. `--spec` still resolves their top-level answers (project
 name, language, skeleton, license, …); their scaffold-internal prompts stay interactive
-until a named-key map is added for them, the same way the five Python tiers were —
+until a named-key map is added for them, the same way the six Python tiers were —
 `spec_skeleton_supported` returns `false` for them today. `blueprintx new --spec` **refuses**
 such a skeleton before creating anything (a half-interactive run would hang an unattended
 caller); `--spec ... --dry-run` still reports the resolved top-level answers with a warning.

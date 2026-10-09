@@ -114,7 +114,7 @@ Checking at the template root is a false green: the generated project pins diffe
 versions. The integration suite matters specifically because it is the only place a `bin/*.sh`
 seam is actually executed.
 
-**Run all five tiers with `make verify_tiers`** (`bin/ci/scaffold_lint_test_all.sh`; `JOBS=1` to
+**Run all six Python tiers with `make verify_tiers`** (`bin/ci/scaffold_lint_test_all.sh`; `JOBS=1` to
 serialise while debugging). It fans the tiers out in parallel — measured 477s of work in 103s wall
 clock — and CI needs none of it, because `tests.yaml` already runs one job per tier.
 
