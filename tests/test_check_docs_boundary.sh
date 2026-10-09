@@ -31,7 +31,7 @@ make_sandbox() {
     # Prints the path of a fresh fake repo root: a copy of the real
     # check_docs_boundary.sh under bin/ci/, no docs/ yet — the caller populates it.
     local str_root
-    str_root="$(mktemp -d)"
+    str_root="$(mktemp -d ${1:+-p "$1"})"
     mkdir -p "$str_root/bin/ci"
     cp "$REPO_ROOT/bin/ci/check_docs_boundary.sh" "$str_root/bin/ci/check_docs_boundary.sh"
     printf '%s' "$str_root"
@@ -322,12 +322,44 @@ test_enclosing_repo_ignore_does_not_leak_in() {
     str_outer="$(mktemp -d)"
     git -C "$str_outer" init -q
     printf '*\n' > "$str_outer/.gitignore"
-    str_root="$str_outer/sandbox"
-    mkdir -p "$str_root/bin/ci" "$str_root/docs/backlog"
-    cp "$REPO_ROOT/bin/ci/check_docs_boundary.sh" "$str_root/bin/ci/"
+    str_root="$(make_sandbox "$str_outer")"
+    mkdir -p "$str_root/docs/backlog"
     printf 'x\n' > "$str_root/docs/backlog/todo.md"
     expect_gate "plain dir inside an ignoring repo" "$str_root" "fail" "docs/backlog"
     rm -rf "$str_outer"
+}
+
+test_inherited_git_dir_does_not_fake_an_own_repo() {
+    # GIT_DIR alone makes git treat the cwd as a work-tree top, so an unscrubbed probe
+    # would trust the sandbox's .gitignore although the sandbox is no repo.
+    local str_root str_other
+    str_other="$(mktemp -d)"
+    git -C "$str_other" init -q
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/docs/backlog"
+    printf 'x\n' > "$str_root/docs/backlog/todo.md"
+    printf 'docs/backlog/\n' > "$str_root/.gitignore"
+    GIT_DIR="$str_other/.git" expect_gate "inherited GIT_DIR" "$str_root" "fail" "docs/backlog"
+    rm -rf "$str_other"
+}
+
+test_global_excludes_do_not_hide_entries() {
+    local str_root str_home
+    str_home="$(mktemp -d)"
+    printf '*-lessons.md\n' > "$str_home/ignore"
+    printf '[core]\n\texcludesFile = %s/ignore\n' "$str_home" > "$str_home/gitconfig"
+    str_root="$(make_git_sandbox)"
+    : > "$str_root/.gitignore"
+    GIT_CONFIG_GLOBAL="$str_home/gitconfig" expect_gate "global excludesFile" "$str_root" \
+        "fail" "docs/x-lessons.md"
+    rm -rf "$str_home"
+}
+
+test_all_ignored_docs_fails_closed() {
+    local str_root
+    str_root="$(make_git_sandbox)"
+    printf 'docs/*\n' > "$str_root/.gitignore"
+    expect_gate "docs/ with every entry ignored" "$str_root" "fail" "contains nothing to check"
 }
 
 main() {
@@ -351,6 +383,9 @@ main() {
     test_git_ignored_directory_is_skipped_whole
     test_tracked_file_under_ignored_directory_still_fails
     test_enclosing_repo_ignore_does_not_leak_in
+    test_inherited_git_dir_does_not_fake_an_own_repo
+    test_global_excludes_do_not_hide_entries
+    test_all_ignored_docs_fails_closed
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures check_docs_boundary.sh regression assertion(s) failed"
