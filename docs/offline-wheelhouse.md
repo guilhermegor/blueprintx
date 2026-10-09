@@ -124,8 +124,11 @@ index still looks like success to a probe that never asked for the right thing:
 
 ```bash
 poe wheelhouse_assemble
-PIP_INDEX_URL=http://127.0.0.1:1/simple pip install --no-index --find-links ../_wheels/<repo-name>/wheels -r requirements-lock.txt
+PIP_INDEX_URL=http://127.0.0.1:1/simple pip install --find-links ../_wheels/<repo-name>/wheels -r requirements-lock.txt
 ```
 
-The install must succeed with the network fully denied. A wheelhouse that is never exercised
+The command deliberately omits `--no-index`: with it pip never contacts `PIP_INDEX_URL`, so the
+unreachable index would prove nothing. Without it, a wheel missing from the wheelhouse falls
+through to the blocked index and the install fails, which is the property this section
+witnesses. The install must succeed with the network fully denied. A wheelhouse that is never exercised
 this way is not verified — it is a directory.

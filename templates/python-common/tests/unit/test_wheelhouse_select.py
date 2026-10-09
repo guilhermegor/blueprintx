@@ -14,6 +14,7 @@ confident wrong answer, which is why they need tests rather than review.
 """
 
 import argparse
+from contextlib import suppress
 import importlib.util
 import json
 from pathlib import Path
@@ -257,7 +258,7 @@ def test_loose_wheels_that_disagree_with_the_manifest_do_not_shadow_it(tmp_path:
     path_manifest = tmp_path / "manifest.json"
     path_manifest.write_text('{"wheel_count": 2}', encoding="utf-8")
 
-    assert gate._loose_wheels_match_manifest(path_manifest, 1) is False
+    assert gate._loose_wheels_match_manifest(path_manifest, ["a.whl"]) is False
 
 
 def test_loose_wheels_matching_the_manifest_count_are_accepted(tmp_path: Path) -> None:
@@ -265,7 +266,7 @@ def test_loose_wheels_matching_the_manifest_count_are_accepted(tmp_path: Path) -
     path_manifest = tmp_path / "manifest.json"
     path_manifest.write_text('{"wheel_count": 2}', encoding="utf-8")
 
-    assert gate._loose_wheels_match_manifest(path_manifest, 2) is True
+    assert gate._loose_wheels_match_manifest(path_manifest, ["a.whl", "b.whl"]) is True
 
 
 def test_a_zip_name_that_collides_with_a_part_is_refused(tmp_path: Path) -> None:
@@ -297,3 +298,95 @@ def test_a_rebuild_with_fewer_parts_removes_the_stale_ones(tmp_path: Path) -> No
     gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
 
     assert not path_stale.exists()
+
+
+def _assemble_args(tmp_path: Path) -> argparse.Namespace:
+    """Build the ``assemble`` arguments for the payload ``_pack_args`` writes.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary directory holding ``out/`` (the payload) and receiving ``wheels/``.
+
+    Returns
+    -------
+    argparse.Namespace
+        Arguments as the CLI would parse them.
+    """
+    return argparse.Namespace(
+        source=str(tmp_path / "out"),
+        wheels_out=str(tmp_path / "wheels"),
+        manifest=str(tmp_path / "out" / "manifest.json"),
+    )
+
+
+def test_pack_records_the_sorted_wheel_names_in_the_manifest(tmp_path: Path) -> None:
+    """Names, not just a count, are what tell a stale ``wheels/`` from the payload."""
+    dir_wheels = _wheel_dir(tmp_path, "b-2.0-py3-none-any.whl", "a-1.0-py3-none-any.whl")
+
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+
+    dict_manifest = json.loads((tmp_path / "out" / "manifest.json").read_text(encoding="utf-8"))
+    assert dict_manifest["wheel_names"] == ["a-1.0-py3-none-any.whl", "b-2.0-py3-none-any.whl"]
+
+
+def test_loose_wheels_with_the_manifest_names_are_accepted(tmp_path: Path) -> None:
+    """The negative control for the name comparison: the same set is still a no-op."""
+    path_manifest = tmp_path / "manifest.json"
+    path_manifest.write_text('{"wheel_count": 2, "wheel_names": ["a.whl", "b.whl"]}')
+
+    assert gate._loose_wheels_match_manifest(path_manifest, ["b.whl", "a.whl"]) is True
+
+
+def test_loose_wheels_with_other_names_but_the_same_count_are_rejected(tmp_path: Path) -> None:
+    """Two wheels from a different lock must not pass for the two the manifest names."""
+    path_manifest = tmp_path / "manifest.json"
+    path_manifest.write_text('{"wheel_count": 2, "wheel_names": ["a.whl", "b.whl"]}')
+
+    assert gate._loose_wheels_match_manifest(path_manifest, ["a.whl", "stale.whl"]) is False
+
+
+def test_stale_wheels_of_the_same_count_do_not_short_circuit_assemble(tmp_path: Path) -> None:
+    """End to end: N stale wheels from another lock must not skip extracting the payload."""
+    dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl", "b-2.0-py3-none-any.whl")
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    dir_out = tmp_path / "wheels"
+    dir_out.mkdir()
+    (dir_out / "x-9.0-py3-none-any.whl").write_bytes(b"stale")
+    (dir_out / "y-9.0-py3-none-any.whl").write_bytes(b"stale")
+
+    gate.assemble_wheelhouse(_assemble_args(tmp_path))
+
+    assert (dir_out / "a-1.0-py3-none-any.whl").is_file()
+
+
+def test_a_sha_mismatch_does_not_leave_the_reassembled_zip_behind(tmp_path: Path) -> None:
+    """A failed archive left as ``wheelhouse.zip`` could later be extracted as unverified."""
+    dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl")
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    path_manifest = tmp_path / "out" / "manifest.json"
+    dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
+    dict_manifest["zip_sha256"] = "0" * 64
+    path_manifest.write_text(json.dumps(dict_manifest), encoding="utf-8")
+
+    with suppress(SystemExit):
+        gate.assemble_wheelhouse(_assemble_args(tmp_path))
+
+    assert not (tmp_path / "out" / "wheelhouse.zip").exists()
+
+
+def test_a_failed_extraction_does_not_leave_the_reassembled_zip_behind(tmp_path: Path) -> None:
+    """The sha matches but the bytes are no zip, so extraction fails after reassembly."""
+    path_part = tmp_path / "out" / "wheelhouse.zip.000"
+    path_part.parent.mkdir()
+    path_part.write_bytes(b"not a zip")
+    dict_manifest = _manifest(
+        [{"name": path_part.name, "sha256": gate.sha256_of(path_part)}],
+        zip_sha256=gate.sha256_of(path_part),
+    )
+    (tmp_path / "out" / "manifest.json").write_text(json.dumps(dict_manifest), encoding="utf-8")
+
+    with suppress(zipfile.BadZipFile):
+        gate.assemble_wheelhouse(_assemble_args(tmp_path))
+
+    assert not (tmp_path / "out" / "wheelhouse.zip").exists()
