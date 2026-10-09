@@ -53,19 +53,61 @@ def test_stamp_provenance_appends_columns_in_output_shape() -> None:
     """The six provenance columns are appended after the source columns, in contract order."""
     df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
     assert list(df_stamped.columns) == list(_CONTRACT.output_columns)
+
+
+def test_contract_output_columns_are_source_then_provenance() -> None:
+    """The contract's output shape is the source columns followed by the provenance ones."""
     assert _CONTRACT.output_columns == ("code", "amount", *_CONTRACT.PROVENANCE_COLUMNS)
 
 
-def test_stamp_provenance_values_and_dtypes() -> None:
-    """Text provenance is nullable ``string``; ``updated_at`` is tz-aware UTC; values propagate."""
+@pytest.mark.parametrize(
+    ("str_column", "str_value"),
+    [
+        ("url", "https://x/y.csv"),
+        ("source_key", "example_source"),
+        ("package_version", "1.2.3"),
+        ("content_hash", "deadbeef"),
+    ],
+)
+def test_stamp_provenance_propagates_values(str_column: str, str_value: str) -> None:
+    """Every row carries the provenance value the caller passed.
+
+    Parameters
+    ----------
+    str_column : str
+        The provenance column.
+    str_value : str
+        The value every row must carry.
+    """
     df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
-    assert (df_stamped["url"] == "https://x/y.csv").all()
-    assert (df_stamped["source_key"] == "example_source").all()
-    assert (df_stamped["package_version"] == "1.2.3").all()
-    assert (df_stamped["content_hash"] == "deadbeef").all()
-    assert str(df_stamped["url"].dtype) == "string"
-    assert str(df_stamped["content_hash"].dtype) == "string"
-    assert str(df_stamped["updated_at"].dtype) == "datetime64[ns, UTC]"
+    assert (df_stamped[str_column] == str_value).all()
+
+
+@pytest.mark.parametrize(
+    ("str_column", "str_dtype"),
+    [
+        ("url", "string"),
+        ("content_hash", "string"),
+        ("updated_at", "datetime64[ns, UTC]"),
+    ],
+)
+def test_stamp_provenance_dtypes(str_column: str, str_dtype: str) -> None:
+    """Text provenance is nullable ``string``; ``updated_at`` is tz-aware UTC.
+
+    Parameters
+    ----------
+    str_column : str
+        The provenance column.
+    str_dtype : str
+        The dtype it must carry.
+    """
+    df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
+    assert str(df_stamped[str_column].dtype) == str_dtype
+
+
+def test_stamp_provenance_updated_at_is_timezone_aware() -> None:
+    """``updated_at`` carries a timezone, not a naive timestamp."""
+    df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
     assert df_stamped["updated_at"].dt.tz is not None
 
 

@@ -25,6 +25,12 @@ def test_apply_dtypes_astype_dict_casts_columns() -> None:
     df_input = _make_frame()
     df_typed = apply_dtypes(df_input, dict_dtypes={"code": "str", "amount": "float64"})
     assert df_typed["code"].tolist() == ["1", "2"]
+
+
+def test_apply_dtypes_astype_dict_casts_numeric_columns() -> None:
+    """The astype dict casts a numeric column to its declared float type."""
+    df_input = _make_frame()
+    df_typed = apply_dtypes(df_input, dict_dtypes={"code": "str", "amount": "float64"})
     assert df_typed["amount"].tolist() == [10.0, 20.0]
 
 
@@ -41,10 +47,45 @@ def test_apply_dtypes_str_declaration_keeps_missing_values_na() -> None:
     df_typed = apply_dtypes(df_input, dict_dtypes={"id_subclasse": "str"})
 
     assert df_typed["id_subclasse"].isna().tolist() == [False, True]
-    # The blank must be gone entirely rather than stored as text.
-    assert df_typed["id_subclasse"].dropna().tolist() == ["A"]
-    # Elements are still ordinary ``str``, so isinstance assertions keep passing.
-    assert isinstance(df_typed["id_subclasse"].iloc[0], str)
+
+
+@pytest.fixture
+def series_str_with_blank() -> pd.Series:
+    """Build a ``"str"``-declared column holding one value and one blank.
+
+    Returns
+    -------
+    pd.Series
+        The typed column.
+    """
+    df_input = pd.DataFrame({"id_subclasse": ["A", float("nan")]})
+    return apply_dtypes(df_input, dict_dtypes={"id_subclasse": "str"})["id_subclasse"]
+
+
+def test_apply_dtypes_str_declaration_drops_the_blank_entirely(
+    series_str_with_blank: pd.Series,
+) -> None:
+    """The blank must be gone entirely rather than stored as text.
+
+    Parameters
+    ----------
+    series_str_with_blank : pd.Series
+        The typed column.
+    """
+    assert series_str_with_blank.dropna().tolist() == ["A"]
+
+
+def test_apply_dtypes_str_declaration_elements_are_still_str(
+    series_str_with_blank: pd.Series,
+) -> None:
+    """Elements are still ordinary ``str``, so isinstance assertions keep passing.
+
+    Parameters
+    ----------
+    series_str_with_blank : pd.Series
+        The typed column.
+    """
+    assert isinstance(series_str_with_blank.iloc[0], str)
 
 
 def test_apply_dtypes_date_column_coerces_to_date_objects() -> None:
@@ -96,6 +137,14 @@ def test_decimal_cols_convert_text_exactly() -> None:
     df_typed = apply_dtypes(df_input, list_decimal_cols=["vlm"])
 
     assert df_typed["vlm"].iloc[0] == Decimal("1984223115.42")
+
+
+def test_decimal_cols_convert_a_small_text_exactly() -> None:
+    """A second numeric string is exact too, not only the large one."""
+    df_input = pd.DataFrame({"vlm": ["1984223115.42", "0.01"]})
+
+    df_typed = apply_dtypes(df_input, list_decimal_cols=["vlm"])
+
     assert df_typed["vlm"].iloc[1] == Decimal("0.01")
 
 
@@ -109,9 +158,7 @@ def test_decimal_cols_preserve_the_source_scale() -> None:
 
     df_typed = apply_dtypes(df_input, list_decimal_cols=["price"])
 
-    assert str(df_typed["price"].iloc[0]) == "1.50"
-    assert str(df_typed["price"].iloc[1]) == "1.5000"
-    assert str(df_typed["price"].iloc[2]) == "2"
+    assert [str(dec_value) for dec_value in df_typed["price"]] == ["1.50", "1.5000", "2"]
 
 
 def test_decimal_cols_sum_exactly() -> None:
@@ -121,7 +168,10 @@ def test_decimal_cols_sum_exactly() -> None:
     df_typed = apply_dtypes(df_input, list_decimal_cols=["vlm"])
 
     assert sum(df_typed["vlm"]) == Decimal("0.60")
-    # Pinned for contrast — the same arithmetic in binary floats misses 0.60 entirely.
+
+
+def test_binary_floats_miss_the_exact_sum() -> None:
+    """Pinned for contrast — the same arithmetic in binary floats misses 0.60 entirely."""
     assert 0.10 + 0.20 + 0.30 != 0.60
 
 

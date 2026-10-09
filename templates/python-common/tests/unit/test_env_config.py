@@ -19,18 +19,25 @@ def test_plain_file_wins_regardless_of_env(tmp_path: Path) -> None:
     assert resolve_config_path("anything", "inputs", tmp_path) == tmp_path / "inputs.yaml"
 
 
-def test_env_wise_selects_suffix(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("str_env", "str_file"),
+    [("production", "inputs_prd.yaml"), ("dev", "inputs_dev.yaml")],
+)
+def test_env_wise_selects_suffix(tmp_path: Path, str_env: str, str_file: str) -> None:
     """With no plain file, ENV picks the dev/prd suffixed file.
 
     Parameters
     ----------
     tmp_path : pathlib.Path
             Pytest-provided throwaway directory holding the env-wise config files.
+    str_env : str
+            The ENV value to resolve.
+    str_file : str
+            The suffixed file that ENV must select.
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
     (tmp_path / "inputs_prd.yaml").write_text("a: 2\n", encoding="utf-8")
-    assert resolve_config_path("production", "inputs", tmp_path) == tmp_path / "inputs_prd.yaml"
-    assert resolve_config_path("dev", "inputs", tmp_path) == tmp_path / "inputs_dev.yaml"
+    assert resolve_config_path(str_env, "inputs", tmp_path) == tmp_path / str_file
 
 
 @pytest.mark.parametrize(
@@ -60,9 +67,8 @@ def test_unknown_env_aborts(tmp_path: Path) -> None:
             Pytest-provided throwaway directory holding the env-wise config file.
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(SystemExit, match=r"^2$"):
         resolve_config_path("staging", "inputs", tmp_path)
-    assert exc.value.code == 2
 
 
 def test_missing_env_file_aborts(tmp_path: Path) -> None:
@@ -74,6 +80,5 @@ def test_missing_env_file_aborts(tmp_path: Path) -> None:
             Pytest-provided throwaway directory holding the env-wise config file.
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(SystemExit, match=r"^2$"):
         resolve_config_path("production", "inputs", tmp_path)  # only _dev exists
-    assert exc.value.code == 2
