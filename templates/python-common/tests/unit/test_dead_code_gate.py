@@ -18,6 +18,7 @@ Two should-fail/should-pass pairs carry the whole point of the issue this gate a
 
 import importlib.util
 from pathlib import Path
+import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -81,6 +82,23 @@ def test_vulture_absent_is_a_legitimate_skip(
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "resolve_vulture", lambda: None)
     assert cls_gate.main(["--root", str(tmp_path)]) == 0
+
+
+def test_vulture_genuinely_missing_resolves_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``ModuleNotFoundError`` naming ``vulture`` itself is the one skippable absence (#640)."""
+    monkeypatch.setitem(sys.modules, "vulture", None)
+    assert _load_gate().resolve_vulture() is None
+
+
+def test_vulture_broken_transitive_import_is_not_a_skip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An installed ``vulture`` whose own import fails must raise, never skip green (#640)."""
+    _write_module(tmp_path, "vulture/__init__.py", "import broken_transitive_dep\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    with pytest.raises(ModuleNotFoundError, match="broken_transitive_dep"):
+        _load_gate().resolve_vulture()
 
 
 def test_provable_dead_parameter_at_gate_confidence_fails(

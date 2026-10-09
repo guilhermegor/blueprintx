@@ -64,7 +64,7 @@ _TUPLE_SKIP_DIRS = (
 
 
 def resolve_vulture() -> ModuleType | None:
-    """Import ``vulture``, treating its absence as an expected skip.
+    """Import ``vulture``, treating only its own absence as an expected skip.
 
     Returns
     -------
@@ -72,10 +72,18 @@ def resolve_vulture() -> ModuleType | None:
         The imported ``vulture`` package, or ``None`` when it is not installed — this gate
         is not yet wired into any tier's dependency table, so a missing import is a
         legitimate, non-fatal skip rather than broken discovery.
+
+    Raises
+    ------
+    ModuleNotFoundError
+        When ``vulture`` is installed but a transitive import fails: a broken tool is not
+        an absent one, and skipping would be a vacuous pass (blueprintx#640).
     """
     try:
         import vulture
-    except ImportError:
+    except ModuleNotFoundError as exc:
+        if exc.name != "vulture":
+            raise
         return None
     return vulture
 
