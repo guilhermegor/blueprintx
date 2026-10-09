@@ -307,6 +307,16 @@ test_git_ignored_directory_is_skipped_whole() {
     expect_gate "git-ignored directory" "$str_root" "pass" "docs/ boundary is clean"
 }
 
+test_tracked_file_under_ignored_directory_still_fails() {
+    local str_root
+    str_root="$(make_git_sandbox)"
+    mkdir -p "$str_root/docs/backlog"
+    printf 'x\n' > "$str_root/docs/backlog/todo.md"
+    printf 'docs/backlog/\n' >> "$str_root/.gitignore"
+    git -C "$str_root" add -f docs/backlog/todo.md
+    expect_gate "tracked file under ignored directory" "$str_root" "fail" "docs/backlog"
+}
+
 main() {
     test_no_docs_dir_is_a_skip
     test_clean_docs_passes
@@ -326,6 +336,7 @@ main() {
     test_unignored_lessons_file_still_fails
     test_tracked_lessons_file_still_fails
     test_git_ignored_directory_is_skipped_whole
+    test_tracked_file_under_ignored_directory_still_fails
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures check_docs_boundary.sh regression assertion(s) failed"
