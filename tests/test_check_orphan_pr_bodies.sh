@@ -80,7 +80,7 @@ run_case() {
 export BLUEPRINTX_REPO=o/r
 run_case "matching body is MATCHED #N, exit 0" 0 "MATCHED #561" "$BODY_A"
 run_case "reflowed whitespace still matches" 0 "MATCHED #561" "$(printf '%s' "$BODY_A" | tr ' ' '\n')"
-run_case "non-breaking spaces normalise like ASCII ones" 0 "MATCHED #561" "${BODY_A// / }"
+run_case "non-breaking spaces normalise like ASCII ones" 0 "MATCHED #561" "${BODY_A// /$'\u00a0'}"
 run_case "a page boundary does not hide a match" 0 "MATCHED #561" "$BODY_A" paged.json
 run_case "unmatched body is ORPHAN, exit 1" 1 "ORPHAN" "$BODY_B"
 run_case "ticked checkbox on the forge still matches" 0 "MATCHED #563" "$CHECKLIST" ticked.json
@@ -91,13 +91,17 @@ run_case "too-short body is UNKNOWN, exit 2" 2 "UNKNOWN" "tiny"
 run_case "ambiguous match is UNKNOWN, exit 2" 2 "UNKNOWN (ambiguous: #561 #562)" "$BODY_A" dup.json
 STUB_GH_FAIL=1 run_case "gh failure is UNKNOWN, exit 2" 2 "UNKNOWN" "$BODY_A"
 RUN_DIR="$str_tmp/missing" run_case "nonexistent dir exits 2, not a silent green" 2 \
-    "no such directory" "$BODY_A"
+    "no such or unreadable directory" "$BODY_A"
 
 run_case "an object where a list was expected is UNKNOWN, never exit 1" 2 "UNKNOWN-FORGE" \
     "$BODY_A" shape.json
 printf '%s\n' "$BODY_A" > "$str_tmp/worktree/README.md"
 RUN_DIR="$str_tmp/worktree" run_case "a worktree dir instead of a git-dir exits 2" 2 \
     "not a git directory" "$BODY_A"
+
+# A crash inside the python body must exit 2, never 1: a gh stub whose JSON nests too deeply.
+python3 -c "print('['*100000)" > "$str_tmp/deep.json"
+run_case "an uncaught python crash exits 2, never 1" 2 "RecursionError" "$BODY_A" deep.json
 
 # git's own exit codes (1, 128) must not leak into the contract: a repo with no origin, and no repo.
 git -C "$str_tmp/norepo" init -q

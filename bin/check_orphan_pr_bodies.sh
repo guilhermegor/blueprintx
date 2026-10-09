@@ -30,8 +30,8 @@ if [ -z "$str_gitdir" ]; then
 	}
 	str_gitdir="$(cd "$str_gitdir" && pwd)"
 fi
-[ -d "$str_gitdir" ] || {
-	echo "UNKNOWN: no such directory: $str_gitdir" >&2
+[ -d "$str_gitdir" ] && [ -r "$str_gitdir" ] && [ -x "$str_gitdir" ] || {
+	echo "UNKNOWN: no such or unreadable directory: $str_gitdir" >&2
 	exit 2
 }
 git --git-dir="$str_gitdir" rev-parse --git-dir >/dev/null 2>&1 || {
@@ -63,7 +63,7 @@ elif ! gh api --paginate "repos/$str_repo/issues?state=all&per_page=100" \
 	echo "UNKNOWN-FORGE: could not read issues/PRs of '$str_repo': $(head -c 200 "$str_forge/err")" >&2
 fi
 
-FORGE_OK="$bool_forge_ok" python3 - "$str_gitdir" "$str_forge/all.json" <<'PY'
+FORGE_OK="$bool_forge_ok" python3 -I - "$str_gitdir" "$str_forge/all.json" <<'PY'
 import json
 import os
 import pathlib
@@ -140,8 +140,7 @@ for path_md in list_files:
     int_orphans += str_verdict == "ORPHAN"
     int_unknown += str_verdict.startswith("UNKNOWN")
     print(f"{path_md}\t{int_size}B\t{int_age}d\t{str_verdict}")
-sys.exit(2 if int_unknown else 1 if int_orphans else 0)
+sys.exit(2 if int_unknown else 3 if int_orphans else 0)  # 1 is what a traceback exits with
 PY
 int_rc=$?
-[ "$int_rc" -le 2 ] || int_rc=2 # an uncaught traceback (exit 1) must never read as ORPHAN
-exit "$int_rc"
+case "$int_rc" in 0 | 2) exit "$int_rc" ;; 3) exit 1 ;; *) exit 2 ;; esac # a traceback is never ORPHAN
