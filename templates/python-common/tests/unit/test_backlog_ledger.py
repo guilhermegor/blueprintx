@@ -96,9 +96,8 @@ def test_membership_is_asked_per_path_not_over_the_whole_list() -> None:
 
 def test_a_valid_ledger_satisfies_the_branch() -> None:
     """A correctly named ledger clears the requirement."""
-    assert (
-        ledger.find_ledger_problems(["src/a.py", ".specs/backlog/my-topic_20260720_101500.md"]) == []
-    )
+    list_files = ["src/a.py", ".specs/backlog/my-topic_20260720_101500.md"]
+    assert ledger.find_ledger_problems(list_files) == []
 
 
 def test_missing_ledger_is_reported() -> None:
