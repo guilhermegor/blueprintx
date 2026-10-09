@@ -317,6 +317,19 @@ test_tracked_file_under_ignored_directory_still_fails() {
     expect_gate "tracked file under ignored directory" "$str_root" "fail" "docs/backlog"
 }
 
+test_enclosing_repo_ignore_does_not_leak_in() {
+    local str_root str_outer
+    str_outer="$(mktemp -d)"
+    git -C "$str_outer" init -q
+    printf '*\n' > "$str_outer/.gitignore"
+    str_root="$str_outer/sandbox"
+    mkdir -p "$str_root/bin/ci" "$str_root/docs/backlog"
+    cp "$REPO_ROOT/bin/ci/check_docs_boundary.sh" "$str_root/bin/ci/"
+    printf 'x\n' > "$str_root/docs/backlog/todo.md"
+    expect_gate "plain dir inside an ignoring repo" "$str_root" "fail" "docs/backlog"
+    rm -rf "$str_outer"
+}
+
 main() {
     test_no_docs_dir_is_a_skip
     test_clean_docs_passes
@@ -337,6 +350,7 @@ main() {
     test_tracked_lessons_file_still_fails
     test_git_ignored_directory_is_skipped_whole
     test_tracked_file_under_ignored_directory_still_fails
+    test_enclosing_repo_ignore_does_not_leak_in
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures check_docs_boundary.sh regression assertion(s) failed"

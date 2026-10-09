@@ -123,6 +123,11 @@ is_denied() {
 is_git_ignored() {
     # Judge what git would publish (blueprintx#632). Outside a work tree check-ignore exits
     # 128, which is "not ignored" — the plain-directory test sandboxes rely on it.
+    # Only trust a repo whose top level IS REPO_ROOT: an enclosing repo's .gitignore must not
+    # decide the verdict for a plain directory that merely sits inside it.
+    local str_prefix
+    str_prefix="$(git -C "$REPO_ROOT" rev-parse --show-prefix 2>/dev/null)" || return 1
+    [ -z "$str_prefix" ] || return 1
     git -C "$REPO_ROOT" check-ignore -q -- "$1" 2>/dev/null
 }
 
