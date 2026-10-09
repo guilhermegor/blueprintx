@@ -37,3 +37,31 @@ def test_to_html_body_escapes_plain_text_markup(str_fragment: str, bool_present:
     str_result = to_html_body("report <final>.xlsx & <script>alert(1)</script>")
 
     assert (str_fragment in str_result) is bool_present
+
+
+def test_to_html_body_tag_lookalike_is_escaped_as_plain_text() -> None:
+    """Should-fail witness: ``<bravo>`` merely starts with ``<br`` and is not a tag."""
+    assert to_html_body("<bravo>\nnext") == "&lt;bravo&gt;<br>\nnext"
+
+
+def test_to_html_body_p_tag_with_attributes_is_left_untouched() -> None:
+    """Should-fail witness: ``<p class=...>`` is real HTML and must not be escaped."""
+    str_html = '<p class="intro">text</p>'
+
+    assert to_html_body(str_html) == str_html
+
+
+@pytest.mark.parametrize(
+    "str_html",
+    ["a<br>b", "a<br/>b", "a<BR />b", "a<br\n>b", "<p>x</p>", "<P>x</P>"],
+    ids=["br", "br-self-closing", "br-upper-spaced", "br-newline", "p", "p-upper"],
+)
+def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
+    """A ``<br``/``<p`` tag followed by whitespace, ``/`` or ``>`` is returned unchanged.
+
+    Parameters
+    ----------
+    str_html : str
+            A body containing a real tag.
+    """
+    assert to_html_body(str_html) == str_html

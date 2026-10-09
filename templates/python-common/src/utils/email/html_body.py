@@ -9,6 +9,7 @@ rather than inside the one vendor gateway that happened to write it first.
 from __future__ import annotations
 
 from html import escape
+import re
 from typing import TYPE_CHECKING
 
 
@@ -31,6 +32,8 @@ else:
     except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
         from chassis.typing import type_checker
 
+re_html_tag = re.compile(r"<(?:br|p)(?=[\s/>])", re.IGNORECASE)
+
 
 @type_checker
 def to_html_body(str_body: str) -> str:
@@ -39,7 +42,8 @@ def to_html_body(str_body: str) -> str:
     An HTML-body client (Outlook's ``mail.HTMLBody``, an SMTP message sent as ``text/html``)
     collapses bare newlines and renders the message on a single line. Each newline is turned
     into a ``<br>`` so paragraph breaks are preserved. A body that already looks like HTML
-    (contains a ``<br`` or ``<p>`` tag) is left untouched — the caller composed real markup on
+    (a ``<br`` or ``<p`` tag followed by whitespace, ``/`` or ``>``, so ``<bravo>`` does
+    not count but ``<p class="x">`` does) is left untouched — the caller composed real markup on
     purpose, and escaping it would show the reader literal angle brackets instead of the
     formatting it asked for.
 
@@ -61,7 +65,6 @@ def to_html_body(str_body: str) -> str:
             The body with newlines rendered as ``<br>`` (unchanged when already HTML; otherwise
             HTML-escaped first).
     """
-    str_low = str_body.casefold()
-    if "<br" in str_low or "<p>" in str_low:
+    if re_html_tag.search(str_body):
         return str_body
     return escape(str_body).replace("\r\n", "\n").replace("\n", "<br>\n")
