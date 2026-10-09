@@ -55,26 +55,44 @@ literal for a packaged install. See the [Changelog](changelog.md).
 
 Yes. A roster reviewer that posts findings as the review **body**, with no inline thread, used
 to satisfy `Review threads answered` unread, because the gate only counted threads (16 PRs
-merged that way on 2026-10-05, blueprintx#630). Now a roster review (on any commit, as threads
-are; a `DISMISSED` one is skipped) whose body has one of these shapes needs a reply:
+merged that way on 2026-10-05, blueprintx#630). The gate does not parse prose to guess; it
+classifies a comment by the structure the comment declares for itself, and when that is
+ambiguous it counts the comment as a review, so a valid review is never dropped.
 
-- a severity emoji (red, orange or yellow circle);
-- `Major`, `Critical`, `Minor` or `Blocker` as bold (`**Major**`) or in brackets at the START of
-  a line, or at the start of a line before `:`, a dash or an em dash;
-- `Severity: <word>`, or a count that opens a line (`2 finding(s)`, `Found 2 findings`);
-- a `Findings`, `Issues` or `Problems` heading.
+### How the gate classifies a review
 
-Nitpick and Trivial lines (CodeRabbit's `Nitpick` and `Trivial` markers) never need a reply:
-they are optional, and requiring one would re-red the gate on most CodeRabbit reviews. Prose
-such as "a *minor* cleanup" or "Addressed 2 findings" is not matched. A line that is only
-`No findings.`, `No blocking bugs found.`, `Minor: none`, `Severity: n/a` or `None.` (and a
-findings heading directly followed by one) is clean; the same words inside a longer sentence
-are not. The tests in `test_review_threads_gate.py` list every shape. Be aware the rule is
-weaker than a thread: ANY 100-character comment from a human account, posted after the review,
-answers every earlier body, and nothing ties it to a finding. A deleted (ghost) author or a
-bot never counts. The reply is a PR comment, posted **after** the review; one reply after the latest
-findings body answers the earlier ones. A body has no thread, so nothing needs resolving. When
-threads are also open, the failure lists both. Re-run the check after replying.
+A roster author's review (on any commit, as threads are; a `DISMISSED` one is skipped) or issue
+comment (some ladder rungs post that way) is a review when it has one of these shapes. A
+printed count wins over everything else:
+
+- `Actionable comments posted: N` (CodeRabbit): `0` is clean, `N > 0` needs a reply, whatever
+  the rest of the body says;
+- `N finding(s) across M reviewed file(s)` (the ladder): same rule;
+- the ladder attribution line `Fallback review — runtime: <x>, model: <y> (selected by: <z>)`
+  without a count (the claude rung writes prose): a review, unless the prose is only
+  `No findings.`;
+- a `Review` or `Findings` heading, bullet, bold label or `Review:` line, and numbered
+  `Finding 1:` items;
+- a severity emoji, `Major`/`Critical`/`Minor`/`Blocker` opening a line as bold, in brackets or
+  before `:`/a dash, `Severity: <word>`, or a count that opens a line (`2 finding(s)`).
+
+A line that is only `No findings.`, `Review: no findings`, `Minor: none` or `None.` (and a
+heading directly followed by one) is clean. Nitpick and Trivial lines never need a reply.
+CodeRabbit's walkthrough, rate-limit and command-reply comments carry an auto-generated marker
+and are not reviews.
+
+### How the gate classifies an answer
+
+An answer comes from outside the reviewer roster, is not a bot or a deleted (ghost) account,
+and is posted **after** the review. It counts when it is either 100 characters or longer, or
+has an answer shape at any length: `Reply to review <id>`, `Answer(s) to ... review`,
+`Re: review`, `Verdicts`/`Judgment on the ... review`, `Review <id> verified`,
+`Addressed in <sha>`/`Fixed in <sha>`, a `Finding N:` heading, or a `> quoted finding`
+followed by a response. A bare `@coderabbitai review` is neither. One reply after the latest
+review answers the earlier ones; a body has no thread, so nothing needs resolving. When threads
+are also open, the failure lists both. Re-run the check after replying. The tests in
+`test_review_threads_gate.py` list every shape with a witness that fails without its marker.
+The rule is weaker than a thread: a long comment answers without being tied to a finding.
 
 ## Which install methods are supported?
 

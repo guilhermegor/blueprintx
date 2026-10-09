@@ -1803,6 +1803,186 @@ def test_print_review_body_problems_json_carries_the_reason(
     assert json.loads(capsys.readouterr().out)["reason"] == "unanswered_review_body"
 
 
+# --------------------------
+# Classification by declared structure (blueprintx#630, docs/faq.md)
+# --------------------------
+# Each shape below is a trimmed copy of a real body from this repo's PRs (#671-#687). The
+# witness is the same text with only its structural marker removed.
+
+_LADDER = (
+    "Fallback review — runtime: {}, model: default (selected by: {})\nReviewed head: 1a2b3c4\n\n"
+)
+_LADDER_CLAUDE = _LADDER.format("claude", "last-resort")
+_LADDER_CLI = _LADDER.format("coderabbit", "live-probe")
+_PROSE = "I couldn't check any of this against the tree. Every tool call failed."
+_LOOP = "the retry loop swallows the final error."
+
+_REVIEW_SHAPES = [
+    pytest.param(
+        "**Actionable comments posted: 2**\n\n---\n\nInline comments:\n- Line 50: reword.",
+        "---\n\nInline comments:\n- Line 50: reword.",
+        id="coderabbit-actionable-n",
+    ),
+    pytest.param(_LADDER_CLAUDE + _PROSE, _PROSE, id="ladder-claude-rung-prose-without-a-count"),
+    pytest.param(
+        _LADDER_CLI + "3 finding(s) across 4 reviewed file(s).",
+        _LADDER_CLI,
+        id="ladder-coderabbit-cli-count",
+    ),
+    pytest.param(f"## Review\n\n{_LOOP}", _LOOP, id="heading-review"),
+    pytest.param(f"* Review - {_LOOP}", f"* {_LOOP}", id="bullet-review-dash"),
+    pytest.param(f"Review: {_LOOP}", _LOOP, id="review-colon"),
+    pytest.param(f"**Findings**\n\n- {_LOOP}", f"- {_LOOP}", id="bold-findings"),
+    pytest.param(f"Finding 1: {_LOOP}", _LOOP, id="numbered-finding"),
+    pytest.param(f"## Findings\n\n- {_LOOP}", f"- {_LOOP}", id="heading-findings"),
+    pytest.param(f"- **Major** `a.py`: {_LOOP}", f"- `a.py`: {_LOOP}", id="severity-bullet"),
+]
+
+
+@pytest.mark.parametrize(("str_body", "str_witness"), _REVIEW_SHAPES)
+def test_review_shape_declared_by_structure_demands_an_answer(
+    str_body: str, str_witness: str
+) -> None:
+    """Every recognised review shape must fail when nobody answered."""
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+@pytest.mark.parametrize(("str_body", "str_witness"), _REVIEW_SHAPES)
+def test_review_shape_witness_without_its_marker_is_not_a_review(
+    str_body: str, str_witness: str
+) -> None:
+    """Should-fail witness: the same text minus the structural marker must stay green."""
+    assert _body_problems([_body_review(str_witness)], []) == []
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    [
+        "**Actionable comments posted: 0**\n\n## Review details\n\nNitpicks only.",
+        "Actionable comments posted: 0",
+        _LADDER_CLI + "0 finding(s) across 4 reviewed file(s).",
+        _LADDER_CLAUDE + "No findings.",
+        _LADDER_CLAUDE + "## Review\n\nNo findings.",
+        "Review: no findings",
+    ],
+)
+def test_review_stating_zero_findings_never_blocks(str_body: str) -> None:
+    """A printed count of 0 (or an explicit clean line) means no findings."""
+    assert _body_problems([_body_review(str_body)], []) == []
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    [
+        "**Actionable comments posted: 0**\n\n🔴 Major stray marker",
+        _LADDER_CLI + "0 finding(s) across 4 reviewed file(s).\n- **Major** x",
+    ],
+)
+def test_review_count_of_zero_beats_prose_markers(str_body: str) -> None:
+    """Structured counts beat prose: a stated 0 is authoritative."""
+    assert _body_problems([_body_review(str_body)], []) == []
+
+
+def test_review_count_of_n_beats_clean_looking_prose() -> None:
+    """The mirror: a stated N > 0 blocks even when the prose reads clean."""
+    str_body = "**Actionable comments posted: 3**\n\nNo issues."
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_ladder_review_posted_as_an_issue_comment_counts_as_a_review() -> None:
+    """Some rungs post their review as an issue comment, not a PR review."""
+    dict_comment = _notice("guilhermegor-review-ladder[bot]", _LADDER_CLAUDE + _PROSE)
+    assert (
+        len(
+            _load_gate().find_review_body_problems(
+                [], [dict_comment], {"coderabbitai", "guilhermegor-review-ladder"}
+            )
+        )
+        == 1
+    )
+
+
+def test_ladder_issue_comment_without_its_attribution_is_not_a_review() -> None:
+    """Should-fail witness for the issue-comment path."""
+    dict_comment = _notice("guilhermegor-review-ladder[bot]", _PROSE)
+    assert (
+        _load_gate().find_review_body_problems([], [dict_comment], {"guilhermegor-review-ladder"})
+        == []
+    )
+
+
+_WALKTHROUGH = "> [!IMPORTANT]\n> ## Review skipped\n> - **Review profile**: CHILL"
+
+
+def test_coderabbit_walkthrough_comment_is_not_a_review() -> None:
+    """Its summary and rate-limit comments carry an auto-generated marker and are skipped."""
+    str_body = (
+        "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n" + _WALKTHROUGH
+    )
+    assert _body_problems([], [_notice("coderabbitai[bot]", str_body)]) == []
+
+
+def test_coderabbit_walkthrough_without_its_marker_would_be_a_review() -> None:
+    """Should-fail witness: only the auto-generated marker keeps the walkthrough out."""
+    assert len(_body_problems([], [_notice("coderabbitai[bot]", _WALKTHROUGH)])) == 1
+
+
+_ANSWER_SHAPES = [
+    pytest.param("Reply to review 5474743692: done.", "done.", id="reply-to-review-id"),
+    pytest.param("Answer to review: done.", "done.", id="answer-to-review"),
+    pytest.param("Answers to ladder review, all held.", "all held.", id="answers-to-ladder"),
+    pytest.param("Re: review — done.", "done.", id="re-review"),
+    pytest.param("Addressed in 2cdb28bf", "Addressed", id="addressed-in-sha"),
+    pytest.param("Fixed in `7273818f`.", "Fixed.", id="fixed-in-sha"),
+    pytest.param("**Finding 1: verified, fixed.**", "**verified, fixed.**", id="per-finding"),
+    pytest.param("> the loop swallows\nFixed it.", "the loop swallows\nFixed it.", id="quoted"),
+    pytest.param("Verdicts on the ladder review: held.", "held.", id="verdicts-on-review"),
+    pytest.param("Judgment on the fallback review: ok.", "ok.", id="judgment-on-review"),
+    pytest.param("Review 5469399568 verified.", "Verified.", id="review-id-verified"),
+]
+_REVIEWED = [_body_review(_BODY_MAJOR)]
+
+
+@pytest.mark.parametrize(("str_reply", "str_witness"), _ANSWER_SHAPES)
+def test_answer_shape_declared_by_structure_answers_at_any_length(
+    str_reply: str, str_witness: str
+) -> None:
+    """A recognised answer shape counts even below the length bar."""
+    assert _body_problems(_REVIEWED, [_notice("someone", str_reply, _BODY_AFTER)]) == []
+
+
+@pytest.mark.parametrize(("str_reply", "str_witness"), _ANSWER_SHAPES)
+def test_answer_shape_witness_without_its_marker_is_not_an_answer(
+    str_reply: str, str_witness: str
+) -> None:
+    """Should-fail witness: the same short text minus the marker is not an answer."""
+    assert len(_body_problems(_REVIEWED, [_notice("someone", str_witness, _BODY_AFTER)])) == 1
+
+
+@pytest.mark.parametrize("str_command", ["@coderabbitai review", "@coderabbitai full review"])
+def test_a_review_command_is_not_an_answer(str_command: str) -> None:
+    """Asking for another review answers nothing."""
+    assert len(_body_problems(_REVIEWED, [_notice("someone", str_command, _BODY_AFTER)])) == 1
+
+
+def test_answer_shape_from_a_bot_is_not_an_answer() -> None:
+    """The shape alone never lets a bot clear findings."""
+    list_notices = [_notice("github-actions[bot]", "Reply to review 123456: ok.", _BODY_AFTER)]
+    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+
+
+def test_answer_shape_posted_before_the_review_is_not_an_answer() -> None:
+    """The shape must still be newer than the review it answers."""
+    list_notices = [_notice("someone", "Reply to review 123456: ok.", "2026-01-01T00:00:00Z")]
+    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+
+
+def test_answer_shape_from_the_roster_is_not_an_answer() -> None:
+    """A reviewer answering itself is not an answer, shape or not."""
+    list_notices = [_notice("coderabbitai[bot]", "Reply to review 123456: ok.", _BODY_AFTER)]
+    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+
+
 # ⚠️ WITNESS FOR blueprintx#372 — THE DISPLAY BUDGET MUST NOT REACH A MATCHER.
 #
 # `summarise_reviewer_notice` cuts the notice to 200 chars so a failure message stays readable.

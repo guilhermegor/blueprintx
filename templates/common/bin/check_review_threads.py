@@ -1033,8 +1033,23 @@ _RE_BODY_COUNT = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 _RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
+# A review declares itself by structure (docs/faq.md, "How the gate classifies"): a heading, a
+# bullet or a bold label that starts with "Review" or "Finding(s)". Ambiguity counts as a review.
+_RE_BODY_REVIEW_LINE = re.compile(
+    r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b", re.IGNORECASE | re.MULTILINE
+)
+# A printed count is authoritative: 0 is clean, N > 0 is findings, whatever the prose says.
+_RES_BODY_COUNT_LINE = (
+    re.compile(r"actionable comments posted:?[\s*]*(\d+)", re.IGNORECASE),
+    re.compile(r"\b(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE),
+)
+_RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
+_RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
+# CodeRabbit's walkthrough, rate-limit and command replies are not reviews.
+_RE_AUTO_COMMENT = re.compile(r"<!--\s*This is an auto-generated (?:comment|reply)", re.I)
 _STR_CLEAN_LINE = (
-    r"^[^\w\n]*(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
+    r"^[^\w\n]*(?:(?:review|findings?|summary|result)\s*[:—–-]\s*)?"
+    r"(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
     rf"|none(?:\s+found)?"
     rf"|(?:{_STR_SEVERITY}|nitpick|severity)[^\w\n]*(?:none|n/?a|no)"
     r"(?:\s+(?:found|issues?|findings?))?)[^\w\n]*$"
@@ -1043,10 +1058,25 @@ _STR_CLEAN_LINE = (
 # ("parse() has no known bugs on ASCII but crashes"), or it would mask a real finding.
 _RE_BODY_CLEAN_LINE = re.compile(_STR_CLEAN_LINE, re.I | re.M)
 _RE_BODY_CLEAN_SECTION = re.compile(
-    r"^#{1,6}\s*(?:findings|issues|problems)\b[^\n]*\n(?:[^\S\n]*\n)*" + _STR_CLEAN_LINE,
+    r"^#{1,6}\s*(?:findings|issues|problems|review)\b[^\n]*\n(?:[^\S\n]*\n)*" + _STR_CLEAN_LINE,
     re.I | re.M,
 )
-_RES_BODY_FINDING = (_RE_BODY_SEVERITY, _RE_BODY_COUNT, _RE_BODY_HEADING)
+_RES_BODY_FINDING = (_RE_BODY_SEVERITY, _RE_BODY_COUNT, _RE_BODY_HEADING, _RE_BODY_REVIEW_LINE)
+
+
+def _stated_count(str_body: str) -> tuple[int, str] | None:
+    """Return the first printed finding count and its line, or ``None`` when none is printed."""
+    for re_count in _RES_BODY_COUNT_LINE:
+        match_ = re_count.search(str_body)
+        if match_:
+            return int(match_.group(1)), match_.group(0).strip("* \t")
+    return None
+
+
+def _ladder_prose_line(str_text: str) -> list[str]:
+    """Return the first prose line of an uncounted ladder review, which counts as a review."""
+    list_prose = [s.strip() for s in _RE_LADDER_META.sub("", str_text).splitlines() if s.strip()]
+    return list_prose[:1]
 
 
 def review_body_finding_lines(str_body: str | None) -> list[str]:
@@ -1065,11 +1095,17 @@ def review_body_finding_lines(str_body: str | None) -> list[str]:
             and a findings heading directly followed by one are dropped first.
     """
     str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
-    return [
+    list_lines = [
         str_line.strip()
         for str_line in str_text.splitlines()
         if any(re_.search(str_line) for re_ in _RES_BODY_FINDING)
     ]
+    tuple_count = _stated_count(str_body or "")
+    if tuple_count is not None:
+        return list_lines + [tuple_count[1]] if tuple_count[0] else []
+    if _RE_LADDER_HEAD.search(str_body or ""):
+        return list_lines or _ladder_prose_line(str_text)
+    return list_lines
 
 
 def review_body_has_findings(str_body: str | None) -> bool:
@@ -1099,14 +1135,56 @@ def _answered_after(
     either, so it fails closed like a missing ``submittedAt``.
     """
     return bool(str_when) and any(
-        bool((d.get("author") or {}).get("login"))
-        and normalise_login((d.get("author") or {}).get("login") or "") not in set_roster
-        and (d.get("author") or {}).get("__typename") != "Bot"
-        and not ((d.get("author") or {}).get("login") or "").endswith(_BOT_SUFFIX)
-        and len((d.get("body") or "").strip()) >= int_min_chars
-        and (d.get("createdAt") or "") > str_when
+        _is_human_answer(d, set_roster, int_min_chars) and (d.get("createdAt") or "") > str_when
         for d in list_notices
     )
+
+
+# An answer declares itself by structure too: "Reply to review 123", "Answers to the ladder
+# review", "Re: review", "Verdicts on ...", "Addressed/Fixed in <sha>", "Finding 1: ...", or a
+# "> quoted finding" followed by a response. Any of these counts at any length.
+_RE_ANSWER_SHAPE = re.compile(
+    r"\b(?:repl(?:y|ies)|answer(?:s|ed)?|re|responses?|verdicts?|judg(?:e)?ments?)\b"
+    r"[^\n]{0,60}?\b(?:review|rung|findings?)\b"
+    r"|\b(?:addressed|fixed|resolved)\s+in\s+`?[0-9a-f]{7,40}\b"
+    r"|^[^\w\n]*finding\s+\d+\b"
+    r"|\breview\s+\d{6,}\b"
+    r"|^>[^\n]*\n(?:[^\S\n]*\n)*[^>\s]",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _is_human_answer(d: dict, set_roster: set[str], int_min_chars: int) -> bool:
+    """Return whether one comment is by a known human outside the roster and reads as an answer."""
+    dict_author = d.get("author") or {}
+    str_login = dict_author.get("login") or ""
+    str_body = (d.get("body") or "").strip()
+    return (
+        bool(str_login)
+        and normalise_login(str_login) not in set_roster
+        and dict_author.get("__typename") != "Bot"
+        and not str_login.endswith(_BOT_SUFFIX)
+        and (len(str_body) >= int_min_chars or bool(_RE_ANSWER_SHAPE.search(str_body)))
+    )
+
+
+def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[dict]:
+    """Return the roster's own issue comments in review shape.
+
+    Some ladder rungs post their review as an issue comment, not a PR review. CodeRabbit's
+    auto-generated walkthroughs and command replies are skipped: they are not reviews.
+    """
+    return [
+        {
+            "author": d.get("author"),
+            "state": "COMMENTED",
+            "body": d.get("body"),
+            "submittedAt": d.get("createdAt"),
+        }
+        for d in list_notices
+        if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
+        and not _RE_AUTO_COMMENT.search(d.get("body") or "")
+    ]
 
 
 def find_review_body_problems(
@@ -1121,7 +1199,8 @@ def find_review_body_problems(
     so a body must too, or a trivial push plus a clean re-review would clear it. One reply
     posted after the latest findings body therefore answers all earlier ones; a reply must
     postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
-    maintainer's explicit answer.
+    maintainer's explicit answer. A roster issue comment that is shaped like a review counts as
+    one, since some ladder rungs post that way (docs/faq.md, "How the gate classifies").
 
     Parameters
     ----------
@@ -1143,7 +1222,7 @@ def find_review_body_problems(
     set_roster = {normalise_login(s) for s in set_roster}
     list_hits = [
         (d, review_body_finding_lines(d.get("body")))
-        for d in list_reviews
+        for d in list_reviews + _notices_as_reviews(list_notices, set_roster)
         if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
         and d.get("state") != "DISMISSED"
     ]
