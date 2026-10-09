@@ -210,6 +210,21 @@ test_automated_testing_left_as_template_text_fails() {
         '`### Automated Testing` heading: still the template text'
 }
 
+test_structural_label_kept_with_real_bullets_passes() {
+    # The template expects `- **CI (this PR)**:` to stay, followed by real content; a label
+    # line is structure, not filler, so keeping it verbatim must not read as a placeholder.
+    local str_body
+    str_body="$(good_body | sed 's/^- tests\/test_check_pr_template.sh\./- **CI (this PR)**:\n    - `pr-template`: passes on this body./')"
+    expect_gate "Automated Testing keeps the CI (this PR) label above real bullets" "$str_body" pass
+}
+
+test_structural_label_alone_is_empty_not_filled() {
+    local str_body
+    str_body="$(good_body | sed 's/^- tests\/test_check_pr_template.sh\./- **CI (this PR)**:/')"
+    expect_gate "Automated Testing with only the label" "$str_body" fail \
+        '`### Automated Testing` heading: present but empty'
+}
+
 test_added_under_the_wrong_section_does_not_count() {
     local str_body
     str_body="$(good_body | sed 's/^\*\*Added\*\*:/Prose only, no field./')"

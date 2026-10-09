@@ -98,6 +98,8 @@ load_layout() {
 
 tally_body() {
     # MAP_PH[key] = own lines that are verbatim template lines of the same node (placeholders).
+    # A bullet that is only a bold label (`- **CI (this PR)**:`) is structure the template
+    # expects to stay: neither a placeholder nor content.
     # MAP_REAL[key] = the node's own real lines plus its descendants' (a `##` with only filled
     # `###`/fields beneath it is not empty).
     local str_key str_line str_up
@@ -109,6 +111,7 @@ tally_body() {
     for str_key in "${ARR_BODY_KEYS[@]}"; do
         IFS="$STR_SEP" read -ra arr_lines <<<"${MAP_BODY_LINES[$str_key]}"
         for str_line in "${arr_lines[@]}"; do
+            [[ "$str_line" =~ ^[-*][[:space:]]+\*\*[^*]+\*\*[[:space:]]*:$ ]] && continue
             if [[ "$STR_SEP${MAP_TPL_LINES[$str_key]:-}$STR_SEP" == *"$STR_SEP$str_line$STR_SEP"* ]]; then
                 MAP_PH["$str_key"]=$((MAP_PH[$str_key] + 1))
                 continue
