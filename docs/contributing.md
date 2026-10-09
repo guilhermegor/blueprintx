@@ -81,8 +81,9 @@ relationship too.
 **Rules.**
 
 - Name the specific upstream issue whenever one exists. Link the terminal issue
-  ([#601](https://github.com/guilhermegor/blueprintx/issues/601)) only when the blocker really is "not 1.0 yet" — the reconciler clears on the *named* issue, so pointing
-  everything at that issue holds work that is in fact ready.
+  ([#601](https://github.com/guilhermegor/blueprintx/issues/601)) only when the blocker really
+  is "not 1.0 yet" — the reconciler clears on the *named* issue, so pointing everything at that
+  issue holds work that is in fact ready.
 - A `decision:` blocker is never auto-cleared; only a person removes it. That is deliberate.
 - A board Status alone is not durable: the reconciler clears any item it reads as blocked by
   nothing. Each blocked item needs the label plus the `**Blocked by:**` body line (the issue
@@ -97,10 +98,15 @@ this convention has been applied to), with a `Blocked by` text field.
     `updateProjectV2Field` replaces the entire option set, and an option sent without its
     existing `id` is minted as a new one — every item's stored value then dangles and reads
     empty. Adding `Blocked` to another board this way wiped all 271 item Statuses in one call.
-    Snapshot first (`gh project item-list <n> --owner <o> --limit <n_items+1> --format json`), send
-    every option with its existing `id` (only the new `Blocked` has none), pass the payload as a
-    `{query, variables}` body via `gh api graphql --input <file>`, then diff per item id against
-    the snapshot.
+    Get the item count first (`gh project view <n> --owner <o> --format json`, field
+    `items.totalCount`), then snapshot with
+    `gh project item-list <n> --owner <o> --limit <count+1> --format json` and check that the
+    snapshot length equals the count. Send every option with its existing `id` (only the new
+    `Blocked` has none), pass the payload as a `{query, variables}` body via
+    `gh api graphql --input <file>`, then diff per item id against the snapshot. If the diff
+    shows any wiped Status, stop and restore each one from the snapshot with
+    `updateProjectV2ItemFieldValue` (its `singleSelectOptionId` is the snapshot's stored option
+    id), then re-diff until it is empty.
 
 ## Releasing
 
