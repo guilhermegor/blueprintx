@@ -38,6 +38,7 @@ Every finding is a hard error (exit 1), printed to stderr. Fails when ``docs/`` 
 "nothing to check".
 """
 
+import os
 import pathlib
 import re
 import sys
@@ -142,17 +143,47 @@ def unpublished_specs(dict_mkdocs: dict) -> tuple[pathspec.GitIgnoreSpec, ...]:
     Returns
     -------
     tuple of pathspec.GitIgnoreSpec
-        The implicit rules (dot-paths, ``/templates/``), ``exclude_docs:`` and ``draft_docs:``.
-        Kept as separate specs, never concatenated: MkDocs evaluates each on its own, so a
-        ``!`` re-include in one must not cancel a match in another.
+        Two specs. The first combines the implicit rules (dot-paths, ``/templates/``) with
+        ``exclude_docs:``, implicit rules first, as MkDocs does, so a ``!`` re-include in
+        ``exclude_docs`` can cancel an implicit drop. The second is ``draft_docs:``, kept
+        apart: MkDocs evaluates it on its own.
     """
-    list_specs = [pathspec.GitIgnoreSpec.from_lines([".*", "/templates/"])]
-    for str_key in ("exclude_docs", "draft_docs"):
-        str_block = dict_mkdocs.get(str_key) or ""
-        # ⚠️ Same engine MkDocs 1.6 builds these with (`mkdocs/structure/files.py`): a
-        # hand-rolled matcher diverged on basename-at-any-depth, anchored `/x`, `**` and `!`.
-        list_specs.append(pathspec.GitIgnoreSpec.from_lines(str_block.splitlines()))
-    return tuple(list_specs)
+    # ⚠️ Same engine MkDocs 1.6 builds these with (`mkdocs/structure/files.py`): a
+    # hand-rolled matcher diverged on basename-at-any-depth, anchored `/x`, `**` and `!`.
+    list_lines = [".*", "/templates/", *(dict_mkdocs.get("exclude_docs") or "").splitlines()]
+    str_draft = dict_mkdocs.get("draft_docs") or ""
+    return (
+        pathspec.GitIgnoreSpec.from_lines(list_lines),
+        pathspec.GitIgnoreSpec.from_lines(str_draft.splitlines()),
+    )
+
+
+def _walk_markdown(path_docs: pathlib.Path) -> list[pathlib.Path]:
+    """Find every ``*.md`` under ``path_docs``, descending into directory symlinks.
+
+    Parameters
+    ----------
+    path_docs : pathlib.Path
+        The docs directory.
+
+    Returns
+    -------
+    list of pathlib.Path
+        Markdown files, unsorted. A directory whose real path was already visited is
+        pruned, so a link back to an ancestor cannot loop.
+    """
+    list_found = []
+    set_seen: set[str] = set()
+    for str_dir, list_dirs, list_files in os.walk(path_docs, followlinks=True):
+        str_real = os.path.realpath(str_dir)
+        if str_real in set_seen:
+            list_dirs.clear()
+            continue
+        set_seen.add(str_real)
+        list_found.extend(
+            pathlib.Path(str_dir) / str_f for str_f in list_files if str_f.endswith(".md")
+        )
+    return list_found
 
 
 def published_pages(
@@ -173,7 +204,7 @@ def published_pages(
         Docs-relative paths (forward slashes), sorted.
     """
     list_pages = []
-    for path_md in sorted(path_docs.glob("**/*.md")):
+    for path_md in sorted(_walk_markdown(path_docs)):
         str_rel = path_md.relative_to(path_docs).as_posix()
         if str_rel == "CLAUDE.md" or any(spec.match_file(str_rel) for spec in tuple_specs):
             continue

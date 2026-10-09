@@ -338,3 +338,43 @@ def test_missing_mkdocs_yml_fails_closed(
     str_stderr = capsys.readouterr().err
     assert int_exit == 1
     assert "no mkdocs.yml found" in str_stderr
+
+
+# --------------------------
+# Tests — MkDocs parity (#641)
+# --------------------------
+
+
+def test_exclude_docs_negation_reincludes_implicitly_dropped_page(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+    """``!`` in ``exclude_docs:`` re-includes a ``templates/`` page, as MkDocs combines them."""
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home", "templates/layout.md": "# T"},
+        "[{Home: index.md}]",
+        str_exclude_docs="!/templates/layout.md\n",
+    )
+    cls_gate.main(["--root", str(path_root)])
+    assert "templates/layout.md" in capsys.readouterr().err
+
+
+def test_symlinked_directory_pages_are_checked(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+    """An unlisted page behind a directory symlink under ``docs/`` is reported."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    path_target = tmp_path / "shared"
+    path_target.mkdir()
+    (path_target / "linked.md").write_text("# L", encoding="utf-8")
+    (path_root / "docs" / "ext").symlink_to(path_target, target_is_directory=True)
+    cls_gate.main(["--root", str(path_root)])
+    assert "ext/linked.md" in capsys.readouterr().err
+
+
+def test_symlink_loop_terminates(tmp_path: pathlib.Path) -> None:
+    """A directory link back to an ancestor is not walked forever."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    (path_root / "docs" / "loop").symlink_to(path_root / "docs", target_is_directory=True)
+    list_pages = cls_gate.published_pages(path_root / "docs", cls_gate.unpublished_specs({}))
+    assert list_pages == ["index.md"]
