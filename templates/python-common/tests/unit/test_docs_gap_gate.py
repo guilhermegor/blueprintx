@@ -123,9 +123,20 @@ def test_orphan_page_message_names_the_file(
         "[{Home: index.md}]",
     )
     cls_gate.main(["--root", str(path_root)])
-    str_stderr = capsys.readouterr().err
-    assert "docs/decision-records.md" in str_stderr
-    assert "not registered in mkdocs.yml nav" in str_stderr
+    assert "docs/decision-records.md" in capsys.readouterr().err
+
+
+def test_orphan_page_message_explains_the_silent_vanish(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The finding explains the mechanism: built by MkDocs but absent from nav."""
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home", "decision-records.md": "# Decisions"},
+        "[{Home: index.md}]",
+    )
+    cls_gate.main(["--root", str(path_root)])
+    assert "not registered in mkdocs.yml nav" in capsys.readouterr().err
 
 
 def test_page_registered_in_nav_is_not_reported(tmp_path: pathlib.Path) -> None:
@@ -170,9 +181,21 @@ def test_anchored_exclude_does_not_match_nested_path(
         "[{Home: index.md}]",
         str_exclude_docs="/*.md\n",
     )
-    int_exit = cls_gate.main(["--root", str(path_root)])
-    assert int_exit == 1
+    cls_gate.main(["--root", str(path_root)])
     assert "section/orphan.md" in capsys.readouterr().err
+
+
+def test_anchored_exclude_still_fails_the_run_for_a_nested_orphan(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An anchored exclude leaves the nested orphan counted, so the run exits 1."""
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home", "section/orphan.md": "# Orphan"},
+        "[{Home: index.md}]",
+        str_exclude_docs="/*.md\n",
+    )
+    assert cls_gate.main(["--root", str(path_root)]) == 1
 
 
 def test_implicit_mkdocs_excludes_are_not_published(tmp_path: pathlib.Path) -> None:
@@ -206,9 +229,19 @@ def test_configured_docs_dir_is_scanned(
         "[{Home: index.md}]",
         str_docs_dir="site/pages",
     )
-    int_exit = cls_gate.main(["--root", str(path_root)])
-    assert int_exit == 1
+    cls_gate.main(["--root", str(path_root)])
     assert "site/pages/orphan.md" in capsys.readouterr().err
+
+
+def test_configured_docs_dir_orphan_fails_the_run(tmp_path: pathlib.Path) -> None:
+    """The orphan under a custom ``docs_dir`` makes the run exit 1."""
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home", "orphan.md": "# Orphan"},
+        "[{Home: index.md}]",
+        str_docs_dir="site/pages",
+    )
+    assert cls_gate.main(["--root", str(path_root)]) == 1
 
 
 def test_absolute_docs_dir_is_scanned(tmp_path: pathlib.Path) -> None:
@@ -237,11 +270,33 @@ def test_claude_index_missing_row_is_reported(
         "[{Home: index.md}, {Usage: usage.md}]",
         str_claude_index_body=_STR_INDEX_TABLE,
     )
-    int_exit = cls_gate.main(["--root", str(path_root)])
-    str_stderr = capsys.readouterr().err
-    assert int_exit == 1
-    assert "docs/usage.md" in str_stderr
-    assert "missing from the docs/CLAUDE.md file index" in str_stderr
+    cls_gate.main(["--root", str(path_root)])
+    assert "docs/usage.md" in capsys.readouterr().err
+
+
+def test_claude_index_missing_row_message_names_the_index(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The missing-row finding says the page is missing from the file index."""
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home", "usage.md": "# Usage"},
+        "[{Home: index.md}, {Usage: usage.md}]",
+        str_claude_index_body=_STR_INDEX_TABLE,
+    )
+    cls_gate.main(["--root", str(path_root)])
+    assert "missing from the docs/CLAUDE.md file index" in capsys.readouterr().err
+
+
+def test_claude_index_missing_row_fails_the_run(tmp_path: pathlib.Path) -> None:
+    """A page absent from the file index makes the run exit 1."""
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home", "usage.md": "# Usage"},
+        "[{Home: index.md}, {Usage: usage.md}]",
+        str_claude_index_body=_STR_INDEX_TABLE,
+    )
+    assert cls_gate.main(["--root", str(path_root)]) == 1
 
 
 def test_claude_index_stale_row_is_reported(
@@ -255,11 +310,35 @@ def test_claude_index_stale_row_is_reported(
         "[{Home: index.md}]",
         str_claude_index_body=str_index_with_ghost,
     )
-    int_exit = cls_gate.main(["--root", str(path_root)])
-    str_stderr = capsys.readouterr().err
-    assert int_exit == 1
-    assert "removed.md" in str_stderr
-    assert "does not exist on disk" in str_stderr
+    cls_gate.main(["--root", str(path_root)])
+    assert "removed.md" in capsys.readouterr().err
+
+
+def test_claude_index_stale_row_message_says_it_is_gone(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The stale-row finding says the named file does not exist on disk."""
+    str_index_with_ghost = _STR_INDEX_TABLE + "| `removed.md` | Utility page | Gone |\n"
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home"},
+        "[{Home: index.md}]",
+        str_claude_index_body=str_index_with_ghost,
+    )
+    cls_gate.main(["--root", str(path_root)])
+    assert "does not exist on disk" in capsys.readouterr().err
+
+
+def test_claude_index_stale_row_fails_the_run(tmp_path: pathlib.Path) -> None:
+    """A row naming a missing file makes the run exit 1."""
+    str_index_with_ghost = _STR_INDEX_TABLE + "| `removed.md` | Utility page | Gone |\n"
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home"},
+        "[{Home: index.md}]",
+        str_claude_index_body=str_index_with_ghost,
+    )
+    assert cls_gate.main(["--root", str(path_root)]) == 1
 
 
 def test_claude_index_in_sync_passes(tmp_path: pathlib.Path) -> None:
@@ -308,9 +387,19 @@ def test_file_index_table_with_no_rows_is_still_enforced(
         "[{Home: index.md}]",
         str_claude_index_body="## 1. File index\n\n| Path | Purpose |\n|------|---------|\n",
     )
-    int_exit = cls_gate.main(["--root", str(path_root)])
-    assert int_exit == 1
+    cls_gate.main(["--root", str(path_root)])
     assert "docs/index.md" in capsys.readouterr().err
+
+
+def test_file_index_table_with_no_rows_fails_the_run(tmp_path: pathlib.Path) -> None:
+    """A row-less file-index table makes the run exit 1."""
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home"},
+        "[{Home: index.md}]",
+        str_claude_index_body="## 1. File index\n\n| Path | Purpose |\n|------|---------|\n",
+    )
+    assert cls_gate.main(["--root", str(path_root)]) == 1
 
 
 # --------------------------
@@ -322,10 +411,13 @@ def test_missing_docs_dir_fails_closed(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
 ) -> None:
     """No ``docs/`` at all is a hard failure, never a silent 'nothing to check'."""
-    int_exit = cls_gate.main(["--root", str(tmp_path)])
-    str_stderr = capsys.readouterr().err
-    assert int_exit == 1
-    assert "no docs/ directory found" in str_stderr
+    cls_gate.main(["--root", str(tmp_path)])
+    assert "no docs/ directory found" in capsys.readouterr().err
+
+
+def test_missing_docs_dir_exits_nonzero(tmp_path: pathlib.Path) -> None:
+    """No ``docs/`` at all exits 1."""
+    assert cls_gate.main(["--root", str(tmp_path)]) == 1
 
 
 def test_missing_mkdocs_yml_fails_closed(
@@ -334,10 +426,15 @@ def test_missing_mkdocs_yml_fails_closed(
     """A ``docs/`` with no ``mkdocs.yml`` beside it is a hard failure, not a pass."""
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "index.md").write_text("# Home", encoding="utf-8")
-    int_exit = cls_gate.main(["--root", str(tmp_path)])
-    str_stderr = capsys.readouterr().err
-    assert int_exit == 1
-    assert "no mkdocs.yml found" in str_stderr
+    cls_gate.main(["--root", str(tmp_path)])
+    assert "no mkdocs.yml found" in capsys.readouterr().err
+
+
+def test_missing_mkdocs_yml_exits_nonzero(tmp_path: pathlib.Path) -> None:
+    """A ``docs/`` with no ``mkdocs.yml`` exits 1."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "index.md").write_text("# Home", encoding="utf-8")
+    assert cls_gate.main(["--root", str(tmp_path)]) == 1
 
 
 # --------------------------
@@ -390,4 +487,15 @@ def test_two_symlink_aliases_of_one_directory_are_both_found(tmp_path: pathlib.P
     (path_docs / "pages" / "loop").symlink_to(path_docs, target_is_directory=True)
     list_pages = cls_gate.published_pages(path_docs, cls_gate.unpublished_specs({}))
     assert "alias/file.md" in list_pages
+
+
+def test_symlink_alias_target_directory_is_still_found(tmp_path: pathlib.Path) -> None:
+    """The real directory behind an alias is published under its own path too."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    path_docs = path_root / "docs"
+    (path_docs / "pages").mkdir()
+    (path_docs / "pages" / "file.md").write_text("# F", encoding="utf-8")
+    (path_docs / "alias").symlink_to(path_docs / "pages", target_is_directory=True)
+    (path_docs / "pages" / "loop").symlink_to(path_docs, target_is_directory=True)
+    list_pages = cls_gate.published_pages(path_docs, cls_gate.unpublished_specs({}))
     assert "pages/file.md" in list_pages
