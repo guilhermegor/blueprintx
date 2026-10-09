@@ -124,8 +124,13 @@ index still looks like success to a probe that never asked for the right thing:
 
 ```bash
 poe wheelhouse_assemble
-PIP_INDEX_URL=http://127.0.0.1:1/simple pip install --find-links ../_wheels/<repo-name>/wheels -r requirements-lock.txt
+dir_witness="$(mktemp -d)" && python -m venv "$dir_witness"   # fresh: nothing pre-installed
+PIP_INDEX_URL=http://127.0.0.1:1/simple "$dir_witness/bin/pip" install --find-links ../_wheels/<repo-name>/wheels -r requirements-lock.txt
 ```
+
+The venv must be fresh: in an environment that already holds the requirements, pip is satisfied
+locally and passes without ever reading the wheelhouse, so a missing wheel goes unnoticed (the
+second probe that lies, above).
 
 The command deliberately omits `--no-index`: with it pip never contacts `PIP_INDEX_URL`, so the
 unreachable index would prove nothing. Without it, a wheel missing from the wheelhouse falls

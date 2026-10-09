@@ -474,6 +474,18 @@ def unzip_wheels(path_zip: Path, dir_out: Path) -> int:
     return len(list_names)
 
 
+def _remove_loose_wheels(dir_out: Path) -> None:
+    """Delete every ``*.whl`` in a directory, so none can sit beside a fresh extraction.
+
+    Parameters
+    ----------
+    dir_out : Path
+        Output directory; a missing one is a no-op.
+    """
+    for path_wheel in dir_out.glob("*.whl"):
+        path_wheel.unlink()
+
+
 def _loose_wheels_match_manifest(path_manifest: Path, list_loose: list[str]) -> bool:
     """Return whether loose wheels in the output dir may stand in for the verified payload.
 
@@ -549,6 +561,8 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
             )
         try:
             reassemble_zip(list_parts, dict_manifest, path_zip_tmp)
+            # Only now: a failed verification above must leave the existing wheels untouched.
+            _remove_loose_wheels(dir_out)
             int_count = unzip_wheels(path_zip_tmp, dir_out)
         finally:
             # A failed archive left behind could later be extracted as "unverified".

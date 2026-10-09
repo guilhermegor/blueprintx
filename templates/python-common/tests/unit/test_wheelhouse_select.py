@@ -14,7 +14,6 @@ confident wrong answer, which is why they need tests rather than review.
 """
 
 import argparse
-from contextlib import suppress
 import importlib.util
 import json
 from pathlib import Path
@@ -360,8 +359,25 @@ def test_stale_wheels_of_the_same_count_do_not_short_circuit_assemble(tmp_path: 
     assert (dir_out / "a-1.0-py3-none-any.whl").is_file()
 
 
+def test_stale_wheels_are_removed_once_the_payload_is_verified(tmp_path: Path) -> None:
+    """A wheel the manifest does not name must not survive next to the extracted payload."""
+    dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl", "b-2.0-py3-none-any.whl")
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    dir_out = tmp_path / "wheels"
+    dir_out.mkdir()
+    (dir_out / "x-9.0-py3-none-any.whl").write_bytes(b"stale")
+
+    gate.assemble_wheelhouse(_assemble_args(tmp_path))
+
+    assert sorted(path_wheel.name for path_wheel in dir_out.glob("*.whl")) == [
+        "a-1.0-py3-none-any.whl",
+        "b-2.0-py3-none-any.whl",
+    ]
+
+
 def test_a_sha_mismatch_does_not_leave_the_reassembled_zip_behind(tmp_path: Path) -> None:
     """A failed archive left as ``wheelhouse.zip`` could later be extracted as unverified."""
+    # one-assert-ok: the raises block IS the failure under test; the assert is its cleanup
     dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl")
     gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
     path_manifest = tmp_path / "out" / "manifest.json"
@@ -369,7 +385,7 @@ def test_a_sha_mismatch_does_not_leave_the_reassembled_zip_behind(tmp_path: Path
     dict_manifest["zip_sha256"] = "0" * 64
     path_manifest.write_text(json.dumps(dict_manifest), encoding="utf-8")
 
-    with suppress(SystemExit):
+    with pytest.raises(SystemExit, match="sha256 mismatch"):
         gate.assemble_wheelhouse(_assemble_args(tmp_path))
 
     assert not (tmp_path / "out" / "wheelhouse.zip").exists()
@@ -377,6 +393,7 @@ def test_a_sha_mismatch_does_not_leave_the_reassembled_zip_behind(tmp_path: Path
 
 def test_a_failed_extraction_does_not_leave_the_reassembled_zip_behind(tmp_path: Path) -> None:
     """The sha matches but the bytes are no zip, so extraction fails after reassembly."""
+    # one-assert-ok: the raises block IS the failure under test; the assert is its cleanup
     path_part = tmp_path / "out" / "wheelhouse.zip.000"
     path_part.parent.mkdir()
     path_part.write_bytes(b"not a zip")
@@ -386,7 +403,7 @@ def test_a_failed_extraction_does_not_leave_the_reassembled_zip_behind(tmp_path:
     )
     (tmp_path / "out" / "manifest.json").write_text(json.dumps(dict_manifest), encoding="utf-8")
 
-    with suppress(zipfile.BadZipFile):
+    with pytest.raises(zipfile.BadZipFile):
         gate.assemble_wheelhouse(_assemble_args(tmp_path))
 
     assert not (tmp_path / "out" / "wheelhouse.zip").exists()
