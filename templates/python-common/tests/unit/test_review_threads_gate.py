@@ -1641,9 +1641,7 @@ def _body_review(str_body: str | None, str_login: str = "coderabbitai[bot]") -> 
 
 
 def _body_problems(list_reviews: list[dict], list_notices: list[dict]) -> list[str]:
-    return _load_gate().find_review_body_problems(
-        list_reviews, list_notices, _BODY_ROSTER, str_head_oid=_HEAD
-    )
+    return _load_gate().find_review_body_problems(list_reviews, list_notices, _BODY_ROSTER)
 
 
 def test_review_body_with_findings_and_no_reply_is_a_problem() -> None:
@@ -1675,10 +1673,53 @@ def test_review_body_reply_from_the_roster_is_a_problem() -> None:
     assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
 
 
-def test_review_body_findings_on_a_superseded_commit_are_not_this_checks_concern() -> None:
-    """Only the head's reviews count; a stale review is the missing-review check's job."""
+def test_review_body_findings_on_a_superseded_commit_still_need_a_reply() -> None:
+    """A push must not clear body findings the way it never clears an inline thread."""
     dict_stale = {**_body_review(_BODY_MAJOR), "commit": {"oid": _SUPERSEDED}}
-    assert _body_problems([dict_stale], []) == []
+    assert len(_body_problems([dict_stale], [])) == 1
+
+
+def test_review_body_one_reply_after_both_reviews_answers_both() -> None:
+    """Deliberate: one reply posted after the latest findings body covers the earlier ones."""
+    dict_late = {**_body_review(_BODY_MAJOR), "submittedAt": "2026-01-02T12:00:00Z"}
+    list_notices = [_notice("someone", _BODY_REPLY, _BODY_AFTER)]
+    assert _body_problems([_body_review(_BODY_MAJOR), dict_late], list_notices) == []
+
+
+def test_review_body_reply_from_a_graphql_bot_is_a_problem() -> None:
+    """GraphQL drops the [bot] suffix; ``__typename`` Bot is what marks GitGuardian et al."""
+    dict_bot = {
+        "author": {"login": "gitguardian", "__typename": "Bot"},
+        "body": _BODY_REPLY,
+        "createdAt": _BODY_AFTER,
+    }
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], [dict_bot])) == 1
+
+
+def test_review_body_reply_from_a_rest_bot_login_is_a_problem() -> None:
+    """A ``[bot]`` login that is not on the roster is still not an answer."""
+    list_notices = [_notice("github-actions[bot]", _BODY_REPLY, _BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+
+
+def test_review_body_dismissed_review_needs_no_reply() -> None:
+    """A dismissal is the maintainer's explicit answer."""
+    dict_dismissed = {**_body_review(_BODY_MAJOR), "state": "DISMISSED"}
+    assert _body_problems([dict_dismissed], []) == []
+
+
+def test_review_body_problem_quotes_the_matched_line_not_the_first() -> None:
+    """CodeRabbit bodies open with boilerplate; the failure must show the finding."""
+    str_body = "<!-- auto-generated -->\n**Actionable comments posted: 1**\n" + _BODY_MAJOR
+    assert "retry loop" in _body_problems([_body_review(str_body)], [])[0]
+
+
+def test_print_review_body_problems_json_carries_the_thread_problems(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Both failures reach the caller in one run, not one per round trip."""
+    _load_gate()._print_review_body_problems(True, ["body"], ["an open thread"])
+    assert json.loads(capsys.readouterr().out)["thread_problems"] == ["an open thread"]
 
 
 def test_review_body_findings_from_a_non_roster_author_are_ignored() -> None:
@@ -1696,6 +1737,8 @@ def test_review_body_findings_from_a_non_roster_author_are_ignored() -> None:
         "- **Minor**: x",
         "2 finding(s) across 3 reviewed file(s).",
         "## Findings\n\n- the loop swallows the error",
+        "## Findings\n- `parse()` has no known bugs on ASCII but crashes on empty input",
+        "No findings in a.py.\n**Major** — b.py swallows the error.",
     ],
 )
 def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
@@ -1713,6 +1756,9 @@ def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
         "No major issues.",
         "0 finding(s) across 3 reviewed file(s).",
         "## Findings\n\nNo findings.",
+        "No **Major** issues.",
+        "- **Critical:** none",
+        "Minor: none found",
     ],
 )
 def test_review_body_reporting_no_findings_stays_green(str_body: str) -> None:
@@ -1725,10 +1771,10 @@ def test_review_body_that_is_null_stays_green() -> None:
     assert _body_problems([_body_review(None)], []) == []
 
 
-def test_review_query_asks_for_the_body_and_the_time() -> None:
-    """Without ``body`` and ``submittedAt`` the check would read an empty review."""
-    str_query = _load_gate()._QUERY
-    assert "body submittedAt" in str_query
+@pytest.mark.parametrize("str_field", ["body", "submittedAt", "state", "__typename"])
+def test_review_query_asks_for_each_field_the_body_check_reads(str_field: str) -> None:
+    """Without these fields the check would read an empty review or a bot as a person."""
+    assert str_field in _load_gate()._QUERY
 
 
 def test_print_review_body_problems_json_carries_the_reason(

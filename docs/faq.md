@@ -55,12 +55,22 @@ literal for a packaged install. See the [Changelog](changelog.md).
 
 Yes. A roster reviewer that posts findings as the review **body**, with no inline thread, used
 to satisfy `Review threads answered` unread, because the gate only counted threads (16 PRs
-merged that way on 2026-10-05, blueprintx#630). Now a roster review of the head whose body
-carries a severity marker (`Major`, `Critical`, `Minor`, `Blocker`, `Nitpick`, or a
-red/orange/yellow circle), a non-zero `N finding(s)` count, or a findings heading needs a
-reply of at least 100 characters from outside the roster, posted **after** the review. A body
-that says `No findings` or `No blocking bugs` stays green. A review body has no thread, so the
-reply is a PR comment and nothing else needs resolving. Re-run the check after replying.
+merged that way on 2026-10-05, blueprintx#630). Now a roster review (on any commit, as threads
+are; a `DISMISSED` one is skipped) whose body has one of these shapes needs a reply:
+
+- a severity emoji (red, orange or yellow circle);
+- `Major`, `Critical`, `Minor`, `Blocker` or `Nitpick` inside `[ ]`, `( )` or `*...*`, or at the
+  start of a line before `:`, a dash or an em dash;
+- `Severity: <word>`, or a non-zero `N finding(s)` count;
+- a `Findings`, `Issues` or `Problems` heading.
+
+A bare "major" in prose is not matched. A line that is only `No findings.`, `No blocking bugs
+found.` or `Minor: none` (and a findings heading directly followed by one) is clean; the same
+words inside a longer sentence are not. The tests in `test_review_threads_gate.py` list every
+shape. The reply is a PR comment of at least 100 characters from a **human** (a bot, even one
+outside the roster, never counts), posted **after** the review; one reply after the latest
+findings body answers the earlier ones. A body has no thread, so nothing needs resolving. When
+threads are also open, the failure lists both. Re-run the check after replying.
 
 ## Which install methods are supported?
 

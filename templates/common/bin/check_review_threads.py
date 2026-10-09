@@ -199,13 +199,13 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
-      comments(last:100) { nodes { author { login } body createdAt } }
+      comments(last:100) { nodes { author { login __typename } body createdAt } }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login } commit { oid } body submittedAt }
+        nodes { author { login } commit { oid } state body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
       reviewThreads(first:100, after:$tc) {
@@ -1024,7 +1024,41 @@ _RE_BODY_SEVERITY = re.compile(
 )
 _RE_BODY_COUNT = re.compile(r"\b[1-9]\d*\s+findings?\b", re.IGNORECASE)
 _RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
-_RE_BODY_CLEAN = re.compile(r"\bno\s+(?:\w+\s+)?(?:findings?|issues?|bugs?|problems?)\b", re.I)
+_STR_CLEAN_LINE = (
+    r"^[^\w\n]*(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
+    r"|(?:critical|major|minor|blocker|nitpick)[^\w\n]*(?:none|n/?a|no\b)[^\n]*)[^\w\n]*$"
+)
+# A clean line must BE the line ("No major issues."), never a phrase inside a longer one
+# ("parse() has no known bugs on ASCII but crashes"), or it would mask a real finding.
+_RE_BODY_CLEAN_LINE = re.compile(_STR_CLEAN_LINE, re.I | re.M)
+_RE_BODY_CLEAN_SECTION = re.compile(
+    r"^#{1,6}\s*(?:findings|issues|problems)\b[^\n]*\n(?:[^\S\n]*\n)*" + _STR_CLEAN_LINE,
+    re.I | re.M,
+)
+_RES_BODY_FINDING = (_RE_BODY_SEVERITY, _RE_BODY_COUNT, _RE_BODY_HEADING)
+
+
+def review_body_finding_lines(str_body: str | None) -> list[str]:
+    """Return the lines of a review body that list findings; empty means a clean body.
+
+    Parameters
+    ----------
+    str_body : str or None
+            The submitted review's body.
+
+    Returns
+    -------
+    list of str
+            Each line carrying a severity marker, a non-zero finding count or a findings
+            heading. A line that only reports there are none ("No findings.", "Minor: none")
+            and a findings heading directly followed by one are dropped first.
+    """
+    str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
+    return [
+        str_line.strip()
+        for str_line in str_text.splitlines()
+        if any(re_.search(str_line) for re_ in _RES_BODY_FINDING)
+    ]
 
 
 def review_body_has_findings(str_body: str | None) -> bool:
@@ -1038,23 +1072,24 @@ def review_body_has_findings(str_body: str | None) -> bool:
     Returns
     -------
     bool
-            ``True`` for a severity marker or a non-zero finding count; a bare findings
-            heading counts too unless the body says there are none. Empty is clean.
+            ``True`` when :func:`review_body_finding_lines` finds at least one line.
     """
-    str_text = str_body or ""
-    return bool(
-        _RE_BODY_SEVERITY.search(str_text)
-        or _RE_BODY_COUNT.search(str_text)
-        or (_RE_BODY_HEADING.search(str_text) and not _RE_BODY_CLEAN.search(str_text))
-    )
+    return bool(review_body_finding_lines(str_body))
 
 
 def _answered_after(
     list_notices: list[dict], set_roster: set[str], str_when: str, int_min_chars: int
 ) -> bool:
-    """Return whether a non-roster comment of at least ``int_min_chars`` postdates ``str_when``."""
+    """Return whether a human comment of at least ``int_min_chars`` postdates ``str_when``.
+
+    Bots never answer: GraphQL reports ``__typename`` ``Bot`` (and REST a ``[bot]`` suffix) for
+    GitGuardian, ``github-actions`` and the like, and one of those clearing findings unread is
+    the #630 failure again.
+    """
     return bool(str_when) and any(
         normalise_login((d.get("author") or {}).get("login") or "") not in set_roster
+        and (d.get("author") or {}).get("__typename") != "Bot"
+        and not ((d.get("author") or {}).get("login") or "").endswith(_BOT_SUFFIX)
         and len((d.get("body") or "").strip()) >= int_min_chars
         and (d.get("createdAt") or "") > str_when
         for d in list_notices
@@ -1066,24 +1101,25 @@ def find_review_body_problems(
     list_notices: list[dict],
     set_roster: set[str],
     int_min_chars: int = _MIN_REPLY_CHARS,
-    *,
-    str_head_oid: str,
 ) -> list[str]:
-    """Return one problem per head review whose body lists findings nobody answered.
+    """Return one problem per roster review whose body lists findings nobody answered.
+
+    Every submitted review counts, not only the head's: inline threads persist across pushes,
+    so a body must too, or a trivial push plus a clean re-review would clear it. One reply
+    posted after the latest findings body therefore answers all earlier ones; a reply must
+    postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
+    maintainer's explicit answer.
 
     Parameters
     ----------
     list_reviews : list of dict
-            Submitted reviews with ``author``, ``commit``, ``body`` and ``submittedAt``.
+            Submitted reviews with ``author``, ``state``, ``body`` and ``submittedAt``.
     list_notices : list of dict
             The PR's issue comments, where the author's reply to a review body lands.
     set_roster : set of str
             Logins that count as reviewers rather than as answers.
     int_min_chars : int, optional
             Minimum length for a reply to count, the same bar a thread reply meets.
-    str_head_oid : str, keyword-only
-            The PR's ``headRefOid``; only reviews of this commit are held to the bar. Empty
-            examines every review, the stricter side.
 
     Returns
     -------
@@ -1092,14 +1128,17 @@ def find_review_body_problems(
             submitted. A missing ``submittedAt`` fails closed.
     """
     set_roster = {normalise_login(s) for s in set_roster}
-    return [
-        f"{(d.get('author') or {}).get('login')}'s review of the head lists findings in its "
-        f"body and nobody outside the reviewer roster replied after it — "
-        f"{(d['body'].strip().splitlines() or [''])[0][:90]}"
+    list_hits = [
+        (d, review_body_finding_lines(d.get("body")))
         for d in list_reviews
         if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
-        and (not str_head_oid or ((d.get("commit") or {}).get("oid") or "") == str_head_oid)
-        and review_body_has_findings(d.get("body"))
+        and d.get("state") != "DISMISSED"
+    ]
+    return [
+        f"{(d.get('author') or {}).get('login')}'s review lists findings in its body and nobody "
+        f"outside the reviewer roster (and no bot) replied after it — {list_lines[0][:90]}"
+        for d, list_lines in list_hits
+        if list_lines
         and not _answered_after(
             list_notices, set_roster, d.get("submittedAt") or "", int_min_chars
         )
@@ -1222,16 +1261,24 @@ def _print_missing_review(
     return 1
 
 
-def _print_review_body_problems(bool_json: bool, list_problems: list[str]) -> int:
-    """Print the unanswered-review-body failure in the requested representation; return ``1``."""
+def _print_review_body_problems(
+    bool_json: bool, list_problems: list[str], list_thread_problems: list[str] | None = None
+) -> int:
+    """Print the unanswered-review-body failure, with any thread failures too; return ``1``."""
+    list_thread_problems = list_thread_problems or []
     if bool_json:
         print(
             json.dumps(
-                {"status": "fail", "reason": "unanswered_review_body", "problems": list_problems}
+                {
+                    "status": "fail",
+                    "reason": "unanswered_review_body",
+                    "problems": list_problems,
+                    "thread_problems": list_thread_problems,
+                }
             )
         )
         return 1
-    for str_problem in list_problems:
+    for str_problem in list_problems + list_thread_problems:
         print(f"❌ {str_problem}")
     print(
         f"\nReply (at least {_MIN_REPLY_CHARS} characters) on the PR after the review, saying "
@@ -1272,7 +1319,6 @@ def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[
         dict_pr.get("reviews", {}).get("nodes", []),
         list_notices,
         set_roster,
-        str_head_oid=dict_pr.get("headRefOid") or "",
     )
 
 
@@ -1333,8 +1379,6 @@ def main(list_argv: list[str] | None = None) -> int:
         return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
 
     list_body_problems = _unanswered_bodies(dict_pr, list_notices, set_roster)
-    if list_body_problems:
-        return _print_review_body_problems(bool_json, list_body_problems)
 
     # Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
     # See the SUPERSEDED block above `main` for why CI stopped passing 0.
@@ -1342,6 +1386,10 @@ def main(list_argv: list[str] | None = None) -> int:
     list_problems = find_thread_problems(
         list_threads, set_roster, bool_require_resolved=bool_require_resolved
     )
+    # Both failures at once: fixing the body reply only to meet the open threads next run is a
+    # second round trip the first run could have saved.
+    if list_body_problems:
+        return _print_review_body_problems(bool_json, list_body_problems, list_problems)
 
     return _print_thread_verdict(
         bool_json, list_problems, len(list_threads), bool_require_resolved
