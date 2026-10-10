@@ -252,7 +252,7 @@ repos:
         entry: bash tests/test_close_linked_issues.sh
         language: system
         pass_filenames: false
-        files: ^(templates/common/bin/close_linked_issues\.sh|tests/test_close_linked_issues\.sh)$
+        files: ^(templates/common/bin/close_linked_issues\.sh|templates/common/\.github/workflows/close-linked-issues\.yml|tests/test_close_linked_issues\.sh)$
 
       - id: docs-locale-prompt-tests
         name: docs-locale prompt should-fail regression tests (blueprintx#247)

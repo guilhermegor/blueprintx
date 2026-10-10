@@ -52,7 +52,11 @@ expect "negation in an earlier sentence" "chore/x" $'It is not done yet.\nFixes 
 expect "list form closes only the first" "chore/x" "Closes #1, #2" "1"
 expect "cross-repo ref ignored" "chore/x" "Closes owner/repo#40" ""
 expect "digits glued to letters ignored" "chore/x" "Closes #12abc" ""
-expect "year in leading form" "chore/2026-10-cleanup" "" ""
+expect "year-month in leading form" "chore/2026-10-cleanup" "" ""
+expect "a bare 4-digit issue number still closes" "feat/1999-x" "" "1999"
+expect "curly-apostrophe negation" "chore/x" "we won’t close #9" ""
+expect "negation window pins its boundary (3 words)" "chore/x" "I do not know why but fixes #12" ""
+expect "four words past a negation still close" "chore/x" "not sure why it works, so fixes #13" "13"
 expect "unknown prefix in leading form" "user/42-wip" "" ""
 expect "deps/ prefix in leading form" "deps/3-bump" "" ""
 expect "trailing -N is no longer read (node)" "chore/bump-node-20" "" ""
@@ -65,11 +69,18 @@ expect "no number at all" "feat/add-thing" "just prose" ""
 
 # Workflow wiring: a workflow that calls a file it never fetched fails on every run.
 str_wf="$REPO_ROOT/templates/common/.github/workflows/close-linked-issues.yml"
-str_called=$(sed -nE 's/^ *run: bash (bin\/[a-z_]+\.sh)$/\1/p' "$str_wf")
+str_called=$(sed -nE 's/^ *run: .*(bin\/[a-z_]+\.sh).*$/\1/p' "$str_wf")
 if [[ -f "$REPO_ROOT/templates/common/$str_called" ]] && grep -q 'uses: actions/checkout@' "$str_wf"; then
 	echo "ok   - workflow checks out the repo and calls an existing script"
 else
 	echo "FAIL - workflow calls '$str_called' without a checkout, or the script is missing"
+	int_failures=$((int_failures + 1))
+fi
+
+if grep -q 'base.ref == github.event.repository.default_branch' "$str_wf"; then
+	echo "ok   - workflow is gated on the default branch"
+else
+	echo "FAIL - workflow does not gate on the default base branch"
 	int_failures=$((int_failures + 1))
 fi
 
@@ -81,7 +92,9 @@ cat >"$str_bin/gh" <<'STUB'
 if [[ "$1" == "api" ]]; then
 	case "$STUB_API" in
 		404) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
-		500) echo "gh: Server Error (HTTP 500)" >&2; exit 1 ;;
+		410) echo "gh: Gone (HTTP 410)" >&2; exit 1 ;;
+		500) echo "gh: Server Error (HTTP 500) request 4041" >&2; exit 1 ;;
+		warn) echo "gh: a new version is available" >&2; echo "open"; exit 0 ;;
 		*) echo "open"; exit 0 ;;
 	esac
 fi
@@ -113,6 +126,12 @@ check() {
 
 run_script 404 "" "Closes #1"
 check "404 is swallowed, job green, nothing closed" "$((int_status != 0 || ${#str_log} != 0))"
+
+run_script 410 "" "Closes #1"
+check "410 is swallowed, job green, nothing closed" "$((int_status != 0 || ${#str_log} != 0))"
+
+run_script warn "" "Closes #1"
+check "a stderr notice on success does not hide an open issue" "$([[ "$str_log" == *"issue close 1"* ]] && echo 0 || echo 1)"
 
 run_script 500 "" "Closes #1"
 check "a 500 fails the job" "$((int_status == 0))"

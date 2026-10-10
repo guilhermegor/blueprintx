@@ -19,8 +19,8 @@ issue_from_branch() {
 	local str_branch="$1" str_num
 
 	str_num=$(printf '%s' "$str_branch" | sed -nE "s#^($BRANCH_TYPES)/([0-9]+)-.*#\2#p")
-	# A leading four-digit year (chore/2026-10-cleanup) is a date, not an issue.
-	if [[ "$str_num" =~ ^(19|20)[0-9]{2}$ ]]; then
+	# A year followed by a month (chore/2026-10-cleanup) is a date; a bare 1999 is an issue.
+	if [[ "$str_branch" =~ /(19|20)[0-9]{2}-(0[1-9]|1[0-2])(-|$) ]]; then
 		return 0
 	fi
 	[[ -n "$str_num" ]] && printf '%s\n' "$str_num"
@@ -36,7 +36,7 @@ issues_from_body() {
 	printf '%s\n' "$str_body" | tr 'A-Z' 'a-z' \
 		| sed -E \
 			-e "s/(^|[^[:alnum:]_])(not|never|cannot)([[:space:]]+[[:alpha:]]+){0,3}[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
-			-e "s/n['’]t([[:space:]]+[[:alpha:]]+){0,3}[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
+			-e "s/n('|’)t([[:space:]]+[[:alpha:]]+){0,3}[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
 		| { grep -owE "$KEYWORDS:?[[:space:]]+#[0-9]+" || true; } \
 		| grep -oE '[0-9]+$'
 }
@@ -57,19 +57,24 @@ resolve_issues() {
 
 # Closes one open issue. Returns 0 when closed or deliberately skipped, 1 on a real error.
 close_issue() {
-	local str_num="$1" str_out str_state
+	local str_num="$1" str_state str_err path_err
 
-	# The issues endpoint also answers for PR numbers; those are skipped.
-	if ! str_out=$(gh api "repos/$GH_REPO/issues/$str_num" \
-		--jq 'if .pull_request then "pr" else .state end' 2>&1); then
-		if [[ "$str_out" == *"404"* || "$str_out" == *"Not Found"* ]]; then
-			echo "#$str_num does not exist, skipped"
+	path_err=$(mktemp)
+	# The issues endpoint also answers for PR numbers; those are skipped. stderr is kept apart
+	# so a notice on a successful call cannot pollute the state.
+	if ! str_state=$(gh api "repos/$GH_REPO/issues/$str_num" \
+		--jq 'if .pull_request then "pr" else .state end' 2>"$path_err"); then
+		str_err=$(<"$path_err")
+		rm -f "$path_err"
+		# 404: no such issue. 410: deleted, or Issues disabled on the repo.
+		if [[ "$str_err" =~ \(HTTP\ (404|410)\) ]]; then
+			echo "#$str_num does not exist (HTTP ${BASH_REMATCH[1]}), skipped"
 			return 0
 		fi
-		echo "::error::could not read #$str_num: $str_out"
+		echo "::error::could not read #$str_num: $str_err"
 		return 1
 	fi
-	str_state="$str_out"
+	rm -f "$path_err"
 	if [[ "$str_state" != "open" ]]; then
 		echo "#$str_num is $str_state, skipped"
 		return 0
