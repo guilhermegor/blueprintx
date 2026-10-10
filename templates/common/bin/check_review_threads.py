@@ -1192,12 +1192,20 @@ _RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I 
 # A review declares itself by structure (docs/faq.md, "How the gate classifies"): a heading, a
 # bullet or a bold label that starts with "Review" or "Finding(s)". Ambiguity counts as a review.
 _RE_BODY_REVIEW_LINE = re.compile(
-    r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b", re.IGNORECASE | re.MULTILINE
+    r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b"
+    r"(?!\s+(?:ladder|skipped|profile|details|status|in progress|completed))",
+    re.IGNORECASE | re.MULTILINE,
 )
-# A printed count is authoritative: 0 is clean, N > 0 is findings, whatever the prose says.
-_RES_BODY_COUNT_LINE = (
-    re.compile(r"actionable comments posted:?[\s*]*(\d+)", re.IGNORECASE),
-    re.compile(r"\b(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE),
+# Printed counts are authoritative, but each speaks for what it counts. CodeRabbit's header counts
+# INLINE comments, which are threads the thread gate already holds; only its body sections
+# (outside the diff, duplicates) live where no thread can see them. The ladder posts no threads,
+# so its count is the body's. Both are anchored to a line start so quoted output cannot fire them.
+_RE_BODY_SECTION = re.compile(
+    r"\b(?:outside diff range|duplicate) comments\s*\((\d+)\)", re.IGNORECASE
+)
+_RE_ACTIONABLE = re.compile(r"actionable comments posted:?[\s*]*\d+", re.IGNORECASE)
+_RE_LADDER_COUNT = re.compile(
+    r"^[^\w\n]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
 )
 _RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
 _RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
@@ -1220,18 +1228,30 @@ _RE_BODY_CLEAN_SECTION = re.compile(
 _RES_BODY_FINDING = (_RE_BODY_SEVERITY, _RE_BODY_COUNT, _RE_BODY_HEADING, _RE_BODY_REVIEW_LINE)
 
 
-def _stated_count(str_body: str) -> tuple[int, str] | None:
-    """Return the first printed finding count and its line, or ``None`` when none is printed."""
-    for re_count in _RES_BODY_COUNT_LINE:
-        match_ = re_count.search(str_body)
-        if match_:
-            return int(match_.group(1)), match_.group(0).strip("* \t")
-    return None
+def _declared_findings(str_body: str) -> list[str] | None:
+    """Return the findings a body's own printed counts declare, or ``None`` if it prints none.
+
+    A non-zero body section (outside the diff, duplicates) wins over a zero inline count, since
+    CodeRabbit prints both. A CodeRabbit header alone means the findings are inline threads.
+    """
+    list_sections = [m.group(0) for m in _RE_BODY_SECTION.finditer(str_body) if int(m.group(1))]
+    if list_sections:
+        return list_sections
+    if _RE_ACTIONABLE.search(str_body):
+        return []
+    cls_count = _RE_LADDER_COUNT.search(str_body)
+    if cls_count is None:
+        return None
+    return [cls_count.group(0).strip("* \t")] if int(cls_count.group(1)) else []
 
 
 def _ladder_prose_line(str_text: str) -> list[str]:
     """Return the first prose line of an uncounted ladder review, which counts as a review."""
-    list_prose = [s.strip() for s in _RE_LADDER_META.sub("", str_text).splitlines() if s.strip()]
+    list_prose = [
+        str_line.strip()
+        for str_line in _RE_LADDER_META.sub("", str_text).splitlines()
+        if str_line.strip()
+    ]
     return list_prose[:1]
 
 
@@ -1250,15 +1270,15 @@ def review_body_finding_lines(str_body: str | None) -> list[str]:
             heading. A line that only reports there are none ("No findings.", "Minor: none")
             and a findings heading directly followed by one are dropped first.
     """
+    list_declared = _declared_findings(str_body or "")
+    if list_declared is not None:
+        return list_declared
     str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
     list_lines = [
         str_line.strip()
         for str_line in str_text.splitlines()
         if any(re_.search(str_line) for re_ in _RES_BODY_FINDING)
     ]
-    tuple_count = _stated_count(str_body or "")
-    if tuple_count is not None:
-        return list_lines + [tuple_count[1]] if tuple_count[0] else []
     if _RE_LADDER_HEAD.search(str_body or ""):
         return list_lines or _ladder_prose_line(str_text)
     return list_lines
@@ -1291,17 +1311,23 @@ def _answered_after(
     either, so it fails closed like a missing ``submittedAt``.
     """
     return bool(str_when) and any(
-        _is_human_answer(d, set_roster, int_min_chars) and (d.get("createdAt") or "") > str_when
-        for d in list_notices
+        _is_human_answer(dict_notice, set_roster, int_min_chars)
+        and (dict_notice.get("createdAt") or "") > str_when
+        for dict_notice in list_notices
     )
 
 
-# An answer declares itself by structure too: "Reply to review 123", "Answers to the ladder
-# review", "Re: review", "Verdicts on ...", "Addressed/Fixed in <sha>", "Finding 1: ...", or a
-# "> quoted finding" followed by a response. Any of these counts at any length.
+# An answer declares itself by structure too: a LINE THAT OPENS with "Reply to review", "Answers
+# to the ladder review", "Re: review", "Verdicts/Judgment on ... review"; a "review <id>"
+# citation; "Addressed/Fixed in <sha>"; "Finding 1: ..."; or a "> quoted finding" followed by a
+# response. Any of these counts at any length. Anchored: "re-review" and "Not answered yet" are
+# not answers.
+_STR_REVIEW_NOUN = (
+    r"(?:the\s+|our\s+|my\s+)?(?:(?:ladder|fallback|claude|coderabbit|cli|rung)\s+)*review\b"
+)
 _RE_ANSWER_SHAPE = re.compile(
-    r"\b(?:repl(?:y|ies)|answer(?:s|ed)?|re|responses?|verdicts?|judg(?:e)?ments?)\b"
-    r"[^\n]{0,60}?\b(?:review|rung|findings?)\b"
+    r"^[\s*_#-]*(?:re\s*:|(?:repl(?:y|ies)|answers?|responses?|verdicts?|judg(?:e)?ments?)"
+    rf"(?:\s+(?:to|on))?\s*:?)\s*{_STR_REVIEW_NOUN}"
     r"|\b(?:addressed|fixed|resolved)\s+in\s+`?[0-9a-f]{7,40}\b"
     r"|^[^\w\n]*finding\s+\d+\b"
     r"|\breview\s+\d{6,}\b"
@@ -1310,11 +1336,11 @@ _RE_ANSWER_SHAPE = re.compile(
 )
 
 
-def _is_human_answer(d: dict, set_roster: set[str], int_min_chars: int) -> bool:
+def _is_human_answer(dict_notice: dict, set_roster: set[str], int_min_chars: int) -> bool:
     """Return whether one comment is by a known human outside the roster and reads as an answer."""
-    dict_author = d.get("author") or {}
+    dict_author = dict_notice.get("author") or {}
     str_login = dict_author.get("login") or ""
-    str_body = (d.get("body") or "").strip()
+    str_body = (dict_notice.get("body") or "").strip()
     return (
         bool(str_login)
         and normalise_login(str_login) not in set_roster
@@ -1327,19 +1353,25 @@ def _is_human_answer(d: dict, set_roster: set[str], int_min_chars: int) -> bool:
 def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[dict]:
     """Return the roster's own issue comments in review shape.
 
-    Some ladder rungs post their review as an issue comment, not a PR review. CodeRabbit's
-    auto-generated walkthroughs and command replies are skipped: they are not reviews.
+    Some ladder rungs post their review as an issue comment, not a PR review. Only a comment that
+    declares itself one counts (the ladder attribution line or a CodeRabbit header): status and
+    failure notices ("Review ladder: all rungs failed"), walkthroughs and command replies are
+    not reviews, whatever their first word is.
     """
     return [
         {
-            "author": d.get("author"),
+            "author": dict_notice.get("author"),
             "state": "COMMENTED",
-            "body": d.get("body"),
-            "submittedAt": d.get("createdAt"),
+            "body": dict_notice.get("body"),
+            "submittedAt": dict_notice.get("createdAt"),
         }
-        for d in list_notices
-        if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
-        and not _RE_AUTO_COMMENT.search(d.get("body") or "")
+        for dict_notice in list_notices
+        if normalise_login((dict_notice.get("author") or {}).get("login") or "") in set_roster
+        and not _RE_AUTO_COMMENT.search(dict_notice.get("body") or "")
+        and (
+            _RE_LADDER_HEAD.search(dict_notice.get("body") or "")
+            or _RE_ACTIONABLE.search(dict_notice.get("body") or "")
+        )
     ]
 
 
@@ -1375,20 +1407,21 @@ def find_review_body_problems(
             Human-readable problems; empty when every findings body was answered after it was
             submitted. A missing ``submittedAt`` fails closed.
     """
-    set_roster = {normalise_login(s) for s in set_roster}
+    set_roster = {normalise_login(str_login) for str_login in set_roster}
     list_hits = [
-        (d, review_body_finding_lines(d.get("body")))
-        for d in list_reviews + _notices_as_reviews(list_notices, set_roster)
-        if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
-        and d.get("state") != "DISMISSED"
+        (dict_review, review_body_finding_lines(dict_review.get("body")))
+        for dict_review in list_reviews + _notices_as_reviews(list_notices, set_roster)
+        if normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+        and dict_review.get("state") != "DISMISSED"
     ]
     return [
-        f"{(d.get('author') or {}).get('login')}'s review lists findings in its body and nobody "
-        f"outside the reviewer roster (and no bot) replied after it — {list_lines[0][:90]}"
-        for d, list_lines in list_hits
+        f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
+        f"and nobody outside the reviewer roster (and no bot) replied after it — "
+        f"{list_lines[0][:90]}"
+        for dict_review, list_lines in list_hits
         if list_lines
         and not _answered_after(
-            list_notices, set_roster, d.get("submittedAt") or "", int_min_chars
+            list_notices, set_roster, dict_review.get("submittedAt") or "", int_min_chars
         )
     ]
 

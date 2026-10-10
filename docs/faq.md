@@ -62,12 +62,17 @@ ambiguous it counts the comment as a review, so a valid review is never dropped.
 ### How the gate classifies a review
 
 A roster author's review (on any commit, as threads are; a `DISMISSED` one is skipped) or issue
-comment (some ladder rungs post that way) is a review when it has one of these shapes. A
-printed count wins over everything else:
+comment is a review when it has one of these shapes. A roster issue comment counts only with the
+ladder attribution line or a CodeRabbit header, so a status notice such as `Review ladder: all
+rungs failed` is not a review. A printed count wins over everything else:
 
-- `Actionable comments posted: N` (CodeRabbit): `0` is clean, `N > 0` needs a reply, whatever
-  the rest of the body says;
-- `N finding(s) across M reviewed file(s)` (the ladder): same rule;
+- CodeRabbit's body sections `Outside diff range comments (N)` and `Duplicate comments (N)`
+  with `N > 0`: these live only in the body, so they need a reply even when `Actionable comments
+  posted: 0`;
+- `Actionable comments posted: N` alone: the N findings are inline threads, which the thread
+  check already holds (reply and resolve), so the body needs no extra reply for them;
+- `N finding(s) across M reviewed file(s)` at the start of a line (the ladder posts no
+  threads): `0` is clean, `N > 0` needs a reply;
 - the ladder attribution line `Fallback review — runtime: <x>, model: <y> (selected by: <z>)`
   without a count (the claude rung writes prose): a review, unless the prose is only
   `No findings.`;
@@ -85,10 +90,12 @@ and are not reviews.
 
 An answer comes from outside the reviewer roster, is not a bot or a deleted (ghost) account,
 and is posted **after** the review. It counts when it is either 100 characters or longer, or
-has an answer shape at any length: `Reply to review <id>`, `Answer(s) to ... review`,
-`Re: review`, `Verdicts`/`Judgment on the ... review`, `Review <id> verified`,
+has an answer shape at any length: a line that opens with `Reply to review <id>`,
+`Answer(s) to ... review`, `Re: review`, `Verdicts`/`Judgment on the ... review`, or a
+`review <id>` citation,
 `Addressed in <sha>`/`Fixed in <sha>`, a `Finding N:` heading, or a `> quoted finding`
-followed by a response. A bare `@coderabbitai review` is neither. One reply after the latest
+followed by a response. A review request (`@coderabbitai re-review`, `Ready for re-review`) or a status line (`Not
+answered yet`) is neither. One reply after the latest
 review answers the earlier ones; a body has no thread, so nothing needs resolving. When threads
 are also open, the failure lists both. Re-run the check after replying. The tests in
 `test_review_threads_gate.py` list every shape with a witness that fails without its marker.
