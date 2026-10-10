@@ -200,7 +200,7 @@ def test_decimal_cols_keep_missing_values_missing(value_missing: object) -> None
     Parameters
     ----------
     value_missing : object
-            A representation of an absent source value.
+        A representation of an absent source value.
     """
     df_input = pd.DataFrame({"vlm": [value_missing]})
 

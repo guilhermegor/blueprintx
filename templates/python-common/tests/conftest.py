@@ -36,15 +36,15 @@ def _blocked(*args: object, **kwargs: object) -> NoReturn:
     Parameters
     ----------
     *args : object
-            Positional arguments from the patched socket primitive; the first is the
-            connection target shown in the error message.
+        Positional arguments from the patched socket primitive; the first is the
+        connection target shown in the error message.
     **kwargs : object
-            Keyword arguments from the patched socket primitive (ignored).
+        Keyword arguments from the patched socket primitive (ignored).
 
     Raises
     ------
     NetworkAccessError
-            Always — a real network call is never allowed in a test.
+        Always — a real network call is never allowed in a test.
     """
     raise NetworkAccessError(
         f"A test tried to reach the network ({args[:1]!r}). "
@@ -62,14 +62,14 @@ class _BlockedSocket(socket.socket):
         Parameters
         ----------
         *args : object
-                Positional arguments (the address tuple); forwarded to the reporter.
+            Positional arguments (the address tuple); forwarded to the reporter.
         **kwargs : object
-                Keyword arguments (ignored).
+            Keyword arguments (ignored).
 
         Raises
         ------
         NetworkAccessError
-                Always.
+            Always.
         """
         _blocked(*args, **kwargs)
 
@@ -79,14 +79,14 @@ class _BlockedSocket(socket.socket):
         Parameters
         ----------
         *args : object
-                Positional arguments (the address tuple); forwarded to the reporter.
+            Positional arguments (the address tuple); forwarded to the reporter.
         **kwargs : object
-                Keyword arguments (ignored).
+            Keyword arguments (ignored).
 
         Raises
         ------
         NetworkAccessError
-                Always.
+            Always.
         """
         _blocked(*args, **kwargs)
 
@@ -101,9 +101,9 @@ def block_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatc
     Parameters
     ----------
     request : pytest.FixtureRequest
-            The active test request; inspected for the ``allow_network`` opt-out marker.
+        The active test request; inspected for the ``allow_network`` opt-out marker.
     monkeypatch : pytest.MonkeyPatch
-            Pytest's patcher; restores the real primitives at teardown.
+        Pytest's patcher; restores the real primitives at teardown.
     """
     # Conditional expressions, rather than a guard clause that bails out early. A test which
     # opted out is patched back to the REAL primitives — a no-op that monkeypatch undoes at
