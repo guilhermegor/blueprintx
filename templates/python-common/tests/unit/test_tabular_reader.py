@@ -20,12 +20,12 @@ def _write_csv(path_dir: Path) -> Path:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory in which to create the file.
+        Directory in which to create the file.
 
     Returns
     -------
     pathlib.Path
-            Path to the created CSV.
+        Path to the created CSV.
     """
     path_csv = path_dir / "data.csv"
     path_csv.write_text("code;amount\nABC;10\nDEF;20\n", encoding="utf-8")
@@ -264,12 +264,12 @@ def _write_malformed_quote_csv(path_dir: Path) -> Path:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory in which to create the file.
+        Directory in which to create the file.
 
     Returns
     -------
     pathlib.Path
-            Path to the created CSV.
+        Path to the created CSV.
     """
     # The stray quote opens a free-text MIDDLE column, so the delimiter after it is the real
     # separator before amount. Under default quoting the open quote swallows that separator plus

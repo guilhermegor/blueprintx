@@ -114,12 +114,12 @@ def _gh_json(list_args: list[str]) -> object:
     Parameters
     ----------
     list_args : list of str
-            Arguments after ``gh``.
+        Arguments after ``gh``.
 
     Returns
     -------
     object
-            The parsed JSON, or ``None`` when the call or the parse failed.
+        The parsed JSON, or ``None`` when the call or the parse failed.
     """
     # A constant, trusted argv assembled from this file's own literals plus repo/PR
     # identifiers supplied by the workflow — no shell, so nothing to quote.
@@ -148,12 +148,12 @@ def load_gate(path_bin: pathlib.Path) -> types.ModuleType | None:
     Parameters
     ----------
     path_bin : pathlib.Path
-            The ``bin/`` directory holding both scripts.
+        The ``bin/`` directory holding both scripts.
 
     Returns
     -------
     types.ModuleType or None
-            The imported module, or ``None`` when it cannot be loaded.
+        The imported module, or ``None`` when it cannot be loaded.
     """
     path_gate = path_bin / "check_review_threads.py"
     cls_spec = importlib.util.spec_from_file_location("check_review_threads", path_gate)
@@ -185,16 +185,16 @@ def newest_roster_comment(
     Parameters
     ----------
     list_comments : list of dict
-            Normalised comments (``login``/``body``/``created_at``), oldest first.
+        Normalised comments (``login``/``body``/``created_at``), oldest first.
     set_roster : set of str
-            Already-normalised reviewer logins.
+        Already-normalised reviewer logins.
     fn_norm : Callable[[str], str]
-            The gate's ``normalise_login``.
+        The gate's ``normalise_login``.
 
     Returns
     -------
     dict or None
-            The newest roster comment, or ``None`` when the roster has said nothing.
+        The newest roster comment, or ``None`` when the roster has said nothing.
     """
     for dict_comment in reversed(list_comments):
         if fn_norm(dict_comment.get("login") or "") in set_roster:
@@ -210,16 +210,16 @@ def newest_roster_notice(
     Parameters
     ----------
     list_comments : list of dict
-            Normalised comments (``login``/``body``/``created_at``), oldest first.
+        Normalised comments (``login``/``body``/``created_at``), oldest first.
     set_roster : set of str
-            Already-normalised reviewer logins.
+        Already-normalised reviewer logins.
     fn_norm : Callable[[str], str]
-            The gate's ``normalise_login``.
+        The gate's ``normalise_login``.
 
     Returns
     -------
     str
-            The newest roster comment's body, or ``""`` when the roster has said nothing.
+        The newest roster comment's body, or ``""`` when the roster has said nothing.
     """
     dict_comment = newest_roster_comment(list_comments, set_roster, fn_norm)
     if dict_comment is None:
@@ -233,12 +233,12 @@ def parse_declared_wait(str_notice: str) -> int | None:
     Parameters
     ----------
     str_notice : str
-            The reviewer's refusal body.
+        The reviewer's refusal body.
 
     Returns
     -------
     int or None
-            Minutes to wait, or ``None`` when the notice states no number.
+        Minutes to wait, or ``None`` when the notice states no number.
     """
     cls_match = _RE_DECLARED_WAIT.search(str_notice)
     if cls_match is None:
@@ -287,14 +287,14 @@ def declared_wait_still_open(dict_notice: dict | None, dt_now: datetime) -> bool
     Parameters
     ----------
     dict_notice : dict or None
-            The newest roster comment, or ``None``.
+        The newest roster comment, or ``None``.
     dt_now : datetime.datetime
-            The current time, timezone-aware.
+        The current time, timezone-aware.
 
     Returns
     -------
     bool
-            ``True`` only while a wait the reviewer actually declared is still open.
+        ``True`` only while a wait the reviewer actually declared is still open.
     """
     if dict_notice is None:
         return False
@@ -343,22 +343,22 @@ def asked_recently(
     Parameters
     ----------
     list_comments : list of dict
-            Normalised comments (``login``/``body``/``created_at``), oldest first.
+        Normalised comments (``login``/``body``/``created_at``), oldest first.
     str_self_login : str
-            The login the retry posts as. A marker from any other author is ignored; an empty
-            value trusts no marker at all, so the worst case is asking twice.
+        The login the retry posts as. A marker from any other author is ignored; an empty
+        value trusts no marker at all, so the worst case is asking twice.
     fn_norm : Callable[[str], str]
-            The gate's ``normalise_login``.
+        The gate's ``normalise_login``.
     dt_now : datetime.datetime
-            The current time, timezone-aware. Passed in rather than read, so a test states the
-            moment it is testing instead of depending on the clock.
+        The current time, timezone-aware. Passed in rather than read, so a test states the
+        moment it is testing instead of depending on the clock.
     int_cooldown_min : int, optional
-            Minutes to wait between requests.
+        Minutes to wait between requests.
 
     Returns
     -------
     bool
-            ``True`` when our own marker comment is younger than the cooldown.
+        ``True`` when our own marker comment is younger than the cooldown.
     """
     str_self = fn_norm(str_self_login)
     if not str_self:
@@ -384,12 +384,12 @@ def parse_timestamp(str_stamp: str) -> datetime | None:
     Parameters
     ----------
     str_stamp : str
-            A timestamp such as ``2026-08-24T23:50:41Z``.
+        A timestamp such as ``2026-08-24T23:50:41Z``.
 
     Returns
     -------
     datetime.datetime or None
-            The parsed value, or ``None`` when it cannot be read.
+        The parsed value, or ``None`` when it cannot be read.
     """
     try:
         return datetime.fromisoformat(str_stamp.replace("Z", "+00:00"))
@@ -408,14 +408,14 @@ def fetch_comments(str_repo: str, int_number: int) -> list[dict]:
     Parameters
     ----------
     str_repo : str
-            ``owner/repo``.
+        ``owner/repo``.
     int_number : int
-            The PR number.
+        The PR number.
 
     Returns
     -------
     list of dict
-            Comments as ``{"login", "body", "created_at"}``, oldest first; empty when unreadable.
+        Comments as ``{"login", "body", "created_at"}``, oldest first; empty when unreadable.
     """
     list_raw = _gh_json(
         [
@@ -453,24 +453,24 @@ def pr_needs_retry(
     Parameters
     ----------
     dict_pr : dict
-            The ``pullRequest`` node from the gate's own query, for reviews and the head oid.
+        The ``pullRequest`` node from the gate's own query, for reviews and the head oid.
     list_comments : list of dict
-            Normalised comments (``login``/``body``/``created_at``), oldest first.
+        Normalised comments (``login``/``body``/``created_at``), oldest first.
     set_reviewers : set of str
-            Logins that can actually submit a review.
+        Logins that can actually submit a review.
     cls_gate : types.ModuleType
-            The imported gate module.
+        The imported gate module.
     str_self_login : str, optional
-            The login the retry posts as, used to tell OUR marker from anyone else's. Defaults to
-            empty, which trusts no marker: the safe default is to ask twice, never to fall silent.
+        The login the retry posts as, used to tell OUR marker from anyone else's. Defaults to
+        empty, which trusts no marker: the safe default is to ask twice, never to fall silent.
     dt_now : datetime.datetime or None, optional
-            The current time; defaults to now in UTC.
+        The current time; defaults to now in UTC.
 
     Returns
     -------
     bool
-            ``True`` when nothing has reviewed the head commit, the reviewer's newest word is a
-            rate limit, and we have not asked within the cooldown.
+        ``True`` when nothing has reviewed the head commit, the reviewer's newest word is a
+        rate limit, and we have not asked within the cooldown.
     """
     list_reviews = ((dict_pr.get("reviews") or {}).get("nodes")) or []
     str_head = dict_pr.get("headRefOid") or ""
@@ -504,14 +504,14 @@ def request_review(str_repo: str, int_number: int) -> bool:
     Parameters
     ----------
     str_repo : str
-            ``owner/repo``.
+        ``owner/repo``.
     int_number : int
-            The PR number.
+        The PR number.
 
     Returns
     -------
     bool
-            ``True`` when the comment was posted.
+        ``True`` when the comment was posted.
     """
     dict_posted = _gh_json(
         [
@@ -555,13 +555,13 @@ def flatten_open_prs(list_pages: list) -> list[dict]:
     Parameters
     ----------
     list_pages : list
-            A list of pages, each a list of pull-request objects.
+        A list of pages, each a list of pull-request objects.
 
     Returns
     -------
     list of dict
-            ``{"number", "created_at"}`` for every PR across every page, sorted ascending by
-            ``created_at`` — the FIFO order the retry serves.
+        ``{"number", "created_at"}`` for every PR across every page, sorted ascending by
+        ``created_at`` — the FIFO order the retry serves.
     """
     list_flat = [
         {"number": dict_pr["number"], "created_at": dict_pr.get("created_at") or ""}
@@ -583,7 +583,7 @@ def resolve_self_login() -> str:
     Returns
     -------
     str
-            The login, or ``""`` when it cannot be resolved — which trusts no marker at all.
+        The login, or ``""`` when it cannot be resolved — which trusts no marker at all.
     """
     dict_user = _gh_json(["api", "user", "--jq", "{login: .login}"])
     if not isinstance(dict_user, dict) or not dict_user.get("login"):
@@ -622,22 +622,22 @@ def build_candidate(
     Parameters
     ----------
     str_repo : str
-            ``owner/repo``.
+        ``owner/repo``.
     int_number : int
-            The PR number.
+        The PR number.
     str_created_at : str
-            The PR's ``created_at``, carried through for FIFO ordering.
+        The PR's ``created_at``, carried through for FIFO ordering.
     set_reviewers : set of str
-            Logins that can actually submit a review.
+        Logins that can actually submit a review.
     cls_gate : types.ModuleType
-            The imported gate module.
+        The imported gate module.
 
     Returns
     -------
     dict or None
-            ``{"number", "created_at", "pr", "comments", "notice"}``, or ``None`` when this PR's
-            head commit has already been reviewed, nothing has been said about it, or it could not
-            be read at all.
+        ``{"number", "created_at", "pr", "comments", "notice"}``, or ``None`` when this PR's
+        head commit has already been reviewed, nothing has been said about it, or it could not
+        be read at all.
     """
     str_owner, _, str_name = str_repo.partition("/")
     try:
@@ -676,16 +676,16 @@ def count_self_asks(
     Parameters
     ----------
     list_comments : list of dict
-            Normalised comments (``login``/``body``/``created_at``).
+        Normalised comments (``login``/``body``/``created_at``).
     str_self_login : str
-            The login the retry posts as. Empty trusts no marker, so the count is always ``0``.
+        The login the retry posts as. Empty trusts no marker, so the count is always ``0``.
     fn_norm : Callable[[str], str]
-            The gate's ``normalise_login``.
+        The gate's ``normalise_login``.
 
     Returns
     -------
     int
-            How many of our own marker comments this PR carries.
+        How many of our own marker comments this PR carries.
     """
     str_self = fn_norm(str_self_login)
     if not str_self:
@@ -708,14 +708,14 @@ def notice_deadline(dict_notice: dict, dt_now: datetime) -> datetime | None:
     Parameters
     ----------
     dict_notice : dict
-            A roster comment (``login``/``body``/``created_at``).
+        A roster comment (``login``/``body``/``created_at``).
     dt_now : datetime.datetime
-            The current time, timezone-aware.
+        The current time, timezone-aware.
 
     Returns
     -------
     datetime.datetime or None
-            The deadline, only while it is still in the future.
+        The deadline, only while it is still in the future.
     """
     int_wait = parse_declared_wait(dict_notice.get("body") or "")
     if int_wait is None:
@@ -741,14 +741,14 @@ def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetim
     Parameters
     ----------
     list_notices : list of dict
-            The newest roster comment for each PR still waiting on a review (one per PR).
+        The newest roster comment for each PR still waiting on a review (one per PR).
     dt_now : datetime.datetime
-            The current time, timezone-aware.
+        The current time, timezone-aware.
 
     Returns
     -------
     datetime.datetime or None
-            The moment the account frees up, or ``None`` when no notice is currently blocking.
+        The moment the account frees up, or ``None`` when no notice is currently blocking.
     """
     # ⚠️ The LATEST DEADLINE, never the deadline of the latest notice. Across PRs these are
     # independent statements about ONE shared quota, so the binding moment is the furthest
@@ -785,23 +785,23 @@ def select_pr_for_retry(
     Parameters
     ----------
     list_candidates : list of dict
-            Records from :func:`build_candidate`.
+        Records from :func:`build_candidate`.
     set_reviewers : set of str
-            Logins that can actually submit a review.
+        Logins that can actually submit a review.
     cls_gate : types.ModuleType
-            The imported gate module.
+        The imported gate module.
     str_self_login : str
-            The login the retry posts as.
+        The login the retry posts as.
     dt_now : datetime.datetime
-            The current time, timezone-aware.
+        The current time, timezone-aware.
     int_max_attempts : int, optional
-            Attempts after which a PR is skipped past, rather than blocking the queue.
+        Attempts after which a PR is skipped past, rather than blocking the queue.
 
     Returns
     -------
     int or None
-            The chosen PR number, or ``None`` when every candidate is either still cooling down or
-            has exhausted its attempts.
+        The chosen PR number, or ``None`` when every candidate is either still cooling down or
+        has exhausted its attempts.
     """
     for dict_candidate in sorted(list_candidates, key=lambda d: d["created_at"]):
         if not pr_needs_retry(
@@ -847,14 +847,14 @@ def _resolve_gate_dir(path_own_bin: pathlib.Path) -> pathlib.Path:
     Parameters
     ----------
     path_own_bin : pathlib.Path
-            This script's own ``bin/`` directory.
+        This script's own ``bin/`` directory.
 
     Returns
     -------
     pathlib.Path
-            ``path_own_bin`` when the gate is co-located there (every generated project);
-            otherwise ``templates/common/bin/``, for when this script runs straight out of the
-            BlueprintX template tree (``templates/python-common/bin/``).
+        ``path_own_bin`` when the gate is co-located there (every generated project);
+        otherwise ``templates/common/bin/``, for when this script runs straight out of the
+        BlueprintX template tree (``templates/python-common/bin/``).
     """
     if (path_own_bin / "check_review_threads.py").is_file():
         return path_own_bin
@@ -867,13 +867,13 @@ def resolve_setup(path_bin: pathlib.Path) -> tuple[types.ModuleType, set[str]] |
     Parameters
     ----------
     path_bin : pathlib.Path
-            The ``bin/`` directory holding the gate.
+        The ``bin/`` directory holding the gate.
 
     Returns
     -------
     tuple of (types.ModuleType, set of str), or None
-            The gate module and the logins that can submit a review, or ``None`` when either
-            cannot be resolved.
+        The gate module and the logins that can submit a review, or ``None`` when either
+        cannot be resolved.
     """
     cls_gate = load_gate(path_bin)
     if cls_gate is None:
@@ -905,16 +905,16 @@ def collect_waiting_prs(
     Parameters
     ----------
     str_repo : str
-            ``owner/repo`` for the repository being swept.
+        ``owner/repo`` for the repository being swept.
     set_reviewers : set
-            The reviewer logins from the roster.
+        The reviewer logins from the roster.
     cls_gate : object
-            The shared review-thread gate module.
+        The shared review-thread gate module.
 
     Returns
     -------
     tuple of (list, list of dict), or None
-            All open PRs and the waiting subset; ``None`` when the listing could not be parsed.
+        All open PRs and the waiting subset; ``None`` when the listing could not be parsed.
     """
     # ⚠️ `--paginate`, not a bare `per_page=100`: without it only the first page is read, and a
     # rate-limited PR on page two is never retried — a silent partial pass, which is the exact
@@ -958,22 +958,22 @@ def choose_pr_to_retry(
     Parameters
     ----------
     list_open : list
-            Every open PR, for the "checked N" log line.
+        Every open PR, for the "checked N" log line.
     list_candidates : list of dict
-            Records from :func:`build_candidate`.
+        Records from :func:`build_candidate`.
     set_reviewers : set
-            The reviewer logins from the roster.
+        The reviewer logins from the roster.
     cls_gate : types.ModuleType
-            The imported gate module.
+        The imported gate module.
     str_self_login : str
-            The login the retry posts as.
+        The login the retry posts as.
     dt_now : datetime.datetime
-            The current time, timezone-aware.
+        The current time, timezone-aware.
 
     Returns
     -------
     int or None
-            The chosen PR number, or ``None`` when nobody should be asked this run.
+        The chosen PR number, or ``None`` when nobody should be asked this run.
     """
     if not list_candidates:
         print(f"open PRs checked: {len(list_open)}; none are waiting on a rate-limited review.")
@@ -1004,8 +1004,8 @@ def main() -> int:
     Returns
     -------
     int
-            Always ``0`` — this is a janitor, and failing the step would add noise to the very
-            signal it exists to clear. Problems are reported as workflow warnings.
+        Always ``0`` — this is a janitor, and failing the step would add noise to the very
+        signal it exists to clear. Problems are reported as workflow warnings.
     """
     str_repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not str_repo:

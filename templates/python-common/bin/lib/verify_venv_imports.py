@@ -37,12 +37,12 @@ def requirement_name(str_line: str) -> str | None:
     Parameters
     ----------
     str_line : str
-            A requirement line, e.g. ``"httpx[http2]>=0.27 ; python_version >= '3.10'"``.
+        A requirement line, e.g. ``"httpx[http2]>=0.27 ; python_version >= '3.10'"``.
 
     Returns
     -------
     str or None
-            The distribution name, or ``None`` for a blank/comment line.
+        The distribution name, or ``None`` for a blank/comment line.
     """
     str_line = str_line.split(";", 1)[0].split("#", 1)[0].strip()
     if not str_line:
@@ -57,12 +57,12 @@ def top_level_from_files(cls_dist: importlib.metadata.Distribution) -> list[str]
     Parameters
     ----------
     cls_dist : importlib.metadata.Distribution
-            The installed distribution to inspect.
+        The installed distribution to inspect.
 
     Returns
     -------
     list of str
-            Top-level package and module names, or ``[]`` when the file list is unavailable.
+        Top-level package and module names, or ``[]`` when the file list is unavailable.
 
     Notes
     -----
@@ -84,12 +84,12 @@ def _importable_head(tuple_parts: tuple[str, ...]) -> str | None:
     Parameters
     ----------
     tuple_parts : tuple of str
-            The path components of one installed file, relative to site-packages.
+        The path components of one installed file, relative to site-packages.
 
     Returns
     -------
     str or None
-            The top-level package or module name, or ``None`` when the path is not importable.
+        The top-level package or module name, or ``None`` when the path is not importable.
 
     Notes
     -----
@@ -117,12 +117,12 @@ def top_level_imports(str_name: str) -> list[str]:
     Parameters
     ----------
     str_name : str
-            The distribution name as pip knows it.
+        The distribution name as pip knows it.
 
     Returns
     -------
     list of str
-            One or more top-level module names to import.
+        One or more top-level module names to import.
     """
     cls_dist = importlib.metadata.distribution(str_name)
     str_text = cls_dist.read_text("top_level.txt")
@@ -142,12 +142,12 @@ def requirement_is_active(str_line: str) -> bool:
     Parameters
     ----------
     str_line : str
-            A requirement line, possibly carrying a ``; marker`` suffix.
+        A requirement line, possibly carrying a ``; marker`` suffix.
 
     Returns
     -------
     bool
-            ``True`` when there is no marker or the marker evaluates true here.
+        ``True`` when there is no marker or the marker evaluates true here.
 
     Notes
     -----
@@ -179,12 +179,12 @@ def check_requirement(str_req: str) -> str | None:
     Parameters
     ----------
     str_req : str
-            A requirement line.
+        A requirement line.
 
     Returns
     -------
     str or None
-            A one-line failure message, or ``None`` when the requirement imports fine.
+        A one-line failure message, or ``None`` when the requirement imports fine.
     """
     str_name = requirement_name(str_req)
     if str_name is None:
@@ -211,7 +211,7 @@ def main() -> int:
     Returns
     -------
     int
-            0 when every requirement imports (or the file has none); 1 otherwise.
+        0 when every requirement imports (or the file has none); 1 otherwise.
     """
     if len(sys.argv) != _INT_EXPECTED_ARGC:
         print("usage: verify_venv_imports.py <requirements-file>", file=sys.stderr)

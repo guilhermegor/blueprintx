@@ -27,7 +27,7 @@ def _load() -> ModuleType:
     Returns
     -------
     ModuleType
-            The imported module.
+        The imported module.
     """
     cls_spec = importlib.util.spec_from_file_location(
         "verify_venv_imports", _LIB / "verify_venv_imports.py"
@@ -145,12 +145,12 @@ def _run_main(path_req: Path) -> int:
     Parameters
     ----------
     path_req : pathlib.Path
-            The requirements file to verify.
+        The requirements file to verify.
 
     Returns
     -------
     int
-            ``main()``'s own return code.
+        ``main()``'s own return code.
     """
     list_argv_saved = sys.argv[:]
     sys.argv = ["verify_venv_imports.py", str(path_req)]

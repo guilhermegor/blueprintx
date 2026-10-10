@@ -27,14 +27,14 @@ def _oracle_columns(path_fixture: Path, str_sep: str = ";") -> tuple[str, ...]:
     Parameters
     ----------
     path_fixture : pathlib.Path
-            Path to the header-only fixture (the verbatim first line of the real artifact).
+        Path to the header-only fixture (the verbatim first line of the real artifact).
     str_sep : str, optional
-            Column delimiter (default ``";"``).
+        Column delimiter (default ``";"``).
 
     Returns
     -------
     tuple of str
-            The oracle columns, in the source's own order.
+        The oracle columns, in the source's own order.
     """
     str_header = path_fixture.read_text(encoding="utf-8").splitlines()[0]
     return tuple(cell.strip() for cell in str_header.split(str_sep))

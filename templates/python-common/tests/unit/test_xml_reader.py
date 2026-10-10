@@ -26,7 +26,7 @@ def _fixture_xml() -> str:
     Returns
     -------
     str
-            The XML document text.
+        The XML document text.
     """
     return (
         "<Document>"
@@ -47,7 +47,7 @@ def _empty_contract() -> FileContract:
     Returns
     -------
     FileContract
-            A permissive contract.
+        A permissive contract.
     """
     return FileContract("tx", "tx", (), ())
 
