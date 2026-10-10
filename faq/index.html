@@ -483,6 +483,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How does a scaffolded repo close the issue a merged PR delivered?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-scaffolder-offered-me-a-kanban-board-and-labels-what-does-it-do" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1889,6 +1900,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How does a scaffolded repo close the issue a merged PR delivered?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-scaffolder-offered-me-a-kanban-board-and-labels-what-does-it-do" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2026,6 +2048,42 @@ later and re-adding the roster turns the gate back on — at the path the gate r
 by language: for Python copy <code>templates/python-common/.review-bots.yaml</code> to the project root; for
 TypeScript copy <code>templates/ts-common/.github/.review-bots.yaml</code> to <code>.github/.review-bots.yaml</code>. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).</p>
+<h2 id="how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered">How does a scaffolded repo close the issue a merged PR delivered?<a class="headerlink" href="#how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered" title="Permanent link">&para;</a></h2>
+<p>BlueprintX carries <code>close-linked-issues.yml</code> and its <code>bin/close_linked_issues.sh</code> under
+<code>templates/common/</code> (blueprintx#604), but generated projects do not receive them yet: the scaffold
+scripts do not copy them until the wiring step tracked in
+<a href="https://github.com/guilhermegor/blueprintx/issues/604">#604</a> lands. Once wired, it behaves as
+follows.</p>
+<p>GitHub's own <code>Closes #N</code> linking can come back empty (a <code>Closes: #N</code> with a colon, or a merge
+that did not link), which leaves the issue open and keeps a Projects "Item closed" -&gt; Done
+automation from firing. On a merged same-repo PR <strong>into the default branch</strong> the workflow closes,
+matching strictly (a wrong closure is worse than a missed one). A PR merged into another branch (a
+stacked PR) closes nothing, because the work has not reached the default branch. Merges made with
+the default <code>GITHUB_TOKEN</code> (an auto-merge or merge-queue action) never trigger
+<code>pull_request: closed</code>, so only merges by a person, an App token or a PAT are covered:</p>
+<ul>
+<li>the issue number in a branch named <code>&lt;type&gt;/&lt;N&gt;-&lt;slug&gt;</code>, where the type is <code>feat</code>, <code>feature</code>,
+  <code>fix</code>, <code>bugfix</code>, <code>hotfix</code>, <code>docs</code>, <code>refactor</code>, <code>chore</code> or <code>test</code> and <code>N</code> is not a year-month
+  date (<code>feat/12-add-thing</code> closes issue 12; <code>feat/1999-x</code> closes 1999; <code>chore/2026-10-cleanup</code>
+  and <code>fix/python-3-12</code> close nothing, and a trailing <code>-N</code> is never read). A real issue number
+  that looks like a year-month, such as <code>feat/2010-12-factor-app</code>, is skipped too: a miss, never a
+  wrong closure;</li>
+<li>each <code>Closes #N</code>, <code>Fixes #N</code> or <code>Resolves #N</code> pair in the PR body (GitHub's closing keywords
+  <code>close</code>, <code>fix</code> and <code>resolve</code> in their <code>-s</code>/<code>-d</code>/<code>-es</code> forms; colon allowed), at a word
+  boundary. <code>Closes #1, #2</code> closes only <code>#1</code>. Like GitHub's own linker, it ignores fenced code
+  blocks, inline code, <code>&gt;</code> quotes and <code>&lt;!-- --&gt;</code> comments. A negated use is ignored, also across
+  a line break: <code>not</code>, <code>never</code>, <code>cannot</code>, <code>n't</code>, <code>no longer</code>, <code>revert(s|ed|ing)</code> or <code>without</code>,
+  followed by up to three words and the keyword ("does not fully fix #12", "this reverts the
+  change that fixes #8"). Any other wording, such as "I doubt this fixes #8", still closes.</li>
+</ul>
+<p>It skips the whole PR, branch and body alike, for <code>dependabot/*</code>, <code>renovate/*</code> and <code>release/*</code>
+branches (their bodies quote upstream <code>Fixes #N</code> text, and a trailing <code>-4</code> is a version). It also
+skips the PR's own number, any number that is a PR, and <code>owner/repo#N</code> references, which point at
+another repository. A fork PR is skipped too: its token is read-only. A missing issue (HTTP 404, or 410 for a deleted issue or a repo with Issues
+disabled) is skipped; any other API error fails the job, and one failed close does not stop the others. The
+branch name and PR body are untrusted text and reach the script only through <code>env:</code>. It
+complements, and does not replace, the Projects "Item closed -&gt; Done" workflow. It is dropped with
+the rest of <code>.github/</code> in offline mode.</p>
 <h2 id="the-scaffolder-offered-me-a-kanban-board-and-labels-what-does-it-do">The scaffolder offered me a kanban board and labels — what does it do?<a class="headerlink" href="#the-scaffolder-offered-me-a-kanban-board-and-labels-what-does-it-do" title="Permanent link">&para;</a></h2>
 <p>After it creates the GitHub repo, the scaffolder creates the house labels (<code>type:task</code>,
 <code>type:research</code>, <code>type:grilling</code>, <code>hitl</code>, <code>afk</code>, <code>oracle:strong</code>, <code>oracle:weak</code>,
