@@ -113,3 +113,12 @@ this convention has been applied to), with a `Blocked by` text field.
 
 The version is the git tag — cut a release from the **Release** GitHub Action (enter the
 version once). See the [FAQ](faq.md#how-is-blueprintx-itself-versioned).
+
+### Snap Store credential
+
+The Snap job needs the `SNAPCRAFT_STORE_CREDENTIALS` repository secret. When it is empty the
+job **fails** on its first step with `NOT PUBLISHED: SNAPCRAFT_STORE_CREDENTIALS not set`
+(an `::error::` annotation plus a job-summary line), instead of reporting green with nothing
+published. Failing is safe for the other channels: every publish job in `release.yml` depends
+only on `tag` and none depends on `snap`, so Homebrew, Chocolatey and apt still publish.
+The red Snap job is expected until the owner adds the secret.
