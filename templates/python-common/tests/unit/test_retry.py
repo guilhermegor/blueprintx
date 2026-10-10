@@ -39,9 +39,9 @@ class _CapturingEmitter(LogEmitter):
         Parameters
         ----------
         str_message : str
-                The message to record.
+            The message to record.
         str_level : str
-                The level name to record.
+            The level name to record.
 
         Returns
         -------
@@ -210,11 +210,11 @@ def test_compute_wait_follows_the_named_schedule(
     Parameters
     ----------
     str_strategy : str
-            The schedule under test.
+        The schedule under test.
     int_attempt : int
-            The 1-indexed number of the attempt that just failed.
+        The 1-indexed number of the attempt that just failed.
     float_expected : float
-            The wait the schedule must produce.
+        The wait the schedule must produce.
     """
     assert _compute_backoff_wait(str_strategy, 2.0, 2.0, int_attempt, None) == float_expected
 
@@ -283,7 +283,7 @@ def test_policy_rejects_a_wait_time_sleep_cannot_accept(dict_kwargs: dict) -> No
     Parameters
     ----------
     dict_kwargs : dict
-            One invalid wait value to construct the policy with.
+        One invalid wait value to construct the policy with.
     """
     with pytest.raises(ValueError, match="finite and >= 0"):
         RetryPolicy(**dict_kwargs)
