@@ -531,6 +531,7 @@ def path_renamed_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     _git_in(tmp_path, "config", "user.email", "t@example.com")
     _git_in(tmp_path, "config", "user.name", "t")
     _git_in(tmp_path, "config", "commit.gpgsign", "false")
+    _git_in(tmp_path, "config", "diff.renames", "false")
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_old.py").write_text(_STR_STRONG, encoding="utf-8")
     _git_in(tmp_path, "add", "-A")

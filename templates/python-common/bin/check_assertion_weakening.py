@@ -200,7 +200,7 @@ def changed_paths(str_base: str) -> list:
         a rename or copy; the base version lives at the source, the head version at the
         destination (blueprintx#590).
     """
-    str_out = _git(["diff", "--cached", "--name-status", str_base])
+    str_out = _git(["diff", "--cached", "--name-status", "--find-renames", str_base])
     list_rows = []
     for str_line in str_out.splitlines():
         list_parts = str_line.split("\t")
