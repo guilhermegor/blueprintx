@@ -29,7 +29,7 @@ def _load_gate() -> ModuleType:
     Returns
     -------
     ModuleType
-            The loaded gate module.
+        The loaded gate module.
     """
     path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_layer_imports.py"
     cls_spec = importlib.util.spec_from_file_location("_check_layer_imports", path_gate)
@@ -60,16 +60,16 @@ def _problems(tmp_path: Path, str_source: str, str_layer: str = "model") -> list
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
     str_source : str
-            The module source to check.
+        The module source to check.
     str_layer : str, optional
-            The layer the file is treated as belonging to, by default ``"model"``.
+        The layer the file is treated as belonging to, by default ``"model"``.
 
     Returns
     -------
     list of str
-            The problems the gate reported.
+        The problems the gate reported.
     """
     cls_gate = _load_gate()
     path_file = tmp_path / "probe.py"
@@ -89,12 +89,12 @@ def _sole(list_problems: list[str]) -> str:
     Parameters
     ----------
     list_problems : list of str
-            Whatever the gate reported.
+        Whatever the gate reported.
 
     Returns
     -------
     str
-            The single problem.
+        The single problem.
     """
     assert len(list_problems) == 1, list_problems
     return list_problems[0]
@@ -106,16 +106,16 @@ def _sole_problem(tmp_path: Path, str_source: str, str_layer: str = "model") -> 
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
     str_source : str
-            The module source to check.
+        The module source to check.
     str_layer : str
-            The layer the file is treated as belonging to.
+        The layer the file is treated as belonging to.
 
     Returns
     -------
     str
-            The one problem the gate reported.
+        The one problem the gate reported.
     """
     return _sole(_problems(tmp_path, str_source, str_layer))
 
@@ -234,9 +234,9 @@ def test_one_statement_binding_many_names_is_one_violation(tmp_path: Path, str_l
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
     str_layer : str
-            The layer the synthetic module is treated as belonging to.
+        The layer the synthetic module is treated as belonging to.
     """
     list_problems = _problems(tmp_path, "from filings_cvm import a, b, c\n", str_layer)
     assert len(list_problems) == 1
@@ -276,12 +276,12 @@ def _run_main(path_root: Path) -> tuple[int, str]:
     Parameters
     ----------
     path_root : pathlib.Path
-            Directory to treat as the project root.
+        Directory to treat as the project root.
 
     Returns
     -------
     tuple of (int, str)
-            The exit code and everything printed.
+        The exit code and everything printed.
     """
     # Constant, trusted argv. Invoked as a subprocess so the working directory and the
     # printed output are the real ones main sees.
@@ -310,14 +310,14 @@ def _output_at(tuple_result: tuple[int, str], int_expected: int) -> str:
     Parameters
     ----------
     tuple_result : tuple of (int, str)
-            The ``(exit code, output)`` pair from ``_run_main``.
+        The ``(exit code, output)`` pair from ``_run_main``.
     int_expected : int
-            The exit code the run must have produced.
+        The exit code the run must have produced.
 
     Returns
     -------
     str
-            Everything the run printed.
+        Everything the run printed.
     """
     int_code, str_out = tuple_result
     assert int_code == int_expected, str_out
@@ -333,9 +333,9 @@ def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
     Parameters
     ----------
     path_root : pathlib.Path
-            Directory to build in.
+        Directory to build in.
     str_module : str, optional
-            Source of the single module placed under ``src/model/``.
+        Source of the single module placed under ``src/model/``.
 
     Returns
     -------
@@ -437,7 +437,7 @@ def _seed_layers(path_root: Path) -> None:
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root to build under.
+        The project root to build under.
 
     Returns
     -------
@@ -454,9 +454,9 @@ def _seed_one_layer(path_root: Path, str_layer: str) -> None:
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root.
+        The project root.
     str_layer : str
-            The layer's directory name.
+        The layer's directory name.
 
     Returns
     -------
@@ -472,14 +472,14 @@ def _direction_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
     str_source : str
-            The module source to check.
+        The module source to check.
 
     Returns
     -------
     tuple of (int, str)
-            The gate's exit code and its output.
+        The gate's exit code and its output.
     """
     _seed_layers(tmp_path)
     (tmp_path / "src" / "utils" / "probe.py").write_text(str_source, encoding="utf-8")
@@ -584,14 +584,14 @@ def _sublayer_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
     str_source : str
-            The module source to check.
+        The module source to check.
 
     Returns
     -------
     tuple of (int, str)
-            The gate's exit code and output.
+        The gate's exit code and output.
     """
     path_dom = tmp_path / "src" / "capabilities" / "notes" / "domain"
     path_dom.mkdir(parents=True)

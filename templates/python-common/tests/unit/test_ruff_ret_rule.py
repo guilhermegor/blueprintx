@@ -34,12 +34,12 @@ def _run_ruff_ret505(path_file: Path) -> subprocess.CompletedProcess[str]:
     Parameters
     ----------
     path_file : pathlib.Path
-            The Python source file to check.
+        The Python source file to check.
 
     Returns
     -------
     subprocess.CompletedProcess[str]
-            The completed ruff invocation (exit code + captured output).
+        The completed ruff invocation (exit code + captured output).
     """
     list_argv = [
         str(_STR_RUFF),

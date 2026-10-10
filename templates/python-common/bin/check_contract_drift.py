@@ -49,7 +49,7 @@ def load_registry() -> dict:
     Returns
     -------
     dict
-            ``{source_key: {"url", "sep", "encoding"}}`` — empty when no sources are configured.
+        ``{source_key: {"url", "sep", "encoding"}}`` — empty when no sources are configured.
     """
     if not _REGISTRY_PATH.exists():
         return {}
@@ -63,8 +63,8 @@ def contracts_by_source_key() -> dict:
     Returns
     -------
     dict
-            ``{str_source_key: FileContract}`` for each contract instance re-exported
-            by the package.
+        ``{str_source_key: FileContract}`` for each contract instance re-exported
+        by the package.
     """
     dict_index = {}
     for str_name in dir(contracts_module):
@@ -80,12 +80,12 @@ def live_header(dict_entry: dict) -> tuple[str, ...]:
     Parameters
     ----------
     dict_entry : dict
-            A registry entry with ``url`` and optional ``sep`` / ``encoding``.
+        A registry entry with ``url`` and optional ``sep`` / ``encoding``.
 
     Returns
     -------
     tuple of str
-            The live header's columns, stripped.
+        The live header's columns, stripped.
     """
     str_sep = dict_entry.get("sep", ";")
     str_encoding = dict_entry.get("encoding", "utf-8-sig")
@@ -133,16 +133,16 @@ def drift_for_source(
     Parameters
     ----------
     cls_contract : FileContract
-            The shipped contract to check.
+        The shipped contract to check.
     dict_entry : dict
-            The source's registry entry.
+        The source's registry entry.
 
     Returns
     -------
     tuple of (list of str or None, list of str)
-            ``(drift_lines, note_lines)`` — ``None`` drift lines mean the source was unreachable
-            and nothing was compared; ``[]`` means checked and clean. Drift lines open/update the
-            issue; note lines only log.
+        ``(drift_lines, note_lines)`` — ``None`` drift lines mean the source was unreachable
+        and nothing was compared; ``[]`` means checked and clean. Drift lines open/update the
+        issue; note lines only log.
     """
     try:
         tuple_live = live_header(dict_entry)
@@ -176,17 +176,17 @@ def build_report(dict_registry: dict, dict_contracts: dict) -> tuple[str, list[s
     Parameters
     ----------
     dict_registry : dict
-            The ``oracles`` mapping.
+        The ``oracles`` mapping.
     dict_contracts : dict
-            ``{source_key: FileContract}``.
+        ``{source_key: FileContract}``.
 
     Returns
     -------
     tuple of (str, list of str, list of str)
-            The Markdown report body (``""`` when every checked contract still matches its source),
-            the note lines (logged, never opening an issue), and the keys of the sources that were
-            **not checked at all**. The third element is the one that keeps an empty report from
-            being read as an all-clear.
+        The Markdown report body (``""`` when every checked contract still matches its source),
+        the note lines (logged, never opening an issue), and the keys of the sources that were
+        **not checked at all**. The third element is the one that keeps an empty report from
+        being read as an all-clear.
     """
     list_sections: list[str] = []
     list_notes: list[str] = []
@@ -216,7 +216,7 @@ def main() -> int:
     Returns
     -------
     int
-            Always 0 — drift is reported via the written file, never via a non-zero exit.
+        Always 0 — drift is reported via the written file, never via a non-zero exit.
     """
     dict_registry = load_registry()
     if not dict_registry:
