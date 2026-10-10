@@ -4,7 +4,7 @@
 > scaffolded projects — it documents how the `templates/ts-common/` directory
 > works inside the BlueprintX repo. Per-project Claude guidance for scaffolded
 > TypeScript projects lives in each skeleton's own root `CLAUDE.md`
-> (e.g. `templates/react-spa-webpack/CLAUDE.md`), which **is** rendered into
+> (e.g. `templates/react-spa-webpack/AGENTS.md`), which **is** rendered into
 > every scaffolded project via `envsubst`.
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
