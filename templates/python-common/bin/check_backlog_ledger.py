@@ -184,6 +184,35 @@ def default_branch() -> str:
     return "main"
 
 
+def merge_heads() -> list:
+    """Return every incoming commit of a merge in progress (several for an octopus).
+
+    Mid-merge the index already holds the incoming side's files but HEAD is still the
+    pre-merge tip, so a base taken from HEAD alone charges the incoming delta to this branch.
+    ``rev-parse MERGE_HEAD`` resolves only the first line, so the file itself is read.
+
+    Returns
+    -------
+    list of str
+        One commit hash per incoming head; empty when no merge is in progress.
+    """
+    str_path = _git(["rev-parse", "--git-path", "MERGE_HEAD"])
+    if not str_path or not pathlib.Path(str_path).is_file():
+        return []
+    return pathlib.Path(str_path).read_text(encoding="utf-8").split()
+
+
+def resolve_base() -> str:
+    """Return the merge-base of HEAD and the default branch, counting a merge in progress.
+
+    Returns
+    -------
+    str
+        The base commit; empty when none resolves.
+    """
+    return _git(["merge-base", default_branch(), "HEAD", *merge_heads()])
+
+
 def changed_paths(str_base: str) -> list:
     """Return the branch's cumulative changed paths, INDEX included.
 
@@ -279,7 +308,7 @@ def main() -> int:
         print("bin/pr_gate.py absent — skipping the work-ledger check.")
         return 0
 
-    str_base = _git(["merge-base", "HEAD", default_branch()])
+    str_base = resolve_base()
     str_head = _git(["rev-parse", "HEAD"])
     if not str_base or str_base == str_head:
         # On the default branch (or no merge-base): nothing branch-scoped to enforce.
