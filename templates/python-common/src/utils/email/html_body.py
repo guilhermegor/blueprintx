@@ -32,7 +32,10 @@ else:
     except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
         from chassis.typing import type_checker
 
-re_html_tag = re.compile(r"<(?:br|p)(?=[\s/>])", re.IGNORECASE)
+re_html_tag = re.compile(
+    r"<(?:br(?=[ \t\r\n\f/>])|p(?:[ \t\r\n\f]+[a-z][\w:-]*[ \t\r\n\f]*(?:=|/?>)|[ \t\r\n\f]*/?>))",
+    re.IGNORECASE,
+)
 
 
 @type_checker
@@ -42,10 +45,10 @@ def to_html_body(str_body: str) -> str:
     An HTML-body client (Outlook's ``mail.HTMLBody``, an SMTP message sent as ``text/html``)
     collapses bare newlines and renders the message on a single line. Each newline is turned
     into a ``<br>`` so paragraph breaks are preserved. A body that already looks like HTML
-    (a ``<br`` or ``<p`` tag followed by whitespace, ``/`` or ``>``, so ``<bravo>`` does
-    not count but ``<p class="x">`` does) is left untouched — the caller composed real markup on
-    purpose, and escaping it would show the reader literal angle brackets instead of the
-    formatting it asked for.
+    (a ``<br`` tag, or a ``<p>`` tag with or without attributes, so ``<bravo>`` and
+    prose like ``<p 0.05`` do not count but ``<p class="x">`` does) is left untouched — the
+    caller composed real markup on purpose, and escaping it would show the reader literal
+    angle brackets instead of the formatting it asked for.
 
     A body that does NOT already look like HTML is treated as plain text and **HTML-escaped**
     before the newline conversion. Without this, a literal ``<``/``&``/``>`` in ordinary

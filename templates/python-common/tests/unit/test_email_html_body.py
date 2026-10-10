@@ -1,5 +1,7 @@
 """Unit tests for the plain-text-to-HTML e-mail body conversion."""
 
+from html import escape
+
 import pytest
 
 from src.utils.email.html_body import to_html_body
@@ -65,3 +67,26 @@ def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
             A body containing a real tag.
     """
     assert to_html_body(str_html) == str_html
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "<pre>x</pre>",
+        "<param>",
+        "<progress>",
+        "a <p",
+        "risk <p 0.05 & <script>x</script>",
+        "a<p/b",
+    ],
+    ids=["pre", "param", "progress", "trailing-p", "p-space-prose", "p-slash-prose"],
+)
+def test_to_html_body_p_lookalike_is_escaped_as_plain_text(str_text: str) -> None:
+    """Should-fail witness: ``<p`` not shaped like a tag is plain text and gets escaped.
+
+    Parameters
+    ----------
+    str_text : str
+            Plain text that merely contains ``<p``.
+    """
+    assert to_html_body(str_text) == escape(str_text)
