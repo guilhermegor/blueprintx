@@ -123,6 +123,40 @@ test_unmapped_skeleton_is_refused_before_creating_anything() {
     fi
 }
 
+prompt_sequence() {
+    # prompt_sequence <scaffold script>: the prompt calls main() makes, in order.
+    grep -E '^    (prompt_[a-z_]+|scaffold_prompt_review_bot_roster)$' "$1" | tr -d ' '
+}
+
+test_api_service_asks_the_same_prompts_as_the_ddd_tiers() {
+    # api-service-native-db borrows the DDD key map (blueprintx#668). That is only correct
+    # while the two scaffolds ask the same prompts in the same order, so pin the claim: a
+    # prompt added to one script must fail here rather than misalign every stored answer.
+    local str_api str_ddd
+    str_api="$(prompt_sequence "$REPO_ROOT/bin/scaffold/python_api_service.sh")"
+    str_ddd="$(prompt_sequence "$REPO_ROOT/bin/scaffold/python_ddd_service.sh")"
+    if [ -n "$str_api" ] && [ "$str_api" = "$str_ddd" ]; then
+        pass "api-service and DDD scaffolds ask the same prompts in the same order"
+    else
+        fail "prompt order" "api: [$(echo "$str_api" | tr '\n' ' ')] ddd: [$(echo "$str_ddd" | tr '\n' ' ')]"
+    fi
+}
+
+test_api_service_storage_answer_reaches_the_storage_prompt() {
+    # The point of the map: storage=y must land on the SECOND line the scaffold reads
+    # (after docker_compose), exactly as for the DDD tiers.
+    local file str_stream
+    file="$(write_spec api-storage api-service-native-db "storage=y")"
+    str_stream="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        spec_skeleton_supported api-service-native-db && spec_stdin_for_skeleton api-service-native-db "$2"' \
+        _ "$REPO_ROOT" "$file" | sed -n 2p)"
+    if [ "$str_stream" = "y" ]; then
+        pass "storage=y is the second answer emitted for api-service-native-db"
+    else
+        fail "api storage answer" "second stdin line was '$str_stream', expected 'y'"
+    fi
+}
+
 test_dev_clean_uses_a_temp_root_and_removes_it() {
     local file root out str_temp int_rc
     root="$WORK_DIR/proot-clean"
@@ -250,6 +284,29 @@ test_skeleton_match_is_exact() {
     fi
 }
 
+test_every_python_tier_has_a_prompt_map() {
+    local str_res str_meta str_name str_err int_tiers=0
+    for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
+        grep -q '^language=python[[:space:]]*$' "$str_meta" || continue
+        int_tiers=$((int_tiers + 1))
+        str_name="$(basename "$(dirname "$str_meta")")"
+        if ! str_err="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+            spec_skeleton_supported "$2" && spec_stdin_for_skeleton "$2" /dev/null >/dev/null' \
+            _ "$REPO_ROOT" "$str_name" 2>&1)"; then
+            str_err="${str_err%%$'\n'*}"
+            str_res+="$str_name (${str_err:-not in the supported list}) "
+        fi
+    done
+    # Zero matches would make the loop vacuous: a gate that checked nothing must not pass.
+    if [ "$int_tiers" -eq 0 ]; then
+        fail "no Python tier found" "templates/*/skeleton.meta matched no language=python"
+    elif [ -z "${str_res:-}" ]; then
+        pass "every Python tier ($int_tiers) in templates/ has a named-key prompt map (blueprintx#691)"
+    else
+        fail "unmapped Python tier" "no prompt map for: $str_res"
+    fi
+}
+
 test_a_failed_answer_stream_stops_the_scaffold_flow() {
     local str_res
     str_res="$(bash -c '
@@ -278,11 +335,14 @@ main() {
     test_validate_answers_reports_every_bad_key
     test_bad_yn_stops_before_anything_is_created
     test_unmapped_skeleton_is_refused_before_creating_anything
+    test_api_service_asks_the_same_prompts_as_the_ddd_tiers
+    test_api_service_storage_answer_reaches_the_storage_prompt
     test_dev_clean_uses_a_temp_root_and_removes_it
     test_dev_without_clean_preserves_the_temp_root
     test_spec_values_are_trimmed_so_a_crlf_spec_works
     test_yn_keys_read_by_callers_match_the_key_map
     test_skeleton_match_is_exact
+    test_every_python_tier_has_a_prompt_map
     test_a_failed_answer_stream_stops_the_scaffold_flow
     test_bad_docs_locale_stops_before_anything_is_created
     test_docs_locale_reaches_the_scaffold

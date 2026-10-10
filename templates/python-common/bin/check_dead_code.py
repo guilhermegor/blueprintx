@@ -40,6 +40,7 @@ follow-up) — ``resolve_vulture`` treats an absent ``vulture`` as an expected, 
 rather than broken discovery until that dependency lands.
 """
 
+import importlib.metadata
 import pathlib
 import sys
 from types import ModuleType
@@ -63,8 +64,17 @@ _TUPLE_SKIP_DIRS = (
 )
 
 
+def _is_distribution_installed() -> bool:
+    """Return whether ``vulture`` has installed distribution metadata."""
+    try:
+        importlib.metadata.version("vulture")
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    return True
+
+
 def resolve_vulture() -> ModuleType | None:
-    """Import ``vulture``, treating its absence as an expected skip.
+    """Import ``vulture``, treating only its own absence as an expected skip.
 
     Returns
     -------
@@ -72,10 +82,22 @@ def resolve_vulture() -> ModuleType | None:
         The imported ``vulture`` package, or ``None`` when it is not installed — this gate
         is not yet wired into any tier's dependency table, so a missing import is a
         legitimate, non-fatal skip rather than broken discovery.
+
+    Raises
+    ------
+    ImportError
+        When ``vulture`` is installed but fails to import: a transitive
+        ``ModuleNotFoundError``, a plain ``ImportError`` (missing name, broken C extension),
+        or a half-removed install (metadata present, package directory gone). A broken tool
+        is not an absent one, and skipping would be a vacuous pass (blueprintx#640).
     """
     try:
         import vulture
-    except ImportError:
+    except ModuleNotFoundError as exc:
+        # A half-removed install also reports name == "vulture"; the metadata probe tells
+        # "never installed" from "installed but its package is gone".
+        if exc.name != "vulture" or _is_distribution_installed():
+            raise
         return None
     return vulture
 
@@ -255,7 +277,8 @@ def main(list_argv: list) -> int:
     int
         0 when nothing gates (including every legitimate skip), 1 on a >=80% confidence
         finding, on broken discovery (``src/`` exists but holds zero ``.py`` files), or when
-        vulture could not scan a file (an unscanned file is not a clean one).
+        vulture could not scan a file (an unscanned file is not a clean one), or when an
+        installed vulture fails to import.
     """
     path_root = pathlib.Path(".").resolve()
     if list_argv[:1] == ["--root"]:
@@ -277,7 +300,13 @@ def main(list_argv: list) -> int:
         print(f"check_dead_code: found ZERO .py files under {path_src}", file=sys.stderr)
         return 1
 
-    cls_vulture = resolve_vulture()
+    try:
+        cls_vulture = resolve_vulture()
+    except ImportError as exc:
+        print(
+            f"check_dead_code: vulture is installed but failed to import: {exc}", file=sys.stderr
+        )
+        return 1
     if cls_vulture is None:
         print(
             "check_dead_code: vulture is not installed — skipping (not yet wired into any "

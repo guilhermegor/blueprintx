@@ -65,19 +65,69 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
 # --------------------------
 
 
-def test_masked_cpf_in_sql_string_literal_is_reported(tmp_path: Path) -> None:
-    """A hardcoded masked CPF in a SQL string matches zero rows, silently."""
+@pytest.fixture
+def tuple_masked_cpf_sql(tmp_path: Path) -> tuple:
+    """Return the findings for a hardcoded masked CPF inside a SQL string literal.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    tuple
+        ``(path_file, list_problems)``.
+    """
     path_file = _python_file(
         tmp_path,
         "query = \"SELECT * FROM users WHERE cpf = '123.456.789-01'\"\n",
     )
+    return path_file, gate.check_python_file(path_file)
 
-    list_problems = gate.check_python_file(path_file)
 
-    assert len(list_problems) == 1
-    assert "123.456.789-01" in list_problems[0]
-    assert str(path_file) in list_problems[0]
-    assert "identifier-mask-ok:" in list_problems[0]
+def test_masked_cpf_in_sql_string_literal_is_reported(tuple_masked_cpf_sql: tuple) -> None:
+    """A hardcoded masked CPF in a SQL string matches zero rows, silently.
+
+    Parameters
+    ----------
+    tuple_masked_cpf_sql : tuple
+        ``(path_file, list_problems)``.
+    """
+    assert len(tuple_masked_cpf_sql[1]) == 1
+
+
+def test_masked_cpf_finding_names_the_value(tuple_masked_cpf_sql: tuple) -> None:
+    """The finding quotes the masked value it objects to.
+
+    Parameters
+    ----------
+    tuple_masked_cpf_sql : tuple
+        ``(path_file, list_problems)``.
+    """
+    assert "123.456.789-01" in tuple_masked_cpf_sql[1][0]
+
+
+def test_masked_cpf_finding_names_the_file(tuple_masked_cpf_sql: tuple) -> None:
+    """The finding names the file it was found in.
+
+    Parameters
+    ----------
+    tuple_masked_cpf_sql : tuple
+        ``(path_file, list_problems)``.
+    """
+    assert str(tuple_masked_cpf_sql[0]) in tuple_masked_cpf_sql[1][0]
+
+
+def test_masked_cpf_finding_names_the_escape_hatch(tuple_masked_cpf_sql: tuple) -> None:
+    """The finding tells the reader how to justify a deliberate exception.
+
+    Parameters
+    ----------
+    tuple_masked_cpf_sql : tuple
+        ``(path_file, list_problems)``.
+    """
+    assert "identifier-mask-ok:" in tuple_masked_cpf_sql[1][0]
 
 
 def test_masked_cnpj_alphanumeric_in_sql_string_literal_is_reported(tmp_path: Path) -> None:
@@ -90,7 +140,16 @@ def test_masked_cnpj_alphanumeric_in_sql_string_literal_is_reported(tmp_path: Pa
     list_problems = gate.check_python_file(path_file)
 
     assert len(list_problems) == 1
-    assert "AB.CDE.FGH/1234-95" in list_problems[0]
+
+
+def test_masked_cnpj_alphanumeric_finding_quotes_the_value(tmp_path: Path) -> None:
+    """The alphanumeric-CNPJ finding quotes the masked value."""
+    path_file = _python_file(
+        tmp_path,
+        "query = \"SELECT * FROM firms WHERE cnpj = 'AB.CDE.FGH/1234-95'\"\n",
+    )
+
+    assert "AB.CDE.FGH/1234-95" in gate.check_python_file(path_file)[0]
 
 
 def test_unmasked_cpf_comparison_passes(tmp_path: Path) -> None:
@@ -121,7 +180,14 @@ def test_raw_sql_file_masked_cpf_is_reported(tmp_path: Path) -> None:
     list_problems = gate._sql_file_problems(path_file)
 
     assert len(list_problems) == 1
-    assert "123.456.789-01" in list_problems[0]
+
+
+def test_raw_sql_file_finding_quotes_the_value(tmp_path: Path) -> None:
+    """The ``.sql`` finding quotes the masked value."""
+    path_file = tmp_path / "query.sql"
+    path_file.write_text("SELECT * FROM users WHERE cpf = '123.456.789-01'\n", encoding="utf-8")
+
+    assert "123.456.789-01" in gate._sql_file_problems(path_file)[0]
 
 
 # --------------------------
@@ -139,7 +205,16 @@ def test_orm_attribute_comparison_masked_cpf_is_reported(tmp_path: Path) -> None
     list_problems = gate.check_python_file(path_file)
 
     assert len(list_problems) == 1
-    assert "123.456.789-01" in list_problems[0]
+
+
+def test_orm_attribute_comparison_finding_quotes_the_value(tmp_path: Path) -> None:
+    """The ORM-comparison finding quotes the masked value."""
+    path_file = _python_file(
+        tmp_path,
+        'stmt = select(User).where(User.cpf == "123.456.789-01")\n',
+    )
+
+    assert "123.456.789-01" in gate.check_python_file(path_file)[0]
 
 
 def test_orm_attribute_comparison_unmasked_cpf_passes(tmp_path: Path) -> None:
@@ -162,7 +237,16 @@ def test_filter_by_keyword_masked_cnpj_is_reported(tmp_path: Path) -> None:
     list_problems = gate.check_python_file(path_file)
 
     assert len(list_problems) == 1
-    assert "12.345.678/0001-95" in list_problems[0]
+
+
+def test_filter_by_keyword_finding_quotes_the_value(tmp_path: Path) -> None:
+    """The ``filter_by`` finding quotes the masked value."""
+    path_file = _python_file(
+        tmp_path,
+        'session.query(Company).filter_by(cnpj="12.345.678/0001-95")\n',
+    )
+
+    assert "12.345.678/0001-95" in gate.check_python_file(path_file)[0]
 
 
 def test_filter_by_keyword_unmasked_value_passes(tmp_path: Path) -> None:

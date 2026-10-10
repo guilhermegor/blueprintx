@@ -68,16 +68,60 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
 # --------------------------
 
 
-def test_a_function_over_the_ceiling_is_reported(tmp_path: Path) -> None:
-    """A function whose CODE exceeds the ceiling produces a finding."""
+@pytest.fixture
+def list_over_ceiling_problems(tmp_path: Path) -> list[str]:
+    """Return the findings for a Python function whose CODE exceeds the ceiling.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
     str_body = "\n".join(f"\tint_x = {i}" for i in range(gate.INT_MAX_LINES + 5))
     path_file = _python_file(tmp_path, f"def f() -> None:\n{str_body}\n")
+    return gate.file_problems(path_file)
 
-    list_problems = gate.file_problems(path_file)
 
-    assert len(list_problems) == 1
-    assert "f() is" in list_problems[0]
-    assert f"max {gate.INT_MAX_LINES}" in list_problems[0]
+def test_a_function_over_the_ceiling_is_reported(list_over_ceiling_problems: list[str]) -> None:
+    """A function whose CODE exceeds the ceiling produces exactly one finding.
+
+    Parameters
+    ----------
+    list_over_ceiling_problems : list[str]
+        The gate's findings.
+    """
+    assert len(list_over_ceiling_problems) == 1
+
+
+def test_the_over_ceiling_finding_names_the_function(
+    list_over_ceiling_problems: list[str],
+) -> None:
+    """The finding names the offending function.
+
+    Parameters
+    ----------
+    list_over_ceiling_problems : list[str]
+        The gate's findings.
+    """
+    assert "f() is" in list_over_ceiling_problems[0]
+
+
+def test_the_over_ceiling_finding_states_the_ceiling(
+    list_over_ceiling_problems: list[str],
+) -> None:
+    """The finding states the maximum, so the reader knows what to get under.
+
+    Parameters
+    ----------
+    list_over_ceiling_problems : list[str]
+        The gate's findings.
+    """
+    assert f"max {gate.INT_MAX_LINES}" in list_over_ceiling_problems[0]
 
 
 def test_a_function_at_the_ceiling_is_accepted(tmp_path: Path) -> None:
@@ -159,7 +203,13 @@ def test_an_unparsable_file_is_a_finding_not_a_silent_pass(tmp_path: Path) -> No
     list_problems = gate.file_problems(path_file)
 
     assert len(list_problems) == 1
-    assert "could not parse" in list_problems[0]
+
+
+def test_an_unparsable_file_finding_says_it_could_not_parse(tmp_path: Path) -> None:
+    """The finding for an unreadable file names the cause."""
+    path_file = _python_file(tmp_path, "def f(:\n")
+
+    assert "could not parse" in gate.file_problems(path_file)[0]
 
 
 def test_audit_mode_fails_on_an_unparsable_file(
@@ -186,7 +236,15 @@ def test_a_long_shell_function_is_reported(tmp_path: Path) -> None:
     list_problems = gate.file_problems(path_file)
 
     assert len(list_problems) == 1
-    assert "f() is" in list_problems[0]
+
+
+def test_a_long_shell_function_finding_names_the_function(tmp_path: Path) -> None:
+    """The shell finding names the offending function."""
+    str_body = "\n".join(f'\techo "{i}"' for i in range(gate.INT_MAX_LINES + 5))
+    path_file = tmp_path / "sample.sh"
+    path_file.write_text(f"f() {{\n{str_body}\n}}\n", encoding="utf-8")
+
+    assert "f() is" in gate.file_problems(path_file)[0]
 
 
 def test_a_short_shell_function_is_accepted(tmp_path: Path) -> None:
@@ -225,8 +283,18 @@ def test_audit_mode_passes_and_reports_the_count(
     _python_file(tmp_path, "def f() -> None:\n\tint_x = 1\n")
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
-    assert gate.main([]) == 0
+    gate.main([])
     assert "1 file(s) checked" in capsys.readouterr().out
+
+
+def test_audit_mode_exits_zero_on_a_short_function(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tree holding only a short function exits 0."""
+    _python_file(tmp_path, "def f() -> None:\n\tint_x = 1\n")
+    monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+
+    assert gate.main([]) == 0
 
 
 # --------------------------
