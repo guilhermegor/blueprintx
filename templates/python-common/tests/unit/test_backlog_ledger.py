@@ -102,14 +102,30 @@ def test_a_valid_ledger_satisfies_the_branch() -> None:
 
 def test_missing_ledger_is_reported() -> None:
     """A src-touching branch with no ledger fails, and the message says what to create."""
-    assert ".specs/backlog" in _first_problem(ledger.find_ledger_problems(["src/a.py"]))
+    assert "Create .specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md" in _first_problem(
+        ledger.find_ledger_problems(["src/a.py"])
+    )
 
 
 def test_ledger_name_must_be_kebab_plus_timestamp() -> None:
     """A misnamed ledger is rejected — the timestamped kebab name is the convention."""
-    assert "kebab" in _first_problem(
+    assert ".specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md" in _first_problem(
         ledger.find_ledger_problems(["src/a.py", ".specs/backlog/BadName.md"])
     )
+
+
+@pytest.mark.parametrize(
+    "str_line", ["- [ ] todo", "- [x] done", "- [~] feat/a doing", "+ [ ] plus"]
+)
+def test_checkbox_grammar_accepts_the_specs_markers(str_line: str) -> None:
+    """The ledger gate accepts the same markers check_specs_structure.sh does."""
+    assert ledger.CHECKBOX_RE.search(str_line)
+
+
+@pytest.mark.parametrize("str_line", ["- [X] upper", "- [] empty", "- [?] unknown", "- plain"])
+def test_checkbox_grammar_rejects_what_the_specs_gate_rejects(str_line: str) -> None:
+    """NEGATIVE CONTROL: a marker the specs gate rejects does not count as a checkbox."""
+    assert not ledger.CHECKBOX_RE.search(str_line)
 
 
 # --------------------------

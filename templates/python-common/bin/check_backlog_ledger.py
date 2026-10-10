@@ -116,7 +116,8 @@ LEDGER_CLASSES = frozenset({"src", "ci"})
 LEDGER_DIR = ".specs/backlog"
 # <kebab-topic>_YYYYMMDD_HHMMSS.md
 LEDGER_RE = re.compile(r"^\.specs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.md$")
-CHECKBOX_RE = re.compile(r"^\s*[-*]\s+\[[ xX]\]", re.M)
+# Same marker grammar as bin/ci/check_specs_structure.sh: [ ], [x] and [~] (lowercase x only).
+CHECKBOX_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\[[ x~]\]", re.M)
 
 _BIN = pathlib.Path(__file__).resolve().parent
 
@@ -244,14 +245,16 @@ def find_ledger_problems(list_paths: list) -> list:
     for str_ledger in list_ledgers:
         if not LEDGER_RE.match(str_ledger):
             list_problems.append(
-                f"❌ {str_ledger}: name must match <kebab-topic>_YYYYMMDD_HHMMSS.md"
+                f"❌ {str_ledger}: name must match {LEDGER_DIR}/<kebab-topic>_YYYYMMDD_HHMMSS.md"
             )
             continue
         path_ledger = pathlib.Path(str_ledger)
         if path_ledger.is_file() and not CHECKBOX_RE.search(
             path_ledger.read_text(encoding="utf-8")
         ):
-            list_problems.append(f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' checkbox")
+            list_problems.append(
+                f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' / '- [~]' checkbox"
+            )
     # A single valid ledger satisfies the branch.
     return [] if len(list_problems) < len(list_ledgers) else list_problems
 

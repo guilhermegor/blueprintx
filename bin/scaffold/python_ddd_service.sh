@@ -212,11 +212,9 @@ copy_mkdocs_templates() {
     # Adds architecture.md to the gate's required-pages set (blueprintx#130) — the
     # page ships in this tier but was previously enforced by nothing.
     cp "$COMMON_TEMPLATE_ROOT/docs/.docs-skeleton.yaml" "$project_path/docs/.docs-skeleton.yaml"
-    # Non-published docs/ authoring guide + the .specs/backlog ledger folder.
+    # Non-published docs/ authoring guide.
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
-    mkdir -p "$project_path/.specs/backlog"
-    touch "$project_path/.specs/backlog/.gitkeep"
 
 
     print_status "success" "MkDocs templates copied"
