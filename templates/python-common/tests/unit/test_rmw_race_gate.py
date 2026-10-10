@@ -30,12 +30,12 @@ def _load(str_name: str) -> ModuleType:
     Parameters
     ----------
     str_name : str
-            Module stem under ``bin/``.
+        Module stem under ``bin/``.
 
     Returns
     -------
     ModuleType
-            The imported module.
+        The imported module.
     """
     cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -53,14 +53,14 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory to write into.
+        Directory to write into.
     str_source : str
-            File contents.
+        File contents.
 
     Returns
     -------
     pathlib.Path
-            The written file.
+        The written file.
     """
     path_file = path_dir / "sample.py"
     path_file.write_text(str_source, encoding="utf-8")
@@ -99,11 +99,11 @@ def test_arithmetic_write_after_session_get_names_file_and_line(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory holding the probe module.
+        Pytest throwaway directory holding the probe module.
     capsys : pytest.CaptureFixture
-            Captures the gate's output.
+        Captures the gate's output.
     str_which : str
-            Which half of the identification is under test.
+        Which half of the identification is under test.
     """
     path_file = _python_file(
         tmp_path,

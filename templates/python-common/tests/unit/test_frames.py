@@ -42,9 +42,9 @@ class _FakeCursor:
     Parameters
     ----------
     list_description : list or None
-            The DB-API ``description`` sequence, or ``None`` for a non-returning statement.
+        The DB-API ``description`` sequence, or ``None`` for a non-returning statement.
     list_rows : list
-            Rows returned by ``fetchall``.
+        Rows returned by ``fetchall``.
     """
 
     def __init__(self, list_description: list | None, list_rows: list) -> None:
@@ -57,7 +57,7 @@ class _FakeCursor:
         Returns
         -------
         list
-                The rows this cursor was built with.
+            The rows this cursor was built with.
         """
         return self.list_rows
 
@@ -76,7 +76,7 @@ def df_from_cursor() -> object:
     Returns
     -------
     object
-            The coerced pandas frame.
+        The coerced pandas frame.
     """
     pytest.importorskip("pandas")
     return from_cursor(_FakeCursor([("id",), ("title",)], [(1, "a"), (2, "b")]), _DICT_DTYPES)
@@ -89,7 +89,7 @@ def df_from_records() -> object:
     Returns
     -------
     object
-            The coerced pandas frame.
+        The coerced pandas frame.
     """
     pytest.importorskip("pandas")
     return from_records(_LIST_RECORDS, _DICT_DTYPES)
@@ -104,9 +104,9 @@ def test_every_declared_column_is_present(
     Parameters
     ----------
     str_fixture : str
-            Name of the shared-frame fixture under test.
+        Name of the shared-frame fixture under test.
     request : pytest.FixtureRequest
-            Used to resolve the fixture by name, so one case list covers both seams.
+        Used to resolve the fixture by name, so one case list covers both seams.
     """
     assert list(request.getfixturevalue(str_fixture).columns) == ["id", "title"]
 
@@ -120,9 +120,9 @@ def test_every_declared_column_is_coerced_to_its_dtype(
     Parameters
     ----------
     str_fixture : str
-            Name of the shared-frame fixture under test.
+        Name of the shared-frame fixture under test.
     request : pytest.FixtureRequest
-            Used to resolve the fixture by name.
+        Used to resolve the fixture by name.
     """
     assert str(request.getfixturevalue(str_fixture)["id"].dtype) == "int64"
 
@@ -136,9 +136,9 @@ def test_the_row_values_survive_the_coercion(
     Parameters
     ----------
     str_fixture : str
-            Name of the shared-frame fixture under test.
+        Name of the shared-frame fixture under test.
     request : pytest.FixtureRequest
-            Used to resolve the fixture by name.
+        Used to resolve the fixture by name.
     """
     assert request.getfixturevalue(str_fixture)["title"].tolist() == ["a", "b"]
 
@@ -154,7 +154,7 @@ def df_empty_from_cursor() -> object:
     Returns
     -------
     object
-            The empty-but-shaped pandas frame.
+        The empty-but-shaped pandas frame.
     """
     pytest.importorskip("pandas")
     return from_cursor(_FakeCursor(None, []), _DICT_DTYPES)
@@ -167,7 +167,7 @@ def df_empty_from_records() -> object:
     Returns
     -------
     object
-            The empty-but-shaped pandas frame.
+        The empty-but-shaped pandas frame.
     """
     pytest.importorskip("pandas")
     return from_records([], _DICT_DTYPES)
@@ -180,9 +180,9 @@ def test_no_rows_yields_an_empty_frame(str_fixture: str, request: pytest.Fixture
     Parameters
     ----------
     str_fixture : str
-            Name of the shared empty-frame fixture under test.
+        Name of the shared empty-frame fixture under test.
     request : pytest.FixtureRequest
-            Used to resolve the fixture by name.
+        Used to resolve the fixture by name.
     """
     assert request.getfixturevalue(str_fixture).empty
 
@@ -196,9 +196,9 @@ def test_an_empty_frame_still_carries_the_declared_columns(
     Parameters
     ----------
     str_fixture : str
-            Name of the shared empty-frame fixture under test.
+        Name of the shared empty-frame fixture under test.
     request : pytest.FixtureRequest
-            Used to resolve the fixture by name.
+        Used to resolve the fixture by name.
     """
     assert list(request.getfixturevalue(str_fixture).columns) == ["id", "title"]
 
@@ -212,7 +212,7 @@ def tuple_date_col_frames() -> tuple:
     Returns
     -------
     tuple
-            The empty-path and populated-path pandas frames.
+        The empty-path and populated-path pandas frames.
     """
     pytest.importorskip("pandas")
     df_empty = from_cursor(_FakeCursor(None, []), {"id": "int64"}, list_date_cols=["dt_ref"])
@@ -230,7 +230,7 @@ def test_the_empty_path_still_declares_the_date_column(tuple_date_col_frames: tu
     Parameters
     ----------
     tuple_date_col_frames : tuple
-            The shared empty-path and populated-path frames.
+        The shared empty-path and populated-path frames.
     """
     df_empty, _ = tuple_date_col_frames
 
@@ -249,7 +249,7 @@ def test_from_cursor_applies_date_columns_on_the_empty_path(
     Parameters
     ----------
     tuple_date_col_frames : tuple
-            The shared empty-path and populated-path frames.
+        The shared empty-path and populated-path frames.
     """
     df_empty, df_rows = tuple_date_col_frames
 

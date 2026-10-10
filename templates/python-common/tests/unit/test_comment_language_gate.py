@@ -33,12 +33,12 @@ def _load(str_name: str) -> ModuleType:
     Parameters
     ----------
     str_name : str
-            Module stem under ``bin/``.
+        Module stem under ``bin/``.
 
     Returns
     -------
     ModuleType
-            The imported module.
+        The imported module.
     """
     cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -60,12 +60,12 @@ def _sole(list_items: list) -> object:
     Parameters
     ----------
     list_items : list
-            Whatever the gate returned.
+        Whatever the gate returned.
 
     Returns
     -------
     object
-            The single item.
+        The single item.
     """
     assert len(list_items) == 1, list_items
     return list_items[0]
@@ -114,7 +114,7 @@ def test_accented_data_labels_do_not_trigger(str_comment: str) -> None:
     Parameters
     ----------
     str_comment : str
-            An English comment naming an accented data label.
+        An English comment naming an accented data label.
     """
     assert gate.portuguese_words(str_comment) == []
 
@@ -131,7 +131,7 @@ def test_all_caps_acronyms_are_not_read_as_words(str_comment: str) -> None:
     Parameters
     ----------
     str_comment : str
-            An English comment containing an ALL-CAPS acronym.
+        An English comment containing an ALL-CAPS acronym.
     """
     assert gate.portuguese_words(str_comment) == []
 
@@ -160,7 +160,7 @@ def test_backticked_and_quoted_spans_are_redacted(str_comment: str) -> None:
     Parameters
     ----------
     str_comment : str
-            An English comment carrying a redacted span.
+        An English comment carrying a redacted span.
     """
     assert gate.portuguese_words(str_comment) == []
 
@@ -225,7 +225,7 @@ def test_the_reported_line_is_the_word_s_own_line(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the probe file.
+        Pytest throwaway dir holding the probe file.
     """
     path_file = tmp_path / "probe.py"
     path_file.write_text(
@@ -287,7 +287,7 @@ def test_audit_mode_fails_when_no_file_matches(monkeypatch: pytest.MonkeyPatch) 
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-            Used to make discovery return nothing.
+        Used to make discovery return nothing.
     """
     monkeypatch.setattr(gate, "audit_paths", list)
     assert gate.main([]) == 1
@@ -393,7 +393,7 @@ def _git_init_and_commit(path_repo: Path) -> None:
     Parameters
     ----------
     path_repo : pathlib.Path
-            The directory to initialise and commit.
+        The directory to initialise and commit.
     """
     # Inherit the environment; a bare dict drops PATH. See the backlog note for the measurement.
     dict_env = {
@@ -428,9 +428,9 @@ def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir; the fake repo is created under a ``docs`` ancestor.
+        Pytest throwaway dir; the fake repo is created under a ``docs`` ancestor.
     monkeypatch : pytest.MonkeyPatch
-            Used to point the gate's ``PATH_ROOT`` at that fake repo.
+        Used to point the gate's ``PATH_ROOT`` at that fake repo.
     """
     path_repo = tmp_path / "docs" / "proj"
     (path_repo / "src").mkdir(parents=True)
@@ -466,9 +466,9 @@ def test_untracked_files_are_invisible_but_tracked_ones_are_not(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir; holds the fake repo.
+        Pytest throwaway dir; holds the fake repo.
     monkeypatch : pytest.MonkeyPatch
-            Used to point the gate's ``PATH_ROOT`` at that fake repo.
+        Used to point the gate's ``PATH_ROOT`` at that fake repo.
     """
     path_repo = tmp_path / "proj"
     (path_repo / "src").mkdir(parents=True)
@@ -505,7 +505,7 @@ def test_bare_root_flag_names_the_reason(capsys: pytest.CaptureFixture) -> None:
     Parameters
     ----------
     capsys : pytest.CaptureFixture
-            Captures the gate's message.
+        Captures the gate's message.
     """
     gate.main(["--root"])
     str_out = capsys.readouterr().out
@@ -526,10 +526,10 @@ def test_missing_root_directory_fails_instead_of_checking_nothing(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            A parent under which the missing root is named but never created.
+        A parent under which the missing root is named but never created.
     capsys : pytest.CaptureFixture
-            Captures the gate's message, so the assertion names the reason and not only
-            the exit code.
+        Captures the gate's message, so the assertion names the reason and not only
+        the exit code.
     """
     int_status = gate.main(["--root", str(tmp_path / "nonexistent"), "a.py"])
     str_out = capsys.readouterr().out
@@ -546,7 +546,7 @@ def test_misplaced_root_flag_fails_instead_of_checking_nothing(list_argv: list[s
     Parameters
     ----------
     list_argv : list of str
-            An argv carrying ``--root`` in a position the gate does not parse.
+        An argv carrying ``--root`` in a position the gate does not parse.
     """
     assert gate.main(list_argv) == 1, f"{list_argv} reported success"
 
@@ -561,9 +561,9 @@ def test_misplaced_root_flag_names_the_reason(
     Parameters
     ----------
     list_argv : list of str
-            An argv carrying ``--root`` in a position the gate does not parse.
+        An argv carrying ``--root`` in a position the gate does not parse.
     capsys : pytest.CaptureFixture
-            Captures the gate's message.
+        Captures the gate's message.
     """
     gate.main(list_argv)
     str_out = capsys.readouterr().out
@@ -581,11 +581,11 @@ def test_named_file_resolves_against_root_not_cwd(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Holds the root and an unrelated working directory.
+        Holds the root and an unrelated working directory.
     monkeypatch : pytest.MonkeyPatch
-            Moves the cwd away from the root.
+        Moves the cwd away from the root.
     capsys : pytest.CaptureFixture
-            Captures the success banner naming the file count.
+        Captures the success banner naming the file count.
     """
     path_root = tmp_path / "root"
     path_root.mkdir()
