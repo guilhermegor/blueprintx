@@ -46,17 +46,37 @@ MODULE = _load()
 # --------------------------
 
 
-def test_requirement_name_strips_extras_markers_and_comments() -> None:
-    """A real requirement line reduces to its bare distribution name."""
-    assert MODULE.requirement_name("httpx[http2]>=0.27 ; python_version >= '3.10'") == "httpx"
-    assert MODULE.requirement_name("pytest  # dev group") == "pytest"
+@pytest.mark.parametrize(
+    ("str_line", "str_name"),
+    [
+        ("httpx[http2]>=0.27 ; python_version >= '3.10'", "httpx"),
+        ("pytest  # dev group", "pytest"),
+    ],
+    ids=["extras-and-marker", "trailing-comment"],
+)
+def test_requirement_name_strips_extras_markers_and_comments(str_line: str, str_name: str) -> None:
+    """A real requirement line reduces to its bare distribution name.
+
+    Parameters
+    ----------
+    str_line : str
+        A requirement line.
+    str_name : str
+        The bare distribution name it reduces to.
+    """
+    assert MODULE.requirement_name(str_line) == str_name
 
 
-def test_requirement_name_blank_and_comment_lines_are_none() -> None:
-    """Blank lines and full-line comments carry no distribution to check."""
-    assert MODULE.requirement_name("") is None
-    assert MODULE.requirement_name("   ") is None
-    assert MODULE.requirement_name("# a comment") is None
+@pytest.mark.parametrize("str_line", ["", "   ", "# a comment"], ids=["empty", "blank", "comment"])
+def test_requirement_name_blank_and_comment_lines_are_none(str_line: str) -> None:
+    """Blank lines and full-line comments carry no distribution to check.
+
+    Parameters
+    ----------
+    str_line : str
+        A line with no distribution on it.
+    """
+    assert MODULE.requirement_name(str_line) is None
 
 
 # --------------------------
@@ -82,8 +102,13 @@ def test_check_requirement_missing_package_is_reported() -> None:
     catch.
     """
     str_problem = MODULE.check_requirement("definitely-not-a-real-package-xyz-127")
-    assert str_problem is not None
+    # `in None` raises, so a missing finding fails here too.
     assert "definitely-not-a-real-package-xyz-127" in str_problem
+
+
+def test_check_requirement_missing_package_says_not_installed() -> None:
+    """The finding for an absent package says it is not installed."""
+    str_problem = MODULE.check_requirement("definitely-not-a-real-package-xyz-127")
     assert "not installed" in str_problem
 
 
