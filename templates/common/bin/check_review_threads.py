@@ -193,17 +193,20 @@ _RE_MARKUP = re.compile(r"<!--.*?-->|<[^>]+>", re.DOTALL)
 #
 # A reviewer that declines to work posts an ISSUE comment, never a review thread — verified on
 # #257. That stream is the only place the difference between "nobody looked at this" and "these
-# commits were already reviewed" is written down (#259). It is fetched `last:` rather than
-# `first:` on purpose: `last` returns the NEWEST, so truncation can only drop OLD notices, and
-# an old notice is the one that must not grant a pass anyway.
+# commits were already reviewed" is written down (#259). It is paginated like reviews and
+# threads: a PR past 100 comments (#282 and #319 have 140) must not drop either a review comment
+# or the answer to it.
 _QUERY = """
-query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
+query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
       baseRefOid
-      comments(last:100) { totalCount nodes { author { login __typename } body createdAt } }
+      comments(first:100, after:$cc) {
+        pageInfo { hasNextPage endCursor }
+        nodes { author { login __typename } body createdAt }
+      }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
@@ -386,6 +389,7 @@ def _fetch_page(
     int_number: int,
     str_review_cursor: str | None,
     str_thread_cursor: str | None,
+    str_comment_cursor: str | None = None,
 ) -> dict:
     """Run one page of the query.
 
@@ -415,6 +419,8 @@ def _fetch_page(
         f"rc={str_review_cursor}" if str_review_cursor else "rc=",
         "-F",
         f"tc={str_thread_cursor}" if str_thread_cursor else "tc=",
+        "-F",
+        f"cc={str_comment_cursor}" if str_comment_cursor else "cc=",
     ]
     # Constant argv built from CI-provided identifiers; no shell is involved.
     cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
@@ -424,6 +430,16 @@ def _fetch_page(
     if "errors" in dict_out:
         raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
     return dict_out["data"]["repository"]["pullRequest"]
+
+
+_TUPLE_PAGED = ("reviews", "reviewThreads", "comments")
+
+
+def _next_cursor(dict_side: dict | None) -> str | None:
+    """Return the cursor to resume a connection from, or ``None`` when it has no next page."""
+    if not dict_side or not dict_side["pageInfo"]["hasNextPage"]:
+        return None
+    return dict_side["pageInfo"]["endCursor"]
 
 
 def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
@@ -448,26 +464,21 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
     RuntimeError
             If the API call fails, so an unreachable API is never mistaken for a clean PR.
     """
-    dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None)
-    dict_reviews = dict_pr["reviews"]
-    dict_threads = dict_pr["reviewThreads"]
+    dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None, None)
+    list_sides = [(dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr]
 
-    # Follow both cursors until neither has a next page. Independent cursors, one request each
+    # Follow every cursor until none has a next page. Independent cursors, one request each
     # round: passing a cursor for a connection that is already exhausted just re-returns its
-    # last (empty) page, so the loop terminates on the slower of the two.
-    while dict_reviews["pageInfo"]["hasNextPage"] or dict_threads["pageInfo"]["hasNextPage"]:
+    # last (empty) page, so the loop terminates on the slowest of them. A failed page raises
+    # in `_fetch_page`, so the loop can only stop early by finishing, never by an error.
+    while any(dict_side["pageInfo"]["hasNextPage"] for dict_side, _ in list_sides):
         dict_next = _fetch_page(
             str_owner,
             str_repo,
             int_number,
-            dict_reviews["pageInfo"]["endCursor"]
-            if dict_reviews["pageInfo"]["hasNextPage"]
-            else None,
-            dict_threads["pageInfo"]["endCursor"]
-            if dict_threads["pageInfo"]["hasNextPage"]
-            else None,
+            *(_next_cursor(dict_pr.get(str_key)) for str_key in _TUPLE_PAGED),
         )
-        for dict_side, str_key in ((dict_reviews, "reviews"), (dict_threads, "reviewThreads")):
+        for dict_side, str_key in list_sides:
             if not dict_side["pageInfo"]["hasNextPage"]:
                 continue
             dict_side["nodes"].extend(dict_next[str_key]["nodes"])
@@ -1644,23 +1655,12 @@ def _head_committed_date(dict_pr: dict) -> str:
 
 
 def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[str]) -> list[str]:
-    """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node.
-
-    ``comments(last:100)`` is not paginated, so a PR with more issue comments than it returned
-    fails closed: a roster review or its answer may sit in the part that was never read.
-    """
-    dict_comments = dict_pr.get("comments", {})
-    list_problems = find_review_body_problems(
+    """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
+    return find_review_body_problems(
         dict_pr.get("reviews", {}).get("nodes", []),
         list_notices,
         set_roster,
     )
-    if dict_comments.get("totalCount", 0) > len(dict_comments.get("nodes", [])):
-        list_problems.append(
-            "the PR has more issue comments than the 100 the gate reads, so a review body or "
-            "its answer may be unread — shrink the thread or answer in a review thread"
-        )
-    return list_problems
 
 
 def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], str]:
