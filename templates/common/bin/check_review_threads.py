@@ -1204,11 +1204,15 @@ _RE_BODY_REVIEW_LINE = re.compile(
 # Printed counts are authoritative, but each speaks for what it counts. CodeRabbit's header counts
 # INLINE comments, which are threads the thread gate already holds; only its body sections
 # (outside the diff, duplicates) live where no thread can see them. The ladder posts no threads,
-# so its count is the body's. Both are anchored to a line start so quoted output cannot fire them.
+# so its count is the body's. The two counts that can CLEAR a body are anchored to a line start so
+# a quotation cannot fire them; a section marker can only ADD a finding, so it stays unanchored
+# (CodeRabbit nests it inside a `<summary>` tag).
 _RE_BODY_SECTION = re.compile(
     r"\b(?:outside diff range|duplicate) comments(?:\s*\((\d+)\))?", re.IGNORECASE
 )
-_RE_ACTIONABLE = re.compile(r"actionable comments posted:?[\s*]*\d+", re.IGNORECASE)
+_RE_ACTIONABLE = re.compile(
+    r"^[^\w\n]*actionable comments posted:?[\s*]*\d+", re.IGNORECASE | re.MULTILINE
+)
 _RE_LADDER_COUNT = re.compile(
     r"^[^\w\n]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
 )
