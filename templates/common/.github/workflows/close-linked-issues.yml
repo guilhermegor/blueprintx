@@ -1,0 +1,38 @@
+name: Close linked issues
+
+# Closes the issues a merged PR delivered when GitHub's own "Closes #N" linking did not.
+# Rules and rationale: BlueprintX docs, FAQ (blueprintx#604).
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  close:
+    # A fork PR gets a read-only token, so it cannot close anything here. A PR merged into a
+    # non-default branch (a stacked PR) has not reached the default branch yet, so it closes nothing.
+    if: >-
+      github.event.pull_request.merged == true
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The script lives in the repo; the default ref on `closed` is the PR's merge commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Close referenced issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # Untrusted text goes through env, never interpolated into the script.
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          BODY: ${{ github.event.pull_request.body }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bash bin/close_linked_issues.sh
