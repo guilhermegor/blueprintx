@@ -35,7 +35,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
 
     Parameters
     ----------
-    logger : logging.Logger | None
+    cls_logger : logging.Logger | None
             The run logger (``None`` prints).
     fn_build_engine : Callable[[], Engine]
             Zero-arg callable building the SQLAlchemy engine. Unused by this illustrative read; a
@@ -57,7 +57,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
 
     def __init__(
         self,
-        logger: Logger | None,
+        cls_logger: Logger | None,
         fn_build_engine: Callable[[], Engine],
         fn_output_path: Callable[[str], Path],
         path_json: Path,
@@ -66,7 +66,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
         cls_webhook: WebhookNotifier | None = None,
         str_webhook_message: str = "",
     ) -> None:
-        self.logger = logger
+        self.cls_logger = cls_logger
         self.fn_build_engine = fn_build_engine
         self.fn_output_path = fn_output_path
         self.path_json = path_json
@@ -85,7 +85,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
         """
         float_start = time()
         pipeline_common.log_context(
-            self.logger, self.dict_context, self.cls_email_handler, self.cls_webhook
+            self.cls_logger, self.dict_context, self.cls_email_handler, self.cls_webhook
         )
         dict_baseline = self._read_baseline()
         dict_summary: dict[str, Any] = {
@@ -93,9 +93,9 @@ class ReconcilePipeline(metaclass=TypeChecker):
             "baseline_found": bool(dict_baseline),
             "baseline_rows": int(dict_baseline.get("rows_read", 0)),
         }
-        pipeline_common.write_summary(self.logger, self.path_json, dict_summary)
-        pipeline_common.log_elapsed(self.logger, time() - float_start)
-        pipeline_common.notify(self.logger, self.cls_webhook, self.str_webhook_message)
+        pipeline_common.write_summary(self.cls_logger, self.path_json, dict_summary)
+        pipeline_common.log_elapsed(self.cls_logger, time() - float_start)
+        pipeline_common.notify(self.cls_logger, self.cls_webhook, self.str_webhook_message)
         return dict_summary
 
     def _read_baseline(self) -> dict[str, Any]:
@@ -108,12 +108,14 @@ class ReconcilePipeline(metaclass=TypeChecker):
                 reconcile reads a values store DB-first and falls back to a bounded backfill
                 (fail loud on nothing within the cap) rather than returning empty.
         """
-        log_message(self.logger, "Reading prior-run baseline for reconciliation")
+        log_message(self.cls_logger, "Reading prior-run baseline for reconciliation")
         if not self.path_json.exists():
             log_message(
-                self.logger, "No prior summary found — baseline empty (prod: bounded backfill)"
+                self.cls_logger, "No prior summary found — baseline empty (prod: bounded backfill)"
             )
             return {}
         dict_prior: dict[str, Any] = json.loads(self.path_json.read_text(encoding="utf-8"))
-        log_message(self.logger, f"Baseline loaded ({dict_prior.get('rows_read', 0)} prior rows)")
+        log_message(
+            self.cls_logger, f"Baseline loaded ({dict_prior.get('rows_read', 0)} prior rows)"
+        )
         return dict_prior
