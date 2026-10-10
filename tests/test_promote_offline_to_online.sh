@@ -7,7 +7,7 @@
 # very defect this script exists to prevent (same shape as bin/ci/check_git_remote_guard.sh).
 #
 # Runs the real script as a subprocess against throwaway local git repos — no network, no real
-# `gh` auth required (a fake `gh` shim shadows the real one only for the one case that needs it).
+# `gh` auth required (a fake `gh` shim shadows the real one in every test).
 #
 # Usage: bash tests/test_promote_offline_to_online.sh
 
@@ -34,8 +34,9 @@ make_git_repo() {
     echo "$dir"
 }
 
-# A fake `gh` ahead of the real one on PATH, for the one case (auth) that needs a controlled
-# response — the real gh in this environment may already be authenticated.
+# A fake `gh` ahead of the real one on PATH for EVERY test: the real gh may be authenticated on a
+# developer machine, and a regression in an earlier check must refuse here, never reach
+# `gh repo create` with real credentials.
 fake_gh_bin_dir() {
     local dir="$WORK_DIR/fake-gh-bin"
     mkdir -p "$dir"
@@ -50,19 +51,8 @@ EOF
     echo "$dir"
 }
 
-expect_refuses() {
-    local desc="$1" extra_path="$2"
-    shift 2
-    if PATH="$extra_path:$PATH" "$PROMOTE_SCRIPT" "$@" >/dev/null 2>&1; then
-        echo "FAIL ($desc): expected a refusal (nonzero exit), got success"
-        int_failures=$((int_failures + 1))
-    else
-        echo "ok: $desc"
-    fi
-}
-
-# Like expect_refuses, but the refusal must come from the named check: a nonzero exit alone
-# also describes "not a git repo", which these option tests would otherwise hide behind.
+# The refusal must come from the named check: a nonzero exit alone also describes "not a git
+# repo", which every other refusal test would otherwise hide behind.
 expect_refuses_with() {
     local desc="$1" needle="$2" out
     shift 2
@@ -88,28 +78,29 @@ expect_succeeds() {
     fi
 }
 
+PATH="$(fake_gh_bin_dir):$PATH"
+
 test_unknown_tier() {
-    expect_refuses "unknown --tier is refused" "" "$WORK_DIR/nonexistent" --tier not-a-real-tier
+    expect_refuses_with "unknown --tier is refused" "Unknown --tier" "$WORK_DIR/nonexistent" --tier not-a-real-tier
 }
 
 test_not_a_git_repo() {
     local dir="$WORK_DIR/plain-dir"
     mkdir -p "$dir"
-    expect_refuses "a non-git directory is refused" "" "$dir" --tier lib-minimal
+    expect_refuses_with "a non-git directory is refused" "not a git repository" "$dir" --tier lib-minimal
 }
 
 test_dirty_tree() {
     local dir
     dir="$(make_git_repo "dirty-tree")"
     echo "uncommitted" >"$dir/scratch.txt"
-    expect_refuses "an uncommitted change is refused" "" "$dir" --tier lib-minimal
+    expect_refuses_with "an uncommitted change is refused" "uncommitted changes" "$dir" --tier lib-minimal
 }
 
 test_gh_unauthenticated() {
-    local dir gh_dir
+    local dir
     dir="$(make_git_repo "gh-unauth")"
-    gh_dir="$(fake_gh_bin_dir)"
-    expect_refuses "gh not authenticated is refused" "$gh_dir" "$dir" --tier lib-minimal
+    expect_refuses_with "gh not authenticated is refused" "not authenticated" "$dir" --tier lib-minimal
 }
 
 test_invalid_tier_options() {
@@ -125,7 +116,7 @@ test_origin_without_assets_is_ambiguous() {
     local dir
     dir="$(make_git_repo "origin-no-assets")"
     git -C "$dir" remote add origin "https://github.com/example/does-not-exist.git"
-    expect_refuses "origin set without .github/workflows is refused (ambiguous)" "" "$dir" --tier lib-minimal
+    expect_refuses_with "origin set without .github/workflows is refused (ambiguous)" "ambiguous state" "$dir" --tier lib-minimal
 }
 
 test_already_online_is_a_noop() {
@@ -149,6 +140,58 @@ test_origin_never_pushed_is_not_online() {
     git -C "$dir" add -A
     git -C "$dir" commit -q -m "chore: seed github assets"
     expect_refuses_with "origin + workflows but no pushed ref is refused, not 'already online'" "nothing was ever pushed" "$dir" --tier lib-minimal
+}
+
+test_flag_without_value() {
+    expect_refuses_with "a value flag with no value is refused with usage" "requires a value" "$WORK_DIR/x" --tier
+}
+
+# react-spa-webpack with --deploy-target none writes no workflow, so "online" must key on a file
+# every tier writes (CODEOWNERS), or a promoted project reads as the ambiguous state forever.
+test_react_without_workflows_reads_as_online() {
+    local dir
+    dir="$(make_git_repo "react-online")"
+    git -C "$dir" remote add origin "https://github.com/example/does-not-exist.git"
+    mkdir -p "$dir/.github/workflows"
+    echo "* @example" >"$dir/.github/CODEOWNERS"
+    git -C "$dir" add -A
+    git -C "$dir" commit -q -m "chore: seed github assets"
+    git -C "$dir" update-ref refs/remotes/origin/main HEAD
+    expect_succeeds "react project promoted with no deploy workflow is a clean no-op" "$dir" --tier react-spa-webpack
+}
+
+# Dropping the whole [tool.poe] table is only safe when include was its only key; a sibling key
+# would otherwise be re-parented under the previous table with no error.
+test_poe_strip_keeps_sibling_keys() {
+    local dir="$WORK_DIR/poe-siblings"
+    mkdir -p "$dir"
+    printf '[tool.poe.tasks]\nlint = "ruff check ."\n\n[tool.poe]\ninclude = ["poe_tasks.offline.toml"]\nenvfile = ".env"\n' >"$dir/poe_tasks.toml"
+    if bash -c 'source "$1"; PROJECT_PATH="$2"; strip_poe_include' _ "$PROMOTE_SCRIPT" "$dir" >/dev/null 2>&1 \
+        && grep -q '^\[tool\.poe\]$' "$dir/poe_tasks.toml" \
+        && grep -q '^envfile = ' "$dir/poe_tasks.toml" \
+        && ! grep -q 'poe_tasks.offline.toml' "$dir/poe_tasks.toml"; then
+        echo "ok: poe include strip keeps the [tool.poe] table when siblings follow"
+    else
+        echo "FAIL (poe include strip keeps siblings): envfile was re-parented or the strip failed"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
+# Executes every tier's copy manifest against the real templates/ tree, so a renamed or deleted
+# template fails here instead of mid-copy on a user's project; CODEOWNERS must be rendered.
+test_copy_manifests_match_templates() {
+    local tier dir
+    for tier in ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db lib-minimal react-spa-webpack; do
+        dir="$WORK_DIR/manifest-$tier"
+        mkdir -p "$dir"
+        if bash -c 'source "$1"; PROJECT_PATH="$2"; TIER="$3"; GITHUB_USERNAME=octo; PROJECT_DISPLAY_NAME=Demo; REPOSITORY=octo/demo; export GITHUB_USERNAME PROJECT_DISPLAY_NAME REPOSITORY; copy_online_assets' _ "$PROMOTE_SCRIPT" "$dir" "$tier" >/dev/null 2>&1 \
+            && grep -q '@octo' "$dir/.github/CODEOWNERS" && ! grep -q '\${' "$dir/.github/CODEOWNERS"; then
+            echo "ok: $tier copy manifest resolves against templates/ and renders CODEOWNERS"
+        else
+            echo "FAIL ($tier): copy manifest failed against templates/ or CODEOWNERS kept a placeholder"
+            int_failures=$((int_failures + 1))
+        fi
+    done
 }
 
 # The restored no-commit-to-branch hook must not block the promotion commit on main, and no
@@ -232,6 +275,10 @@ main() {
     test_origin_without_assets_is_ambiguous
     test_already_online_is_a_noop
     test_origin_never_pushed_is_not_online
+    test_flag_without_value
+    test_react_without_workflows_reads_as_online
+    test_poe_strip_keeps_sibling_keys
+    test_copy_manifests_match_templates
     test_promotion_commit_skips_only_no_commit_to_branch
     test_mutations_on_offline_fixture
 

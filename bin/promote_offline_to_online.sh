@@ -57,6 +57,11 @@ exit_usage_error() {
     exit_error "$1"
 }
 
+# `shift 2` on a lone flag fails under set -e with no message at all.
+require_flag_value() {
+    [ $# -ge 2 ] || exit_usage_error "$1 requires a value"
+}
+
 parse_args() {
     [ $# -eq 0 ] && exit_usage_error "project_path is required"
     while [ $# -gt 0 ]; do
@@ -66,23 +71,28 @@ parse_args() {
                 exit 0
                 ;;
             --tier)
-                TIER="${2:-}"
+                require_flag_value "$@"
+                TIER="$2"
                 shift 2
                 ;;
             --github-user)
-                GITHUB_USERNAME="${2:-}"
+                require_flag_value "$@"
+                GITHUB_USERNAME="$2"
                 shift 2
                 ;;
             --visibility)
-                VISIBILITY="${2:-}"
+                require_flag_value "$@"
+                VISIBILITY="$2"
                 shift 2
                 ;;
             --deploy-target)
-                DEPLOY_TARGET="${2:-}"
+                require_flag_value "$@"
+                DEPLOY_TARGET="$2"
                 shift 2
                 ;;
             --publish)
-                PUBLISH_TARGET="${2:-}"
+                require_flag_value "$@"
+                PUBLISH_TARGET="$2"
                 shift 2
                 ;;
             --skip-branch-protection)
@@ -195,14 +205,16 @@ detect_state() {
     git -C "$PROJECT_PATH" remote get-url origin >/dev/null 2>&1 && HAS_ORIGIN=true
 
     HAS_GITHUB_ASSETS=false
-    if [ -d "$PROJECT_PATH/.github/workflows" ] \
-        && [ -n "$(find "$PROJECT_PATH/.github/workflows" -mindepth 1 2>/dev/null)" ]; then
+    # CODEOWNERS is the one file every tier writes; react-spa-webpack with --deploy-target none
+    # writes no workflow, so workflows alone would read a promoted project as ambiguous.
+    if [ -f "$PROJECT_PATH/.github/CODEOWNERS" ] \
+        || [ -n "$(find "$PROJECT_PATH/.github/workflows" -mindepth 1 2>/dev/null)" ]; then
         HAS_GITHUB_ASSETS=true
     fi
 }
 
 resolve_identity() {
-    [ -n "$GITHUB_USERNAME" ] || GITHUB_USERNAME="$(gh api user --jq .login)"
+    [ -n "$GITHUB_USERNAME" ] || GITHUB_USERNAME="$(gh api user --jq .login || true)"
     [ -n "$GITHUB_USERNAME" ] || exit_error "Could not resolve a GitHub username; pass --github-user explicitly."
     PROJECT_NAME="$(basename "$(cd "$PROJECT_PATH" && pwd)")"
     PROJECT_DISPLAY_NAME="$(echo "$PROJECT_NAME" | tr '_-' '  ' | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2); print}')"
@@ -246,7 +258,7 @@ copy_online_assets_lib_minimal() {
         test-pypi | both) envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' <"$skeleton/.github/workflows/release-test-pypi.yaml" >"$dest/.github/workflows/release-test-pypi.yaml" ;;
     esac
     cp "$skeleton/.github/workflows/docs.yaml" "$dest/.github/workflows/docs.yaml"
-    cp "$shared/.github/CODEOWNERS" "$dest/.github/CODEOWNERS"
+    envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' <"$shared/SECURITY.md" >"$dest/SECURITY.md"
     cp "$common/.github/dependabot.yml" "$dest/.github/dependabot.yml"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
@@ -262,7 +274,7 @@ copy_online_assets_react() {
     local deploy_root="$BLUEPRINTX_ROOT/templates/react-spa-webpack/optional/deploy"
     mkdir -p "$dest/.github/workflows"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
-    cp "$shared/.github/CODEOWNERS" "$dest/.github/CODEOWNERS"
+    envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
     case "$DEPLOY_TARGET" in
         pages) cp "$deploy_root/pages/deploy-spa.yml" "$dest/.github/workflows/deploy-spa.yml" ;;
@@ -369,7 +381,15 @@ if not match:
     sys.exit("strip_poe_include: poe_tasks.offline.toml is listed but the [tool.poe] include table has an unexpected shape — edit poe_tasks.toml by hand, then re-run.")
 
 entries = [e.strip() for e in match.group(1).split(",") if e.strip() and e.strip() != '"poe_tasks.offline.toml"']
-replacement = f"\n[tool.poe]\ninclude = [{', '.join(entries)}]\n" if entries else "\n"
+# An empty include drops the whole table only when no sibling key follows; otherwise the
+# header stays, or `envfile`/`executor` would be re-parented under the previous table.
+rest = text[match.end():]
+if entries:
+    replacement = f"\n[tool.poe]\ninclude = [{', '.join(entries)}]\n"
+elif rest.strip() and not rest.lstrip().startswith("["):
+    replacement = "\n[tool.poe]\n"
+else:
+    replacement = "\n"
 text = text[: match.start()] + replacement + text[match.end() :]
 
 with open(path, "w", encoding="utf-8") as fh:
@@ -438,7 +458,8 @@ PY
 strip_package_json_git_diff_scripts() {
     local pkg="$PROJECT_PATH/package.json"
     [ -f "$pkg" ] || return 0
-    python3 - "$pkg" <<'PY'
+    local outcome
+    outcome="$(python3 - "$pkg" <<'PY'
 import json
 import sys
 
@@ -447,14 +468,21 @@ with open(path, encoding="utf-8") as fh:
     pkg = json.load(fh)
 
 scripts = pkg.get("scripts", {})
-for key in ("git:diff:export", "git:diff:check", "git:diff:apply"):
-    scripts.pop(key, None)
+keys = [k for k in ("git:diff:export", "git:diff:check", "git:diff:apply") if k in scripts]
+if not keys:
+    print("absent")
+    sys.exit(0)
+for key in keys:
+    del scripts[key]
 
 with open(path, "w", encoding="utf-8") as fh:
     json.dump(pkg, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
+print("removed")
 PY
-    print_status "info" "Removed git:diff:* scripts from package.json"
+)"
+    [ "$outcome" = "removed" ] && print_status "info" "Removed git:diff:* scripts from package.json"
+    return 0
 }
 
 commit_promotion_changes() {
@@ -478,7 +506,7 @@ create_remote_and_push() {
     local visibility_flag="--private"
     [ "$VISIBILITY" = "public" ] && visibility_flag="--public"
     (cd "$PROJECT_PATH" && gh repo create "$REPOSITORY" "$visibility_flag" --source=. --remote=origin --push) \
-        || exit_error "Failed to create/push $REPOSITORY via gh repo create."
+        || exit_error "Failed to create/push $REPOSITORY via gh repo create. If the repo now exists on GitHub, add it with: git -C $PROJECT_PATH remote add origin <url> && git -C $PROJECT_PATH push -u origin HEAD"
     has_pushed_remote_ref \
         || exit_error "$REPOSITORY was created but nothing was pushed — promotion is INCOMPLETE. Run: git -C $PROJECT_PATH push -u origin HEAD"
     print_status "success" "Created $REPOSITORY and pushed"

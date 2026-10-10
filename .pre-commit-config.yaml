@@ -287,7 +287,7 @@ repos:
         entry: bash tests/test_promote_offline_to_online.sh
         language: system
         pass_filenames: false
-        files: ^(bin/promote_offline_to_online\.sh|tests/test_promote_offline_to_online\.sh)$
+        files: ^(bin/promote_offline_to_online\.sh|tests/test_promote_offline_to_online\.sh|bin/lib/common\.sh|templates/(common|python-common|lib-minimal|react-spa-webpack)/(\.github/|SECURITY\.md|optional/deploy/|docs_version/))
 
       - id: docs-boundary
         name: docs/ boundary guard (working material stays out of docs/, blueprintx#536)

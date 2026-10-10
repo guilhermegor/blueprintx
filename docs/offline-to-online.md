@@ -4,10 +4,6 @@ blueprintx#382. `bin/promote_offline_to_online.sh` turns an offline-scaffolded p
 online one — a GitHub remote, the GitHub-only CI assets, branch protection — without
 re-scaffolding and without hand-copying files out of BlueprintX.
 
-Not registered in `mkdocs.yml` nav, matching the existing docs/issue-scope.md — operational/gate
-documentation at the docs root, not a published skeleton page (see docs/CLAUDE.md's Type A/B/C
-categories, none of which fit this).
-
 ## Why offline mode needs an inverse
 
 `apply_offline_mode` (in every `bin/scaffold/python_*.sh` and `ts_react_app.sh`) runs once, at
@@ -33,7 +29,7 @@ bin/promote_offline_to_online.sh <project_path> --tier <tier> [options]
 | Flag | Required | Meaning |
 |---|---|---|
 | `<project_path>` | yes | Path to the offline-scaffolded project. |
-| `--tier` | yes | One of the 6 tiers below. No inference — a wrong guess silently promotes the wrong inventory, so the caller must say which one. |
+| `--tier` | yes | One of the 6 tiers below. No inference — a wrong guess silently promotes the wrong inventory, so the caller must say which one. `ts-lib`, `bash-cli` and `api-service-native-db` have no promotion manifest yet and are refused as unknown tiers. |
 | `--github-user` | no | GitHub owner for the new repo. Default: `gh api user`. |
 | `--visibility public\|private` | no | Default `private`. |
 | `--deploy-target none\|pages\|vercel` | no | `react-spa-webpack` only. Default `none` (see caveat below). |
@@ -48,7 +44,7 @@ across all four:
 
 - `.github/workflows/{tests,review_threads,coderabbit_trigger,review_retry,pr-gate,pr-reconcile,contract_drift,release,docs}.yaml`
 - `.github/workflows/secret_scan.yaml` only when `GITGUARDIAN_API_KEY` is exported (opt-in, as at scaffold time); the key is then set as a repo secret after `gh repo create`
-- `.github/CODEOWNERS` (envsubst `GITHUB_USERNAME`), `.github/CLAUDE.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/dependabot.yml`
+- `.github/CODEOWNERS` (envsubst `GITHUB_USERNAME`, on every tier), `.github/CLAUDE.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/dependabot.yml`
 - `SECURITY.md` (envsubst `PROJECT_DISPLAY_NAME`, `REPOSITORY`)
 
 `lib-minimal` (from `lib_minimal_copy_github_assets()`) is the same shape minus
@@ -56,7 +52,7 @@ across all four:
 plus `release-pypi.yaml` / `release-test-pypi.yaml` gated by `--publish`.
 
 `react-spa-webpack` (from `ts_react_app.sh`) ships only `.github/CLAUDE.md`, `.github/CODEOWNERS`
-(plain copy, no envsubst), `.github/PULL_REQUEST_TEMPLATE.md`, and — gated by `--deploy-target` —
+(envsubst `GITHUB_USERNAME`), `.github/PULL_REQUEST_TEMPLATE.md`, and — gated by `--deploy-target` —
 either `deploy-spa.yml` or `deploy-vercel.yml` + `vercel.json`. No `SECURITY.md` or
 `dependabot.yml`: `templates/ts-common/` ships neither.
 
@@ -88,7 +84,7 @@ Checked before any file is touched, in this order: the `--tier` is one of the 6 
 `templates/<tier>/skeleton.meta` still exists in this BlueprintX checkout (an unknown or
 since-removed tier fails loudly rather than copying nothing and reporting success); the
 tier-specific options are valid; the target is a git repository; not already fully online (an
-`origin` remote **and** a populated `.github/workflows/` — that combination is a clean no-op, exit
+`origin` remote **and** `.github/CODEOWNERS` or a populated `.github/workflows/` — that combination is a clean no-op, exit
 0); not in the ambiguous state of an `origin` remote **without** GitHub assets (refuses — could be
 mid-promotion or a manually-added remote, and guessing which is exactly what this script exists
 not to do); the current branch is `main` (the push and the branch protection both target it); the
@@ -105,9 +101,11 @@ rather than reporting success over a half-edited project.
 
 A run interrupted **before the first push** (most likely: a pre-commit hook rejected the promotion
 commit) leaves the copied assets in the working tree and no `origin`. The next run recognises that
-state — `.github/workflows/` populated, no `origin` — and resumes: it overwrites the workflows from
+state — GitHub assets present, no `origin` — and resumes: it overwrites the workflows from
 the templates, repeats the removals and commits again. Only the paths this script itself writes or
-removes may be dirty on a resume; any other uncommitted change is refused.
+removes may be dirty on a resume; any other uncommitted change is refused. The allowlist is by
+path, so an uncommitted edit of your own to one of those files (for example `package.json`) is
+indistinguishable from the promotion's and is committed with it — stash it first.
 
 **After the first push the project reads as online and a re-run does nothing.** That includes the
 branch-protection step: if it failed (it is best-effort), set it up on GitHub by hand. The protection
@@ -119,9 +117,10 @@ online scaffold's.
 
 `bash -n` and `shellcheck --severity=warning --exclude=SC1091` pass clean (mirrors CI's
 `shellcheck` pre-commit hook). `tests/test_promote_offline_to_online.sh` exercises the refusal
-paths (not a git repo, unknown tier, dirty tree, `gh` missing/unauthenticated, an `origin` set
-without GitHub assets) and the already-online no-op, against throwaway local git repos with no
-network or `gh` auth required.
+paths (not a git repo, unknown tier, dirty tree, `gh` unauthenticated, an `origin` set
+without GitHub assets), the already-online no-op (including react-spa-webpack with no
+deploy workflow), and every tier's copy manifest against the real `templates/` tree, all against
+throwaway local git repos with no network or `gh` auth required.
 
 **Not verified here, and stated rather than glossed over:** a live round trip (scaffold offline →
 promote → diff against an online scaffold of the same tier) needs a real `gh`-authenticated
