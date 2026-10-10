@@ -158,7 +158,7 @@ def unpublished_specs(dict_mkdocs: dict) -> tuple[pathspec.GitIgnoreSpec, ...]:
     )
 
 
-def _walk_markdown(path_docs: pathlib.Path) -> list[pathlib.Path]:
+def _walk_markdown(path_docs: pathlib.Path) -> tuple[list[pathlib.Path], list[str]]:
     """Find every ``*.md`` under ``path_docs``, descending into directory symlinks.
 
     Parameters
@@ -168,16 +168,27 @@ def _walk_markdown(path_docs: pathlib.Path) -> list[pathlib.Path]:
 
     Returns
     -------
-    list of pathlib.Path
-        Markdown files, unsorted. A directory whose real path is an ancestor on its own
-        branch is pruned, so a link back cannot loop; sibling aliases are all kept.
+    tuple of (list of pathlib.Path, list of str)
+        Markdown files (unsorted), then one message per symlink loop or unreadable
+        directory. A directory whose real path is an ancestor on its own branch is pruned
+        so the walk terminates, but MkDocs (``followlinks=True``, no ancestor check) keeps
+        descending until the kernel raises ELOOP and publishes the nested copies — so a
+        pruned loop is reported, never silently dropped. Sibling aliases are all kept.
     """
-    list_found = []
+    list_found: list[pathlib.Path] = []
+    list_problems: list[str] = []
     dict_ancestors: dict[str, frozenset[str]] = {str(path_docs): frozenset()}
-    for str_dir, list_dirs, list_files in os.walk(path_docs, followlinks=True):
+
+    def _unreadable(cls_err: OSError) -> None:
+        list_problems.append(f"{cls_err.filename}: cannot be read ({cls_err.strerror})")
+
+    for str_dir, list_dirs, list_files in os.walk(
+        path_docs, followlinks=True, onerror=_unreadable
+    ):
         str_real = os.path.realpath(str_dir)
         set_ancestors = dict_ancestors[str_dir]
         if str_real in set_ancestors:
+            list_problems.append(f"{str_dir}: symlink loop back to {str_real}")
             list_dirs.clear()
             continue
         for str_sub in list_dirs:
@@ -185,7 +196,23 @@ def _walk_markdown(path_docs: pathlib.Path) -> list[pathlib.Path]:
         list_found.extend(
             pathlib.Path(str_dir) / str_f for str_f in list_files if str_f.endswith(".md")
         )
-    return list_found
+    return list_found, list_problems
+
+
+def walk_problems(path_docs: pathlib.Path) -> list[str]:
+    """Return one error per symlink loop or unreadable directory under ``path_docs``.
+
+    Parameters
+    ----------
+    path_docs : pathlib.Path
+        The docs directory.
+
+    Returns
+    -------
+    list of str
+        Messages naming each offending path; empty when the tree walks cleanly.
+    """
+    return _walk_markdown(path_docs)[1]
 
 
 def published_pages(
@@ -206,7 +233,7 @@ def published_pages(
         Docs-relative paths (forward slashes), sorted.
     """
     list_pages = []
-    for path_md in sorted(_walk_markdown(path_docs)):
+    for path_md in sorted(_walk_markdown(path_docs)[0]):
         str_rel = path_md.relative_to(path_docs).as_posix()
         if str_rel == "CLAUDE.md" or any(spec.match_file(str_rel) for spec in tuple_specs):
             continue
@@ -366,6 +393,7 @@ def main(list_argv: list) -> int:
         return 1
     set_nav_files = nav_files(dict_mkdocs.get("nav"))
     list_errors = check_orphan_pages(list_pages, set_nav_files, str_docs)
+    list_errors += walk_problems(path_docs)
 
     set_indexed = claude_index_table(path_docs / "CLAUDE.md")
     if set_indexed is not None:
