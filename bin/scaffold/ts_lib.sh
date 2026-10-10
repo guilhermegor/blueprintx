@@ -307,7 +307,7 @@ copy_static_ts_lib_files() {
     copy_shared_github_overlay "$project_path"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-    # commit, never templated principles. See .specs/spec.md for the id conventions.
+    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 
     # Ship the repo->LLM context exporter (and its print_status helper) unconditionally,
