@@ -113,14 +113,14 @@ def first_party_roots(path_src: pathlib.Path) -> set[str]:
     Parameters
     ----------
     path_src : pathlib.Path
-            The project's ``src/`` directory (may not exist).
+        The project's ``src/`` directory (may not exist).
 
     Returns
     -------
     set of str
-            Directory names that are real packages (carry ``__init__.py``) plus top-level
-            ``.py`` module stems. Empty when ``src/`` is absent — a legitimate state, not
-            an error; see the module docstring.
+        Directory names that are real packages (carry ``__init__.py``) plus top-level
+        ``.py`` module stems. Empty when ``src/`` is absent — a legitimate state, not
+        an error; see the module docstring.
     """
     if not path_src.is_dir():
         return set()
@@ -141,17 +141,17 @@ def in_scope_roots(path_src: pathlib.Path) -> set[str]:
     Parameters
     ----------
     path_src : pathlib.Path
-            The project's ``src/`` directory (may not exist).
+        The project's ``src/`` directory (may not exist).
 
     Returns
     -------
     set of str
-            The real first-party directories under ``src/`` unioned with
-            :data:`_TUPLE_KNOWN_LAYER_NAMES` — but only when ``src/`` genuinely exists.
-            Empty when it does not: with nothing to resolve against, every candidate would
-            fail identically regardless of the static list, which is noise, not a finding
-            (the same reasoning `lint_deps.sh`/deptry documents for its own BlueprintX-side
-            skip).
+        The real first-party directories under ``src/`` unioned with
+        :data:`_TUPLE_KNOWN_LAYER_NAMES` — but only when ``src/`` genuinely exists.
+        Empty when it does not: with nothing to resolve against, every candidate would
+        fail identically regardless of the static list, which is noise, not a finding
+        (the same reasoning `lint_deps.sh`/deptry documents for its own BlueprintX-side
+        skip).
     """
     if not path_src.is_dir():
         return set()
@@ -164,14 +164,14 @@ def resolve_module(path_src: pathlib.Path, str_module: str) -> pathlib.Path | No
     Parameters
     ----------
     path_src : pathlib.Path
-            The project's ``src/`` directory.
+        The project's ``src/`` directory.
     str_module : str
-            A dotted, absolute module path (e.g. ``chassis.db.domain.ports``).
+        A dotted, absolute module path (e.g. ``chassis.db.domain.ports``).
 
     Returns
     -------
     pathlib.Path or None
-            The resolved ``.py`` file, or ``None`` when neither a package nor a module matches.
+        The resolved ``.py`` file, or ``None`` when neither a package nor a module matches.
     """
     path_candidate = path_src.joinpath(*str_module.split("."))
     path_init = path_candidate / "__init__.py"
@@ -187,12 +187,12 @@ def _all_entries(cls_assign: ast.Assign) -> list[str]:
     Parameters
     ----------
     cls_assign : ast.Assign
-            A top-level assignment node.
+        A top-level assignment node.
 
     Returns
     -------
     list of str
-            The listed export names, or an empty list when this assignment is not ``__all__``.
+        The listed export names, or an empty list when this assignment is not ``__all__``.
     """
     bool_is_all = any(
         isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_assign.targets
@@ -212,15 +212,15 @@ def defined_names(path_module: pathlib.Path) -> set[str] | None:
     Parameters
     ----------
     path_module : pathlib.Path
-            A resolved ``.py`` source file.
+        A resolved ``.py`` source file.
 
     Returns
     -------
     set of str or None
-            Top-level ``def``/``class``/assignment targets, re-exported import names, and any
-            ``__all__`` string entries. ``None`` when the file cannot be parsed — a defect for
-            a different gate (ruff/the syntax itself) to catch, not this one; the caller must
-            then skip level-2 checking rather than report a false symbol mismatch.
+        Top-level ``def``/``class``/assignment targets, re-exported import names, and any
+        ``__all__`` string entries. ``None`` when the file cannot be parsed — a defect for
+        a different gate (ruff/the syntax itself) to catch, not this one; the caller must
+        then skip level-2 checking rather than report a false symbol mismatch.
     """
     try:
         cls_tree = ast.parse(path_module.read_text(encoding="utf-8"), filename=str(path_module))
@@ -259,12 +259,12 @@ def strip_inline_comment(str_line: str) -> str:
     Parameters
     ----------
     str_line : str
-            A line, or fragment, of an import statement.
+        A line, or fragment, of an import statement.
 
     Returns
     -------
     str
-            ``str_line`` up to the first ``#``, right-stripped.
+        ``str_line`` up to the first ``#``, right-stripped.
     """
     return str_line.split("#")[0].rstrip()
 
@@ -275,16 +275,16 @@ def parse_names(str_names: str) -> list[str]:
     Parameters
     ----------
     str_names : str
-            Everything after ``import `` — e.g. ``"Foo, Bar as Baz"`` or a joined
-            multi-line ``"(Foo, Bar,)"`` group. A trailing ``# comment`` is dropped: docs
-            routinely annotate an example import, and keeping the comment turns the name into
-            one that no module can define.
+        Everything after ``import `` — e.g. ``"Foo, Bar as Baz"`` or a joined
+        multi-line ``"(Foo, Bar,)"`` group. A trailing ``# comment`` is dropped: docs
+        routinely annotate an example import, and keeping the comment turns the name into
+        one that no module can define.
 
     Returns
     -------
     list of str
-            Imported names with ``as`` aliases, a trailing comma and any inline comment
-            stripped; ``*`` dropped.
+        Imported names with ``as`` aliases, a trailing comma and any inline comment
+        stripped; ``*`` dropped.
     """
     str_clean = strip_inline_comment(str_names).strip()
     if str_clean.startswith("("):
@@ -305,14 +305,14 @@ def fenced_python_blocks(path_md: pathlib.Path) -> list[tuple[int, list[str], bo
     Parameters
     ----------
     path_md : pathlib.Path
-            The markdown file to scan.
+        The markdown file to scan.
 
     Returns
     -------
     list of tuple
-            ``(first_code_lineno, body_lines, exempt)`` per block. ``exempt`` is ``True`` when
-            a ``<!-- docs-refs-ok: <reason> -->`` comment sat immediately before the opening
-            fence (blank lines tolerated in between).
+        ``(first_code_lineno, body_lines, exempt)`` per block. ``exempt`` is ``True`` when
+        a ``<!-- docs-refs-ok: <reason> -->`` comment sat immediately before the opening
+        fence (blank lines tolerated in between).
     """
     list_lines = path_md.read_text(encoding="utf-8").splitlines()
     list_blocks: list[tuple[int, list[str], bool]] = []
@@ -341,15 +341,15 @@ def import_statements(list_body: list[str], int_first_lineno: int) -> list[tuple
     Parameters
     ----------
     list_body : list of str
-            The block's code lines (fence markers excluded).
+        The block's code lines (fence markers excluded).
     int_first_lineno : int
-            1-based file line number of ``list_body[0]``.
+        1-based file line number of ``list_body[0]``.
 
     Returns
     -------
     list of tuple
-            ``(lineno, module, names)`` per statement. A parenthesised multi-line name group is
-            joined onto one string before it is returned.
+        ``(lineno, module, names)`` per statement. A parenthesised multi-line name group is
+        joined onto one string before it is returned.
     """
     list_found: list[tuple[int, str, str]] = []
     int_i = 0
@@ -387,20 +387,20 @@ def candidate_problem(
     Parameters
     ----------
     path_src : pathlib.Path
-            The project's ``src/`` directory.
+        The project's ``src/`` directory.
     str_module : str
-            The dotted module path the docs cite.
+        The dotted module path the docs cite.
     list_names : list of str
-            The names the docs import from it.
+        The names the docs import from it.
 
     Returns
     -------
     str or None
-            A human-readable finding, or ``None`` when the module resolves and every named
-            symbol is defined (or the target could not be parsed, in which case level 2 is
-            skipped rather than guessed at). A name that is not defined in the module but
-            resolves as a **submodule** of it is accepted: ``from chassis import widgets`` is
-            valid Python whether or not ``chassis/__init__.py`` re-exports the name.
+        A human-readable finding, or ``None`` when the module resolves and every named
+        symbol is defined (or the target could not be parsed, in which case level 2 is
+        skipped rather than guessed at). A name that is not defined in the module but
+        resolves as a **submodule** of it is accepted: ``from chassis import widgets`` is
+        valid Python whether or not ``chassis/__init__.py`` re-exports the name.
     """
     path_module = resolve_module(path_src, str_module)
     if path_module is None:
@@ -426,12 +426,12 @@ def doc_files(path_root: pathlib.Path) -> list[pathlib.Path]:
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root.
+        The project root.
 
     Returns
     -------
     list of pathlib.Path
-            Sorted markdown files, empty when the project ships neither.
+        Sorted markdown files, empty when the project ships neither.
     """
     path_docs = path_root / "docs"
     list_files = sorted(path_docs.rglob("*.md")) if path_docs.is_dir() else []
@@ -449,18 +449,18 @@ def scan_file(
     Parameters
     ----------
     path_md : pathlib.Path
-            The markdown file to scan.
+        The markdown file to scan.
     path_src : pathlib.Path
-            The project's ``src/`` directory (for resolving in-scope candidates).
+        The project's ``src/`` directory (for resolving in-scope candidates).
     set_first_party : set of str
-            Real first-party top-level names, from :func:`first_party_roots`.
+        Real first-party top-level names, from :func:`first_party_roots`.
 
     Returns
     -------
     tuple of (int, int, list of str)
-            Raw candidate count (scope filter not applied), in-scope candidate count, and
-            findings — each already formatted as ``path:line: message``. See the module
-            docstring for why the two counts are tracked separately.
+        Raw candidate count (scope filter not applied), in-scope candidate count, and
+        findings — each already formatted as ``path:line: message``. See the module
+        docstring for why the two counts are tracked separately.
     """
     int_raw = 0
     int_scoped = 0
@@ -489,13 +489,13 @@ def main(list_argv: list) -> int:
     Parameters
     ----------
     list_argv : list of str
-            ``["--root", <dir>]`` to check a tree other than this file's own project, else empty.
+        ``["--root", <dir>]`` to check a tree other than this file's own project, else empty.
 
     Returns
     -------
     int
-            0 when the docs check out (or the project ships no docs at all, or no in-scope
-            import statement, both legitimate — see the module docstring), 1 on any finding.
+        0 when the docs check out (or the project ships no docs at all, or no in-scope
+        import statement, both legitimate — see the module docstring), 1 on any finding.
     """
     global PATH_ROOT  # noqa: PLW0603 — same documented seam as check_function_length.py
     if list_argv[:1] == ["--root"]:

@@ -60,13 +60,13 @@ def is_bot_author(str_login: str) -> bool:
     Parameters
     ----------
     str_login : str
-            A GitHub login, e.g. ``dependabot[bot]`` or ``octocat``. An empty or ``None``-ish
-            value is treated as human, so an unresolved author fails CLOSED.
+        A GitHub login, e.g. ``dependabot[bot]`` or ``octocat``. An empty or ``None``-ish
+        value is treated as human, so an unresolved author fails CLOSED.
 
     Returns
     -------
     bool
-            ``True`` only for a login carrying GitHub's ``[bot]`` suffix.
+        ``True`` only for a login carrying GitHub's ``[bot]`` suffix.
     """
     return bool(str_login) and str_login.endswith(BOT_LOGIN_SUFFIX)
 
@@ -85,8 +85,8 @@ def pr_author_login() -> str:
     Returns
     -------
     str
-            The author login, or ``""`` when it cannot be resolved — which the caller treats as
-            human, so the gate fails closed rather than exempting everyone.
+        The author login, or ``""`` when it cannot be resolved — which the caller treats as
+        human, so the gate fails closed rather than exempting everyone.
     """
     str_event_path = os.environ.get("GITHUB_EVENT_PATH", "")
 
@@ -127,7 +127,7 @@ def _load_pr_gate() -> types.ModuleType | None:
     Returns
     -------
     module or None
-            The ``pr_gate`` module, or ``None`` when it is absent (the gate is an opt-in tier).
+        The ``pr_gate`` module, or ``None`` when it is absent (the gate is an opt-in tier).
     """
     path_gate = _BIN / "pr_gate.py"
     if not path_gate.is_file():
@@ -144,12 +144,12 @@ def _git(list_args: list) -> str:
     Parameters
     ----------
     list_args : list of str
-            Arguments after ``git``.
+        Arguments after ``git``.
 
     Returns
     -------
     str
-            Captured stdout, stripped.
+        Captured stdout, stripped.
     """
     try:
         # Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
@@ -172,7 +172,7 @@ def default_branch() -> str:
     Returns
     -------
     str
-            The default branch name.
+        The default branch name.
     """
     str_ref = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
     if str_ref:
@@ -218,12 +218,12 @@ def changed_paths(str_base: str) -> list:
     Parameters
     ----------
     str_base : str
-            The merge-base commit to diff against.
+        The merge-base commit to diff against.
 
     Returns
     -------
     list of str
-            Repository-relative paths.
+        Repository-relative paths.
     """
     str_out = _git(["diff", "--cached", "--name-only", str_base])
     return [p for p in str_out.splitlines() if p]
@@ -235,14 +235,14 @@ def needs_ledger(list_paths: list, cls_gate: types.ModuleType) -> bool:
     Parameters
     ----------
     list_paths : list of str
-            The branch's changed paths.
+        The branch's changed paths.
     cls_gate : module
-            The loaded ``pr_gate`` module (its classifier is the single source of truth).
+        The loaded ``pr_gate`` module (its classifier is the single source of truth).
 
     Returns
     -------
     bool
-            ``True`` when at least one path is in ``LEDGER_CLASSES``.
+        ``True`` when at least one path is in ``LEDGER_CLASSES``.
     """
     # PER PATH — see the module docstring: classify_risk() over the whole list answers a
     # different question and lets a mixed branch escape the requirement.
@@ -255,12 +255,12 @@ def find_ledger_problems(list_paths: list) -> list:
     Parameters
     ----------
     list_paths : list of str
-            The branch's changed paths.
+        The branch's changed paths.
 
     Returns
     -------
     list of str
-            One message per problem.
+        One message per problem.
     """
     list_ledgers = [p for p in list_paths if p.startswith(f"{LEDGER_DIR}/") and p.endswith(".md")]
     if not list_ledgers:
@@ -291,7 +291,7 @@ def main() -> int:
     Returns
     -------
     int
-            0 when satisfied (or not applicable), 1 on a violation.
+        0 when satisfied (or not applicable), 1 on a violation.
     """
     str_author = pr_author_login()
     if is_bot_author(str_author):
