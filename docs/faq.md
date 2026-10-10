@@ -133,14 +133,24 @@ which also drops the function context and normalises whitespace. The CI checkout
 
 Both compares name the base by the commit SHA read once with the PR, never by branch name, so a
 retarget or a push to the base between the two reads cannot make them measure different bases.
-Each commit is fingerprinted once, however many reviewed commits are compared with the head.
+Each commit is fingerprinted at most once, however many reviewed commits are compared with
+the head: the head is read first, and if that fails the comparison stops there. The check runs
+after the completion-notice check, so a PR that already passes makes no compare call. Each call
+has a 60 second timeout, and a timeout, a missing `gh` or an API error all read as "not
+covered", with one line on stderr giving the reason (stdout stays the `--json` document). A
+`DISMISSED` review is never carried forward. Every review's findings, threads or body, are
+audited afterwards whatever the carry-forward decided.
 
 What carries forward is therefore narrower than "any update-branch". A base edit that only
 shifts the PR's hunks (lines added above or below them) leaves the fingerprint alone. A
 conflict-free base edit inside a hunk's three context lines changes the context, so the review
 goes stale; that fails safe. The tests pin both cases against real `git diff` output. Known
-ceiling: an identical edit moved within one function, between identical context lines, still
-matches, as it does for `git patch-id`.
+ceilings: an identical edit moved within one function, between identical context lines, still
+matches, as it does for `git patch-id`; and a conflict-free base change can still break the
+unchanged patch semantically (main renames a function the PR calls), which a patch comparison
+cannot see. That is accepted: a review is repeated only when a conflict or new code changes
+the PR's own patch, and CI covers the integration. A PR from a fork whose commits cannot be
+compared fails closed like any other error.
 
 Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails

@@ -531,12 +531,15 @@ def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str
     list of str
             Commit oids, deduplicated, empty oids dropped.
     """
-    # Every review, not each reviewer's latest as `reviewers_who_reported` does: an equal
-    # fingerprint means identical PR code, so an older identical review is a true carry-forward.
+    # Every review, not each reviewer's latest: an equal fingerprint means identical PR code, so
+    # an older identical review is a true carry-forward. `reviewers_who_reported` filters by
+    # neither recency nor state at HEAD; DISMISSED is excluded HERE, stricter on purpose, since
+    # a dismissal retracts the review and a stale one should not be revived by a merge.
     list_oids = [
         (d.get("commit") or {}).get("oid") or ""
         for d in list_reviews
         if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
+        and d.get("state") != "DISMISSED"
     ]
     return list(dict.fromkeys(str_oid for str_oid in list_oids if str_oid))
 
@@ -544,6 +547,22 @@ def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str
 # The compare API lists at most this many files, whatever `per_page` says (it pages COMMITS,
 # not files; measured). A full list may be cut off, so it fails closed.
 _INT_COMPARE_FILES = 300
+
+# One compare call may not stall the job: a hang would end as `cancelled` at the job timeout,
+# which reads like a human cancelling (#192).
+_INT_COMPARE_TIMEOUT_S = 60
+
+# Everything that means "the patch could not be computed": an API or `gh` failure, a timeout,
+# a missing `gh`, an unusable or malformed response. All of it reads as "not covered".
+_TUPLE_FINGERPRINT_ERRORS = (
+    RuntimeError,
+    ValueError,
+    LookupError,
+    TypeError,
+    AttributeError,
+    OSError,
+    subprocess.TimeoutExpired,
+)
 
 
 def patch_fingerprint(list_files: list[dict]) -> str:
@@ -623,7 +642,13 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
         f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1",
     ]
     # Constant argv built from CI-provided identifiers; no shell is involved.
-    cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
+    cls_run = subprocess.run(  # noqa: S603
+        list_cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=_INT_COMPARE_TIMEOUT_S,
+    )
     if cls_run.returncode != 0:
         raise RuntimeError(f"compare failed: {cls_run.stderr.strip()[:400]}")
     return patch_fingerprint(json.loads(cls_run.stdout).get("files") or [])
@@ -655,15 +680,64 @@ def review_covers_head(
     """
     try:
         bool_same = fn_fingerprint(str_review_oid) == fn_fingerprint(str_head_oid)
-    except (RuntimeError, ValueError, LookupError, TypeError, AttributeError):
+    except _TUPLE_FINGERPRINT_ERRORS as cls_error:
+        _note(f"carry-forward from {str_review_oid[:7]} unavailable: {cls_error}")
         return False
     if bool_same:
-        print(
+        _note(
             f"review at {str_review_oid[:7]} still covers {str_head_oid[:7]}: the head only "
-            "merges the base, the PR's own patch is unchanged",
-            file=sys.stderr,
+            "merges the base, the PR's own patch is unchanged"
         )
     return bool_same
+
+
+def _note(str_message: str) -> None:
+    """Print a diagnostic on stderr, so ``--json`` keeps stdout to the one verdict document.
+
+    Parameters
+    ----------
+    str_message : str
+            The line to print.
+    """
+    print(str_message, file=sys.stderr)
+
+
+def review_carried_forward(
+    fn_fingerprint: Callable[[str], str] | None,
+    list_reviews: list[dict],
+    set_roster: set[str],
+    str_head_oid: str,
+) -> bool:
+    """Return whether any earlier roster review still covers the head.
+
+    The head is fingerprinted once, up front: if that fails, every comparison would fail the
+    same way, so the loop is skipped instead of repeating the failing call per reviewed commit.
+
+    Parameters
+    ----------
+    fn_fingerprint : Callable[[str], str] or None
+            Maps a commit oid to its patch fingerprint; ``None`` disables carry-forward.
+    list_reviews : list of dict
+            Submitted reviews.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
+    str_head_oid : str
+            The PR's head commit.
+
+    Returns
+    -------
+    bool
+            ``True`` only when a review at another commit has an equal fingerprint.
+    """
+    list_oids = reviewed_commits(list_reviews, set_roster) if fn_fingerprint else []
+    if not list_oids:
+        return False
+    try:
+        fn_fingerprint(str_head_oid)
+    except _TUPLE_FINGERPRINT_ERRORS as cls_error:
+        _note(f"carry-forward unavailable, the head patch cannot be read: {cls_error}")
+        return False
+    return any(review_covers_head(fn_fingerprint, str_oid, str_head_oid) for str_oid in list_oids)
 
 
 # Display budget for a quoted notice. ⚠️ It bounds what a HUMAN reads, never what a matcher
@@ -1074,14 +1148,12 @@ def find_missing_review_problem(
     if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
         return None
 
-    if fn_fingerprint and any(
-        review_covers_head(fn_fingerprint, str_oid, str_head_oid)
-        for str_oid in reviewed_commits(list_reviews, set_roster)
-    ):
-        return None
-
     if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
         # A CLEAN review is not a missing one — see the COMPLETION block above the function.
+        return None
+
+    # After the notice check, so a PR that already passes makes no compare call at all.
+    if review_carried_forward(fn_fingerprint, list_reviews, set_roster, str_head_oid):
         return None
 
     # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this

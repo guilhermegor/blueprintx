@@ -2826,3 +2826,181 @@ def test_compare_fingerprint_computes_each_commit_once(
     fn_fingerprint("head")
     fn_fingerprint("head")
     assert fn_fetch.call_count == 1
+
+
+def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Mock:
+    """Make every compare call fail, and return the mock that counts them.
+
+    Parameters
+    ----------
+    cls_gate : ModuleType
+            The loaded gate.
+    monkeypatch : pytest.MonkeyPatch
+            Pytest's patcher.
+
+    Returns
+    -------
+    Mock
+            The stand-in for ``fetch_patch_fingerprint``.
+    """
+    fn_fetch = Mock(side_effect=RuntimeError("compare failed: 502"))
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", fn_fetch)
+    return fn_fetch
+
+
+def _three_reviews() -> list[dict]:
+    """Return roster reviews at three distinct commits, none at ``_HEAD``.
+
+    Returns
+    -------
+    list of dict
+            Three reviews by the roster's CodeRabbit.
+    """
+    return [_review("coderabbitai[bot]", str_oid * 40) for str_oid in "abc"]
+
+
+def test_find_missing_review_problem_failing_head_compare_is_called_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A head whose patch cannot be read stops the loop; it is not refetched per review."""
+    cls_gate = _load_gate()
+    fn_fetch = _failing_compare(cls_gate, monkeypatch)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r"),
+    )
+    assert fn_fetch.call_count == 1
+
+
+def test_find_missing_review_problem_failing_head_compare_reports_the_reason(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A broken carry-forward is diagnosable: the reason reaches stderr."""
+    cls_gate = _load_gate()
+    _failing_compare(cls_gate, monkeypatch)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r"),
+    )
+    assert "compare failed: 502" in capsys.readouterr().err
+
+
+def test_find_missing_review_problem_failing_head_compare_leaves_stdout_empty(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The failure line is a diagnostic: stdout stays clean for ``--json``."""
+    cls_gate = _load_gate()
+    _failing_compare(cls_gate, monkeypatch)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r"),
+    )
+    assert capsys.readouterr().out == ""
+
+
+def test_find_missing_review_problem_passing_pr_makes_no_compare_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A completion notice already passes the PR, so carry-forward costs no API call."""
+    cls_gate = _load_gate()
+    fn_fingerprint = Mock(return_value="digest")
+    monkeypatch.setattr(cls_gate, "reviewer_declared_completion", lambda *_: True)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=fn_fingerprint,
+    )
+    assert fn_fingerprint.call_count == 0
+
+
+@pytest.mark.parametrize(
+    "cls_error", [subprocess.TimeoutExpired("gh", 60), FileNotFoundError("gh")]
+)
+def test_review_covers_head_hung_or_missing_gh_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, cls_error: Exception
+) -> None:
+    """A timeout or a missing ``gh`` binary means "not covered", never a crash."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate.subprocess, "run", Mock(side_effect=cls_error))
+    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
+    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40) is False
+
+
+def test_fetch_patch_fingerprint_bounds_the_compare_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The compare call carries a timeout, so a hung ``gh`` cannot stall the job."""
+    cls_gate = _load_gate()
+    json_body = '{"files": [{"filename": "a", "status": "modified", "patch": "x"}]}'
+    fn_run = Mock(return_value=Mock(returncode=0, stdout=json_body))
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+    assert fn_run.call_args.kwargs["timeout"] > 0
+
+
+def test_reviewed_commits_dismissed_review_is_not_revived() -> None:
+    """A dismissal retracts the review; a later merge must not bring it back."""
+    cls_gate = _load_gate()
+    dict_dismissed = {**_review("coderabbitai[bot]", "a" * 40), "state": "DISMISSED"}
+    assert cls_gate.reviewed_commits([dict_dismissed], {"coderabbitai"}) == []
+
+
+@pytest.mark.parametrize(
+    ("str_body", "int_expected"),
+    [("0 findings across 3 reviewed files", 0), ("2 findings across 3 reviewed files", 1)],
+)
+def test_main_carried_review_still_owes_a_later_findings_body(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    str_body: str,
+    int_expected: int,
+) -> None:
+    """R1 clean on P, R2 with findings on P', the head back at P: R2 is still answered.
+
+    Carry-forward decides only whether SOME review covers the head. The findings of every
+    submitted review, thread or body, are audited by the half that runs after it.
+    """
+    cls_gate = _load_gate()
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - login: guilhermegor-review-ladder[bot]\n    posts: threads\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    str_login = "guilhermegor-review-ladder"
+    str_attribution = "Fallback review — runtime: claude, model: m (selected by: s)\n"
+    dict_pr = {
+        "author": {"login": "someone"},
+        "headRefOid": _HEAD,
+        "baseRefOid": "base",
+        "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
+        "reviews": {
+            "nodes": [
+                {
+                    **_review(str_login, "a" * 40),
+                    "state": "COMMENTED",
+                    "body": str_attribution + "0 findings across 3 reviewed files",
+                    "submittedAt": "2026-10-01T00:00:00Z",
+                },
+                {
+                    **_review(str_login, "b" * 40),
+                    "state": "COMMENTED",
+                    "body": str_attribution + str_body,
+                    "submittedAt": "2026-10-02T00:00:00Z",
+                },
+            ]
+        },
+        "reviewThreads": {"nodes": []},
+        "commits": {"nodes": []},
+    }
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    assert cls_gate.main([]) == int_expected
