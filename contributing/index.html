@@ -626,6 +626,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Releasing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#snap-store-credential" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snap Store credential
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1825,6 +1842,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Releasing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#snap-store-credential" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snap Store credential
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1896,6 +1930,13 @@ green, and fill out the PR template. Direct commits to <code>main</code> are blo
 <h2 id="releasing">Releasing<a class="headerlink" href="#releasing" title="Permanent link">&para;</a></h2>
 <p>The version is the git tag — cut a release from the <strong>Release</strong> GitHub Action (enter the
 version once). See the <a href="../faq/#how-is-blueprintx-itself-versioned">FAQ</a>.</p>
+<h3 id="snap-store-credential">Snap Store credential<a class="headerlink" href="#snap-store-credential" title="Permanent link">&para;</a></h3>
+<p>The Snap job needs the <code>SNAPCRAFT_STORE_CREDENTIALS</code> repository secret. When it is empty the
+job <strong>fails</strong> on its first step with <code>NOT PUBLISHED: SNAPCRAFT_STORE_CREDENTIALS not set</code>
+(an <code>::error::</code> annotation plus a job-summary line), instead of reporting green with nothing
+published. Failing is safe for the other channels: every publish job in <code>release.yml</code> depends
+only on <code>tag</code> and none depends on <code>snap</code>, so Homebrew, Chocolatey and apt still publish.
+The red Snap job is expected until the owner adds the secret.</p>
 
 
 
