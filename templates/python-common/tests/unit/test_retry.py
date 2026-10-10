@@ -1,5 +1,6 @@
 """Unit tests for the retry-with-backoff seam (decorator, executor and policy)."""
 
+import contextlib
 from dataclasses import FrozenInstanceError
 from unittest.mock import Mock
 
@@ -55,6 +56,13 @@ def test_retry_returns_on_first_success() -> None:
     fn = retry_with_backoff(int_max_attempts=3, float_base_wait_s=0.0)(cls_call)
 
     assert fn() == "ok"
+
+
+def test_retry_calls_once_when_the_first_attempt_succeeds() -> None:
+    """A call that succeeds immediately is invoked exactly once."""
+    cls_call = Mock(side_effect=["ok"])
+    retry_with_backoff(int_max_attempts=3, float_base_wait_s=0.0)(cls_call)()
+
     assert cls_call.call_count == 1
 
 
@@ -64,6 +72,13 @@ def test_retry_retries_transient_then_succeeds() -> None:
     fn = retry_with_backoff(int_max_attempts=3, float_base_wait_s=0.0)(cls_call)
 
     assert fn() == "ok"
+
+
+def test_retry_calls_three_times_for_two_transient_failures() -> None:
+    """Two transient failures then success is three invocations."""
+    cls_call = Mock(side_effect=[OSError("transient"), OSError("transient"), "ok"])
+    retry_with_backoff(int_max_attempts=3, float_base_wait_s=0.0)(cls_call)()
+
     assert cls_call.call_count == 3
 
 
@@ -76,6 +91,17 @@ def test_retry_does_not_retry_non_transient() -> None:
 
     with pytest.raises(ValueError, match="permanent"):
         fn()
+
+
+def test_retry_calls_a_non_transient_failure_only_once() -> None:
+    """A permanent failure is attempted once, never retried."""
+    cls_call = Mock(side_effect=ValueError("permanent"))
+    fn = retry_with_backoff(
+        int_max_attempts=3, float_base_wait_s=0.0, tuple_exceptions=(OSError,)
+    )(cls_call)
+    with contextlib.suppress(ValueError):
+        fn()
+
     assert cls_call.call_count == 1
 
 
@@ -94,7 +120,27 @@ def test_retry_writes_warning_to_injected_logger() -> None:
     )
 
     assert fn() == "ok"
+
+
+def test_retry_writes_one_warning_per_retry_to_the_injected_logger() -> None:
+    """Two retries produce two messages on the injected emitter."""
+    cls_emitter = _CapturingEmitter()
+    cls_call = Mock(side_effect=[OSError("transient"), OSError("transient"), "ok"])
+    retry_with_backoff(int_max_attempts=3, float_base_wait_s=0.0, cls_logger=cls_emitter)(
+        cls_call
+    )()
+
     assert len(cls_emitter.list_messages) == 2
+
+
+def test_retry_messages_on_the_injected_logger_are_warnings() -> None:
+    """Every retry message is emitted at warning level."""
+    cls_emitter = _CapturingEmitter()
+    cls_call = Mock(side_effect=[OSError("transient"), OSError("transient"), "ok"])
+    retry_with_backoff(int_max_attempts=3, float_base_wait_s=0.0, cls_logger=cls_emitter)(
+        cls_call
+    )()
+
     assert all(msg.startswith("warning:") for msg in cls_emitter.list_messages)
 
 
