@@ -285,16 +285,22 @@ test_skeleton_match_is_exact() {
 }
 
 test_every_python_tier_has_a_prompt_map() {
-    local str_res str_meta str_name
+    local str_res str_meta str_name str_err int_tiers=0
     for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
-        grep -q '^language=python$' "$str_meta" || continue
+        grep -q '^language=python[[:space:]]*$' "$str_meta" || continue
+        int_tiers=$((int_tiers + 1))
         str_name="$(basename "$(dirname "$str_meta")")"
-        bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        if ! str_err="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
             spec_skeleton_supported "$2" && spec_stdin_for_skeleton "$2" /dev/null >/dev/null' \
-            _ "$REPO_ROOT" "$str_name" 2>/dev/null || str_res+="$str_name "
+            _ "$REPO_ROOT" "$str_name" 2>&1)"; then
+            str_res+="$str_name (${str_err:-not in the supported list}) "
+        fi
     done
-    if [ -z "${str_res:-}" ]; then
-        pass "every Python tier in templates/ has a named-key prompt map (blueprintx#691)"
+    # Zero matches would make the loop vacuous: a gate that checked nothing must not pass.
+    if [ "$int_tiers" -eq 0 ]; then
+        fail "no Python tier found" "templates/*/skeleton.meta matched no language=python"
+    elif [ -z "${str_res:-}" ]; then
+        pass "every Python tier ($int_tiers) in templates/ has a named-key prompt map (blueprintx#691)"
     else
         fail "unmapped Python tier" "no prompt map for: $str_res"
     fi

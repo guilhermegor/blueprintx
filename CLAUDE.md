@@ -277,15 +277,15 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 
 ## How scaffolding works
 
-**Eight skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
-`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`), two TypeScript
+**Nine skeletons ship today** — six Python (`ddd-service-native-db`, `ddd-service-orm-db`,
+`api-service-native-db`, `mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`), two TypeScript
 (`react-spa-webpack`, `ts-lib`) and one Bash (`bash-cli`), one `skeleton.meta` each (see "Repo architecture" above and
 "Discovery system" below). `bin/ci/validate_meta.sh` enforces that every one of these
 directory names is also named here — this count is a should-fail witness in its own right:
 add or remove a skeleton without updating it and the number goes stale before the paragraph
 does (blueprintx#478).
 
-### Python skeletons (`python_ddd_service.sh`, `python_ddd_service_orm.sh`, `python_mvc_service.sh`, `python_mvc_service_orm.sh`, `python_lib_minimal.sh`)
+### Python skeletons (`python_ddd_service.sh`, `python_ddd_service_orm.sh`, `python_api_service.sh`, `python_mvc_service.sh`, `python_mvc_service_orm.sh`, `python_lib_minimal.sh`)
 
 1. `validate_inputs` — checks required args.
 2. `resolve_github_username` — env var → `gh` CLI → interactive prompt.
