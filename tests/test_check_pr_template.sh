@@ -268,6 +268,12 @@ test_bold_label_variants_are_accepted() {
     expect_gate "**What:** and **Why** : render like **What**:" "$str_body" pass
 }
 
+test_trailing_top_level_section_is_not_a_silent_exit() {
+    # The CodeRabbit summary shape: its last real line has no parent section (blueprintx#706).
+    expect_gate "body ending in an extra top-level ## section" \
+        "$(good_body)"$'\n\n## Summary by CodeRabbit\n* **Bug Fixes**\n  * A real line.' pass
+}
+
 test_tilde_fence_hides_headings() {
     local str_body
     str_body="$(without '^## Documentation' '^## Additional')"
