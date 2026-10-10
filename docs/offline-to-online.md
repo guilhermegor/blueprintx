@@ -43,7 +43,7 @@ The 4 service tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service
 across all four:
 
 - `.github/workflows/{tests,review_threads,coderabbit_trigger,review_retry,pr-gate,pr-reconcile,contract_drift,release,docs}.yaml`
-- `.github/workflows/secret_scan.yaml` only when `GITGUARDIAN_API_KEY` is exported (opt-in, as at scaffold time); the key is then set as a repo secret after `gh repo create`
+- `.github/workflows/secret_scan.yaml` only when `GITGUARDIAN_API_KEY` is exported (opt-in, as at scaffold time); the key is then set as a repo secret after `gh repo create`. Setting it is best-effort like branch protection: if it fails the repo is already created and pushed, so the script warns with the exact `gh secret set` command rather than aborting, and a re-run does nothing
 - `.github/CODEOWNERS` (envsubst `GITHUB_USERNAME`, on every tier), `.github/CLAUDE.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/dependabot.yml`
 - `SECURITY.md` (envsubst `PROJECT_DISPLAY_NAME`, `REPOSITORY`)
 

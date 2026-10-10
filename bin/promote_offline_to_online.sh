@@ -518,7 +518,7 @@ set_secret_scan_key() {
     [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0
     printf '%s' "$GITGUARDIAN_API_KEY" | gh secret set GITGUARDIAN_API_KEY --repo "$REPOSITORY" >/dev/null 2>&1 \
         && print_status "success" "GitGuardian secret-scan key set on $REPOSITORY" \
-        || print_status "warning" "Could not set GITGUARDIAN_API_KEY on $REPOSITORY — secret_scan.yaml will fail until you set it (or delete the workflow)"
+        || print_status "warning" "Could not set GITGUARDIAN_API_KEY on $REPOSITORY — secret_scan.yaml will fail until you run: gh secret set GITGUARDIAN_API_KEY --repo $REPOSITORY (or delete the workflow)"
 }
 
 # Best-effort: a fresh repo can lag a moment behind API-visibility, and a solo maintainer's
