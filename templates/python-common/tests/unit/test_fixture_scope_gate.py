@@ -66,18 +66,60 @@ def _test_file(path_dir: Path, str_source: str) -> Path:
 # --------------------------
 
 
-def test_a_module_scope_fixture_with_no_reason_is_reported(tmp_path: Path) -> None:
-    """A widened, unjustified scope produces exactly one finding."""
+@pytest.fixture
+def list_unjustified_module_scope(tmp_path: Path) -> list[str]:
+    """Return the findings for a module-scope fixture that carries no written reason.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
     path_file = _test_file(
         tmp_path,
         'import pytest\n\n\n@pytest.fixture(scope="module")\ndef shared():\n\treturn {}\n',
     )
+    return gate.file_problems(path_file)
 
-    list_problems = gate.file_problems(path_file)
 
-    assert len(list_problems) == 1
-    assert "shared()" in list_problems[0]
-    assert "scope='module'" in list_problems[0]
+def test_a_module_scope_fixture_with_no_reason_is_reported(
+    list_unjustified_module_scope: list[str],
+) -> None:
+    """A widened, unjustified scope produces exactly one finding.
+
+    Parameters
+    ----------
+    list_unjustified_module_scope : list[str]
+        The gate's findings.
+    """
+    assert len(list_unjustified_module_scope) == 1
+
+
+def test_the_finding_names_the_fixture(list_unjustified_module_scope: list[str]) -> None:
+    """The finding names the offending fixture.
+
+    Parameters
+    ----------
+    list_unjustified_module_scope : list[str]
+        The gate's findings.
+    """
+    assert "shared()" in list_unjustified_module_scope[0]
+
+
+def test_the_finding_names_the_widened_scope(list_unjustified_module_scope: list[str]) -> None:
+    """The finding names the scope that was widened.
+
+    Parameters
+    ----------
+    list_unjustified_module_scope : list[str]
+        The gate's findings.
+    """
+    assert "scope='module'" in list_unjustified_module_scope[0]
 
 
 @pytest.mark.parametrize("str_scope", ["class", "session", "package"])
@@ -201,8 +243,20 @@ def test_audit_mode_passes_and_reports_the_count(
     _test_file(path_tests, "import pytest\n\n\n@pytest.fixture\ndef f():\n\treturn {}\n")
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
-    assert gate.main([]) == 0
+    gate.main([])
     assert "1 file(s) checked" in capsys.readouterr().out
+
+
+def test_audit_mode_exits_zero_on_a_clean_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tree with only a bare fixture decorator exits 0."""
+    path_tests = tmp_path / "tests" / "unit"
+    path_tests.mkdir(parents=True)
+    _test_file(path_tests, "import pytest\n\n\n@pytest.fixture\ndef f():\n\treturn {}\n")
+    monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+
+    assert gate.main([]) == 0
 
 
 def test_audit_mode_fails_on_a_real_violation_end_to_end(

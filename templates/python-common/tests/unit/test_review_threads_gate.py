@@ -10,11 +10,13 @@ Every shape here was measured on a real PR (blueprintx#170), including the one t
 the gate: 14 threads all reading ``isResolved: true`` while 11 held no author reply at all.
 """
 
+import functools
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 from types import ModuleType
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -1253,10 +1255,12 @@ def test_the_query_asks_for_the_prs_issue_comments() -> None:
     """The notices are ISSUE comments, not review threads — verified on blueprintx#257.
 
     Reading only ``reviewThreads`` cannot see them, which is why the distinction between
-    "nobody looked" and "already looked" was unavailable to the gate at all.
+    "nobody looked" and "already looked" was unavailable to the gate at all. The connection is
+    paginated (``first`` + cursor) because ``last:100`` silently dropped the older half of a
+    140-comment PR (#282, #319); the old assertion pinned that truncating shape.
     """
     cls_gate = _load_gate()
-    assert "comments(last:100)" in cls_gate._QUERY
+    assert "comments(first:100, after:$cc)" in cls_gate._QUERY
 
 
 # --------------------------
@@ -1619,6 +1623,688 @@ def test_print_thread_verdict_json_fail_carries_the_problems(
     assert json.loads(capsys.readouterr().out)["problems"] == ["src/thing.py: thread is open"]
 
 
+# --------------------------
+# Review BODY findings need a reply too (blueprintx#630)
+# --------------------------
+
+_BODY_ROSTER = {"coderabbitai"}
+_BOTH_ROSTER = {"coderabbitai", "guilhermegor-review-ladder", "copilot-pull-request-reviewer"}
+_BODY_MAJOR = "**Major** — the retry loop swallows the final error."
+_BODY_SUBMITTED = "2026-01-02T00:00:00Z"
+_BODY_AFTER = "2026-01-03T00:00:00Z"
+_BODY_REPLY = "Fixed in the next commit: the loop now re-raises the last error. " + "x" * 60
+
+
+def _body_review(str_body: str | None, str_login: str = "coderabbitai[bot]") -> dict:
+    """Build a submitted review on the head carrying a body, as the ladder posts them."""
+    return {
+        "author": {"login": str_login},
+        "commit": {"oid": _HEAD},
+        "body": str_body,
+        "submittedAt": _BODY_SUBMITTED,
+    }
+
+
+_LADDER_LOGIN = "guilhermegor-review-ladder[bot]"
+
+
+def _ladder_problems(str_body: str, str_login: str = _LADDER_LOGIN) -> list[str]:
+    """Problems for one review authored by ``str_login`` under a CodeRabbit + ladder roster."""
+    list_reviews = [_body_review(str_body, str_login)]
+    return _load_gate().find_review_body_problems(list_reviews, [], _BOTH_ROSTER)
+
+
+def _body_problems(list_reviews: list[dict], list_notices: list[dict]) -> list[str]:
+    return _load_gate().find_review_body_problems(list_reviews, list_notices, _BODY_ROSTER)
+
+
+def test_review_body_with_findings_and_no_reply_is_a_problem() -> None:
+    """A severity marker in a review body with nobody answering it must fail (#630)."""
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], [])) == 1
+
+
+def test_review_body_with_findings_answered_after_it_passes() -> None:
+    """A substantive non-roster reply posted after the review answers it."""
+    list_notices = [_notice("someone", _BODY_REPLY, _BODY_AFTER)]
+    assert _body_problems([_body_review(_BODY_MAJOR)], list_notices) == []
+
+
+def test_review_body_reply_shorter_than_the_bar_is_a_problem() -> None:
+    """The thread bar applies: 99 characters is not an answer."""
+    list_notices = [_notice("someone", "x" * 99, _BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+
+
+def test_review_body_reply_posted_before_the_review_is_a_problem() -> None:
+    """A reply that predates the review cannot be an answer to it."""
+    list_notices = [_notice("someone", _BODY_REPLY, "2026-01-01T12:00:00Z")]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+
+
+def test_review_body_reply_from_the_roster_is_a_problem() -> None:
+    """A reviewer replying to itself is not an answer, same as in a thread."""
+    list_notices = [_notice("coderabbitai[bot]", _BODY_REPLY, _BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+
+
+def test_review_body_findings_on_a_superseded_commit_still_need_a_reply() -> None:
+    """A push must not clear body findings the way it never clears an inline thread."""
+    dict_stale = {**_body_review(_BODY_MAJOR), "commit": {"oid": _SUPERSEDED}}
+    assert len(_body_problems([dict_stale], [])) == 1
+
+
+def test_review_body_one_reply_after_both_reviews_answers_both() -> None:
+    """Deliberate: one reply posted after the latest findings body covers the earlier ones."""
+    dict_late = {**_body_review(_BODY_MAJOR), "submittedAt": "2026-01-02T12:00:00Z"}
+    list_notices = [_notice("someone", _BODY_REPLY, _BODY_AFTER)]
+    assert _body_problems([_body_review(_BODY_MAJOR), dict_late], list_notices) == []
+
+
+def test_review_body_reply_from_a_graphql_bot_is_a_problem() -> None:
+    """GraphQL drops the [bot] suffix; ``__typename`` Bot is what marks GitGuardian et al."""
+    dict_bot = {
+        "author": {"login": "gitguardian", "__typename": "Bot"},
+        "body": _BODY_REPLY,
+        "createdAt": _BODY_AFTER,
+    }
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], [dict_bot])) == 1
+
+
+def test_review_body_reply_from_a_null_author_is_a_problem() -> None:
+    """A deleted (ghost) account is not a known human; it fails closed."""
+    dict_ghost = {"author": None, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], [dict_ghost])) == 1
+
+
+def test_review_body_reply_from_a_rest_bot_login_is_a_problem() -> None:
+    """A ``[bot]`` login that is not on the roster is still not an answer."""
+    list_notices = [_notice("github-actions[bot]", _BODY_REPLY, _BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+
+
+def test_review_body_dismissed_review_needs_no_reply() -> None:
+    """A dismissal is the maintainer's explicit answer."""
+    dict_dismissed = {**_body_review(_BODY_MAJOR), "state": "DISMISSED"}
+    assert _body_problems([dict_dismissed], []) == []
+
+
+def test_review_body_problem_quotes_the_matched_line_not_the_first() -> None:
+    """CodeRabbit bodies open with boilerplate; the failure must show the finding."""
+    str_body = "<!-- auto-generated -->\n**Review profile**: CHILL\n" + _BODY_MAJOR
+    assert "retry loop" in _body_problems([_body_review(str_body)], [])[0]
+
+
+def test_print_review_body_problems_json_carries_the_thread_problems(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Both failures reach the caller in one run, not one per round trip."""
+    _load_gate()._print_review_body_problems(True, ["body"], ["an open thread"])
+    assert json.loads(capsys.readouterr().out)["thread_problems"] == ["an open thread"]
+
+
+def test_review_body_findings_from_a_non_roster_author_are_ignored() -> None:
+    """Only a roster reviewer's body is held to the bar."""
+    assert _body_problems([_body_review(_BODY_MAJOR, "someone")], []) == []
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    [
+        "**Major** — x",
+        "🟠 Major: x",
+        "[Critical] x",
+        "Severity: major",
+        "- **Minor**: x",
+        "2 finding(s) across 3 reviewed file(s).",
+        "## Findings\n\n- the loop swallows the error",
+        "## Findings\n- `parse()` has no known bugs on ASCII but crashes on empty input",
+        "No findings in a.py.\n**Major** — b.py swallows the error.",
+        "- **Major:** no input validation in parse(), RCE via crafted path",
+        "**Critical** — None of the callers check the return code, data loss",
+    ],
+)
+def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
+    """Each shape a reviewer writes findings in must demand an answer."""
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    [
+        "",
+        "LGTM.",
+        "No findings.",
+        "No blocking bugs found.",
+        "No major issues.",
+        "0 finding(s) across 3 reviewed file(s).",
+        "## Findings\n\nNo findings.",
+        "No **Major** issues.",
+        "- **Critical:** none",
+        "Minor: none found",
+        "Major: none",
+        "Severity: none",
+        "Severity: n/a",
+        "## Issues\n\nNone.",
+        "## Issues\nNone found.",
+        "This is a *minor* cleanup, LGTM.",
+        "Approved (minor nits only, all optional).",
+        "Addressed 2 findings from the prior round; nothing new.",
+        "_🧹 Nitpick_ | _🔵 Trivial_",
+        "- **Nitpick:** rename x",
+    ],
+)
+def test_review_body_reporting_no_findings_stays_green(str_body: str) -> None:
+    """A clean review is not a finding: it needs no reply."""
+    assert _body_problems([_body_review(str_body)], []) == []
+
+
+def test_review_body_that_is_null_stays_green() -> None:
+    """GitHub returns a null-ish body for an approval with no text."""
+    assert _body_problems([_body_review(None)], []) == []
+
+
+@pytest.mark.parametrize("str_field", ["body", "submittedAt", "state", "__typename"])
+def test_review_query_asks_for_each_field_the_body_check_reads(str_field: str) -> None:
+    """Without these fields the check would read an empty review or a bot as a person."""
+    assert str_field in _load_gate()._QUERY
+
+
+def test_print_review_body_problems_json_carries_the_reason(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The JSON verdict names the failure so a caller never greps prose."""
+    _load_gate()._print_review_body_problems(True, ["a review body is unanswered"])
+    assert json.loads(capsys.readouterr().out)["reason"] == "unanswered_review_body"
+
+
+# --------------------------
+# Classification by declared structure (blueprintx#630, docs/faq.md)
+# --------------------------
+# Each shape below is a trimmed copy of a real body from this repo's PRs (#347, #671-#687). The
+# witness is the same text with only its structural marker removed.
+
+_LADDER = (
+    "Fallback review — runtime: {}, model: default (selected by: {})\nReviewed head: 1a2b3c4\n\n"
+)
+_LADDER_CLAUDE = _LADDER.format("claude", "last-resort")
+_LADDER_CLI = _LADDER.format("coderabbit", "live-probe")
+_PROSE = "I couldn't check any of this against the tree. Every tool call failed."
+_LOOP = "the retry loop swallows the final error."
+
+# Real CodeRabbit body (#347): its only finding sits in a body section, not in an inline thread.
+_CR_SECTION = "⚠️ Outside diff range comments (1)"
+_CR_OUTSIDE_DIFF = (
+    "> [!CAUTION]\n> Some comments are outside the diff and can't be posted inline.\n>\n"
+    f"> <details>\n> <summary>{_CR_SECTION}</summary><blockquote>\n>\n"
+    "> `191-191`: _🎯 Functional Correctness_ | _🟠 Major_ | _⚡ Quick win_\n>\n"
+    "> **Resolve the PR head SHA for `issue_comment` runs.**\n>\n"
+    "> </blockquote></details>\n\n"
+    "<details>\n<summary>ℹ️ Review info</summary>\n\n**Review profile**: CHILL\n"
+)
+_CR_NITPICK_ONLY = _CR_OUTSIDE_DIFF.replace(_CR_SECTION, "🧹 Nitpick comments (1)")
+_CR_INLINE_ONLY = (
+    "**Actionable comments posted: 2**\n\n---\n\nInline comments:\n"
+    "Review comments at @docs/faq.md:\n- Line 50: reword.\n\n"
+    "<details>\n<summary>ℹ️ Review info</summary>\n\n**Review profile**: CHILL\n"
+)
+
+_DICT_REVIEW_SHAPES = {
+    "coderabbit-outside-diff-section": (
+        _CR_OUTSIDE_DIFF,
+        _CR_NITPICK_ONLY.replace("🟠 Major", "🧹 Nitpick"),
+    ),
+    "coderabbit-zero-count-with-outside-diff": (
+        "**Actionable comments posted: 0**\n\n" + _CR_OUTSIDE_DIFF,
+        "**Actionable comments posted: 0**\n\n" + _CR_NITPICK_ONLY,
+    ),
+    "coderabbit-n-count-with-duplicate-section": (
+        "**Actionable comments posted: 2**\n\n♻️ Duplicate comments (1)\n\nx",
+        "**Actionable comments posted: 2**\n\n🧹 Nitpick comments (1)\n\nx",
+    ),
+    "ladder-claude-rung-prose-without-a-count": (_LADDER_CLAUDE + _PROSE, _PROSE),
+    "ladder-coderabbit-cli-count": (
+        _LADDER_CLI + "3 finding(s) across 4 reviewed file(s).",
+        _LADDER_CLI + "No findings.",
+    ),
+    "heading-review": (f"## Review\n\n{_LOOP}", _LOOP),
+    "bullet-review-dash": (f"* Review - {_LOOP}", f"* {_LOOP}"),
+    "review-colon": (f"Review: {_LOOP}", _LOOP),
+    "bold-findings": (f"**Findings**\n\n- {_LOOP}", f"- {_LOOP}"),
+    "numbered-finding": (f"Finding 1: {_LOOP}", _LOOP),
+    "heading-findings": (f"## Findings\n\n- {_LOOP}", f"- {_LOOP}"),
+    "severity-bullet": (f"- **Major** `a.py`: {_LOOP}", f"- `a.py`: {_LOOP}"),
+}
+
+
+@pytest.mark.parametrize(
+    "str_body", [t[0] for t in _DICT_REVIEW_SHAPES.values()], ids=list(_DICT_REVIEW_SHAPES)
+)
+def test_review_shape_declared_by_structure_demands_an_answer(str_body: str) -> None:
+    """Every recognised review shape must fail when nobody answered."""
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+@pytest.mark.parametrize(
+    "str_witness", [t[1] for t in _DICT_REVIEW_SHAPES.values()], ids=list(_DICT_REVIEW_SHAPES)
+)
+def test_review_shape_witness_without_its_marker_is_not_a_review(str_witness: str) -> None:
+    """Should-fail witness: the same text minus the structural marker must stay green."""
+    assert _body_problems([_body_review(str_witness)], []) == []
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    [
+        "**Actionable comments posted: 0**\n\n## Review details\n\nNitpicks only.",
+        "Actionable comments posted: 0",
+        _LADDER_CLI + "0 finding(s) across 4 reviewed file(s).",
+        _LADDER_CLAUDE + "No findings.",
+        _LADDER_CLAUDE + "## Review\n\nNo findings.",
+        "Review: no findings",
+    ],
+)
+def test_review_stating_zero_findings_never_blocks(str_body: str) -> None:
+    """A printed count of 0 (or an explicit clean line) means no findings."""
+    assert _ladder_problems(str_body) == []
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    [
+        _LADDER_CLI + "0 finding(s) across 4 reviewed file(s).\n- **Major** x",
+    ],
+)
+def test_review_count_of_zero_beats_prose_markers(str_body: str) -> None:
+    """Structured counts beat prose: a stated 0 is authoritative when no section contradicts."""
+    assert _ladder_problems(str_body) == []
+
+
+def test_coderabbit_header_of_zero_beats_prose_markers() -> None:
+    """The same rule for CodeRabbit's own header, authored by CodeRabbit."""
+    str_body = "**Actionable comments posted: 0**\n\n🔴 Major stray marker"
+    assert _ladder_problems(str_body, "coderabbitai[bot]") == []
+
+
+def test_quoted_ladder_count_inside_a_sentence_does_not_declare_zero() -> None:
+    """The count must open a line: a quoted '0 finding(s) across' cannot clean a real finding."""
+    str_body = f"- **Major** x: {_LOOP} (earlier run said 0 finding(s) across 4 files)"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_quoted_actionable_header_mid_line_does_not_clear_a_real_finding() -> None:
+    """Should-fail witness: a claude-rung body quoting the header mid-line still needs a reply."""
+    str_body = (
+        _LADDER_CLAUDE + "- **Major** x: the gate trusts 'Actionable comments posted: 0' anywhere."
+    )
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+_FINDING = "- **Major** x: the gate trusts a quoted header."
+
+
+@pytest.mark.parametrize(
+    "str_quote",
+    [
+        "> **Actionable comments posted: 0**",
+        ">> Actionable comments posted: 0",
+        "```\n**Actionable comments posted: 0**\n```",
+        "~~~\nActionable comments posted: 0\n~~~",
+    ],
+)
+def test_quoted_or_fenced_header_cannot_clear_a_ladder_finding(str_quote: str) -> None:
+    """Should-fail witness: a quoted CodeRabbit '0' header in a ladder body clears nothing."""
+    str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n{str_quote}\n"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_head", "str_login"),
+    [
+        (_LADDER_CLAUDE, _LADDER_LOGIN),
+        ("", _LADDER_LOGIN),
+        ("", "copilot-pull-request-reviewer[bot]"),
+        (_LADDER_CLAUDE, "copilot-pull-request-reviewer[bot]"),
+    ],
+    ids=["ladder-attributed", "ladder-attribution-missing", "other-roster", "other-roster-ladder"],
+)
+def test_unquoted_header_from_a_non_coderabbit_author_cannot_clear_a_finding(
+    str_head: str, str_login: str
+) -> None:
+    """Count authority binds to the author: only CodeRabbit's header speaks."""
+    str_body = f"{str_head}{_FINDING}\n\n**Actionable comments posted: 0**\n"
+    assert len(_ladder_problems(str_body, str_login)) == 1
+
+
+def test_unquoted_header_from_coderabbit_still_clears_inline_findings() -> None:
+    """Should-fail witness: the same body authored by CodeRabbit stays green."""
+    str_body = f"{_FINDING}\n\n**Actionable comments posted: 0**\n"
+    assert _ladder_problems(str_body, "coderabbitai[bot]") == []
+
+
+@pytest.mark.parametrize("str_login", ["coderabbitai[bot]", "copilot-pull-request-reviewer[bot]"])
+def test_ladder_count_from_a_non_ladder_author_cannot_clear_a_finding(str_login: str) -> None:
+    """The ladder count speaks only for the ladder app, with the attribution line."""
+    str_body = f"{_LADDER_CLI}0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
+    assert len(_ladder_problems(str_body, str_login)) == 1
+
+
+def test_ladder_count_without_attribution_cannot_clear_a_finding() -> None:
+    """Even the ladder app's count needs the attribution line."""
+    str_body = f"0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
+    assert len(_ladder_problems(str_body)) == 1
+
+
+@pytest.mark.parametrize(
+    "str_quote",
+    [
+        "> 0 finding(s) across 4 reviewed file(s).",
+        "```\n0 finding(s) across 4 reviewed file(s).\n```",
+    ],
+)
+def test_quoted_ladder_count_cannot_clear_a_finding(str_quote: str) -> None:
+    """A quoted ladder '0 finding(s)' count clears nothing."""
+    str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n{str_quote}\n"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_ladder_count_without_the_ladder_attribution_is_not_authoritative() -> None:
+    """The count speaks only in a body that carries the attribution line."""
+    str_body = f"0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_actionable_header_at_a_line_start_still_clears_inline_findings() -> None:
+    """The real CodeRabbit shape, the bold header opening a line, still wins."""
+    str_body = "**Actionable comments posted: 0**\n\n- **Major** x"
+    assert _body_problems([_body_review(str_body)], []) == []
+
+
+def test_coderabbit_inline_findings_need_no_body_reply() -> None:
+    """Its N inline comments are threads `find_thread_problems` already gates (no double-gate).
+
+    An open PR whose inline threads are all answered and resolved must stay green, so the body
+    check cannot demand a PR comment for the same findings.
+    """
+    assert _body_problems([_body_review(_CR_INLINE_ONLY)], []) == []
+
+
+def test_coderabbit_review_boilerplate_is_never_the_quoted_finding() -> None:
+    """The message quotes the section, not '**Review profile**: CHILL'."""
+    assert "Outside diff range" in _body_problems([_body_review(_CR_OUTSIDE_DIFF)], [])[0]
+
+
+def test_ladder_review_posted_as_an_issue_comment_counts_as_a_review() -> None:
+    """Some rungs post their review as an issue comment, not a PR review."""
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", _LADDER_CLAUDE + _PROSE)]
+    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
+
+
+def test_ladder_issue_comment_without_its_attribution_is_not_a_review() -> None:
+    """Should-fail witness for the issue-comment path."""
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", _PROSE)]
+    assert _load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER) == []
+
+
+@pytest.mark.parametrize(
+    "str_status",
+    [
+        "Review ladder: all rungs failed, no review was produced.",
+        "Review ladder: no rung available for this PR.",
+        "Review skipped: draft PR.",
+    ],
+)
+def test_ladder_status_notice_is_not_a_review(str_status: str) -> None:
+    """A failure or status notice from the ladder must not demand an answer."""
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_status)]
+    assert _load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER) == []
+
+
+_WALKTHROUGH = "> [!IMPORTANT]\n> ## Review skipped\n> - **Review profile**: CHILL"
+
+
+def test_coderabbit_walkthrough_comment_is_not_a_review() -> None:
+    """A walkthrough is skipped by SHAPE: it has no ladder head, header or body section."""
+    str_body = (
+        "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n" + _WALKTHROUGH
+    )
+    assert _body_problems([], [_notice("coderabbitai[bot]", str_body)]) == []
+
+
+def _pr_page(list_reviews: list[dict], bool_next: bool) -> dict:
+    """Build one GraphQL page whose reviews connection may have a next page."""
+    return {
+        "reviews": {
+            "pageInfo": {"hasNextPage": bool_next, "endCursor": "c"},
+            "nodes": list_reviews,
+        },
+        "reviewThreads": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []},
+    }
+
+
+def test_review_on_the_second_page_reaches_the_body_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pagination extends ``dict_pr`` in place, so a body past the first 100 reviews is seen."""
+    cls_gate = _load_gate()
+    list_pages = [
+        _pr_page([_body_review("LGTM")], True),
+        _pr_page([_body_review(_BODY_MAJOR)], False),
+    ]
+    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: list_pages.pop(0))
+    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+    assert len(cls_gate._unanswered_bodies(dict_pr, [], _BODY_ROSTER)) == 1
+
+
+_ANSWER_SHAPES = {
+    "reply-to-review-id": ("Reply to review 5474743692: done.", "done."),
+    "answer-to-review": ("Answer to review: done.", "done."),
+    "answers-to-ladder": ("Answers to ladder review, all held.", "all held."),
+    "re-colon-review": ("Re: review — done.", "done."),
+    "addressed-in-sha": ("Addressed in 2cdb28bf", "Addressed"),
+    "fixed-in-sha": ("Fixed in `7273818f`.", "Fixed."),
+    "per-finding": ("**Finding 1: verified, fixed.**", "**verified, fixed.**"),
+    "quoted": ("> the loop swallows\nFixed it.", "the loop swallows\nFixed it."),
+    "verdicts-on-review": ("Verdicts on the ladder review: held.", "held."),
+    "judgment-on-review": ("Judgment on the fallback review: ok.", "ok."),
+    "review-id-verified": ("Review 5469399568 verified.", "Verified."),
+}
+_REVIEWED = [_body_review(_BODY_MAJOR)]
+
+
+@pytest.mark.parametrize(
+    "str_reply", [t[0] for t in _ANSWER_SHAPES.values()], ids=list(_ANSWER_SHAPES)
+)
+def test_answer_shape_declared_by_structure_answers_at_any_length(str_reply: str) -> None:
+    """A recognised answer shape counts even below the length bar."""
+    assert _body_problems(_REVIEWED, [_notice("someone", str_reply, _BODY_AFTER)]) == []
+
+
+@pytest.mark.parametrize(
+    "str_witness", [t[1] for t in _ANSWER_SHAPES.values()], ids=list(_ANSWER_SHAPES)
+)
+def test_answer_shape_witness_without_its_marker_is_not_an_answer(str_witness: str) -> None:
+    """Should-fail witness: the same short text minus the marker is not an answer."""
+    assert len(_body_problems(_REVIEWED, [_notice("someone", str_witness, _BODY_AFTER)])) == 1
+
+
+@pytest.mark.parametrize(
+    "str_command",
+    [
+        "@coderabbitai review",
+        "@coderabbitai full review",
+        "@coderabbitai re-review",
+        "Ready for re-review",
+        "We're waiting on the review",
+        "Not answered yet, findings pending",
+    ],
+)
+def test_a_review_request_or_status_line_is_not_an_answer(str_command: str) -> None:
+    """Asking for another review, or saying nothing is answered, answers nothing."""
+    assert len(_body_problems(_REVIEWED, [_notice("someone", str_command, _BODY_AFTER)])) == 1
+
+
+def test_answer_shape_from_a_bot_is_not_an_answer() -> None:
+    """The shape alone never lets a bot clear findings."""
+    list_notices = [_notice("github-actions[bot]", "Reply to review 123456: ok.", _BODY_AFTER)]
+    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+
+
+def test_answer_shape_posted_before_the_review_is_not_an_answer() -> None:
+    """The shape must still be newer than the review it answers."""
+    list_notices = [_notice("someone", "Reply to review 123456: ok.", "2026-01-01T00:00:00Z")]
+    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+
+
+def test_answer_shape_from_the_roster_is_not_an_answer() -> None:
+    """A reviewer answering itself is not an answer, shape or not."""
+    list_notices = [_notice("coderabbitai[bot]", "Reply to review 123456: ok.", _BODY_AFTER)]
+    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+
+
+# --------------------------
+# Fail-closed audit: no success without positive evidence (blueprintx#630)
+# --------------------------
+
+
+def test_body_section_without_a_parsable_count_is_a_finding() -> None:
+    """A section heading whose count is missing or unparsable is a finding, never a clean 0."""
+    str_body = "**Actionable comments posted: 0**\n\n⚠️ Outside diff range comments\n\nx"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_body_section_with_a_stated_zero_count_is_clean() -> None:
+    """Should-fail witness: the same body with an explicit (0) stays green."""
+    str_body = "**Actionable comments posted: 0**\n\n⚠️ Outside diff range comments (0)\n\nx"
+    assert _body_problems([_body_review(str_body)], []) == []
+
+
+def test_ladder_review_with_an_attribution_and_nothing_else_is_a_finding() -> None:
+    """A truncated or failed ladder review says nothing, so it cannot read as clean."""
+    assert len(_body_problems([_body_review(_LADDER_CLAUDE)], [])) == 1
+
+
+def test_ladder_review_that_says_no_findings_is_clean() -> None:
+    """Should-fail witness: the explicit clean statement is the positive evidence."""
+    assert _body_problems([_body_review(_LADDER_CLAUDE + "No findings.")], []) == []
+
+
+@pytest.mark.parametrize("str_typename", ["Bot", "Mannequin", "Organization"])
+def test_answer_from_a_non_user_account_type_is_not_an_answer(str_typename: str) -> None:
+    """Only a ``User`` (or an untyped REST login) answers; any other type fails closed."""
+    dict_author = {"login": "someone", "__typename": str_typename}
+    dict_reply = {"author": dict_author, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
+    assert len(_body_problems(_REVIEWED, [dict_reply])) == 1
+
+
+def test_answer_from_a_user_account_type_is_an_answer() -> None:
+    """Should-fail witness: the same reply from a ``User`` answers."""
+    dict_author = {"login": "someone", "__typename": "User"}
+    dict_reply = {"author": dict_author, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
+    assert _body_problems(_REVIEWED, [dict_reply]) == []
+
+
+def test_roster_comment_with_an_auto_marker_and_an_attribution_still_counts() -> None:
+    """A marker must not be a skip list: structure decides, so a marked ladder review counts."""
+    str_body = "<!-- This is an auto-generated comment: x -->\n" + _LADDER_CLAUDE + _PROSE
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_body)]
+    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
+
+
+def test_roster_issue_comment_with_a_body_section_counts_as_a_review() -> None:
+    """An issue comment carrying a non-zero outside-diff section is a review too."""
+    list_notices = [_notice("coderabbitai[bot]", _CR_OUTSIDE_DIFF)]
+    assert len(_body_problems([], list_notices)) == 1
+
+
+def test_roster_issue_comment_without_the_body_section_is_not_a_review() -> None:
+    """Should-fail witness: the same comment minus its section marker."""
+    list_notices = [_notice("coderabbitai[bot]", _CR_NITPICK_ONLY.replace("🟠 Major", "x"))]
+    assert _body_problems([], list_notices) == []
+
+
+def test_ladder_issue_review_without_a_timestamp_fails_closed() -> None:
+    """No ``createdAt`` means no ordering evidence, so no answer can postdate it."""
+    dict_review = {**_notice("guilhermegor-review-ladder[bot]", _LADDER_CLAUDE + _PROSE)}
+    dict_review["createdAt"] = None
+    list_notices = [dict_review, _notice("someone", _BODY_REPLY, _BODY_AFTER)]
+    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
+
+
+def _comments_node(list_notices: list[dict], str_cursor: str | None) -> dict:
+    """Build one page of issue comments; ``str_cursor`` set means another page follows."""
+    return {
+        "reviews": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []},
+        "reviewThreads": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []},
+        "comments": {
+            "pageInfo": {"hasNextPage": bool(str_cursor), "endCursor": str_cursor},
+            "nodes": list_notices,
+        },
+    }
+
+
+def _fetch_comment_pages(monkeypatch: pytest.MonkeyPatch, list_pages: list[dict]) -> dict:
+    """Run ``fetch_pull_request`` over mocked pages and return the merged node."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "_fetch_page", Mock(side_effect=list_pages))
+    return cls_gate.fetch_pull_request("o", "r", 1)
+
+
+def test_review_on_comment_page_one_answered_on_page_three_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR past 200 comments: the answer on the last page must reach the body check."""
+    str_review = "**Actionable comments posted: 1**\n\n♻️ Duplicate comments (1)\n\nx"
+    list_pages = [
+        _comments_node([_notice("coderabbitai[bot]", str_review, "2026-01-02T00:00:00Z")], "c1"),
+        _comments_node([_notice("someone", "unrelated chatter", "2026-01-02T06:00:00Z")], "c2"),
+        _comments_node([_notice("someone", _BODY_REPLY, _BODY_AFTER)], None),
+    ]
+    dict_pr = _fetch_comment_pages(monkeypatch, list_pages)
+    list_notices = dict_pr["comments"]["nodes"]
+    assert _load_gate().find_review_body_problems([], list_notices, _BODY_ROSTER) == []
+
+
+def test_comment_review_without_the_page_three_answer_is_a_problem(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Should-fail witness: the same review without the last-page answer still fails."""
+    str_review = "**Actionable comments posted: 1**\n\n♻️ Duplicate comments (1)\n\nx"
+    list_pages = [
+        _comments_node([_notice("coderabbitai[bot]", str_review, "2026-01-02T00:00:00Z")], "c1"),
+        _comments_node([_notice("someone", "unrelated chatter", "2026-01-02T06:00:00Z")], "c2"),
+        _comments_node([_notice("someone", "still chatting", _BODY_AFTER)], None),
+    ]
+    dict_pr = _fetch_comment_pages(monkeypatch, list_pages)
+    list_notices = dict_pr["comments"]["nodes"]
+    assert len(_load_gate().find_review_body_problems([], list_notices, _BODY_ROSTER)) == 1
+
+
+def test_comment_pages_are_requested_with_the_comment_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Page two and three are asked for with the previous page's cursor (sixth argument)."""
+    cls_gate = _load_gate()
+    cls_page = Mock(
+        side_effect=[
+            _comments_node([], "c1"),
+            _comments_node([], "c2"),
+            _comments_node([], None),
+        ]
+    )
+    monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
+    cls_gate.fetch_pull_request("o", "r", 1)
+    assert [tuple_args[5] for tuple_args, _ in cls_page.call_args_list] == [None, "c1", "c2"]
+
+
+def test_a_failing_comment_page_raises_instead_of_stopping_early(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail closed: an error on a later page propagates, never a silently short list."""
+    cls_gate = _load_gate()
+    cls_page = Mock(side_effect=[_comments_node([], "c1"), RuntimeError("page two failed")])
+    monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
+    with pytest.raises(RuntimeError, match="page two failed"):
+        cls_gate.fetch_pull_request("o", "r", 1)
+
+
 # ⚠️ WITNESS FOR blueprintx#372 — THE DISPLAY BUDGET MUST NOT REACH A MATCHER.
 #
 # `summarise_reviewer_notice` cuts the notice to 200 chars so a failure message stays readable.
@@ -1790,3 +2476,794 @@ def test_load_comment_markers_reads_the_marker_row(path_marker_root: Path) -> No
 def test_load_roster_ignores_the_marker_row(path_marker_root: Path) -> None:
     """A marker row has no login, so the login roster is untouched."""
     assert _load_gate().load_roster(path_marker_root) == {"coderabbitai": "threads"}
+
+
+# --------------------------
+# A review carries forward across a merge of the base (blueprintx#698)
+# --------------------------
+
+
+def _git(path_repo: Path, *list_args: str, bool_check: bool = True) -> str:
+    """Run git in ``path_repo`` and return stdout, raising on a non-zero exit.
+
+    Raising matters: a silent setup failure would yield empty commit ids, and the negative
+    witnesses would then pass because two broken fingerprints differ.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory.
+    *list_args : str
+            Arguments after ``git``.
+    bool_check : bool
+            ``False`` only for the one command expected to exit non-zero (a conflicting merge).
+
+    Returns
+    -------
+    str
+            Stripped stdout.
+    """
+    list_cmd = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    cls_run = subprocess.run(  # noqa: S603
+        [*list_cmd, "-C", str(path_repo), *list_args],
+        capture_output=True,
+        text=True,
+        check=bool_check,
+    )
+    return cls_run.stdout.strip()
+
+
+def _commit(path_repo: Path, str_file: str, str_text: str) -> str:
+    """Write ``str_text`` to ``str_file``, commit it and return the new commit.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory.
+    str_file : str
+            File to write, relative to the repo.
+    str_text : str
+            File content.
+
+    Returns
+    -------
+    str
+            The new commit oid.
+    """
+    (path_repo / str_file).write_text(str_text)
+    _git(path_repo, "add", str_file)
+    _git(path_repo, "commit", "-m", f"edit {str_file}")
+    return _git(path_repo, "rev-parse", "HEAD")
+
+
+def _patch_id(path_repo: Path, str_oid: str) -> str:
+    """Return ``git patch-id --stable`` of the PR's own patch at ``str_oid``.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory, where ``main`` is the base.
+    str_oid : str
+            Commit to measure.
+
+    Returns
+    -------
+    str
+            The patch id, an independent oracle for the compare-API fingerprint.
+
+    Raises
+    ------
+    ValueError
+            If ``git patch-id`` prints nothing, which is an empty diff or a failed run.
+    """
+    str_base = _git(path_repo, "merge-base", "main", str_oid)
+    str_diff = _git(path_repo, "diff", str_base, str_oid)
+    cls_run = subprocess.run(  # noqa: S603
+        ["git", "patch-id", "--stable"],  # noqa: S607
+        input=str_diff + "\n",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    # `<patch-id> <commit-id>`; unpacking fails loudly on empty output instead of IndexError.
+    str_patch_id, _ = cls_run.stdout.split()
+    return str_patch_id
+
+
+_DICT_STATUS = {"A": "added", "M": "modified", "D": "removed", "R": "renamed"}
+
+
+def _file_entry(path_repo: Path, str_base: str, str_oid: str, str_line: str) -> dict:
+    """Build one ``files`` entry of the compare API from a real ``git diff``.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory.
+    str_base : str
+            Merge base of ``main`` and the commit.
+    str_oid : str
+            Commit being compared.
+    str_line : str
+            One ``git diff --name-status`` line: a status code, then one tab-separated path
+            (two for a rename: the old one, then the new one).
+
+    Returns
+    -------
+    dict
+            ``filename``, ``status`` and ``patch`` (starting at the first hunk, as the API does),
+            plus ``previous_filename`` for a rename.
+    """
+    str_code, *list_names = str_line.split("\t")
+    str_diff = _git(path_repo, "diff", "-M", str_base, str_oid, "--", *list_names)
+    dict_rename = {"R": {"previous_filename": list_names[0]}}.get(str_code[0], {})
+    return {
+        "filename": list_names[-1],
+        "status": _DICT_STATUS[str_code[0]],
+        "patch": str_diff[str_diff.index("@@") :],
+        **dict_rename,
+    }
+
+
+def _compare_files(path_repo: Path, str_oid: str) -> list[dict]:
+    """Return the compare-shaped ``files`` list of the PR's own patch at ``str_oid``.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory, where ``main`` is the base.
+    str_oid : str
+            Commit to measure.
+
+    Returns
+    -------
+    list of dict
+            What ``compare/main...<oid>`` would list, built from real ``git diff`` output.
+    """
+    str_base = _git(path_repo, "merge-base", "main", str_oid)
+    list_lines = _git(path_repo, "diff", "-M", "--name-status", str_base, str_oid).splitlines()
+    return list(map(functools.partial(_file_entry, path_repo, str_base, str_oid), list_lines))
+
+
+def _real_fingerprint(path_repo: Path, str_oid: str) -> str:
+    """Run the PRODUCTION ``patch_fingerprint`` on compare-shaped files from real diffs.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory, where ``main`` is the base.
+    str_oid : str
+            Commit to measure.
+
+    Returns
+    -------
+    str
+            The gate's own digest.
+    """
+    return _load_gate().patch_fingerprint(_compare_files(path_repo, str_oid))
+
+
+def _overlap_repo(path_repo: Path, str_old: str, str_new: str) -> tuple[str, str]:
+    """Build a PR that edits line 10, then merge a ``main`` that rewrites ``str_old``.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Empty repository directory.
+    str_old : str
+            Text of the 20-line file that ``main`` replaces. Line 12 is inside the PR hunk's
+            3-line context; line 20 and the top of the file are outside it.
+    str_new : str
+            Its replacement.
+
+    Returns
+    -------
+    tuple of str
+            The reviewed commit and the head after the conflict-free merge of ``main``.
+    """
+    str_text = "\n".join(map(str, range(1, 21))) + "\n"
+    _git(path_repo, "init", "-b", "main")
+    _commit(path_repo, "a.txt", str_text)
+    _git(path_repo, "checkout", "-b", "feat")
+    str_review = _commit(path_repo, "a.txt", str_text.replace("\n10\n", "\nfeat\n"))
+    _git(path_repo, "checkout", "main")
+    _commit(path_repo, "a.txt", str_text.replace(str_old, str_new, 1))
+    _git(path_repo, "checkout", "feat")
+    _git(path_repo, "merge", "--no-edit", "main")
+    return str_review, _git(path_repo, "rev-parse", "HEAD")
+
+
+@pytest.fixture
+def dict_repo(tmp_path: Path) -> dict:
+    """Build a PR branch with a review commit ``R`` and four candidate heads.
+
+    Parameters
+    ----------
+    tmp_path : Path
+            Pytest temp dir.
+
+    Returns
+    -------
+    dict
+            ``path``, ``review`` (R) and the heads ``clean_merge``, ``conflict_merge``,
+            ``new_commit`` and ``rewritten``.
+    """
+    str_text = "1\n{}\n3\n4\n5\n6\n7\n8\n9\n"
+    _git(tmp_path, "init", "-b", "main")
+    _commit(tmp_path, "a.txt", str_text.format("2"))
+    _commit(tmp_path, "b.txt", "b\n")
+    _git(tmp_path, "checkout", "-b", "feat")
+    str_review = _commit(tmp_path, "a.txt", str_text.format("feat"))
+    _git(tmp_path, "checkout", "main")
+    _commit(tmp_path, "b.txt", "b main\n")
+    _commit(tmp_path, "a.txt", str_text.format("main"))
+    _git(tmp_path, "checkout", "-b", "clean", str_review)
+    _git(tmp_path, "merge", "--no-edit", "main~1")
+    str_clean = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-b", "conflict", str_review)
+    _git(tmp_path, "merge", "--no-edit", "main", bool_check=False)  # conflicts by design
+    str_conflict = _commit(tmp_path, "a.txt", str_text.format("resolved"))
+    _git(tmp_path, "checkout", "-b", "more", str_review)
+    str_new = _commit(tmp_path, "c.txt", "new\n")
+    _git(tmp_path, "checkout", "-b", "rewrite", "main")
+    str_rewritten = _commit(tmp_path, "a.txt", str_text.format("rewritten"))
+    list_oids = [str_review, str_clean, str_conflict, str_new, str_rewritten]
+    assert set(map(len, list_oids)) == {40}, "fixture built an empty or malformed commit id"
+    assert len(set(list_oids)) == len(list_oids), "fixture built duplicate commits"
+    return {
+        "path": tmp_path,
+        "review": str_review,
+        "clean_merge": str_clean,
+        "conflict_merge": str_conflict,
+        "new_commit": str_new,
+        "rewritten": str_rewritten,
+    }
+
+
+def _covers(dict_repo: dict, str_head_key: str) -> bool:
+    """Ask the gate whether the review at ``R`` covers the head named by ``str_head_key``.
+
+    Parameters
+    ----------
+    dict_repo : dict
+            The :func:`dict_repo` fixture value.
+    str_head_key : str
+            Key of the head commit in that dict.
+
+    Returns
+    -------
+    bool
+            The gate's verdict, using a real ``git patch-id`` as the fingerprint.
+    """
+    fn_fingerprint = functools.partial(_patch_id, dict_repo["path"])
+    str_head = dict_repo[str_head_key]
+    return _load_gate().review_covers_head(
+        fn_fingerprint, dict_repo["review"], str_head, fn_fingerprint(str_head)
+    )
+
+
+def test_review_covers_head_carry_forward_notice_leaves_stdout_empty(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--json`` prints the verdict on stdout, so the notice must not share that stream."""
+    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40, "same")
+    assert capsys.readouterr().out == ""
+
+
+def test_review_covers_head_carry_forward_notice_goes_to_stderr(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The one line saying a review was carried forward is still printed, on stderr."""
+    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40, "same")
+    assert "still covers" in capsys.readouterr().err
+
+
+def test_review_covers_head_merge_of_base_without_conflict_carries_forward(
+    dict_repo: dict,
+) -> None:
+    """An update-branch that only merges the base leaves the PR's patch alone."""
+    assert _covers(dict_repo, "clean_merge") is True
+
+
+def test_review_covers_head_conflict_resolving_merge_stays_superseded(dict_repo: dict) -> None:
+    """Resolving a conflict changes what the PR contributes, so the review is stale."""
+    assert _covers(dict_repo, "conflict_merge") is False
+
+
+def test_review_covers_head_new_commit_stays_superseded(dict_repo: dict) -> None:
+    """A new commit adds code nobody reviewed."""
+    assert _covers(dict_repo, "new_commit") is False
+
+
+def test_review_covers_head_rewritten_code_stays_superseded(dict_repo: dict) -> None:
+    """A force-push that rewrites the PR's code is new code under an old review."""
+    assert _covers(dict_repo, "rewritten") is False
+
+
+def test_review_covers_head_patch_unavailable_fails_closed() -> None:
+    """A missing commit or an API error is never read as 'covered'."""
+    cls_gate = _load_gate()
+    fn_broken = Mock(side_effect=RuntimeError("compare failed"))
+    assert cls_gate.review_covers_head(fn_broken, "a" * 40, _HEAD, "digest") is False
+
+
+def test_find_missing_review_problem_carried_review_passes(dict_repo: dict) -> None:
+    """End to end: a roster review at R, head H only a base merge, no problem."""
+    cls_gate = _load_gate()
+    assert (
+        cls_gate.find_missing_review_problem(
+            [_review("coderabbitai[bot]", dict_repo["review"])],
+            {"coderabbitai"},
+            str_head_oid=dict_repo["clean_merge"],
+            fn_fingerprint=lambda str_oid: _patch_id(dict_repo["path"], str_oid),
+        )
+        is None
+    )
+
+
+def test_patch_fingerprint_ignores_hunk_line_numbers() -> None:
+    """Main moving lines above the PR's hunk shifts ``@@`` offsets and nothing else."""
+    cls_gate = _load_gate()
+    dict_at_review = {"filename": "a", "status": "modified", "patch": "@@ -2,1 +2,1 @@ fn\n-x\n+y"}
+    dict_at_head = {"filename": "a", "status": "modified", "patch": "@@ -9,1 +9,1 @@ fn\n-x\n+y"}
+    assert cls_gate.patch_fingerprint([dict_at_review]) == cls_gate.patch_fingerprint(
+        [dict_at_head]
+    )
+
+
+def test_patch_fingerprint_file_without_patch_text_raises() -> None:
+    """The API omits ``patch`` for binary or oversized files, which cannot be compared."""
+    cls_gate = _load_gate()
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([{"filename": "big.bin", "status": "added"}])
+
+
+def test_patch_fingerprint_same_edit_in_another_function_differs() -> None:
+    """The reviewed hunk text moved to a different function must not carry forward."""
+    cls_gate = _load_gate()
+    dict_reviewed = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ def one\n-x\n+y"}
+    dict_moved = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ def two\n-x\n+y"}
+    assert cls_gate.patch_fingerprint([dict_reviewed]) != cls_gate.patch_fingerprint([dict_moved])
+
+
+def test_patch_fingerprint_field_boundaries_are_unambiguous() -> None:
+    """A filename carrying the old separator must not collide with a different file."""
+    cls_gate = _load_gate()
+    dict_plain = {"filename": "a", "status": "modified", "patch": "p"}
+    dict_crafted = {"filename": "a\nmodified", "status": "", "previous_filename": "p", "patch": ""}
+    assert cls_gate.patch_fingerprint([dict_plain]) != cls_gate.patch_fingerprint([dict_crafted])
+
+
+def test_fetch_patch_fingerprint_compares_against_the_pinned_base_sha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both compares name the base by the SHA read once, never by a movable branch name."""
+    cls_gate = _load_gate()
+    json_body = '{"files": [{"filename": "a", "status": "modified", "patch": "x"}]}'
+    fn_run = Mock(return_value=Mock(returncode=0, stdout=json_body))
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    cls_gate.fetch_patch_fingerprint("o", "r", "basesha", "headsha")
+    assert fn_run.call_args[0][0][2].startswith("repos/o/r/compare/basesha...headsha")
+
+
+def test_fetch_patch_fingerprint_unknown_base_sha_fails_closed() -> None:
+    """No pinned base means no comparison: the gate cannot say which base was measured."""
+    cls_gate = _load_gate()
+    with pytest.raises(ValueError, match="base commit is unknown"):
+        cls_gate.fetch_patch_fingerprint("o", "r", "", "headsha")
+
+
+@pytest.mark.parametrize(
+    ("str_head_key", "bool_expected"),
+    [
+        ("clean_merge", True),
+        ("conflict_merge", False),
+        ("new_commit", False),
+        ("rewritten", False),
+    ],
+)
+def test_review_covers_head_production_fingerprint_on_real_diffs(
+    dict_repo: dict, str_head_key: str, bool_expected: bool
+) -> None:
+    """The production digest, fed compare-shaped files from real ``git diff``, decides it."""
+    fn_fingerprint = functools.partial(_real_fingerprint, dict_repo["path"])
+    str_head = dict_repo[str_head_key]
+    bool_covered = _load_gate().review_covers_head(
+        fn_fingerprint, dict_repo["review"], str_head, fn_fingerprint(str_head)
+    )
+    assert bool_covered is bool_expected
+
+
+@pytest.mark.parametrize(
+    ("str_old", "str_new", "bool_expected"),
+    [
+        ("\n20\n", "\nmain\n", True),  # below the hunk
+        ("1\n2\n", "0\n1\n2\n", True),  # a line inserted above shifts the coordinates
+        ("\n12\n", "\nmain\n", False),  # inside the hunk's 3-line context window
+    ],
+)
+def test_review_covers_head_main_edit_relative_to_the_hunk(
+    tmp_path: Path, str_old: str, str_new: str, bool_expected: bool
+) -> None:
+    """A clean merge carries a review forward unless main touched the hunk's context lines.
+
+    Pinned behaviour, not a promise: the digest keeps context lines, so a conflict-free
+    base edit inside the 3-line window makes the review stale (it fails safe), while an
+    edit that only shifts the hunk's coordinates does not.
+    """
+    str_review, str_head = _overlap_repo(tmp_path, str_old, str_new)
+    fn_fingerprint = functools.partial(_real_fingerprint, tmp_path)
+    bool_covered = _load_gate().review_covers_head(
+        fn_fingerprint, str_review, str_head, fn_fingerprint(str_head)
+    )
+    assert bool_covered is bool_expected
+
+
+def _rename_repo(path_repo: Path) -> tuple[str, str]:
+    """Build two PRs that rename DIFFERENT identical files to the same name, same edit.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Empty repository directory.
+
+    Returns
+    -------
+    tuple of str
+            The commit that renamed ``a.txt`` and the one that renamed ``b.txt``; both give
+            ``c.txt`` the same content, so their hunks are identical.
+    """
+    str_text = "\n".join(map(str, range(1, 21))) + "\n"
+    _git(path_repo, "init", "-b", "main")
+    _commit(path_repo, "a.txt", str_text)
+    _commit(path_repo, "b.txt", str_text)
+    _git(path_repo, "checkout", "-b", "from-a")
+    _git(path_repo, "mv", "a.txt", "c.txt")
+    str_from_a = _commit(path_repo, "c.txt", str_text.replace("\n10\n", "\nfeat\n"))
+    _git(path_repo, "checkout", "-b", "from-b", "main")
+    _git(path_repo, "mv", "b.txt", "c.txt")
+    return str_from_a, _commit(path_repo, "c.txt", str_text.replace("\n10\n", "\nfeat\n"))
+
+
+def test_patch_fingerprint_rename_from_another_file_differs_on_a_real_diff(
+    tmp_path: Path,
+) -> None:
+    """Only ``previous_filename`` tells the two renames apart, so it must be hashed."""
+    str_from_a, str_from_b = _rename_repo(tmp_path)
+    assert _real_fingerprint(tmp_path, str_from_a) != _real_fingerprint(tmp_path, str_from_b)
+
+
+def test_patch_fingerprint_whole_file_page_raises() -> None:
+    """A full 300-file list may be cut off by the API, so it is not trusted."""
+    cls_gate = _load_gate()
+    dict_file = {"filename": "a", "status": "modified", "patch": "p"}
+    with pytest.raises(ValueError, match="300 file"):
+        cls_gate.patch_fingerprint([dict_file] * 300)
+
+
+def test_review_covers_head_malformed_file_entry_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A compare response whose file entry lacks ``filename`` is "not covered", not a crash."""
+    cls_gate = _load_gate()
+    json_body = '{"files": [{"patch": "x"}]}'
+    monkeypatch.setattr(
+        cls_gate.subprocess, "run", Mock(return_value=Mock(returncode=0, stdout=json_body))
+    )
+    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
+    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
+
+
+def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Mock:
+    """Make every compare call fail, and return the mock that counts them.
+
+    Parameters
+    ----------
+    cls_gate : ModuleType
+            The loaded gate.
+    monkeypatch : pytest.MonkeyPatch
+            Pytest's patcher.
+
+    Returns
+    -------
+    Mock
+            The stand-in for ``fetch_patch_fingerprint``.
+    """
+    fn_fetch = Mock(side_effect=RuntimeError("compare failed: 502"))
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", fn_fetch)
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
+    return fn_fetch
+
+
+def _three_reviews() -> list[dict]:
+    """Return roster reviews at three distinct commits, none at ``_HEAD``.
+
+    Returns
+    -------
+    list of dict
+            Three reviews by the roster's CodeRabbit.
+    """
+    return [_review("coderabbitai[bot]", str_oid * 40) for str_oid in "abc"]
+
+
+def test_find_missing_review_problem_failing_head_compare_is_called_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A head whose patch cannot be read stops the loop; it is not refetched per review."""
+    cls_gate = _load_gate()
+    fn_fetch = _failing_compare(cls_gate, monkeypatch)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+    )
+    assert fn_fetch.call_count == 1
+
+
+def test_find_missing_review_problem_failing_head_compare_reports_the_reason(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A broken carry-forward is diagnosable: the reason reaches stderr."""
+    cls_gate = _load_gate()
+    _failing_compare(cls_gate, monkeypatch)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+    )
+    assert "compare failed: 502" in capsys.readouterr().err
+
+
+def test_find_missing_review_problem_failing_head_compare_leaves_stdout_empty(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The failure line is a diagnostic: stdout stays clean for ``--json``."""
+    cls_gate = _load_gate()
+    _failing_compare(cls_gate, monkeypatch)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+    )
+    assert capsys.readouterr().out == ""
+
+
+def test_find_missing_review_problem_passing_pr_makes_no_compare_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A completion notice already passes the PR, so carry-forward costs no API call."""
+    cls_gate = _load_gate()
+    fn_fingerprint = Mock(return_value="digest")
+    monkeypatch.setattr(cls_gate, "reviewer_declared_completion", lambda *_, **__: True)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=fn_fingerprint,
+    )
+    assert fn_fingerprint.call_count == 0
+
+
+@pytest.mark.parametrize(
+    "cls_error", [subprocess.TimeoutExpired("gh", 60), FileNotFoundError("gh")]
+)
+def test_review_covers_head_hung_or_missing_gh_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, cls_error: Exception
+) -> None:
+    """A timeout or a missing ``gh`` binary means "not covered", never a crash."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate.subprocess, "run", Mock(side_effect=cls_error))
+    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
+    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
+
+
+def test_fetch_patch_fingerprint_bounds_the_compare_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The compare call carries a timeout, so a hung ``gh`` cannot stall the job."""
+    cls_gate = _load_gate()
+    json_body = '{"files": [{"filename": "a", "status": "modified", "patch": "x"}]}'
+    fn_run = Mock(return_value=Mock(returncode=0, stdout=json_body))
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+    assert fn_run.call_args.kwargs["timeout"] > 0
+
+
+def test_reviewed_commits_dismissed_review_is_not_revived() -> None:
+    """A dismissal retracts the review; a later merge must not bring it back."""
+    cls_gate = _load_gate()
+    dict_dismissed = {**_review("coderabbitai[bot]", "a" * 40), "state": "DISMISSED"}
+    assert cls_gate.reviewed_commits([dict_dismissed], {"coderabbitai"}) == []
+
+
+@pytest.mark.parametrize(
+    ("str_body", "int_expected"),
+    [("0 findings across 3 reviewed files", 0), ("2 findings across 3 reviewed files", 1)],
+)
+def test_main_carried_review_still_owes_a_later_findings_body(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    str_body: str,
+    int_expected: int,
+) -> None:
+    """R1 clean on P, R2 with findings on P', the head back at P: R2 is still answered.
+
+    Carry-forward decides only whether SOME review covers the head. The findings of every
+    submitted review, thread or body, are audited by the half that runs after it.
+    """
+    cls_gate = _load_gate()
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - login: guilhermegor-review-ladder[bot]\n    posts: threads\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    str_login = "guilhermegor-review-ladder"
+    str_attribution = "Fallback review — runtime: claude, model: m (selected by: s)\n"
+    dict_pr = {
+        "author": {"login": "someone"},
+        "headRefOid": _HEAD,
+        "baseRefOid": "base",
+        "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
+        "reviews": {
+            "nodes": [
+                {
+                    **_review(str_login, "a" * 40),
+                    "state": "COMMENTED",
+                    "body": str_attribution + "0 findings across 3 reviewed files",
+                    "submittedAt": "2026-10-01T00:00:00Z",
+                },
+                {
+                    **_review(str_login, "b" * 40),
+                    "state": "COMMENTED",
+                    "body": str_attribution + str_body,
+                    "submittedAt": "2026-10-02T00:00:00Z",
+                },
+            ]
+        },
+        "reviewThreads": {"nodes": []},
+        "commits": {"nodes": []},
+    }
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
+    assert cls_gate.main([]) == int_expected
+
+
+def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: list[str]) -> int:
+    """Run ``main`` on a PR whose only review sits at an older commit with the same patch.
+
+    Parameters
+    ----------
+    tmp_path : Path
+            Pytest temp dir, where the roster file is written.
+    monkeypatch : pytest.MonkeyPatch
+            Pytest's patcher.
+    list_argv : list of str
+            CLI arguments.
+
+    Returns
+    -------
+    int
+            The gate's exit code.
+    """
+    cls_gate = _load_gate()
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - login: coderabbitai[bot]\n    posts: threads\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    dict_pr = {
+        "author": {"login": "someone"},
+        "headRefOid": _HEAD,
+        "baseRefOid": "base",
+        "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
+        "reviews": {"nodes": [{**_review("coderabbitai[bot]", "a" * 40), "state": "COMMENTED"}]},
+        "reviewThreads": {"nodes": []},
+        "commits": {"nodes": []},
+    }
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
+    return cls_gate.main(list_argv)
+
+
+def test_main_carried_review_is_visible_in_the_normal_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A pass that rests on a carried-forward review says so in the verdict, not only on stderr."""
+    _carried_main(tmp_path, monkeypatch, [])
+    assert "carried forward from aaaaaaa" in capsys.readouterr().out
+
+
+def test_main_carried_review_is_a_json_field_and_nothing_else_on_stdout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Under ``--json`` stdout stays ONE document, which names the carrying commit."""
+    _carried_main(tmp_path, monkeypatch, ["--json"])
+    assert json.loads(capsys.readouterr().out)["carried_forward_from"] == "a" * 40
+
+
+def test_fetch_retargeted_reads_the_timeline_for_a_base_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``base_ref_changed`` event in the timeline means the PR was retargeted."""
+    cls_gate = _load_gate()
+    fn_run = Mock(return_value=Mock(returncode=0, stdout="base_ref_changed\n"))
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    assert cls_gate.fetch_retargeted("o", "r", 7) is True
+
+
+def test_fetch_retargeted_unreadable_timeline_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed timeline call is an error, never read as 'not retargeted'."""
+    cls_gate = _load_gate()
+    fn_run = Mock(return_value=Mock(returncode=1, stderr="502"))
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    with pytest.raises(RuntimeError, match="timeline failed"):
+        cls_gate.fetch_retargeted("o", "r", 7)
+
+
+def test_find_missing_review_problem_retargeted_pr_stays_superseded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An otherwise-equal fingerprint is not enough once the base branch was changed."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: True)
+    str_problem = cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+    )
+    assert "SUPERSEDED" in str_problem
+
+
+def test_find_missing_review_problem_retargeted_pr_says_why_on_stderr(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The refusal is diagnosable: the reason names the base change."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: True)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+    )
+    assert "base branch was changed" in capsys.readouterr().err
+
+
+def test_review_carried_forward_long_review_list_makes_at_most_cap_plus_one_calls() -> None:
+    """The head once, then at most the cap of reviewed commits, however many reviews exist."""
+    cls_gate = _load_gate()
+    fn_fingerprint = Mock(side_effect=lambda str_oid: str_oid)
+    list_reviews = [_review("coderabbitai[bot]", f"{int_n:040d}") for int_n in range(40)]
+    cls_gate.review_carried_forward(fn_fingerprint, list_reviews, {"coderabbitai"}, _HEAD)
+    assert fn_fingerprint.call_count == cls_gate._INT_MAX_REVIEWED_COMMITS + 1
+
+
+def test_review_carried_forward_tries_the_newest_reviewed_commit_first() -> None:
+    """Of two reviews with the head's patch, the more recent one is the one named."""
+    cls_gate = _load_gate()
+    list_reviews = [_review("coderabbitai[bot]", "a" * 40), _review("coderabbitai[bot]", "b" * 40)]
+    str_carried = cls_gate.review_carried_forward(
+        lambda str_oid: "same", list_reviews, {"coderabbitai"}, _HEAD
+    )
+    assert str_carried == "b" * 40
+
+
+def test_review_carried_forward_computes_the_head_digest_once_without_a_cache() -> None:
+    """The once-only guarantee lives in the caller: a plain, uncached callable sees it once."""
+    cls_gate = _load_gate()
+    fn_counting = Mock(side_effect=lambda str_oid: str_oid)
+    cls_gate.review_carried_forward(fn_counting, _three_reviews(), {"coderabbitai"}, _HEAD)
+    assert fn_counting.call_args_list.count(call(_HEAD)) == 1

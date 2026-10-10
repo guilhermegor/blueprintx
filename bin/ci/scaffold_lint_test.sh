@@ -141,6 +141,21 @@ for str_online_only in coderabbit_trigger.yaml review_threads.yaml review_retry.
 done
 echo "No GitHub-only workflows in the offline project."
 
+# The .specs/ gate ships into every Python project (blueprintx#583). Run the PROJECT'S copy on
+# the shipped skeleton (must pass) and on a copy with a stray top-level note (must fail): a gate
+# that only ever passes would also satisfy the first half.
+bash "$PROJECT_PATH/bin/check_specs_structure.sh" --root "$PROJECT_PATH"
+str_probe="$(mktemp -d)"
+cp -r "$PROJECT_PATH/.specs" "$str_probe/.specs"
+touch "$str_probe/.specs/notes.md"
+if bash "$PROJECT_PATH/bin/check_specs_structure.sh" --root "$str_probe" >/dev/null 2>&1; then
+    echo "ERROR: the project's .specs/ gate accepted a stray top-level note" >&2
+    rm -rf "$str_probe"
+    exit 1
+fi
+rm -rf "$str_probe"
+echo "The project's .specs/ gate passes its skeleton and rejects a stray note."
+
 cd "$PROJECT_PATH"
 
 echo "::group::poetry install (runtime + dev)"

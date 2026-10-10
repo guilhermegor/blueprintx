@@ -66,7 +66,14 @@ def test_ret505_flags_else_after_return(tmp_path: Path) -> None:
     path_file.write_text(_BAD_SOURCE, encoding="utf-8")
     cls_result = _run_ruff_ret505(path_file)
     assert cls_result.returncode == 1
-    assert "RET505" in cls_result.stdout
+
+
+@pytest.mark.skipif(_STR_RUFF is None, reason="ruff is not on PATH")
+def test_ret505_names_the_rule_it_flags(tmp_path: Path) -> None:
+    """The rejection names RET505, so a crash (also non-zero) is told apart."""
+    path_file = tmp_path / "bad.py"
+    path_file.write_text(_BAD_SOURCE, encoding="utf-8")
+    assert "RET505" in _run_ruff_ret505(path_file).stdout
 
 
 # --------------------------
@@ -81,7 +88,14 @@ def test_ret505_allows_early_return(tmp_path: Path) -> None:
     path_file.write_text(_GOOD_SOURCE, encoding="utf-8")
     cls_result = _run_ruff_ret505(path_file)
     assert cls_result.returncode == 0
-    assert "RET505" not in cls_result.stdout
+
+
+@pytest.mark.skipif(_STR_RUFF is None, reason="ruff is not on PATH")
+def test_ret505_stays_silent_on_an_early_return(tmp_path: Path) -> None:
+    """The early-return shape produces no RET505 output."""
+    path_file = tmp_path / "good.py"
+    path_file.write_text(_GOOD_SOURCE, encoding="utf-8")
+    assert "RET505" not in _run_ruff_ret505(path_file).stdout
 
 
 def test_shipped_config_selects_ret() -> None:

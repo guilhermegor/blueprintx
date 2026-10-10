@@ -434,6 +434,18 @@ jobs:
       - name: Run the --spec should-fail suite (blueprintx#629)
         run: bash tests/test_spec_answers.sh
 
+  scaffold-kanban:
+    name: scaffold kanban board and labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Run the kanban should-fail suite (blueprintx#592)
+        run: bash tests/test_scaffold_kanban.sh
+
   specs-structure:
     name: .specs/ structure guard
     runs-on: ubuntu-latest
@@ -633,12 +645,13 @@ jobs:
         # `scaffold-lint-test` above scaffolds with NO opt-ins, so a file that ships only on an
         # opt-in was never linted, type-checked or complexity-checked (blueprintx#650: the
         # storage opt-in failed mypy and nine complexity checks with every job green). This
-        # answers that one prompt "yes" via the named-key spec, on the two tiers with a spec
-        # key map for it. api-service-native-db also offers the opt-in but has no map in
-        # bin/lib/spec.sh yet, so it cannot be driven from here.
+        # answers that one prompt "yes" via the named-key spec, on every tier that offers it.
+        # api-service-native-db shares the DDD prompt order, so its key map is the DDD one
+        # (blueprintx#668).
         skeleton:
           - ddd-service-native-db
           - ddd-service-orm-db
+          - api-service-native-db
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -677,7 +690,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "npm"
