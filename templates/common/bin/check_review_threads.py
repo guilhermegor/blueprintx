@@ -657,7 +657,8 @@ def review_covers_head(
     if bool_same:
         print(
             f"review at {str_review_oid[:7]} still covers {str_head_oid[:7]}: the head only "
-            "merges the base, the PR's own patch is unchanged"
+            "merges the base, the PR's own patch is unchanged",
+            file=sys.stderr,
         )
     return bool_same
 

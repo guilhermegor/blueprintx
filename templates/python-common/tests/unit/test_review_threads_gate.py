@@ -2532,6 +2532,22 @@ def _covers(dict_repo: dict, str_head_key: str) -> bool:
     )
 
 
+def test_review_covers_head_carry_forward_notice_leaves_stdout_empty(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--json`` prints the verdict on stdout, so the notice must not share that stream."""
+    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40)
+    assert capsys.readouterr().out == ""
+
+
+def test_review_covers_head_carry_forward_notice_goes_to_stderr(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The one line saying a review was carried forward is still printed, on stderr."""
+    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40)
+    assert "still covers" in capsys.readouterr().err
+
+
 def test_review_covers_head_merge_of_base_without_conflict_carries_forward(
     dict_repo: dict,
 ) -> None:
