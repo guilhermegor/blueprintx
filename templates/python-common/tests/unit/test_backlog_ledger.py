@@ -7,6 +7,7 @@ Only the path-classification and ledger-validation seams are tested here — the
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -822,3 +823,75 @@ def test_a_bare_skip_mark_is_still_registered() -> None:
     gate_integrity = _load("check_gate_integrity")
     cls_node = ast.parse("@pytest.mark.skip\ndef test_b() -> None:\n\tpass\n").body[0]
     assert gate_integrity.skip_marks(cls_node) == frozenset({"skip"})
+
+
+# --------------------------
+# Tests — the merge-base mid-merge (a merge of main into the branch in progress)
+# --------------------------
+
+
+def _git_in(path_repo: Path, *args: str) -> str:
+    """Run ``git`` inside a throwaway repo and return its stripped stdout.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+            The repository to run in.
+    *args : str
+            Arguments after ``git``.
+
+    Returns
+    -------
+    str
+            Captured stdout, stripped.
+    """
+    cls_proc = subprocess.run(  # noqa: S603
+        ["git", "-C", str(path_repo), *args],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return cls_proc.stdout.strip()
+
+
+@pytest.fixture
+def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return a repo whose ``feature`` has a merge of ``main`` in progress.
+
+    ``main`` moves on after the fork, so a base resolved from the pre-merge HEAD (the fork
+    point) differs from main's tip.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest-provided scratch directory.
+    monkeypatch : pytest.MonkeyPatch
+            Used to run the gate inside the repo.
+
+    Returns
+    -------
+    pathlib.Path
+            The repository, left mid-merge.
+    """
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    _git_in(tmp_path, "config", "commit.gpgsign", "false")
+    _git_in(tmp_path, "commit", "-q", "--allow-empty", "-m", "seed")
+    _git_in(tmp_path, "checkout", "-q", "-b", "feature")
+    (tmp_path / "own").write_text("own", encoding="utf-8")
+    _git_in(tmp_path, "add", "own")
+    _git_in(tmp_path, "commit", "-q", "-m", "own")
+    _git_in(tmp_path, "checkout", "-q", "main")
+    (tmp_path / "theirs").write_text("theirs", encoding="utf-8")
+    _git_in(tmp_path, "add", "theirs")
+    _git_in(tmp_path, "commit", "-q", "-m", "theirs")
+    _git_in(tmp_path, "checkout", "-q", "feature")
+    _git_in(tmp_path, "merge", "-q", "--no-commit", "--no-ff", "main")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def test_resolve_base_mid_merge_is_the_incoming_tip(path_mid_merge: Path) -> None:
+    """Mid-merge the base is main's tip, never the fork point that charges main's delta."""
+    assert ledger.resolve_base() == _git_in(path_mid_merge, "rev-parse", "main")
