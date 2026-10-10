@@ -219,7 +219,7 @@ copy_mkdocs_templates() {
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
     mkdir -p "$project_path/.specs/backlog"
-    touch "$project_path/.specs/backlog/.keep"
+    touch "$project_path/.specs/backlog/.gitkeep"
 
 
     print_status "success" "MkDocs templates copied"
