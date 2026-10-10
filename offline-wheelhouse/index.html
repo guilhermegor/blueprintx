@@ -2006,9 +2006,16 @@ than writing a broken result:</p>
 <p>Verified against an actually blocked index, not merely an absent one — a reachable-but-empty
 index still looks like success to a probe that never asked for the right thing:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>poe<span class="w"> </span>wheelhouse_assemble
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nv">PIP_INDEX_URL</span><span class="o">=</span>http://127.0.0.1:1/simple<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-index<span class="w"> </span>--find-links<span class="w"> </span>../_wheels/&lt;repo-name&gt;/wheels<span class="w"> </span>-r<span class="w"> </span>requirements-lock.txt
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nv">dir_witness</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>mktemp<span class="w"> </span>-d<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span><span class="s2">"</span><span class="nv">$dir_witness</span><span class="s2">"</span><span class="w">   </span><span class="c1"># fresh: nothing pre-installed</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nv">PIP_INDEX_URL</span><span class="o">=</span>http://127.0.0.1:1/simple<span class="w"> </span><span class="s2">"</span><span class="nv">$dir_witness</span><span class="s2">/bin/pip"</span><span class="w"> </span>install<span class="w"> </span>--find-links<span class="w"> </span>../_wheels/&lt;repo-name&gt;/wheels<span class="w"> </span>-r<span class="w"> </span>requirements-lock.txt
 </span></code></pre></div>
-<p>The install must succeed with the network fully denied. A wheelhouse that is never exercised
+<p>The venv must be fresh: in an environment that already holds the requirements, pip is satisfied
+locally and passes without ever reading the wheelhouse, so a missing wheel goes unnoticed (the
+second probe that lies, above).</p>
+<p>The command deliberately omits <code>--no-index</code>: with it pip never contacts <code>PIP_INDEX_URL</code>, so the
+unreachable index would prove nothing. Without it, a wheel missing from the wheelhouse falls
+through to the blocked index and the install fails, which is the property this section
+witnesses. The install must succeed with the network fully denied. A wheelhouse that is never exercised
 this way is not verified — it is a directory.</p>
 
 
