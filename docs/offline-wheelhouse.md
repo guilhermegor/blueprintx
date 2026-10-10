@@ -31,6 +31,9 @@ was measured:
 poe wheelhouse
 ```
 
+In VS Code, the same step is the `wheelhouse` entry in the Tasks menu (and
+`wheelhouse_assemble` for the target-side step below).
+
 This writes a **sibling** payload — `../_wheels/<repo-name>/`, one level *outside* the
 project — never inside it: code changes constantly, wheels almost never, and a payload
 inside the repo would be a `git add` candidate and would not survive a re-clone. It is
