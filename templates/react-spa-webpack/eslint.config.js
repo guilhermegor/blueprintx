@@ -228,22 +228,27 @@ export default [
       'boundaries/ignore': ['**/*.test.*', '**/*.spec.*'],
     },
     rules: {
-      'boundaries/element-types': [
+      'boundaries/dependencies': [
         'error',
         {
           default: 'disallow',
-          rules: [
-            // Classical hexagonal: domain has no deps; application depends only
-            // on domain (ports). Infrastructure implements ports — also only
-            // domain. composition-root is the DI assembly point.
-            { from: ['domain'], allow: [] },
-            { from: ['application'], allow: ['domain'] },
-            { from: ['infrastructure'], allow: ['domain'] },
-            { from: ['ui'], allow: ['application', 'domain', 'composition-root', 'shared'] },
-            { from: ['composition-root'], allow: ['domain', 'application', 'infrastructure', 'shared'] },
-            { from: ['barrel'], allow: ['domain', 'application', 'ui', 'composition-root'] },
-            { from: ['shared'], allow: ['shared'] },
-            { from: ['routes'], allow: ['barrel', 'shared'] },
+          policies: [
+            // Classical hexagonal: domain has no deps (no policy, so the default
+            // disallow applies); application depends only on domain (ports).
+            // Infrastructure implements ports — also only domain.
+            // composition-root is the DI assembly point.
+            ...[
+              ['application', ['domain']],
+              ['infrastructure', ['domain']],
+              ['ui', ['application', 'domain', 'composition-root', 'shared']],
+              ['composition-root', ['domain', 'application', 'infrastructure', 'shared']],
+              ['barrel', ['domain', 'application', 'ui', 'composition-root']],
+              ['shared', ['shared']],
+              ['routes', ['barrel', 'shared']],
+            ].map(([from, list_to]) => ({
+              from: { element: { type: from } },
+              allow: { to: { element: { types: { anyOf: list_to } } } },
+            })),
           ],
         },
       ],
