@@ -1142,6 +1142,10 @@ def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list
     ----------
     str_body : str or None
             The submitted review's body.
+    str_login : str, optional
+            The author's login. Printed counts clear a body only for the author they speak
+            for (CodeRabbit's header, the ladder app's count); any other author is read by
+            structure alone.
 
     Returns
     -------
