@@ -93,7 +93,8 @@ done
     exit 1
 }
 
-echo "::group::Scaffold $SKELETON (offline, no opt-ins)"
+str_opt_label="${SCAFFOLD_SPEC_FILE:+opt-ins from $SCAFFOLD_SPEC_FILE}"
+echo "::group::Scaffold $SKELETON (offline, ${str_opt_label:-no opt-ins})"
 # Driven by bin/lib/spec.sh (#481) instead of a blind positional `printf`: a
 # stdin stream built from NAMED keys (defaulting to "decline everything, no
 # remote"), so a scaffold script gaining a new prompt fails loudly in
@@ -139,6 +140,21 @@ for str_online_only in coderabbit_trigger.yaml review_threads.yaml review_retry.
     fi
 done
 echo "No GitHub-only workflows in the offline project."
+
+# The .specs/ gate ships into every Python project (blueprintx#583). Run the PROJECT'S copy on
+# the shipped skeleton (must pass) and on a copy with a stray top-level note (must fail): a gate
+# that only ever passes would also satisfy the first half.
+bash "$PROJECT_PATH/bin/check_specs_structure.sh" --root "$PROJECT_PATH"
+str_probe="$(mktemp -d)"
+cp -r "$PROJECT_PATH/.specs" "$str_probe/.specs"
+touch "$str_probe/.specs/notes.md"
+if bash "$PROJECT_PATH/bin/check_specs_structure.sh" --root "$str_probe" >/dev/null 2>&1; then
+    echo "ERROR: the project's .specs/ gate accepted a stray top-level note" >&2
+    rm -rf "$str_probe"
+    exit 1
+fi
+rm -rf "$str_probe"
+echo "The project's .specs/ gate passes its skeleton and rejects a stray note."
 
 cd "$PROJECT_PATH"
 

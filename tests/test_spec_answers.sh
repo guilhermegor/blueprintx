@@ -123,6 +123,40 @@ test_unmapped_skeleton_is_refused_before_creating_anything() {
     fi
 }
 
+prompt_sequence() {
+    # prompt_sequence <scaffold script>: the prompt calls main() makes, in order.
+    grep -E '^    (prompt_[a-z_]+|scaffold_prompt_review_bot_roster)$' "$1" | tr -d ' '
+}
+
+test_api_service_asks_the_same_prompts_as_the_ddd_tiers() {
+    # api-service-native-db borrows the DDD key map (blueprintx#668). That is only correct
+    # while the two scaffolds ask the same prompts in the same order, so pin the claim: a
+    # prompt added to one script must fail here rather than misalign every stored answer.
+    local str_api str_ddd
+    str_api="$(prompt_sequence "$REPO_ROOT/bin/scaffold/python_api_service.sh")"
+    str_ddd="$(prompt_sequence "$REPO_ROOT/bin/scaffold/python_ddd_service.sh")"
+    if [ -n "$str_api" ] && [ "$str_api" = "$str_ddd" ]; then
+        pass "api-service and DDD scaffolds ask the same prompts in the same order"
+    else
+        fail "prompt order" "api: [$(echo "$str_api" | tr '\n' ' ')] ddd: [$(echo "$str_ddd" | tr '\n' ' ')]"
+    fi
+}
+
+test_api_service_storage_answer_reaches_the_storage_prompt() {
+    # The point of the map: storage=y must land on the SECOND line the scaffold reads
+    # (after docker_compose), exactly as for the DDD tiers.
+    local file str_stream
+    file="$(write_spec api-storage api-service-native-db "storage=y")"
+    str_stream="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        spec_skeleton_supported api-service-native-db && spec_stdin_for_skeleton api-service-native-db "$2"' \
+        _ "$REPO_ROOT" "$file" | sed -n 2p)"
+    if [ "$str_stream" = "y" ]; then
+        pass "storage=y is the second answer emitted for api-service-native-db"
+    else
+        fail "api storage answer" "second stdin line was '$str_stream', expected 'y'"
+    fi
+}
+
 test_dev_clean_uses_a_temp_root_and_removes_it() {
     local file root out str_temp int_rc
     root="$WORK_DIR/proot-clean"
@@ -131,8 +165,9 @@ test_dev_clean_uses_a_temp_root_and_removes_it() {
     int_rc=$?
     str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | tr -d '\r' | tail -1)"
     str_temp="$(sed 's/\x1b\[[0-9;]*m//g' <<<"$str_temp")"
-    if [ "$int_rc" -eq 0 ] && [ -n "$str_temp" ] && [ ! -e "$str_temp" ] && [ ! -e "$root" ]; then
-        pass "--spec --dev --clean scaffolds into a temp root, ignores project_root, and cleans up"
+    if [ "$int_rc" -eq 0 ] && [[ "$str_temp" == "$WORK_DIR"/* ]] && [ ! -e "$str_temp" ] && [ ! -e "$root" ] \
+        && [[ "$out" == *"deleted on exit"* ]]; then
+        pass "--spec --dev --clean scaffolds into a temp root, ignores project_root, cleans up, and says so"
     else
         fail "--dev --clean" "rc=$int_rc temp='$str_temp' exists=$([ -e "$str_temp" ] && echo yes || echo no) root-made=$([ -e "$root" ] && echo yes || echo no)"
     fi
@@ -145,7 +180,7 @@ test_dev_without_clean_preserves_the_temp_root() {
     out="$(run_blueprintx new --spec "$file" --dev)"
     int_rc=$?
     str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
-    if [ "$int_rc" -eq 0 ] && [ -n "$str_temp" ] && [ -d "$str_temp/spec-probe" ] && [ ! -e "$root" ]; then
+    if [ "$int_rc" -eq 0 ] && [[ "$str_temp" == "$WORK_DIR"/* ]] && [ -d "$str_temp/spec-probe" ] && [ ! -e "$root" ]; then
         pass "--spec --dev keeps the temp root and the project inside it"
     else
         fail "--dev" "rc=$int_rc temp='$str_temp' project-in-temp=$([ -d "$str_temp/spec-probe" ] && echo yes || echo no)"
@@ -196,14 +231,119 @@ test_absent_docs_locale_defaults_to_en() {
     fi
 }
 
+test_spec_values_are_trimmed_so_a_crlf_spec_works() {
+    local file="$WORK_DIR/crlf.spec" str_yn str_license
+    printf 'otel=yes\r\nlicense=MIT \r\n' >"$file"
+    str_yn="$(yn_in_subshell "$file" otel n | cut -d'|' -f1-2)"
+    str_license="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        printf "<%s>" "$(spec_get "$2" license)"' _ "$REPO_ROOT" "$file")"
+    if [ "$str_yn" = "y|0" ] && [ "$str_license" = "<MIT>" ]; then
+        pass "a CRLF spec: 'yes\\r' reads as y and 'MIT \\r' as MIT"
+    else
+        fail "CRLF trim" "yn=$str_yn license=$str_license"
+    fi
+}
+
+test_yn_keys_read_by_callers_match_the_key_map() {
+    local str_called str_mapped str_unparsed
+    # A call site the sed below cannot read (a variable default, two calls on one line) would
+    # escape the comparison, so any such line fails the test. The validator's generic call is
+    # the one allowed exception.
+    str_unparsed="$(grep -n 'spec_yn "\$' "$REPO_ROOT/bin/lib/spec.sh" \
+        | grep -vE '^[0-9]+:[[:space:]]*#' \
+        | grep -v '"\$key" "\$default"' \
+        | grep -vE '^[0-9]+:[^#]*spec_yn "\$[a-z0-9]*" [a-z_]+ [yn]([^a-z_]|$)' \
+        ; grep -n 'spec_yn .*spec_yn ' "$REPO_ROOT/bin/lib/spec.sh")" || true
+    if [ -n "$str_unparsed" ]; then
+        fail "key map vs callers" "call site(s) the check cannot parse: $str_unparsed"
+        return
+    fi
+    # Every `spec_yn "$x" <key> <default>` call site in the answer emitters, as "key:default".
+    str_called="$(sed -n '/^[[:space:]]*#/d; s/.*spec_yn "\$[a-z0-9]*" \([a-z_]*\) \([yn]\).*/\1:\2/p' "$REPO_ROOT/bin/lib/spec.sh" | sort -u)"
+    # Every y/n entry of the key map across all supported skeletons.
+    str_mapped="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        for sk in $_SPEC_SUPPORTED_SKELETONS; do _spec_key_map "$sk"; done' _ "$REPO_ROOT" \
+        | grep -E ':[yn]$' | sort -u)"
+    if [ -n "$str_called" ] && [ "$str_called" = "$str_mapped" ]; then
+        pass "the y/n keys the emitters read are exactly the y/n entries of the key map"
+    else
+        fail "key map vs callers" "only in callers: $(comm -23 <(echo "$str_called") <(echo "$str_mapped") | tr '\n' ' ') only in map: $(comm -13 <(echo "$str_called") <(echo "$str_mapped") | tr '\n' ' ')"
+    fi
+}
+
+test_skeleton_match_is_exact() {
+    local str_res
+    str_res="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        for n in "lib-minimal" "ddd-service-native-db ddd-service-orm-db" "lib-minimal " "lib-*" "LIB-MINIMAL" ""; do
+            spec_skeleton_supported "$n" && printf "[%s] " "$n"
+        done' _ "$REPO_ROOT")"
+    if [ "$str_res" = "[lib-minimal] " ]; then
+        pass "spec_skeleton_supported accepts a supported name only, not two joined by a space"
+    else
+        fail "exact skeleton match" "accepted: $str_res"
+    fi
+}
+
+test_every_python_tier_has_a_prompt_map() {
+    local str_res str_meta str_name str_err int_tiers=0
+    for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
+        grep -q '^language=python[[:space:]]*$' "$str_meta" || continue
+        int_tiers=$((int_tiers + 1))
+        str_name="$(basename "$(dirname "$str_meta")")"
+        if ! str_err="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+            spec_skeleton_supported "$2" && spec_stdin_for_skeleton "$2" /dev/null >/dev/null' \
+            _ "$REPO_ROOT" "$str_name" 2>&1)"; then
+            str_err="${str_err%%$'\n'*}"
+            str_res+="$str_name (${str_err:-not in the supported list}) "
+        fi
+    done
+    # Zero matches would make the loop vacuous: a gate that checked nothing must not pass.
+    if [ "$int_tiers" -eq 0 ]; then
+        fail "no Python tier found" "templates/*/skeleton.meta matched no language=python"
+    elif [ -z "${str_res:-}" ]; then
+        pass "every Python tier ($int_tiers) in templates/ has a named-key prompt map (blueprintx#691)"
+    else
+        fail "unmapped Python tier" "no prompt map for: $str_res"
+    fi
+}
+
+test_a_failed_answer_stream_stops_the_scaffold_flow() {
+    local str_res
+    str_res="$(bash -c '
+        str_repo="$1" str_stub="$2"
+        set --
+        source "$str_repo/bin/blueprintx.sh"
+        mkdir -p "$str_stub/templates/fake"
+        printf "scaffold=fake.sh\n" >"$str_stub/templates/fake/skeleton.meta"
+        printf "touch \"%s/scaffold-ran\"\n" "$str_stub" >"$str_stub/fake.sh"
+        TEMPLATES_ROOT="$str_stub/templates" BLUEPRINTX_ROOT="$str_stub"
+        SKELETON_CHOICE=fake SPEC_FILE=none PROJECT_ROOT="$str_stub" PROJECT_NAME=p PROJECT_DESCRIPTION=d
+        LICENSE_CHOICE=MIT DOCS_LOCALE=en
+        spec_stdin_for_skeleton() { return 1; }
+        scaffold_from_spec' _ "$REPO_ROOT" "$WORK_DIR/stream" 2>&1)" || true
+    if [[ "$str_res" == *"could not resolve the answers for 'fake'"* ]] \
+        && [ ! -e "$WORK_DIR/stream/scaffold-ran" ]; then
+        pass "a failing answer stream stops the flow before the scaffold ever runs"
+    else
+        fail "answer stream status" "got: ${str_res: -300}"
+    fi
+}
+
 main() {
     test_spec_yn_accepts_the_documented_forms
     test_spec_yn_rejects_a_typo_naming_the_key
     test_validate_answers_reports_every_bad_key
     test_bad_yn_stops_before_anything_is_created
     test_unmapped_skeleton_is_refused_before_creating_anything
+    test_api_service_asks_the_same_prompts_as_the_ddd_tiers
+    test_api_service_storage_answer_reaches_the_storage_prompt
     test_dev_clean_uses_a_temp_root_and_removes_it
     test_dev_without_clean_preserves_the_temp_root
+    test_spec_values_are_trimmed_so_a_crlf_spec_works
+    test_yn_keys_read_by_callers_match_the_key_map
+    test_skeleton_match_is_exact
+    test_every_python_tier_has_a_prompt_map
+    test_a_failed_answer_stream_stops_the_scaffold_flow
     test_bad_docs_locale_stops_before_anything_is_created
     test_docs_locale_reaches_the_scaffold
     test_absent_docs_locale_defaults_to_en

@@ -32,6 +32,10 @@
 # because "what happens next" is genuinely per-tier policy and folding it in would mean
 # a flag that means "which tier am I", which is how a shared function rots.
 
+# The kanban board and house labels offered once the repo exists (blueprintx#592).
+# shellcheck source=bin/lib/scaffold_kanban.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_kanban.sh"
+
 # Set by the caller before scaffold_prompt_git_remote_setup; empty means no --homepage.
 : "${SCAFFOLD_REPO_HOMEPAGE:=}"
 
@@ -200,6 +204,7 @@ scaffold_create_github_repo() {
 		"${list_homepage[@]}" --description "$PROJECT_DESCRIPTION" "$str_vis_flag"); then
 		gh repo edit "$str_slug" --default-branch main "${list_homepage[@]}" >/dev/null 2>&1 || true
 		print_status "success" "Repository created and pushed via gh."
+		scaffold_kanban_setup
 		return 0
 	fi
 
