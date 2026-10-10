@@ -496,7 +496,7 @@ lib_minimal_copy_github_assets() {
     # GitHub-remote-only, like the release workflows — apply_offline_mode drops all of .github/.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/docs.yaml" \
         "$project_path/.github/workflows/docs.yaml"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
+    GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     # SECURITY.md (root; GitHub auto-detects it and flips "Security policy" to Enabled) +
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
     # bin/enable_security.sh). Both are GitHub-platform features, hence GitHub-only.
