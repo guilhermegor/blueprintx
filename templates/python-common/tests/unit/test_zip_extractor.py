@@ -42,6 +42,13 @@ def test_extract_all_writes_every_member(tmp_path: Path) -> None:
     path_dest = tmp_path / "out"
     list_out = extract_all(path_zip, path_dest)
     assert {p.name for p in list_out} == {"a.txt", "b.txt"}
+
+
+def test_extract_all_writes_the_member_contents(tmp_path: Path) -> None:
+    """A written member holds the archived bytes."""
+    path_zip = _make_zip(tmp_path)
+    path_dest = tmp_path / "out"
+    extract_all(path_zip, path_dest)
     assert (path_dest / "a.txt").read_text() == "alpha"
 
 
@@ -66,6 +73,16 @@ def test_find_member_selects_exact_name_never_a_prefix(tmp_path: Path) -> None:
     list_out = extract_all(path_zip, tmp_path / "out")
 
     assert find_member(list_out, "lamina_fi_202601.csv").read_text() == "principal"
+
+
+def test_find_member_selects_the_longer_name_when_asked_for_it(tmp_path: Path) -> None:
+    """The member with the longer name is found by its own exact name too."""
+    path_zip = tmp_path / "lamina.zip"
+    with zipfile.ZipFile(path_zip, "w") as cls_zip:
+        cls_zip.writestr("lamina_fi_carteira_202601.csv", "carteira")
+        cls_zip.writestr("lamina_fi_202601.csv", "principal")
+    list_out = extract_all(path_zip, tmp_path / "out")
+
     assert find_member(list_out, "lamina_fi_carteira_202601.csv").read_text() == "carteira"
 
 
@@ -81,10 +98,20 @@ def test_unzip_if_needed_is_idempotent(tmp_path: Path) -> None:
     """Extraction is skipped when the target already exists or is disabled."""
     path_zip = _make_zip(tmp_path)
     path_target = tmp_path / "out" / "a.txt"
-    # First run extracts; second run is a no-op because the target now exists.
     assert unzip_if_needed(path_zip, path_target, bool_enabled=True) is True
+
+
+def test_unzip_if_needed_is_a_no_op_when_the_target_exists(tmp_path: Path) -> None:
+    """The second run is a no-op because the target now exists."""
+    path_zip = _make_zip(tmp_path)
+    path_target = tmp_path / "out" / "a.txt"
+    unzip_if_needed(path_zip, path_target, bool_enabled=True)
     assert unzip_if_needed(path_zip, path_target, bool_enabled=True) is False
-    # Disabled never extracts.
+
+
+def test_unzip_if_needed_never_extracts_when_disabled(tmp_path: Path) -> None:
+    """Disabled never extracts."""
+    path_zip = _make_zip(tmp_path)
     assert unzip_if_needed(path_zip, tmp_path / "other" / "a.txt", bool_enabled=False) is False
 
 
@@ -93,6 +120,12 @@ def test_extract_all_to_memory_returns_every_member(tmp_path: Path) -> None:
     path_zip = _make_zip(tmp_path)
     dict_out = extract_all_to_memory(path_zip)
     assert dict_out == {"a.txt": b"alpha", "b.txt": b"beta"}
+
+
+def test_extract_all_to_memory_writes_nothing_to_disk(tmp_path: Path) -> None:
+    """In-memory extraction leaves the directory holding only the archive."""
+    path_zip = _make_zip(tmp_path)
+    extract_all_to_memory(path_zip)
     assert list(tmp_path.iterdir()) == [path_zip]
 
 
