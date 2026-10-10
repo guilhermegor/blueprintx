@@ -133,8 +133,14 @@ which also drops the function context and normalises whitespace. The CI checkout
 
 Both compares name the base by the commit SHA read once with the PR, never by branch name, so a
 retarget or a push to the base between the two reads cannot make them measure different bases.
-Each commit is fingerprinted at most once, however many reviewed commits are compared with
-the head: the head is read first, and if that fails the comparison stops there. The check runs
+The head is fingerprinted once, by the caller, and handed to each comparison, so the guarantee
+does not rest on the compare function caching anything: if the head cannot be read the
+comparison stops there. Reviewed commits are tried newest first and at most five of them
+(`_INT_MAX_REVIEWED_COMMITS`: five 60 second calls stay well inside the job timeout, and a PR
+reviewed at more commits than that is simply re-reviewed), so a PR makes at most six compare
+calls. A pass that rests on a carried-forward review is shown in the verdict: one line in the
+normal output, and a `carried_forward_from` field (the reviewed commit) under `--json`, where
+stdout stays one document. The check runs
 after the completion-notice check, so a PR that already passes makes no compare call. Each call
 has a 60 second timeout, and a timeout, a missing `gh` or an API error all read as "not
 covered", with one line on stderr giving the reason (stdout stays the `--json` document). A
@@ -151,6 +157,13 @@ unchanged patch semantically (main renames a function the PR calls), which a pat
 cannot see. That is accepted: a review is repeated only when a conflict or new code changes
 the PR's own patch, and CI covers the integration. A PR from a fork whose commits cannot be
 compared fails closed like any other error.
+
+A PR whose base branch was ever changed gets no carry-forward at all. The compare measures the
+patch against today's base, which need not be the base the review was written against, so
+after a retarget the same fingerprint proves nothing. The gate reads the PR's REST timeline for
+a `base_ref_changed` event (an event is never removed, so the refusal is permanent for that
+PR), prints the reason on stderr, and treats an unreadable timeline as a failure rather than as
+"not retargeted".
 
 Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails

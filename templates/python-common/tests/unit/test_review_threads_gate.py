@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 import subprocess
 from types import ModuleType
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -2472,7 +2472,7 @@ def _patch_id(path_repo: Path, str_oid: str) -> str:
     return str_patch_id
 
 
-_DICT_STATUS = {"A": "added", "M": "modified", "D": "removed"}
+_DICT_STATUS = {"A": "added", "M": "modified", "D": "removed", "R": "renamed"}
 
 
 def _file_entry(path_repo: Path, str_base: str, str_oid: str, str_line: str) -> dict:
@@ -2487,19 +2487,23 @@ def _file_entry(path_repo: Path, str_base: str, str_oid: str, str_line: str) -> 
     str_oid : str
             Commit being compared.
     str_line : str
-            One ``git diff --name-status`` line: a status code, a tab, then the path.
+            One ``git diff --name-status`` line: a status code, then one tab-separated path
+            (two for a rename: the old one, then the new one).
 
     Returns
     -------
     dict
-            ``filename``, ``status`` and ``patch`` (starting at the first hunk, as the API does).
+            ``filename``, ``status`` and ``patch`` (starting at the first hunk, as the API does),
+            plus ``previous_filename`` for a rename.
     """
-    str_code, str_name = str_line.split("\t")
-    str_diff = _git(path_repo, "diff", str_base, str_oid, "--", str_name)
+    str_code, *list_names = str_line.split("\t")
+    str_diff = _git(path_repo, "diff", "-M", str_base, str_oid, "--", *list_names)
+    dict_rename = {"R": {"previous_filename": list_names[0]}}.get(str_code[0], {})
     return {
-        "filename": str_name,
-        "status": _DICT_STATUS[str_code],
+        "filename": list_names[-1],
+        "status": _DICT_STATUS[str_code[0]],
         "patch": str_diff[str_diff.index("@@") :],
+        **dict_rename,
     }
 
 
@@ -2519,7 +2523,7 @@ def _compare_files(path_repo: Path, str_oid: str) -> list[dict]:
             What ``compare/main...<oid>`` would list, built from real ``git diff`` output.
     """
     str_base = _git(path_repo, "merge-base", "main", str_oid)
-    list_lines = _git(path_repo, "diff", "--name-status", str_base, str_oid).splitlines()
+    list_lines = _git(path_repo, "diff", "-M", "--name-status", str_base, str_oid).splitlines()
     return list(map(functools.partial(_file_entry, path_repo, str_base, str_oid), list_lines))
 
 
@@ -2633,10 +2637,10 @@ def _covers(dict_repo: dict, str_head_key: str) -> bool:
     bool
             The gate's verdict, using a real ``git patch-id`` as the fingerprint.
     """
+    fn_fingerprint = functools.partial(_patch_id, dict_repo["path"])
+    str_head = dict_repo[str_head_key]
     return _load_gate().review_covers_head(
-        lambda str_oid: _patch_id(dict_repo["path"], str_oid),
-        dict_repo["review"],
-        dict_repo[str_head_key],
+        fn_fingerprint, dict_repo["review"], str_head, fn_fingerprint(str_head)
     )
 
 
@@ -2644,7 +2648,7 @@ def test_review_covers_head_carry_forward_notice_leaves_stdout_empty(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """``--json`` prints the verdict on stdout, so the notice must not share that stream."""
-    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40)
+    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40, "same")
     assert capsys.readouterr().out == ""
 
 
@@ -2652,7 +2656,7 @@ def test_review_covers_head_carry_forward_notice_goes_to_stderr(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The one line saying a review was carried forward is still printed, on stderr."""
-    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40)
+    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40, "same")
     assert "still covers" in capsys.readouterr().err
 
 
@@ -2682,7 +2686,7 @@ def test_review_covers_head_patch_unavailable_fails_closed() -> None:
     """A missing commit or an API error is never read as 'covered'."""
     cls_gate = _load_gate()
     fn_broken = Mock(side_effect=RuntimeError("compare failed"))
-    assert cls_gate.review_covers_head(fn_broken, "a" * 40, _HEAD) is False
+    assert cls_gate.review_covers_head(fn_broken, "a" * 40, _HEAD, "digest") is False
 
 
 def test_find_missing_review_problem_carried_review_passes(dict_repo: dict) -> None:
@@ -2765,8 +2769,9 @@ def test_review_covers_head_production_fingerprint_on_real_diffs(
 ) -> None:
     """The production digest, fed compare-shaped files from real ``git diff``, decides it."""
     fn_fingerprint = functools.partial(_real_fingerprint, dict_repo["path"])
+    str_head = dict_repo[str_head_key]
     bool_covered = _load_gate().review_covers_head(
-        fn_fingerprint, dict_repo["review"], dict_repo[str_head_key]
+        fn_fingerprint, dict_repo["review"], str_head, fn_fingerprint(str_head)
     )
     assert bool_covered is bool_expected
 
@@ -2790,8 +2795,44 @@ def test_review_covers_head_main_edit_relative_to_the_hunk(
     """
     str_review, str_head = _overlap_repo(tmp_path, str_old, str_new)
     fn_fingerprint = functools.partial(_real_fingerprint, tmp_path)
-    bool_covered = _load_gate().review_covers_head(fn_fingerprint, str_review, str_head)
+    bool_covered = _load_gate().review_covers_head(
+        fn_fingerprint, str_review, str_head, fn_fingerprint(str_head)
+    )
     assert bool_covered is bool_expected
+
+
+def _rename_repo(path_repo: Path) -> tuple[str, str]:
+    """Build two PRs that rename DIFFERENT identical files to the same name, same edit.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Empty repository directory.
+
+    Returns
+    -------
+    tuple of str
+            The commit that renamed ``a.txt`` and the one that renamed ``b.txt``; both give
+            ``c.txt`` the same content, so their hunks are identical.
+    """
+    str_text = "\n".join(map(str, range(1, 21))) + "\n"
+    _git(path_repo, "init", "-b", "main")
+    _commit(path_repo, "a.txt", str_text)
+    _commit(path_repo, "b.txt", str_text)
+    _git(path_repo, "checkout", "-b", "from-a")
+    _git(path_repo, "mv", "a.txt", "c.txt")
+    str_from_a = _commit(path_repo, "c.txt", str_text.replace("\n10\n", "\nfeat\n"))
+    _git(path_repo, "checkout", "-b", "from-b", "main")
+    _git(path_repo, "mv", "b.txt", "c.txt")
+    return str_from_a, _commit(path_repo, "c.txt", str_text.replace("\n10\n", "\nfeat\n"))
+
+
+def test_patch_fingerprint_rename_from_another_file_differs_on_a_real_diff(
+    tmp_path: Path,
+) -> None:
+    """Only ``previous_filename`` tells the two renames apart, so it must be hashed."""
+    str_from_a, str_from_b = _rename_repo(tmp_path)
+    assert _real_fingerprint(tmp_path, str_from_a) != _real_fingerprint(tmp_path, str_from_b)
 
 
 def test_patch_fingerprint_whole_file_page_raises() -> None:
@@ -2812,20 +2853,7 @@ def test_review_covers_head_malformed_file_entry_fails_closed(
         cls_gate.subprocess, "run", Mock(return_value=Mock(returncode=0, stdout=json_body))
     )
     fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
-    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40) is False
-
-
-def test_compare_fingerprint_computes_each_commit_once(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The head is fingerprinted once however many reviewed commits are compared with it."""
-    cls_gate = _load_gate()
-    fn_fetch = Mock(return_value="digest")
-    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", fn_fetch)
-    fn_fingerprint = cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r")
-    fn_fingerprint("head")
-    fn_fingerprint("head")
-    assert fn_fetch.call_count == 1
+    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
 
 
 def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Mock:
@@ -2845,6 +2873,7 @@ def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> M
     """
     fn_fetch = Mock(side_effect=RuntimeError("compare failed: 502"))
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", fn_fetch)
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
     return fn_fetch
 
 
@@ -2869,7 +2898,7 @@ def test_find_missing_review_problem_failing_head_compare_is_called_once(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
     )
     assert fn_fetch.call_count == 1
 
@@ -2884,7 +2913,7 @@ def test_find_missing_review_problem_failing_head_compare_reports_the_reason(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
     )
     assert "compare failed: 502" in capsys.readouterr().err
 
@@ -2899,7 +2928,7 @@ def test_find_missing_review_problem_failing_head_compare_leaves_stdout_empty(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
     )
     assert capsys.readouterr().out == ""
 
@@ -2910,7 +2939,7 @@ def test_find_missing_review_problem_passing_pr_makes_no_compare_call(
     """A completion notice already passes the PR, so carry-forward costs no API call."""
     cls_gate = _load_gate()
     fn_fingerprint = Mock(return_value="digest")
-    monkeypatch.setattr(cls_gate, "reviewer_declared_completion", lambda *_: True)
+    monkeypatch.setattr(cls_gate, "reviewer_declared_completion", lambda *_, **__: True)
     cls_gate.find_missing_review_problem(
         _three_reviews(),
         {"coderabbitai"},
@@ -2930,7 +2959,7 @@ def test_review_covers_head_hung_or_missing_gh_fails_closed(
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(side_effect=cls_error))
     fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
-    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40) is False
+    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
 
 
 def test_fetch_patch_fingerprint_bounds_the_compare_call(
@@ -3003,4 +3032,140 @@ def test_main_carried_review_still_owes_a_later_findings_body(
     }
     monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
     assert cls_gate.main([]) == int_expected
+
+
+def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: list[str]) -> int:
+    """Run ``main`` on a PR whose only review sits at an older commit with the same patch.
+
+    Parameters
+    ----------
+    tmp_path : Path
+            Pytest temp dir, where the roster file is written.
+    monkeypatch : pytest.MonkeyPatch
+            Pytest's patcher.
+    list_argv : list of str
+            CLI arguments.
+
+    Returns
+    -------
+    int
+            The gate's exit code.
+    """
+    cls_gate = _load_gate()
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - login: coderabbitai[bot]\n    posts: threads\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    dict_pr = {
+        "author": {"login": "someone"},
+        "headRefOid": _HEAD,
+        "baseRefOid": "base",
+        "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
+        "reviews": {"nodes": [{**_review("coderabbitai[bot]", "a" * 40), "state": "COMMENTED"}]},
+        "reviewThreads": {"nodes": []},
+        "commits": {"nodes": []},
+    }
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
+    return cls_gate.main(list_argv)
+
+
+def test_main_carried_review_is_visible_in_the_normal_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A pass that rests on a carried-forward review says so in the verdict, not only on stderr."""
+    _carried_main(tmp_path, monkeypatch, [])
+    assert "carried forward from aaaaaaa" in capsys.readouterr().out
+
+
+def test_main_carried_review_is_a_json_field_and_nothing_else_on_stdout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Under ``--json`` stdout stays ONE document, which names the carrying commit."""
+    _carried_main(tmp_path, monkeypatch, ["--json"])
+    assert json.loads(capsys.readouterr().out)["carried_forward_from"] == "a" * 40
+
+
+def test_fetch_retargeted_reads_the_timeline_for_a_base_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``base_ref_changed`` event in the timeline means the PR was retargeted."""
+    cls_gate = _load_gate()
+    fn_run = Mock(return_value=Mock(returncode=0, stdout="base_ref_changed\n"))
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    assert cls_gate.fetch_retargeted("o", "r", 7) is True
+
+
+def test_fetch_retargeted_unreadable_timeline_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed timeline call is an error, never read as 'not retargeted'."""
+    cls_gate = _load_gate()
+    fn_run = Mock(return_value=Mock(returncode=1, stderr="502"))
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    with pytest.raises(RuntimeError, match="timeline failed"):
+        cls_gate.fetch_retargeted("o", "r", 7)
+
+
+def test_find_missing_review_problem_retargeted_pr_stays_superseded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An otherwise-equal fingerprint is not enough once the base branch was changed."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: True)
+    str_problem = cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+    )
+    assert "SUPERSEDED" in str_problem
+
+
+def test_find_missing_review_problem_retargeted_pr_says_why_on_stderr(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The refusal is diagnosable: the reason names the base change."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: True)
+    cls_gate.find_missing_review_problem(
+        _three_reviews(),
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+    )
+    assert "base branch was changed" in capsys.readouterr().err
+
+
+def test_review_carried_forward_long_review_list_makes_at_most_cap_plus_one_calls() -> None:
+    """The head once, then at most the cap of reviewed commits, however many reviews exist."""
+    cls_gate = _load_gate()
+    fn_fingerprint = Mock(side_effect=lambda str_oid: str_oid)
+    list_reviews = [_review("coderabbitai[bot]", f"{int_n:040d}") for int_n in range(40)]
+    cls_gate.review_carried_forward(fn_fingerprint, list_reviews, {"coderabbitai"}, _HEAD)
+    assert fn_fingerprint.call_count == cls_gate._INT_MAX_REVIEWED_COMMITS + 1
+
+
+def test_review_carried_forward_tries_the_newest_reviewed_commit_first() -> None:
+    """Of two reviews with the head's patch, the more recent one is the one named."""
+    cls_gate = _load_gate()
+    list_reviews = [_review("coderabbitai[bot]", "a" * 40), _review("coderabbitai[bot]", "b" * 40)]
+    str_carried = cls_gate.review_carried_forward(
+        lambda str_oid: "same", list_reviews, {"coderabbitai"}, _HEAD
+    )
+    assert str_carried == "b" * 40
+
+
+def test_review_carried_forward_computes_the_head_digest_once_without_a_cache() -> None:
+    """The once-only guarantee lives in the caller: a plain, uncached callable sees it once."""
+    cls_gate = _load_gate()
+    fn_counting = Mock(side_effect=lambda str_oid: str_oid)
+    cls_gate.review_carried_forward(fn_counting, _three_reviews(), {"coderabbitai"}, _HEAD)
+    assert fn_counting.call_args_list.count(call(_HEAD)) == 1
