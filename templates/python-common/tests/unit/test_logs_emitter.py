@@ -58,12 +58,12 @@ def mock_create_log(mocker: MockerFixture) -> MagicMock:
     Parameters
     ----------
     mocker : pytest_mock.MockerFixture
-            The pytest-mock fixture.
+        The pytest-mock fixture.
 
     Returns
     -------
     unittest.mock.MagicMock
-            The mock standing in for the ``CreateLog`` instance the emitter builds.
+        The mock standing in for the ``CreateLog`` instance the emitter builds.
     """
     return mocker.patch("utils.logs_emitter.CreateLog", autospec=True).return_value
 
@@ -79,7 +79,7 @@ def test_logs_emitter_without_logger_passes_none_to_create_log(
     Parameters
     ----------
     mock_create_log : unittest.mock.MagicMock
-            The mocked ``CreateLog`` instance.
+        The mocked ``CreateLog`` instance.
     """
     LogsEmitter().log_message("hello", "info")
     mock_create_log.log_message.assert_called_once_with(None, "hello", "info")
@@ -96,7 +96,7 @@ def test_logs_emitter_default_prints_message_to_screen(
     Parameters
     ----------
     capsys : pytest.CaptureFixture[str]
-            Captures what the emitter printed.
+        Captures what the emitter printed.
     """
     LogsEmitter().log_message("visible on screen", "info")
     assert "visible on screen" in capsys.readouterr().out
@@ -110,7 +110,7 @@ def test_logs_emitter_with_logger_passes_it_through_unchanged(
     Parameters
     ----------
     mock_create_log : unittest.mock.MagicMock
-            The mocked ``CreateLog`` instance.
+        The mocked ``CreateLog`` instance.
     """
     cls_logger = logging.getLogger("test_logs_emitter_injected")
     LogsEmitter(cls_logger).log_message("hello", "info")

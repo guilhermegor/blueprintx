@@ -29,7 +29,7 @@ def _frame():  # noqa: ANN202 — pandas imported lazily so a pandas-less env st
     Returns
     -------
     pd.DataFrame
-            Two rows with the contract's source columns.
+        Two rows with the contract's source columns.
     """
     pd = pytest.importorskip("pandas")
     return pd.DataFrame({"code": ["ABC", "DEF"], "amount": [10, 20]})

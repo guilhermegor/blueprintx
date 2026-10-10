@@ -49,12 +49,12 @@ def check_file(str_path: str) -> int:
     Parameters
     ----------
     str_path : str
-            Path to the Python source file to scan.
+        Path to the Python source file to scan.
 
     Returns
     -------
     int
-            The number of violations found (0 when clean).
+        The number of violations found (0 when clean).
     """
     int_errors = 0
     for int_no, str_line in enumerate(
@@ -80,7 +80,7 @@ def _source_files() -> list[pathlib.Path]:
     Returns
     -------
     list[pathlib.Path]
-            Python source files to check.
+        Python source files to check.
     """
     return sorted(
         p for p in pathlib.Path("src").rglob("*.py") if _EXCLUDED_PARTS.isdisjoint(p.parts)

@@ -81,7 +81,7 @@ def test_find_sheet_name_problems_accepts_cell_reference_shaped_names(str_name: 
     Parameters
     ----------
     str_name : str
-            A cell-reference-shaped worksheet name.
+        A cell-reference-shaped worksheet name.
     """
     assert find_sheet_name_problems(str_name) == _EMPTY_REPORT
 
