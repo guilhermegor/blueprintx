@@ -16,11 +16,23 @@ def test_logs_emitter_is_a_log_emitter() -> None:
     assert isinstance(LogsEmitter(), LogEmitter)
 
 
-def test_logs_emitter_emits_at_any_level_without_raising() -> None:
-    """A valid level and an unrecognised one both emit; the odd level degrades, never raises."""
-    emitter = LogsEmitter()
-    emitter.log_message("valid level", "info")
-    emitter.log_message("odd level falls back", "not-a-level")
+@pytest.mark.parametrize("str_level", ["info", "not-a-level"])
+def test_logs_emitter_emits_at_any_level_without_raising(
+    caplog: pytest.LogCaptureFixture, str_level: str
+) -> None:
+    """A valid level and an unrecognised one both emit; the odd level degrades, never raises.
+
+    Parameters
+    ----------
+    caplog : pytest.LogCaptureFixture
+        Captures what the emitter logged.
+    str_level : str
+        A recognised level, then one the emitter must degrade on.
+    """
+    cls_logger = logging.getLogger("test_logs_emitter")
+    with caplog.at_level(logging.DEBUG, logger="test_logs_emitter"):
+        LogsEmitter(cls_logger).log_message("emitted message", str_level)
+    assert "emitted message" in caplog.text
 
 
 def test_skip_set_matches_package_qualified_module_last_component() -> None:
@@ -32,6 +44,10 @@ def test_skip_set_matches_package_qualified_module_last_component() -> None:
     """
     str_qualified = "myproject._internal.utils.typing"
     assert str_qualified.rsplit(".", 1)[-1] in _SET_SKIP_MODULES
+
+
+def test_skip_set_names_every_wrapper_module() -> None:
+    """The skip set carries every wrapper module the stack walker must step over."""
     assert {"logs", "logs_emitter", "retry", "typing"} <= _SET_SKIP_MODULES
 
 
