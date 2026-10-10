@@ -488,26 +488,28 @@ def test_untracked_files_are_invisible_but_tracked_ones_are_not(
     )
 
 
-def test_bare_root_flag_fails_instead_of_checking_nothing(
-    capsys: pytest.CaptureFixture,
-) -> None:
+def test_bare_root_flag_fails_instead_of_checking_nothing() -> None:
     """``--root`` with no directory must exit non-zero, not report success.
 
     Before blueprintx#247 the flag fell through to the filename list, `file_problems`
     ignored its unsupported extension, and the gate printed its success banner having
     checked nothing. `check_function_length.py` — the seam this one mirrors — already
     rejected the same argv, so the two had drifted.
+    """
+    assert gate.main(["--root"]) == 1, "a bare --root reported success"
+
+
+def test_bare_root_flag_names_the_reason(capsys: pytest.CaptureFixture) -> None:
+    """The bare ``--root`` failure says why, so a crash (also non-zero) is told apart.
 
     Parameters
     ----------
     capsys : pytest.CaptureFixture
-            Captures the gate's message, so the assertion names the reason and not only
-            the exit code (a crash also exits non-zero).
+            Captures the gate's message.
     """
-    int_status = gate.main(["--root"])
+    gate.main(["--root"])
     str_out = capsys.readouterr().out
 
-    assert int_status == 1, "a bare --root reported success"
     assert "--root needs a directory" in str_out, f"failed without naming the reason: {str_out!r}"
 
 
@@ -538,23 +540,34 @@ def test_missing_root_directory_fails_instead_of_checking_nothing(
 
 
 @pytest.mark.parametrize("list_argv", [["a.py", "--root", "x"], ["--root=x"]])
-def test_misplaced_root_flag_fails_instead_of_checking_nothing(
-    list_argv: list[str],
-    capsys: pytest.CaptureFixture,
-) -> None:
+def test_misplaced_root_flag_fails_instead_of_checking_nothing(list_argv: list[str]) -> None:
     """``--root`` anywhere but first must exit non-zero, not fall into the filename list.
 
     Parameters
     ----------
     list_argv : list of str
             An argv carrying ``--root`` in a position the gate does not parse.
-    capsys : pytest.CaptureFixture
-            Captures the gate's message, so the assertion names the reason.
     """
-    int_status = gate.main(list_argv)
+    assert gate.main(list_argv) == 1, f"{list_argv} reported success"
+
+
+@pytest.mark.parametrize("list_argv", [["a.py", "--root", "x"], ["--root=x"]])
+def test_misplaced_root_flag_names_the_reason(
+    list_argv: list[str],
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """The misplaced-flag failure says why, so a crash (also non-zero) is told apart.
+
+    Parameters
+    ----------
+    list_argv : list of str
+            An argv carrying ``--root`` in a position the gate does not parse.
+    capsys : pytest.CaptureFixture
+            Captures the gate's message.
+    """
+    gate.main(list_argv)
     str_out = capsys.readouterr().out
 
-    assert int_status == 1, f"{list_argv} reported success"
     assert "--root must be the first argument" in str_out, f"no reason named: {str_out!r}"
 
 
