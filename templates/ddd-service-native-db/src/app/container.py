@@ -18,9 +18,9 @@ class AppContainer(metaclass=TypeChecker):
     Attributes
     ----------
     create_note : Callable[[NoteCreateDTO], NoteResponseDTO]
-            Create and persist a note from an inbound DTO.
+        Create and persist a note from an inbound DTO.
     list_notes : Callable[[], list[NoteResponseDTO]]
-            Retrieve all notes as response DTOs.
+        Retrieve all notes as response DTOs.
     """
 
     create_note: Callable[[NoteCreateDTO], NoteResponseDTO]
@@ -34,7 +34,7 @@ def build() -> AppContainer:
     Returns
     -------
     AppContainer
-            Fully wired container ready for use.
+        Fully wired container ready for use.
 
     Notes
     -----

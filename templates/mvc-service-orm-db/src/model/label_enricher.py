@@ -26,7 +26,7 @@ class LabelEnricher(metaclass=TypeChecker):
     Parameters
     ----------
     path_labels : pathlib.Path
-            The JSON file mapping a stringified ``id`` to its label.
+        The JSON file mapping a stringified ``id`` to its label.
     """
 
     def __init__(self, path_labels: Path) -> None:
@@ -38,21 +38,21 @@ class LabelEnricher(metaclass=TypeChecker):
         Parameters
         ----------
         df_report : pandas.DataFrame
-                The already-fetched report. Never re-read here.
+            The already-fetched report. Never re-read here.
 
         Returns
         -------
         pandas.DataFrame
-                A copy of ``df_report`` carrying the ``label`` column.
+            A copy of ``df_report`` carrying the ``label`` column.
 
         Raises
         ------
         OSError
-                The label file cannot be opened or read.
+            The label file cannot be opened or read.
         json.JSONDecodeError
-                The label file is not valid JSON.
+            The label file is not valid JSON.
         KeyError
-                ``df_report`` has no ``id`` column to key on.
+            ``df_report`` has no ``id`` column to key on.
         """
         dict_labels = self._load_labels()
         df_enriched = df_report.copy()
@@ -65,7 +65,7 @@ class LabelEnricher(metaclass=TypeChecker):
         Returns
         -------
         dict
-                The parsed label map.
+            The parsed label map.
         """
         with self.path_labels.open(encoding="utf-8") as file_labels:
             return json.load(file_labels)

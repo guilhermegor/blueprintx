@@ -30,19 +30,19 @@ def load_query(str_filename: str) -> str:
     Parameters
     ----------
     str_filename : str
-            Bare query filename, e.g. ``example_entity__select_active.sql``. Never spell the
-            engine here — it is derived from ``DB_BACKEND``, which is the whole point.
+        Bare query filename, e.g. ``example_entity__select_active.sql``. Never spell the
+        engine here — it is derived from ``DB_BACKEND``, which is the whole point.
 
     Returns
     -------
     str
-            The SQL text.
+        The SQL text.
 
     Raises
     ------
     FileNotFoundError
-            If no query of that name is filed for the active engine. The message names the
-            engines that do carry it, so a misconfigured ``DB_BACKEND`` and a misspelled
-            filename do not read identically.
+        If no query of that name is filed for the active engine. The message names the
+        engines that do carry it, so a misconfigured ``DB_BACKEND`` and a misspelled
+        filename do not read identically.
     """
     return _load_query_from(str_filename, active_backend(), _PATH_QUERIES_ROOT)

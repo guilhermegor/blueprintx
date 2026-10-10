@@ -20,9 +20,9 @@ class RenderToExcel(metaclass=TypeChecker):
     Parameters
     ----------
     path_out : pathlib.Path
-            Destination ``.xlsx`` path. Parent directories are created on render.
+        Destination ``.xlsx`` path. Parent directories are created on render.
     str_sheet_name : str, optional
-            Worksheet name, by default ``"report"``.
+        Worksheet name, by default ``"report"``.
     """
 
     def __init__(self, path_out: Path, str_sheet_name: str = "report") -> None:
@@ -35,12 +35,12 @@ class RenderToExcel(metaclass=TypeChecker):
         Parameters
         ----------
         df_report : pd.DataFrame
-                Data to write.
+            Data to write.
 
         Returns
         -------
         pathlib.Path
-                The path that was written.
+            The path that was written.
         """
         self.path_out.parent.mkdir(parents=True, exist_ok=True)
         df_report.to_excel(

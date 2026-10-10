@@ -76,19 +76,19 @@ def resolve_intent(str_raw: str) -> str:
     Parameters
     ----------
     str_raw : str
-            The environment value (any reasonable spelling — case, accents and spaces/hyphens are
-            normalised).
+        The environment value (any reasonable spelling — case, accents and spaces/hyphens are
+        normalised).
 
     Returns
     -------
     str
-            The canonical intent key (e.g. ``"send"`` / ``"reconcile"``).
+        The canonical intent key (e.g. ``"send"`` / ``"reconcile"``).
 
     Raises
     ------
     SystemExit
-            When ``str_raw`` maps to no known intent — after printing a clear error to stderr
-            (exit code 2).
+        When ``str_raw`` maps to no known intent — after printing a clear error to stderr
+        (exit code 2).
     """
     str_norm = normalize_text(str_raw).replace(" ", "_").replace("-", "_")
     str_intent = _INTENT_ALIASES.get(str_norm)
@@ -122,33 +122,33 @@ def build_pipeline(  # noqa: PLR0913
     Parameters
     ----------
     str_intent : str
-            A canonical intent key (as returned by :func:`resolve_intent`).
+        A canonical intent key (as returned by :func:`resolve_intent`).
     logger : logging.Logger | None
-            The run logger.
+        The run logger.
     fn_build_engine : Callable[[], Engine]
-            Zero-arg callable building the SQLAlchemy engine.
+        Zero-arg callable building the SQLAlchemy engine.
     fn_output_path : Callable[[str], pathlib.Path]
-            Resolver from an ``outputs.yaml`` key to an output path.
+        Resolver from an ``outputs.yaml`` key to an output path.
     path_json : pathlib.Path
-            Path to write (or, for reconcile, read) the JSON run summary.
+        Path to write (or, for reconcile, read) the JSON run summary.
     dict_context : dict
-            Run-context values logged so every log file is self-describing.
+        Run-context values logged so every log file is self-describing.
     cls_email_handler : EmailHandler | None
-            Optional e-mail handler injected by ``main.py``.
+        Optional e-mail handler injected by ``main.py``.
     cls_webhook : WebhookNotifier | None
-            Optional webhook notifier injected by ``main.py``.
+        Optional webhook notifier injected by ``main.py``.
     str_webhook_message : str
-            The run-summary message sent through ``cls_webhook``.
+        The run-summary message sent through ``cls_webhook``.
 
     Returns
     -------
     Pipeline
-            The constructed orchestrator (a zero-arg ``run`` returning the run summary).
+        The constructed orchestrator (a zero-arg ``run`` returning the run summary).
 
     Raises
     ------
     SystemExit
-            When ``str_intent`` is not a known canonical intent (exit code 2).
+        When ``str_intent`` is not a known canonical intent (exit code 2).
     """
     cls_builder = _INTENT_BUILDERS.get(str_intent)
     if cls_builder is None:
@@ -174,12 +174,12 @@ def _abort(str_reason: str) -> NoReturn:
     Parameters
     ----------
     str_reason : str
-            The reason shown to the operator.
+        The reason shown to the operator.
 
     Raises
     ------
     SystemExit
-            Always (exit code 2).
+        Always (exit code 2).
     """
     print(f"[startup][ERROR] {str_reason}", file=sys.stderr)
     raise SystemExit(2)

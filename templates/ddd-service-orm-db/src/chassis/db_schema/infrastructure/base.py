@@ -25,7 +25,7 @@ def generate_uuid() -> str:
     Returns
     -------
     str
-            Hex UUID string.
+        Hex UUID string.
     """
     return uuid.uuid4().hex
 
@@ -36,9 +36,9 @@ class DatabaseSession:
     Parameters
     ----------
     database_url : str
-            SQLAlchemy connection URL (e.g., ``postgresql://user:pass@host/db``).
+        SQLAlchemy connection URL (e.g., ``postgresql://user:pass@host/db``).
     echo : bool, optional
-            If ``True``, log all SQL statements, by default ``False``.
+        If ``True``, log all SQL statements, by default ``False``.
 
     Examples
     --------
@@ -66,7 +66,7 @@ class DatabaseSession:
         Returns
         -------
         Session
-                SQLAlchemy session bound to the engine.
+            SQLAlchemy session bound to the engine.
         """
         return self._session_factory()
 
@@ -76,7 +76,7 @@ class DatabaseSession:
         Yields
         ------
         Session
-                SQLAlchemy session that auto-closes after use.
+            SQLAlchemy session that auto-closes after use.
 
         Examples
         --------
@@ -107,7 +107,7 @@ class Repository(Generic[_EntityT], metaclass=ABCTypeCheckerMeta):
     Parameters
     ----------
     session : Session
-            SQLAlchemy session for database operations.
+        SQLAlchemy session for database operations.
     """
 
     def __init__(self, session: Session) -> None:
@@ -120,12 +120,12 @@ class Repository(Generic[_EntityT], metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         entity : _EntityT
-                Entity to persist.
+            Entity to persist.
 
         Returns
         -------
         _EntityT
-                Persisted entity with assigned identifier.
+            Persisted entity with assigned identifier.
         """
 
     @abstractmethod
@@ -135,12 +135,12 @@ class Repository(Generic[_EntityT], metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         entity_id : str
-                Unique identifier.
+            Unique identifier.
 
         Returns
         -------
         _EntityT or None
-                Entity if found, otherwise ``None``.
+            Entity if found, otherwise ``None``.
         """
 
     @abstractmethod
@@ -150,12 +150,12 @@ class Repository(Generic[_EntityT], metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         entity : _EntityT
-                Entity with updated fields.
+            Entity with updated fields.
 
         Returns
         -------
         _EntityT or None
-                Updated entity if it exists, otherwise ``None``.
+            Updated entity if it exists, otherwise ``None``.
         """
 
     @abstractmethod
@@ -165,12 +165,12 @@ class Repository(Generic[_EntityT], metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         entity_id : str
-                Unique identifier of the entity to remove.
+            Unique identifier of the entity to remove.
 
         Returns
         -------
         bool
-                ``True`` if entity was deleted, ``False`` otherwise.
+            ``True`` if entity was deleted, ``False`` otherwise.
         """
 
     @abstractmethod
@@ -180,5 +180,5 @@ class Repository(Generic[_EntityT], metaclass=ABCTypeCheckerMeta):
         Returns
         -------
         list[_EntityT]
-                All entities in the repository.
+            All entities in the repository.
         """

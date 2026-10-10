@@ -32,12 +32,12 @@ def cls_connection(tmp_path: Path) -> sqlite3.Connection:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------
     sqlite3.Connection
-            Connection for ``tmp_path / "pipeline.db"``.
+        Connection for ``tmp_path / "pipeline.db"``.
     """
     return sqlite3.connect(tmp_path / "pipeline.db")
 
@@ -50,16 +50,16 @@ def _build_orchestrator(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory, used for the report and the summary.
+        Pytest-provided temporary directory, used for the report and the summary.
     cls_connection : sqlite3.Connection
-            Connection returned by ``fn_build_connection``.
+        Connection returned by ``fn_build_connection``.
     **kwargs : object
-            Extra ``PipelineOrchestrator`` keyword arguments (``dict_context``, ...).
+        Extra ``PipelineOrchestrator`` keyword arguments (``dict_context``, ...).
 
     Returns
     -------
     PipelineOrchestrator
-            Orchestrator whose phases run against ``cls_connection`` and write into ``tmp_path``.
+        Orchestrator whose phases run against ``cls_connection`` and write into ``tmp_path``.
     """
     return PipelineOrchestrator(
         logger=None,
@@ -76,12 +76,12 @@ def _logged(mock_log: Mock) -> str:
     Parameters
     ----------
     mock_log : unittest.mock.Mock
-            The patched ``log_message``.
+        The patched ``log_message``.
 
     Returns
     -------
     str
-            One line per logged message.
+        One line per logged message.
     """
     return "\n".join(call.args[1] for call in mock_log.call_args_list)
 

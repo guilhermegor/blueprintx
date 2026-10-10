@@ -85,13 +85,13 @@ def log_context(
     Parameters
     ----------
     logger : logging.Logger | None
-            The run logger (``None`` prints).
+        The run logger (``None`` prints).
     dict_context : dict
-            Run-context values (app/operator/host/environment/paths) to log.
+        Run-context values (app/operator/host/environment/paths) to log.
     cls_email_handler : EmailHandler | None
-            The injected e-mail handler, if any (logged as configured/none).
+        The injected e-mail handler, if any (logged as configured/none).
     cls_webhook : WebhookNotifier | None
-            The injected webhook notifier, if any (logged as configured/none).
+        The injected webhook notifier, if any (logged as configured/none).
     """
     log_message(logger, "Starting variable-definition process")
     for str_key, value in dict_context.items():
@@ -118,16 +118,16 @@ def render_report(
     Parameters
     ----------
     logger : logging.Logger | None
-            The run logger.
+        The run logger.
     fn_output_path : Callable[[str], pathlib.Path]
-            Resolver from an ``outputs.yaml`` key to an output path.
+        Resolver from an ``outputs.yaml`` key to an output path.
     df_report : pandas.DataFrame
-            The data to render.
+        The data to render.
 
     Returns
     -------
     pathlib.Path
-            The written report path.
+        The written report path.
     """
     log_message(logger, "Starting report-export process")
     path_report = fn_output_path("xlsx_name")
@@ -143,11 +143,11 @@ def write_summary(logger: Logger | None, path_json: Path, dict_summary: dict[str
     Parameters
     ----------
     logger : logging.Logger | None
-            The run logger.
+        The run logger.
     path_json : pathlib.Path
-            Path to write the JSON run summary.
+        Path to write the JSON run summary.
     dict_summary : dict
-            The run summary to serialise.
+        The run summary to serialise.
     """
     log_message(logger, "Starting summary-export process")
     with path_json.open("w") as file_write:
@@ -162,11 +162,11 @@ def notify(logger: Logger | None, cls_webhook: WebhookNotifier | None, str_messa
     Parameters
     ----------
     logger : logging.Logger | None
-            The run logger.
+        The run logger.
     cls_webhook : WebhookNotifier | None
-            The injected webhook notifier; when ``None`` this is a no-op.
+        The injected webhook notifier; when ``None`` this is a no-op.
     str_message : str
-            The run-summary message to send.
+        The run-summary message to send.
     """
     if cls_webhook is None:
         return
@@ -182,9 +182,9 @@ def log_elapsed(logger: Logger | None, float_elapsed: float) -> None:
     Parameters
     ----------
     logger : logging.Logger | None
-            The run logger.
+        The run logger.
     float_elapsed : float
-            Elapsed seconds.
+        Elapsed seconds.
     """
     float_hours, float_remainder = divmod(float_elapsed, 3600)
     float_minutes, float_seconds = divmod(float_remainder, 60)

@@ -49,12 +49,12 @@ def build_database_url() -> str:
     Returns
     -------
     str
-            SQLAlchemy-compatible database URL.
+        SQLAlchemy-compatible database URL.
 
     Raises
     ------
     ValueError
-            If ``DB_BACKEND`` does not match a supported backend.
+        If ``DB_BACKEND`` does not match a supported backend.
 
     Notes
     -----
@@ -93,12 +93,12 @@ def build_database_session(echo: bool = False) -> DatabaseSession:
     Parameters
     ----------
     echo : bool, optional
-            If ``True``, log all SQL statements, by default ``False``.
+        If ``True``, log all SQL statements, by default ``False``.
 
     Returns
     -------
     DatabaseSession
-            Configured SQLAlchemy session manager.
+        Configured SQLAlchemy session manager.
 
     Examples
     --------
