@@ -227,11 +227,27 @@ def test_a_section_title_alone_is_not_a_banner() -> None:
     assert gate.banner_findings(1, ["a", "b", "c"]) == []
 
 
-def test_is_exempt_section_banner_matches_the_full_triple_only() -> None:
-    """Only the exact mandated triple is exempt — a shorter rule is not."""
-    list_lines = [" --------------------------", " Tests", " --------------------------"]
-    assert gate.is_exempt_section_banner(list_lines, 0) is True
-    assert gate.is_exempt_section_banner([" -------", " LINTING", " -------"], 0) is False
+@pytest.mark.parametrize(
+    ("list_lines", "bool_expected"),
+    [
+        ([" --------------------------", " Tests", " --------------------------"], True),
+        ([" -------", " LINTING", " -------"], False),
+    ],
+    ids=["full-triple", "shorter-rule"],
+)
+def test_is_exempt_section_banner_matches_the_full_triple_only(
+    list_lines: list[str], bool_expected: bool
+) -> None:
+    """Only the exact mandated triple is exempt — a shorter rule is not.
+
+    Parameters
+    ----------
+    list_lines : list[str]
+        The candidate banner lines.
+    bool_expected : bool
+        Whether the triple is exempt.
+    """
+    assert gate.is_exempt_section_banner(list_lines, 0) is bool_expected
 
 
 # --------------------------
@@ -428,9 +444,26 @@ def test_a_production_python_file_gets_no_section_banner_exemption(
         "\treturn None\n"
     )
     path_file.write_text(str_source, encoding="utf-8")
-    list_problems = gate.file_problems(path_file)
-    assert len(list_problems) == 1
-    assert "decorative banner (rule/title/rule)" in list_problems[0]
+    assert len(gate.file_problems(path_file)) == 1
+
+
+def test_a_production_python_file_banner_is_named_a_decorative_banner(
+    tmp_path: Path,
+) -> None:
+    """The one finding on a production ``.py`` triple names the banner rule.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    path_dir = tmp_path / "src"
+    path_dir.mkdir()
+    path_file = path_dir / "service.py"
+    str_rule = "# " + "-" * 26 + "\n"
+    str_code = "def run() -> None:\n\treturn None\n"
+    path_file.write_text(str_rule + "# Helpers\n" + str_rule + str_code)
+    assert "decorative banner (rule/title/rule)" in gate.file_problems(path_file)[0]
 
 
 def test_a_non_python_file_gets_no_section_banner_exemption(tmp_path: Path) -> None:
@@ -457,13 +490,28 @@ def test_a_non_python_file_gets_no_section_banner_exemption(tmp_path: Path) -> N
         "echo hi\n"
     )
     path_file.write_text(str_source, encoding="utf-8")
-    list_problems = gate.file_problems(path_file)
-    assert len(list_problems) == 1
-    assert "decorative banner (rule/title/rule)" in list_problems[0]
+    assert len(gate.file_problems(path_file)) == 1
 
 
-def test_the_exempt_banner_does_not_split_an_oversized_run(tmp_path: Path) -> None:
-    """Should-fail witness for blueprintx#479: the exemption must not be a pragma.
+def test_a_non_python_file_banner_is_named_a_decorative_banner(tmp_path: Path) -> None:
+    """The one finding on a ``tests/`` shell triple names the banner rule.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    path_dir = tmp_path / "tests"
+    path_dir.mkdir()
+    path_file = path_dir / "probe.sh"
+    str_rule = "# " + "-" * 26 + "\n"
+    path_file.write_text("#!/bin/bash\n" + str_rule + "# Fixtures\n" + str_rule + "echo hi\n")
+    assert "decorative banner (rule/title/rule)" in gate.file_problems(path_file)[0]
+
+
+@pytest.fixture
+def list_split_run_problems(tmp_path: Path) -> list[str]:
+    """Problems for an 89-line block with one lone rule line in the middle (blueprintx#479).
 
     ``comment_budget_allowlist.txt`` is read by ``is_pragma_line``, and
     ``line_breaks_run`` makes a pragma BREAK the current run — correct for a
@@ -478,27 +526,70 @@ def test_the_exempt_banner_does_not_split_an_oversized_run(tmp_path: Path) -> No
     ----------
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings for the probe file.
     """
     path_file = tmp_path / "probe.py"
     list_lines = ["# filler"] * 44 + ["# --------------------------"] + ["# filler"] * 44
     path_file.write_text("\n".join(list_lines) + "\n", encoding="utf-8")
-    list_problems = gate.file_problems(path_file)
-    assert len(list_problems) == 2
-    assert any("89 lines" in str_problem for str_problem in list_problems)
-    assert any("decorative banner" in str_problem for str_problem in list_problems)
+    return gate.file_problems(path_file)
 
 
-def test_the_exempt_triple_still_counts_toward_an_oversized_run(tmp_path: Path) -> None:
-    """The exemption suppresses the BANNER finding, never the run-length one.
+def test_the_exempt_banner_does_not_split_an_oversized_run(
+    list_split_run_problems: list[str],
+) -> None:
+    """Should-fail witness for blueprintx#479: the lone rule line stays in the run's count.
 
-    A full, valid section-banner triple wrapped inside an otherwise-oversized
-    block must not disappear from the run's line count — only the triple
-    itself must go unreported as a banner.
+    Parameters
+    ----------
+    list_split_run_problems : list[str]
+        The gate's findings for the probe file.
+    """
+    assert any("89 lines" in str_problem for str_problem in list_split_run_problems)
+
+
+def test_a_lone_rule_line_inside_an_oversized_run_is_flagged_as_a_banner(
+    list_split_run_problems: list[str],
+) -> None:
+    """The lone rule line is also reported as its own decorative banner.
+
+    Parameters
+    ----------
+    list_split_run_problems : list[str]
+        The gate's findings for the probe file.
+    """
+    assert any("decorative banner" in str_problem for str_problem in list_split_run_problems)
+
+
+def test_an_oversized_run_split_by_a_rule_line_yields_exactly_two_findings(
+    list_split_run_problems: list[str],
+) -> None:
+    """One run-length finding and one banner finding, nothing more.
+
+    Parameters
+    ----------
+    list_split_run_problems : list[str]
+        The gate's findings for the probe file.
+    """
+    assert len(list_split_run_problems) == 2
+
+
+@pytest.fixture
+def list_triple_run_problems(tmp_path: Path) -> list[str]:
+    """Problems for an oversized block wrapped around a valid section-banner triple.
 
     Parameters
     ----------
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings for the probe file.
     """
     path_dir = tmp_path / "tests"
     path_dir.mkdir()
@@ -509,9 +600,36 @@ def test_the_exempt_triple_still_counts_toward_an_oversized_run(tmp_path: Path) 
         + ["# filler"] * 44
     )
     path_file.write_text("\n".join(list_lines) + "\n", encoding="utf-8")
-    list_problems = gate.file_problems(path_file)
-    assert len(list_problems) == 1
-    assert "91 lines" in list_problems[0]
+    return gate.file_problems(path_file)
+
+
+def test_the_exempt_triple_still_counts_toward_an_oversized_run(
+    list_triple_run_problems: list[str],
+) -> None:
+    """The exemption suppresses the BANNER finding, never the run-length one.
+
+    A full, valid section-banner triple wrapped inside an otherwise-oversized
+    block must not disappear from the run's line count.
+
+    Parameters
+    ----------
+    list_triple_run_problems : list[str]
+        The gate's findings for the probe file.
+    """
+    assert "91 lines" in list_triple_run_problems[0]
+
+
+def test_the_exempt_triple_is_not_reported_as_a_banner_inside_a_run(
+    list_triple_run_problems: list[str],
+) -> None:
+    """Only the run-length finding is reported — the triple itself goes unflagged.
+
+    Parameters
+    ----------
+    list_triple_run_problems : list[str]
+        The gate's findings for the probe file.
+    """
+    assert len(list_triple_run_problems) == 1
 
 
 # --------------------------
