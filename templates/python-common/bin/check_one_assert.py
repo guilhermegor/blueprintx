@@ -228,13 +228,13 @@ def _ctx_call_name(node_call: ast.Call) -> str | None:
     return None
 
 
-def _assertion_with_count(node_with: ast.With) -> int:
+def _assertion_with_count(node_with: ast.With | ast.AsyncWith) -> int:
     """Count the ``pytest.raises``/``pytest.warns`` contexts in a ``with`` statement.
 
     Parameters
     ----------
-    node_with : ast.With
-        The ``with`` statement.
+    node_with : ast.With or ast.AsyncWith
+        The ``with`` or ``async with`` statement.
 
     Returns
     -------
@@ -249,12 +249,12 @@ def _assertion_with_count(node_with: ast.With) -> int:
     )
 
 
-def _assertion_sites(node_fn: ast.FunctionDef) -> list:
+def _assertion_sites(node_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list:
     """Return the assertion-like nodes inside a test function, in source order.
 
     Parameters
     ----------
-    node_fn : ast.FunctionDef
+    node_fn : ast.FunctionDef or ast.AsyncFunctionDef
         The test function (or method).
 
     Returns
@@ -272,7 +272,7 @@ def _assertion_sites(node_fn: ast.FunctionDef) -> list:
                 continue
             if isinstance(child, ast.Assert):
                 list_sites.append(child)
-            elif isinstance(child, ast.With):
+            elif isinstance(child, ast.With | ast.AsyncWith):
                 list_sites.extend([child] * _assertion_with_count(child))
             elif (
                 isinstance(child, ast.Expr)
@@ -296,7 +296,7 @@ def _index_test_functions(cls_tree: ast.AST) -> dict:
 
     Returns
     -------
-    dict of str to ast.FunctionDef
+    dict of str to ast.FunctionDef or ast.AsyncFunctionDef
         Qualified name (``ClassName.test_x`` or bare ``test_x``) to its node — qualified so
         two classes sharing a method name are tracked separately.
     """
@@ -315,14 +315,14 @@ def _index_test_functions(cls_tree: ast.AST) -> dict:
     return dict_funcs
 
 
-def _hatch_reason(str_source: str, node_fn: ast.FunctionDef) -> str:
+def _hatch_reason(str_source: str, node_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Return the ``# one-assert-ok: <reason>`` text inside a function, or ``""``.
 
     Parameters
     ----------
     str_source : str
         The file's full source text.
-    node_fn : ast.FunctionDef
+    node_fn : ast.FunctionDef or ast.AsyncFunctionDef
         The function to scan.
 
     Returns

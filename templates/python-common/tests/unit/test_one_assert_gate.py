@@ -11,6 +11,7 @@ single arrange backs several claims, the claims are ``parametrize`` cases rather
 asserts — the pattern ``tests/CLAUDE.md`` prescribes for exactly this split.
 """
 
+import ast
 import importlib.util
 from pathlib import Path
 import sys
@@ -85,6 +86,22 @@ def _run(path_root: Path, list_extra_args: list[str]) -> int:
     return gate.main(["--root", str(path_root), *list_extra_args])
 
 
+def _count_sites(str_src: str) -> int:
+    """Count the assertion sites of ``test_x`` in a source string.
+
+    Parameters
+    ----------
+    str_src : str
+        Source text defining ``test_x``.
+
+    Returns
+    -------
+    int
+        The number of assertion sites the gate discovers in ``test_x``.
+    """
+    return len(gate._assertion_sites(gate._index_test_functions(ast.parse(str_src))["test_x"]))
+
+
 # --------------------------
 # The unconditional rule — a test with zero assertion sites, in any suite
 # --------------------------
@@ -144,6 +161,36 @@ def test_a_non_assert_statement_check_counts_as_one_assertion_site(
     _write_test_file(tmp_path, f"def test_x() -> None:\n{str_body}")
 
     assert _run(tmp_path, []) == 0
+
+
+def test_an_async_raises_block_alone_counts_as_one_site_not_zero() -> None:
+    """``async with pytest.raises`` is one site; exit 0 alone cannot tell it from "never seen"."""
+    str_src = "async def test_x() -> None:\n\tasync with pytest.raises(E):\n\t\tawait f()\n"
+
+    assert _count_sites(str_src) == 1
+
+
+def test_a_nested_async_helper_assert_is_not_charged_to_the_outer_test() -> None:
+    """A nested ``async def`` is its own unit; its assert must not inflate the outer count."""
+    str_src = (
+        "def test_x() -> None:\n\tassert 1 == 1\n"
+        "\tasync def helper() -> None:\n\t\tassert 2 == 2\n"
+    )
+
+    assert _count_sites(str_src) == 1
+
+
+def test_a_plain_assert_plus_an_async_raises_block_is_two_sites_and_flagged(
+    tmp_path: Path,
+) -> None:
+    """The async block must be counted, or this under-counts at one and passes silently (#643)."""
+    _write_test_file(
+        tmp_path,
+        "async def test_x() -> None:\n\tassert 1 == 1\n"
+        "\tasync with pytest.raises(ValueError):\n\t\tawait f()\n",
+    )
+
+    assert _run(tmp_path, []) == 1
 
 
 # --------------------------
