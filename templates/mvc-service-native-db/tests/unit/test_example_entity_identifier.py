@@ -14,7 +14,7 @@ def test_a_plain_table_name_builds_a_working_entity(str_table: str) -> None:
     Parameters
     ----------
     str_table : str
-            Identifier that must be accepted.
+        Identifier that must be accepted.
     """
     cls_connection = sqlite3.connect(":memory:")
     ExampleEntity(cls_connection, str_table).ensure_table()
@@ -33,7 +33,7 @@ def test_an_unsafe_table_name_is_rejected_before_any_sql(str_table: str) -> None
     Parameters
     ----------
     str_table : str
-            Identifier that must be rejected.
+        Identifier that must be rejected.
     """
     with pytest.raises(ValueError, match="str_table must match"):
         ExampleEntity(sqlite3.connect(":memory:"), str_table)

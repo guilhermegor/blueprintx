@@ -32,12 +32,12 @@ def cls_engine(tmp_path: Path) -> Iterator[Engine]:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Yields
     ------
     sqlalchemy.Engine
-            Engine for ``tmp_path / "pipeline.db"``, disposed after the test.
+        Engine for ``tmp_path / "pipeline.db"``, disposed after the test.
     """
     cls_built = create_engine(f"sqlite:///{tmp_path / 'pipeline.db'}")
     yield cls_built
@@ -52,16 +52,16 @@ def _build_orchestrator(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory, used for the report and the summary.
+        Pytest-provided temporary directory, used for the report and the summary.
     cls_engine : sqlalchemy.Engine
-            Engine returned by ``fn_build_engine``.
+        Engine returned by ``fn_build_engine``.
     **kwargs : object
-            Extra ``PipelineOrchestrator`` keyword arguments (``dict_context``, ...).
+        Extra ``PipelineOrchestrator`` keyword arguments (``dict_context``, ...).
 
     Returns
     -------
     PipelineOrchestrator
-            Orchestrator whose phases run against ``cls_engine`` and write into ``tmp_path``.
+        Orchestrator whose phases run against ``cls_engine`` and write into ``tmp_path``.
     """
     return PipelineOrchestrator(
         logger=None,
@@ -78,12 +78,12 @@ def _logged(mock_log: Mock) -> str:
     Parameters
     ----------
     mock_log : unittest.mock.Mock
-            The patched ``log_message``.
+        The patched ``log_message``.
 
     Returns
     -------
     str
-            One line per logged message.
+        One line per logged message.
     """
     return "\n".join(call.args[1] for call in mock_log.call_args_list)
 

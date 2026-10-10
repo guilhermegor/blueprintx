@@ -25,12 +25,12 @@ def _compose_dsn(str_backend: str) -> str:
     Parameters
     ----------
     str_backend : str
-            Backend key (``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``).
+        Backend key (``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``).
 
     Returns
     -------
     str
-            A driver-specific connection string composed from ``DB_*`` env vars.
+        A driver-specific connection string composed from ``DB_*`` env vars.
     """
     str_user = os.getenv("DB_USER", "user")
     str_password = os.getenv("DB_PASSWORD", "password")
@@ -111,12 +111,12 @@ def _normalize_odbc_bool(str_value: str) -> str:  # complexity-ok: DSN option ma
     Parameters
     ----------
     str_value : str
-            The raw value read from the environment.
+        The raw value read from the environment.
 
     Returns
     -------
     str
-            ``"yes"`` / ``"no"`` for a recognised boolean, else the stripped original.
+        ``"yes"`` / ``"no"`` for a recognised boolean, else the stripped original.
     """
     str_norm = str_value.strip().casefold()
     if str_norm in {"true", "1", "yes", "y", "on", "t"}:
@@ -207,12 +207,12 @@ def active_backend() -> str:
     Returns
     -------
     str
-            The lower-cased engine name, defaulting to ``sqlite``.
+        The lower-cased engine name, defaulting to ``sqlite``.
 
     Raises
     ------
     ValueError
-            If ``DB_BACKEND`` does not name a supported engine.
+        If ``DB_BACKEND`` does not name a supported engine.
 
     Notes
     -----
@@ -245,7 +245,7 @@ def build_connection() -> Any:
     Returns
     -------
     Any
-            An open DB-API 2.0 connection for the configured backend.
+        An open DB-API 2.0 connection for the configured backend.
 
     Notes
     -----

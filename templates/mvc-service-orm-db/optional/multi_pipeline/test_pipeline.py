@@ -33,12 +33,12 @@ def _build_args(tmp_path: Path) -> tuple:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------
     tuple
-            ``(logger, fn_build_connection, fn_output_path, path_json, dict_context)``.
+        ``(logger, fn_build_connection, fn_output_path, path_json, dict_context)``.
     """
     return (
         None,
@@ -76,9 +76,9 @@ def test_resolve_intent_maps_known_spelling_to_canonical_intent(
     Parameters
     ----------
     str_raw : str
-            A raw ``PIPELINE_INTENT`` spelling under test.
+        A raw ``PIPELINE_INTENT`` spelling under test.
     str_expected : str
-            The canonical intent that spelling must resolve to.
+        The canonical intent that spelling must resolve to.
 
     Returns
     -------
@@ -108,7 +108,7 @@ def test_build_pipeline_returns_send_pipeline_for_send_intent(tmp_path: Path) ->
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------
@@ -124,7 +124,7 @@ def test_build_pipeline_returns_reconcile_pipeline_for_reconcile_intent(tmp_path
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------
@@ -140,7 +140,7 @@ def test_build_pipeline_raises_systemexit_on_unregistered_intent(tmp_path: Path)
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------

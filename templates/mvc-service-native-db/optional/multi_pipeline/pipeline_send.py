@@ -30,22 +30,22 @@ class SendPipeline(metaclass=TypeChecker):
     Parameters
     ----------
     logger : logging.Logger | None
-            The run logger (``None`` prints).
+        The run logger (``None`` prints).
     fn_build_connection : Callable[[], Any]
-            Zero-arg callable opening a DB-API connection (closed after the read).
+        Zero-arg callable opening a DB-API connection (closed after the read).
     fn_output_path : Callable[[str], pathlib.Path]
-            Resolver from an ``outputs.yaml`` key to an output path.
+        Resolver from an ``outputs.yaml`` key to an output path.
     path_json : pathlib.Path
-            Path to write the JSON run summary.
+        Path to write the JSON run summary.
     dict_context : dict
-            Run-context values logged so every log file is self-describing.
+        Run-context values logged so every log file is self-describing.
     cls_email_handler : EmailHandler | None
-            Optional e-mail handler (the ``EmailHandler`` port), injected by ``main.py``.
+        Optional e-mail handler (the ``EmailHandler`` port), injected by ``main.py``.
     cls_webhook : WebhookNotifier | None
-            Optional webhook notifier (the ``WebhookNotifier`` port); when wired, the final
-            phase sends ``str_webhook_message``.
+        Optional webhook notifier (the ``WebhookNotifier`` port); when wired, the final
+        phase sends ``str_webhook_message``.
     str_webhook_message : str
-            The run-summary message sent through ``cls_webhook``; ignored when it is ``None``.
+        The run-summary message sent through ``cls_webhook``; ignored when it is ``None``.
     """
 
     def __init__(
@@ -74,7 +74,7 @@ class SendPipeline(metaclass=TypeChecker):
         Returns
         -------
         dict
-                Run summary (intent, rows read, report path).
+            Run summary (intent, rows read, report path).
         """
         float_start = time()
         pipeline_common.log_context(
@@ -103,7 +103,7 @@ class SendPipeline(metaclass=TypeChecker):
         Returns
         -------
         Any
-                The open DB-API 2.0 connection (closed by :meth:`run` in a ``finally``).
+            The open DB-API 2.0 connection (closed by :meth:`run` in a ``finally``).
         """
         log_message(self.logger, "Opening DB connection")
         return self.fn_build_connection()
@@ -114,12 +114,12 @@ class SendPipeline(metaclass=TypeChecker):
         Parameters
         ----------
         cls_connection : Any
-                The open DB-API connection.
+            The open DB-API connection.
 
         Returns
         -------
         pandas.DataFrame
-                The rows read by the model.
+            The rows read by the model.
         """
         log_message(self.logger, "Starting data-read process")
         cls_example = ExampleEntity(cls_connection)

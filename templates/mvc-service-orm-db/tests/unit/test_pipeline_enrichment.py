@@ -29,15 +29,15 @@ def _build_orchestrator(tmp_path: Path, path_labels: Path | None) -> PipelineOrc
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory, used for the unused JSON summary path.
+        Pytest-provided temporary directory, used for the unused JSON summary path.
     path_labels : pathlib.Path | None
-            The labels path to inject via ``dict_context`` (``None`` to exercise the
-            missing-config mode).
+        The labels path to inject via ``dict_context`` (``None`` to exercise the
+        missing-config mode).
 
     Returns
     -------
     PipelineOrchestrator
-            An orchestrator wired only with what ``_enrich`` needs.
+        An orchestrator wired only with what ``_enrich`` needs.
     """
     return PipelineOrchestrator(
         logger=None,
@@ -54,7 +54,7 @@ def _report() -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-            One row, matching ``model.example_entity``'s ``id``/``title`` schema.
+        One row, matching ``model.example_entity``'s ``id``/``title`` schema.
     """
     return pd.DataFrame({"id": [1], "title": ["Hello from MVC native-db service!"]})
 
@@ -68,16 +68,16 @@ def _degraded_run(tmp_path: Path, mocker: MockerFixture, path_labels: Path | Non
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching the log sink.
+        pytest-mock fixture for patching the log sink.
     path_labels : pathlib.Path | None
-            The labels path to inject (``None`` for the missing-config mode).
+        The labels path to inject (``None`` for the missing-config mode).
 
     Returns
     -------
     tuple
-            ``(df_result, df_report, str_log)``.
+        ``(df_result, df_report, str_log)``.
     """
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     df_report = _report()
@@ -93,14 +93,14 @@ def tuple_unconfigured(tmp_path: Path, mocker: MockerFixture) -> tuple:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
     tuple
-            ``(df_result, df_report, str_log)``.
+        ``(df_result, df_report, str_log)``.
     """
     return _degraded_run(tmp_path, mocker, None)
 
@@ -112,14 +112,14 @@ def tuple_absent_file(tmp_path: Path, mocker: MockerFixture) -> tuple:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
     tuple
-            ``(df_result, df_report, str_log)``.
+        ``(df_result, df_report, str_log)``.
     """
     return _degraded_run(tmp_path, mocker, tmp_path / "does-not-exist.json")
 
@@ -131,14 +131,14 @@ def tuple_malformed_file(tmp_path: Path, mocker: MockerFixture) -> tuple:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
     tuple
-            ``(df_result, df_report, str_log)``.
+        ``(df_result, df_report, str_log)``.
     """
     path_labels = tmp_path / "labels.json"
     path_labels.write_text("{not valid json")
@@ -155,14 +155,14 @@ def tuple_permission_error(tmp_path: Path, mocker: MockerFixture) -> tuple:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
     tuple
-            ``(df_result, df_report, str_log)``.
+        ``(df_result, df_report, str_log)``.
     """
     path_labels = tmp_path / "labels.json"
     path_labels.write_text('{"1": "demo"}')
@@ -180,14 +180,14 @@ def tuple_unforeseen_failure(tmp_path: Path, mocker: MockerFixture) -> tuple:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
     tuple
-            ``(df_result, df_report, str_log)``.
+        ``(df_result, df_report, str_log)``.
     """
     mocker.patch(
         "src.model.label_enricher.json.load",
@@ -216,9 +216,9 @@ def test_enrich_degrades_to_the_unchanged_report(
     Parameters
     ----------
     request : pytest.FixtureRequest
-            Resolves the mode's fixture by name.
+        Resolves the mode's fixture by name.
     str_fixture : str
-            The fixture running one failure mode.
+        The fixture running one failure mode.
     """
     tuple_run = request.getfixturevalue(str_fixture)
     pd.testing.assert_frame_equal(tuple_run[0], tuple_run[1])
@@ -242,11 +242,11 @@ def test_enrich_degradation_logs_its_cause(
     Parameters
     ----------
     request : pytest.FixtureRequest
-            Resolves the mode's fixture by name.
+        Resolves the mode's fixture by name.
     str_fixture : str
-            The fixture running one failure mode.
+        The fixture running one failure mode.
     str_cause : str
-            What the log must name.
+        What the log must name.
     """
     tuple_run = request.getfixturevalue(str_fixture)
     assert str_cause in tuple_run[2]

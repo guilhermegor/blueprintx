@@ -16,7 +16,7 @@ class RegimeRegistry(metaclass=TypeChecker):
     Parameters
     ----------
     list_windows : list of RegimeWindow
-            Every regime this registry knows, in any order.
+        Every regime this registry knows, in any order.
     """
 
     def __init__(self, list_windows: list[RegimeWindow]) -> None:
@@ -31,18 +31,18 @@ class RegimeRegistry(metaclass=TypeChecker):
         Parameters
         ----------
         int_period : int
-                The period to resolve, ``YYYYMM``.
+            The period to resolve, ``YYYYMM``.
 
         Returns
         -------
         RegimeWindow
-                The window whose :meth:`RegimeWindow.covers` is ``True`` for ``int_period``.
+            The window whose :meth:`RegimeWindow.covers` is ``True`` for ``int_period``.
 
         Raises
         ------
         ValueError
-                No known regime covers ``int_period``. Names every known window so the caller
-                sees where the period would belong, instead of a bare "not found".
+            No known regime covers ``int_period``. Names every known window so the caller
+            sees where the period would belong, instead of a bare "not found".
         """
         for cls_window in self.list_windows:
             if cls_window.covers(int_period):
@@ -64,17 +64,17 @@ class RegimeRegistry(metaclass=TypeChecker):
         Parameters
         ----------
         str_name : str
-                The target regime's :attr:`RegimeWindow.str_name`.
+            The target regime's :attr:`RegimeWindow.str_name`.
 
         Returns
         -------
         int
-                ``int_period_end`` of the named regime.
+            ``int_period_end`` of the named regime.
 
         Raises
         ------
         ValueError
-                The name is unknown, or the regime is still open (``int_period_end is None``).
+            The name is unknown, or the regime is still open (``int_period_end is None``).
         """
         cls_match = self._find_by_name(str_name)
         if cls_match is None:
@@ -93,12 +93,12 @@ class RegimeRegistry(metaclass=TypeChecker):
         Parameters
         ----------
         str_name : str
-                The regime name to look up.
+            The regime name to look up.
 
         Returns
         -------
         RegimeWindow | None
-                The matching window, or ``None``.
+            The matching window, or ``None``.
         """
         for cls_window in self.list_windows:
             if cls_window.str_name == str_name:
@@ -111,7 +111,7 @@ class RegimeRegistry(metaclass=TypeChecker):
         Returns
         -------
         str
-                Comma-separated ``name [start-end]`` entries, ``open`` standing in for ``None``.
+            Comma-separated ``name [start-end]`` entries, ``open`` standing in for ``None``.
         """
         return ", ".join(
             f"{cls_window.str_name} [{cls_window.int_period_start or 'open'}-"

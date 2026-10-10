@@ -115,12 +115,12 @@ def normalise_login(str_login: str) -> str:
     Parameters
     ----------
     str_login : str
-            A login as either API reports it, e.g. ``coderabbitai[bot]`` or ``coderabbitai``.
+        A login as either API reports it, e.g. ``coderabbitai[bot]`` or ``coderabbitai``.
 
     Returns
     -------
     str
-            The login without a trailing ``[bot]`` suffix, so the two spellings compare equal.
+        The login without a trailing ``[bot]`` suffix, so the two spellings compare equal.
     """
     str_clean = (str_login or "").strip()
     return str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
@@ -236,9 +236,9 @@ def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
     Returns
     -------
     bool
-            ``True`` only when git can prove the file exists there. Any failure (no git, shallow
-            clone, no remote) returns ``False``, so an unresolvable state never
-            invents a violation.
+        ``True`` only when git can prove the file exists there. Any failure (no git, shallow
+        clone, no remote) returns ``False``, so an unresolvable state never
+        invents a violation.
     """
     for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
         # S607 (partial path) is resolution BY DESIGN: use the `git` on PATH, the one the
@@ -259,22 +259,22 @@ def posts_of(dict_row: dict) -> str:
     Parameters
     ----------
     dict_row : dict
-            One entry of the roster's ``reviewers:`` list.
+        One entry of the roster's ``reviewers:`` list.
 
     Returns
     -------
     str
-            One of :data:`_POSTS_VALID` — ``"threads"`` or ``"status"``.
+        One of :data:`_POSTS_VALID` — ``"threads"`` or ``"status"``.
 
     Raises
     ------
     RuntimeError
-            When ``posts:`` is missing or is not one of :data:`_POSTS_VALID`. Defaulting is not
-            available here in either direction: silently reading a forgotten field as ``status``
-            makes the gate unsatisfiable (and unsatisfiable gates get bypassed with ``--admin``,
-            taking the real blocks with them), while reading it as ``threads`` re-opens the exact
-            hole this field exists to close. So the roster must say, and a row that does not is a
-            configuration error the message has to name.
+        When ``posts:`` is missing or is not one of :data:`_POSTS_VALID`. Defaulting is not
+        available here in either direction: silently reading a forgotten field as ``status``
+        makes the gate unsatisfiable (and unsatisfiable gates get bypassed with ``--admin``,
+        taking the real blocks with them), while reading it as ``threads`` re-opens the exact
+        hole this field exists to close. So the roster must say, and a row that does not is a
+        configuration error the message has to name.
     """
     str_login = str(dict_row.get("login") or "").strip()
     str_posts = str(dict_row.get("posts") or "").strip()
@@ -296,24 +296,24 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
     Parameters
     ----------
     path_root : pathlib.Path
-            Repository root holding ``.review-bots.yaml``.
+        Repository root holding ``.review-bots.yaml``.
 
     Returns
     -------
     dict of str to str
-            Normalised login mapped to its ``posts:`` classification. Every member counts as a
-            reviewer rather than as an answer for the THREAD half; only the ``threads`` members
-            can satisfy the MISSING-REVIEW half — see :func:`reviewer_logins`. Empty when the
-            file was NEVER there, which makes the gate a no-op rather than a source of false
-            failures.
+        Normalised login mapped to its ``posts:`` classification. Every member counts as a
+        reviewer rather than as an answer for the THREAD half; only the ``threads`` members
+        can satisfy the MISSING-REVIEW half — see :func:`reviewer_logins`. Empty when the
+        file was NEVER there, which makes the gate a no-op rather than a source of false
+        failures.
 
     Raises
     ------
     RuntimeError
-            When the roster is absent HERE but present on the default branch — that is a
-            deletion, and since an empty roster makes this gate a no-op, it would switch the
-            gate off inside the very PR it is meant to police. Also propagated from
-            :func:`posts_of` for a row that does not declare a usable ``posts:``.
+        When the roster is absent HERE but present on the default branch — that is a
+        deletion, and since an empty roster makes this gate a no-op, it would switch the
+        gate off inside the very PR it is meant to police. Also propagated from
+        :func:`posts_of` for a row that does not declare a usable ``posts:``.
     """
     path_roster = path_root / _ROSTER_FILE
     if yaml is None:
@@ -358,20 +358,20 @@ def reviewer_logins(dict_roster: dict[str, str]) -> set[str]:
     Parameters
     ----------
     dict_roster : dict of str to str
-            Roster as returned by :func:`load_roster`.
+        Roster as returned by :func:`load_roster`.
 
     Returns
     -------
     set of str
-            The ``posts: threads`` members. A ``posts: status`` member is deliberately absent:
-            it can neither be expected to review nor accepted as having reviewed.
+        The ``posts: threads`` members. A ``posts: status`` member is deliberately absent:
+        it can neither be expected to review nor accepted as having reviewed.
 
     Raises
     ------
     RuntimeError
-            When a non-empty roster declares no member that can review. That roster makes the
-            missing-review check unsatisfiable on every PR, and a permanently red required check
-            is the fastest way to teach people that red means nothing.
+        When a non-empty roster declares no member that can review. That roster makes the
+        missing-review check unsatisfiable on every PR, and a permanently red required check
+        is the fastest way to teach people that red means nothing.
     """
     set_reviewers = {s for s, p in dict_roster.items() if _POSTS_CAN_REVIEW[p]}
     if dict_roster and not set_reviewers:
@@ -396,12 +396,12 @@ def _fetch_page(
     Returns
     -------
     dict
-            The ``pullRequest`` node for this page.
+        The ``pullRequest`` node for this page.
 
     Raises
     ------
     RuntimeError
-            If the API call fails, so an unreachable API is never mistaken for a clean PR.
+        If the API call fails, so an unreachable API is never mistaken for a clean PR.
     """
     list_cmd = [
         "gh",
@@ -448,21 +448,21 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
     Parameters
     ----------
     str_owner : str
-            Repository owner.
+        Repository owner.
     str_repo : str
-            Repository name.
+        Repository name.
     int_number : int
-            Pull-request number.
+        Pull-request number.
 
     Returns
     -------
     dict
-            The ``pullRequest`` node, carrying ``author``, ``reviews`` and ``reviewThreads``.
+        The ``pullRequest`` node, carrying ``author``, ``reviews`` and ``reviewThreads``.
 
     Raises
     ------
     RuntimeError
-            If the API call fails, so an unreachable API is never mistaken for a clean PR.
+        If the API call fails, so an unreachable API is never mistaken for a clean PR.
     """
     dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None, None)
     list_sides = [(dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr]
@@ -496,18 +496,18 @@ def reviewers_who_reported(
     Parameters
     ----------
     list_reviews : list of dict
-            Submitted reviews, each with an ``author`` node and a ``commit`` node.
+        Submitted reviews, each with an ``author`` node and a ``commit`` node.
     set_roster : set of str
-            Already-normalised logins that can submit a review.
+        Already-normalised logins that can submit a review.
     str_commit_oid : str, optional
-            When given, only a review written against exactly this commit counts. When empty,
-            every review counts regardless of commit — used to tell "reviewed OLDER code" apart
-            from "never reviewed", which must not print the same sentence.
+        When given, only a review written against exactly this commit counts. When empty,
+        every review counts regardless of commit — used to tell "reviewed OLDER code" apart
+        from "never reviewed", which must not print the same sentence.
 
     Returns
     -------
     set of str
-            The subset of ``set_roster`` that reported under the requested pinning.
+        The subset of ``set_roster`` that reported under the requested pinning.
     """
     return {
         normalise_login((d.get("author") or {}).get("login") or "")
@@ -525,14 +525,14 @@ def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str
     Parameters
     ----------
     list_reviews : list of dict
-            Submitted reviews, oldest first, each with an ``author`` node and a ``commit`` node.
+        Submitted reviews, oldest first, each with an ``author`` node and a ``commit`` node.
     set_roster : set of str
-            Already-normalised logins that can submit a review.
+        Already-normalised logins that can submit a review.
 
     Returns
     -------
     list of str
-            Commit oids, deduplicated, empty oids dropped.
+        Commit oids, deduplicated, empty oids dropped.
     """
     # Every review, not each reviewer's latest: an equal fingerprint means identical PR code, so
     # an older identical review is a true carry-forward. `reviewers_who_reported` filters by
@@ -576,18 +576,18 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     Parameters
     ----------
     list_files : list of dict
-            The ``files`` array of ``compare/<base>...<oid>`` (merge-base to oid).
+        The ``files`` array of ``compare/<base>...<oid>`` (merge-base to oid).
 
     Returns
     -------
     str
-            A digest that ignores hunk line numbers but keeps each hunk header's function
-            context, so the same edit moved to another function does not match.
+        A digest that ignores hunk line numbers but keeps each hunk header's function
+        context, so the same edit moved to another function does not match.
 
     Raises
     ------
     ValueError
-            If the list is empty, possibly truncated, or a file carries no patch text.
+        If the list is empty, possibly truncated, or a file carries no patch text.
     """
     if not list_files or len(list_files) >= _INT_COMPARE_FILES:
         raise ValueError(f"patch unavailable: {len(list_files)} file(s) in the comparison")
@@ -619,28 +619,28 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
     Parameters
     ----------
     str_owner : str
-            Repository owner.
+        Repository owner.
     str_repo : str
-            Repository name.
+        Repository name.
     str_base : str
-            The base commit SHA, read once with the PR. ⚠️ Never the branch name: two compares
-            would resolve it at two moments, and a retarget or push in between would measure
-            both patches against different bases.
+        The base commit SHA, read once with the PR. ⚠️ Never the branch name: two compares
+        would resolve it at two moments, and a retarget or push in between would measure
+        both patches against different bases.
     str_oid : str
-            The commit whose patch is wanted.
+        The commit whose patch is wanted.
 
     Returns
     -------
     str
-            See :func:`patch_fingerprint`.
+        See :func:`patch_fingerprint`.
 
     Raises
     ------
     RuntimeError
-            If the API call fails.
+        If the API call fails.
     ValueError
-            If the base SHA is empty, or the response is unusable, see
-            :func:`patch_fingerprint`.
+        If the base SHA is empty, or the response is unusable, see
+        :func:`patch_fingerprint`.
     """
     if not str_base:
         raise ValueError("patch unavailable: the PR's base commit is unknown")
@@ -676,21 +676,21 @@ def fetch_retargeted(str_owner: str, str_repo: str, int_number: int) -> bool:
     Parameters
     ----------
     str_owner : str
-            Repository owner.
+        Repository owner.
     str_repo : str
-            Repository name.
+        Repository name.
     int_number : int
-            Pull-request number.
+        Pull-request number.
 
     Returns
     -------
     bool
-            ``True`` when the timeline holds a ``base_ref_changed`` event.
+        ``True`` when the timeline holds a ``base_ref_changed`` event.
 
     Raises
     ------
     RuntimeError
-            If the API call fails, so an unreadable timeline is never read as "not retargeted".
+        If the API call fails, so an unreadable timeline is never read as "not retargeted".
     """
     list_cmd = [
         "gh",
@@ -729,19 +729,19 @@ def review_covers_head(
     Parameters
     ----------
     fn_fingerprint : Callable[[str], str]
-            Maps a commit oid to its patch fingerprint; raises on an unavailable patch.
+        Maps a commit oid to its patch fingerprint; raises on an unavailable patch.
     str_review_oid : str
-            The commit the review was written against.
+        The commit the review was written against.
     str_head_oid : str
-            The PR's head commit, for the diagnostic only.
+        The PR's head commit, for the diagnostic only.
     str_head_digest : str
-            The head's fingerprint, computed once by the caller and passed in, so the
-            at-most-once guarantee never depends on the callable caching.
+        The head's fingerprint, computed once by the caller and passed in, so the
+        at-most-once guarantee never depends on the callable caching.
 
     Returns
     -------
     bool
-            ``True`` only when both fingerprints were computed and are equal.
+        ``True`` only when both fingerprints were computed and are equal.
     """
     try:
         bool_same = fn_fingerprint(str_review_oid) == str_head_digest
@@ -762,7 +762,7 @@ def _note(str_message: str) -> None:
     Parameters
     ----------
     str_message : str
-            The line to print.
+        The line to print.
     """
     print(str_message, file=sys.stderr)
 
@@ -782,18 +782,18 @@ def review_carried_forward(
     Parameters
     ----------
     fn_fingerprint : Callable[[str], str] or None
-            Maps a commit oid to its patch fingerprint; ``None`` disables carry-forward.
+        Maps a commit oid to its patch fingerprint; ``None`` disables carry-forward.
     list_reviews : list of dict
-            Submitted reviews.
+        Submitted reviews.
     set_roster : set of str
-            Already-normalised logins that can submit a review.
+        Already-normalised logins that can submit a review.
     str_head_oid : str
-            The PR's head commit.
+        The PR's head commit.
 
     Returns
     -------
     str
-            The covering review's commit, or ``""`` when none has an equal fingerprint.
+        The covering review's commit, or ``""`` when none has an equal fingerprint.
     """
     list_oids = reviewed_commits(list_reviews, set_roster) if fn_fingerprint else []
     if not list_oids:
@@ -820,15 +820,15 @@ def newest_roster_notice(list_notices: list[dict], set_roster: set[str]) -> str:
     Parameters
     ----------
     list_notices : list of dict
-            The PR's issue comments, oldest first — the stream a declining reviewer posts to.
+        The PR's issue comments, oldest first — the stream a declining reviewer posts to.
     set_roster : set of str
-            Already-normalised logins that can submit a review.
+        Already-normalised logins that can submit a review.
 
     Returns
     -------
     str
-            The newest roster comment with markup stripped, untruncated, or ``""`` when the roster
-            has said nothing.
+        The newest roster comment with markup stripped, untruncated, or ``""`` when the roster
+        has said nothing.
 
     Notes
     -----
@@ -859,17 +859,17 @@ def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) ->
     Parameters
     ----------
     list_notices : list of dict
-            The PR's issue comments, oldest first — the stream a declining reviewer posts to.
+        The PR's issue comments, oldest first — the stream a declining reviewer posts to.
     set_roster : set of str
-            Already-normalised logins that can submit a review.
+        Already-normalised logins that can submit a review.
 
     Returns
     -------
     str
-            :func:`newest_roster_notice` cut to :data:`_INT_NOTICE_DISPLAY_CHARS`, or ``""`` when
-            the roster has said nothing. ⚠️ DISPLAY ONLY, never a verdict — see the notice block
-            above: every outcome carries the same "already reviewed" footnote, so the text cannot
-            discriminate between them. Match on :func:`newest_roster_notice` instead.
+        :func:`newest_roster_notice` cut to :data:`_INT_NOTICE_DISPLAY_CHARS`, or ``""`` when
+        the roster has said nothing. ⚠️ DISPLAY ONLY, never a verdict — see the notice block
+        above: every outcome carries the same "already reviewed" footnote, so the text cannot
+        discriminate between them. Match on :func:`newest_roster_notice` instead.
     """
     return newest_roster_notice(list_notices, set_roster)[:_INT_NOTICE_DISPLAY_CHARS]
 
@@ -880,15 +880,15 @@ def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) ->
     Parameters
     ----------
     list_notices : list of dict
-            The PR's issue comments, oldest first.
+        The PR's issue comments, oldest first.
     set_roster : set of str
-            Already-normalised logins that can submit a review.
+        Already-normalised logins that can submit a review.
 
     Returns
     -------
     str
-            ISO-8601 timestamp, or ``""`` when the roster has said nothing. Pairs with
-            :func:`summarise_reviewer_notice`, which walks the same stream for the same comment.
+        ISO-8601 timestamp, or ``""`` when the roster has said nothing. Pairs with
+        :func:`summarise_reviewer_notice`, which walks the same stream for the same comment.
     """
     for dict_comment in reversed(list_notices):
         if normalise_login((dict_comment.get("author") or {}).get("login") or "") in set_roster:
@@ -1010,12 +1010,12 @@ def parse_declared_wait(str_notice: str) -> int | None:
     Parameters
     ----------
     str_notice : str
-            The reviewer's refusal body.
+        The reviewer's refusal body.
 
     Returns
     -------
     int or None
-            Seconds to wait, or ``None`` when the notice states no parseable wait.
+        Seconds to wait, or ``None`` when the notice states no parseable wait.
     """
     cls_chat = _RE_CHAT_WAIT.search(str_notice)
     if cls_chat is not None:
@@ -1079,19 +1079,19 @@ def reviewer_declared_completion(
     Parameters
     ----------
     list_notices : list of dict
-            The PR's issue comments, oldest first — the stream the reviewer reports completion to.
+        The PR's issue comments, oldest first — the stream the reviewer reports completion to.
     set_roster : set of str
-            Already-normalised logins that can submit a review.
+        Already-normalised logins that can submit a review.
     str_head_date : str, optional
-            ISO-8601 ``committedDate`` of the head commit. A notice created BEFORE it describes
-            superseded code and is not evidence. Empty means unknown, and unknown fails closed.
+        ISO-8601 ``committedDate`` of the head commit. A notice created BEFORE it describes
+        superseded code and is not evidence. Empty means unknown, and unknown fails closed.
 
     Returns
     -------
     bool
-            ``True`` when a roster-authored comment carries a completion phrase AND postdates the
-            head commit. ⚠️ Evidence that a review HAPPENED and never that a thread was answered —
-            see the COMPLETION block above.
+        ``True`` when a roster-authored comment carries a completion phrase AND postdates the
+        head commit. ⚠️ Evidence that a review HAPPENED and never that a thread was answered —
+        see the COMPLETION block above.
     """
     if not str_head_date:
         return False
@@ -1124,18 +1124,18 @@ def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: lis
     Parameters
     ----------
     str_quote : str
-            The "reviewer's most recent notice" suffix the caller already built, or ``""``.
+        The "reviewer's most recent notice" suffix the caller already built, or ``""``.
     set_roster : set of str
-            Already-normalised logins that can submit a review, named in the generic message.
+        Already-normalised logins that can submit a review, named in the generic message.
     list_notices : list of dict
-            The PR's issue comments, oldest first — read again to classify the SAME notice
-            ``str_quote`` already quotes, so the sentence and the quote never disagree.
+        The PR's issue comments, oldest first — read again to classify the SAME notice
+        ``str_quote`` already quotes, so the sentence and the quote never disagree.
 
     Returns
     -------
     str
-            The file-cap sentence when the reviewer's newest notice states that structural reason;
-            the generic "never ran" sentence otherwise. Both are failures — never a pass.
+        The file-cap sentence when the reviewer's newest notice states that structural reason;
+        the generic "never ran" sentence otherwise. Both are failures — never a pass.
     """
     str_notice = newest_roster_notice(list_notices, set_roster)
     if classify_reviewer_notice(str_notice) == NOTICE_FILE_CAP_EXCEEDED:
@@ -1177,36 +1177,36 @@ def find_missing_review_problem(
     Parameters
     ----------
     list_reviews : list of dict
-            Submitted reviews, each with an ``author`` node and a ``commit`` node.
+        Submitted reviews, each with an ``author`` node and a ``commit`` node.
     set_reviewers : set of str
-            Logins that can actually submit a review — :func:`reviewer_logins`, NOT the whole
-            roster. ⚠️ Handing this the full roster is the defect it was fixed for: a
-            ``posts: status`` member both gets NAMED as expected and SATISFIES the check, and
-            ``github-actions[bot]`` can submit a review with the ambient token.
+        Logins that can actually submit a review — :func:`reviewer_logins`, NOT the whole
+        roster. ⚠️ Handing this the full roster is the defect it was fixed for: a
+        ``posts: status`` member both gets NAMED as expected and SATISFIES the check, and
+        ``github-actions[bot]`` can submit a review with the ambient token.
     str_pr_author : str, optional
-            Login of the PR author; a roster member's own PR is exempt.
+        Login of the PR author; a roster member's own PR is exempt.
     str_head_date : str, optional
-            ISO-8601 ``committedDate`` of the head commit, so a completion notice can be pinned to
-            the code it described. ⚠️ Empty fails CLOSED: unknown is not evidence.
+        ISO-8601 ``committedDate`` of the head commit, so a completion notice can be pinned to
+        the code it described. ⚠️ Empty fails CLOSED: unknown is not evidence.
     str_head_oid : str, keyword-only
-            The PR's ``headRefOid``. ⚠️ Deliberately has NO default, like ``posts:`` on a roster
-            row: an empty value silently counts every review whatever code it was written
-            against, which is the vacuous pass this parameter exists to remove.
+        The PR's ``headRefOid``. ⚠️ Deliberately has NO default, like ``posts:`` on a roster
+        row: an empty value silently counts every review whatever code it was written
+        against, which is the vacuous pass this parameter exists to remove.
     list_notices : list of dict, optional
-            The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
+        The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
     fn_fingerprint : Callable[[str], str], optional
-            Maps a commit oid to its patch fingerprint. When given, a review at an earlier
-            commit covers HEAD if the PR's own patch is unchanged (see
-            :func:`review_covers_head`). ``None`` keeps the strict pin to HEAD.
+        Maps a commit oid to its patch fingerprint. When given, a review at an earlier
+        commit covers HEAD if the PR's own patch is unchanged (see
+        :func:`review_covers_head`). ``None`` keeps the strict pin to HEAD.
     dict_carried : dict, optional
-            Out-parameter: receives ``{"from": <commit>}`` when a carried-forward review is what
-            satisfied the check, so the caller can show it in the verdict.
+        Out-parameter: receives ``{"from": <commit>}`` when a carried-forward review is what
+        satisfied the check, so the caller can show it in the verdict.
 
     Returns
     -------
     str or None
-            A human-readable problem, or ``None`` when a reviewer reported on the head commit
-            (or declared those commits already reviewed).
+        A human-readable problem, or ``None`` when a reviewer reported on the head commit
+        (or declared those commits already reviewed).
     """
     set_roster = {normalise_login(s) for s in set_reviewers}
     if normalise_login(str_pr_author) in set_roster:
@@ -1279,23 +1279,23 @@ def find_thread_problems(
     Parameters
     ----------
     list_threads : list of dict
-            Review threads as returned by :func:`fetch_pull_request` (its ``reviewThreads``).
+        Review threads as returned by :func:`fetch_pull_request` (its ``reviewThreads``).
     set_roster : set of str
-            Logins that count as reviewers rather than as answers.
+        Logins that count as reviewers rather than as answers.
     int_min_chars : int, optional
-            Minimum length for a reply to count as substantive.
+        Minimum length for a reply to count as substantive.
     bool_require_resolved : bool, keyword-only, optional
-            Whether an answered-but-open thread is a problem. ⚠️ CI passes ``True`` — it used to
-            pass ``False`` on the reasoning that a job must not assert what it cannot re-evaluate,
-            which delegated the resolve half to a native setting that DROPS an outdated thread.
-            See the SUPERSEDED block above ``main`` for the measurement and the accepted cost.
+        Whether an answered-but-open thread is a problem. ⚠️ CI passes ``True`` — it used to
+        pass ``False`` on the reasoning that a job must not assert what it cannot re-evaluate,
+        which delegated the resolve half to a native setting that DROPS an outdated thread.
+        See the SUPERSEDED block above ``main`` for the measurement and the accepted cost.
 
     Returns
     -------
     list of str
-            Human-readable problems; empty when every thread carries an answer — and, when
-            ``bool_require_resolved`` is set, is resolved as well. Both halves are the contract:
-            the reply records the reasoning, the resolution records that the exchange is over.
+        Human-readable problems; empty when every thread carries an answer — and, when
+        ``bool_require_resolved`` is set, is resolved as well. Both halves are the contract:
+        the reply records the reasoning, the resolution records that the exchange is over.
     """
     # Normalise the roster here too, so the predicate is correct however the caller built the
     # set — `load_roster` already normalises, but a hand-built set (a test, another caller)
@@ -1473,18 +1473,18 @@ def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list
     Parameters
     ----------
     str_body : str or None
-            The submitted review's body.
+        The submitted review's body.
     str_login : str, optional
-            The author's login. Printed counts clear a body only for the author they speak
-            for (CodeRabbit's header, the ladder app's count); any other author is read by
-            structure alone.
+        The author's login. Printed counts clear a body only for the author they speak
+        for (CodeRabbit's header, the ladder app's count); any other author is read by
+        structure alone.
 
     Returns
     -------
     list of str
-            Each line carrying a severity marker, a non-zero finding count or a findings
-            heading. A line that only reports there are none ("No findings.", "Minor: none")
-            and a findings heading directly followed by one are dropped first.
+        Each line carrying a severity marker, a non-zero finding count or a findings
+        heading. A line that only reports there are none ("No findings.", "Minor: none")
+        and a findings heading directly followed by one are dropped first.
     """
     list_declared = _declared_findings(str_body or "", str_login)
     if list_declared is not None:
@@ -1506,12 +1506,12 @@ def review_body_has_findings(str_body: str | None) -> bool:
     Parameters
     ----------
     str_body : str or None
-            The submitted review's body.
+        The submitted review's body.
 
     Returns
     -------
     bool
-            ``True`` when :func:`review_body_finding_lines` finds at least one line.
+        ``True`` when :func:`review_body_finding_lines` finds at least one line.
     """
     return bool(review_body_finding_lines(str_body))
 
@@ -1608,19 +1608,19 @@ def find_review_body_problems(
     Parameters
     ----------
     list_reviews : list of dict
-            Submitted reviews with ``author``, ``state``, ``body`` and ``submittedAt``.
+        Submitted reviews with ``author``, ``state``, ``body`` and ``submittedAt``.
     list_notices : list of dict
-            The PR's issue comments, where the author's reply to a review body lands.
+        The PR's issue comments, where the author's reply to a review body lands.
     set_roster : set of str
-            Logins that count as reviewers rather than as answers.
+        Logins that count as reviewers rather than as answers.
     int_min_chars : int, optional
-            Minimum length for a reply to count, the same bar a thread reply meets.
+        Minimum length for a reply to count, the same bar a thread reply meets.
 
     Returns
     -------
     list of str
-            Human-readable problems; empty when every findings body was answered after it was
-            submitted. A missing ``submittedAt`` fails closed.
+        Human-readable problems; empty when every findings body was answered after it was
+        submitted. A missing ``submittedAt`` fails closed.
     """
     set_roster = {normalise_login(str_login) for str_login in set_roster}
     list_hits = [
@@ -1660,16 +1660,16 @@ def report_verdict(
     Parameters
     ----------
     list_problems : list of str
-            Problems from :func:`find_thread_problems`.
+        Problems from :func:`find_thread_problems`.
     int_threads : int
-            How many review threads were examined.
+        How many review threads were examined.
     bool_require_resolved : bool
-            Whether the resolve half was asserted, so the wording matches what was checked.
+        Whether the resolve half was asserted, so the wording matches what was checked.
 
     Returns
     -------
     int
-            ``1`` when there are problems, ``0`` otherwise.
+        ``1`` when there are problems, ``0`` otherwise.
     """
     for str_problem in list_problems:
         print(f"❌ {str_problem}")
@@ -1716,14 +1716,14 @@ def parse_args(list_argv: list[str] | None = None) -> argparse.Namespace:
     Parameters
     ----------
     list_argv : list of str, optional
-            Arguments to parse; ``None`` (the default) makes argparse read ``sys.argv[1:]``, so
-            ``sys.exit(main())`` at the bottom of this file is unaffected.
+        Arguments to parse; ``None`` (the default) makes argparse read ``sys.argv[1:]``, so
+        ``sys.exit(main())`` at the bottom of this file is unaffected.
 
     Returns
     -------
     argparse.Namespace
-            A ``json`` boolean. Every other input stays environment-only (``GITHUB_REPOSITORY``,
-            ``PR_NUMBER``, ``REVIEW_THREADS_REQUIRE_RESOLVED``) — unchanged by this addition.
+        A ``json`` boolean. Every other input stays environment-only (``GITHUB_REPOSITORY``,
+        ``PR_NUMBER``, ``REVIEW_THREADS_REQUIRE_RESOLVED``) — unchanged by this addition.
     """
     cls_parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     cls_parser.add_argument(
@@ -1849,17 +1849,17 @@ def _compare_fingerprint(
     Parameters
     ----------
     dict_pr : dict
-            The ``pullRequest`` node, read for ``baseRefOid``, pinned in the same query as
-            ``headRefOid``.
+        The ``pullRequest`` node, read for ``baseRefOid``, pinned in the same query as
+        ``headRefOid``.
     str_repo_full : str
-            ``owner/name``.
+        ``owner/name``.
     int_number : int
-            Pull-request number, for the retarget check.
+        Pull-request number, for the retarget check.
 
     Returns
     -------
     Callable[[str], str]
-            Maps a commit oid to its patch fingerprint; raises ``ValueError`` when retargeted.
+        Maps a commit oid to its patch fingerprint; raises ``ValueError`` when retargeted.
     """
     str_owner, _, str_repo = str_repo_full.partition("/")
     str_base = dict_pr.get("baseRefOid") or ""
@@ -1904,12 +1904,12 @@ def main(list_argv: list[str] | None = None) -> int:
     Parameters
     ----------
     list_argv : list of str, optional
-            CLI arguments; ``None`` defaults to ``sys.argv[1:]`` — see :func:`parse_args`.
+        CLI arguments; ``None`` defaults to ``sys.argv[1:]`` — see :func:`parse_args`.
 
     Returns
     -------
     int
-            ``0`` when every thread is answered (or the repo declares no roster), ``1`` otherwise.
+        ``0`` when every thread is answered (or the repo declares no roster), ``1`` otherwise.
     """
     bool_json = parse_args(list_argv).json
 
