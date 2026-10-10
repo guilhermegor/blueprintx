@@ -91,12 +91,12 @@ def _walk_own_statements(node: ast.AST) -> list:
     Parameters
     ----------
     node : ast.AST
-            A function (or async function) node.
+        A function (or async function) node.
 
     Returns
     -------
     list of ast.AST
-            Every node in ``node``'s own body, one function-scope deep.
+        Every node in ``node``'s own body, one function-scope deep.
     """
     list_out: list = []
     list_stack = list(ast.iter_child_nodes(node))
@@ -115,13 +115,13 @@ def _session_get_read(call: ast.Call) -> tuple | None:
     Parameters
     ----------
     call : ast.Call
-            A call expression.
+        A call expression.
 
     Returns
     -------
     tuple of (str, bool) or None
-            ``(model_name, has_lock)`` when this is a ``*.get(Model, ...)`` call reached through
-            something named ``session``; ``None`` otherwise.
+        ``(model_name, has_lock)`` when this is a ``*.get(Model, ...)`` call reached through
+        something named ``session``; ``None`` otherwise.
     """
     if not isinstance(call.func, ast.Attribute) or call.func.attr != "get":
         return None
@@ -138,12 +138,12 @@ def _keyword_locks(list_keywords: list) -> bool:
     Parameters
     ----------
     list_keywords : list of ast.keyword
-            The call's keyword arguments.
+        The call's keyword arguments.
 
     Returns
     -------
     bool
-            ``True`` only when the lock keyword is given a truthy literal.
+        ``True`` only when the lock keyword is given a truthy literal.
 
     Notes
     -----
@@ -171,14 +171,14 @@ def _query_chain_read(call: ast.Call) -> tuple | None:
     Parameters
     ----------
     call : ast.Call
-            The outermost call — ``<chain>.first()`` or ``<chain>.one()``.
+        The outermost call — ``<chain>.first()`` or ``<chain>.one()``.
 
     Returns
     -------
     tuple of (str, bool) or None
-            ``(model_name, has_lock)`` when the chain includes a ``.query(Model)`` call (the one
-            signal that pins a model onto an otherwise generic ``.first()``/``.one()``);
-            ``None`` when it does not.
+        ``(model_name, has_lock)`` when the chain includes a ``.query(Model)`` call (the one
+        signal that pins a model onto an otherwise generic ``.first()``/``.one()``);
+        ``None`` when it does not.
     """
     if not isinstance(call.func, ast.Attribute) or call.func.attr not in _READ_TERMINALS:
         return None
@@ -198,12 +198,12 @@ def _collect_read_entities(func: ast.AST) -> dict:
     Parameters
     ----------
     func : ast.AST
-            A function (or async function) node.
+        A function (or async function) node.
 
     Returns
     -------
     dict of str to tuple
-            Variable name -> ``(model_name, has_lock)``, scoped to this function only.
+        Variable name -> ``(model_name, has_lock)``, scoped to this function only.
     """
     dict_entities: dict = {}
     for cls_node in _walk_own_statements(func):
@@ -233,16 +233,16 @@ def _references_attr(expr: ast.AST, str_var: str, str_attr: str) -> bool:
     Parameters
     ----------
     expr : ast.AST
-            The expression to search.
+        The expression to search.
     str_var : str
-            The entity variable name.
+        The entity variable name.
     str_attr : str
-            The attribute name.
+        The attribute name.
 
     Returns
     -------
     bool
-            ``True`` when ``expr`` contains ``var.attr``.
+        ``True`` when ``expr`` contains ``var.attr``.
     """
     return any(
         isinstance(cls_node, ast.Attribute)
@@ -259,13 +259,13 @@ def _assign_target_and_check(node: ast.AST) -> tuple:
     Parameters
     ----------
     node : ast.AST
-            A statement node.
+        A statement node.
 
     Returns
     -------
     tuple of (ast.AST or None, ast.AST or None)
-            The attribute target and the expression to test for a self-reference, or
-            ``(None, None)`` when ``node`` is not an arithmetic reassignment.
+        The attribute target and the expression to test for a self-reference, or
+        ``(None, None)`` when ``node`` is not an arithmetic reassignment.
     """
     if isinstance(node, ast.AugAssign) and isinstance(node.op, _ARITH_OPS):
         # `x.qty -= n` IS `x.qty = x.qty - n` — the target is the self-reference.
@@ -287,18 +287,18 @@ def _model_has_version_id_col(tree: ast.Module, str_source: str, str_model: str)
     Parameters
     ----------
     tree : ast.Module
-            The parsed module.
+        The parsed module.
     str_source : str
-            Unused; kept so the call site stays stable. See Notes.
+        Unused; kept so the call site stays stable. See Notes.
     str_model : str
-            The model name to look up.
+        The model name to look up.
 
     Returns
     -------
     bool
-            ``True`` when the class assigns ``__mapper_args__`` with a ``version_id_col`` key.
-            A model defined in another file cannot be resolved by this structural gate and reads
-            as unprotected — use ``with_for_update()`` or the escape hatch for that case.
+        ``True`` when the class assigns ``__mapper_args__`` with a ``version_id_col`` key.
+        A model defined in another file cannot be resolved by this structural gate and reads
+        as unprotected — use ``with_for_update()`` or the escape hatch for that case.
 
     Notes
     -----
@@ -321,12 +321,12 @@ def _class_declares_version_id_col(cls_class: ast.ClassDef) -> bool:
     Parameters
     ----------
     cls_class : ast.ClassDef
-            The model class to inspect.
+        The model class to inspect.
 
     Returns
     -------
     bool
-            ``True`` when a ``__mapper_args__`` dict declares the key.
+        ``True`` when a ``__mapper_args__`` dict declares the key.
     """
     for cls_stmt in cls_class.body:
         if not isinstance(cls_stmt, ast.Assign) or not isinstance(cls_stmt.value, ast.Dict):
@@ -350,16 +350,16 @@ def _message(str_var: str, str_attr: str, str_model: str) -> str:
     Parameters
     ----------
     str_var : str
-            The entity variable name.
+        The entity variable name.
     str_attr : str
-            The attribute name.
+        The attribute name.
     str_model : str
-            The model name.
+        The model name.
 
     Returns
     -------
     str
-            The finding message.
+        The finding message.
     """
     # S608 false positive: this builds a human-readable REMEDY MESSAGE containing SQL
     # vocabulary, never an executed query — nothing here reaches a cursor or a session.
@@ -379,16 +379,16 @@ def _race_violations(func: ast.AST, tree: ast.Module, str_source: str) -> list:
     Parameters
     ----------
     func : ast.AST
-            A function (or async function) node.
+        A function (or async function) node.
     tree : ast.Module
-            The parsed module (for cross-statement model lookup).
+        The parsed module (for cross-statement model lookup).
     str_source : str
-            The module's source text.
+        The module's source text.
 
     Returns
     -------
     list of tuple
-            ``(line_number, message)`` for every unprotected race found.
+        ``(line_number, message)`` for every unprotected race found.
     """
     dict_entities = _collect_read_entities(func)
     list_findings: list = []
@@ -414,13 +414,13 @@ def check_file(str_path: str) -> int:
     Parameters
     ----------
     str_path : str
-            Path to the Python source file to scan.
+        Path to the Python source file to scan.
 
     Returns
     -------
     int
-            The number of violations found (0 when clean). An unparsable file is one violation,
-            never a silent pass — "cannot be checked" and "is clean" must not read the same.
+        The number of violations found (0 when clean). An unparsable file is one violation,
+        never a silent pass — "cannot be checked" and "is clean" must not read the same.
     """
     str_source = pathlib.Path(str_path).read_text(encoding="utf-8")
     try:
@@ -449,7 +449,7 @@ def _source_files() -> list:
     Returns
     -------
     list of pathlib.Path
-            Python source files to check.
+        Python source files to check.
     """
     return sorted(pathlib.Path("src").rglob("*.py"))
 
