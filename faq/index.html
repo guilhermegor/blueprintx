@@ -494,6 +494,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#does-a-review-that-only-has-a-body-need-an-answer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Does a review that only has a body need an answer?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Does a review that only has a body need an answer?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-gate-classifies-a-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the gate classifies a review
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-the-gate-classifies-an-answer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the gate classifies an answer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#which-install-methods-are-supported" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1839,6 +1878,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#does-a-review-that-only-has-a-body-need-an-answer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Does a review that only has a body need an answer?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Does a review that only has a body need an answer?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-gate-classifies-a-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the gate classifies a review
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-the-gate-classifies-an-answer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the gate classifies an answer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#which-install-methods-are-supported" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1908,6 +1986,60 @@ a fix) and blueprintx#262 (why an empty roster is not the opt-out).</p>
 <p>The version is the git tag. Cut a release from the <strong>Release</strong> GitHub Action (enter the version
 once); <code>blueprintx --version</code> resolves it via <code>git describe</code> from a checkout, or a stamped
 literal for a packaged install. See the <a href="../changelog/">Changelog</a>.</p>
+<h2 id="does-a-review-that-only-has-a-body-need-an-answer">Does a review that only has a body need an answer?<a class="headerlink" href="#does-a-review-that-only-has-a-body-need-an-answer" title="Permanent link">&para;</a></h2>
+<p>Yes. A roster reviewer that posts findings as the review <strong>body</strong>, with no inline thread, used
+to satisfy <code>Review threads answered</code> unread, because the gate only counted threads (16 PRs
+merged that way on 2026-10-05, blueprintx#630). The gate does not parse prose to guess; it
+classifies a comment by the structure the comment declares for itself, and when that is
+ambiguous it counts the comment as a review, so a valid review is never dropped.</p>
+<h3 id="how-the-gate-classifies-a-review">How the gate classifies a review<a class="headerlink" href="#how-the-gate-classifies-a-review" title="Permanent link">&para;</a></h3>
+<p>A roster author's review (on any commit, as threads are; a <code>DISMISSED</code> one is skipped) or issue
+comment is a review when it has one of these shapes. A roster issue comment counts only with the
+ladder attribution line or a CodeRabbit header, so a status notice such as <code>Review ladder: all
+rungs failed</code> is not a review. A printed count wins over everything else:</p>
+<ul>
+<li>CodeRabbit's body sections <code>Outside diff range comments (N)</code> and <code>Duplicate comments (N)</code>
+  with <code>N &gt; 0</code>: these live only in the body, so they need a reply even when <code>Actionable comments
+  posted: 0</code>;</li>
+<li><code>Actionable comments posted: N</code> alone: the N findings are inline threads, which the thread
+  check already holds (reply and resolve), so the body needs no extra reply for them;</li>
+<li><code>N finding(s) across M reviewed file(s)</code> at the start of a line (the ladder posts no
+  threads): <code>0</code> is clean, <code>N &gt; 0</code> needs a reply;</li>
+<li>the ladder attribution line <code>Fallback review — runtime: &lt;x&gt;, model: &lt;y&gt; (selected by: &lt;z&gt;)</code>
+  without a count (the claude rung writes prose): a review, unless the prose is only
+  <code>No findings.</code>;</li>
+<li>a <code>Review</code> or <code>Findings</code> heading, bullet, bold label or <code>Review:</code> line, and numbered
+  <code>Finding 1:</code> items;</li>
+<li>a severity emoji, <code>Major</code>/<code>Critical</code>/<code>Minor</code>/<code>Blocker</code> opening a line as bold, in brackets or
+  before <code>:</code>/a dash, <code>Severity: &lt;word&gt;</code>, or a count that opens a line (<code>2 finding(s)</code>).</li>
+</ul>
+<p>A line that is only <code>No findings.</code>, <code>Review: no findings</code>, <code>Minor: none</code> or <code>None.</code> (and a
+heading directly followed by one) is clean. Nitpick and Trivial lines never need a reply.
+CodeRabbit's walkthrough, rate-limit and command-reply comments are not reviews because of their
+SHAPE: they carry no ladder attribution line, <code>Actionable</code> header or body section, and a roster
+issue comment counts as a review only with one of those.</p>
+<p>Count authority binds to the author, not the body: the <code>Actionable</code> header only speaks for
+CodeRabbit, and the <code>N finding(s) across</code> count only for the ladder app and only with its
+attribution line. Any other author's counts are ignored and its body is read by structure, so
+quoting a header never clears findings. Quoted lines and fenced blocks are ignored too.</p>
+<p>Missing or unrecognised input fails closed: a body section with no parsable count, a ladder
+attribution with nothing after it, and a review comment with no timestamp all count as findings;
+only an explicit clean statement or a stated <code>0</code> clears a review. Issue comments, reviews and
+threads are all paginated, so a PR with 140 comments is read in full; a page that fails to load
+fails the check instead of shortening the list.</p>
+<h3 id="how-the-gate-classifies-an-answer">How the gate classifies an answer<a class="headerlink" href="#how-the-gate-classifies-an-answer" title="Permanent link">&para;</a></h3>
+<p>An answer comes from outside the reviewer roster, is a user account (not a bot, app, organization or deleted ghost),
+and is posted <strong>after</strong> the review. It counts when it is either 100 characters or longer, or
+has an answer shape at any length: a line that opens with <code>Reply to review &lt;id&gt;</code>,
+<code>Answer(s) to ... review</code>, <code>Re: review</code>, <code>Verdicts</code>/<code>Judgment on the ... review</code>, or a
+<code>review &lt;id&gt;</code> citation,
+<code>Addressed in &lt;sha&gt;</code>/<code>Fixed in &lt;sha&gt;</code>, a <code>Finding N:</code> heading, or a <code>&gt; quoted finding</code>
+followed by a response. A review request (<code>@coderabbitai re-review</code>, <code>Ready for re-review</code>) or a status line (<code>Not
+answered yet</code>) is neither. One reply after the latest
+review answers the earlier ones; a body has no thread, so nothing needs resolving. When threads
+are also open, the failure lists both. Re-run the check after replying. The tests in
+<code>test_review_threads_gate.py</code> list every shape with a witness that fails without its marker.
+The rule is weaker than a thread: a long comment answers without being tied to a finding.</p>
 <h2 id="which-install-methods-are-supported">Which install methods are supported?<a class="headerlink" href="#which-install-methods-are-supported" title="Permanent link">&para;</a></h2>
 <p>Homebrew, Chocolatey, Snap, apt, and <code>make install</code> from a clone — see the project README.</p>
 
