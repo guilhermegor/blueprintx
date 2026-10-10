@@ -53,7 +53,19 @@ def test_to_html_body_p_tag_with_attributes_is_left_untouched() -> None:
 
 @pytest.mark.parametrize(
     "str_html",
-    ["a<br>b", "a<br/>b", "a<BR />b", "a<br\n>b", "<p>x</p>", "<P>x</P>", "<p hidden>x</p>"],
+    [
+        "a<br>b",
+        "a<br/>b",
+        "a<BR />b",
+        "a<br\n>b",
+        "<p>x</p>",
+        "<P>x</P>",
+        "<p hidden>x</p>",
+        '<p hidden class="intro">x</p>',
+        "a<br/ >b",
+        "a<br / >b",
+        "<p class='a' id=b>x</p>",
+    ],
     ids=[
         "br",
         "br-self-closing",
@@ -62,10 +74,14 @@ def test_to_html_body_p_tag_with_attributes_is_left_untouched() -> None:
         "p",
         "p-upper",
         "p-boolean-attribute",
+        "p-two-attributes",
+        "br-slash-space",
+        "br-space-slash-space",
+        "p-mixed-quotes",
     ],
 )
 def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
-    """A ``<br``/``<p`` tag followed by whitespace, ``/`` or ``>`` is returned unchanged.
+    """A well-formed ``<br>``/``<p>`` start tag, with any attributes, is returned unchanged.
 
     Parameters
     ----------
@@ -88,6 +104,7 @@ def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
             "risk &lt;p 0.05 &amp; &lt;script&gt;x&lt;/script&gt;",
         ),
         ("x <br 5 & <script>", "x &lt;br 5 &amp; &lt;script&gt;"),
+        ("risk <p n=30 & <script>", "risk &lt;p n=30 &amp; &lt;script&gt;"),
         ("a<p/b", "a&lt;p/b"),
         ("a<br/b", "a&lt;br/b"),
         ("<p \u212a=1>", "&lt;p \u212a=1&gt;"),
@@ -100,6 +117,7 @@ def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
         "trailing-br",
         "p-space-prose",
         "br-space-prose",
+        "p-name-value-prose",
         "p-slash-prose",
         "br-slash-prose",
         "kelvin-sign",

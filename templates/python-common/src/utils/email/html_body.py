@@ -33,8 +33,12 @@ else:
         from chassis.typing import type_checker
 
 re_html_tag = re.compile(
-    r"<(?:br|p)(?:[ \t\r\n\f]+[a-z][\w:-]*[ \t\r\n\f]*(?:=|/?>)|[ \t\r\n\f]*/?>)",
-    re.IGNORECASE | re.ASCII,
+    r"""<(?:br|p)
+    (?:[ \t\r\n\f]+[a-z][a-z0-9:_.-]*
+        (?:[ \t\r\n\f]*=[ \t\r\n\f]*(?:"[^"]*"|'[^']*'|[^ \t\r\n\f"'=<>`]+))?
+    )*
+    (?:[ \t\r\n\f]*/)?[ \t\r\n\f]*>""",
+    re.IGNORECASE | re.ASCII | re.VERBOSE,
 )
 
 
@@ -45,14 +49,21 @@ def to_html_body(str_body: str) -> str:
     An HTML-body client (Outlook's ``mail.HTMLBody``, an SMTP message sent as ``text/html``)
     collapses bare newlines and renders the message on a single line. Each newline is turned
     into a ``<br>`` so paragraph breaks are preserved. A body that already looks like HTML
-    (it holds a real ``<br>`` or ``<p>`` tag, with or without ``name=`` attributes, so
-    ``<bravo>`` and prose like ``<p 0.05`` or ``a<br/b`` do not count but ``<p class="x">``
-    does) is left untouched — the caller composed real markup on purpose, and escaping it
-    would show the reader literal angle brackets instead of the formatting it asked for.
+    is left untouched — the caller composed real markup on purpose, and escaping it would
+    show the reader literal angle brackets instead of the formatting it asked for.
 
-    Only ``<br>`` and ``<p>`` count as HTML: a body of ``<div>`` or ``<b>`` markup without
-    either is still escaped (tracked in blueprintx#701), and attribute names starting with
-    ``_``, ``@`` or ``:`` (framework syntax) are not recognised.
+    "Looks like HTML" means the body contains a complete ``br`` or ``p`` start tag:
+    ``<br`` or ``<p``, zero or more attributes, optional whitespace, an optional ``/``,
+    optional whitespace, then ``>``. An attribute is whitespace and a name
+    (``[a-z][a-z0-9:_.-]*``), optionally ``=`` with a double-quoted, single-quoted or
+    unquoted value (no whitespace and none of ``"'=<>```). Matching is ASCII and
+    case-insensitive. So ``<p class="x">``, ``<p hidden class='a'>`` and ``<br/ >`` count,
+    while ``<bravo>``, ``a<br/b`` and prose like ``<p 0.05`` or ``<p n=30 & x`` (no closing
+    ``>``) do not.
+
+    Only ``br``/``p`` START tags count: ``<div>``/``<b>`` markup without one of them is still
+    escaped, and a body holding only a closing tag (``text</p>``) is not detected either
+    (tracked in blueprintx#701).
 
     ⚠️ Detection is all-or-nothing: ONE detected tag makes the WHOLE body pass through raw.
     Never concatenate untrusted text into a body that carries such a tag — the untrusted
