@@ -7,9 +7,11 @@ cases below reproduce that exact shape on a fabricated project so the gate is pr
 the defect it exists to catch, not only against its own passing case.
 """
 
+import contextlib
 import importlib.util
 import pathlib
 import sys
+import tempfile
 import types
 
 import pytest
@@ -435,3 +437,117 @@ def test_missing_mkdocs_yml_exits_nonzero(tmp_path: pathlib.Path) -> None:
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "index.md").write_text("# Home", encoding="utf-8")
     assert cls_gate.main(["--root", str(tmp_path)]) == 1
+
+
+# --------------------------
+# Tests — MkDocs parity (#641)
+# --------------------------
+
+
+def test_exclude_docs_negation_reincludes_implicitly_dropped_page(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+    """``!`` in ``exclude_docs:`` re-includes a ``templates/`` page, as MkDocs combines them."""
+    path_root = _build_project(
+        tmp_path,
+        {"index.md": "# Home", "templates/layout.md": "# T"},
+        "[{Home: index.md}]",
+        str_exclude_docs="!/templates/layout.md\n",
+    )
+    cls_gate.main(["--root", str(path_root)])
+    assert "templates/layout.md" in capsys.readouterr().err
+
+
+def _symlinks_work() -> bool:
+    """Probe whether this platform lets the process create a directory symlink.
+
+    Returns
+    -------
+    bool
+        ``False`` on Windows without Developer Mode or admin rights, where ``symlink_to``
+        raises ``OSError`` — the symlink tests are then skipped rather than errored.
+    """
+    with tempfile.TemporaryDirectory() as str_tmp:
+        path_link = pathlib.Path(str_tmp) / "link"
+        with contextlib.suppress(OSError):
+            path_link.symlink_to(str_tmp, target_is_directory=True)
+        return path_link.is_symlink()
+
+
+needs_symlinks = pytest.mark.skipif(not _symlinks_work(), reason="symlinks unavailable")
+
+
+@needs_symlinks
+def test_symlinked_directory_pages_are_checked(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+    """An unlisted page behind a directory symlink under ``docs/`` is reported."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    path_target = tmp_path / "shared"
+    path_target.mkdir()
+    (path_target / "linked.md").write_text("# L", encoding="utf-8")
+    (path_root / "docs" / "ext").symlink_to(path_target, target_is_directory=True)
+    cls_gate.main(["--root", str(path_root)])
+    assert "ext/linked.md" in capsys.readouterr().err
+
+
+@needs_symlinks
+def test_symlink_loop_is_reported(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture) -> None:
+    """A link back to an ancestor fails the gate: MkDocs would publish ~40 nested copies."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    (path_root / "docs" / "loop").symlink_to(path_root / "docs", target_is_directory=True)
+    cls_gate.main(["--root", str(path_root)])
+    assert "symlink loop" in capsys.readouterr().err
+
+
+@needs_symlinks
+def test_symlink_loop_still_terminates(tmp_path: pathlib.Path) -> None:
+    """The walk prunes the loop, so pages are listed once and the call returns."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    (path_root / "docs" / "loop").symlink_to(path_root / "docs", target_is_directory=True)
+    list_pages = cls_gate.published_pages(path_root / "docs", cls_gate.unpublished_specs({}))
+    assert list_pages == ["index.md"]
+
+
+@needs_symlinks
+@pytest.mark.parametrize("str_expected", ["alias/file.md", "pages/file.md"])
+def test_symlink_aliases_and_target_are_both_found(
+    tmp_path: pathlib.Path, str_expected: str
+) -> None:
+    """MkDocs publishes each docs-relative alias, and the real directory too."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    path_docs = path_root / "docs"
+    (path_docs / "pages").mkdir()
+    (path_docs / "pages" / "file.md").write_text("# F", encoding="utf-8")
+    (path_docs / "alias").symlink_to(path_docs / "pages", target_is_directory=True)
+    (path_docs / "pages" / "loop").symlink_to(path_docs, target_is_directory=True)
+    list_pages = cls_gate.published_pages(path_docs, cls_gate.unpublished_specs({}))
+    assert str_expected in list_pages
+
+
+def _walk_that_fails(str_top: str, **dict_kwargs: object) -> list:
+    """Stand in for ``os.walk``: report one unreadable directory through ``onerror``.
+
+    Parameters
+    ----------
+    str_top : str
+        The walked root (unused).
+    **dict_kwargs : object
+        The ``os.walk`` keyword arguments; ``onerror`` is the callback under test.
+
+    Returns
+    -------
+    list
+        An empty walk.
+    """
+    dict_kwargs["onerror"](PermissionError(13, "Permission denied", "docs/secret"))
+    return []
+
+
+def test_unreadable_directory_is_reported(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A directory ``os.walk`` cannot list is an error, not a silent skip."""
+    path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
+    monkeypatch.setattr(cls_gate.os, "walk", _walk_that_fails)
+    assert "docs/secret" in cls_gate.walk_problems(path_root / "docs")[0]
