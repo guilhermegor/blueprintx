@@ -483,6 +483,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-scaffolder-offered-me-a-kanban-board-and-labels-what-does-it-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The scaffolder offered me a kanban board and labels — what does it do?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-is-blueprintx-itself-versioned" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1878,6 +1889,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-scaffolder-offered-me-a-kanban-board-and-labels-what-does-it-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The scaffolder offered me a kanban board and labels — what does it do?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-is-blueprintx-itself-versioned" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2004,6 +2026,18 @@ later and re-adding the roster turns the gate back on — at the path the gate r
 by language: for Python copy <code>templates/python-common/.review-bots.yaml</code> to the project root; for
 TypeScript copy <code>templates/ts-common/.github/.review-bots.yaml</code> to <code>.github/.review-bots.yaml</code>. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).</p>
+<h2 id="the-scaffolder-offered-me-a-kanban-board-and-labels-what-does-it-do">The scaffolder offered me a kanban board and labels — what does it do?<a class="headerlink" href="#the-scaffolder-offered-me-a-kanban-board-and-labels-what-does-it-do" title="Permanent link">&para;</a></h2>
+<p>After it creates the GitHub repo, the scaffolder creates the house labels (<code>type:task</code>,
+<code>type:research</code>, <code>type:grilling</code>, <code>hitl</code>, <code>afk</code>, <code>oracle:strong</code>, <code>oracle:weak</code>,
+<code>do-not-merge</code>) and asks whether to create a <code>&lt;repo&gt; kanban</code> GitHub Project. Answer yes and it
+creates the board, links it to the repo, sets <code>Status</code> to Backlog / Ready / In progress / In
+review / Done, and adds <code>Priority</code>, <code>Size</code>, <code>Estimate</code>, <code>Start date</code>, <code>Target date</code> and
+<code>Points</code>. Visibility defaults to the repo's own.</p>
+<p>It is safe to re-run: labels use <code>--force</code>, an existing <code>&lt;repo&gt; kanban</code> board is skipped, and two
+boards with that title are reported, never guessed between. A token without the <code>project</code> scope
+prints <code>gh auth refresh -s project</code> and scaffolding carries on. Views and the built-in workflows
+(auto-add items, item closed to Done) have no public API, so enable them at the URL the
+scaffolder prints (<code>.../projects/&lt;n&gt;/workflows</code>).</p>
 <h2 id="how-is-blueprintx-itself-versioned">How is BlueprintX itself versioned?<a class="headerlink" href="#how-is-blueprintx-itself-versioned" title="Permanent link">&para;</a></h2>
 <p>The version is the git tag. Cut a release from the <strong>Release</strong> GitHub Action (enter the version
 once); <code>blueprintx --version</code> resolves it via <code>git describe</code> from a checkout, or a stamped
