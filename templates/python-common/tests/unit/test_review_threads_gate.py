@@ -1921,9 +1921,52 @@ def test_quoted_actionable_header_mid_line_does_not_clear_a_real_finding() -> No
     assert len(_body_problems([_body_review(str_body)], [])) == 1
 
 
+_FINDING = "- **Major** x: the gate trusts a quoted header."
+
+
+@pytest.mark.parametrize(
+    "str_quote",
+    [
+        "> **Actionable comments posted: 0**",
+        ">> Actionable comments posted: 0",
+        "```\n**Actionable comments posted: 0**\n```",
+        "~~~\nActionable comments posted: 0\n~~~",
+    ],
+)
+def test_quoted_or_fenced_header_cannot_clear_a_ladder_finding(str_quote: str) -> None:
+    """Should-fail witness: a quoted CodeRabbit '0' header in a ladder body clears nothing."""
+    str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n{str_quote}\n"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_unquoted_header_in_a_ladder_body_cannot_clear_a_finding() -> None:
+    """The ladder is not CodeRabbit: its own header-shaped line is not authoritative."""
+    str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n**Actionable comments posted: 0**\n"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+@pytest.mark.parametrize(
+    "str_quote",
+    [
+        "> 0 finding(s) across 4 reviewed file(s).",
+        "```\n0 finding(s) across 4 reviewed file(s).\n```",
+    ],
+)
+def test_quoted_ladder_count_cannot_clear_a_finding(str_quote: str) -> None:
+    """A quoted ladder '0 finding(s)' count clears nothing."""
+    str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n{str_quote}\n"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_ladder_count_without_the_ladder_attribution_is_not_authoritative() -> None:
+    """The count speaks only in a body that carries the attribution line."""
+    str_body = f"0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
 def test_actionable_header_at_a_line_start_still_clears_inline_findings() -> None:
     """The real CodeRabbit shape, the bold header opening a line, still wins."""
-    str_body = _LADDER_CLAUDE + "**Actionable comments posted: 0**\n\n- **Major** x"
+    str_body = "**Actionable comments posted: 0**\n\n- **Major** x"
     assert _body_problems([_body_review(str_body)], []) == []
 
 

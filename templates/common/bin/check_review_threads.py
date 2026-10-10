@@ -1050,10 +1050,10 @@ _RE_BODY_SECTION = re.compile(
     r"\b(?:outside diff range|duplicate) comments(?:\s*\((\d+)\))?", re.IGNORECASE
 )
 _RE_ACTIONABLE = re.compile(
-    r"^[^\w\n]*actionable comments posted:?[\s*]*\d+", re.IGNORECASE | re.MULTILINE
+    r"^[ \t*_#-]*actionable comments posted:?[\s*]*\d+", re.IGNORECASE | re.MULTILINE
 )
 _RE_LADDER_COUNT = re.compile(
-    r"^[^\w\n]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
+    r"^[ \t*_#-]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
 )
 _RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
 _RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
@@ -1074,11 +1074,19 @@ _RE_BODY_CLEAN_SECTION = re.compile(
 _RES_BODY_FINDING = (_RE_BODY_SEVERITY, _RE_BODY_COUNT, _RE_BODY_HEADING, _RE_BODY_REVIEW_LINE)
 
 
+# Quoted material is never the review's own structure: a fenced block or a "> " line can hold
+# another reviewer's header verbatim, and counting it would let one body clear its own findings.
+_RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*", re.M | re.S)
+
+
 def _declared_findings(str_body: str) -> list[str] | None:
     """Return the findings a body's own printed counts declare, or ``None`` if it prints none.
 
     A non-zero body section (outside the diff, duplicates) wins over a zero inline count, since
-    CodeRabbit prints both. A CodeRabbit header alone means the findings are inline threads.
+    CodeRabbit prints both. A CodeRabbit header alone means the findings are inline threads, but
+    only in a body that is not a ladder review (the ladder quotes CodeRabbit), and the ladder
+    count speaks only in a body carrying the ladder attribution line. Both are read from the
+    body with quoted lines and fenced blocks removed.
     """
     list_sections = [
         cls_section.group(0)
@@ -1087,9 +1095,11 @@ def _declared_findings(str_body: str) -> list[str] | None:
     ]
     if list_sections:
         return list_sections
-    if _RE_ACTIONABLE.search(str_body):
+    bool_ladder = bool(_RE_LADDER_HEAD.search(str_body))
+    str_own = _RE_QUOTED.sub("", str_body)
+    if not bool_ladder and _RE_ACTIONABLE.search(str_own):
         return []
-    cls_count = _RE_LADDER_COUNT.search(str_body)
+    cls_count = _RE_LADDER_COUNT.search(str_own) if bool_ladder else None
     if cls_count is None:
         return None
     return [cls_count.group(0).strip("* \t")] if int(cls_count.group(1)) else []
