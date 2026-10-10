@@ -33,8 +33,8 @@ else:
         from chassis.typing import type_checker
 
 re_html_tag = re.compile(
-    r"<(?:br(?=[ \t\r\n\f/>])|p(?:[ \t\r\n\f]+[a-z][\w:-]*[ \t\r\n\f]*(?:=|/?>)|[ \t\r\n\f]*/?>))",
-    re.IGNORECASE,
+    r"<(?:br|p)(?:[ \t\r\n\f]+[a-z][\w:-]*[ \t\r\n\f]*(?:=|/?>)|[ \t\r\n\f]*/?>)",
+    re.IGNORECASE | re.ASCII,
 )
 
 
@@ -45,10 +45,18 @@ def to_html_body(str_body: str) -> str:
     An HTML-body client (Outlook's ``mail.HTMLBody``, an SMTP message sent as ``text/html``)
     collapses bare newlines and renders the message on a single line. Each newline is turned
     into a ``<br>`` so paragraph breaks are preserved. A body that already looks like HTML
-    (a ``<br`` tag, or a ``<p>`` tag with or without attributes, so ``<bravo>`` and
-    prose like ``<p 0.05`` do not count but ``<p class="x">`` does) is left untouched — the
-    caller composed real markup on purpose, and escaping it would show the reader literal
-    angle brackets instead of the formatting it asked for.
+    (it holds a real ``<br>`` or ``<p>`` tag, with or without ``name=`` attributes, so
+    ``<bravo>`` and prose like ``<p 0.05`` or ``a<br/b`` do not count but ``<p class="x">``
+    does) is left untouched — the caller composed real markup on purpose, and escaping it
+    would show the reader literal angle brackets instead of the formatting it asked for.
+
+    Only ``<br>`` and ``<p>`` count as HTML: a body of ``<div>`` or ``<b>`` markup without
+    either is still escaped (tracked in blueprintx#701), and attribute names starting with
+    ``_``, ``@`` or ``:`` (framework syntax) are not recognised.
+
+    ⚠️ Detection is all-or-nothing: ONE detected tag makes the WHOLE body pass through raw.
+    Never concatenate untrusted text into a body that carries such a tag — the untrusted
+    part is returned unescaped, ``<script>`` included.
 
     A body that does NOT already look like HTML is treated as plain text and **HTML-escaped**
     before the newline conversion. Without this, a literal ``<``/``&``/``>`` in ordinary

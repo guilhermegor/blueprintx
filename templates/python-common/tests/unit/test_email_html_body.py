@@ -1,7 +1,5 @@
 """Unit tests for the plain-text-to-HTML e-mail body conversion."""
 
-from html import escape
-
 import pytest
 
 from src.utils.email.html_body import to_html_body
@@ -55,8 +53,16 @@ def test_to_html_body_p_tag_with_attributes_is_left_untouched() -> None:
 
 @pytest.mark.parametrize(
     "str_html",
-    ["a<br>b", "a<br/>b", "a<BR />b", "a<br\n>b", "<p>x</p>", "<P>x</P>"],
-    ids=["br", "br-self-closing", "br-upper-spaced", "br-newline", "p", "p-upper"],
+    ["a<br>b", "a<br/>b", "a<BR />b", "a<br\n>b", "<p>x</p>", "<P>x</P>", "<p hidden>x</p>"],
+    ids=[
+        "br",
+        "br-self-closing",
+        "br-upper-spaced",
+        "br-newline",
+        "p",
+        "p-upper",
+        "p-boolean-attribute",
+    ],
 )
 def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
     """A ``<br``/``<p`` tag followed by whitespace, ``/`` or ``>`` is returned unchanged.
@@ -70,23 +76,45 @@ def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "str_text",
+    ("str_text", "str_expected"),
     [
-        "<pre>x</pre>",
-        "<param>",
-        "<progress>",
-        "a <p",
-        "risk <p 0.05 & <script>x</script>",
-        "a<p/b",
+        ("<pre>x</pre>", "&lt;pre&gt;x&lt;/pre&gt;"),
+        ("<param>", "&lt;param&gt;"),
+        ("<progress>", "&lt;progress&gt;"),
+        ("a <p", "a &lt;p"),
+        ("a<br", "a&lt;br"),
+        (
+            "risk <p 0.05 & <script>x</script>",
+            "risk &lt;p 0.05 &amp; &lt;script&gt;x&lt;/script&gt;",
+        ),
+        ("x <br 5 & <script>", "x &lt;br 5 &amp; &lt;script&gt;"),
+        ("a<p/b", "a&lt;p/b"),
+        ("a<br/b", "a&lt;br/b"),
+        ("<p \u212a=1>", "&lt;p \u212a=1&gt;"),
     ],
-    ids=["pre", "param", "progress", "trailing-p", "p-space-prose", "p-slash-prose"],
+    ids=[
+        "pre",
+        "param",
+        "progress",
+        "trailing-p",
+        "trailing-br",
+        "p-space-prose",
+        "br-space-prose",
+        "p-slash-prose",
+        "br-slash-prose",
+        "kelvin-sign",
+    ],
 )
-def test_to_html_body_p_lookalike_is_escaped_as_plain_text(str_text: str) -> None:
-    """Should-fail witness: ``<p`` not shaped like a tag is plain text and gets escaped.
+def test_to_html_body_tag_lookalike_is_escaped_as_plain_text_literal(
+    str_text: str, str_expected: str
+) -> None:
+    """Should-fail witness: ``<br``/``<p`` not shaped like a tag is plain text, escaped.
 
     Parameters
     ----------
     str_text : str
-            Plain text that merely contains ``<p``.
+            Plain text that merely contains ``<br`` or ``<p``.
+    str_expected : str
+            The exact escaped output.
     """
-    assert to_html_body(str_text) == escape(str_text)
+    assert to_html_body(str_text) == str_expected
