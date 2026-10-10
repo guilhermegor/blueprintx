@@ -190,22 +190,25 @@ _RE_MARKUP = re.compile(r"<!--.*?-->|<[^>]+>", re.DOTALL)
 #
 # A reviewer that declines to work posts an ISSUE comment, never a review thread — verified on
 # #257. That stream is the only place the difference between "nobody looked at this" and "these
-# commits were already reviewed" is written down (#259). It is fetched `last:` rather than
-# `first:` on purpose: `last` returns the NEWEST, so truncation can only drop OLD notices, and
-# an old notice is the one that must not grant a pass anyway.
+# commits were already reviewed" is written down (#259). It is paginated like reviews and
+# threads: a PR past 100 comments (#282 and #319 have 140) must not drop either a review comment
+# or the answer to it.
 _QUERY = """
-query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
+query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
-      comments(last:100) { nodes { author { login } body createdAt } }
+      comments(first:100, after:$cc) {
+        pageInfo { hasNextPage endCursor }
+        nodes { author { login __typename } body createdAt }
+      }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login } commit { oid } }
+        nodes { author { login } commit { oid } state body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
       reviewThreads(first:100, after:$tc) {
@@ -382,6 +385,7 @@ def _fetch_page(
     int_number: int,
     str_review_cursor: str | None,
     str_thread_cursor: str | None,
+    str_comment_cursor: str | None = None,
 ) -> dict:
     """Run one page of the query.
 
@@ -411,6 +415,8 @@ def _fetch_page(
         f"rc={str_review_cursor}" if str_review_cursor else "rc=",
         "-F",
         f"tc={str_thread_cursor}" if str_thread_cursor else "tc=",
+        "-F",
+        f"cc={str_comment_cursor}" if str_comment_cursor else "cc=",
     ]
     # Constant argv built from CI-provided identifiers; no shell is involved.
     cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
@@ -420,6 +426,16 @@ def _fetch_page(
     if "errors" in dict_out:
         raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
     return dict_out["data"]["repository"]["pullRequest"]
+
+
+_TUPLE_PAGED = ("reviews", "reviewThreads", "comments")
+
+
+def _next_cursor(dict_side: dict | None) -> str | None:
+    """Return the cursor to resume a connection from, or ``None`` when it has no next page."""
+    if not dict_side or not dict_side["pageInfo"]["hasNextPage"]:
+        return None
+    return dict_side["pageInfo"]["endCursor"]
 
 
 def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
@@ -444,26 +460,21 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
     RuntimeError
             If the API call fails, so an unreachable API is never mistaken for a clean PR.
     """
-    dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None)
-    dict_reviews = dict_pr["reviews"]
-    dict_threads = dict_pr["reviewThreads"]
+    dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None, None)
+    list_sides = [(dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr]
 
-    # Follow both cursors until neither has a next page. Independent cursors, one request each
+    # Follow every cursor until none has a next page. Independent cursors, one request each
     # round: passing a cursor for a connection that is already exhausted just re-returns its
-    # last (empty) page, so the loop terminates on the slower of the two.
-    while dict_reviews["pageInfo"]["hasNextPage"] or dict_threads["pageInfo"]["hasNextPage"]:
+    # last (empty) page, so the loop terminates on the slowest of them. A failed page raises
+    # in `_fetch_page`, so the loop can only stop early by finishing, never by an error.
+    while any(dict_side["pageInfo"]["hasNextPage"] for dict_side, _ in list_sides):
         dict_next = _fetch_page(
             str_owner,
             str_repo,
             int_number,
-            dict_reviews["pageInfo"]["endCursor"]
-            if dict_reviews["pageInfo"]["hasNextPage"]
-            else None,
-            dict_threads["pageInfo"]["endCursor"]
-            if dict_threads["pageInfo"]["hasNextPage"]
-            else None,
+            *(_next_cursor(dict_pr.get(str_key)) for str_key in _TUPLE_PAGED),
         )
-        for dict_side, str_key in ((dict_reviews, "reviews"), (dict_threads, "reviewThreads")):
+        for dict_side, str_key in list_sides:
             if not dict_side["pageInfo"]["hasNextPage"]:
                 continue
             dict_side["nodes"].extend(dict_next[str_key]["nodes"])
@@ -1016,6 +1027,304 @@ def find_thread_problems(
     return list_problems
 
 
+# A review BODY carries findings the thread count cannot see (blueprintx#630, docs/faq.md).
+_STR_SEVERITY = r"critical|major|minor|blocker"
+# Nitpick and Trivial are deliberately absent: optional by definition, so they need no reply.
+# A marker counts only at the START of a line (after a list marker), as bold or a bracket, so
+# "a *minor* cleanup" and "(minor nits only)" in prose are not findings.
+_RE_BODY_SEVERITY = re.compile(
+    rf"🔴|🟠|🟡|\bseverity\s*:\s*\w"
+    rf"|^[^\w\n]*(?:\d+[.)]\s*)?(?:\*\*|\[)\s*(?:{_STR_SEVERITY})\b"
+    rf"|^\W*(?:{_STR_SEVERITY})\b\s*[:—-]",
+    re.IGNORECASE | re.MULTILINE,
+)
+# A count counts only as a statement of what the review found, not "Addressed 2 findings".
+_RE_BODY_COUNT = re.compile(
+    r"^[^\w\n]*(?:(?:found|posted|reported|with|has|have)\s+)?[1-9]\d*\s+findings?\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
+# A review declares itself by structure (docs/faq.md, "How the gate classifies"): a heading, a
+# bullet or a bold label that starts with "Review" or "Finding(s)". Ambiguity counts as a review.
+_RE_BODY_REVIEW_LINE = re.compile(
+    r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b"
+    r"(?!\s+(?:ladder|skipped|profile|details|status|in progress|completed))",
+    re.IGNORECASE | re.MULTILINE,
+)
+# Printed counts are authoritative, but each speaks for what it counts. CodeRabbit's header counts
+# INLINE comments, which are threads the thread gate already holds; only its body sections
+# (outside the diff, duplicates) live where no thread can see them. The ladder posts no threads,
+# so its count is the body's. The two counts that can CLEAR a body are anchored to a line start so
+# a quotation cannot fire them; a section marker can only ADD a finding, so it stays unanchored
+# (CodeRabbit nests it inside a `<summary>` tag).
+_RE_BODY_SECTION = re.compile(
+    r"\b(?:outside diff range|duplicate) comments(?:\s*\((\d+)\))?", re.IGNORECASE
+)
+_RE_ACTIONABLE = re.compile(
+    r"^[ \t*_#-]*actionable comments posted:?[\s*]*\d+", re.IGNORECASE | re.MULTILINE
+)
+_RE_LADDER_COUNT = re.compile(
+    r"^[ \t*_#-]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
+)
+_RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
+_RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
+_STR_CLEAN_LINE = (
+    r"^[^\w\n]*(?:(?:review|findings?|summary|result)\s*[:—–-]\s*)?"
+    r"(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
+    rf"|none(?:\s+found)?"
+    rf"|(?:{_STR_SEVERITY}|nitpick|severity)[^\w\n]*(?:none|n/?a|no)"
+    r"(?:\s+(?:found|issues?|findings?))?)[^\w\n]*$"
+)
+# A clean line must BE the line ("No major issues."), never a phrase inside a longer one
+# ("parse() has no known bugs on ASCII but crashes"), or it would mask a real finding.
+_RE_BODY_CLEAN_LINE = re.compile(_STR_CLEAN_LINE, re.I | re.M)
+_RE_BODY_CLEAN_SECTION = re.compile(
+    r"^#{1,6}\s*(?:findings|issues|problems|review)\b[^\n]*\n(?:[^\S\n]*\n)*" + _STR_CLEAN_LINE,
+    re.I | re.M,
+)
+_RES_BODY_FINDING = (_RE_BODY_SEVERITY, _RE_BODY_COUNT, _RE_BODY_HEADING, _RE_BODY_REVIEW_LINE)
+
+
+# Quoted material is never the review's own structure: a fenced block or a "> " line can hold
+# another reviewer's header verbatim, and counting it would let one body clear its own findings.
+_RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*", re.M | re.S)
+
+
+# Count authority belongs to the AUTHOR, never to the body's shape: any body can print any header.
+# The roster carries no per-format data, so the two authors whose counts this gate trusts are
+# named here (docs/faq.md). Any other author's counts are ignored and its body is read by
+# structure alone, which fails closed.
+_SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
+_SET_LADDER_AUTHORS = frozenset({"guilhermegor-review-ladder"})
+
+
+def _declared_findings(str_body: str, str_login: str = "") -> list[str] | None:
+    """Return the findings a body's own printed counts declare, or ``None`` if it prints none.
+
+    A non-zero body section (outside the diff, duplicates) always counts: it can only add a
+    finding. The counts that can CLEAR a body speak only for their author: the ``Actionable``
+    header for CodeRabbit (its N findings are inline threads, which the thread check holds), the
+    ``N finding(s) across`` count for the ladder app and only with the attribution line. Both are
+    read with quoted lines and fenced blocks removed. Any other author gets no count authority.
+    """
+    list_sections = [
+        cls_section.group(0)
+        for cls_section in _RE_BODY_SECTION.finditer(str_body)
+        if cls_section.group(1) != "0"
+    ]
+    if list_sections:
+        return list_sections
+    str_author = normalise_login(str_login)
+    str_own = _RE_QUOTED.sub("", str_body)
+    if str_author in _SET_HEADER_AUTHORS and _RE_ACTIONABLE.search(str_own):
+        return []
+    cls_count = _RE_LADDER_COUNT.search(str_own)
+    is_ladder = str_author in _SET_LADDER_AUTHORS and _RE_LADDER_HEAD.search(str_body)
+    if cls_count is None or not is_ladder:
+        return None
+    return [cls_count.group(0).strip("* \t")] if int(cls_count.group(1)) else []
+
+
+def _ladder_prose_line(str_text: str) -> list[str]:
+    """Return the first prose line of an uncounted ladder review, which counts as a review."""
+    list_prose = [
+        str_line.strip()
+        for str_line in _RE_LADDER_META.sub("", str_text).splitlines()
+        if str_line.strip()
+    ]
+    return list_prose[:1]
+
+
+def _ladder_empty_findings(str_body: str) -> list[str]:
+    """Return a finding for a ladder review with no prose, unless it says it is clean.
+
+    An attribution line with nothing after it is a truncated or failed review, not a clean one,
+    so it fails closed; only an explicit clean line ("No findings.") clears it.
+    """
+    if _RE_BODY_CLEAN_LINE.search(str_body):
+        return []
+    return ["ladder review with no findings count and no clean statement"]
+
+
+def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list[str]:
+    """Return the lines of a review body that list findings; empty means a clean body.
+
+    Parameters
+    ----------
+    str_body : str or None
+            The submitted review's body.
+    str_login : str, optional
+            The author's login. Printed counts clear a body only for the author they speak
+            for (CodeRabbit's header, the ladder app's count); any other author is read by
+            structure alone.
+
+    Returns
+    -------
+    list of str
+            Each line carrying a severity marker, a non-zero finding count or a findings
+            heading. A line that only reports there are none ("No findings.", "Minor: none")
+            and a findings heading directly followed by one are dropped first.
+    """
+    list_declared = _declared_findings(str_body or "", str_login)
+    if list_declared is not None:
+        return list_declared
+    str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
+    list_lines = [
+        str_line.strip()
+        for str_line in str_text.splitlines()
+        if any(re_.search(str_line) for re_ in _RES_BODY_FINDING)
+    ]
+    if _RE_LADDER_HEAD.search(str_body or ""):
+        return list_lines or _ladder_prose_line(str_text) or _ladder_empty_findings(str_body or "")
+    return list_lines
+
+
+def review_body_has_findings(str_body: str | None) -> bool:
+    """Return whether a review body lists findings rather than reporting none.
+
+    Parameters
+    ----------
+    str_body : str or None
+            The submitted review's body.
+
+    Returns
+    -------
+    bool
+            ``True`` when :func:`review_body_finding_lines` finds at least one line.
+    """
+    return bool(review_body_finding_lines(str_body))
+
+
+def _answered_after(
+    list_notices: list[dict], set_roster: set[str], str_when: str, int_min_chars: int
+) -> bool:
+    """Return whether a human comment of at least ``int_min_chars`` postdates ``str_when``.
+
+    Bots never answer: GraphQL reports ``__typename`` ``Bot`` (and REST a ``[bot]`` suffix) for
+    GitGuardian, ``github-actions`` and the like, and one of those clearing findings unread is
+    the #630 failure again. A null author (a deleted "ghost" account) is not a known human
+    either, so it fails closed like a missing ``submittedAt``.
+    """
+    return bool(str_when) and any(
+        _is_human_answer(dict_notice, set_roster, int_min_chars)
+        and (dict_notice.get("createdAt") or "") > str_when
+        for dict_notice in list_notices
+    )
+
+
+# An answer declares itself by structure too: a LINE THAT OPENS with "Reply to review", "Answers
+# to the ladder review", "Re: review", "Verdicts/Judgment on ... review"; a "review <id>"
+# citation; "Addressed/Fixed in <sha>"; "Finding 1: ..."; or a "> quoted finding" followed by a
+# response. Any of these counts at any length. Anchored: "re-review" and "Not answered yet" are
+# not answers.
+_STR_REVIEW_NOUN = (
+    r"(?:the\s+|our\s+|my\s+)?(?:(?:ladder|fallback|claude|coderabbit|cli|rung)\s+)*review\b"
+)
+_RE_ANSWER_SHAPE = re.compile(
+    r"^[\s*_#-]*(?:re\s*:|(?:repl(?:y|ies)|answers?|responses?|verdicts?|judg(?:e)?ments?)"
+    rf"(?:\s+(?:to|on))?\s*:?)\s*{_STR_REVIEW_NOUN}"
+    r"|\b(?:addressed|fixed|resolved)\s+in\s+`?[0-9a-f]{7,40}\b"
+    r"|^[^\w\n]*finding\s+\d+\b"
+    r"|\breview\s+\d{6,}\b"
+    r"|^>[^\n]*\n(?:[^\S\n]*\n)*[^>\s]",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _is_human_answer(dict_notice: dict, set_roster: set[str], int_min_chars: int) -> bool:
+    """Return whether one comment is by a known human outside the roster and reads as an answer."""
+    dict_author = dict_notice.get("author") or {}
+    str_login = dict_author.get("login") or ""
+    str_body = (dict_notice.get("body") or "").strip()
+    return (
+        bool(str_login)
+        and normalise_login(str_login) not in set_roster
+        and dict_author.get("__typename", "User") == "User"
+        and not str_login.endswith(_BOT_SUFFIX)
+        and (len(str_body) >= int_min_chars or bool(_RE_ANSWER_SHAPE.search(str_body)))
+    )
+
+
+def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[dict]:
+    """Return the roster's own issue comments in review shape.
+
+    Some ladder rungs post their review as an issue comment, not a PR review. Only a comment that
+    declares itself one counts (the ladder attribution line or a CodeRabbit header): status and
+    failure notices ("Review ladder: all rungs failed"), walkthroughs and command replies are
+    not reviews, whatever their first word is.
+    """
+    return [
+        {
+            "author": dict_notice.get("author"),
+            "state": "COMMENTED",
+            "body": dict_notice.get("body"),
+            "submittedAt": dict_notice.get("createdAt"),
+        }
+        for dict_notice in list_notices
+        if normalise_login((dict_notice.get("author") or {}).get("login") or "") in set_roster
+        and any(
+            re_.search(dict_notice.get("body") or "")
+            for re_ in (_RE_LADDER_HEAD, _RE_ACTIONABLE, _RE_BODY_SECTION)
+        )
+    ]
+
+
+def find_review_body_problems(
+    list_reviews: list[dict],
+    list_notices: list[dict],
+    set_roster: set[str],
+    int_min_chars: int = _MIN_REPLY_CHARS,
+) -> list[str]:
+    """Return one problem per roster review whose body lists findings nobody answered.
+
+    Every submitted review counts, not only the head's: inline threads persist across pushes,
+    so a body must too, or a trivial push plus a clean re-review would clear it. One reply
+    posted after the latest findings body therefore answers all earlier ones; a reply must
+    postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
+    maintainer's explicit answer. A roster issue comment that is shaped like a review counts as
+    one, since some ladder rungs post that way (docs/faq.md, "How the gate classifies").
+
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews with ``author``, ``state``, ``body`` and ``submittedAt``.
+    list_notices : list of dict
+            The PR's issue comments, where the author's reply to a review body lands.
+    set_roster : set of str
+            Logins that count as reviewers rather than as answers.
+    int_min_chars : int, optional
+            Minimum length for a reply to count, the same bar a thread reply meets.
+
+    Returns
+    -------
+    list of str
+            Human-readable problems; empty when every findings body was answered after it was
+            submitted. A missing ``submittedAt`` fails closed.
+    """
+    set_roster = {normalise_login(str_login) for str_login in set_roster}
+    list_hits = [
+        (
+            dict_review,
+            review_body_finding_lines(
+                dict_review.get("body"), (dict_review.get("author") or {}).get("login") or ""
+            ),
+        )
+        for dict_review in list_reviews + _notices_as_reviews(list_notices, set_roster)
+        if normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+        and dict_review.get("state") != "DISMISSED"
+    ]
+    return [
+        f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
+        f"and nobody outside the reviewer roster (and no bot) replied after it — "
+        f"{list_lines[0][:90]}"
+        for dict_review, list_lines in list_hits
+        if list_lines
+        and not _answered_after(
+            list_notices, set_roster, dict_review.get("submittedAt") or "", int_min_chars
+        )
+    ]
+
+
 def report_verdict(
     list_problems: list[str],
     int_threads: int,
@@ -1132,6 +1441,33 @@ def _print_missing_review(
     return 1
 
 
+def _print_review_body_problems(
+    bool_json: bool, list_problems: list[str], list_thread_problems: list[str] | None = None
+) -> int:
+    """Print the unanswered-review-body failure, with any thread failures too; return ``1``."""
+    list_thread_problems = list_thread_problems or []
+    if bool_json:
+        print(
+            json.dumps(
+                {
+                    "status": "fail",
+                    "reason": "unanswered_review_body",
+                    "problems": list_problems,
+                    "thread_problems": list_thread_problems,
+                }
+            )
+        )
+        return 1
+    for str_problem in list_problems + list_thread_problems:
+        print(f"❌ {str_problem}")
+    print(
+        f"\nReply (at least {_MIN_REPLY_CHARS} characters) on the PR after the review, saying "
+        "what changed and why, then re-run this check. A review body has no thread to resolve, "
+        "so the reply is the whole answer (blueprintx#630)."
+    )
+    return 1
+
+
 def _print_thread_verdict(
     bool_json: bool, list_problems: list[str], int_threads: int, bool_require_resolved: bool
 ) -> int:
@@ -1149,6 +1485,21 @@ def _print_thread_verdict(
         )
         return 1 if list_problems else 0
     return report_verdict(list_problems, int_threads, bool_require_resolved)
+
+
+def _head_committed_date(dict_pr: dict) -> str:
+    """Return the head commit's ``committedDate``, or ``""`` when the query did not carry it."""
+    dict_commit = ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit")) or {}
+    return dict_commit.get("committedDate") or ""
+
+
+def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[str]) -> list[str]:
+    """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
+    return find_review_body_problems(
+        dict_pr.get("reviews", {}).get("nodes", []),
+        list_notices,
+        set_roster,
+    )
 
 
 def main(list_argv: list[str] | None = None) -> int:
@@ -1202,15 +1553,12 @@ def main(list_argv: list[str] | None = None) -> int:
         (dict_pr.get("author") or {}).get("login") or "",
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=list_notices,
-        str_head_date=(
-            ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit") or {}).get(
-                "committedDate"
-            )
-            or ""
-        ),
+        str_head_date=_head_committed_date(dict_pr),
     )
     if str_missing:
         return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
+
+    list_body_problems = _unanswered_bodies(dict_pr, list_notices, set_roster)
 
     # Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
     # See the SUPERSEDED block above `main` for why CI stopped passing 0.
@@ -1218,6 +1566,10 @@ def main(list_argv: list[str] | None = None) -> int:
     list_problems = find_thread_problems(
         list_threads, set_roster, bool_require_resolved=bool_require_resolved
     )
+    # Both failures at once: fixing the body reply only to meet the open threads next run is a
+    # second round trip the first run could have saved.
+    if list_body_problems:
+        return _print_review_body_problems(bool_json, list_body_problems, list_problems)
 
     return _print_thread_verdict(
         bool_json, list_problems, len(list_threads), bool_require_resolved
