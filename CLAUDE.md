@@ -223,6 +223,7 @@ BlueprintX/
 │   └── scaffold/
 │       ├── python_ddd_service.sh      # DDD native-DB scaffold logic
 │       ├── python_ddd_service_orm.sh  # DDD SQLAlchemy ORM scaffold logic
+│       ├── python_api_service.sh      # API service (FastAPI) native-DB scaffold logic
 │       ├── python_mvc_service.sh      # MVC native-DB scaffold logic
 │       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold logic
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold logic

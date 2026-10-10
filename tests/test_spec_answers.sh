@@ -293,6 +293,7 @@ test_every_python_tier_has_a_prompt_map() {
         if ! str_err="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
             spec_skeleton_supported "$2" && spec_stdin_for_skeleton "$2" /dev/null >/dev/null' \
             _ "$REPO_ROOT" "$str_name" 2>&1)"; then
+            str_err="${str_err%%$'\n'*}"
             str_res+="$str_name (${str_err:-not in the supported list}) "
         fi
     done
