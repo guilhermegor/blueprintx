@@ -530,6 +530,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_coverage_floor_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
         "$project_path/tests/unit/test_function_length_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
+        "$project_path/tests/unit/test_template_drift_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
         "$project_path/tests/unit/test_comment_budget_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" \
