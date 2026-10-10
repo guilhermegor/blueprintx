@@ -47,26 +47,33 @@ a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
 ## How does a scaffolded repo close the issue a merged PR delivered?
 
-BlueprintX carries `close-linked-issues.yml` under `templates/common/.github/workflows/`
-(blueprintx#604), but generated projects do not receive it yet: the scaffold scripts do not copy it
-until a follow-up wires it in. Once wired, it behaves as follows.
+BlueprintX carries `close-linked-issues.yml` and its `bin/close_linked_issues.sh` under
+`templates/common/` (blueprintx#604), but generated projects do not receive them yet: the scaffold
+scripts do not copy them until the wiring step tracked in
+[#604](https://github.com/guilhermegor/blueprintx/issues/604) lands. Once wired, it behaves as
+follows.
 
 GitHub's own `Closes #N` linking can come back empty (a non-default base branch, a `Closes: #N`
 with a colon, a bot-performed merge), which leaves the issue open and keeps a Projects "Item closed"
--> Done automation from firing. On a merged same-repo PR the workflow closes:
+-> Done automation from firing. On a merged same-repo PR the workflow closes, matching strictly
+(a wrong closure is worse than a missed one):
 
-- the issue number in the branch name, `<type>/<N>-<slug>` first, with a trailing `-N` as the
-  fallback only when that form is absent, the type is `feat`, `fix`, `docs`, `refactor`, `chore`,
-  `test` or `hotfix`, and the number is not a four-digit year (`feat/12-add-thing` closes issue 12,
-  `fix/thing-25` closes issue 25, `fix/typo-2024` closes nothing);
-- every `#N` after `Closes`, `Fixes` or `Resolves` in the PR body (colon allowed).
+- the issue number in a branch named `<type>/<N>-<slug>`, where the type is `feat`, `feature`,
+  `fix`, `bugfix`, `hotfix`, `docs`, `refactor`, `chore` or `test` and `N` is not a four-digit year
+  (`feat/12-add-thing` closes issue 12; `chore/2026-10-cleanup` and `fix/python-3-12` close
+  nothing, and a trailing `-N` is never read);
+- each `Closes #N`, `Fixes #N` or `Resolves #N` pair in the PR body (GitHub's closing keywords
+  `close`, `fix` and `resolve` in their `-s`/`-d`/`-es` forms; colon allowed), at a word boundary. `Closes #1, #2` closes
+  only `#1`, and a negated use such as "does not fix #12" is ignored.
 
-It deliberately skips `dependabot/*`, `renovate/*` and `release/*` branches (a
-trailing `-4` there is a version, not an issue), the PR's own number, any number that is a PR, and `owner/repo#N` references, which
-point at another repository. A fork PR is skipped too: its token is read-only. The branch name and
-PR body are untrusted text and reach the script only through `env:`. It complements, and does not
-replace, the Projects "Item closed -> Done" workflow. It is dropped with the rest of `.github/` in
-offline mode.
+It skips the whole PR, branch and body alike, for `dependabot/*`, `renovate/*` and `release/*`
+branches (their bodies quote upstream `Fixes #N` text, and a trailing `-4` is a version). It also
+skips the PR's own number, any number that is a PR, and `owner/repo#N` references, which point at
+another repository. A fork PR is skipped too: its token is read-only. A missing issue (404) is
+skipped; any other API error fails the job, and one failed close does not stop the others. The
+branch name and PR body are untrusted text and reach the script only through `env:`. It
+complements, and does not replace, the Projects "Item closed -> Done" workflow. It is dropped with
+the rest of `.github/` in offline mode.
 
 ## How is BlueprintX itself versioned?
 

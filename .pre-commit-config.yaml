@@ -247,6 +247,13 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
 
+      - id: close-linked-issues-tests
+        name: close_linked_issues.sh should-fail regression tests (blueprintx#604)
+        entry: bash tests/test_close_linked_issues.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/common/bin/close_linked_issues\.sh|tests/test_close_linked_issues\.sh)$
+
       - id: docs-locale-prompt-tests
         name: docs-locale prompt should-fail regression tests (blueprintx#247)
         entry: bash tests/test_docs_locale_prompt.sh
