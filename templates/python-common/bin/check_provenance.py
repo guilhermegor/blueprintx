@@ -49,12 +49,12 @@ def check_file(filepath: str) -> int:
     Parameters
     ----------
     filepath : str
-            Path to a Python source file under ``src/``.
+        Path to a Python source file under ``src/``.
 
     Returns
     -------
     int
-            1 when ``read_table`` appears without ``stamp_provenance``, else 0.
+        1 when ``read_table`` appears without ``stamp_provenance``, else 0.
     """
     str_source = pathlib.Path(filepath).read_text(encoding="utf-8")
     if _READ_MARKER not in str_source:
@@ -75,8 +75,8 @@ def _source_files() -> list[pathlib.Path]:
     Returns
     -------
     list[pathlib.Path]
-            Python source files to check (``typing``/``chassis``/``example_feature`` trees and the
-            ``tabular_reader.py``/``provenance.py`` seam definitions are exempt).
+        Python source files to check (``typing``/``chassis``/``example_feature`` trees and the
+        ``tabular_reader.py``/``provenance.py`` seam definitions are exempt).
     """
     return sorted(
         p

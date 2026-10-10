@@ -37,11 +37,11 @@ def _find_gate_path() -> Path:
     Returns
     -------
     Path
-            Whichever candidate exists. ⚠️ No branch here on purpose — ``tests/`` is capped at
-            cyclomatic complexity 1 (`` bin/check_complexity.sh``); an ``if``/``raise`` pair
-            would violate that ceiling for a path lookup that is not itself a test. Defaulting
-            to the template-tree candidate when neither exists lets a genuinely missing gate
-            fail naturally in the loader below, which already reports an absent file clearly.
+        Whichever candidate exists. ⚠️ No branch here on purpose — ``tests/`` is capped at
+        cyclomatic complexity 1 (`` bin/check_complexity.sh``); an ``if``/``raise`` pair
+        would violate that ceiling for a path lookup that is not itself a test. Defaulting
+        to the template-tree candidate when neither exists lets a genuinely missing gate
+        fail naturally in the loader below, which already reports an absent file clearly.
     """
     path_here = Path(__file__).resolve()
     tuple_candidates = (
@@ -60,7 +60,7 @@ def _load_gate() -> ModuleType:
     Returns
     -------
     ModuleType
-            The loaded gate module.
+        The loaded gate module.
     """
     path_gate = _find_gate_path()
     cls_spec = importlib.util.spec_from_file_location("_check_review_threads", path_gate)
@@ -99,14 +99,14 @@ def _thread(list_comments: list[tuple[str, str]], *, bool_resolved: bool = True)
     Parameters
     ----------
     list_comments : list of tuple of (str, str)
-            Author login and comment body, in order.
+        Author login and comment body, in order.
     bool_resolved : bool, optional
-            Whether the thread is marked resolved, by default ``True``.
+        Whether the thread is marked resolved, by default ``True``.
 
     Returns
     -------
     dict
-            A thread shaped like the GraphQL response.
+        A thread shaped like the GraphQL response.
     """
     return {
         "isResolved": bool_resolved,
@@ -127,12 +127,12 @@ def _sole(list_problems: list[str]) -> str:
     Parameters
     ----------
     list_problems : list of str
-            Whatever the gate reported.
+        Whatever the gate reported.
 
     Returns
     -------
     str
-            The single problem.
+        The single problem.
     """
     assert len(list_problems) == 1, list_problems
     return list_problems[0]
@@ -144,12 +144,12 @@ def _reported(str_problem: str | None) -> str:
     Parameters
     ----------
     str_problem : str or None
-            The gate's single-problem return, where ``None`` means "no finding".
+        The gate's single-problem return, where ``None`` means "no finding".
 
     Returns
     -------
     str
-            The finding.
+        The finding.
     """
     assert str_problem is not None, "the gate reported no problem at all"
     return str_problem
@@ -271,14 +271,14 @@ def _review(str_login: str, str_oid: str = _HEAD) -> dict:
     Parameters
     ----------
     str_login : str
-            Review author's login, in either API's spelling.
+        Review author's login, in either API's spelling.
     str_oid : str
-            Commit the review is attributed to; defaults to the PR head.
+        Commit the review is attributed to; defaults to the PR head.
 
     Returns
     -------
     dict
-            A review shaped like the GraphQL response.
+        A review shaped like the GraphQL response.
     """
     return {"author": {"login": str_login}, "commit": {"oid": str_oid}}
 
@@ -289,17 +289,17 @@ def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:
     Parameters
     ----------
     str_login : str
-            Comment author's login.
+        Comment author's login.
     str_body : str
-            Comment body.
+        Comment body.
     str_created : str
-            ISO-8601 ``createdAt``. Defaults to a date AFTER ``_HEAD_DATE`` so the ordinary case
-            reads as "the reviewer spoke about the current head".
+        ISO-8601 ``createdAt``. Defaults to a date AFTER ``_HEAD_DATE`` so the ordinary case
+        reads as "the reviewer spoke about the current head".
 
     Returns
     -------
     dict
-            An issue comment shaped like the GraphQL response.
+        An issue comment shaped like the GraphQL response.
     """
     return {"author": {"login": str_login}, "body": str_body, "createdAt": str_created}
 
@@ -428,7 +428,7 @@ def tuple_paged_fetch() -> tuple[ModuleType, dict, Mock]:
     Returns
     -------
     tuple of (ModuleType, dict, unittest.mock.Mock)
-            The loaded gate, the merged pull request, and the page-fetch mock.
+        The loaded gate, the merged pull request, and the page-fetch mock.
     """
     cls_gate = _load_gate()
     cls_page = Mock(side_effect=[_DICT_PAGE_ONE, _DICT_PAGE_TWO])
@@ -446,7 +446,7 @@ def test_the_second_page_is_requested_with_both_cursors(
     Parameters
     ----------
     tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
-            The shared two-page fetch.
+        The shared two-page fetch.
     """
     _, _, cls_page = tuple_paged_fetch
 
@@ -464,7 +464,7 @@ def test_page_two_reviews_are_merged_in(
     Parameters
     ----------
     tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
-            The shared two-page fetch.
+        The shared two-page fetch.
     """
     _, dict_pr, _ = tuple_paged_fetch
 
@@ -482,7 +482,7 @@ def test_page_two_threads_are_merged_in(
     Parameters
     ----------
     tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
-            The shared two-page fetch.
+        The shared two-page fetch.
     """
     _, dict_pr, _ = tuple_paged_fetch
 
@@ -497,7 +497,7 @@ def test_the_merged_reviews_reach_the_missing_review_verdict(
     Parameters
     ----------
     tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
-            The shared two-page fetch.
+        The shared two-page fetch.
     """
     cls_gate, dict_pr, _ = tuple_paged_fetch
 
@@ -517,7 +517,7 @@ def test_the_merged_threads_reach_the_thread_verdict(
     Parameters
     ----------
     tuple_paged_fetch : tuple of (ModuleType, dict, unittest.mock.Mock)
-            The shared two-page fetch.
+        The shared two-page fetch.
     """
     cls_gate, dict_pr, _ = tuple_paged_fetch
 
@@ -555,7 +555,7 @@ def test_the_roster_is_read_from_the_declared_file(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the roster file.
+        Pytest throwaway dir holding the roster file.
     """
     cls_gate = _load_gate()
     (tmp_path / ".review-bots.yaml").write_text(_STR_OTHER_ROSTER, encoding="utf-8")
@@ -575,7 +575,7 @@ def test_a_swapped_in_reviewer_is_policed_like_any_other(tmp_path: Path) -> None
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the roster file.
+        Pytest throwaway dir holding the roster file.
     """
     cls_gate = _load_gate()
     (tmp_path / ".review-bots.yaml").write_text(_STR_OTHER_ROSTER, encoding="utf-8")
@@ -603,8 +603,8 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-            Used to replace ``_fetch_page`` with a mock that raises, standing in for a real
-            ``gh`` failure without touching a binary or the wire.
+        Used to replace ``_fetch_page`` with a mock that raises, standing in for a real
+        ``gh`` failure without touching a binary or the wire.
     """
     cls_gate = _load_gate()
     cls_page = Mock(
@@ -655,7 +655,7 @@ def test_a_reviewer_comment_in_graphql_spelling_is_not_an_answer(tmp_path: Path)
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the roster file.
+        Pytest throwaway dir holding the roster file.
     """
     cls_gate = _load_gate()
     (tmp_path / ".review-bots.yaml").write_text(
@@ -675,7 +675,7 @@ def test_a_human_reply_in_the_same_thread_still_answers_it(tmp_path: Path) -> No
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the roster file.
+        Pytest throwaway dir holding the roster file.
     """
     cls_gate = _load_gate()
     (tmp_path / ".review-bots.yaml").write_text(
@@ -699,7 +699,7 @@ def test_an_answered_but_unresolved_thread_is_reported(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the roster file.
+        Pytest throwaway dir holding the roster file.
     """
     cls_gate = _load_gate()
     (tmp_path / ".review-bots.yaml").write_text(
@@ -730,9 +730,9 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir standing in for a checkout with no roster.
+        Pytest throwaway dir standing in for a checkout with no roster.
     monkeypatch : pytest.MonkeyPatch
-            Used to stub the default-branch probe, so the test needs no real remote.
+        Used to stub the default-branch probe, so the test needs no real remote.
     """
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
@@ -754,9 +754,9 @@ def test_a_roster_never_adopted_is_still_a_silent_no_op(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir standing in for a checkout with no roster.
+        Pytest throwaway dir standing in for a checkout with no roster.
     monkeypatch : pytest.MonkeyPatch
-            Used to stub the default-branch probe, so the test needs no real remote.
+        Used to stub the default-branch probe, so the test needs no real remote.
     """
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: False)
@@ -1140,7 +1140,7 @@ def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str)
     Parameters
     ----------
     str_notice : str
-            A notice that must NOT satisfy the gate, copied from the measured stream.
+        A notice that must NOT satisfy the gate, copied from the measured stream.
     """
     cls_gate = _load_gate()
     assert (
@@ -2394,16 +2394,16 @@ def _git(path_repo: Path, *list_args: str, bool_check: bool = True) -> str:
     Parameters
     ----------
     path_repo : Path
-            Repository directory.
+        Repository directory.
     *list_args : str
-            Arguments after ``git``.
+        Arguments after ``git``.
     bool_check : bool
-            ``False`` only for the one command expected to exit non-zero (a conflicting merge).
+        ``False`` only for the one command expected to exit non-zero (a conflicting merge).
 
     Returns
     -------
     str
-            Stripped stdout.
+        Stripped stdout.
     """
     list_cmd = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
     cls_run = subprocess.run(  # noqa: S603
@@ -2421,16 +2421,16 @@ def _commit(path_repo: Path, str_file: str, str_text: str) -> str:
     Parameters
     ----------
     path_repo : Path
-            Repository directory.
+        Repository directory.
     str_file : str
-            File to write, relative to the repo.
+        File to write, relative to the repo.
     str_text : str
-            File content.
+        File content.
 
     Returns
     -------
     str
-            The new commit oid.
+        The new commit oid.
     """
     (path_repo / str_file).write_text(str_text)
     _git(path_repo, "add", str_file)
@@ -2444,19 +2444,19 @@ def _patch_id(path_repo: Path, str_oid: str) -> str:
     Parameters
     ----------
     path_repo : Path
-            Repository directory, where ``main`` is the base.
+        Repository directory, where ``main`` is the base.
     str_oid : str
-            Commit to measure.
+        Commit to measure.
 
     Returns
     -------
     str
-            The patch id, an independent oracle for the compare-API fingerprint.
+        The patch id, an independent oracle for the compare-API fingerprint.
 
     Raises
     ------
     ValueError
-            If ``git patch-id`` prints nothing, which is an empty diff or a failed run.
+        If ``git patch-id`` prints nothing, which is an empty diff or a failed run.
     """
     str_base = _git(path_repo, "merge-base", "main", str_oid)
     str_diff = _git(path_repo, "diff", str_base, str_oid)
@@ -2481,20 +2481,20 @@ def _file_entry(path_repo: Path, str_base: str, str_oid: str, str_line: str) -> 
     Parameters
     ----------
     path_repo : Path
-            Repository directory.
+        Repository directory.
     str_base : str
-            Merge base of ``main`` and the commit.
+        Merge base of ``main`` and the commit.
     str_oid : str
-            Commit being compared.
+        Commit being compared.
     str_line : str
-            One ``git diff --name-status`` line: a status code, then one tab-separated path
-            (two for a rename: the old one, then the new one).
+        One ``git diff --name-status`` line: a status code, then one tab-separated path
+        (two for a rename: the old one, then the new one).
 
     Returns
     -------
     dict
-            ``filename``, ``status`` and ``patch`` (starting at the first hunk, as the API does),
-            plus ``previous_filename`` for a rename.
+        ``filename``, ``status`` and ``patch`` (starting at the first hunk, as the API does),
+        plus ``previous_filename`` for a rename.
     """
     str_code, *list_names = str_line.split("\t")
     str_diff = _git(path_repo, "diff", "-M", str_base, str_oid, "--", *list_names)
@@ -2513,14 +2513,14 @@ def _compare_files(path_repo: Path, str_oid: str) -> list[dict]:
     Parameters
     ----------
     path_repo : Path
-            Repository directory, where ``main`` is the base.
+        Repository directory, where ``main`` is the base.
     str_oid : str
-            Commit to measure.
+        Commit to measure.
 
     Returns
     -------
     list of dict
-            What ``compare/main...<oid>`` would list, built from real ``git diff`` output.
+        What ``compare/main...<oid>`` would list, built from real ``git diff`` output.
     """
     str_base = _git(path_repo, "merge-base", "main", str_oid)
     list_lines = _git(path_repo, "diff", "-M", "--name-status", str_base, str_oid).splitlines()
@@ -2533,14 +2533,14 @@ def _real_fingerprint(path_repo: Path, str_oid: str) -> str:
     Parameters
     ----------
     path_repo : Path
-            Repository directory, where ``main`` is the base.
+        Repository directory, where ``main`` is the base.
     str_oid : str
-            Commit to measure.
+        Commit to measure.
 
     Returns
     -------
     str
-            The gate's own digest.
+        The gate's own digest.
     """
     return _load_gate().patch_fingerprint(_compare_files(path_repo, str_oid))
 
@@ -2551,17 +2551,17 @@ def _overlap_repo(path_repo: Path, str_old: str, str_new: str) -> tuple[str, str
     Parameters
     ----------
     path_repo : Path
-            Empty repository directory.
+        Empty repository directory.
     str_old : str
-            Text of the 20-line file that ``main`` replaces. Line 12 is inside the PR hunk's
-            3-line context; line 20 and the top of the file are outside it.
+        Text of the 20-line file that ``main`` replaces. Line 12 is inside the PR hunk's
+        3-line context; line 20 and the top of the file are outside it.
     str_new : str
-            Its replacement.
+        Its replacement.
 
     Returns
     -------
     tuple of str
-            The reviewed commit and the head after the conflict-free merge of ``main``.
+        The reviewed commit and the head after the conflict-free merge of ``main``.
     """
     str_text = "\n".join(map(str, range(1, 21))) + "\n"
     _git(path_repo, "init", "-b", "main")
@@ -2582,13 +2582,13 @@ def dict_repo(tmp_path: Path) -> dict:
     Parameters
     ----------
     tmp_path : Path
-            Pytest temp dir.
+        Pytest temp dir.
 
     Returns
     -------
     dict
-            ``path``, ``review`` (R) and the heads ``clean_merge``, ``conflict_merge``,
-            ``new_commit`` and ``rewritten``.
+        ``path``, ``review`` (R) and the heads ``clean_merge``, ``conflict_merge``,
+        ``new_commit`` and ``rewritten``.
     """
     str_text = "1\n{}\n3\n4\n5\n6\n7\n8\n9\n"
     _git(tmp_path, "init", "-b", "main")
@@ -2628,14 +2628,14 @@ def _covers(dict_repo: dict, str_head_key: str) -> bool:
     Parameters
     ----------
     dict_repo : dict
-            The :func:`dict_repo` fixture value.
+        The :func:`dict_repo` fixture value.
     str_head_key : str
-            Key of the head commit in that dict.
+        Key of the head commit in that dict.
 
     Returns
     -------
     bool
-            The gate's verdict, using a real ``git patch-id`` as the fingerprint.
+        The gate's verdict, using a real ``git patch-id`` as the fingerprint.
     """
     fn_fingerprint = functools.partial(_patch_id, dict_repo["path"])
     str_head = dict_repo[str_head_key]
@@ -2807,13 +2807,13 @@ def _rename_repo(path_repo: Path) -> tuple[str, str]:
     Parameters
     ----------
     path_repo : Path
-            Empty repository directory.
+        Empty repository directory.
 
     Returns
     -------
     tuple of str
-            The commit that renamed ``a.txt`` and the one that renamed ``b.txt``; both give
-            ``c.txt`` the same content, so their hunks are identical.
+        The commit that renamed ``a.txt`` and the one that renamed ``b.txt``; both give
+        ``c.txt`` the same content, so their hunks are identical.
     """
     str_text = "\n".join(map(str, range(1, 21))) + "\n"
     _git(path_repo, "init", "-b", "main")
@@ -2862,14 +2862,14 @@ def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> M
     Parameters
     ----------
     cls_gate : ModuleType
-            The loaded gate.
+        The loaded gate.
     monkeypatch : pytest.MonkeyPatch
-            Pytest's patcher.
+        Pytest's patcher.
 
     Returns
     -------
     Mock
-            The stand-in for ``fetch_patch_fingerprint``.
+        The stand-in for ``fetch_patch_fingerprint``.
     """
     fn_fetch = Mock(side_effect=RuntimeError("compare failed: 502"))
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", fn_fetch)
@@ -2883,7 +2883,7 @@ def _three_reviews() -> list[dict]:
     Returns
     -------
     list of dict
-            Three reviews by the roster's CodeRabbit.
+        Three reviews by the roster's CodeRabbit.
     """
     return [_review("coderabbitai[bot]", str_oid * 40) for str_oid in "abc"]
 
@@ -3042,16 +3042,16 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
     Parameters
     ----------
     tmp_path : Path
-            Pytest temp dir, where the roster file is written.
+        Pytest temp dir, where the roster file is written.
     monkeypatch : pytest.MonkeyPatch
-            Pytest's patcher.
+        Pytest's patcher.
     list_argv : list of str
-            CLI arguments.
+        CLI arguments.
 
     Returns
     -------
     int
-            The gate's exit code.
+        The gate's exit code.
     """
     cls_gate = _load_gate()
     (tmp_path / ".review-bots.yaml").write_text(
