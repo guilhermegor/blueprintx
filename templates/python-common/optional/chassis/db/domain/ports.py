@@ -24,7 +24,7 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
     Attributes
     ----------
     id_field : str
-            Name of the identifier field used across backends.
+        Name of the identifier field used across backends.
     """
 
     id_field: str = "id"
@@ -36,12 +36,12 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         record : Record
-                Data to store.
+            Data to store.
 
         Returns
         -------
         str
-                Identifier assigned to the stored record.
+            Identifier assigned to the stored record.
         """
 
     @abstractmethod
@@ -51,12 +51,12 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         record_id : str
-                Identifier to look up.
+            Identifier to look up.
 
         Returns
         -------
         Record or None
-                Stored record when found, otherwise ``None``.
+            Stored record when found, otherwise ``None``.
         """
 
     @abstractmethod
@@ -75,21 +75,21 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to update.
+            Identifier of the record to update.
         updates : Record
-                Partial payload containing fields to override.
+            Partial payload containing fields to override.
 
         Returns
         -------
         Record or None
-                Updated record when it exists, otherwise ``None``.
+            Updated record when it exists, otherwise ``None``.
 
         Raises
         ------
         NotImplementedError
-                Only from a backend whose records are immutable by design
-                (``JoblibHandler``), which has no in-place write to make atomic. Such a
-                handler states so in its own docstring and in the factory's ``Notes``.
+            Only from a backend whose records are immutable by design
+            (``JoblibHandler``), which has no in-place write to make atomic. Such a
+            handler states so in its own docstring and in the factory's ``Notes``.
         """
 
     @abstractmethod
@@ -99,12 +99,12 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to remove.
+            Identifier of the record to remove.
 
         Returns
         -------
         bool
-                ``True`` when a row was deleted, ``False`` otherwise.
+            ``True`` when a row was deleted, ``False`` otherwise.
         """
 
     @abstractmethod
@@ -114,12 +114,12 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         target_path : str or Path
-                Destination file path for the backup artifact.
+            Destination file path for the backup artifact.
 
         Returns
         -------
         Path
-                Path to the created backup artifact.
+            Path to the created backup artifact.
         """
 
     @abstractmethod

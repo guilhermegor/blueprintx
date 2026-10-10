@@ -21,8 +21,8 @@ class WebhookNotifier(Protocol):
         Parameters
         ----------
         str_message : str
-                Message body to deliver.
+            Message body to deliver.
         str_title : str, optional
-                Message title/subject.
+            Message title/subject.
         """
         ...

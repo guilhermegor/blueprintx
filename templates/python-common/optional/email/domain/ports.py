@@ -34,21 +34,21 @@ class EmailHandler(Protocol):
         Parameters
         ----------
         str_subject : str
-                Subject line.
+            Subject line.
         list_to : list of str
-                Primary recipients.
+            Primary recipients.
         list_cc : list of str
-                Carbon-copy recipients.
+            Carbon-copy recipients.
         str_body : str
-                Plain-text (or HTML) body.
+            Plain-text (or HTML) body.
         list_attachments : list of str
-                File paths to attach.
+            File paths to attach.
         bool_auto_send : bool
-                Send without manual review where the backend supports it, by default ``True``.
+            Send without manual review where the backend supports it, by default ``True``.
 
         Returns
         -------
         bool
-                ``True`` when dispatched; ``False`` when not (e.g. off-platform, opted out).
+            ``True`` when dispatched; ``False`` when not (e.g. off-platform, opted out).
         """
         ...

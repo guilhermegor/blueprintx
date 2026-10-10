@@ -52,12 +52,12 @@ class RegimeBoundAdapter(metaclass=TypeChecker):
     Parameters
     ----------
     cls_registry : RegimeRegistry
-            The registry holding every known regime window, this adapter's included.
+        The registry holding every known regime window, this adapter's included.
     str_regime_name : str
-            Which regime THIS adapter instance is bound to.
+        Which regime THIS adapter instance is bound to.
     int_period : int | None, optional
-            The competency period, ``YYYYMM``; ``None`` resolves via
-            :meth:`RegimeRegistry.default_period`.
+        The competency period, ``YYYYMM``; ``None`` resolves via
+        :meth:`RegimeRegistry.default_period`.
     """
 
     def __init__(  # complexity-ok: default + refuse-wrong-regime IS the constructor contract

@@ -76,19 +76,19 @@ def _contained_path(str_raw: str, path_root: Path) -> Path:
     Parameters
     ----------
     str_raw : str
-            The recorded ``save_path``, already placeholder-expanded.
+        The recorded ``save_path``, already placeholder-expanded.
     path_root : Path
-            The only directory a recording is allowed to write into.
+        The only directory a recording is allowed to write into.
 
     Returns
     -------
     Path
-            The resolved destination, guaranteed to sit under ``path_root``.
+        The resolved destination, guaranteed to sit under ``path_root``.
 
     Raises
     ------
     BrowserStepError
-            If the destination resolves outside ``path_root``.
+        If the destination resolves outside ``path_root``.
 
     Notes
     -----
@@ -142,16 +142,16 @@ def _validate_step(int_index: int, str_kind: str, dict_step: BrowserStep) -> Non
     Parameters
     ----------
     int_index : int
-            Position in the recording, named in the error so a bad file is findable.
+        Position in the recording, named in the error so a bad file is findable.
     str_kind : str
-            The already-validated step kind.
+        The already-validated step kind.
     dict_step : BrowserStep
-            The raw parsed step.
+        The raw parsed step.
 
     Raises
     ------
     BrowserStepError
-            If a required field is absent or of the wrong type.
+        If a required field is absent or of the wrong type.
 
     Notes
     -----
@@ -186,20 +186,20 @@ async def run_browser_steps(
     Parameters
     ----------
     list_steps : list[BrowserStep]
-            Parsed from a ``data/browser-steps/*.json`` file.
+        Parsed from a ``data/browser-steps/*.json`` file.
     cls_page : BrowserPage
-            A live Playwright page, or a test double satisfying the same Protocol.
+        A live Playwright page, or a test double satisfying the same Protocol.
     path_download_root : Path or None, optional
-            The ONLY directory a ``download`` step may write into; defaults to
-            ``data/downloads`` under the current directory. A recorded ``save_path`` is
-            resolved under it and refused if it escapes.
+        The ONLY directory a ``download`` step may write into; defaults to
+        ``data/downloads`` under the current directory. A recorded ``save_path`` is
+        resolved under it and refused if it escapes.
 
     Raises
     ------
     BrowserStepError
-            If a step's ``kind`` is not one of :data:`STEP_KINDS`, a step is missing a
-            required field or has one of the wrong type, a ``download`` step's ``save_path``
-            escapes ``path_download_root``, or a step references an unset secret placeholder.
+        If a step's ``kind`` is not one of :data:`STEP_KINDS`, a step is missing a
+        required field or has one of the wrong type, a ``download`` step's ``save_path``
+        escapes ``path_download_root``, or a step references an unset secret placeholder.
     """
     path_root = Path("data/downloads") if path_download_root is None else path_download_root
     for int_index, dict_step in enumerate(list_steps):

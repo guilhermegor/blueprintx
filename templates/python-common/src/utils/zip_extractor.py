@@ -47,7 +47,7 @@ def _require_zip(path_zip: Path) -> None:
     Parameters
     ----------
     path_zip : pathlib.Path
-            The archive that must exist.
+        The archive that must exist.
 
     Returns
     -------
@@ -56,7 +56,7 @@ def _require_zip(path_zip: Path) -> None:
     Raises
     ------
     FileNotFoundError
-            When ``path_zip`` does not exist.
+        When ``path_zip`` does not exist.
     """
     if not path_zip.exists():
         raise FileNotFoundError(f"Zip not found: {path_zip}")
@@ -78,20 +78,20 @@ def unzip_if_needed(
     Parameters
     ----------
     path_zip : pathlib.Path
-            The (password-protected) zip to extract.
+        The (password-protected) zip to extract.
     path_target : pathlib.Path
-            The file expected after extraction; if it already exists, extraction is skipped
-            (idempotent). Its parent directory is the extraction destination.
+        The file expected after extraction; if it already exists, extraction is skipped
+        (idempotent). Its parent directory is the extraction destination.
     bool_enabled : bool
-            Config switch: only extract when true.
+        Config switch: only extract when true.
     str_password : str, optional
-            ZipCrypto password (from ``.env``); ``None`` for an unencrypted zip.
+        ZipCrypto password (from ``.env``); ``None`` for an unencrypted zip.
 
     Returns
     -------
     bool
-            ``True`` when extraction was performed, ``False`` when skipped (target already
-            present, extraction disabled, or the zip is absent).
+        ``True`` when extraction was performed, ``False`` when skipped (target already
+        present, extraction disabled, or the zip is absent).
     """
     # The three skip conditions are one question — "is there anything to do?" — so they read
     # as one predicate instead of two exits placed apart.
@@ -112,21 +112,21 @@ def extract_members(path_zip: Path, path_dest_dir: Path, list_members: list[str]
     Parameters
     ----------
     path_zip : pathlib.Path
-            The zip to read.
+        The zip to read.
     path_dest_dir : pathlib.Path
-            Destination directory (created if absent).
+        Destination directory (created if absent).
     list_members : list of str
-            The archive member names to extract.
+        The archive member names to extract.
 
     Returns
     -------
     list of pathlib.Path
-            The extracted file paths (only those members that were present).
+        The extracted file paths (only those members that were present).
 
     Raises
     ------
     FileNotFoundError
-            If ``path_zip`` does not exist.
+        If ``path_zip`` does not exist.
     """
     _require_zip(path_zip)
     path_dest_dir.mkdir(parents=True, exist_ok=True)
@@ -151,21 +151,21 @@ def extract_all(
     Parameters
     ----------
     path_zip : pathlib.Path
-            The zip to extract.
+        The zip to extract.
     path_dest_dir : pathlib.Path
-            Destination directory (created if absent).
+        Destination directory (created if absent).
     str_password : str, optional
-            ZipCrypto password; ``None`` for an unencrypted zip.
+        ZipCrypto password; ``None`` for an unencrypted zip.
 
     Returns
     -------
     list of pathlib.Path
-            The extracted file paths, in archive order.
+        The extracted file paths, in archive order.
 
     Raises
     ------
     FileNotFoundError
-            If ``path_zip`` does not exist.
+        If ``path_zip`` does not exist.
     """
     _require_zip(path_zip)
     path_dest_dir.mkdir(parents=True, exist_ok=True)
@@ -192,19 +192,19 @@ def find_member(list_members: list[Path], str_name: str) -> Path:
     Parameters
     ----------
     list_members : list of pathlib.Path
-            Extracted paths, as returned by :func:`extract_all` or :func:`extract_members`.
+        Extracted paths, as returned by :func:`extract_all` or :func:`extract_members`.
     str_name : str
-            The member's exact file name, no directory component (e.g. ``"lamina_fi_202601.csv"``).
+        The member's exact file name, no directory component (e.g. ``"lamina_fi_202601.csv"``).
 
     Returns
     -------
     pathlib.Path
-            The member whose file name equals ``str_name``.
+        The member whose file name equals ``str_name``.
 
     Raises
     ------
     ValueError
-            If no member matches, naming the wanted member and listing what was available.
+        If no member matches, naming the wanted member and listing what was available.
     """
     path_found = next(
         (path_member for path_member in list_members if path_member.name == str_name), None
@@ -226,19 +226,19 @@ def extract_all_to_memory(path_zip: Path, str_password: str | None = None) -> di
     Parameters
     ----------
     path_zip : pathlib.Path
-            The zip to read.
+        The zip to read.
     str_password : str, optional
-            ZipCrypto password; ``None`` for an unencrypted zip.
+        ZipCrypto password; ``None`` for an unencrypted zip.
 
     Returns
     -------
     dict of {str: bytes}
-            Member name → its decompressed bytes, for every file member.
+        Member name → its decompressed bytes, for every file member.
 
     Raises
     ------
     FileNotFoundError
-            If ``path_zip`` does not exist.
+        If ``path_zip`` does not exist.
     """
     _require_zip(path_zip)
     bytes_pwd = str_password.encode() if str_password else None
@@ -263,21 +263,21 @@ def extract_members_to_memory(
     Parameters
     ----------
     path_zip : pathlib.Path
-            The zip to read.
+        The zip to read.
     list_members : list of str
-            The archive member names to read.
+        The archive member names to read.
     str_password : str, optional
-            ZipCrypto password; ``None`` for an unencrypted zip.
+        ZipCrypto password; ``None`` for an unencrypted zip.
 
     Returns
     -------
     dict of {str: bytes}
-            Member name → its decompressed bytes, for each requested member that was present.
+        Member name → its decompressed bytes, for each requested member that was present.
 
     Raises
     ------
     FileNotFoundError
-            If ``path_zip`` does not exist.
+        If ``path_zip`` does not exist.
     """
     _require_zip(path_zip)
     bytes_pwd = str_password.encode() if str_password else None
@@ -302,23 +302,23 @@ def extract_member_to_memory(
     Parameters
     ----------
     path_zip : pathlib.Path
-            The zip to read.
+        The zip to read.
     str_member : str
-            The archive member name to read.
+        The archive member name to read.
     str_password : str, optional
-            ZipCrypto password; ``None`` for an unencrypted zip.
+        ZipCrypto password; ``None`` for an unencrypted zip.
 
     Returns
     -------
     bytes
-            The decompressed bytes of ``str_member``.
+        The decompressed bytes of ``str_member``.
 
     Raises
     ------
     FileNotFoundError
-            If ``path_zip`` does not exist.
+        If ``path_zip`` does not exist.
     KeyError
-            If ``str_member`` is not present in the archive.
+        If ``str_member`` is not present in the archive.
     """
     _require_zip(path_zip)
     bytes_pwd = str_password.encode() if str_password else None

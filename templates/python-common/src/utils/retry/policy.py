@@ -44,17 +44,17 @@ class RetryPolicy(metaclass=TypeChecker):
     Attributes
     ----------
     int_max_attempts : int
-            Total attempts (>= 1), by default 3 (one initial try + two retries).
+        Total attempts (>= 1), by default 3 (one initial try + two retries).
     float_base_wait_s : float
-            Wait before the first retry, in seconds, by default 2.0.
+        Wait before the first retry, in seconds, by default 2.0.
     float_factor : float
-            Exponential growth factor; used only by the ``"exponential"`` strategy, by default 2.0.
+        Exponential growth factor; used only by the ``"exponential"`` strategy, by default 2.0.
     str_strategy : str
-            Backoff schedule: ``"exponential"`` (default), ``"linear"``, or ``"constant"``.
+        Backoff schedule: ``"exponential"`` (default), ``"linear"``, or ``"constant"``.
     float_max_wait_s : float or None
-            Optional per-wait cap, in seconds; ``None`` (default) leaves the schedule uncapped.
+        Optional per-wait cap, in seconds; ``None`` (default) leaves the schedule uncapped.
     tuple_exceptions : tuple of type[Exception]
-            The transient exception types that trigger a retry, by default ``(OSError,)``.
+        The transient exception types that trigger a retry, by default ``(OSError,)``.
     """
 
     int_max_attempts: int = _DEFAULT_MAX_ATTEMPTS
@@ -74,8 +74,8 @@ class RetryPolicy(metaclass=TypeChecker):
         Raises
         ------
         ValueError
-                If ``int_max_attempts`` is less than 1, or ``str_strategy`` is not one of
-                ``"exponential"``, ``"linear"``, ``"constant"``.
+            If ``int_max_attempts`` is less than 1, or ``str_strategy`` is not one of
+            ``"exponential"``, ``"linear"``, ``"constant"``.
         """
         if self.int_max_attempts < 1:
             raise ValueError("int_max_attempts must be >= 1")
@@ -98,7 +98,7 @@ class RetryPolicy(metaclass=TypeChecker):
         Raises
         ------
         ValueError
-                If any wait is negative or non-finite.
+            If any wait is negative or non-finite.
         """
         dict_waits = {
             "float_base_wait_s": self.float_base_wait_s,

@@ -86,12 +86,12 @@ def is_windows_path(str_path: str) -> bool:
     Parameters
     ----------
     str_path : str
-            Candidate path string.
+        Candidate path string.
 
     Returns
     -------
     bool
-            ``True`` for ``X:\...`` drive paths or ``\\server\share`` UNC paths.
+        ``True`` for ``X:\...`` drive paths or ``\\server\share`` UNC paths.
     """
     str_stripped = str_path.strip()
     if (
@@ -115,12 +115,12 @@ def resolve_path(str_path: str) -> Path:
     Parameters
     ----------
     str_path : str
-            Path string from configuration (drive, UNC, POSIX, or ``~``-prefixed).
+        Path string from configuration (drive, UNC, POSIX, or ``~``-prefixed).
 
     Returns
     -------
     pathlib.Path
-            A path object suitable for the host OS.
+        A path object suitable for the host OS.
     """
     str_stripped = str_path.strip()
     if not is_windows_path(str_stripped):
@@ -137,12 +137,12 @@ def ensure_dir(path_dir: Path) -> Path:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory to ensure exists.
+        Directory to ensure exists.
 
     Returns
     -------
     pathlib.Path
-            The same directory path.
+        The same directory path.
     """
     path_dir.mkdir(parents=True, exist_ok=True)
     return path_dir
@@ -160,21 +160,21 @@ def copy_into(path_src: Path, path_dir: Path, str_stamp: str | None = None) -> P
     Parameters
     ----------
     path_src : pathlib.Path
-            The source file to copy.
+        The source file to copy.
     path_dir : pathlib.Path
-            Destination directory.
+        Destination directory.
     str_stamp : str | None
-            Optional stamp suffix appended to the stem.
+        Optional stamp suffix appended to the stem.
 
     Returns
     -------
     pathlib.Path
-            The copied file's path.
+        The copied file's path.
 
     Raises
     ------
     FileNotFoundError
-            If ``path_src`` does not exist.
+        If ``path_src`` does not exist.
     """
     if not path_src.exists():
         raise FileNotFoundError(f"Input not found for copy: {path_src}")
@@ -209,12 +209,12 @@ def date_tokens(dt_ref: date) -> dict[str, str]:
     Parameters
     ----------
     dt_ref : datetime.date
-            Reference date.
+        Reference date.
 
     Returns
     -------
     dict
-            Token name to value.
+        Token name to value.
     """
     return {
         "year": f"{dt_ref.year:04d}",
@@ -241,14 +241,14 @@ def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | Non
     Parameters
     ----------
     spec : str or dict of {str: str} or None
-            A plain path string, or a ``{dir, filename_pattern}`` mapping.
+        A plain path string, or a ``{dir, filename_pattern}`` mapping.
     dt_ref : datetime.date
-            Reference date used to fill the templates.
+        Reference date used to fill the templates.
 
     Returns
     -------
     pathlib.Path or None
-            The resolved file, or ``None`` when nothing matches.
+        The resolved file, or ``None`` when nothing matches.
     """
     dict_tokens = date_tokens(dt_ref)
     # Two genuinely different resolutions behind one name, so each gets its own function and
@@ -266,14 +266,14 @@ def _resolve_mapping_spec(dict_spec: dict[str, str], dict_tokens: dict) -> Path 
     Parameters
     ----------
     dict_spec : dict of {str: str}
-            The mapping form of an input spec.
+        The mapping form of an input spec.
     dict_tokens : dict
-            Date tokens used to fill the templates.
+        Date tokens used to fill the templates.
 
     Returns
     -------
     pathlib.Path or None
-            The newest match as an absolute path, or ``None``.
+        The newest match as an absolute path, or ``None``.
     """
     str_dir = str(dict_spec.get("dir", "")).format(**dict_tokens)
     str_pattern = str(dict_spec.get("filename_pattern", "*")).format(**dict_tokens)
@@ -288,14 +288,14 @@ def _resolve_plain_spec(str_spec: str, dict_tokens: dict) -> Path | None:
     Parameters
     ----------
     str_spec : str
-            The string form of an input spec (may be empty).
+        The string form of an input spec (may be empty).
     dict_tokens : dict
-            Date tokens used to fill the template.
+        Date tokens used to fill the template.
 
     Returns
     -------
     pathlib.Path or None
-            The resolved file as an absolute path, or ``None`` when blank or absent.
+        The resolved file as an absolute path, or ``None`` when blank or absent.
     """
     str_path = str_spec.format(**dict_tokens)
     if not str_path.strip():
@@ -314,14 +314,14 @@ def resolve_input_glob(spec: dict[str, str] | None, dt_ref: date) -> list[Path]:
     Parameters
     ----------
     spec : dict of {str: str} or None
-            A ``{dir, filename_pattern}`` mapping (date-token templates), or ``None``.
+        A ``{dir, filename_pattern}`` mapping (date-token templates), or ``None``.
     dt_ref : datetime.date
-            Reference date used to fill the templates.
+        Reference date used to fill the templates.
 
     Returns
     -------
     list of pathlib.Path
-            Every matching file (empty when the spec is ``None`` or nothing matches).
+        Every matching file (empty when the spec is ``None`` or nothing matches).
     """
     if not isinstance(spec, dict):
         return []
@@ -354,12 +354,12 @@ def to_absolute(path_resolved: Path) -> Path:
     Parameters
     ----------
     path_resolved : pathlib.Path
-            The path to hand off.
+        The path to hand off.
 
     Returns
     -------
     pathlib.Path
-            The absolute path.
+        The absolute path.
     """
     return path_resolved if path_resolved.is_absolute() else path_resolved.resolve()
 
@@ -371,14 +371,14 @@ def _latest_match(path_dir: Path, str_pattern: str) -> Path | None:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory to search.
+        Directory to search.
     str_pattern : str
-            Glob pattern, matched case-insensitively against file names.
+        Glob pattern, matched case-insensitively against file names.
 
     Returns
     -------
     pathlib.Path or None
-            The most recently modified matching file, or ``None``.
+        The most recently modified matching file, or ``None``.
     """
     # The default keyword carries the empty case, so no second guard is needed for it.
     return max(
@@ -399,14 +399,14 @@ def _matching_files(path_dir: Path, str_pattern: str) -> list[Path]:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory to search; a missing directory yields an empty list rather than raising.
+        Directory to search; a missing directory yields an empty list rather than raising.
     str_pattern : str
-            Glob pattern, matched case-insensitively against file names.
+        Glob pattern, matched case-insensitively against file names.
 
     Returns
     -------
     list of pathlib.Path
-            Matching files, in directory order.
+        Matching files, in directory order.
     """
     if not path_dir.exists():
         return []

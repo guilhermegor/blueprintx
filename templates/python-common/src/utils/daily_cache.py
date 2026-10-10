@@ -68,12 +68,12 @@ def _is_usable_cache_entry(path_cached: Path) -> bool:
     Parameters
     ----------
     path_cached : pathlib.Path
-            The candidate cache entry.
+        The candidate cache entry.
 
     Returns
     -------
     bool
-            ``True`` only for an existing, non-empty file.
+        ``True`` only for an existing, non-empty file.
     """
     return path_cached.is_file() and path_cached.stat().st_size > 0
 
@@ -87,19 +87,19 @@ def daily_cache_path(
     Parameters
     ----------
     path_cache_dir : pathlib.Path
-            Directory the cached artifacts live in.
+        Directory the cached artifacts live in.
     str_key : str
-            Kebab-case source name, e.g. ``"cvm-daily-register"``.
+        Kebab-case source name, e.g. ``"cvm-daily-register"``.
     dt_reference : datetime.date
-            The **data's** reference date — not the moment of the run.
+        The **data's** reference date — not the moment of the run.
     str_suffix : str
-            File extension including the dot, e.g. ``".csv"``; may be empty.
+        File extension including the dot, e.g. ``".csv"``; may be empty.
 
     Returns
     -------
     pathlib.Path
-            ``<dir>/<key>_<YYYYMMDD><suffix>`` — the house naming convention, minus the time
-            component, because the whole point is that one reference day is one file.
+        ``<dir>/<key>_<YYYYMMDD><suffix>`` — the house naming convention, minus the time
+        component, because the whole point is that one reference day is one file.
     """
     return path_cache_dir / f"{str_key}_{dt_reference:%Y%m%d}{str_suffix}"
 
@@ -124,29 +124,29 @@ def download_daily(
     Parameters
     ----------
     str_url : str
-            The source URL to fetch on a miss.
+        The source URL to fetch on a miss.
     path_cache_dir : pathlib.Path
-            Directory the cached artifacts live in; created (parents included) on a miss rather
-            than assumed to exist — the archiver may not have run yet on a fresh dated folder.
+        Directory the cached artifacts live in; created (parents included) on a miss rather
+        than assumed to exist — the archiver may not have run yet on a fresh dated folder.
     str_key : str
-            Kebab-case source name used in the cached filename.
+        Kebab-case source name used in the cached filename.
     dt_reference : datetime.date
-            The **data's** reference date, never the wall clock.
+        The **data's** reference date, never the wall clock.
     str_suffix : str, optional
-            File extension including the dot, by default ``""``.
+        File extension including the dot, by default ``""``.
     bool_use_cache : bool, optional
-            ``True`` (default) reads an existing file for this reference day. ``False`` skips the
-            READ and fetches from the network — it still WRITES, refreshing the cached copy.
+        ``True`` (default) reads an existing file for this reference day. ``False`` skips the
+        READ and fetches from the network — it still WRITES, refreshing the cached copy.
     cls_logger : LogEmitter, optional
-            Emitter for the branch line; defaults to :class:`utils.retry.LogEmitter`.
+        Emitter for the branch line; defaults to :class:`utils.retry.LogEmitter`.
     fn_download : Callable[[str, pathlib.Path], pathlib.Path], optional
-            The download seam, by default :func:`utils.http_downloader.download_file`. Injected so
-            tests never touch the network.
+        The download seam, by default :func:`utils.http_downloader.download_file`. Injected so
+        tests never touch the network.
 
     Returns
     -------
     pathlib.Path
-            Path to the artifact for ``dt_reference``.
+        Path to the artifact for ``dt_reference``.
 
     Notes
     -----
@@ -197,7 +197,7 @@ def _require_reference_date(dt_reference: date) -> None:
     Parameters
     ----------
     dt_reference : datetime.date
-            The value to check.
+        The value to check.
 
     Returns
     -------
@@ -206,7 +206,7 @@ def _require_reference_date(dt_reference: date) -> None:
     Raises
     ------
     TypeError
-            If ``dt_reference`` is a ``datetime``.
+        If ``dt_reference`` is a ``datetime``.
     """
     if isinstance(dt_reference, datetime):
         raise TypeError(
@@ -228,11 +228,11 @@ def _download_and_publish(
     Parameters
     ----------
     str_url : str
-            The source URL.
+        The source URL.
     path_cached : pathlib.Path
-            Final cache path; created by rename once the download completed.
+        Final cache path; created by rename once the download completed.
     fn_download : Callable[[str, pathlib.Path], pathlib.Path]
-            The download transport.
+        The download transport.
 
     Returns
     -------
@@ -241,7 +241,7 @@ def _download_and_publish(
     Raises
     ------
     OSError
-            If the download produced a missing or empty artifact.
+        If the download produced a missing or empty artifact.
     """
     path_staging = path_cached.with_name(f"{path_cached.name}.{uuid4().hex}.part")
     try:

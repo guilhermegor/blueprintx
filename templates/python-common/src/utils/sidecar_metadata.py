@@ -69,19 +69,19 @@ def cvm_meta_url(str_base_url: str, str_dataset_key: str) -> str:
     Parameters
     ----------
     str_base_url : str
-            The dataset's base/directory URL (the portion before the data file) — for CVM, the
-            host ``https://dados.cvm.gov.br`` followed by the path ``/dados/FI/DOC/CAD``.
-            ⚠️ Written as host + path rather than one URL on purpose: the ``check-urls`` hook
-            fetches every fetchable docstring URL and that directory answers 404 to a scripted
-            probe, while the host answers 200. It skips host-only URLs, which is why this form
-            passes and the joined one does not. See ``bin/CLAUDE.md`` → "Docstring URL convention".
+        The dataset's base/directory URL (the portion before the data file) — for CVM, the
+        host ``https://dados.cvm.gov.br`` followed by the path ``/dados/FI/DOC/CAD``.
+        ⚠️ Written as host + path rather than one URL on purpose: the ``check-urls`` hook
+        fetches every fetchable docstring URL and that directory answers 404 to a scripted
+        probe, while the host answers 200. It skips host-only URLs, which is why this form
+        passes and the joined one does not. See ``bin/CLAUDE.md`` → "Docstring URL convention".
     str_dataset_key : str
-            The dataset key naming the descriptor (``cad_fi`` -> ``meta_cad_fi.txt``).
+        The dataset key naming the descriptor (``cad_fi`` -> ``meta_cad_fi.txt``).
 
     Returns
     -------
     str
-            The descriptor URL ``<base>/META/meta_<key>.txt``.
+        The descriptor URL ``<base>/META/meta_<key>.txt``.
     """
     return f"{str_base_url.rstrip('/')}/META/meta_{str_dataset_key}.txt"
 
@@ -104,22 +104,22 @@ def fetch_sidecar_text(
     Parameters
     ----------
     str_descriptor_url : str
-            The descriptor URL (e.g. from :func:`cvm_meta_url`).
+        The descriptor URL (e.g. from :func:`cvm_meta_url`).
     path_dest : pathlib.Path
-            Bronze-layer path to persist the descriptor to (the ``path_raw`` seam). Its parent is
-            created by the transport when missing.
+        Bronze-layer path to persist the descriptor to (the ``path_raw`` seam). Its parent is
+        created by the transport when missing.
     fn_download : Callable[[str, pathlib.Path], pathlib.Path], optional
-            The download transport, by default
-            :func:`utils.http_downloader.download_file`. Injected so
-            tests mock at the one network boundary.
+        The download transport, by default
+        :func:`utils.http_downloader.download_file`. Injected so
+        tests mock at the one network boundary.
     str_encoding : str, optional
-            Text encoding for decoding the persisted descriptor (default ``"utf-8"``; pass
-            ``"ISO-8859-1"`` for Latin-1 dumps such as CVM's).
+        Text encoding for decoding the persisted descriptor (default ``"utf-8"``; pass
+        ``"ISO-8859-1"`` for Latin-1 dumps such as CVM's).
 
     Returns
     -------
     str or None
-            The descriptor text, or ``None`` when the source publishes no sidecar.
+        The descriptor text, or ``None`` when the source publishes no sidecar.
     """
     try:
         path_written = fn_download(str_descriptor_url, path_dest)
@@ -142,14 +142,14 @@ def parse_sidecar_metadata(str_text: str, str_sep: str = ";") -> dict[str, dict[
     Parameters
     ----------
     str_text : str
-            The raw descriptor text (from :func:`fetch_sidecar_text`).
+        The raw descriptor text (from :func:`fetch_sidecar_text`).
     str_sep : str, optional
-            Column delimiter (default ``";"``, the CVM open-data convention).
+        Column delimiter (default ``";"``, the CVM open-data convention).
 
     Returns
     -------
     dict of {str: dict of {str: str}}
-            Field key -> {remaining header -> cell value}. Empty when the text has no data rows.
+        Field key -> {remaining header -> cell value}. Empty when the text has no data rows.
     """
     list_lines = [line for line in str_text.splitlines() if line.strip()]
     if len(list_lines) < _INT_MIN_DESCRIPTOR_LINES:

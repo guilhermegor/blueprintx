@@ -23,21 +23,21 @@ class NullEmailHandler:
         Parameters
         ----------
         str_subject : str
-                Subject line (ignored).
+            Subject line (ignored).
         list_to : list of str
-                Primary recipients (ignored).
+            Primary recipients (ignored).
         list_cc : list of str
-                Carbon-copy recipients (ignored).
+            Carbon-copy recipients (ignored).
         str_body : str
-                Body (ignored).
+            Body (ignored).
         list_attachments : list of str
-                Attachment paths (ignored).
+            Attachment paths (ignored).
         bool_auto_send : bool
-                Accepted for port parity (ignored).
+            Accepted for port parity (ignored).
 
         Returns
         -------
         bool
-                Always ``False`` (nothing dispatched).
+            Always ``False`` (nothing dispatched).
         """
         return False

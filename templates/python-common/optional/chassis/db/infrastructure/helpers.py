@@ -30,15 +30,15 @@ class DsnParts(TypedDict):
     Attributes
     ----------
     user : str or None
-            Database user, when the DSN carries one.
+        Database user, when the DSN carries one.
     password : str or None
-            Database password, when the DSN carries one.
+        Database password, when the DSN carries one.
     host : str or None
-            Hostname, when the DSN carries one.
+        Hostname, when the DSN carries one.
     port : int or None
-            TCP port, already coerced by ``urlparse``.
+        TCP port, already coerced by ``urlparse``.
     database : str or None
-            Database (schema) name, when the DSN carries one.
+        Database (schema) name, when the DSN carries one.
     """
 
     user: str | None
@@ -110,14 +110,14 @@ def ensure_id(record: Record, id_field: str = "id") -> Record:
     Parameters
     ----------
     record : Record
-            Dictionary payload representing the entity.
+        Dictionary payload representing the entity.
     id_field : str, optional
-            Key used to store the identifier, by default ``"id"``.
+        Key used to store the identifier, by default ``"id"``.
 
     Returns
     -------
     Record
-            Record with the identifier guaranteed to be present.
+        Record with the identifier guaranteed to be present.
     """
     value = record.get(id_field)
     if value:

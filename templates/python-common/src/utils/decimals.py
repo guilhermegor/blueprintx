@@ -62,30 +62,30 @@ def to_decimal(
     Parameters
     ----------
     value : NumericLike
-            Raw value. Strings may carry Brazilian formatting (``.`` thousands
-            separator and ``,`` decimal separator); both are normalised. ``None``,
-            empty strings, unparsable values and **non-finite** results (``NaN``/``±Inf``,
-            including the strings ``"nan"``/``"inf"``) fall back to ``default``.
+        Raw value. Strings may carry Brazilian formatting (``.`` thousands
+        separator and ``,`` decimal separator); both are normalised. ``None``,
+        empty strings, unparsable values and **non-finite** results (``NaN``/``±Inf``,
+        including the strings ``"nan"``/``"inf"``) fall back to ``default``.
     int_places : int
-            Number of decimal places to quantise to (non-negative).
+        Number of decimal places to quantise to (non-negative).
     default : Decimal, optional
-            Value returned when ``value`` is missing or unparsable, by default
-            ``Decimal("0")``. ⚠️ Also returned when the quantise itself overflows the
-            caller's ``decimal`` context precision — a finite, parsable value can hit
-            that, and this function never raises a decimal exception.
+        Value returned when ``value`` is missing or unparsable, by default
+        ``Decimal("0")``. ⚠️ Also returned when the quantise itself overflows the
+        caller's ``decimal`` context precision — a finite, parsable value can hit
+        that, and this function never raises a decimal exception.
     rounding : str, optional
-            A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
-            by default ``ROUND_DOWN`` (truncation).
+        A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
+        by default ``ROUND_DOWN`` (truncation).
 
     Returns
     -------
     Decimal
-            ``value`` quantised to ``int_places`` decimal places using ``rounding``.
+        ``value`` quantised to ``int_places`` decimal places using ``rounding``.
 
     Raises
     ------
     ValueError
-            If ``int_places`` is negative.
+        If ``int_places`` is negative.
     """
     if int_places < 0:
         raise ValueError("int_places must be non-negative")
@@ -111,25 +111,25 @@ def to_decimal_strict(
     Parameters
     ----------
     value : NumericLike
-            Raw value. See :func:`to_decimal` for the accepted shapes; unlike that
-            function, ``None`` is rejected here rather than defaulted.
+        Raw value. See :func:`to_decimal` for the accepted shapes; unlike that
+        function, ``None`` is rejected here rather than defaulted.
     int_places : int
-            Number of decimal places to quantise to (non-negative).
+        Number of decimal places to quantise to (non-negative).
     rounding : str, optional
-            A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
-            by default ``ROUND_DOWN`` (truncation), matching :func:`to_decimal`.
+        A :mod:`decimal` rounding mode (e.g. ``ROUND_DOWN``, ``ROUND_HALF_UP``);
+        by default ``ROUND_DOWN`` (truncation), matching :func:`to_decimal`.
 
     Returns
     -------
     Decimal
-            ``value`` quantised to ``int_places`` decimal places using ``rounding``.
+        ``value`` quantised to ``int_places`` decimal places using ``rounding``.
 
     Raises
     ------
     ValueError
-            If ``int_places`` is negative, if ``value`` is ``None`` or cannot be parsed
-            as a finite decimal number, or if quantising it overflows the caller's
-            ``decimal`` context precision.
+        If ``int_places`` is negative, if ``value`` is ``None`` or cannot be parsed
+        as a finite decimal number, or if quantising it overflows the caller's
+        ``decimal`` context precision.
     """
     cls_sentinel = Decimal("NaN")
     cls_result = to_decimal(value, int_places, default=cls_sentinel, rounding=rounding)
@@ -145,18 +145,18 @@ def _quantise(cls_raw: Decimal, int_places: int, default: Decimal, rounding: str
     Parameters
     ----------
     cls_raw : Decimal
-            The already-parsed, unquantised value.
+        The already-parsed, unquantised value.
     int_places : int
-            Number of decimal places to quantise to.
+        Number of decimal places to quantise to.
     default : Decimal
-            Returned when the quantise overflows the active context precision.
+        Returned when the quantise overflows the active context precision.
     rounding : str
-            A :mod:`decimal` rounding mode.
+        A :mod:`decimal` rounding mode.
 
     Returns
     -------
     Decimal
-            ``cls_raw`` quantised, or ``default``.
+        ``cls_raw`` quantised, or ``default``.
 
     Notes
     -----
@@ -177,14 +177,14 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
     Parameters
     ----------
     value : NumericLike
-            Raw value to parse.
+        Raw value to parse.
     default : Decimal
-            Fallback for missing, unparsable, or non-finite (``NaN``/``±Inf``) input.
+        Fallback for missing, unparsable, or non-finite (``NaN``/``±Inf``) input.
 
     Returns
     -------
     Decimal
-            The parsed value, or ``default``.
+        The parsed value, or ``default``.
     """
     return _parse_by_type(value, default)
 
@@ -201,14 +201,14 @@ def _parse_by_type(value: object, default: Decimal) -> Decimal:
     Parameters
     ----------
     value : object
-            Raw value to parse; stringified and normalised.
+        Raw value to parse; stringified and normalised.
     default : Decimal
-            Fallback for unparsable or non-finite input.
+        Fallback for unparsable or non-finite input.
 
     Returns
     -------
     Decimal
-            The parsed value, or ``default``.
+        The parsed value, or ``default``.
     """
     str_clean = _normalise_br_number(str(value))
     try:
@@ -228,14 +228,14 @@ def _parse_none(value: None, default: Decimal) -> Decimal:
     Parameters
     ----------
     value : None
-            The missing value.
+        The missing value.
     default : Decimal
-            The fallback.
+        The fallback.
 
     Returns
     -------
     Decimal
-            ``default``.
+        ``default``.
     """
     return default
 
@@ -248,14 +248,14 @@ def _parse_decimal(value: Decimal, default: Decimal) -> Decimal:
     Parameters
     ----------
     value : Decimal
-            The value to check.
+        The value to check.
     default : Decimal
-            The fallback for a non-finite value.
+        The fallback for a non-finite value.
 
     Returns
     -------
     Decimal
-            ``value`` when finite, else ``default``.
+        ``value`` when finite, else ``default``.
     """
     return _finite_or(value, default)
 
@@ -270,14 +270,14 @@ def _parse_bool(value: bool, default: Decimal) -> Decimal:
     Parameters
     ----------
     value : bool
-            The rejected value.
+        The rejected value.
     default : Decimal
-            The fallback.
+        The fallback.
 
     Returns
     -------
     Decimal
-            ``default``.
+        ``default``.
     """
     return default
 
@@ -290,14 +290,14 @@ def _parse_int(value: int, default: Decimal) -> Decimal:
     Parameters
     ----------
     value : int
-            The value to convert.
+        The value to convert.
     default : Decimal
-            Unused; present to satisfy the dispatch signature.
+        Unused; present to satisfy the dispatch signature.
 
     Returns
     -------
     Decimal
-            The converted value.
+        The converted value.
     """
     return Decimal(value)
 
@@ -313,14 +313,14 @@ def _parse_float(value: float, default: Decimal) -> Decimal:
     Parameters
     ----------
     value : float
-            The value to convert.
+        The value to convert.
     default : Decimal
-            The fallback for a non-finite value.
+        The fallback for a non-finite value.
 
     Returns
     -------
     Decimal
-            The converted value, or ``default``.
+        The converted value, or ``default``.
     """
     return _finite_or(Decimal(repr(value)), default)
 
@@ -338,14 +338,14 @@ def _finite_or(cls_value: Decimal, default: Decimal) -> Decimal:
     Parameters
     ----------
     cls_value : Decimal
-            The candidate parsed value.
+        The candidate parsed value.
     default : Decimal
-            Fallback returned when ``cls_value`` is not finite.
+        Fallback returned when ``cls_value`` is not finite.
 
     Returns
     -------
     Decimal
-            ``cls_value`` if finite, otherwise ``default``.
+        ``cls_value`` if finite, otherwise ``default``.
     """
     return cls_value if cls_value.is_finite() else default
 
@@ -360,12 +360,12 @@ def _normalise_br_number(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            Raw numeric string.
+        Raw numeric string.
 
     Returns
     -------
     str
-            A string Decimal can parse, or ``""`` when empty.
+        A string Decimal can parse, or ``""`` when empty.
     """
     str_stripped = str_value.strip()
     # No comma means nothing to normalise — which covers the empty string as well, so it
@@ -397,12 +397,12 @@ def parse_br_number_series(series_value: pd.Series) -> pd.Series:
     Parameters
     ----------
     series_value : pandas.Series
-            The raw string (or mixed) column.
+        The raw string (or mixed) column.
 
     Returns
     -------
     pandas.Series
-            The parsed ``float`` column (``NaN`` where unparsable).
+        The parsed ``float`` column (``NaN`` where unparsable).
     """
     import pandas as pd
 
