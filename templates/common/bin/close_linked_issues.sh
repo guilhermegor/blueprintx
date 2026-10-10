@@ -27,18 +27,49 @@ issue_from_branch() {
 	return 0
 }
 
+# Drops what GitHub's own linker ignores: fenced blocks, `>` quote lines, <!-- --> comments
+# (across lines) and inline code spans. What is left is the prose that can close an issue.
+strip_non_prose() {
+	tr -d '\r' | awk '
+		/^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+		fence { next }
+		{
+			str_orig = $0
+			str_line = $0
+			str_out = ""
+			while (1) {
+				if (int_comment) {
+					int_at = index(str_line, "-->")
+					if (!int_at) { str_line = ""; break }
+					str_line = substr(str_line, int_at + 3)
+					int_comment = 0
+				}
+				int_at = index(str_line, "<!--")
+				if (!int_at) break
+				str_out = str_out substr(str_line, 1, int_at - 1) " "
+				str_line = substr(str_line, int_at + 4)
+				int_comment = 1
+			}
+			str_line = str_out str_line
+			if (str_orig ~ /^[[:space:]]*>/) next
+			gsub(/`[^`]*`/, " ", str_line)
+			print str_line
+		}'
+}
+
 # Prints each issue number that follows a closing keyword in a PR body, one per line.
-# Skips negated uses ("not fix #12", "won't close #9"); grep -w supplies the word
+# Skips negated uses ("not fully fix #12", "no longer fixes #8", "reverts the change that
+# fixes #8", "won't close #9"), even across a line break; grep -w supplies the word
 # boundaries, so `hotfix #5` and `closes #12abc` never match.
 issues_from_body() {
-	local str_body="$1"
+	local str_body="$1" str_neg='(not|never|cannot|no longer|reverts?|reverted|reverting|without)'
 
-	printf '%s\n' "$str_body" | tr 'A-Z' 'a-z' \
+	printf '%s\n' "$str_body" | strip_non_prose | tr '\n' ' ' | tr '[:upper:]' '[:lower:]' \
 		| sed -E \
-			-e "s/(^|[^[:alnum:]_])(not|never|cannot)([[:space:]]+[[:alpha:]]+){0,3}[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
+			-e "s/(^|[^[:alnum:]_])$str_neg([[:space:]]+[[:alpha:]]+){0,3}[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
 			-e "s/n('|’)t([[:space:]]+[[:alpha:]]+){0,3}[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
 		| { grep -owE "$KEYWORDS:?[[:space:]]+#[0-9]+" || true; } \
-		| grep -oE '[0-9]+$'
+		| { grep -oE '[0-9]+$' || true; }
 }
 
 # Prints the de-duplicated issue numbers for a PR; nothing at all for a bot branch,
@@ -52,7 +83,7 @@ resolve_issues() {
 	{
 		issue_from_branch "$str_branch"
 		issues_from_body "$str_body"
-	} | sed -E 's/^0+//' | grep -vxE '' | sort -un
+	} | sed -E 's/^0+//' | { grep -vxE '' || true; } | sort -un
 }
 
 # Closes one open issue. Returns 0 when closed or deliberately skipped, 1 on a real error.
@@ -87,9 +118,14 @@ close_issue() {
 }
 
 main() {
-	local int_failed=0 str_num
+	local int_failed=0 str_num str_list
 
-	for str_num in $(resolve_issues "$BRANCH" "$BODY"); do
+	# Captured first: a for-loop over $(...) would drop a broken parser's status.
+	if ! str_list=$(resolve_issues "$BRANCH" "$BODY"); then
+		echo "::error::could not parse the branch and body for issue numbers"
+		return 1
+	fi
+	for str_num in $str_list; do
 		[[ "$str_num" == "$PR" ]] && continue
 		close_issue "$str_num" || int_failed=1
 	done

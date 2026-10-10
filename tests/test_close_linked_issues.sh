@@ -31,7 +31,8 @@ expect() {
 
 # Positives.
 expect "leading number" "feat/12-add-thing-3" "" "12"
-expect "feature/ and bugfix/ spellings" "bugfix/7-typo" "" "7"
+expect "bugfix/ spelling" "bugfix/7-typo" "" "7"
+expect "feature/ spelling" "feature/6-thing" "" "6"
 expect "keyword with colon" "chore/cleanup" "Closes: #8" "8"
 expect "keyword without colon, mixed case" "chore/cleanup" "FIXED #9" "9"
 expect "each Closes pair counts" "chore/cleanup" $'Closes #1\nFixes #2, closes #3' "1 2 3"
@@ -49,6 +50,18 @@ expect "won't actually close #9" "chore/x" "we won't actually close #9" ""
 expect "never really resolves #3" "chore/x" "it never really resolves #3" ""
 expect "negation elsewhere in the sentence" "chore/x" "Not a hotfix, closes #6" "6"
 expect "negation in an earlier sentence" "chore/x" $'It is not done yet.\nFixes #7' "7"
+expect "fenced block" "chore/x" $'```\nCloses #41\n```' ""
+expect "tilde fenced block" "chore/x" $'~~~\nFixes #42\n~~~' ""
+expect "inline code" "chore/x" 'use `closes #45` here' ""
+expect "blockquote" "chore/x" $'> Fixes #46\nreal text' ""
+expect "one-line html comment" "chore/x" 'text <!-- e.g. Closes #123 --> more' ""
+expect "multi-line html comment" "chore/x" $'<!--\nCloses #124\n-->' ""
+expect "PR-template comment, real close after it" "chore/x" $'<!-- Closes #123 -->\nCloses #50' "50"
+expect "negation wrapped across lines" "chore/x" $'This does not\nfix #12' ""
+expect "negation wrapped with CRLF" "chore/x" $'This does not\r\nfix #12' ""
+expect "no longer fixes #8" "chore/x" "no longer fixes #8" ""
+expect "reverts the change that fixes #8" "chore/x" "this reverts the change that fixes #8" ""
+expect "date-like slug skips a real issue (fails safe)" "feat/2010-12-factor-app" "" ""
 expect "list form closes only the first" "chore/x" "Closes #1, #2" "1"
 expect "cross-repo ref ignored" "chore/x" "Closes owner/repo#40" ""
 expect "digits glued to letters ignored" "chore/x" "Closes #12abc" ""
@@ -77,12 +90,15 @@ else
 	int_failures=$((int_failures + 1))
 fi
 
-if grep -q 'base.ref == github.event.repository.default_branch' "$str_wf"; then
-	echo "ok   - workflow is gated on the default branch"
-else
-	echo "FAIL - workflow does not gate on the default base branch"
-	int_failures=$((int_failures + 1))
-fi
+for str_guard in 'merged == true' 'head.repo.full_name == github.repository' \
+	'base.ref == github.event.repository.default_branch'; do
+	if grep -qF "$str_guard" "$str_wf"; then
+		echo "ok   - workflow guard present: $str_guard"
+	else
+		echo "FAIL - workflow lacks the guard: $str_guard"
+		int_failures=$((int_failures + 1))
+	fi
+done
 
 # Error handling, against a stub gh. STUB_API=<404|500|open>, STUB_CLOSE_FAIL=<number>.
 str_bin="$(mktemp -d)"
@@ -139,6 +155,15 @@ check "a 500 fails the job" "$((int_status == 0))"
 run_script open 1 $'Closes #1\nCloses #2'
 check "one failed close does not abort the rest" "$([[ "$str_log" == *"issue close 2"* ]] && echo 0 || echo 1)"
 check "one failed close fails the job" "$((int_status == 0))"
+
+mkdir "$str_bin/broken"
+printf '#!/bin/sh\nexit 2\n' >"$str_bin/broken/awk"
+chmod +x "$str_bin/broken/awk"
+str_path="$PATH"
+PATH="$str_bin/broken:$PATH"
+run_script open "" "Closes #1"
+PATH="$str_path"
+check "a broken parser fails the job instead of closing nothing" "$((int_status == 0))"
 
 run_script open "" "Closes #99"
 check "the PR's own number is skipped" "${#str_log}"

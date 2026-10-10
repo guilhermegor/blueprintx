@@ -62,13 +62,18 @@ the default `GITHUB_TOKEN` (an auto-merge or merge-queue action) never trigger
 `pull_request: closed`, so only merges by a person, an App token or a PAT are covered:
 
 - the issue number in a branch named `<type>/<N>-<slug>`, where the type is `feat`, `feature`,
-  `fix`, `bugfix`, `hotfix`, `docs`, `refactor`, `chore` or `test` and `N` is not a year-month date
-  (`feat/12-add-thing` closes issue 12; `feat/1999-x` closes 1999; `chore/2026-10-cleanup` and `fix/python-3-12` close
-  nothing, and a trailing `-N` is never read);
+  `fix`, `bugfix`, `hotfix`, `docs`, `refactor`, `chore` or `test` and `N` is not a year-month
+  date (`feat/12-add-thing` closes issue 12; `feat/1999-x` closes 1999; `chore/2026-10-cleanup`
+  and `fix/python-3-12` close nothing, and a trailing `-N` is never read). A real issue number
+  that looks like a year-month, such as `feat/2010-12-factor-app`, is skipped too: a miss, never a
+  wrong closure;
 - each `Closes #N`, `Fixes #N` or `Resolves #N` pair in the PR body (GitHub's closing keywords
-  `close`, `fix` and `resolve` in their `-s`/`-d`/`-es` forms; colon allowed), at a word boundary. `Closes #1, #2` closes
-  only `#1`, and a negated use such as "does not fully fix #12" (up to three words after the
-  negation) is ignored.
+  `close`, `fix` and `resolve` in their `-s`/`-d`/`-es` forms; colon allowed), at a word
+  boundary. `Closes #1, #2` closes only `#1`. Like GitHub's own linker, it ignores fenced code
+  blocks, inline code, `>` quotes and `<!-- -->` comments. A negated use is ignored, also across
+  a line break: `not`, `never`, `cannot`, `n't`, `no longer`, `revert(s|ed|ing)` or `without`,
+  followed by up to three words and the keyword ("does not fully fix #12", "this reverts the
+  change that fixes #8"). Any other wording, such as "I doubt this fixes #8", still closes.
 
 It skips the whole PR, branch and body alike, for `dependabot/*`, `renovate/*` and `release/*`
 branches (their bodies quote upstream `Fixes #N` text, and a trailing `-4` is a version). It also
