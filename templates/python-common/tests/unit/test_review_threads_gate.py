@@ -1716,7 +1716,7 @@ def test_review_body_dismissed_review_needs_no_reply() -> None:
 
 def test_review_body_problem_quotes_the_matched_line_not_the_first() -> None:
     """CodeRabbit bodies open with boilerplate; the failure must show the finding."""
-    str_body = "<!-- auto-generated -->\n**Actionable comments posted: 1**\n" + _BODY_MAJOR
+    str_body = "<!-- auto-generated -->\n**Review profile**: CHILL\n" + _BODY_MAJOR
     assert "retry loop" in _body_problems([_body_review(str_body)], [])[0]
 
 
@@ -1806,7 +1806,7 @@ def test_print_review_body_problems_json_carries_the_reason(
 # --------------------------
 # Classification by declared structure (blueprintx#630, docs/faq.md)
 # --------------------------
-# Each shape below is a trimmed copy of a real body from this repo's PRs (#671-#687). The
+# Each shape below is a trimmed copy of a real body from this repo's PRs (#347, #671-#687). The
 # witness is the same text with only its structural marker removed.
 
 _LADDER = (
@@ -1816,41 +1816,65 @@ _LADDER_CLAUDE = _LADDER.format("claude", "last-resort")
 _LADDER_CLI = _LADDER.format("coderabbit", "live-probe")
 _PROSE = "I couldn't check any of this against the tree. Every tool call failed."
 _LOOP = "the retry loop swallows the final error."
+_BOTH_ROSTER = {"coderabbitai", "guilhermegor-review-ladder"}
 
-_REVIEW_SHAPES = [
-    pytest.param(
-        "**Actionable comments posted: 2**\n\n---\n\nInline comments:\n- Line 50: reword.",
-        "---\n\nInline comments:\n- Line 50: reword.",
-        id="coderabbit-actionable-n",
+# Real CodeRabbit body (#347): its only finding sits in a body section, not in an inline thread.
+_CR_SECTION = "⚠️ Outside diff range comments (1)"
+_CR_OUTSIDE_DIFF = (
+    "> [!CAUTION]\n> Some comments are outside the diff and can't be posted inline.\n>\n"
+    f"> <details>\n> <summary>{_CR_SECTION}</summary><blockquote>\n>\n"
+    "> `191-191`: _🎯 Functional Correctness_ | _🟠 Major_ | _⚡ Quick win_\n>\n"
+    "> **Resolve the PR head SHA for `issue_comment` runs.**\n>\n"
+    "> </blockquote></details>\n\n"
+    "<details>\n<summary>ℹ️ Review info</summary>\n\n**Review profile**: CHILL\n"
+)
+_CR_NITPICK_ONLY = _CR_OUTSIDE_DIFF.replace(_CR_SECTION, "🧹 Nitpick comments (1)")
+_CR_INLINE_ONLY = (
+    "**Actionable comments posted: 2**\n\n---\n\nInline comments:\n"
+    "Review comments at @docs/faq.md:\n- Line 50: reword.\n\n"
+    "<details>\n<summary>ℹ️ Review info</summary>\n\n**Review profile**: CHILL\n"
+)
+
+_DICT_REVIEW_SHAPES = {
+    "coderabbit-outside-diff-section": (
+        _CR_OUTSIDE_DIFF,
+        _CR_NITPICK_ONLY.replace("🟠 Major", "🧹 Nitpick"),
     ),
-    pytest.param(_LADDER_CLAUDE + _PROSE, _PROSE, id="ladder-claude-rung-prose-without-a-count"),
-    pytest.param(
+    "coderabbit-zero-count-with-outside-diff": (
+        "**Actionable comments posted: 0**\n\n" + _CR_OUTSIDE_DIFF,
+        "**Actionable comments posted: 0**\n\n" + _CR_NITPICK_ONLY,
+    ),
+    "coderabbit-n-count-with-duplicate-section": (
+        "**Actionable comments posted: 2**\n\n♻️ Duplicate comments (1)\n\nx",
+        "**Actionable comments posted: 2**\n\n🧹 Nitpick comments (1)\n\nx",
+    ),
+    "ladder-claude-rung-prose-without-a-count": (_LADDER_CLAUDE + _PROSE, _PROSE),
+    "ladder-coderabbit-cli-count": (
         _LADDER_CLI + "3 finding(s) across 4 reviewed file(s).",
         _LADDER_CLI,
-        id="ladder-coderabbit-cli-count",
     ),
-    pytest.param(f"## Review\n\n{_LOOP}", _LOOP, id="heading-review"),
-    pytest.param(f"* Review - {_LOOP}", f"* {_LOOP}", id="bullet-review-dash"),
-    pytest.param(f"Review: {_LOOP}", _LOOP, id="review-colon"),
-    pytest.param(f"**Findings**\n\n- {_LOOP}", f"- {_LOOP}", id="bold-findings"),
-    pytest.param(f"Finding 1: {_LOOP}", _LOOP, id="numbered-finding"),
-    pytest.param(f"## Findings\n\n- {_LOOP}", f"- {_LOOP}", id="heading-findings"),
-    pytest.param(f"- **Major** `a.py`: {_LOOP}", f"- `a.py`: {_LOOP}", id="severity-bullet"),
-]
+    "heading-review": (f"## Review\n\n{_LOOP}", _LOOP),
+    "bullet-review-dash": (f"* Review - {_LOOP}", f"* {_LOOP}"),
+    "review-colon": (f"Review: {_LOOP}", _LOOP),
+    "bold-findings": (f"**Findings**\n\n- {_LOOP}", f"- {_LOOP}"),
+    "numbered-finding": (f"Finding 1: {_LOOP}", _LOOP),
+    "heading-findings": (f"## Findings\n\n- {_LOOP}", f"- {_LOOP}"),
+    "severity-bullet": (f"- **Major** `a.py`: {_LOOP}", f"- `a.py`: {_LOOP}"),
+}
 
 
-@pytest.mark.parametrize(("str_body", "str_witness"), _REVIEW_SHAPES)
-def test_review_shape_declared_by_structure_demands_an_answer(
-    str_body: str, str_witness: str
-) -> None:
+@pytest.mark.parametrize(
+    "str_body", [t[0] for t in _DICT_REVIEW_SHAPES.values()], ids=list(_DICT_REVIEW_SHAPES)
+)
+def test_review_shape_declared_by_structure_demands_an_answer(str_body: str) -> None:
     """Every recognised review shape must fail when nobody answered."""
     assert len(_body_problems([_body_review(str_body)], [])) == 1
 
 
-@pytest.mark.parametrize(("str_body", "str_witness"), _REVIEW_SHAPES)
-def test_review_shape_witness_without_its_marker_is_not_a_review(
-    str_body: str, str_witness: str
-) -> None:
+@pytest.mark.parametrize(
+    "str_witness", [t[1] for t in _DICT_REVIEW_SHAPES.values()], ids=list(_DICT_REVIEW_SHAPES)
+)
+def test_review_shape_witness_without_its_marker_is_not_a_review(str_witness: str) -> None:
     """Should-fail witness: the same text minus the structural marker must stay green."""
     assert _body_problems([_body_review(str_witness)], []) == []
 
@@ -1879,36 +1903,54 @@ def test_review_stating_zero_findings_never_blocks(str_body: str) -> None:
     ],
 )
 def test_review_count_of_zero_beats_prose_markers(str_body: str) -> None:
-    """Structured counts beat prose: a stated 0 is authoritative."""
+    """Structured counts beat prose: a stated 0 is authoritative when no section contradicts."""
     assert _body_problems([_body_review(str_body)], []) == []
 
 
-def test_review_count_of_n_beats_clean_looking_prose() -> None:
-    """The mirror: a stated N > 0 blocks even when the prose reads clean."""
-    str_body = "**Actionable comments posted: 3**\n\nNo issues."
+def test_quoted_ladder_count_inside_a_sentence_does_not_declare_zero() -> None:
+    """The count must open a line: a quoted '0 finding(s) across' cannot clean a real finding."""
+    str_body = f"- **Major** x: {_LOOP} (earlier run said 0 finding(s) across 4 files)"
     assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_coderabbit_inline_findings_need_no_body_reply() -> None:
+    """Its N inline comments are threads `find_thread_problems` already gates (no double-gate).
+
+    An open PR whose inline threads are all answered and resolved must stay green, so the body
+    check cannot demand a PR comment for the same findings.
+    """
+    assert _body_problems([_body_review(_CR_INLINE_ONLY)], []) == []
+
+
+def test_coderabbit_review_boilerplate_is_never_the_quoted_finding() -> None:
+    """The message quotes the section, not '**Review profile**: CHILL'."""
+    assert "Outside diff range" in _body_problems([_body_review(_CR_OUTSIDE_DIFF)], [])[0]
 
 
 def test_ladder_review_posted_as_an_issue_comment_counts_as_a_review() -> None:
     """Some rungs post their review as an issue comment, not a PR review."""
-    dict_comment = _notice("guilhermegor-review-ladder[bot]", _LADDER_CLAUDE + _PROSE)
-    assert (
-        len(
-            _load_gate().find_review_body_problems(
-                [], [dict_comment], {"coderabbitai", "guilhermegor-review-ladder"}
-            )
-        )
-        == 1
-    )
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", _LADDER_CLAUDE + _PROSE)]
+    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
 
 
 def test_ladder_issue_comment_without_its_attribution_is_not_a_review() -> None:
     """Should-fail witness for the issue-comment path."""
-    dict_comment = _notice("guilhermegor-review-ladder[bot]", _PROSE)
-    assert (
-        _load_gate().find_review_body_problems([], [dict_comment], {"guilhermegor-review-ladder"})
-        == []
-    )
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", _PROSE)]
+    assert _load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER) == []
+
+
+@pytest.mark.parametrize(
+    "str_status",
+    [
+        "Review ladder: all rungs failed, no review was produced.",
+        "Review ladder: no rung available for this PR.",
+        "Review skipped: draft PR.",
+    ],
+)
+def test_ladder_status_notice_is_not_a_review(str_status: str) -> None:
+    """A failure or status notice from the ladder must not demand an answer."""
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_status)]
+    assert _load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER) == []
 
 
 _WALKTHROUGH = "> [!IMPORTANT]\n> ## Review skipped\n> - **Review profile**: CHILL"
@@ -1922,46 +1964,74 @@ def test_coderabbit_walkthrough_comment_is_not_a_review() -> None:
     assert _body_problems([], [_notice("coderabbitai[bot]", str_body)]) == []
 
 
-def test_coderabbit_walkthrough_without_its_marker_would_be_a_review() -> None:
-    """Should-fail witness: only the auto-generated marker keeps the walkthrough out."""
-    assert len(_body_problems([], [_notice("coderabbitai[bot]", _WALKTHROUGH)])) == 1
+def _pr_page(list_reviews: list[dict], bool_next: bool) -> dict:
+    """Build one GraphQL page whose reviews connection may have a next page."""
+    return {
+        "reviews": {
+            "pageInfo": {"hasNextPage": bool_next, "endCursor": "c"},
+            "nodes": list_reviews,
+        },
+        "reviewThreads": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []},
+    }
 
 
-_ANSWER_SHAPES = [
-    pytest.param("Reply to review 5474743692: done.", "done.", id="reply-to-review-id"),
-    pytest.param("Answer to review: done.", "done.", id="answer-to-review"),
-    pytest.param("Answers to ladder review, all held.", "all held.", id="answers-to-ladder"),
-    pytest.param("Re: review — done.", "done.", id="re-review"),
-    pytest.param("Addressed in 2cdb28bf", "Addressed", id="addressed-in-sha"),
-    pytest.param("Fixed in `7273818f`.", "Fixed.", id="fixed-in-sha"),
-    pytest.param("**Finding 1: verified, fixed.**", "**verified, fixed.**", id="per-finding"),
-    pytest.param("> the loop swallows\nFixed it.", "the loop swallows\nFixed it.", id="quoted"),
-    pytest.param("Verdicts on the ladder review: held.", "held.", id="verdicts-on-review"),
-    pytest.param("Judgment on the fallback review: ok.", "ok.", id="judgment-on-review"),
-    pytest.param("Review 5469399568 verified.", "Verified.", id="review-id-verified"),
-]
+def test_review_on_the_second_page_reaches_the_body_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pagination extends ``dict_pr`` in place, so a body past the first 100 reviews is seen."""
+    cls_gate = _load_gate()
+    list_pages = [
+        _pr_page([_body_review("LGTM")], True),
+        _pr_page([_body_review(_BODY_MAJOR)], False),
+    ]
+    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: list_pages.pop(0))
+    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+    assert len(cls_gate._unanswered_bodies(dict_pr, [], _BODY_ROSTER)) == 1
+
+
+_ANSWER_SHAPES = {
+    "reply-to-review-id": ("Reply to review 5474743692: done.", "done."),
+    "answer-to-review": ("Answer to review: done.", "done."),
+    "answers-to-ladder": ("Answers to ladder review, all held.", "all held."),
+    "re-colon-review": ("Re: review — done.", "done."),
+    "addressed-in-sha": ("Addressed in 2cdb28bf", "Addressed"),
+    "fixed-in-sha": ("Fixed in `7273818f`.", "Fixed."),
+    "per-finding": ("**Finding 1: verified, fixed.**", "**verified, fixed.**"),
+    "quoted": ("> the loop swallows\nFixed it.", "the loop swallows\nFixed it."),
+    "verdicts-on-review": ("Verdicts on the ladder review: held.", "held."),
+    "judgment-on-review": ("Judgment on the fallback review: ok.", "ok."),
+    "review-id-verified": ("Review 5469399568 verified.", "Verified."),
+}
 _REVIEWED = [_body_review(_BODY_MAJOR)]
 
 
-@pytest.mark.parametrize(("str_reply", "str_witness"), _ANSWER_SHAPES)
-def test_answer_shape_declared_by_structure_answers_at_any_length(
-    str_reply: str, str_witness: str
-) -> None:
+@pytest.mark.parametrize(
+    "str_reply", [t[0] for t in _ANSWER_SHAPES.values()], ids=list(_ANSWER_SHAPES)
+)
+def test_answer_shape_declared_by_structure_answers_at_any_length(str_reply: str) -> None:
     """A recognised answer shape counts even below the length bar."""
     assert _body_problems(_REVIEWED, [_notice("someone", str_reply, _BODY_AFTER)]) == []
 
 
-@pytest.mark.parametrize(("str_reply", "str_witness"), _ANSWER_SHAPES)
-def test_answer_shape_witness_without_its_marker_is_not_an_answer(
-    str_reply: str, str_witness: str
-) -> None:
+@pytest.mark.parametrize(
+    "str_witness", [t[1] for t in _ANSWER_SHAPES.values()], ids=list(_ANSWER_SHAPES)
+)
+def test_answer_shape_witness_without_its_marker_is_not_an_answer(str_witness: str) -> None:
     """Should-fail witness: the same short text minus the marker is not an answer."""
     assert len(_body_problems(_REVIEWED, [_notice("someone", str_witness, _BODY_AFTER)])) == 1
 
 
-@pytest.mark.parametrize("str_command", ["@coderabbitai review", "@coderabbitai full review"])
-def test_a_review_command_is_not_an_answer(str_command: str) -> None:
-    """Asking for another review answers nothing."""
+@pytest.mark.parametrize(
+    "str_command",
+    [
+        "@coderabbitai review",
+        "@coderabbitai full review",
+        "@coderabbitai re-review",
+        "Ready for re-review",
+        "We're waiting on the review",
+        "Not answered yet, findings pending",
+    ],
+)
+def test_a_review_request_or_status_line_is_not_an_answer(str_command: str) -> None:
+    """Asking for another review, or saying nothing is answered, answers nothing."""
     assert len(_body_problems(_REVIEWED, [_notice("someone", str_command, _BODY_AFTER)])) == 1
 
 
