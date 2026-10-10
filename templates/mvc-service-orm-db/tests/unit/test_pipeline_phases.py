@@ -101,17 +101,27 @@ def test_log_context_logs_one_line_per_context_item(
     assert "App: demo" in _logged(mock_log)
 
 
+@pytest.mark.parametrize("str_line", ["Email handler: none", "Webhook notifier: none"])
 def test_log_context_reports_no_handlers_when_none_are_wired(
-    tmp_path: Path, cls_engine: Engine, mocker: MockerFixture
+    tmp_path: Path, cls_engine: Engine, mocker: MockerFixture, str_line: str
 ) -> None:
-    """With no e-mail handler and no webhook, both lines say ``none``."""
+    """With no e-mail handler and no webhook, both lines say ``none``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided temporary directory.
+    cls_engine : Engine
+        The seeded engine.
+    mocker : MockerFixture
+        pytest-mock fixture for patching.
+    str_line : str
+        A line the context log must carry.
+    """
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     _build_orchestrator(tmp_path, cls_engine)._log_context()
 
-    str_logged = _logged(mock_log)
-
-    assert "Email handler: none" in str_logged
-    assert "Webhook notifier: none" in str_logged
+    assert str_line in _logged(mock_log)
 
 
 def test_log_context_reports_a_configured_webhook(
@@ -177,14 +187,44 @@ def test_run_returns_the_summary_of_the_rows_read(tmp_path: Path, cls_engine: En
     assert dict_summary["rows_read"] == 1
 
 
-def test_run_disposes_the_engine_even_when_the_read_fails(
+@pytest.fixture
+def mock_dispose_after_failed_read(
     tmp_path: Path, cls_engine: Engine, mocker: MockerFixture
-) -> None:
-    """The engine is disposed in a ``finally``, so a failing read cannot leak connections."""
+) -> object:
+    """Run the pipeline with a failing read and return the engine's ``dispose`` mock.
+
+    The failure is arranged here, so the test below asserts one fact about the aftermath.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided temporary directory.
+    cls_engine : Engine
+        The seeded engine.
+    mocker : MockerFixture
+        pytest-mock fixture for patching.
+
+    Returns
+    -------
+    object
+        The ``dispose`` mock.
+    """
     cls_orchestrator = _build_orchestrator(tmp_path, cls_engine)
     mocker.patch.object(cls_orchestrator, "_read", side_effect=RuntimeError("boom"))
     mock_dispose = mocker.patch.object(cls_engine, "dispose")
     with pytest.raises(RuntimeError, match="boom"):
         cls_orchestrator.run()
+    return mock_dispose
 
-    mock_dispose.assert_called_once_with()
+
+def test_run_disposes_the_engine_even_when_the_read_fails(
+    mock_dispose_after_failed_read: object,
+) -> None:
+    """The engine is disposed in a ``finally``, so a failing read cannot leak connections.
+
+    Parameters
+    ----------
+    mock_dispose_after_failed_read : object
+        The ``dispose`` mock, after the failed run.
+    """
+    mock_dispose_after_failed_read.assert_called_once_with()
