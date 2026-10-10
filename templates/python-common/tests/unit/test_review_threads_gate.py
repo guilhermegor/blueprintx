@@ -2447,6 +2447,19 @@ def test_ladder_marker_with_findings_is_rejected() -> None:
     assert _missing_with([dict_found], _TUPLE_MARKERS) is not None
 
 
+@pytest.mark.parametrize(
+    "str_head_line",
+    [f"Reviewed head: {_HEAD}  ", f"Reviewed head: {_HEAD}\r", f"  Reviewed head: {_HEAD}"],
+)
+def test_ladder_marker_tolerates_whitespace_around_the_head_line(str_head_line: str) -> None:
+    """Cosmetic whitespace on the SHA line must not silently block every PR."""
+    dict_ws = {
+        **_marker_comment("MEMBER"),
+        "body": f"{_MARKER}\n{str_head_line}\n\n0 finding(s) across 3 reviewed file(s).",
+    }
+    assert _missing_with([dict_ws], _TUPLE_MARKERS) is None
+
+
 def test_ladder_marker_without_a_findings_line_is_rejected() -> None:
     """Unparseable means "has findings": a prose review never passes."""
     dict_prose = {

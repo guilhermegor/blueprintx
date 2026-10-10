@@ -1192,7 +1192,8 @@ def ladder_marker_declared(
         d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
         and (d.get("createdAt") or "") >= str_head_date
         and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
-        and (d.get("body") or "").lstrip().casefold().splitlines()[1:2] == [str_reviewed]
+        and [s.strip() for s in (d.get("body") or "").lstrip().casefold().splitlines()[1:2]]
+        == [str_reviewed]
         and ladder_reports_zero_findings((d.get("body") or "").strip().splitlines())
         for d in list_notices
     )

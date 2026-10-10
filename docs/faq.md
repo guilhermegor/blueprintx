@@ -51,7 +51,8 @@ A roster row with `kind: comment-marker` and a `marker:` string (here `Fallback 
 lets a plain issue comment count as a review. The comment must start with the marker, name the head SHA on its
 second line (`Reviewed head: <sha>`), be posted
 after the head commit, and come from an `OWNER`, `MEMBER` or `COLLABORATOR` (GitHub's
-`authorAssociation`), so an outside commenter cannot forge it. The row has no `login:` and is
+`authorAssociation`), so an outside commenter cannot forge it. A comment posted by a GitHub App reports `NONE` and
+is rejected, so post the marker with the owner's own token. The row has no `login:` and is
 ignored when absent. The comment must also contain the line `0 finding(s) across N reviewed file(s).`; a count above zero, or no such line, fails closed, so a ladder review with findings never satisfies the gate on its own (blueprintx#630). Like a clean-review notice, it proves a review ran, never that a thread was
 answered. The workflow needs the `issue_comment` trigger to re-run on that comment. See
 blueprintx#593.
