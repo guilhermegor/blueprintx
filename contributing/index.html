@@ -618,6 +618,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#blocked-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocked work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#releasing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1834,6 +1845,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#blocked-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocked work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#releasing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1927,6 +1949,54 @@ root file, where the change would reach one tier and silently miss the rest.</p>
 <h2 id="pull-requests">Pull requests<a class="headerlink" href="#pull-requests" title="Permanent link">&para;</a></h2>
 <p>Branch off <code>main</code> using the CONTRIBUTING prefix policy (<code>feat/…</code>, <code>fix/…</code>, …), keep <code>make lint</code>
 green, and fill out the PR template. Direct commits to <code>main</code> are blocked by pre-commit.</p>
+<h2 id="blocked-work">Blocked work<a class="headerlink" href="#blocked-work" title="Permanent link">&para;</a></h2>
+<p>Work that cannot start because an upstream is unfinished is marked on the issue and on the
+kanban board, so it is obvious when to stop here and go finish the upstream.</p>
+<p><strong>Convention.</strong> An issue that cannot start carries the <code>state:blocked</code> label and a
+<code>**Blocked by:**</code> line at the start of a body line, naming each blocker as <code>repo#N</code>, or as
+<code>decision: &lt;why&gt;</code> when the blocker is a choice nobody has made yet. The same convention is used in
+<code>greenfield</code> (<code>project-seed.md</code>), so every repo reads it the same way. The
+<a href="https://github.com/guilhermegor/blueprintx/blob/main/.github/ISSUE_TEMPLATE/feature_or_fix.md">issue template</a>
+carries the line plus the machine-readable <code>issue-template-guard:</code> directive that makes a
+<code>state:blocked</code> issue without it get rejected (guard: <code>issue_template_guard.sh</code> in <code>dotfiles-dev</code>,
+<code>ai_clients/claude/hooks/</code>).</p>
+<p><strong>Why a convention and not only GitHub's native <code>blocked_by</code>.</strong> The native relationship is
+same-repo only, so a blocker in another repository cannot use it. Where it does apply, nothing
+propagates it: GitHub resolves the dependency when the blocker closes, but the board Status, the
+label and the <code>Blocked by</code> field sit still until the reconciler (<code>roadmap_unblock.sh</code> in
+<code>dotfiles-linux-dev</code>) re-reads them. Where the blocker is in the same repository, mirror it as a native
+relationship too.</p>
+<p><strong>Rules.</strong></p>
+<ul>
+<li>Name the specific upstream issue whenever one exists. Link the terminal issue
+  (<a href="https://github.com/guilhermegor/blueprintx/issues/601">#601</a>) only when the blocker really
+  is "not 1.0 yet" — the reconciler clears on the <em>named</em> issue, so pointing everything at that
+  issue holds work that is in fact ready.</li>
+<li>A <code>decision:</code> blocker is never auto-cleared; only a person removes it. That is deliberate.</li>
+<li>A board Status alone is not durable: the reconciler clears any item it reads as blocked by
+  nothing. Each blocked item needs the label plus the <code>**Blocked by:**</code> body line (the issue
+  template guard rejects a <code>state:blocked</code> issue without it). A native <code>blocked_by</code> entry is an
+  additional mirror where supported, never a replacement for the body line.</li>
+</ul>
+<p><strong>Board.</strong> The kanban board's <code>Status</code> options read
+<code>Blocked | Backlog | Ready | In progress | In review | Done</code> (<code>Blocked</code> first, as on the boards
+this convention has been applied to), with a <code>Blocked by</code> text field.</p>
+<div class="admonition warning">
+<p class="admonition-title">Pin every option <code>id</code> when editing the Status field</p>
+<p><code>updateProjectV2Field</code> replaces the entire option set, and an option sent without its
+existing <code>id</code> is minted as a new one — every item's stored value then dangles and reads
+empty. Adding <code>Blocked</code> to another board this way wiped all 271 item Statuses in one call.
+Get the item count first (<code>gh project view &lt;n&gt; --owner &lt;o&gt; --format json</code>, field
+<code>items.totalCount</code>), then snapshot with
+<code>gh project item-list &lt;n&gt; --owner &lt;o&gt; --limit &lt;count+1&gt; --format json</code> and check that the
+snapshot length equals the count. Send every option with its existing <code>id</code> (only the new
+<code>Blocked</code> has none), pass the payload as a <code>{query, variables}</code> body via
+<code>gh api graphql --input &lt;file&gt;</code>, then diff per item id against the snapshot. If the diff
+shows any wiped Status, stop and restore each one with <code>updateProjectV2ItemFieldValue</code>.
+Its <code>singleSelectOptionId</code> must be an option that exists now, and a wipe means the old ids
+were replaced, so map each item's saved Status label to the field's current option id
+(re-read the field's options first). Then re-diff until the diff is empty.</p>
+</div>
 <h2 id="releasing">Releasing<a class="headerlink" href="#releasing" title="Permanent link">&para;</a></h2>
 <p>The version is the git tag — cut a release from the <strong>Release</strong> GitHub Action (enter the
 version once). See the <a href="../faq/#how-is-blueprintx-itself-versioned">FAQ</a>.</p>
