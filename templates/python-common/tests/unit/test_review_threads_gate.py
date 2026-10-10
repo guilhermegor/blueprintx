@@ -1851,7 +1851,7 @@ _DICT_REVIEW_SHAPES = {
     "ladder-claude-rung-prose-without-a-count": (_LADDER_CLAUDE + _PROSE, _PROSE),
     "ladder-coderabbit-cli-count": (
         _LADDER_CLI + "3 finding(s) across 4 reviewed file(s).",
-        _LADDER_CLI,
+        _LADDER_CLI + "No findings.",
     ),
     "heading-review": (f"## Review\n\n{_LOOP}", _LOOP),
     "bullet-review-dash": (f"* Review - {_LOOP}", f"* {_LOOP}"),
@@ -2051,6 +2051,90 @@ def test_answer_shape_from_the_roster_is_not_an_answer() -> None:
     """A reviewer answering itself is not an answer, shape or not."""
     list_notices = [_notice("coderabbitai[bot]", "Reply to review 123456: ok.", _BODY_AFTER)]
     assert len(_body_problems(_REVIEWED, list_notices)) == 1
+
+
+# --------------------------
+# Fail-closed audit: no success without positive evidence (blueprintx#630)
+# --------------------------
+
+
+def test_body_section_without_a_parsable_count_is_a_finding() -> None:
+    """A section heading whose count is missing or unparsable is a finding, never a clean 0."""
+    str_body = "**Actionable comments posted: 0**\n\n⚠️ Outside diff range comments\n\nx"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_body_section_with_a_stated_zero_count_is_clean() -> None:
+    """Should-fail witness: the same body with an explicit (0) stays green."""
+    str_body = "**Actionable comments posted: 0**\n\n⚠️ Outside diff range comments (0)\n\nx"
+    assert _body_problems([_body_review(str_body)], []) == []
+
+
+def test_ladder_review_with_an_attribution_and_nothing_else_is_a_finding() -> None:
+    """A truncated or failed ladder review says nothing, so it cannot read as clean."""
+    assert len(_body_problems([_body_review(_LADDER_CLAUDE)], [])) == 1
+
+
+def test_ladder_review_that_says_no_findings_is_clean() -> None:
+    """Should-fail witness: the explicit clean statement is the positive evidence."""
+    assert _body_problems([_body_review(_LADDER_CLAUDE + "No findings.")], []) == []
+
+
+@pytest.mark.parametrize("str_typename", ["Bot", "Mannequin", "Organization"])
+def test_answer_from_a_non_user_account_type_is_not_an_answer(str_typename: str) -> None:
+    """Only a ``User`` (or an untyped REST login) answers; any other type fails closed."""
+    dict_author = {"login": "someone", "__typename": str_typename}
+    dict_reply = {"author": dict_author, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
+    assert len(_body_problems(_REVIEWED, [dict_reply])) == 1
+
+
+def test_answer_from_a_user_account_type_is_an_answer() -> None:
+    """Should-fail witness: the same reply from a ``User`` answers."""
+    dict_author = {"login": "someone", "__typename": "User"}
+    dict_reply = {"author": dict_author, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
+    assert _body_problems(_REVIEWED, [dict_reply]) == []
+
+
+def test_roster_comment_with_an_auto_marker_and_an_attribution_still_counts() -> None:
+    """A marker must not be a skip list: structure decides, so a marked ladder review counts."""
+    str_body = "<!-- This is an auto-generated comment: x -->\n" + _LADDER_CLAUDE + _PROSE
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_body)]
+    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
+
+
+def test_roster_issue_comment_with_a_body_section_counts_as_a_review() -> None:
+    """An issue comment carrying a non-zero outside-diff section is a review too."""
+    list_notices = [_notice("coderabbitai[bot]", _CR_OUTSIDE_DIFF)]
+    assert len(_body_problems([], list_notices)) == 1
+
+
+def test_roster_issue_comment_without_the_body_section_is_not_a_review() -> None:
+    """Should-fail witness: the same comment minus its section marker."""
+    list_notices = [_notice("coderabbitai[bot]", _CR_NITPICK_ONLY.replace("🟠 Major", "x"))]
+    assert _body_problems([], list_notices) == []
+
+
+def test_ladder_issue_review_without_a_timestamp_fails_closed() -> None:
+    """No ``createdAt`` means no ordering evidence, so no answer can postdate it."""
+    dict_review = {**_notice("guilhermegor-review-ladder[bot]", _LADDER_CLAUDE + _PROSE)}
+    dict_review["createdAt"] = None
+    list_notices = [dict_review, _notice("someone", _BODY_REPLY, _BODY_AFTER)]
+    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
+
+
+def _comments_page(int_total: int) -> dict:
+    """Build a PR node whose issue comments report ``int_total`` against one node read."""
+    return {"comments": {"totalCount": int_total, "nodes": [_notice("someone", "hi")]}}
+
+
+def test_truncated_issue_comments_fail_closed() -> None:
+    """More comments than the 100 read means a review or answer may be unread."""
+    assert len(_load_gate()._unanswered_bodies(_comments_page(101), [], _BODY_ROSTER)) == 1
+
+
+def test_complete_issue_comments_stay_green() -> None:
+    """Should-fail witness: a total equal to the nodes read is not truncated."""
+    assert _load_gate()._unanswered_bodies(_comments_page(1), [], _BODY_ROSTER) == []
 
 
 # ⚠️ WITNESS FOR blueprintx#372 — THE DISPLAY BUDGET MUST NOT REACH A MATCHER.
