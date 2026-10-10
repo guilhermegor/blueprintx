@@ -2487,7 +2487,7 @@ def _file_entry(path_repo: Path, str_base: str, str_oid: str, str_line: str) -> 
     str_oid : str
             Commit being compared.
     str_line : str
-            One ``git diff --name-status`` line, ``<code>\\t<path>``.
+            One ``git diff --name-status`` line: a status code, a tab, then the path.
 
     Returns
     -------
