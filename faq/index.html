@@ -527,6 +527,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#when-does-a-review-still-count-after-the-branch-moves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When does a review still count after the branch moves?
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1911,6 +1922,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#when-does-a-review-still-count-after-the-branch-moves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When does a review still count after the branch moves?
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2040,6 +2062,58 @@ review answers the earlier ones; a body has no thread, so nothing needs resolvin
 are also open, the failure lists both. Re-run the check after replying. The tests in
 <code>test_review_threads_gate.py</code> list every shape with a witness that fails without its marker.
 The rule is weaker than a thread: a long comment answers without being tied to a finding.</p>
+<h3 id="when-does-a-review-still-count-after-the-branch-moves">When does a review still count after the branch moves?<a class="headerlink" href="#when-does-a-review-still-count-after-the-branch-moves" title="Permanent link">&para;</a></h3>
+<p>A review is pinned to the commit it was written against. When no review names the head, the
+gate asks whether the PR's <strong>own patch</strong> changed between the reviewed commit <code>R</code> and the head
+<code>H</code>. If it did not, the review covers <code>H</code> and the gate prints
+<code>review at R still covers H: the head only merges the base, the PR's own patch is unchanged</code>.
+That is the case of <code>update-branch</code> under the strict-serial ruleset: main is merged in, no code
+is written, and a second review of the same diff would only spend a reviewer rung.</p>
+<p>The patch is the diff from the merge base with the base branch to the commit. It is
+fingerprinted as the compare API reports it, with only the hunk coordinates
+(<code>@@ -a,b +c,d @@</code>) removed. Everything else is kept: the function context after the closing
+<code>@@</code>, the context lines, and all whitespace. This is stricter than <code>git patch-id --stable</code>,
+which also drops the function context and normalises whitespace. The CI checkout is shallow
+(<code>actions/checkout</code> defaults to <code>fetch-depth: 1</code>), so there is no local history for
+<code>git merge-base</code>; the gate reads the same diff from the GitHub compare API
+(<code>compare/&lt;base&gt;...&lt;commit&gt;</code>), which computes the merge base server side.</p>
+<p>Both compares name the base by the commit SHA read once with the PR, never by branch name, so a
+retarget or a push to the base between the two reads cannot make them measure different bases.
+The head is fingerprinted once, by the caller, and handed to each comparison, so the guarantee
+does not rest on the compare function caching anything: if the head cannot be read the
+comparison stops there. Reviewed commits are tried newest first and at most five of them
+(<code>_INT_MAX_REVIEWED_COMMITS</code>: five 60 second calls stay well inside the job timeout, and a PR
+reviewed at more commits than that is simply re-reviewed), so a PR makes at most six compare
+calls. A pass that rests on a carried-forward review is shown in the verdict: one line in the
+normal output, and a <code>carried_forward_from</code> field (the reviewed commit) under <code>--json</code>, where
+stdout stays one document. The check runs
+after the completion-notice check, so a PR that already passes makes no compare call. Each call
+has a 60 second timeout, and a timeout, a missing <code>gh</code> or an API error all read as "not
+covered", with one line on stderr giving the reason (stdout stays the <code>--json</code> document). A
+<code>DISMISSED</code> review is never carried forward. Every review's findings, threads or body, are
+audited afterwards whatever the carry-forward decided.</p>
+<p>What carries forward is therefore narrower than "any update-branch". A base edit that only
+shifts the PR's hunks (lines added above or below them) leaves the fingerprint alone. A
+conflict-free base edit inside a hunk's three context lines changes the context, so the review
+goes stale; that fails safe. The tests pin both cases against real <code>git diff</code> output. Known
+ceilings: an identical edit moved within one function, between identical context lines, still
+matches, as it does for <code>git patch-id</code>; and a conflict-free base change can still break the
+unchanged patch semantically (main renames a function the PR calls), which a patch comparison
+cannot see. That is accepted: a review is repeated only when a conflict or new code changes
+the PR's own patch, and CI covers the integration. A PR from a fork whose commits cannot be
+compared fails closed like any other error.</p>
+<p>A PR whose base branch was ever changed gets no carry-forward at all. The compare measures the
+patch against today's base, which need not be the base the review was written against, so
+after a retarget the same fingerprint proves nothing. The gate reads the PR's REST timeline for
+a <code>base_ref_changed</code> event (an event is never removed, so the refusal is permanent for that
+PR), prints the reason on stderr, and treats an unreadable timeline as a failure rather than as
+"not retargeted".</p>
+<p>Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
+and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
+closed: a missing commit, an API error, a malformed response, a binary or oversized file with
+no patch text, or a full 300-file list is read as "not covered". The compare API returns at most
+300 files whatever <code>per_page</code> says (it pages commits, not files), so a list that long may be cut
+off. The gate asks for <code>per_page=1</code> to keep the commit list, which it does not use, small.</p>
 <h2 id="which-install-methods-are-supported">Which install methods are supported?<a class="headerlink" href="#which-install-methods-are-supported" title="Permanent link">&para;</a></h2>
 <p>Homebrew, Chocolatey, Snap, apt, and <code>make install</code> from a clone — see the project README.</p>
 
