@@ -45,6 +45,45 @@ by language: for Python copy `templates/python-common/.review-bots.yaml` to the 
 TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
+## How does a scaffolded repo close the issue a merged PR delivered?
+
+BlueprintX carries `close-linked-issues.yml` and its `bin/close_linked_issues.sh` under
+`templates/common/` (blueprintx#604), but generated projects do not receive them yet: the scaffold
+scripts do not copy them until the wiring step tracked in
+[#604](https://github.com/guilhermegor/blueprintx/issues/604) lands. Once wired, it behaves as
+follows.
+
+GitHub's own `Closes #N` linking can come back empty (a `Closes: #N` with a colon, or a merge
+that did not link), which leaves the issue open and keeps a Projects "Item closed" -> Done
+automation from firing. On a merged same-repo PR **into the default branch** the workflow closes,
+matching strictly (a wrong closure is worse than a missed one). A PR merged into another branch (a
+stacked PR) closes nothing, because the work has not reached the default branch. Merges made with
+the default `GITHUB_TOKEN` (an auto-merge or merge-queue action) never trigger
+`pull_request: closed`, so only merges by a person, an App token or a PAT are covered:
+
+- the issue number in a branch named `<type>/<N>-<slug>`, where the type is `feat`, `feature`,
+  `fix`, `bugfix`, `hotfix`, `docs`, `refactor`, `chore` or `test` and `N` is not a year-month
+  date (`feat/12-add-thing` closes issue 12; `feat/1999-x` closes 1999; `chore/2026-10-cleanup`
+  and `fix/python-3-12` close nothing, and a trailing `-N` is never read). A real issue number
+  that looks like a year-month, such as `feat/2010-12-factor-app`, is skipped too: a miss, never a
+  wrong closure;
+- each `Closes #N`, `Fixes #N` or `Resolves #N` pair in the PR body (GitHub's closing keywords
+  `close`, `fix` and `resolve` in their `-s`/`-d`/`-es` forms; colon allowed), at a word
+  boundary. `Closes #1, #2` closes only `#1`. Like GitHub's own linker, it ignores fenced code
+  blocks, inline code, `>` quotes and `<!-- -->` comments. A negated use is ignored, also across
+  a line break: `not`, `never`, `cannot`, `n't`, `no longer`, `revert(s|ed|ing)` or `without`,
+  followed by up to three words and the keyword ("does not fully fix #12", "this reverts the
+  change that fixes #8"). Any other wording, such as "I doubt this fixes #8", still closes.
+
+It skips the whole PR, branch and body alike, for `dependabot/*`, `renovate/*` and `release/*`
+branches (their bodies quote upstream `Fixes #N` text, and a trailing `-4` is a version). It also
+skips the PR's own number, any number that is a PR, and `owner/repo#N` references, which point at
+another repository. A fork PR is skipped too: its token is read-only. A missing issue (HTTP 404, or 410 for a deleted issue or a repo with Issues
+disabled) is skipped; any other API error fails the job, and one failed close does not stop the others. The
+branch name and PR body are untrusted text and reach the script only through `env:`. It
+complements, and does not replace, the Projects "Item closed -> Done" workflow. It is dropped with
+the rest of `.github/` in offline mode.
+
 ## The scaffolder offered me a kanban board and labels — what does it do?
 
 After it creates the GitHub repo, the scaffolder creates the house labels (`type:task`,
