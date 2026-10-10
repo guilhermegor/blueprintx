@@ -205,7 +205,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       baseRefOid
       comments(first:100, after:$cc) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login __typename } body createdAt }
+        nodes { author { login __typename } authorAssociation body createdAt }
       }
       reviews(
         first:100, after:$rc,
@@ -1105,6 +1105,100 @@ def reviewer_declared_completion(
     return bool(str_when) and str_when >= str_head_date
 
 
+_KIND_COMMENT_MARKER = "comment-marker"
+_SET_TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+
+
+def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
+    """Return the ``kind: comment-marker`` strings declared by the roster.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+            Repository root holding ``.review-bots.yaml``.
+
+    Returns
+    -------
+    tuple of str
+            Lower-cased marker strings; empty when the file, the key or the row is absent, so a
+            roster without the row behaves exactly as before. Rationale: docs/faq.md.
+    """
+    path_roster = path_root / _ROSTER_FILE
+    if yaml is None or not path_roster.is_file():
+        return ()
+    dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
+    return tuple(
+        str(d["marker"]).strip().casefold()
+        for d in (dict_yaml.get("reviewers") or [])
+        if d.get("kind") == _KIND_COMMENT_MARKER and str(d.get("marker") or "").strip()
+    )
+
+
+_RE_FINDINGS_LINE = re.compile(r"(\d+) finding\(s\) across \d+ reviewed file\(s\)\.")
+
+
+def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
+    """Return whether a ladder comment's findings line reads zero, failing closed.
+
+    Parameters
+    ----------
+    list_lines : list of str
+            The comment body split into lines.
+
+    Returns
+    -------
+    bool
+            ``True`` only when exactly one line is ``0 finding(s) across N reviewed file(s).``
+            and no line reports a non-zero count. A missing or unparseable line is "has
+            findings", so a prose review never satisfies the gate (blueprintx#630).
+    """
+    list_counts = [m.group(1) for m in map(_RE_FINDINGS_LINE.fullmatch, list_lines) if m]
+    return list_counts == ["0"]
+
+
+def ladder_marker_declared(
+    list_notices: list[dict],
+    tuple_markers: tuple[str, ...],
+    str_head_date: str = "",
+    str_head_oid: str = "",
+) -> bool:
+    """Return whether a trusted commenter posted a roster marker after the head commit.
+
+    Parameters
+    ----------
+    list_notices : list of dict
+            The PR's issue comments, each with ``authorAssociation``, ``body``, ``createdAt``.
+    tuple_markers : tuple of str
+            Lower-cased markers from :func:`load_comment_markers`; matched at the start of the body
+            only, so a quotation on a later line is not a review.
+    str_head_date : str, optional
+            ISO-8601 ``committedDate`` of the head commit; empty fails closed.
+    str_head_oid : str, optional
+            The head commit SHA. The ladder writes ``Reviewed head: <sha>`` on the second line
+            of its comment, which must name this SHA; empty fails closed.
+
+    Returns
+    -------
+    bool
+            ``True`` only for an OWNER/MEMBER/COLLABORATOR comment carrying a marker and
+            postdating the head, whose second line names the head SHA and which reports zero
+            findings, so an outside commenter cannot forge it and a review of an older head
+            cannot be reused.
+    """
+    if not str_head_date or not str_head_oid:
+        return False
+    str_reviewed = f"reviewed head: {str_head_oid}".casefold()
+    return any(
+        d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
+        and (d.get("createdAt") or "") >= str_head_date
+        and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
+        and [s.strip() for s in (d.get("body") or "").lstrip().casefold().splitlines()[1:2]]
+        == [str_reviewed]
+        and ladder_reports_zero_findings((d.get("body") or "").strip().splitlines())
+        for d in list_notices
+    )
+
+
 # ⚠️ THE FILE-CAP MESSAGE IS A THIRD SENTENCE, NOT A THIRD VERDICT (blueprintx#433).
 #
 # Both branches below are FAILURES — a file-cap decline must never read as a pass, or the
@@ -1158,10 +1252,16 @@ def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: lis
     )
 
 
+def _notice_quote(list_notices: list[dict], set_roster: set[str]) -> str:
+    """Return the reviewer's newest notice as a message suffix, or ``""`` when there is none."""
+    str_seen = summarise_reviewer_notice(list_notices, set_roster)
+    return f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
+
+
 # ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
 # #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
 # ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
-def find_missing_review_problem(
+def find_missing_review_problem(  # noqa: PLR0913
     list_reviews: list[dict],
     set_reviewers: set[str],
     str_pr_author: str = "",
@@ -1169,6 +1269,7 @@ def find_missing_review_problem(
     str_head_oid: str,
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
+    tuple_markers: tuple[str, ...] = (),
     fn_fingerprint: Callable[[str], str] | None = None,
     dict_carried: dict | None = None,
 ) -> str | None:
@@ -1194,6 +1295,8 @@ def find_missing_review_problem(
             against, which is the vacuous pass this parameter exists to remove.
     list_notices : list of dict, optional
             The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
+    tuple_markers : tuple of str, optional
+            Roster ``comment-marker`` strings; see :func:`ladder_marker_declared`.
     fn_fingerprint : Callable[[str], str], optional
             Maps a commit oid to its patch fingerprint. When given, a review at an earlier
             commit covers HEAD if the PR's own patch is unchanged (see
@@ -1221,11 +1324,12 @@ def find_missing_review_problem(
         # about asking. The exemption is "do not ask X to review X", not "bots are exempt".
         return None
 
-    if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
-        return None
-
-    if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
+    if (
+        reviewers_who_reported(list_reviews, set_roster, str_head_oid)
         # A CLEAN review is not a missing one — see the COMPLETION block above the function.
+        or reviewer_declared_completion(list_notices or [], set_roster, str_head_date)
+        or ladder_marker_declared(list_notices or [], tuple_markers, str_head_date, str_head_oid)
+    ):
         return None
 
     # After the notice check, so a PR that already passes makes no compare call at all.
@@ -1237,10 +1341,7 @@ def find_missing_review_problem(
 
     # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
     # is (never ran / refused / rate-limited). Display only — see the notice block above.
-    str_seen = summarise_reviewer_notice(list_notices or [], set_roster)
-    str_quote = (
-        f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
-    )
+    str_quote = _notice_quote(list_notices or [], set_roster)
 
     # TWO FAILURES, TWO SENTENCES — see the block above the function.
     if reviewers_who_reported(list_reviews, set_roster):
@@ -1893,6 +1994,7 @@ def _missing_review(
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=dict_pr.get("comments", {}).get("nodes", []),
         str_head_date=_head_committed_date(dict_pr),
+        tuple_markers=load_comment_markers(pathlib.Path.cwd()),
         fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full, int_number),
         dict_carried=dict_carried,
     )
