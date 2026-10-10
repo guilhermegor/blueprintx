@@ -160,5 +160,11 @@ def _run_main(path_req: Path) -> int:
         sys.argv = list_argv_saved
 
 
+def test_unevaluable_marker_is_verified_not_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without ``packaging`` a marked requirement is still checked, never silently dropped."""
+    monkeypatch.setitem(sys.modules, "packaging.markers", None)
+    assert MODULE.requirement_is_active('foo; python_version < "3.0"') is True
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

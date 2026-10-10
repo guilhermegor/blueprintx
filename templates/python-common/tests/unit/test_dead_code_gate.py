@@ -16,8 +16,10 @@ Two should-fail/should-pass pairs carry the whole point of the issue this gate a
   this test now pins so it cannot regress silently a second time).
 """
 
+import importlib.metadata
 import importlib.util
 from pathlib import Path
+import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -81,6 +83,65 @@ def test_vulture_absent_is_a_legitimate_skip(
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "resolve_vulture", lambda: None)
     assert cls_gate.main(["--root", str(tmp_path)]) == 0
+
+
+def test_vulture_genuinely_missing_resolves_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``ModuleNotFoundError`` naming ``vulture`` itself is the one skippable absence (#640)."""
+    monkeypatch.setitem(sys.modules, "vulture", None)
+    assert _load_gate().resolve_vulture() is None
+
+
+def test_vulture_broken_transitive_import_is_not_a_skip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An installed ``vulture`` whose own import fails must raise, never skip green (#640)."""
+    _write_module(tmp_path, "vulture/__init__.py", "import broken_transitive_dep\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    with pytest.raises(ModuleNotFoundError, match="broken_transitive_dep"):
+        _load_gate().resolve_vulture()
+
+
+def test_vulture_plain_import_error_is_not_a_skip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A plain ``ImportError`` inside an installed ``vulture`` must raise, never skip (#640)."""
+    _write_module(tmp_path, "vulture/__init__.py", "from os import no_such_name\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    with pytest.raises(ImportError, match="no_such_name"):
+        _load_gate().resolve_vulture()
+
+
+def test_vulture_half_removed_install_is_not_a_skip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Metadata present but package gone (``exc.name == "vulture"``) must raise, not skip."""
+    monkeypatch.setitem(sys.modules, "vulture", None)
+    monkeypatch.setattr(importlib.metadata, "version", lambda str_name: "2.14")
+    with pytest.raises(ModuleNotFoundError):
+        _load_gate().resolve_vulture()
+
+
+def test_broken_vulture_prints_one_line_and_exits_nonzero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """``main()`` turns a broken vulture into a one-line stderr message, not a traceback."""
+    _write_module(tmp_path, "src/thing.py", "def used():\n    return 1\n")
+    _write_module(tmp_path, "vulture/__init__.py", "import broken_transitive_dep\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    _load_gate().main(["--root", str(tmp_path)])
+    assert "vulture is installed but failed to import" in capsys.readouterr().err
+
+
+def test_broken_vulture_main_returns_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A broken vulture fails the gate (exit 1) rather than propagating out of ``main()``."""
+    _write_module(tmp_path, "src/thing.py", "def used():\n    return 1\n")
+    _write_module(tmp_path, "vulture/__init__.py", "import broken_transitive_dep\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    assert _load_gate().main(["--root", str(tmp_path)]) == 1
 
 
 def test_provable_dead_parameter_at_gate_confidence_fails(

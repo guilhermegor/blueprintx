@@ -157,6 +157,16 @@ repos:
         files: \.(py|sh)$
         pass_filenames: false
 
+      # .specs/ is working material (specs, plans, trackers, PR bodies); docs/ is published
+      # documentation only. Layout rules: .specs/CLAUDE.md. The script is BlueprintX's own,
+      # copied at scaffold time, so the root repo and this project run one implementation.
+      - id: specs-structure
+        name: .specs/ structure guard
+        entry: bash bin/check_specs_structure.sh --root .
+        language: system
+        files: ^\.specs/|^bin/check_specs_structure\.sh$
+        pass_filenames: false
+
       # A masked CPF/CNPJ compared against a stored unmasked column matches ZERO rows and
       # raises nothing: the query is valid, the answer is silently empty. Scans .py and .sql
       # alike, since SQL reaches the database through both.
