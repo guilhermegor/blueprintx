@@ -29,18 +29,18 @@ def _seed_query(path_root: Path, str_engine: str, str_filename: str, str_sql: st
     Parameters
     ----------
     path_root : pathlib.Path
-            The queries root standing in for ``config/queries``.
+        The queries root standing in for ``config/queries``.
     str_engine : str
-            Engine directory name, e.g. ``sqlite``.
+        Engine directory name, e.g. ``sqlite``.
     str_filename : str
-            Bare query filename.
+        Bare query filename.
     str_sql : str
-            SQL text to write.
+        SQL text to write.
 
     Returns
     -------
     pathlib.Path
-            The path written.
+        The path written.
     """
     path_engine = path_root / str_engine
     path_engine.mkdir(parents=True, exist_ok=True)

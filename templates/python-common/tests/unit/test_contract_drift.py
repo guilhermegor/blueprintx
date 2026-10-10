@@ -29,12 +29,12 @@ def _load(str_name: str) -> ModuleType:
     Parameters
     ----------
     str_name : str
-            Module stem under ``bin/``.
+        Module stem under ``bin/``.
 
     Returns
     -------
     ModuleType
-            The imported module.
+        The imported module.
     """
     cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -62,11 +62,11 @@ class _Contract:
         Parameters
         ----------
         tuple_required : tuple of str
-                Columns the contract requires.
+            Columns the contract requires.
         bool_full_column : bool
-                Whether the contract claims to list every column of the source.
+            Whether the contract claims to list every column of the source.
         str_source_key : str
-                The registry key this contract is pinned to.
+            The registry key this contract is pinned to.
         """
         self.tuple_required = tuple_required
         self.bool_full_column = bool_full_column
@@ -85,7 +85,7 @@ def dict_entry() -> dict:
     Returns
     -------
     dict
-            A minimal ``{url, sep, encoding}`` entry.
+        A minimal ``{url, sep, encoding}`` entry.
     """
     return {"url": "https://example.invalid/data.csv", "sep": ";", "encoding": "utf-8"}
 
@@ -103,9 +103,9 @@ def test_drift_for_source_unreachable_returns_none_not_empty(
     Parameters
     ----------
     dict_entry : dict
-            Registry entry fixture.
+        Registry entry fixture.
     monkeypatch : pytest.MonkeyPatch
-            Used to make the fetch fail.
+        Used to make the fetch fail.
     """
     monkeypatch.setattr(
         driver, "live_header", lambda _entry: (_ for _ in ()).throw(OSError("host down"))
@@ -122,9 +122,9 @@ def test_drift_for_source_unreachable_note_names_the_exception_type(
     Parameters
     ----------
     dict_entry : dict
-            Registry entry fixture.
+        Registry entry fixture.
     monkeypatch : pytest.MonkeyPatch
-            Used to make the fetch fail.
+        Used to make the fetch fail.
     """
     monkeypatch.setattr(
         driver, "live_header", lambda _entry: (_ for _ in ()).throw(ValueError("bad url"))
@@ -141,9 +141,9 @@ def test_drift_for_source_matching_header_returns_empty_list(
     Parameters
     ----------
     dict_entry : dict
-            Registry entry fixture.
+        Registry entry fixture.
     monkeypatch : pytest.MonkeyPatch
-            Used to pin the live header.
+        Used to pin the live header.
     """
     monkeypatch.setattr(driver, "live_header", lambda _entry: ("a", "b"))
     list_lines, _ = driver.drift_for_source(_Contract(("a", "b"), True, "k"), dict_entry)
@@ -158,9 +158,9 @@ def test_drift_for_source_dropped_required_column_is_drift(
     Parameters
     ----------
     dict_entry : dict
-            Registry entry fixture.
+        Registry entry fixture.
     monkeypatch : pytest.MonkeyPatch
-            Used to pin the live header.
+        Used to pin the live header.
     """
     monkeypatch.setattr(driver, "live_header", lambda _entry: ("a",))
     list_lines, _ = driver.drift_for_source(_Contract(("a", "b"), False, "k"), dict_entry)
@@ -175,9 +175,9 @@ def test_drift_for_source_extra_column_is_not_drift_on_a_subset_contract(
     Parameters
     ----------
     dict_entry : dict
-            Registry entry fixture.
+        Registry entry fixture.
     monkeypatch : pytest.MonkeyPatch
-            Used to pin the live header.
+        Used to pin the live header.
     """
     monkeypatch.setattr(driver, "live_header", lambda _entry: ("a", "b", "c"))
     list_lines, _ = driver.drift_for_source(_Contract(("a",), False, "k"), dict_entry)
@@ -192,9 +192,9 @@ def test_drift_for_source_extra_column_is_drift_on_a_full_column_contract(
     Parameters
     ----------
     dict_entry : dict
-            Registry entry fixture.
+        Registry entry fixture.
     monkeypatch : pytest.MonkeyPatch
-            Used to pin the live header.
+        Used to pin the live header.
     """
     monkeypatch.setattr(driver, "live_header", lambda _entry: ("a", "b"))
     list_lines, _ = driver.drift_for_source(_Contract(("a",), True, "k"), dict_entry)
@@ -209,7 +209,7 @@ def test_build_report_unreachable_source_is_not_reported_clean(
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-            Used to make the fetch fail.
+        Used to make the fetch fail.
     """
     monkeypatch.setattr(
         driver, "live_header", lambda _entry: (_ for _ in ()).throw(OSError("down"))
@@ -227,7 +227,7 @@ def test_build_report_unreachable_source_stays_out_of_the_report_body(
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-            Used to make the fetch fail.
+        Used to make the fetch fail.
     """
     monkeypatch.setattr(
         driver, "live_header", lambda _entry: (_ for _ in ()).throw(OSError("down"))
@@ -246,11 +246,11 @@ def test_main_prints_skipped_and_never_the_all_clear(
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-            Used to stub the registry, the contracts and the fetch.
+        Used to stub the registry, the contracts and the fetch.
     capsys : pytest.CaptureFixture
-            Captures the driver's summary output.
+        Captures the driver's summary output.
     tmp_path : pathlib.Path
-            Redirects the written report away from the repo.
+        Redirects the written report away from the repo.
     """
     monkeypatch.setattr(driver, "_REPORT_PATH", tmp_path / "report.md")
     monkeypatch.setattr(
@@ -274,9 +274,9 @@ def test_main_returns_zero_even_when_every_source_is_unreachable(
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-            Used to stub the registry, the contracts and the fetch.
+        Used to stub the registry, the contracts and the fetch.
     tmp_path : pathlib.Path
-            Redirects the written report away from the repo.
+        Redirects the written report away from the repo.
     """
     monkeypatch.setattr(driver, "_REPORT_PATH", tmp_path / "report.md")
     monkeypatch.setattr(

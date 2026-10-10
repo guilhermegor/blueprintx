@@ -40,12 +40,12 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
     Parameters
     ----------
     path_init : pathlib.Path
-            The ``__init__.py`` to read.
+        The ``__init__.py`` to read.
 
     Returns
     -------
     list of str or None
-            The exported names, or ``None`` when the module has no ``__all__``.
+        The exported names, or ``None`` when the module has no ``__all__``.
     """
     cls_tree = ast.parse(path_init.read_text(encoding="utf-8"))
     for cls_node in cls_tree.body:
@@ -75,12 +75,12 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     Parameters
     ----------
     path_module : pathlib.Path
-            The submodule to read.
+        The submodule to read.
 
     Returns
     -------
     set of str
-            Public names bound at module level by a def, class, or assignment.
+        Public names bound at module level by a def, class, or assignment.
     """
     set_names: set[str] = set()
     cls_tree = ast.parse(path_module.read_text(encoding="utf-8"))
@@ -104,12 +104,12 @@ def check_package(path_init: pathlib.Path) -> list[str]:
     Parameters
     ----------
     path_init : pathlib.Path
-            The package's ``__init__.py``.
+        The package's ``__init__.py``.
 
     Returns
     -------
     list of str
-            Human-readable problems; empty when the export list is complete.
+        Human-readable problems; empty when the export list is complete.
     """
     list_exported = declared_all(path_init)
     if list_exported is None:
@@ -134,7 +134,7 @@ def main() -> int:
     Returns
     -------
     int
-            ``0`` when every declared export list is complete, ``1`` otherwise.
+        ``0`` when every declared export list is complete, ``1`` otherwise.
     """
     list_inits = [
         path_init

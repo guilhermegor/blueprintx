@@ -24,7 +24,7 @@ def _contracts() -> dict:
     Returns
     -------
     dict
-            ``{"<module>.<name>": contract}`` for every contract instance found.
+        ``{"<module>.<name>": contract}`` for every contract instance found.
     """
     cls_pkg = importlib.import_module("config.contracts")
     list_modules = [
@@ -76,7 +76,7 @@ def _discovered_contract_ids() -> list[str]:
     Returns
     -------
     list of str
-            ``"<module>.<name>"`` for each discovered contract.
+        ``"<module>.<name>"`` for each discovered contract.
     """
     # Suppression via contextlib rather than a handler block. Handling is identical, since an
     # absent package still yields the empty list, but mccabe charges a with-statement nothing

@@ -100,12 +100,12 @@ def own_docstring_span(cls_node: ast.AST) -> int:
     Parameters
     ----------
     cls_node : ast.AST
-            A function, method, or class node.
+        A function, method, or class node.
 
     Returns
     -------
     int
-            Line count of the docstring expression, or 0 when there is none.
+        Line count of the docstring expression, or 0 when there is none.
     """
     list_body = getattr(cls_node, "body", [])
     if not list_body:
@@ -138,12 +138,12 @@ def docstring_span(cls_node: ast.AST) -> int:
     Parameters
     ----------
     cls_node : ast.AST
-            A function or method node.
+        A function or method node.
 
     Returns
     -------
     int
-            Total docstring lines in the node's own body and in every definition nested in it.
+        Total docstring lines in the node's own body and in every definition nested in it.
     """
     int_total = own_docstring_span(cls_node)
     for cls_child in ast.walk(cls_node):
@@ -160,12 +160,12 @@ def python_functions(path_file: pathlib.Path) -> list:
     Parameters
     ----------
     path_file : pathlib.Path
-            Path to a ``.py`` source file.
+        Path to a ``.py`` source file.
 
     Returns
     -------
     list of tuple
-            ``(name, lineno, length)`` per function, including nested ones and methods.
+        ``(name, lineno, length)`` per function, including nested ones and methods.
     """
     try:
         cls_tree = ast.parse(path_file.read_text(encoding="utf-8"), filename=str(path_file))
@@ -195,12 +195,12 @@ def shell_functions(path_file: pathlib.Path) -> list:
     Parameters
     ----------
     path_file : pathlib.Path
-            Path to a ``.sh`` source file.
+        Path to a ``.sh`` source file.
 
     Returns
     -------
     list of tuple
-            ``(name, lineno, length)`` per function.
+        ``(name, lineno, length)`` per function.
     """
     list_lines = path_file.read_text(encoding="utf-8", errors="replace").splitlines()
     list_found = []
@@ -228,12 +228,12 @@ def file_problems(path_file: pathlib.Path) -> list:
     Parameters
     ----------
     path_file : pathlib.Path
-            Path to a ``.py`` or ``.sh`` file.
+        Path to a ``.py`` or ``.sh`` file.
 
     Returns
     -------
     list of str
-            Human-readable findings; empty when every function fits.
+        Human-readable findings; empty when every function fits.
     """
     if path_file.suffix not in (".py", ".sh"):
         return []
@@ -267,7 +267,7 @@ def audit_paths() -> list:
     Returns
     -------
     list of pathlib.Path
-            Sorted ``.py`` and ``.sh`` paths, skipping vendored and generated trees.
+        Sorted ``.py`` and ``.sh`` paths, skipping vendored and generated trees.
     """
     # Compare parts RELATIVE TO PATH_ROOT, never `path_file.parts` directly. The latter
     # carries every ancestor above the repo too, and a directory literally named `.claude`
@@ -297,12 +297,12 @@ def main(list_argv: list) -> int:
     Parameters
     ----------
     list_argv : list of str
-            Filenames, as pre-commit passes them. Empty means audit the whole repository.
+        Filenames, as pre-commit passes them. Empty means audit the whole repository.
 
     Returns
     -------
     int
-            0 when every function fits, 1 on a violation.
+        0 when every function fits, 1 on a violation.
     """
     # ⚠️ PLW0603 is real and accepted here with its upgrade path written down. `--root` exists
     # so BlueprintX can run THIS file over its own tree instead of keeping a second copy, and

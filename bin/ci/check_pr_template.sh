@@ -124,7 +124,10 @@ tally_body() {
                 continue
             fi
             for str_up in "$str_key" "${MAP_BODY_PAR[$str_key]}"; do
-                [ "$str_up" != "-" ] && MAP_REAL["$str_up"]=$((MAP_REAL[$str_up] + 1))
+                # `if`, not `&&`: a false test as the last statement exits under set -e (#706).
+                if [ "$str_up" != "-" ]; then
+                    MAP_REAL["$str_up"]=$((MAP_REAL[$str_up] + 1))
+                fi
             done
         done
     done
