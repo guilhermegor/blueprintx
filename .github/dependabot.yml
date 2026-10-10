@@ -56,6 +56,13 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore: # upstream peer ranges exclude these; lift per #720 when the blockers widen them
+      - dependency-name: "typescript" # typescript-eslint peers on typescript <6.1.0
+        versions: [">=6.1.0"]
+      - dependency-name: "eslint" # react/import/jsx-a11y plugins cap eslint at 9
+        versions: [">=10.0.0"]
+      - dependency-name: "@eslint/js" # peers on eslint ^10
+        versions: [">=10.0.0"]
 
   - package-ecosystem: "pip" # the root pyproject.toml/poetry.lock exist only to drive the MkDocs docs site
     directory: "/"
