@@ -123,7 +123,10 @@ def test_checkbox_grammar_accepts_the_specs_markers(str_line: str) -> None:
     assert ledger.CHECKBOX_RE.search(str_line)
 
 
-@pytest.mark.parametrize("str_line", ["- [X] upper", "- [] empty", "- [?] unknown", "- plain"])
+@pytest.mark.parametrize(
+    "str_line",
+    ["- [X] upper", "- [] empty", "- [?] unknown", "- plain", "- [~]", "- [~] doing", "- [~]\t"],
+)
 def test_checkbox_grammar_rejects_what_the_specs_gate_rejects(str_line: str) -> None:
     """NEGATIVE CONTROL: a marker the specs gate rejects does not count as a checkbox."""
     assert not ledger.CHECKBOX_RE.search(str_line)

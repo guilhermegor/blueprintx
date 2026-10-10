@@ -117,7 +117,7 @@ LEDGER_DIR = ".specs/backlog"
 # <kebab-topic>_YYYYMMDD_HHMMSS.md
 LEDGER_RE = re.compile(r"^\.specs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.md$")
 # Same marker grammar as bin/ci/check_specs_structure.sh: [ ], [x] and [~] (lowercase x only).
-CHECKBOX_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\[[ x~]\]", re.M)
+CHECKBOX_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ x]\]|\[~\][ \t]+[a-z]+/\S)", re.M)
 
 _BIN = pathlib.Path(__file__).resolve().parent
 
