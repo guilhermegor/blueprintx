@@ -13,7 +13,7 @@ def test_plain_file_wins_regardless_of_env(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided throwaway directory holding the config file.
+        Pytest-provided throwaway directory holding the config file.
     """
     (tmp_path / "inputs.yaml").write_text("a: 1\n", encoding="utf-8")
     assert resolve_config_path("anything", "inputs", tmp_path) == tmp_path / "inputs.yaml"
@@ -29,11 +29,11 @@ def test_env_wise_selects_suffix(tmp_path: Path, str_env: str, str_file: str) ->
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided throwaway directory holding the env-wise config files.
+        Pytest-provided throwaway directory holding the env-wise config files.
     str_env : str
-            The ENV value to resolve.
+        The ENV value to resolve.
     str_file : str
-            The suffixed file that ENV must select.
+        The suffixed file that ENV must select.
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
     (tmp_path / "inputs_prd.yaml").write_text("a: 2\n", encoding="utf-8")
@@ -50,9 +50,9 @@ def test_env_spelling_variants_resolve(tmp_path: Path, str_env: str) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided throwaway directory holding the env-wise config files.
+        Pytest-provided throwaway directory holding the env-wise config files.
     str_env : str
-            A spelling variant of a known ENV value that must normalise to ``prd``.
+        A spelling variant of a known ENV value that must normalise to ``prd``.
     """
     (tmp_path / "inputs_prd.yaml").write_text("a: 1\n", encoding="utf-8")
     assert resolve_config_path(str_env, "inputs", tmp_path) == tmp_path / "inputs_prd.yaml"
@@ -64,7 +64,7 @@ def test_unknown_env_aborts(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided throwaway directory holding the env-wise config file.
+        Pytest-provided throwaway directory holding the env-wise config file.
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
     with pytest.raises(SystemExit, match=r"^2$"):
@@ -77,7 +77,7 @@ def test_missing_env_file_aborts(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided throwaway directory holding the env-wise config file.
+        Pytest-provided throwaway directory holding the env-wise config file.
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
     with pytest.raises(SystemExit, match=r"^2$"):

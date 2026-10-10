@@ -56,14 +56,14 @@ def _run_probe(path_tmp: Path, str_module_source: str) -> subprocess.CompletedPr
     Parameters
     ----------
     path_tmp : pathlib.Path
-            Scratch directory the throwaway module is written into.
+        Scratch directory the throwaway module is written into.
     str_module_source : str
-            Source of the single test module to execute.
+        Source of the single test module to execute.
 
     Returns
     -------
     subprocess.CompletedProcess[str]
-            The completed ``pytest`` invocation, captured as text.
+        The completed ``pytest`` invocation, captured as text.
     """
     path_module = path_tmp / "test_probe.py"
     path_module.write_text(str_module_source)
@@ -83,7 +83,7 @@ def test_resourcewarning_gate_fails_on_del_leak(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test scratch directory (isolates the throwaway module).
+        Pytest's per-test scratch directory (isolates the throwaway module).
     """
     cls_result = _run_probe(tmp_path, _STR_LEAKY_MODULE)
     assert cls_result.returncode != 0
@@ -96,7 +96,7 @@ def test_resourcewarning_gate_leaves_clean_run_green(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test scratch directory (isolates the throwaway module).
+        Pytest's per-test scratch directory (isolates the throwaway module).
     """
     cls_result = _run_probe(tmp_path, _STR_CLEAN_MODULE)
     assert cls_result.returncode == 0

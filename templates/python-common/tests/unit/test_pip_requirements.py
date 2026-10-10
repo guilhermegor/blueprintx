@@ -30,7 +30,7 @@ def _load() -> ModuleType:
     Returns
     -------
     ModuleType
-            The imported module.
+        The imported module.
     """
     cls_spec = importlib.util.spec_from_file_location(
         "pip_requirements", _LIB / "pip_requirements.py"

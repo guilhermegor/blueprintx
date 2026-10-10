@@ -29,7 +29,7 @@ def _startup_tree() -> ast.Module:
     Returns
     -------
     ast.Module
-            The parsed module.
+        The parsed module.
     """
     path_startup = Path(__file__).resolve().parents[2] / "src" / "config" / "startup.py"
     return ast.parse(path_startup.read_text(encoding="utf-8"))
@@ -47,14 +47,14 @@ def _load_pure_function(cls_tree: ast.Module, str_name: str) -> Callable[[dict, 
     Parameters
     ----------
     cls_tree : ast.Module
-            The parsed ``startup`` module (see ``_startup_tree``).
+        The parsed ``startup`` module (see ``_startup_tree``).
     str_name : str
-            The function name to extract.
+        The function name to extract.
 
     Returns
     -------
     Callable[[dict, str], dict or None]
-            The undecorated function, ready to call directly with a plain config mapping.
+        The undecorated function, ready to call directly with a plain config mapping.
     """
     list_matches = [
         cls_node
@@ -79,12 +79,12 @@ def _logger_lineno(cls_tree: ast.Module) -> int:
     Parameters
     ----------
     cls_tree : ast.Module
-            The parsed ``startup`` module.
+        The parsed ``startup`` module.
 
     Returns
     -------
     int
-            The 1-based line number of the ``LOGGER = …`` statement.
+        The 1-based line number of the ``LOGGER = …`` statement.
     """
     # A generator plus next-with-default rather than a loop with a guard and a trailing raise.
     # Same answer, same failure, and mccabe charges a comprehension nothing while charging the
