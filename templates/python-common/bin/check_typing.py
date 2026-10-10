@@ -46,12 +46,12 @@ def _is_dunder(name: str) -> bool:
     Parameters
     ----------
     name : str
-            The class or function name.
+        The class or function name.
 
     Returns
     -------
     bool
-            ``True`` when the name is a dunder.
+        ``True`` when the name is a dunder.
     """
     return name.startswith("__") and name.endswith("__")
 
@@ -62,12 +62,12 @@ def _base_names(node: ast.ClassDef) -> set[str]:
     Parameters
     ----------
     node : ast.ClassDef
-            The class definition node.
+        The class definition node.
 
     Returns
     -------
     set[str]
-            Unqualified base-class names (``pydantic.BaseModel`` -> ``BaseModel``).
+        Unqualified base-class names (``pydantic.BaseModel`` -> ``BaseModel``).
     """
     names: set[str] = set()
     for base in node.bases:
@@ -84,12 +84,12 @@ def _metaclass_name(node: ast.ClassDef) -> str | None:
     Parameters
     ----------
     node : ast.ClassDef
-            The class definition node.
+        The class definition node.
 
     Returns
     -------
     str or None
-            The unqualified metaclass name, or ``None`` when none is declared.
+        The unqualified metaclass name, or ``None`` when none is declared.
     """
     for keyword in node.keywords:
         if keyword.arg != "metaclass":
@@ -108,12 +108,12 @@ def _decorator_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     Parameters
     ----------
     node : ast.FunctionDef or ast.AsyncFunctionDef
-            The function definition node.
+        The function definition node.
 
     Returns
     -------
     set[str]
-            Unqualified decorator names (``@type_checker``, ``@a.b`` -> ``b``).
+        Unqualified decorator names (``@type_checker``, ``@a.b`` -> ``b``).
     """
     names: set[str] = set()
     for dec in node.decorator_list:
@@ -142,12 +142,12 @@ def comment_lines(str_source: str) -> dict[int, str]:
     Parameters
     ----------
     str_source : str
-            The file's full source text.
+        The file's full source text.
 
     Returns
     -------
     dict of int to str
-            Comment text keyed by 1-based line number.
+        Comment text keyed by 1-based line number.
     """
     dict_comments: dict[int, str] = {}
     try:
@@ -175,14 +175,14 @@ def _escape_reason(
     Parameters
     ----------
     node : ast.FunctionDef or ast.AsyncFunctionDef
-            The function that lacks ``@type_checker``.
+        The function that lacks ``@type_checker``.
     dict_comments : dict of int to str
-            Comment text by line number, from :func:`comment_lines`.
+        Comment text by line number, from :func:`comment_lines`.
 
     Returns
     -------
     str or None
-            The reason text, or ``None`` when no reason-carrying marker is present.
+        The reason text, or ``None`` when no reason-carrying marker is present.
     """
     int_first = min([node.lineno, *[d.lineno for d in node.decorator_list]])
     int_last = node.body[0].lineno if node.body else node.lineno
@@ -202,14 +202,14 @@ def _check_class(node: ast.ClassDef, filepath: str) -> int:
     Parameters
     ----------
     node : ast.ClassDef
-            The class definition node.
+        The class definition node.
     filepath : str
-            Source file (for messages).
+        Source file (for messages).
 
     Returns
     -------
     int
-            Number of hard errors for this class (0 or 1).
+        Number of hard errors for this class (0 or 1).
     """
     is_pydantic = "BaseModel" in _base_names(node)
     metaclass = _metaclass_name(node)
@@ -240,12 +240,12 @@ def check_file(filepath: str) -> int:
     Parameters
     ----------
     filepath : str
-            Path to a Python source file under ``src/``.
+        Path to a Python source file under ``src/``.
 
     Returns
     -------
     int
-            Number of hard errors found in the file.
+        Number of hard errors found in the file.
     """
     errors = 0
     with open(filepath, encoding="utf-8") as fh:
@@ -284,8 +284,8 @@ def _source_files() -> list[pathlib.Path]:
     Returns
     -------
     list[pathlib.Path]
-            Python source files to check (``**/typing/``, ``**/chassis/`` and
-            ``**/example_feature/`` are exempt, mirroring ruff.toml / mypy.ini).
+        Python source files to check (``**/typing/``, ``**/chassis/`` and
+        ``**/example_feature/`` are exempt, mirroring ruff.toml / mypy.ini).
     """
     return sorted(
         p for p in pathlib.Path("src").rglob("*.py") if _EXCLUDED_PARTS.isdisjoint(p.parts)

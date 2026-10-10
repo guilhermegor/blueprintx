@@ -36,7 +36,7 @@ def _load_retry() -> ModuleType:
     Returns
     -------
     ModuleType
-            The loaded retry module.
+        The loaded retry module.
     """
     path_mod = Path(__file__).resolve().parents[2] / "bin" / "retry_rate_limited_review.py"
     cls_spec = importlib.util.spec_from_file_location("_retry_rate_limited_review", path_mod)
@@ -61,11 +61,11 @@ def _find_gate_path() -> Path:
     Returns
     -------
     Path
-            Whichever candidate exists. ⚠️ No branch here on purpose — ``tests/`` is capped at
-            cyclomatic complexity 1; an ``if``/``raise`` pair would violate that ceiling for a
-            path lookup that is not itself a test. Defaulting to the template-tree candidate
-            when neither exists lets a genuinely missing gate fail naturally in the loader
-            below, which already reports an absent file clearly.
+        Whichever candidate exists. ⚠️ No branch here on purpose — ``tests/`` is capped at
+        cyclomatic complexity 1; an ``if``/``raise`` pair would violate that ceiling for a
+        path lookup that is not itself a test. Defaulting to the template-tree candidate
+        when neither exists lets a genuinely missing gate fail naturally in the loader
+        below, which already reports an absent file clearly.
     """
     path_here = Path(__file__).resolve()
     tuple_candidates = (
@@ -87,16 +87,16 @@ def _comment(str_login: str, str_body: str, int_min_ago: int = 0) -> dict:
     Parameters
     ----------
     str_login : str
-            The comment author's login.
+        The comment author's login.
     str_body : str
-            The comment body.
+        The comment body.
     int_min_ago : int
-            How many minutes before ``_DT_NOW`` it was posted.
+        How many minutes before ``_DT_NOW`` it was posted.
 
     Returns
     -------
     dict
-            A comment with ``login``, ``body`` and ``created_at``.
+        A comment with ``login``, ``body`` and ``created_at``.
     """
     dt_at = _DT_NOW - timedelta(minutes=int_min_ago)
     return {
@@ -112,16 +112,16 @@ def _pr(list_comments: list, list_reviews: list, str_head: str = "cafe123") -> d
     Parameters
     ----------
     list_comments : list
-            Accepted for call-site symmetry; comments are passed to the predicate separately.
+        Accepted for call-site symmetry; comments are passed to the predicate separately.
     list_reviews : list
-            Submitted-review nodes.
+        Submitted-review nodes.
     str_head : str
-            The head commit oid.
+        The head commit oid.
 
     Returns
     -------
     dict
-            A pull-request node.
+        A pull-request node.
     """
     return {"headRefOid": str_head, "reviews": {"nodes": list_reviews}}
 
@@ -151,7 +151,7 @@ def cls_retry() -> ModuleType:
     Returns
     -------
     ModuleType
-            The retry module.
+        The retry module.
     """
     return _load_retry()
 
@@ -163,7 +163,7 @@ def cls_gate() -> ModuleType:
     Returns
     -------
     ModuleType
-            The gate module.
+        The gate module.
     """
     path_gate = _find_gate_path()
     cls_spec = importlib.util.spec_from_file_location("_gate_for_retry", path_gate)
@@ -187,9 +187,9 @@ def test_a_rate_limited_pr_with_no_review_is_re_asked(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
     dict_pr = _pr(list_comments, [])
@@ -208,9 +208,9 @@ def test_a_reviewed_head_is_never_re_asked(cls_retry: ModuleType, cls_gate: Modu
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
     dict_pr = _pr(
@@ -238,9 +238,9 @@ def test_a_pr_with_no_notice_at_all_is_not_re_asked(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = []
     dict_pr = _pr(list_comments, [])
@@ -265,9 +265,9 @@ def test_a_successful_trigger_notice_is_not_a_rate_limit(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [_comment("coderabbitai", _STR_PERFORMED)]
     dict_pr = _pr(list_comments, [])
@@ -289,9 +289,9 @@ def test_only_the_newest_notice_decides(cls_retry: ModuleType, cls_gate: ModuleT
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("coderabbitai", _STR_RATE_LIMITED),
@@ -321,9 +321,9 @@ def test_the_marker_makes_a_scheduled_run_ask_once_per_window(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("coderabbitai", _STR_RATE_LIMITED),
@@ -357,9 +357,9 @@ def test_the_reviewers_own_acknowledgement_does_not_trigger_another_ask(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=6),
@@ -387,9 +387,9 @@ def test_the_cooldown_expires_so_a_stuck_pr_is_asked_again(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=45),
@@ -417,9 +417,9 @@ def test_a_review_on_older_code_is_not_a_rate_limit_case(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [_comment("coderabbitai", _STR_PERFORMED)]
     dict_pr = _pr(
@@ -445,7 +445,7 @@ def test_the_request_names_a_full_review_not_a_plain_one(cls_retry: ModuleType) 
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     assert "@coderabbitai full review" in cls_retry._STR_REQUEST
 
@@ -456,7 +456,7 @@ def test_the_request_carries_the_idempotence_marker(cls_retry: ModuleType) -> No
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     assert cls_retry._STR_MARKER in cls_retry._STR_REQUEST
 
@@ -475,9 +475,9 @@ def test_a_marker_from_another_author_does_not_suppress_the_retry(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("coderabbitai", _STR_RATE_LIMITED),
@@ -505,9 +505,9 @@ def test_an_unresolvable_identity_trusts_no_marker(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("coderabbitai", _STR_RATE_LIMITED),
@@ -532,7 +532,7 @@ def test_every_page_of_open_prs_is_examined(cls_retry: ModuleType) -> None:
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     list_pages = [
         [{"number": 1, "created_at": "2026-08-24T10:00:00Z"}],
@@ -551,7 +551,7 @@ def test_a_malformed_page_cannot_crash_the_sweep(cls_retry: ModuleType) -> None:
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     list_pages = [[{"number": 1}], "not-a-page", [{"no_number": True}, {"number": 4}]]
 
@@ -564,7 +564,7 @@ def test_flatten_open_prs_sorts_oldest_created_at_first(cls_retry: ModuleType) -
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     list_pages = [
         [
@@ -593,9 +593,9 @@ def test_an_author_less_marker_cannot_match_an_unknown_identity(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=6),
@@ -626,11 +626,11 @@ def test_one_unreadable_pr_does_not_end_the_sweep(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     monkeypatch : pytest.MonkeyPatch
-            Fixture used to make the fetch raise.
+        Fixture used to make the fetch raise.
     """
     monkeypatch.setattr(
         cls_gate,
@@ -667,7 +667,7 @@ def test_the_declared_wait_is_read_from_the_reviewers_own_words(cls_retry: Modul
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     assert cls_retry.parse_declared_wait(_STR_RATE_LIMITED_35) == 35
 
@@ -678,7 +678,7 @@ def test_a_refusal_that_declares_no_wait_yields_no_number(cls_retry: ModuleType)
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     assert cls_retry.parse_declared_wait(_STR_RATE_LIMITED) is None
 
@@ -696,9 +696,9 @@ def test_a_pr_inside_the_declared_window_is_not_re_asked(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20)]
     dict_pr = _pr(list_comments, [])
@@ -722,9 +722,9 @@ def test_a_pr_past_the_declared_window_is_re_asked(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)]
     dict_pr = _pr(list_comments, [])
@@ -749,7 +749,7 @@ def test_the_declared_window_is_measured_from_the_notice_not_from_our_marker(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     dict_notice = _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)
 
@@ -767,7 +767,7 @@ def test_a_declared_wait_with_an_unreadable_timestamp_defers_to_the_cooldown(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     dict_notice = {
         "login": "coderabbitai",
@@ -793,7 +793,7 @@ def test_an_oversized_declared_wait_is_rejected_instead_of_crashing(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     # ⚠️ 5000 digits, not 100. The first version used 100 — below the 4300-digit conversion
     # limit — so it exercised only the OverflowError path and passed while the ValueError path
@@ -813,7 +813,7 @@ def test_a_representable_but_oversized_wait_is_also_rejected(cls_retry: ModuleTy
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     str_absurd = f"Your next included review will be available in {'9' * 100} minutes."
 
@@ -831,18 +831,18 @@ def _candidate(int_number: int, str_created_at: str, list_comments: list, dict_p
     Parameters
     ----------
     int_number : int
-            The PR number.
+        The PR number.
     str_created_at : str
-            The PR's ``created_at``.
+        The PR's ``created_at``.
     list_comments : list
-            Normalised comments for this PR.
+        Normalised comments for this PR.
     dict_pr : dict
-            The ``pullRequest`` node (``headRefOid``/``reviews``).
+        The ``pullRequest`` node (``headRefOid``/``reviews``).
 
     Returns
     -------
     dict
-            A record shaped like :func:`build_candidate`'s return value.
+        A record shaped like :func:`build_candidate`'s return value.
     """
     return {
         "number": int_number,
@@ -861,7 +861,7 @@ def test_account_blocked_until_reads_the_newest_refusal_across_all_waiting_prs(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     list_notices = [
         _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20),  # older refusal
@@ -884,7 +884,7 @@ def test_account_blocked_until_takes_the_LATEST_deadline_not_the_latest_notice(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     list_notices = [
         # Older, but names 35 minutes and was posted 20 ago -- still blocking for 15 more.
@@ -904,7 +904,7 @@ def test_account_blocked_until_is_free_once_the_newest_refusal_elapses(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     """
     list_notices = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)]
 
@@ -919,9 +919,9 @@ def test_select_pr_for_retry_picks_the_oldest_of_several_waiting_prs(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
     dict_pr = _pr(list_comments, [])
@@ -949,9 +949,9 @@ def test_select_pr_for_retry_picks_none_while_the_only_candidate_is_cooling_down
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("coderabbitai", _STR_RATE_LIMITED),
@@ -976,9 +976,9 @@ def test_select_pr_for_retry_skips_a_pr_past_the_attempt_cap(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     # Five past attempts, all outside the 40-minute cooldown, plus the reviewer's latest refusal.
     list_comments_stuck = [
@@ -1018,9 +1018,9 @@ def test_count_self_asks_counts_only_our_own_marker(
     Parameters
     ----------
     cls_retry : types.ModuleType
-            The retry module.
+        The retry module.
     cls_gate : types.ModuleType
-            The gate module.
+        The gate module.
     """
     list_comments = [
         _comment("guilhermegor", cls_retry._STR_REQUEST),

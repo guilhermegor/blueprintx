@@ -54,9 +54,9 @@ def _skip_unless(bool_available: bool, str_reason: str) -> None:
     Parameters
     ----------
     bool_available : bool
-            Whether the capability is present.
+        Whether the capability is present.
     str_reason : str
-            Message shown for the skip.
+        Message shown for the skip.
 
     Returns
     -------
@@ -79,7 +79,7 @@ def _materialise_bin_lib(path_bin: Path) -> None:
     Parameters
     ----------
     path_bin : pathlib.Path
-            The throwaway ``bin`` directory; ``lib`` is created inside it.
+        The throwaway ``bin`` directory; ``lib`` is created inside it.
 
     Returns
     -------
@@ -95,12 +95,12 @@ def _bin_script(str_name: str) -> Path:
     Parameters
     ----------
     str_name : str
-            The script filename, e.g. ``poetry_exec.sh``.
+        The script filename, e.g. ``poetry_exec.sh``.
 
     Returns
     -------
     pathlib.Path
-            Absolute path to ``bin/<str_name>`` at the repository root.
+        Absolute path to ``bin/<str_name>`` at the repository root.
     """
     return Path(__file__).resolve().parents[2] / "bin" / str_name
 
@@ -116,12 +116,12 @@ def _print_status(str_status: str) -> subprocess.CompletedProcess:
     Parameters
     ----------
     str_status : str
-            The status word to pass, valid or not.
+        The status word to pass, valid or not.
 
     Returns
     -------
     subprocess.CompletedProcess
-            The completed ``bash -c`` run, with stdout and stderr captured separately.
+        The completed ``bash -c`` run, with stdout and stderr captured separately.
     """
     path_lib = Path(__file__).resolve().parents[2] / "bin" / "lib" / "common.sh"
     str_bash = shutil.which("bash") or "bash"
@@ -167,19 +167,19 @@ def _run(
     Parameters
     ----------
     str_script : str
-            The script filename under ``bin/``.
+        The script filename under ``bin/``.
     args : str
-            Arguments forwarded to the script.
+        Arguments forwarded to the script.
     cwd : pathlib.Path or None, optional
-            Working directory to run from; defaults to the current directory.
+        Working directory to run from; defaults to the current directory.
     dict_env : dict of {str: str} or None, optional
-            Extra environment variables layered on top of the current environment; ``None``
-            inherits the environment unchanged.
+        Extra environment variables layered on top of the current environment; ``None``
+        inherits the environment unchanged.
 
     Returns
     -------
     subprocess.CompletedProcess[str]
-            The finished process with decoded ``stdout`` and ``stderr``.
+        The finished process with decoded ``stdout`` and ``stderr``.
     """
     str_bash = shutil.which("bash") or "bash"
     dict_full_env = {**os.environ, **dict_env} if dict_env else None
@@ -239,7 +239,7 @@ def test_precommit_skips_gracefully_off_git_tree(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided throwaway directory used as a non-git work tree.
+        Pytest-provided throwaway directory used as a non-git work tree.
     """
     cls_result = _run("precommit.sh", cwd=tmp_path)
 
@@ -265,7 +265,7 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir; a real git work tree is initialised inside it.
+        Pytest throwaway dir; a real git work tree is initialised inside it.
     """
     path_repo = tmp_path / "repo"
     path_repo.mkdir()
@@ -309,14 +309,14 @@ def _run_prune(tmp_path: Path, str_backend: str) -> list[str]:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Temporary directory standing in for the project root (holds ``.env``).
+        Temporary directory standing in for the project root (holds ``.env``).
     str_backend : str
-            The ``DB_BACKEND`` value to write into ``.env``.
+        The ``DB_BACKEND`` value to write into ``.env``.
 
     Returns
     -------
     list of str
-            The requirement lines that survived pruning.
+        The requirement lines that survived pruning.
     """
     path_lib = Path(__file__).resolve().parents[2] / "bin" / "lib"
     path_req = tmp_path / "req.txt"
@@ -462,12 +462,12 @@ def _fake_pem(str_marker: str) -> str:
     Parameters
     ----------
     str_marker : str
-            A base64-safe token embedded in the certificate body so the test can find it.
+        A base64-safe token embedded in the certificate body so the test can find it.
 
     Returns
     -------
     str
-            One ``BEGIN/END CERTIFICATE`` block.
+        One ``BEGIN/END CERTIFICATE`` block.
     """
     return f"-----BEGIN CERTIFICATE-----\n{str_marker}\n-----END CERTIFICATE-----\n"
 
@@ -617,12 +617,12 @@ def _init_repo_with_one_commit(path_repo: Path) -> str:
     Parameters
     ----------
     path_repo : pathlib.Path
-            Directory to initialise as a git work tree; created if absent.
+        Directory to initialise as a git work tree; created if absent.
 
     Returns
     -------
     str
-            Absolute path to the ``git`` executable.
+        Absolute path to the ``git`` executable.
     """
     _skip_unless(_STR_GIT is not None, "git not available -- integration guard only")
     str_git = str(_STR_GIT)
@@ -651,7 +651,7 @@ def test_clean_index_guard_allows_a_push_with_an_empty_index(tmp_path: Path) -> 
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the git work tree.
+        Pytest throwaway dir holding the git work tree.
     """
     path_repo = tmp_path / "repo"
     _init_repo_with_one_commit(path_repo)
@@ -675,7 +675,7 @@ def test_clean_index_guard_blocks_a_populated_index(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the git work tree.
+        Pytest throwaway dir holding the git work tree.
     """
     path_repo = tmp_path / "repo"
     str_git = _init_repo_with_one_commit(path_repo)
@@ -702,7 +702,7 @@ def test_clean_index_guard_is_inert_off_a_git_tree(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir that is deliberately not a git repository.
+        Pytest throwaway dir that is deliberately not a git repository.
     """
     cls_result = _run("check_clean_index.sh", cwd=tmp_path)
 
@@ -777,14 +777,14 @@ def _stub_poetry(path_dir: Path, str_export_body: str) -> dict[str, str]:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory the stub is written into (prepended to ``PATH``).
+        Directory the stub is written into (prepended to ``PATH``).
     str_export_body : str
-            Shell body run for the ``export`` subcommand; ``--version`` always succeeds.
+        Shell body run for the ``export`` subcommand; ``--version`` always succeeds.
 
     Returns
     -------
     dict of {str: str}
-            Environment overrides placing the stub ahead of any real Poetry.
+        Environment overrides placing the stub ahead of any real Poetry.
     """
     path_stub = path_dir / "poetry"
     path_stub.write_text(
@@ -868,11 +868,11 @@ def _seed_url_cache(path_root: Path, str_url: str, str_status: str) -> None:
     Parameters
     ----------
     path_root : pathlib.Path
-            The directory the hook will run in (the cache is CWD-relative).
+        The directory the hook will run in (the cache is CWD-relative).
     str_url : str
-            The URL to pre-resolve.
+        The URL to pre-resolve.
     str_status : str
-            The HTTP status to serve for it, e.g. ``"404"``.
+        The HTTP status to serve for it, e.g. ``"404"``.
 
     Returns
     -------
@@ -893,12 +893,12 @@ def _run_url_hook(path_root: Path) -> subprocess.CompletedProcess:
     Parameters
     ----------
     path_root : pathlib.Path
-            Directory to scan; also the hook's CWD, so its cache resolves there.
+        Directory to scan; also the hook's CWD, so its cache resolves there.
 
     Returns
     -------
     subprocess.CompletedProcess
-            The completed run.
+        The completed run.
     """
     # Constant, trusted argv; no shell involved.
     return subprocess.run(  # noqa: S603
@@ -984,7 +984,7 @@ def _seed_tree(path_dir: Path) -> None:
     Parameters
     ----------
     path_dir : pathlib.Path
-            The directory to create and seed.
+        The directory to create and seed.
 
     Returns
     -------
@@ -1000,11 +1000,11 @@ def _complexity_tree(path_root: Path, str_marker: str = "", str_tree: str = "src
     Parameters
     ----------
     path_root : pathlib.Path
-            Directory to build the tree in; becomes the gate's ``--root``.
+        Directory to build the tree in; becomes the gate's ``--root``.
     str_marker : str
-            Text appended to the ``def`` line, e.g. an escape-hatch comment.
+        Text appended to the ``def`` line, e.g. an escape-hatch comment.
     str_tree : str
-            Which tree receives the branchy function (``src``, ``tests`` or ``bin``).
+        Which tree receives the branchy function (``src``, ``tests`` or ``bin``).
 
     Returns
     -------
@@ -1046,14 +1046,14 @@ def _run_complexity(
     Parameters
     ----------
     path_root : pathlib.Path
-            The ``--root`` to scan.
+        The ``--root`` to scan.
     dict_extra : Mapping[str, str]
-            Environment entries layered over the stripped environment.
+        Environment entries layered over the stripped environment.
 
     Returns
     -------
     subprocess.CompletedProcess
-            The completed run.
+        The completed run.
     """
     dict_env = dict(os.environ)
     dict_env.pop("FORCE_COLOR", None)
@@ -1301,14 +1301,14 @@ def _run_py_gate(str_gate: str, path_root: Path) -> subprocess.CompletedProcess:
     Parameters
     ----------
     str_gate : str
-            Gate filename, e.g. ``check_provenance.py``.
+        Gate filename, e.g. ``check_provenance.py``.
     path_root : pathlib.Path
-            Directory to run the gate in.
+        Directory to run the gate in.
 
     Returns
     -------
     subprocess.CompletedProcess
-            The completed run, stdout and stderr captured as text.
+        The completed run, stdout and stderr captured as text.
     """
     str_python = shutil.which("python3") or shutil.which("python") or "python3"
     # Constant, trusted argv built from repo-internal paths — no user input reaches it.
@@ -1328,14 +1328,14 @@ def _write(path_file: Path, str_text: str) -> Path:
     Parameters
     ----------
     path_file : pathlib.Path
-            File to write.
+        File to write.
     str_text : str
-            Contents.
+        Contents.
 
     Returns
     -------
     pathlib.Path
-            The written file.
+        The written file.
     """
     path_file.parent.mkdir(parents=True, exist_ok=True)
     path_file.write_text(str_text, encoding="utf-8")
@@ -1459,12 +1459,12 @@ def _run_docs_code_refs_gate(path_root: Path) -> subprocess.CompletedProcess:
     Parameters
     ----------
     path_root : pathlib.Path
-            The throwaway project tree to check.
+        The throwaway project tree to check.
 
     Returns
     -------
     subprocess.CompletedProcess
-            The completed run, stdout and stderr captured as text.
+        The completed run, stdout and stderr captured as text.
     """
     str_python = shutil.which("python3") or shutil.which("python") or "python3"
     # Constant, trusted argv built from repo-internal paths — no user input reaches it.
@@ -1483,7 +1483,7 @@ def _seed_widgets_module(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            The throwaway project tree.
+        The throwaway project tree.
 
     Returns
     -------
@@ -1584,14 +1584,14 @@ def _materialise_gate_tree(path_root: Path, str_script: str) -> Path:
     Parameters
     ----------
     path_root : pathlib.Path
-            Project root to build.
+        Project root to build.
     str_script : str
-            Wrapper filename, e.g. ``lint_actions.sh``.
+        Wrapper filename, e.g. ``lint_actions.sh``.
 
     Returns
     -------
     pathlib.Path
-            Path to the copied script inside the throwaway tree.
+        Path to the copied script inside the throwaway tree.
     """
     path_bin = path_root / "bin"
     path_bin.mkdir(parents=True, exist_ok=True)
@@ -1607,14 +1607,14 @@ def _shadow(path_dir: Path, str_tool: str) -> Path:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory that will go first on ``PATH``.
+        Directory that will go first on ``PATH``.
     str_tool : str
-            Executable name to shadow.
+        Executable name to shadow.
 
     Returns
     -------
     pathlib.Path
-            ``path_dir``, so calls chain in a caller without a loop.
+        ``path_dir``, so calls chain in a caller without a loop.
     """
     path_dir.mkdir(parents=True, exist_ok=True)
     path_stub = path_dir / str_tool
@@ -1633,14 +1633,14 @@ def _stub_ok(path_dir: Path, str_tool: str) -> Path:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory that will go first on ``PATH``.
+        Directory that will go first on ``PATH``.
     str_tool : str
-            Executable name to provide.
+        Executable name to provide.
 
     Returns
     -------
     pathlib.Path
-            ``path_dir``, so calls chain in a caller without a loop.
+        ``path_dir``, so calls chain in a caller without a loop.
     """
     path_dir.mkdir(parents=True, exist_ok=True)
     path_stub = path_dir / str_tool
@@ -1655,12 +1655,12 @@ def _path_with(path_dir: Path) -> str:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory to prepend.
+        Directory to prepend.
 
     Returns
     -------
     str
-            The composed PATH.
+        The composed PATH.
     """
     return f"{path_dir}{os.pathsep}{os.environ.get('PATH', '')}"
 
@@ -1681,14 +1681,14 @@ def _shadow_tool_and_poetry(path_root: Path, str_tool: str) -> str:
     Parameters
     ----------
     path_root : pathlib.Path
-            Directory to create the stub directory under.
+        Directory to create the stub directory under.
     str_tool : str
-            The gate's tool, e.g. ``actionlint``.
+        The gate's tool, e.g. ``actionlint``.
 
     Returns
     -------
     str
-            A PATH value with the stub directory first.
+        A PATH value with the stub directory first.
     """
     path_stub_dir = path_root / "_stubbin"
     _shadow(path_stub_dir, str_tool)
@@ -1707,12 +1707,12 @@ def _shadow_hadolint_completely(path_root: Path) -> str:
     Parameters
     ----------
     path_root : pathlib.Path
-            Directory to create the stub directory under.
+        Directory to create the stub directory under.
 
     Returns
     -------
     str
-            A PATH value with the stub directory first.
+        A PATH value with the stub directory first.
     """
     path_stub_dir = path_root / "_stubbin"
     _shadow(path_stub_dir, "hadolint")
@@ -1729,14 +1729,14 @@ def _run_sh_gate(
     Parameters
     ----------
     path_script : pathlib.Path
-            The copied script, as returned by ``_materialise_gate_tree``.
+        The copied script, as returned by ``_materialise_gate_tree``.
     dict_extra : Mapping[str, str]
-            Environment entries layered over the inherited environment.
+        Environment entries layered over the inherited environment.
 
     Returns
     -------
     subprocess.CompletedProcess
-            The completed run.
+        The completed run.
     """
     dict_env = dict(os.environ)
     dict_env.update(dict_extra)
@@ -1949,12 +1949,12 @@ def _fake_gh(path_root: Path) -> tuple[str, Path]:
     Parameters
     ----------
     path_root : pathlib.Path
-            Directory to create the stub directory under.
+        Directory to create the stub directory under.
 
     Returns
     -------
     tuple of (str, pathlib.Path)
-            A PATH value with the stub first, and the file every invocation is appended to.
+        A PATH value with the stub first, and the file every invocation is appended to.
     """
     path_stub_dir = path_root / "_ghbin"
     path_stub_dir.mkdir(parents=True, exist_ok=True)
@@ -1978,21 +1978,21 @@ def _run_cleanup(
     Parameters
     ----------
     path_root : pathlib.Path
-            Directory the stub and log live under.
+        Directory the stub and log live under.
     str_run_ids : str
-            Space-separated run ids the listing call should report.
+        Space-separated run ids the listing call should report.
     str_head_sha : str, optional
-            The head SHA the workflow would pass in.
+        The head SHA the workflow would pass in.
     str_rerun_exit : str, optional
-            Exit code the stub returns for a re-run request; ``"1"`` simulates a denied
-            ``actions: write``.
+        Exit code the stub returns for a re-run request; ``"1"`` simulates a denied
+        ``actions: write``.
     str_list_exit : str, optional
-            Exit code the stub returns for the listing call; ``"1"`` simulates the query failing.
+        Exit code the stub returns for the listing call; ``"1"`` simulates the query failing.
 
     Returns
     -------
     tuple of (subprocess.CompletedProcess[str], str)
-            The finished process, and the recorded ``gh`` invocations as one string.
+        The finished process, and the recorded ``gh`` invocations as one string.
     """
     str_path, path_log = _fake_gh(path_root)
     cls_result = _run(
@@ -2021,7 +2021,7 @@ def test_stale_cleanup_reruns_every_stale_failure_but_never_itself(tmp_path: Pat
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     cls_result, str_log = _run_cleanup(tmp_path, "111 222 999")
 
@@ -2042,7 +2042,7 @@ def test_stale_cleanup_scopes_its_query_to_this_workflow_and_this_head(tmp_path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     _cls_result, str_log = _run_cleanup(tmp_path, "111")
 
@@ -2057,7 +2057,7 @@ def test_stale_cleanup_does_nothing_off_a_pull_request_event(tmp_path: Path) -> 
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     cls_result, str_log = _run_cleanup(tmp_path, "111", str_head_sha="")
 
@@ -2076,7 +2076,7 @@ def test_stale_cleanup_stays_green_and_warns_when_it_may_not_rerun(tmp_path: Pat
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     cls_result, _str_log = _run_cleanup(tmp_path, "111", str_rerun_exit="1")
     str_all = cls_result.stdout + cls_result.stderr
@@ -2097,7 +2097,7 @@ def test_stale_cleanup_never_reports_clean_over_a_listing_that_failed(tmp_path: 
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     cls_result, _str_log = _run_cleanup(tmp_path, "", str_list_exit="1")
     str_all = cls_result.stdout + cls_result.stderr
@@ -2141,12 +2141,12 @@ def _poetry_forwarding_deptry(path_dir: Path) -> str:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory to create the stub in; it is prepended to PATH.
+        Directory to create the stub in; it is prepended to PATH.
 
     Returns
     -------
     str
-            A PATH value with the stub directory first.
+        A PATH value with the stub directory first.
     """
     path_dir.mkdir(parents=True, exist_ok=True)
     path_stub = path_dir / "poetry"
@@ -2173,7 +2173,7 @@ def test_deps_gate_fires_on_an_import_that_is_no_declared_dependency(tmp_path: P
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
     _write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)
@@ -2197,7 +2197,7 @@ def test_deps_gate_passes_when_the_same_import_is_declared(tmp_path: Path) -> No
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
     _write(
@@ -2223,7 +2223,7 @@ def test_deps_gate_fails_when_discovery_matches_zero_python_files(tmp_path: Path
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
     _write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)
@@ -2253,7 +2253,7 @@ def test_deps_gate_hard_fails_when_deptry_is_unresolvable_instead_of_skipping(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest's per-test temporary directory.
+        Pytest's per-test temporary directory.
     """
     path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
     _write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)

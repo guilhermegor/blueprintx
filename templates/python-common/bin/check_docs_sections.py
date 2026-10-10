@@ -63,11 +63,11 @@ def _ignore_unknown(loader: _MkDocsSafeLoader, tag_suffix: str, node: yaml.Node)
     Parameters
     ----------
     loader : _MkDocsSafeLoader
-            The active loader.
+        The active loader.
     tag_suffix : str
-            The unresolved tag suffix.
+        The unresolved tag suffix.
     node : yaml.Node
-            The node carrying the unknown tag.
+        The node carrying the unknown tag.
 
     Returns
     -------
@@ -86,12 +86,12 @@ def _nav_files(nav: object) -> set[str]:
     Parameters
     ----------
     nav : object
-            The parsed ``nav`` value (a list of str / dict, arbitrarily nested).
+        The parsed ``nav`` value (a list of str / dict, arbitrarily nested).
 
     Returns
     -------
     set of str
-            Every doc path referenced in the nav, normalised with forward slashes.
+        Every doc path referenced in the nav, normalised with forward slashes.
     """
     set_files: set[str] = set()
     if isinstance(nav, str):
@@ -111,8 +111,8 @@ def _load_config() -> dict:
     Returns
     -------
     dict
-            The parsed ``docs/.docs-skeleton.yaml`` (``required_pages`` /
-            ``section_families``), or an empty dict when the repo ships no override.
+        The parsed ``docs/.docs-skeleton.yaml`` (``required_pages`` /
+        ``section_families``), or an empty dict when the repo ships no override.
     """
     if not _SKELETON_CONFIG.exists():
         return {}
@@ -125,14 +125,14 @@ def _check_layer1(set_nav_files: set[str], tuple_required: tuple[str, ...]) -> l
     Parameters
     ----------
     set_nav_files : set of str
-            Every doc path registered in ``mkdocs.yml`` ``nav:``.
+        Every doc path registered in ``mkdocs.yml`` ``nav:``.
     tuple_required : tuple of str
-            The canonical English slugs that must exist and be navigable.
+        The canonical English slugs that must exist and be navigable.
 
     Returns
     -------
     list of str
-            One message per violation.
+        One message per violation.
     """
     list_errors: list[str] = []
     for str_slug in tuple_required:
@@ -152,12 +152,12 @@ def _headings(path_md: pathlib.Path) -> set[str]:
     Parameters
     ----------
     path_md : pathlib.Path
-            The Markdown file to scan.
+        The Markdown file to scan.
 
     Returns
     -------
     set of str
-            Heading texts with the leading ``#`` markers and surrounding ``*`` stripped.
+        Heading texts with the leading ``#`` markers and surrounding ``*`` stripped.
     """
     set_headings: set[str] = set()
     for str_line in path_md.read_text(encoding="utf-8").splitlines():
@@ -172,13 +172,13 @@ def _check_layer2(dict_families: dict) -> list[str]:
     Parameters
     ----------
     dict_families : dict
-            ``{glob: [heading, ...]}`` from the repo's ``docs/.docs-skeleton.yaml``
-            (repo-owned labels).
+        ``{glob: [heading, ...]}`` from the repo's ``docs/.docs-skeleton.yaml``
+        (repo-owned labels).
 
     Returns
     -------
     list of str
-            One message per page missing a required heading.
+        One message per page missing a required heading.
     """
     list_errors: list[str] = []
     for str_glob, list_required in (dict_families or {}).items():
@@ -202,7 +202,7 @@ def main() -> int:
     Returns
     -------
     int
-            0 when the docs skeleton is intact, 1 otherwise.
+        0 when the docs skeleton is intact, 1 otherwise.
     """
     if not _MKDOCS_YML.exists():
         print("No mkdocs.yml — skipping docs-skeleton check.")
