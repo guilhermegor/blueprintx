@@ -53,7 +53,7 @@ def test_skip_set_names_every_wrapper_module() -> None:
 
 @pytest.fixture
 def mock_create_log(mocker: MockerFixture) -> MagicMock:
-    """Replace ``CreateLog`` in ``logs_emitter`` with a ``spec=``-ed mock.
+    """Replace ``CreateLog`` in ``logs_emitter`` with an autospec-ed mock.
 
     Parameters
     ----------
@@ -83,6 +83,23 @@ def test_logs_emitter_without_logger_passes_none_to_create_log(
     """
     LogsEmitter().log_message("hello", "info")
     mock_create_log.log_message.assert_called_once_with(None, "hello", "info")
+
+
+def test_logs_emitter_default_prints_message_to_screen(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A default ``LogsEmitter()`` prints the message, through the real ``CreateLog``.
+
+    Regression (blueprintx#597): before the fix the substituted module logger swallowed the
+    line, so nothing reached the screen.
+
+    Parameters
+    ----------
+    capsys : pytest.CaptureFixture[str]
+            Captures what the emitter printed.
+    """
+    LogsEmitter().log_message("visible on screen", "info")
+    assert "visible on screen" in capsys.readouterr().out
 
 
 def test_logs_emitter_with_logger_passes_it_through_unchanged(

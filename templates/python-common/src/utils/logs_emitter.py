@@ -41,7 +41,7 @@ class LogsEmitter(LogEmitter):
                 is printed to the screen instead.
         """
         # super() swaps None for a module logger; keep the original (blueprintx#597).
-        self._cls_logger_arg = cls_logger
+        self._cls_logger_or_none = cls_logger
         super().__init__(cls_logger)
         self._cls_create_log = CreateLog()
 
@@ -60,4 +60,4 @@ class LogsEmitter(LogEmitter):
         log_level = cast(
             LogLevel, str_normalized if str_normalized in _VALID_LOG_LEVELS else "warning"
         )
-        self._cls_create_log.log_message(self._cls_logger_arg, str_message, log_level)
+        self._cls_create_log.log_message(self._cls_logger_or_none, str_message, log_level)
