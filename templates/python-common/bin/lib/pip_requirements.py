@@ -60,12 +60,12 @@ def version_parts(str_raw: str) -> list[int]:
     Parameters
     ----------
     str_raw : str
-            A version string such as ``"1.4"`` or ``"2.0.0rc1"``.
+        A version string such as ``"1.4"`` or ``"2.0.0rc1"``.
 
     Returns
     -------
     list of int
-            The parsed components, one per dot-separated part.
+        The parsed components, one per dot-separated part.
     """
     list_numbers: list[int] = []
     for str_part in str_raw.strip().split("."):
@@ -88,12 +88,12 @@ def caret_to_range(str_raw: str) -> str:
     Parameters
     ----------
     str_raw : str
-            The constraint including its leading ``^``.
+        The constraint including its leading ``^``.
 
     Returns
     -------
     str
-            A ``">=X,<Y"`` range.
+        A ``">=X,<Y"`` range.
     """
     str_base = str_raw[1:].strip()
     list_parts = version_parts(str_base)
@@ -120,12 +120,12 @@ def tilde_to_range(str_raw: str) -> str:
     Parameters
     ----------
     str_raw : str
-            The constraint including its leading ``~``.
+        The constraint including its leading ``~``.
 
     Returns
     -------
     str
-            A ``">=X,<Y"`` range.
+        A ``">=X,<Y"`` range.
     """
     str_base = str_raw[1:].strip()
     int_written = len(str_base.split("."))
@@ -144,12 +144,12 @@ def normalize_version_spec(str_spec: str) -> str:
     Parameters
     ----------
     str_spec : str
-            A Poetry constraint (``"^1.2"``, ``"~1.2"``, ``">=1,<2"``, ``"1.2.3"``, ``"*"``).
+        A Poetry constraint (``"^1.2"``, ``"~1.2"``, ``">=1,<2"``, ``"1.2.3"``, ``"*"``).
 
     Returns
     -------
     str
-            The pip-syntax equivalent, or an empty string for "any version".
+        The pip-syntax equivalent, or an empty string for "any version".
     """
     str_spec = str(str_spec).strip()
     if str_spec in {"", "*"}:
@@ -171,21 +171,21 @@ def build_requirement(str_name: str, union_spec: str | dict) -> str | None:
     Parameters
     ----------
     str_name : str
-            The dependency name as declared.
+        The dependency name as declared.
     union_spec : str or dict
-            Its declaration: a version string, or a table carrying ``version``/``extras``/
-            ``markers``/``optional``.
+        Its declaration: a version string, or a table carrying ``version``/``extras``/
+        ``markers``/``optional``.
 
     Returns
     -------
     str or None
-            The requirement line, or ``None`` when the dependency must be skipped (the
-            ``python`` pseudo-dependency, and anything marked ``optional``).
+        The requirement line, or ``None`` when the dependency must be skipped (the
+        ``python`` pseudo-dependency, and anything marked ``optional``).
 
     Raises
     ------
     SystemExit
-            If the declaration is a path/git/url dependency, or a shape not handled here.
+        If the declaration is a path/git/url dependency, or a shape not handled here.
     """
     # Poetry declares the interpreter itself as a dependency; pip has no such concept.
     if str_name.lower() == "python":
@@ -220,15 +220,15 @@ def pep621_requirements(dict_project: dict, list_groups: list) -> list:
     Parameters
     ----------
     dict_project : dict
-            The parsed ``[project]`` table.
+        The parsed ``[project]`` table.
     list_groups : list of str
-            Requested groups; ``"main"`` maps to ``dependencies``, the rest to
-            ``optional-dependencies``.
+        Requested groups; ``"main"`` maps to ``dependencies``, the rest to
+        ``optional-dependencies``.
 
     Returns
     -------
     list of str
-            Requirement lines, already pip-shaped.
+        Requirement lines, already pip-shaped.
     """
     list_requirements = list(dict_project.get("dependencies", [])) if "main" in list_groups else []
     dict_optional = dict_project.get("optional-dependencies", {})
@@ -243,14 +243,14 @@ def poetry_requirements(dict_poetry: dict, list_groups: list) -> list:
     Parameters
     ----------
     dict_poetry : dict
-            The parsed ``[tool.poetry]`` table.
+        The parsed ``[tool.poetry]`` table.
     list_groups : list of str
-            Requested groups; ``"main"`` maps to the top-level ``dependencies`` table.
+        Requested groups; ``"main"`` maps to the top-level ``dependencies`` table.
 
     Returns
     -------
     list of str
-            Requirement lines, normalised from Poetry's constraint grammar.
+        Requirement lines, normalised from Poetry's constraint grammar.
     """
     list_requirements: list[str] = []
     if "main" in list_groups:
@@ -282,14 +282,14 @@ def select_requirements(dict_pyproject: dict, list_groups: list) -> list:
     Parameters
     ----------
     dict_pyproject : dict
-            The parsed ``pyproject.toml``.
+        The parsed ``pyproject.toml``.
     list_groups : list of str
-            Requested groups, ``"main"`` included when the runtime set is wanted.
+        Requested groups, ``"main"`` included when the runtime set is wanted.
 
     Returns
     -------
     list of str
-            Requirement lines from whichever layout the project actually uses.
+        Requirement lines from whichever layout the project actually uses.
     """
     dict_project = dict_pyproject.get("project") or {}
     if dict_project.get("dependencies") or dict_project.get("optional-dependencies"):
@@ -303,7 +303,7 @@ def main() -> int:
     Returns
     -------
     int
-            0 on success.
+        0 on success.
     """
     path_root = Path(os.environ["PROJECT_ROOT"])
     list_groups = [

@@ -27,12 +27,12 @@ def _load(str_name: str) -> ModuleType:
     Parameters
     ----------
     str_name : str
-            Module stem under ``bin/``.
+        Module stem under ``bin/``.
 
     Returns
     -------
     ModuleType
-            The imported module.
+        The imported module.
     """
     cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -50,16 +50,16 @@ def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) ->
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff.
+        Whether a non-test file also changed in this diff.
 
     Returns
     -------
     list of str
-            Findings from ``gate._file_findings``.
+        Findings from ``gate._file_findings``.
     """
     return gate._file_findings("tests/unit/test_sample.py", str_old, str_new, bool_prod_changed)
 
@@ -75,16 +75,16 @@ def _sole_finding(str_old: str, str_new: str, *, bool_prod_changed: bool = False
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff.
+        Whether a non-test file also changed in this diff.
 
     Returns
     -------
     str
-            The one finding.
+        The one finding.
     """
     list_problems = _findings(str_old, str_new, bool_prod_changed=bool_prod_changed)
     assert len(list_problems) == 1, list_problems
@@ -308,7 +308,7 @@ def test_the_report_passes_a_flagged_diff_with_a_justification_trailer(
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-            Replaces the gate's git runner so the trailer search reads a fixed commit message.
+        Replaces the gate's git runner so the trailer search reads a fixed commit message.
     """
     monkeypatch.setattr(
         gate,
@@ -400,7 +400,7 @@ def test_a_call_trivialised_to_any_truthy_constant_is_reported(str_new_assert: s
     Parameters
     ----------
     str_new_assert : str
-            The trivialised assertion replacing the unittest call.
+        The trivialised assertion replacing the unittest call.
     """
     assert "truthy constant" in _sole_finding(
         "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n",
@@ -419,7 +419,7 @@ def test_a_call_replaced_by_a_falsy_constant_is_not_a_weakening(str_new_assert: 
     Parameters
     ----------
     str_new_assert : str
-            The falsy assertion replacing the unittest call.
+        The falsy assertion replacing the unittest call.
     """
     str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
     str_new = f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n"
@@ -437,14 +437,14 @@ def _git_in(path_repo: Path, *args: str) -> str:
     Parameters
     ----------
     path_repo : pathlib.Path
-            The repository to run in.
+        The repository to run in.
     *args : str
-            Arguments after ``git``.
+        Arguments after ``git``.
 
     Returns
     -------
     str
-            Captured stdout, stripped.
+        Captured stdout, stripped.
     """
     cls_proc = subprocess.run(  # noqa: S603
         ["git", "-C", str(path_repo), *args],  # noqa: S607
@@ -465,14 +465,14 @@ def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided scratch directory.
+        Pytest-provided scratch directory.
     monkeypatch : pytest.MonkeyPatch
-            Used to run the gate inside the repo.
+        Used to run the gate inside the repo.
 
     Returns
     -------
     pathlib.Path
-            The repository, left mid-merge.
+        The repository, left mid-merge.
     """
     _git_in(tmp_path, "init", "-q", "--initial-branch=main")
     _git_in(tmp_path, "config", "user.email", "t@example.com")

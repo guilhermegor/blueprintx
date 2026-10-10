@@ -55,12 +55,12 @@ def omit_patterns(path_coveragerc: pathlib.Path) -> list[str]:
     Parameters
     ----------
     path_coveragerc : pathlib.Path
-            The coverage config to read.
+        The coverage config to read.
 
     Returns
     -------
     list of str
-            One pattern per non-blank line, in declaration order.
+        One pattern per non-blank line, in declaration order.
     """
     cls_parser = configparser.ConfigParser()
     cls_parser.read(path_coveragerc, encoding="utf-8")
@@ -83,12 +83,12 @@ def whole_capability_exclusions(list_patterns: list[str]) -> set[str]:
     Parameters
     ----------
     list_patterns : list of str
-            The declared ``omit`` patterns.
+        The declared ``omit`` patterns.
 
     Returns
     -------
     set of str
-            Capability directory names named outright, e.g. ``{"example_feature"}``.
+        Capability directory names named outright, e.g. ``{"example_feature"}``.
     """
     return {
         cls_match.group(1)
@@ -107,12 +107,12 @@ def defines_a_function(path_module: pathlib.Path) -> bool:
     Parameters
     ----------
     path_module : pathlib.Path
-            The module to inspect.
+        The module to inspect.
 
     Returns
     -------
     bool
-            ``True`` when the module defines at least one function or method.
+        ``True`` when the module defines at least one function or method.
     """
     cls_tree = ast.parse(path_module.read_text(encoding="utf-8"))
     return any(
@@ -127,12 +127,12 @@ def logic_bearing_modules(path_capability: pathlib.Path) -> list[pathlib.Path]:
     Parameters
     ----------
     path_capability : pathlib.Path
-            A directory under ``src/capabilities/``.
+        A directory under ``src/capabilities/``.
 
     Returns
     -------
     list of pathlib.Path
-            Modules under ``domain/`` or ``application/`` that define a function, sorted.
+        Modules under ``domain/`` or ``application/`` that define a function, sorted.
     """
     list_modules = []
     for str_layer in _LAYERS:
@@ -155,15 +155,15 @@ def must_stay_covered(
     Parameters
     ----------
     path_capabilities : pathlib.Path
-            ``src/capabilities/``.
+        ``src/capabilities/``.
     set_excluded : set of str
-            Capability names the omit list already names outright.
+        Capability names the omit list already names outright.
 
     Returns
     -------
     list of pathlib.Path
-            Domain/application modules, across every non-excluded capability, that define a
-            function — the code-derived floor.
+        Domain/application modules, across every non-excluded capability, that define a
+        function — the code-derived floor.
     """
     list_capabilities = sorted(
         path_capability
@@ -185,14 +185,14 @@ def swallowed_by_omit(
     Parameters
     ----------
     list_must_stay_covered : list of pathlib.Path
-            The code-derived floor: modules that must stay in the coverage denominator.
+        The code-derived floor: modules that must stay in the coverage denominator.
     list_patterns : list of str
-            The declared ``omit`` patterns.
+        The declared ``omit`` patterns.
 
     Returns
     -------
     list of str
-            Human-readable problems; empty when none are swallowed.
+        Human-readable problems; empty when none are swallowed.
     """
     list_problems = []
     for path_module in list_must_stay_covered:
@@ -225,7 +225,7 @@ def vacuous_discovery_reason() -> str | None:
     Returns
     -------
     str or None
-            A human-readable reason, or ``None`` when ``.coveragerc`` and ``src/`` are both real.
+        A human-readable reason, or ``None`` when ``.coveragerc`` and ``src/`` are both real.
     """
     if not _COVERAGERC.is_file():
         return f"{_COVERAGERC} not found"
@@ -245,7 +245,7 @@ def main() -> int:
     Returns
     -------
     int
-            ``0`` when no logic-bearing module is silently omitted, ``1`` otherwise.
+        ``0`` when no logic-bearing module is silently omitted, ``1`` otherwise.
     """
     str_reason = vacuous_discovery_reason()
     if str_reason is not None:

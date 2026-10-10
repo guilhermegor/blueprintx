@@ -67,8 +67,8 @@ def test_to_decimal_non_finite_returns_default(value: float | Decimal | str) -> 
     Parameters
     ----------
     value : float or Decimal or str
-            A non-finite value the coercion contract must map to ``default`` rather than
-            leak (a leaked ``Decimal('NaN')`` raises ``InvalidOperation`` downstream).
+        A non-finite value the coercion contract must map to ``default`` rather than
+        leak (a leaked ``Decimal('NaN')`` raises ``InvalidOperation`` downstream).
     """
     # Equality alone proves finiteness: a NaN never compares equal to anything.
     assert to_decimal(value, 2, default=Decimal("-1")) == Decimal("-1.00")

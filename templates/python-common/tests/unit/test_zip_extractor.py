@@ -22,12 +22,12 @@ def _make_zip(path_dir: Path) -> Path:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory in which to create the archive.
+        Directory in which to create the archive.
 
     Returns
     -------
     pathlib.Path
-            Path to the created zip.
+        Path to the created zip.
     """
     path_zip = path_dir / "bundle.zip"
     with zipfile.ZipFile(path_zip, "w") as cls_zip:
