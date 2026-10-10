@@ -29,7 +29,6 @@ def test_raw_workspace_bronze_keeps_the_artifact_byte_for_byte(tmp_path: Path) -
     path_bronze = tmp_path / "bronze" / "2026-08-17"
     with raw_workspace(path_bronze) as path_dir:
         (path_dir / "artifact.csv").write_bytes(bytes_payload)
-    assert path_bronze.is_dir()
     assert (path_bronze / "artifact.csv").read_bytes() == bytes_payload
 
 
@@ -38,9 +37,17 @@ def test_raw_workspace_bronze_creates_missing_parents(tmp_path: Path) -> None:
     # The caller names a leaf inside a tree the archiver has not built yet; assuming the
     # parent exists is how a bronze write dies on the first run of a new dated folder.
     path_bronze = tmp_path / "a" / "b" / "c"
-    with raw_workspace(path_bronze) as path_dir:
-        assert path_dir == path_bronze
+    with raw_workspace(path_bronze):
+        pass
     assert path_bronze.is_dir()
+
+
+def test_raw_workspace_bronze_yields_the_named_directory(tmp_path: Path) -> None:
+    """The bronze branch hands the caller the directory it named, not a scratch one."""
+    path_bronze = tmp_path / "a" / "b" / "c"
+    with raw_workspace(path_bronze) as path_dir:
+        path_seen = path_dir
+    assert path_seen == path_bronze
 
 
 def test_raw_workspace_bronze_accepts_an_existing_directory(tmp_path: Path) -> None:

@@ -14,6 +14,7 @@ docs/architecture.md#enrichment-degradation-contract.
 from pathlib import Path
 
 import pandas as pd
+import pytest
 from pytest_mock import MockerFixture
 
 from src.controller._pipeline import PipelineOrchestrator
@@ -61,74 +62,194 @@ def _report() -> pd.DataFrame:
 # --------------------------
 # Tests — the five degradation modes
 # --------------------------
-def test_enrich_degrades_when_path_labels_not_configured(
-    tmp_path: Path, mocker: MockerFixture
-) -> None:
-    """Mode 1: no ``path_labels`` configured — no call attempted, report returned unchanged."""
+def _degraded_run(tmp_path: Path, mocker: MockerFixture, path_labels: Path | None) -> tuple:
+    """Run ``_enrich`` once and return the result, the input report and the joined log text.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest-provided temporary directory.
+    mocker : MockerFixture
+            pytest-mock fixture for patching the log sink.
+    path_labels : pathlib.Path | None
+            The labels path to inject (``None`` for the missing-config mode).
+
+    Returns
+    -------
+    tuple
+            ``(df_result, df_report, str_log)``.
+    """
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     df_report = _report()
-    df_result = _build_orchestrator(tmp_path, path_labels=None)._enrich(df_report)
-    pd.testing.assert_frame_equal(df_result, df_report)
-    str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
-    assert "Label enrichment skipped" in str_log
-
-
-def test_enrich_degrades_on_absent_file(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Mode 2: the configured file does not exist on disk (real read attempt)."""
-    mock_log = mocker.patch("src.controller._pipeline.log_message")
-    df_report = _report()
-    path_labels = tmp_path / "does-not-exist.json"
     df_result = _build_orchestrator(tmp_path, path_labels)._enrich(df_report)
-    pd.testing.assert_frame_equal(df_result, df_report)
     str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
-    assert "FileNotFoundError" in str_log
+    return df_result, df_report, str_log
 
 
-def test_enrich_degrades_on_malformed_file(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Mode 3: the file exists but is not valid JSON (real read attempt)."""
-    mock_log = mocker.patch("src.controller._pipeline.log_message")
-    df_report = _report()
+@pytest.fixture
+def tuple_unconfigured(tmp_path: Path, mocker: MockerFixture) -> tuple:
+    """Mode 1: no ``path_labels`` configured — no call attempted.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest-provided temporary directory.
+    mocker : MockerFixture
+            pytest-mock fixture for patching.
+
+    Returns
+    -------
+    tuple
+            ``(df_result, df_report, str_log)``.
+    """
+    return _degraded_run(tmp_path, mocker, None)
+
+
+@pytest.fixture
+def tuple_absent_file(tmp_path: Path, mocker: MockerFixture) -> tuple:
+    """Mode 2: the configured file does not exist on disk (real read attempt).
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest-provided temporary directory.
+    mocker : MockerFixture
+            pytest-mock fixture for patching.
+
+    Returns
+    -------
+    tuple
+            ``(df_result, df_report, str_log)``.
+    """
+    return _degraded_run(tmp_path, mocker, tmp_path / "does-not-exist.json")
+
+
+@pytest.fixture
+def tuple_malformed_file(tmp_path: Path, mocker: MockerFixture) -> tuple:
+    """Mode 3: the file exists but is not valid JSON (real read attempt).
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest-provided temporary directory.
+    mocker : MockerFixture
+            pytest-mock fixture for patching.
+
+    Returns
+    -------
+    tuple
+            ``(df_result, df_report, str_log)``.
+    """
     path_labels = tmp_path / "labels.json"
     path_labels.write_text("{not valid json")
-    df_result = _build_orchestrator(tmp_path, path_labels)._enrich(df_report)
-    pd.testing.assert_frame_equal(df_result, df_report)
-    str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
-    assert "JSONDecodeError" in str_log
+    return _degraded_run(tmp_path, mocker, path_labels)
 
 
-def test_enrich_degrades_on_permission_error(tmp_path: Path, mocker: MockerFixture) -> None:
+@pytest.fixture
+def tuple_permission_error(tmp_path: Path, mocker: MockerFixture) -> tuple:
     """Mode 4 (canonical regression, #151): the file exists but cannot be read.
 
     This is the exact shape of the measured incident: an unreadable file must degrade, not
     raise and kill a run whose upstream read already succeeded.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest-provided temporary directory.
+    mocker : MockerFixture
+            pytest-mock fixture for patching.
+
+    Returns
+    -------
+    tuple
+            ``(df_result, df_report, str_log)``.
     """
-    mock_log = mocker.patch("src.controller._pipeline.log_message")
     path_labels = tmp_path / "labels.json"
     path_labels.write_text('{"1": "demo"}')
     mocker.patch.object(Path, "open", side_effect=PermissionError("labels.json"))
-    df_report = _report()
-    df_result = _build_orchestrator(tmp_path, path_labels)._enrich(df_report)
-    pd.testing.assert_frame_equal(df_result, df_report)
-    str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
-    assert "PermissionError" in str_log
+    return _degraded_run(tmp_path, mocker, path_labels)
 
 
-def test_enrich_degrades_on_unforeseen_failure(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Mode 5: an unforeseen error unrelated to the file's existence or shape."""
-    mock_log = mocker.patch("src.controller._pipeline.log_message")
-    # Patched where the call lives — the model — see the enrichment degradation contract in
-    # the architecture doc.
+@pytest.fixture
+def tuple_unforeseen_failure(tmp_path: Path, mocker: MockerFixture) -> tuple:
+    """Mode 5: an unforeseen error unrelated to the file's existence or shape.
+
+    Patched where the call lives — the model — see the enrichment degradation contract in
+    the architecture doc.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest-provided temporary directory.
+    mocker : MockerFixture
+            pytest-mock fixture for patching.
+
+    Returns
+    -------
+    tuple
+            ``(df_result, df_report, str_log)``.
+    """
     mocker.patch(
         "src.model.label_enricher.json.load",
         side_effect=RuntimeError("unexpected failure"),
     )
-    df_report = _report()
     path_labels = tmp_path / "labels.json"
     path_labels.write_text('{"1": "demo"}')
-    df_result = _build_orchestrator(tmp_path, path_labels)._enrich(df_report)
-    pd.testing.assert_frame_equal(df_result, df_report)
-    str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
-    assert "RuntimeError" in str_log
+    return _degraded_run(tmp_path, mocker, path_labels)
+
+
+@pytest.mark.parametrize(
+    "str_fixture",
+    [
+        "tuple_unconfigured",
+        "tuple_absent_file",
+        "tuple_malformed_file",
+        "tuple_permission_error",
+        "tuple_unforeseen_failure",
+    ],
+)
+def test_enrich_degrades_to_the_unchanged_report(
+    request: pytest.FixtureRequest, str_fixture: str
+) -> None:
+    """Every failure mode reaches the same explicit degraded value: the report, unchanged.
+
+    Parameters
+    ----------
+    request : pytest.FixtureRequest
+            Resolves the mode's fixture by name.
+    str_fixture : str
+            The fixture running one failure mode.
+    """
+    tuple_run = request.getfixturevalue(str_fixture)
+    pd.testing.assert_frame_equal(tuple_run[0], tuple_run[1])
+
+
+@pytest.mark.parametrize(
+    ("str_fixture", "str_cause"),
+    [
+        ("tuple_unconfigured", "Label enrichment skipped"),
+        ("tuple_absent_file", "FileNotFoundError"),
+        ("tuple_malformed_file", "JSONDecodeError"),
+        ("tuple_permission_error", "PermissionError"),
+        ("tuple_unforeseen_failure", "RuntimeError"),
+    ],
+)
+def test_enrich_degradation_logs_its_cause(
+    request: pytest.FixtureRequest, str_fixture: str, str_cause: str
+) -> None:
+    """Every failure mode names its cause in the log, never silently.
+
+    Parameters
+    ----------
+    request : pytest.FixtureRequest
+            Resolves the mode's fixture by name.
+    str_fixture : str
+            The fixture running one failure mode.
+    str_cause : str
+            What the log must name.
+    """
+    tuple_run = request.getfixturevalue(str_fixture)
+    assert str_cause in tuple_run[2]
 
 
 # --------------------------

@@ -18,7 +18,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `offline-wheelhouse.md` | Utility page | How a scaffolded Python project installs offline — `poe wheelhouse` / `wheelhouse_assemble`, target-env selection, manifest/split-part payload (blueprintx#299) |
 | `secret-scanning.md` | Utility page | Secret scanning per tier — the measured gitleaks-vs-GitGuardian comparison behind gitleaks being the default, plus the GitGuardian (`ggshield`) opt-in: how to enable it at scaffold time, how it propagates the key, and how to opt in after the fact |
 | `complexity-ceilings-measured.md` | Utility page | Why the complexity ceilings are 1/2/8 per tree — per-construct ruff mccabe measurements (`and`/`or`/`assert` free, a second decision point costs) and why radon's scale was not adopted (blueprintx#425) |
-| `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, release) |
+| `contributing.md` | Utility page | How to contribute to BlueprintX (setup, adding a skeleton, PR, blocked-work convention, release) |
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
 | `coverage-floor.md` | Utility page | Design record for `bin/check_coverage_floor.py` (blueprintx#149) — why `.coveragerc`'s `omit` list needed a code-derived floor, how it derives one, and why it stays deliberately coarse |

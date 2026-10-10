@@ -63,6 +63,9 @@ reviewed".
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
+import functools
+import hashlib
 import json
 import os
 import pathlib
@@ -190,22 +193,26 @@ _RE_MARKUP = re.compile(r"<!--.*?-->|<[^>]+>", re.DOTALL)
 #
 # A reviewer that declines to work posts an ISSUE comment, never a review thread — verified on
 # #257. That stream is the only place the difference between "nobody looked at this" and "these
-# commits were already reviewed" is written down (#259). It is fetched `last:` rather than
-# `first:` on purpose: `last` returns the NEWEST, so truncation can only drop OLD notices, and
-# an old notice is the one that must not grant a pass anyway.
+# commits were already reviewed" is written down (#259). It is paginated like reviews and
+# threads: a PR past 100 comments (#282 and #319 have 140) must not drop either a review comment
+# or the answer to it.
 _QUERY = """
-query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
+query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
-      comments(last:100) { nodes { author { login } body createdAt } }
+      baseRefOid
+      comments(first:100, after:$cc) {
+        pageInfo { hasNextPage endCursor }
+        nodes { author { login __typename } body createdAt }
+      }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login } commit { oid } }
+        nodes { author { login } commit { oid } state body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
       reviewThreads(first:100, after:$tc) {
@@ -382,6 +389,7 @@ def _fetch_page(
     int_number: int,
     str_review_cursor: str | None,
     str_thread_cursor: str | None,
+    str_comment_cursor: str | None = None,
 ) -> dict:
     """Run one page of the query.
 
@@ -411,6 +419,8 @@ def _fetch_page(
         f"rc={str_review_cursor}" if str_review_cursor else "rc=",
         "-F",
         f"tc={str_thread_cursor}" if str_thread_cursor else "tc=",
+        "-F",
+        f"cc={str_comment_cursor}" if str_comment_cursor else "cc=",
     ]
     # Constant argv built from CI-provided identifiers; no shell is involved.
     cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
@@ -420,6 +430,16 @@ def _fetch_page(
     if "errors" in dict_out:
         raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
     return dict_out["data"]["repository"]["pullRequest"]
+
+
+_TUPLE_PAGED = ("reviews", "reviewThreads", "comments")
+
+
+def _next_cursor(dict_side: dict | None) -> str | None:
+    """Return the cursor to resume a connection from, or ``None`` when it has no next page."""
+    if not dict_side or not dict_side["pageInfo"]["hasNextPage"]:
+        return None
+    return dict_side["pageInfo"]["endCursor"]
 
 
 def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
@@ -444,26 +464,21 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
     RuntimeError
             If the API call fails, so an unreachable API is never mistaken for a clean PR.
     """
-    dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None)
-    dict_reviews = dict_pr["reviews"]
-    dict_threads = dict_pr["reviewThreads"]
+    dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None, None)
+    list_sides = [(dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr]
 
-    # Follow both cursors until neither has a next page. Independent cursors, one request each
+    # Follow every cursor until none has a next page. Independent cursors, one request each
     # round: passing a cursor for a connection that is already exhausted just re-returns its
-    # last (empty) page, so the loop terminates on the slower of the two.
-    while dict_reviews["pageInfo"]["hasNextPage"] or dict_threads["pageInfo"]["hasNextPage"]:
+    # last (empty) page, so the loop terminates on the slowest of them. A failed page raises
+    # in `_fetch_page`, so the loop can only stop early by finishing, never by an error.
+    while any(dict_side["pageInfo"]["hasNextPage"] for dict_side, _ in list_sides):
         dict_next = _fetch_page(
             str_owner,
             str_repo,
             int_number,
-            dict_reviews["pageInfo"]["endCursor"]
-            if dict_reviews["pageInfo"]["hasNextPage"]
-            else None,
-            dict_threads["pageInfo"]["endCursor"]
-            if dict_threads["pageInfo"]["hasNextPage"]
-            else None,
+            *(_next_cursor(dict_pr.get(str_key)) for str_key in _TUPLE_PAGED),
         )
-        for dict_side, str_key in ((dict_reviews, "reviews"), (dict_threads, "reviewThreads")):
+        for dict_side, str_key in list_sides:
             if not dict_side["pageInfo"]["hasNextPage"]:
                 continue
             dict_side["nodes"].extend(dict_next[str_key]["nodes"])
@@ -499,6 +514,299 @@ def reviewers_who_reported(
         for d in list_reviews
         if not str_commit_oid or ((d.get("commit") or {}).get("oid") or "") == str_commit_oid
     } & set_roster
+
+
+def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str]:
+    """Return the distinct commits a roster member reviewed, newest review first.
+
+    Newest first because, after an ``update-branch``, the most recent reviewed commit is the
+    likeliest match, so the caller's cap spends its calls where they pay.
+
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews, oldest first, each with an ``author`` node and a ``commit`` node.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
+
+    Returns
+    -------
+    list of str
+            Commit oids, deduplicated, empty oids dropped.
+    """
+    # Every review, not each reviewer's latest: an equal fingerprint means identical PR code, so
+    # an older identical review is a true carry-forward. `reviewers_who_reported` filters by
+    # neither recency nor state at HEAD; DISMISSED is excluded HERE, stricter on purpose, since
+    # a dismissal retracts the review and a stale one should not be revived by a merge.
+    list_oids = [
+        (d.get("commit") or {}).get("oid") or ""
+        for d in list_reviews
+        if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
+        and d.get("state") != "DISMISSED"
+    ]
+    return list(dict.fromkeys(str_oid for str_oid in reversed(list_oids) if str_oid))
+
+
+# The compare API lists at most this many files, whatever `per_page` says (it pages COMMITS,
+# not files; measured). A full list may be cut off, so it fails closed.
+_INT_COMPARE_FILES = 300
+
+# One compare call may not stall the job: a hang would end as `cancelled` at the job timeout,
+# which reads like a human cancelling (#192).
+_INT_COMPARE_TIMEOUT_S = 60
+
+# At most this many reviewed commits are compared with the head: 5 calls x 60 s stays well inside
+# the job's `timeout-minutes`, and a PR with more reviewed commits than that is re-reviewed.
+_INT_MAX_REVIEWED_COMMITS = 5
+
+# Everything that means "the patch could not be computed": an API or `gh` failure, a timeout, a
+# missing `gh`, an unusable response. Malformed response PARTS are turned into a ValueError at
+# the parsing site (`patch_fingerprint`), so a programming bug elsewhere is NOT swallowed here.
+_TUPLE_FINGERPRINT_ERRORS = (
+    RuntimeError,
+    ValueError,
+    OSError,
+    subprocess.TimeoutExpired,
+)
+
+
+def patch_fingerprint(list_files: list[dict]) -> str:
+    """Hash the PR's own patch as the compare API reports it.
+
+    Parameters
+    ----------
+    list_files : list of dict
+            The ``files`` array of ``compare/<base>...<oid>`` (merge-base to oid).
+
+    Returns
+    -------
+    str
+            A digest that ignores hunk line numbers but keeps each hunk header's function
+            context, so the same edit moved to another function does not match.
+
+    Raises
+    ------
+    ValueError
+            If the list is empty, possibly truncated, or a file carries no patch text.
+    """
+    if not list_files or len(list_files) >= _INT_COMPARE_FILES:
+        raise ValueError(f"patch unavailable: {len(list_files)} file(s) in the comparison")
+    if any(d.get("patch") is None for d in list_files):
+        raise ValueError("patch unavailable: a file has no patch text (binary or too large)")
+    try:
+        list_parts = [
+            [
+                d["filename"],
+                d.get("status", ""),
+                d.get("previous_filename", ""),
+                [re.sub(r"^@@ -\S+ \+\S+ @@", "@@", s) for s in d["patch"].splitlines()],
+            ]
+            for d in sorted(list_files, key=lambda d: d["filename"])
+        ]
+    except (KeyError, TypeError, AttributeError) as cls_error:
+        raise ValueError(f"patch unavailable: malformed file entry ({cls_error!r})") from cls_error
+    # JSON is unambiguous: no filename or patch line can collide with a field separator.
+    return hashlib.sha256(json.dumps(list_parts).encode()).hexdigest()
+
+
+def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oid: str) -> str:
+    """Return the PR's own patch fingerprint at ``str_oid`` via the compare API.
+
+    The CI checkout is shallow (``actions/checkout`` defaults to ``fetch-depth: 1``), so
+    ``git merge-base`` has no history to read. The three-dot compare computes the merge base
+    server side, which is the same diff ``git diff $(git merge-base base oid) oid`` yields.
+
+    Parameters
+    ----------
+    str_owner : str
+            Repository owner.
+    str_repo : str
+            Repository name.
+    str_base : str
+            The base commit SHA, read once with the PR. ⚠️ Never the branch name: two compares
+            would resolve it at two moments, and a retarget or push in between would measure
+            both patches against different bases.
+    str_oid : str
+            The commit whose patch is wanted.
+
+    Returns
+    -------
+    str
+            See :func:`patch_fingerprint`.
+
+    Raises
+    ------
+    RuntimeError
+            If the API call fails.
+    ValueError
+            If the base SHA is empty, or the response is unusable, see
+            :func:`patch_fingerprint`.
+    """
+    if not str_base:
+        raise ValueError("patch unavailable: the PR's base commit is unknown")
+    list_cmd = [
+        "gh",
+        "api",
+        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1",
+    ]
+    # Constant argv built from CI-provided identifiers; no shell is involved.
+    cls_run = subprocess.run(  # noqa: S603
+        list_cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=_INT_COMPARE_TIMEOUT_S,
+    )
+    if cls_run.returncode != 0:
+        raise RuntimeError(f"compare failed: {cls_run.stderr.strip()[:400]}")
+    dict_compare = json.loads(cls_run.stdout)
+    if not isinstance(dict_compare, dict):
+        raise ValueError("patch unavailable: the compare response is not an object")
+    return patch_fingerprint(dict_compare.get("files") or [])
+
+
+def fetch_retargeted(str_owner: str, str_repo: str, int_number: int) -> bool:
+    """Return whether the PR's base branch was ever changed, from its timeline.
+
+    The compare is measured against today's base, which is not necessarily the base a review
+    was written against: a PR reviewed against ``develop`` and then retargeted to ``main`` would
+    otherwise carry a review over code the reviewer never saw. A change is never undone in the
+    timeline, so a retargeted PR simply gets no carry-forward (it fails closed).
+
+    Parameters
+    ----------
+    str_owner : str
+            Repository owner.
+    str_repo : str
+            Repository name.
+    int_number : int
+            Pull-request number.
+
+    Returns
+    -------
+    bool
+            ``True`` when the timeline holds a ``base_ref_changed`` event.
+
+    Raises
+    ------
+    RuntimeError
+            If the API call fails, so an unreadable timeline is never read as "not retargeted".
+    """
+    list_cmd = [
+        "gh",
+        "api",
+        f"repos/{str_owner}/{str_repo}/issues/{int_number}/timeline",
+        "--paginate",
+        "--jq",
+        '.[] | select(.event == "base_ref_changed") | .event',
+    ]
+    # Constant argv built from CI-provided identifiers; no shell is involved.
+    cls_run = subprocess.run(  # noqa: S603
+        list_cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=_INT_COMPARE_TIMEOUT_S,
+    )
+    if cls_run.returncode != 0:
+        raise RuntimeError(f"timeline failed: {cls_run.stderr.strip()[:400]}")
+    return bool(cls_run.stdout.strip())
+
+
+def review_covers_head(
+    fn_fingerprint: Callable[[str], str],
+    str_review_oid: str,
+    str_head_oid: str,
+    str_head_digest: str,
+) -> bool:
+    """Return whether a review at an earlier commit still covers the head.
+
+    It does when the PR's own patch is unchanged, so the head only merged the base in. A
+    conflict resolution, a new commit or a force-push changes the patch and stays superseded.
+    ⚠️ Fails CLOSED: any error computing the review's patch (API failure, a malformed file
+    entry) means "not covered", never "covered".
+
+    Parameters
+    ----------
+    fn_fingerprint : Callable[[str], str]
+            Maps a commit oid to its patch fingerprint; raises on an unavailable patch.
+    str_review_oid : str
+            The commit the review was written against.
+    str_head_oid : str
+            The PR's head commit, for the diagnostic only.
+    str_head_digest : str
+            The head's fingerprint, computed once by the caller and passed in, so the
+            at-most-once guarantee never depends on the callable caching.
+
+    Returns
+    -------
+    bool
+            ``True`` only when both fingerprints were computed and are equal.
+    """
+    try:
+        bool_same = fn_fingerprint(str_review_oid) == str_head_digest
+    except _TUPLE_FINGERPRINT_ERRORS as cls_error:
+        _note(f"carry-forward from {str_review_oid[:7]} unavailable: {cls_error}")
+        return False
+    if bool_same:
+        _note(
+            f"review at {str_review_oid[:7]} still covers {str_head_oid[:7]}: the head only "
+            "merges the base, the PR's own patch is unchanged"
+        )
+    return bool_same
+
+
+def _note(str_message: str) -> None:
+    """Print a diagnostic on stderr, so ``--json`` keeps stdout to the one verdict document.
+
+    Parameters
+    ----------
+    str_message : str
+            The line to print.
+    """
+    print(str_message, file=sys.stderr)
+
+
+def review_carried_forward(
+    fn_fingerprint: Callable[[str], str] | None,
+    list_reviews: list[dict],
+    set_roster: set[str],
+    str_head_oid: str,
+) -> str:
+    """Return the commit of an earlier roster review that still covers the head, or ``""``.
+
+    The head is fingerprinted once, up front: if that fails, every comparison would fail the
+    same way, so the loop is skipped instead of repeating the failing call per reviewed commit.
+    Only the newest ``_INT_MAX_REVIEWED_COMMITS`` reviewed commits are tried.
+
+    Parameters
+    ----------
+    fn_fingerprint : Callable[[str], str] or None
+            Maps a commit oid to its patch fingerprint; ``None`` disables carry-forward.
+    list_reviews : list of dict
+            Submitted reviews.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
+    str_head_oid : str
+            The PR's head commit.
+
+    Returns
+    -------
+    str
+            The covering review's commit, or ``""`` when none has an equal fingerprint.
+    """
+    list_oids = reviewed_commits(list_reviews, set_roster) if fn_fingerprint else []
+    if not list_oids:
+        return ""
+    try:
+        str_head_digest = fn_fingerprint(str_head_oid)
+    except _TUPLE_FINGERPRINT_ERRORS as cls_error:
+        _note(f"carry-forward unavailable, the head patch cannot be read: {cls_error}")
+        return ""
+    for str_oid in list_oids[:_INT_MAX_REVIEWED_COMMITS]:
+        if review_covers_head(fn_fingerprint, str_oid, str_head_oid, str_head_digest):
+            return str_oid
+    return ""
 
 
 # Display budget for a quoted notice. ⚠️ It bounds what a HUMAN reads, never what a matcher
@@ -639,7 +947,8 @@ _RE_ANY_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 # so require the vendor's period or end-of-string right after it rather than trusting `\s` to
 # already be there.
 _RE_FILE_CAP = re.compile(
-    r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+(?:\.|$)", re.IGNORECASE
+    r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+(?:\.|$)",
+    re.IGNORECASE,
 )
 
 NOTICE_REVIEW_LIMITED = "REVIEW_LIMITED"
@@ -686,10 +995,12 @@ def classify_reviewer_notice(str_notice: str) -> str:
 # whole-minute unit would truncate the 37 seconds that made the #364 window wrong), while the
 # review quota declares whole minutes only. Seconds is the one unit that loses nothing either way.
 _RE_CHAT_WAIT = re.compile(
-    r"wait\s+\*{0,2}(\d+)\s+minutes?(?:\s+and\s+(\d+)\s+seconds?)?\*{0,2}", re.IGNORECASE
+    r"wait\s+\*{0,2}(\d+)\s+minutes?(?:\s+and\s+(\d+)\s+seconds?)?\*{0,2}",
+    re.IGNORECASE,
 )
 _RE_REVIEW_WAIT = re.compile(
-    r"next\s+included\s+review\s+will\s+be\s+available\s+in\s+(\d+)\s+minutes?", re.IGNORECASE
+    r"next\s+included\s+review\s+will\s+be\s+available\s+in\s+(\d+)\s+minutes?",
+    re.IGNORECASE,
 )
 
 
@@ -858,6 +1169,8 @@ def find_missing_review_problem(
     str_head_oid: str,
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
+    fn_fingerprint: Callable[[str], str] | None = None,
+    dict_carried: dict | None = None,
 ) -> str | None:
     """Return a problem when no declared reviewer ever reported on this PR's HEAD.
 
@@ -881,6 +1194,13 @@ def find_missing_review_problem(
             against, which is the vacuous pass this parameter exists to remove.
     list_notices : list of dict, optional
             The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
+    fn_fingerprint : Callable[[str], str], optional
+            Maps a commit oid to its patch fingerprint. When given, a review at an earlier
+            commit covers HEAD if the PR's own patch is unchanged (see
+            :func:`review_covers_head`). ``None`` keeps the strict pin to HEAD.
+    dict_carried : dict, optional
+            Out-parameter: receives ``{"from": <commit>}`` when a carried-forward review is what
+            satisfied the check, so the caller can show it in the verdict.
 
     Returns
     -------
@@ -906,6 +1226,13 @@ def find_missing_review_problem(
 
     if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
         # A CLEAN review is not a missing one — see the COMPLETION block above the function.
+        return None
+
+    # After the notice check, so a PR that already passes makes no compare call at all.
+    str_carried = review_carried_forward(fn_fingerprint, list_reviews, set_roster, str_head_oid)
+    if str_carried:
+        if dict_carried is not None:
+            dict_carried["from"] = str_carried
         return None
 
     # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
@@ -1014,6 +1341,313 @@ def find_thread_problems(
                 f"once the reply is posted{str_why} — {str_title}"
             )
     return list_problems
+
+
+# A review BODY carries findings the thread count cannot see (blueprintx#630, docs/faq.md).
+_STR_SEVERITY = r"critical|major|minor|blocker"
+# Nitpick and Trivial are deliberately absent: optional by definition, so they need no reply.
+# A marker counts only at the START of a line (after a list marker), as bold or a bracket, so
+# "a *minor* cleanup" and "(minor nits only)" in prose are not findings.
+_RE_BODY_SEVERITY = re.compile(
+    rf"🔴|🟠|🟡|\bseverity\s*:\s*\w"
+    rf"|^[^\w\n]*(?:\d+[.)]\s*)?(?:\*\*|\[)\s*(?:{_STR_SEVERITY})\b"
+    rf"|^\W*(?:{_STR_SEVERITY})\b\s*[:—-]",
+    re.IGNORECASE | re.MULTILINE,
+)
+# A count counts only as a statement of what the review found, not "Addressed 2 findings".
+_RE_BODY_COUNT = re.compile(
+    r"^[^\w\n]*(?:(?:found|posted|reported|with|has|have)\s+)?[1-9]\d*\s+findings?\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
+# A review declares itself by structure (docs/faq.md, "How the gate classifies"): a heading, a
+# bullet or a bold label that starts with "Review" or "Finding(s)". Ambiguity counts as a review.
+_RE_BODY_REVIEW_LINE = re.compile(
+    r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b"
+    r"(?!\s+(?:ladder|skipped|profile|details|status|in progress|completed))",
+    re.IGNORECASE | re.MULTILINE,
+)
+# Printed counts are authoritative, but each speaks for what it counts. CodeRabbit's header counts
+# INLINE comments, which are threads the thread gate already holds; only its body sections
+# (outside the diff, duplicates) live where no thread can see them. The ladder posts no threads,
+# so its count is the body's. The two counts that can CLEAR a body are anchored to a line start so
+# a quotation cannot fire them; a section marker can only ADD a finding, so it stays unanchored
+# (CodeRabbit nests it inside a `<summary>` tag).
+_RE_BODY_SECTION = re.compile(
+    r"\b(?:outside diff range|duplicate) comments(?:\s*\((\d+)\))?", re.IGNORECASE
+)
+_RE_ACTIONABLE = re.compile(
+    r"^[ \t*_#-]*actionable comments posted:?[\s*]*\d+", re.IGNORECASE | re.MULTILINE
+)
+_RE_LADDER_COUNT = re.compile(
+    r"^[ \t*_#-]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
+)
+_RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
+_RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
+_STR_CLEAN_LINE = (
+    r"^[^\w\n]*(?:(?:review|findings?|summary|result)\s*[:—–-]\s*)?"
+    r"(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
+    rf"|none(?:\s+found)?"
+    rf"|(?:{_STR_SEVERITY}|nitpick|severity)[^\w\n]*(?:none|n/?a|no)"
+    r"(?:\s+(?:found|issues?|findings?))?)[^\w\n]*$"
+)
+# A clean line must BE the line ("No major issues."), never a phrase inside a longer one
+# ("parse() has no known bugs on ASCII but crashes"), or it would mask a real finding.
+_RE_BODY_CLEAN_LINE = re.compile(_STR_CLEAN_LINE, re.I | re.M)
+_RE_BODY_CLEAN_SECTION = re.compile(
+    r"^#{1,6}\s*(?:findings|issues|problems|review)\b[^\n]*\n(?:[^\S\n]*\n)*" + _STR_CLEAN_LINE,
+    re.I | re.M,
+)
+_RES_BODY_FINDING = (
+    _RE_BODY_SEVERITY,
+    _RE_BODY_COUNT,
+    _RE_BODY_HEADING,
+    _RE_BODY_REVIEW_LINE,
+)
+
+
+# Quoted material is never the review's own structure: a fenced block or a "> " line can hold
+# another reviewer's header verbatim, and counting it would let one body clear its own findings.
+_RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*", re.M | re.S)
+
+
+# Count authority belongs to the AUTHOR, never to the body's shape: any body can print any header.
+# The roster carries no per-format data, so the two authors whose counts this gate trusts are
+# named here (docs/faq.md). Any other author's counts are ignored and its body is read by
+# structure alone, which fails closed.
+_SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
+_SET_LADDER_AUTHORS = frozenset({"guilhermegor-review-ladder"})
+
+
+def _declared_findings(str_body: str, str_login: str = "") -> list[str] | None:
+    """Return the findings a body's own printed counts declare, or ``None`` if it prints none.
+
+    A non-zero body section (outside the diff, duplicates) always counts: it can only add a
+    finding. The counts that can CLEAR a body speak only for their author: the ``Actionable``
+    header for CodeRabbit (its N findings are inline threads, which the thread check holds), the
+    ``N finding(s) across`` count for the ladder app and only with the attribution line. Both are
+    read with quoted lines and fenced blocks removed. Any other author gets no count authority.
+    """
+    list_sections = [
+        cls_section.group(0)
+        for cls_section in _RE_BODY_SECTION.finditer(str_body)
+        if cls_section.group(1) != "0"
+    ]
+    if list_sections:
+        return list_sections
+    str_author = normalise_login(str_login)
+    str_own = _RE_QUOTED.sub("", str_body)
+    if str_author in _SET_HEADER_AUTHORS and _RE_ACTIONABLE.search(str_own):
+        return []
+    cls_count = _RE_LADDER_COUNT.search(str_own)
+    is_ladder = str_author in _SET_LADDER_AUTHORS and _RE_LADDER_HEAD.search(str_body)
+    if cls_count is None or not is_ladder:
+        return None
+    return [cls_count.group(0).strip("* \t")] if int(cls_count.group(1)) else []
+
+
+def _ladder_prose_line(str_text: str) -> list[str]:
+    """Return the first prose line of an uncounted ladder review, which counts as a review."""
+    list_prose = [
+        str_line.strip()
+        for str_line in _RE_LADDER_META.sub("", str_text).splitlines()
+        if str_line.strip()
+    ]
+    return list_prose[:1]
+
+
+def _ladder_empty_findings(str_body: str) -> list[str]:
+    """Return a finding for a ladder review with no prose, unless it says it is clean.
+
+    An attribution line with nothing after it is a truncated or failed review, not a clean one,
+    so it fails closed; only an explicit clean line ("No findings.") clears it.
+    """
+    if _RE_BODY_CLEAN_LINE.search(str_body):
+        return []
+    return ["ladder review with no findings count and no clean statement"]
+
+
+def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list[str]:
+    """Return the lines of a review body that list findings; empty means a clean body.
+
+    Parameters
+    ----------
+    str_body : str or None
+            The submitted review's body.
+    str_login : str, optional
+            The author's login. Printed counts clear a body only for the author they speak
+            for (CodeRabbit's header, the ladder app's count); any other author is read by
+            structure alone.
+
+    Returns
+    -------
+    list of str
+            Each line carrying a severity marker, a non-zero finding count or a findings
+            heading. A line that only reports there are none ("No findings.", "Minor: none")
+            and a findings heading directly followed by one are dropped first.
+    """
+    list_declared = _declared_findings(str_body or "", str_login)
+    if list_declared is not None:
+        return list_declared
+    str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
+    list_lines = [
+        str_line.strip()
+        for str_line in str_text.splitlines()
+        if any(re_.search(str_line) for re_ in _RES_BODY_FINDING)
+    ]
+    if _RE_LADDER_HEAD.search(str_body or ""):
+        return list_lines or _ladder_prose_line(str_text) or _ladder_empty_findings(str_body or "")
+    return list_lines
+
+
+def review_body_has_findings(str_body: str | None) -> bool:
+    """Return whether a review body lists findings rather than reporting none.
+
+    Parameters
+    ----------
+    str_body : str or None
+            The submitted review's body.
+
+    Returns
+    -------
+    bool
+            ``True`` when :func:`review_body_finding_lines` finds at least one line.
+    """
+    return bool(review_body_finding_lines(str_body))
+
+
+def _answered_after(
+    list_notices: list[dict], set_roster: set[str], str_when: str, int_min_chars: int
+) -> bool:
+    """Return whether a human comment of at least ``int_min_chars`` postdates ``str_when``.
+
+    Bots never answer: GraphQL reports ``__typename`` ``Bot`` (and REST a ``[bot]`` suffix) for
+    GitGuardian, ``github-actions`` and the like, and one of those clearing findings unread is
+    the #630 failure again. A null author (a deleted "ghost" account) is not a known human
+    either, so it fails closed like a missing ``submittedAt``.
+    """
+    return bool(str_when) and any(
+        _is_human_answer(dict_notice, set_roster, int_min_chars)
+        and (dict_notice.get("createdAt") or "") > str_when
+        for dict_notice in list_notices
+    )
+
+
+# An answer declares itself by structure too: a LINE THAT OPENS with "Reply to review", "Answers
+# to the ladder review", "Re: review", "Verdicts/Judgment on ... review"; a "review <id>"
+# citation; "Addressed/Fixed in <sha>"; "Finding 1: ..."; or a "> quoted finding" followed by a
+# response. Any of these counts at any length. Anchored: "re-review" and "Not answered yet" are
+# not answers.
+_STR_REVIEW_NOUN = (
+    r"(?:the\s+|our\s+|my\s+)?(?:(?:ladder|fallback|claude|coderabbit|cli|rung)\s+)*review\b"
+)
+_RE_ANSWER_SHAPE = re.compile(
+    r"^[\s*_#-]*(?:re\s*:|(?:repl(?:y|ies)|answers?|responses?|verdicts?|judg(?:e)?ments?)"
+    rf"(?:\s+(?:to|on))?\s*:?)\s*{_STR_REVIEW_NOUN}"
+    r"|\b(?:addressed|fixed|resolved)\s+in\s+`?[0-9a-f]{7,40}\b"
+    r"|^[^\w\n]*finding\s+\d+\b"
+    r"|\breview\s+\d{6,}\b"
+    r"|^>[^\n]*\n(?:[^\S\n]*\n)*[^>\s]",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _is_human_answer(dict_notice: dict, set_roster: set[str], int_min_chars: int) -> bool:
+    """Return whether one comment is by a known human outside the roster and reads as an answer."""
+    dict_author = dict_notice.get("author") or {}
+    str_login = dict_author.get("login") or ""
+    str_body = (dict_notice.get("body") or "").strip()
+    return (
+        bool(str_login)
+        and normalise_login(str_login) not in set_roster
+        and dict_author.get("__typename", "User") == "User"
+        and not str_login.endswith(_BOT_SUFFIX)
+        and (len(str_body) >= int_min_chars or bool(_RE_ANSWER_SHAPE.search(str_body)))
+    )
+
+
+def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[dict]:
+    """Return the roster's own issue comments in review shape.
+
+    Some ladder rungs post their review as an issue comment, not a PR review. Only a comment that
+    declares itself one counts (the ladder attribution line or a CodeRabbit header): status and
+    failure notices ("Review ladder: all rungs failed"), walkthroughs and command replies are
+    not reviews, whatever their first word is.
+    """
+    return [
+        {
+            "author": dict_notice.get("author"),
+            "state": "COMMENTED",
+            "body": dict_notice.get("body"),
+            "submittedAt": dict_notice.get("createdAt"),
+        }
+        for dict_notice in list_notices
+        if normalise_login((dict_notice.get("author") or {}).get("login") or "") in set_roster
+        and any(
+            re_.search(dict_notice.get("body") or "")
+            for re_ in (_RE_LADDER_HEAD, _RE_ACTIONABLE, _RE_BODY_SECTION)
+        )
+    ]
+
+
+def find_review_body_problems(
+    list_reviews: list[dict],
+    list_notices: list[dict],
+    set_roster: set[str],
+    int_min_chars: int = _MIN_REPLY_CHARS,
+) -> list[str]:
+    """Return one problem per roster review whose body lists findings nobody answered.
+
+    Every submitted review counts, not only the head's: inline threads persist across pushes,
+    so a body must too, or a trivial push plus a clean re-review would clear it. One reply
+    posted after the latest findings body therefore answers all earlier ones; a reply must
+    postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
+    maintainer's explicit answer. A roster issue comment that is shaped like a review counts as
+    one, since some ladder rungs post that way (docs/faq.md, "How the gate classifies").
+
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews with ``author``, ``state``, ``body`` and ``submittedAt``.
+    list_notices : list of dict
+            The PR's issue comments, where the author's reply to a review body lands.
+    set_roster : set of str
+            Logins that count as reviewers rather than as answers.
+    int_min_chars : int, optional
+            Minimum length for a reply to count, the same bar a thread reply meets.
+
+    Returns
+    -------
+    list of str
+            Human-readable problems; empty when every findings body was answered after it was
+            submitted. A missing ``submittedAt`` fails closed.
+    """
+    set_roster = {normalise_login(str_login) for str_login in set_roster}
+    list_hits = [
+        (
+            dict_review,
+            review_body_finding_lines(
+                dict_review.get("body"),
+                (dict_review.get("author") or {}).get("login") or "",
+            ),
+        )
+        for dict_review in list_reviews + _notices_as_reviews(list_notices, set_roster)
+        if normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+        and dict_review.get("state") != "DISMISSED"
+    ]
+    return [
+        f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
+        f"and nobody outside the reviewer roster (and no bot) replied after it — "
+        f"{list_lines[0][:90]}"
+        for dict_review, list_lines in list_hits
+        if list_lines
+        and not _answered_after(
+            list_notices,
+            set_roster,
+            dict_review.get("submittedAt") or "",
+            int_min_chars,
+        )
+    ]
 
 
 def report_verdict(
@@ -1132,23 +1766,136 @@ def _print_missing_review(
     return 1
 
 
-def _print_thread_verdict(
-    bool_json: bool, list_problems: list[str], int_threads: int, bool_require_resolved: bool
+def _print_review_body_problems(
+    bool_json: bool,
+    list_problems: list[str],
+    list_thread_problems: list[str] | None = None,
 ) -> int:
-    """Print the thread verdict in the requested representation and return the exit code."""
+    """Print the unanswered-review-body failure, with any thread failures too; return ``1``."""
+    list_thread_problems = list_thread_problems or []
     if bool_json:
         print(
             json.dumps(
                 {
-                    "status": "fail" if list_problems else "pass",
-                    "threads_examined": int_threads,
-                    "require_resolved": bool_require_resolved,
+                    "status": "fail",
+                    "reason": "unanswered_review_body",
                     "problems": list_problems,
+                    "thread_problems": list_thread_problems,
                 }
             )
         )
+        return 1
+    for str_problem in list_problems + list_thread_problems:
+        print(f"❌ {str_problem}")
+    print(
+        f"\nReply (at least {_MIN_REPLY_CHARS} characters) on the PR after the review, saying "
+        "what changed and why, then re-run this check. A review body has no thread to resolve, "
+        "so the reply is the whole answer (blueprintx#630)."
+    )
+    return 1
+
+
+def _print_thread_verdict(
+    bool_json: bool,
+    list_problems: list[str],
+    int_threads: int,
+    bool_require_resolved: bool,
+    str_carried: str = "",
+) -> int:
+    """Print the thread verdict in the requested representation and return the exit code.
+
+    A carried-forward review is shown in the verdict itself: a ``carried_forward_from`` field
+    under ``--json`` (stdout stays one document), one extra line otherwise.
+    """
+    if bool_json:
+        dict_verdict = {
+            "status": "fail" if list_problems else "pass",
+            "threads_examined": int_threads,
+            "require_resolved": bool_require_resolved,
+            "problems": list_problems,
+        }
+        if str_carried:
+            dict_verdict["carried_forward_from"] = str_carried
+        print(json.dumps(dict_verdict))
         return 1 if list_problems else 0
+    if str_carried:
+        print(f"Review carried forward from {str_carried[:7]} (the PR's own patch is unchanged).")
     return report_verdict(list_problems, int_threads, bool_require_resolved)
+
+
+def _head_committed_date(dict_pr: dict) -> str:
+    """Return the head commit's ``committedDate``, or ``""`` when the query did not carry it."""
+    dict_commit = ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit")) or {}
+    return dict_commit.get("committedDate") or ""
+
+
+def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[str]) -> list[str]:
+    """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
+    return find_review_body_problems(
+        dict_pr.get("reviews", {}).get("nodes", []),
+        list_notices,
+        set_roster,
+    )
+
+
+def _compare_fingerprint(
+    dict_pr: dict, str_repo_full: str, int_number: int
+) -> Callable[[str], str]:
+    """Bind the compare-API fingerprint to this PR's repository and base branch.
+
+    A retargeted PR gets no fingerprint at all: the compare is measured against today's base,
+    which is not the base the review was written against.
+
+    Parameters
+    ----------
+    dict_pr : dict
+            The ``pullRequest`` node, read for ``baseRefOid``, pinned in the same query as
+            ``headRefOid``.
+    str_repo_full : str
+            ``owner/name``.
+    int_number : int
+            Pull-request number, for the retarget check.
+
+    Returns
+    -------
+    Callable[[str], str]
+            Maps a commit oid to its patch fingerprint; raises ``ValueError`` when retargeted.
+    """
+    str_owner, _, str_repo = str_repo_full.partition("/")
+    str_base = dict_pr.get("baseRefOid") or ""
+
+    # Cached: one timeline read however many commits are compared (a failure is not cached,
+    # and the head fingerprint, computed first, fails before any other commit is tried).
+    fn_retargeted = functools.cache(
+        functools.partial(fetch_retargeted, str_owner, str_repo, int_number)
+    )
+
+    def fn_fingerprint(str_oid: str) -> str:
+        if fn_retargeted():
+            raise ValueError("the PR's base branch was changed: a review is not carried across")
+        return fetch_patch_fingerprint(str_owner, str_repo, str_base, str_oid)
+
+    return fn_fingerprint
+
+
+def _missing_review(
+    dict_pr: dict,
+    str_repo_full: str,
+    int_number: int,
+    dict_roster: dict,
+    dict_carried: dict,
+) -> str | None:
+    """Return :func:`find_missing_review_problem` for one fetched ``pullRequest`` node."""
+    return find_missing_review_problem(
+        dict_pr.get("reviews", {}).get("nodes", []),
+        reviewer_logins(dict_roster),
+        (dict_pr.get("author") or {}).get("login") or "",
+        str_head_oid=dict_pr.get("headRefOid") or "",
+        list_notices=dict_pr.get("comments", {}).get("nodes", []),
+        str_head_date=_head_committed_date(dict_pr),
+        fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full, int_number),
+        dict_carried=dict_carried,
+    )
 
 
 def main(list_argv: list[str] | None = None) -> int:
@@ -1171,8 +1918,7 @@ def main(list_argv: list[str] | None = None) -> int:
     if not str_repo_full or not str_number.isdigit():
         return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
 
-    path_root = pathlib.Path.cwd()
-    dict_roster = load_roster(path_root)
+    dict_roster = load_roster(pathlib.Path.cwd())
     if not dict_roster:
         return _print_skip(
             bool_json, f"No {_ROSTER_FILE} — the review-thread gate is not adopted here"
@@ -1196,21 +1942,14 @@ def main(list_argv: list[str] | None = None) -> int:
     # merging with unfinished review conversations could not stop one merging with NO REVIEW
     # AT ALL, the only case where nothing else is watching. Measured on #204: 29 of 30 checks
     # passed and it merged with the reviewer having posted only its refusal notice.
-    str_missing = find_missing_review_problem(
-        dict_pr.get("reviews", {}).get("nodes", []),
-        set_reviewers,
-        (dict_pr.get("author") or {}).get("login") or "",
-        str_head_oid=dict_pr.get("headRefOid") or "",
-        list_notices=list_notices,
-        str_head_date=(
-            ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit") or {}).get(
-                "committedDate"
-            )
-            or ""
-        ),
+    dict_carried: dict = {}
+    str_missing = _missing_review(
+        dict_pr, str_repo_full, int(str_number), dict_roster, dict_carried
     )
     if str_missing:
         return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
+
+    list_body_problems = _unanswered_bodies(dict_pr, list_notices, set_roster)
 
     # Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
     # See the SUPERSEDED block above `main` for why CI stopped passing 0.
@@ -1218,9 +1957,17 @@ def main(list_argv: list[str] | None = None) -> int:
     list_problems = find_thread_problems(
         list_threads, set_roster, bool_require_resolved=bool_require_resolved
     )
+    # Both failures at once: fixing the body reply only to meet the open threads next run is a
+    # second round trip the first run could have saved.
+    if list_body_problems:
+        return _print_review_body_problems(bool_json, list_body_problems, list_problems)
 
     return _print_thread_verdict(
-        bool_json, list_problems, len(list_threads), bool_require_resolved
+        bool_json,
+        list_problems,
+        len(list_threads),
+        bool_require_resolved,
+        dict_carried.get("from", ""),
     )
 
 

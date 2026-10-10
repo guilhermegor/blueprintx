@@ -57,7 +57,68 @@ root file, where the change would reach one tier and silently miss the rest.
 Branch off `main` using the CONTRIBUTING prefix policy (`feat/…`, `fix/…`, …), keep `make lint`
 green, and fill out the PR template. Direct commits to `main` are blocked by pre-commit.
 
+## Blocked work
+
+Work that cannot start because an upstream is unfinished is marked on the issue and on the
+kanban board, so it is obvious when to stop here and go finish the upstream.
+
+**Convention.** An issue that cannot start carries the `state:blocked` label and a
+`**Blocked by:**` line at the start of a body line, naming each blocker as `repo#N`, or as
+`decision: <why>` when the blocker is a choice nobody has made yet. The same convention is used in
+`greenfield` (`project-seed.md`), so every repo reads it the same way. The
+[issue template](https://github.com/guilhermegor/blueprintx/blob/main/.github/ISSUE_TEMPLATE/feature_or_fix.md)
+carries the line plus the machine-readable `issue-template-guard:` directive that makes a
+`state:blocked` issue without it get rejected (guard: `issue_template_guard.sh` in `dotfiles-dev`,
+`ai_clients/claude/hooks/`).
+
+**Why a convention and not only GitHub's native `blocked_by`.** The native relationship is
+same-repo only, so a blocker in another repository cannot use it. Where it does apply, nothing
+propagates it: GitHub resolves the dependency when the blocker closes, but the board Status, the
+label and the `Blocked by` field sit still until the reconciler (`roadmap_unblock.sh` in
+`dotfiles-linux-dev`) re-reads them. Where the blocker is in the same repository, mirror it as a native
+relationship too.
+
+**Rules.**
+
+- Name the specific upstream issue whenever one exists. Link the terminal issue
+  ([#601](https://github.com/guilhermegor/blueprintx/issues/601)) only when the blocker really
+  is "not 1.0 yet" — the reconciler clears on the *named* issue, so pointing everything at that
+  issue holds work that is in fact ready.
+- A `decision:` blocker is never auto-cleared; only a person removes it. That is deliberate.
+- A board Status alone is not durable: the reconciler clears any item it reads as blocked by
+  nothing. Each blocked item needs the label plus the `**Blocked by:**` body line (the issue
+  template guard rejects a `state:blocked` issue without it). A native `blocked_by` entry is an
+  additional mirror where supported, never a replacement for the body line.
+
+**Board.** The kanban board's `Status` options read
+`Blocked | Backlog | Ready | In progress | In review | Done` (`Blocked` first, as on the boards
+this convention has been applied to), with a `Blocked by` text field.
+
+!!! warning "Pin every option `id` when editing the Status field"
+    `updateProjectV2Field` replaces the entire option set, and an option sent without its
+    existing `id` is minted as a new one — every item's stored value then dangles and reads
+    empty. Adding `Blocked` to another board this way wiped all 271 item Statuses in one call.
+    Get the item count first (`gh project view <n> --owner <o> --format json`, field
+    `items.totalCount`), then snapshot with
+    `gh project item-list <n> --owner <o> --limit <count+1> --format json` and check that the
+    snapshot length equals the count. Send every option with its existing `id` (only the new
+    `Blocked` has none), pass the payload as a `{query, variables}` body via
+    `gh api graphql --input <file>`, then diff per item id against the snapshot. If the diff
+    shows any wiped Status, stop and restore each one with `updateProjectV2ItemFieldValue`.
+    Its `singleSelectOptionId` must be an option that exists now, and a wipe means the old ids
+    were replaced, so map each item's saved Status label to the field's current option id
+    (re-read the field's options first). Then re-diff until the diff is empty.
+
 ## Releasing
 
 The version is the git tag — cut a release from the **Release** GitHub Action (enter the
 version once). See the [FAQ](faq.md#how-is-blueprintx-itself-versioned).
+
+### Snap Store credential
+
+The Snap job needs the `SNAPCRAFT_STORE_CREDENTIALS` repository secret. When it is empty the
+job **fails** on its first step with `NOT PUBLISHED: SNAPCRAFT_STORE_CREDENTIALS not set`
+(an `::error::` annotation plus a job-summary line), instead of reporting green with nothing
+published. Failing is safe for the other channels: every publish job in `release.yml` depends
+only on `tag` and none depends on `snap`, so Homebrew, Chocolatey and apt still publish.
+The red Snap job is expected until the owner adds the secret.
