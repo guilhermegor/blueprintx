@@ -1922,7 +1922,7 @@ def test_quoted_actionable_header_mid_line_does_not_clear_a_real_finding() -> No
 
 
 def test_actionable_header_at_a_line_start_still_clears_inline_findings() -> None:
-    """The real CodeRabbit shape, `**Actionable comments posted: N**` opening a line, still wins."""
+    """The real CodeRabbit shape, the bold header opening a line, still wins."""
     str_body = _LADDER_CLAUDE + "**Actionable comments posted: 0**\n\n- **Major** x"
     assert _body_problems([_body_review(str_body)], []) == []
 
