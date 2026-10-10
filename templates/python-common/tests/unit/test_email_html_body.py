@@ -32,9 +32,9 @@ def test_to_html_body_escapes_plain_text_markup(str_fragment: str, bool_present:
     Parameters
     ----------
     str_fragment : str
-            A fragment the escaped body must, or must not, contain.
+        A fragment the escaped body must, or must not, contain.
     bool_present : bool
-            Which of the two.
+        Which of the two.
     """
     str_result = to_html_body("report <final>.xlsx & <script>alert(1)</script>")
 

@@ -71,13 +71,13 @@ def _hatch_reason(str_line: str) -> str | None:
     Parameters
     ----------
     str_line : str
-            The source line to inspect.
+        The source line to inspect.
 
     Returns
     -------
     str or None
-            The written reason, or ``None`` when the marker is absent OR the reason after it is
-            empty/whitespace-only — a bare marker is not a decision anyone made on purpose.
+        The written reason, or ``None`` when the marker is absent OR the reason after it is
+        empty/whitespace-only — a bare marker is not a decision anyone made on purpose.
     """
     if _ALLOW_MARKER not in str_line:
         return None
@@ -90,14 +90,14 @@ def _line_allowed(list_lines: list[str], int_line: int) -> bool:
     Parameters
     ----------
     list_lines : list of str
-            The source file, split into lines.
+        The source file, split into lines.
     int_line : int
-            The 1-indexed line number to check.
+        The 1-indexed line number to check.
 
     Returns
     -------
     bool
-            ``True`` only when the line exists and carries a non-empty reason.
+        ``True`` only when the line exists and carries a non-empty reason.
     """
     if not (1 <= int_line <= len(list_lines)):
         return False
@@ -110,16 +110,16 @@ def _sqlalchemy_usage(cls_tree: ast.Module) -> tuple[bool, set[str], set[str]]:
     Parameters
     ----------
     cls_tree : ast.Module
-            The parsed module.
+        The parsed module.
 
     Returns
     -------
     tuple of (bool, set of str, set of str)
-            Whether any ``sqlalchemy`` import is present; the local names bound to
-            ``sqlalchemy``'s ``delete``/``update`` Core builder functions (honouring ``as``
-            aliases), e.g. ``{"delete", "update"}`` for a plain ``from sqlalchemy import
-            delete, update``; and the local names bound to the ``sqlalchemy`` MODULE itself,
-            e.g. ``{"sa"}`` for ``import sqlalchemy as sa``.
+        Whether any ``sqlalchemy`` import is present; the local names bound to
+        ``sqlalchemy``'s ``delete``/``update`` Core builder functions (honouring ``as``
+        aliases), e.g. ``{"delete", "update"}`` for a plain ``from sqlalchemy import
+        delete, update``; and the local names bound to the ``sqlalchemy`` MODULE itself,
+        e.g. ``{"sa"}`` for ``import sqlalchemy as sa``.
     """
     bool_uses_sqlalchemy = False
     set_core_aliases: set[str] = set()
@@ -154,12 +154,12 @@ def _parent_map(cls_tree: ast.AST) -> dict[int, ast.AST]:
     Parameters
     ----------
     cls_tree : ast.AST
-            The parsed module.
+        The parsed module.
 
     Returns
     -------
     dict of int to ast.AST
-            Parent lookup keyed by the child node's ``id()``.
+        Parent lookup keyed by the child node's ``id()``.
     """
     dict_parents: dict[int, ast.AST] = {}
     for cls_node in ast.walk(cls_tree):
@@ -177,12 +177,12 @@ def _downward_chain_names(cls_call: ast.Call) -> list[str]:
     Parameters
     ----------
     cls_call : ast.Call
-            The call to start from.
+        The call to start from.
 
     Returns
     -------
     list of str
-            Names encountered, outer to inner.
+        Names encountered, outer to inner.
     """
     list_names: list[str] = []
     cls_node: ast.expr = cls_call
@@ -207,14 +207,14 @@ def _upward_chain_names(cls_call: ast.Call, dict_parents: dict[int, ast.AST]) ->
     Parameters
     ----------
     cls_call : ast.Call
-            The call to start from.
+        The call to start from.
     dict_parents : dict of int to ast.AST
-            Parent lookup from :func:`_parent_map`.
+        Parent lookup from :func:`_parent_map`.
 
     Returns
     -------
     list of str
-            Method names chained on top of ``cls_call``, innermost first.
+        Method names chained on top of ``cls_call``, innermost first.
     """
     list_names: list[str] = []
     cls_current: ast.AST = cls_call
@@ -236,16 +236,16 @@ def _whereless_message(path_file: pathlib.Path, int_line: int, str_verb: str) ->
     Parameters
     ----------
     path_file : pathlib.Path
-            The offending file.
+        The offending file.
     int_line : int
-            The line of the mutation call.
+        The line of the mutation call.
     str_verb : str
-            ``"delete"`` or ``"update"``.
+        ``"delete"`` or ``"update"``.
 
     Returns
     -------
     str
-            A human-readable finding.
+        A human-readable finding.
     """
     return (
         f"{path_file}:{int_line}: {str_verb}(...) has no .where()/.filter() — a WHERE-less "
@@ -264,19 +264,19 @@ def _mutation_verb(
     Parameters
     ----------
     cls_call : ast.Call
-            The call to classify.
+        The call to classify.
     set_core_aliases : set of str
-            Local names bound to ``sqlalchemy``'s bare ``delete``/``update`` builders.
+        Local names bound to ``sqlalchemy``'s bare ``delete``/``update`` builders.
     set_module_aliases : set of str
-            Local names bound to the ``sqlalchemy`` module itself, e.g. ``{"sa"}``.
+        Local names bound to the ``sqlalchemy`` module itself, e.g. ``{"sa"}``.
 
     Returns
     -------
     tuple of (str or None, bool)
-            ``(None, False)`` when this call is not a mutation at all. Otherwise the verb
-            (``"delete"``/``"update"``), and whether it is the attribute (``.delete()``/
-            ``.update()``) form — which needs a ``.query(`` anchor elsewhere in its chain to be
-            treated as SQLAlchemy at all, rather than a dict's own ``.update()``.
+        ``(None, False)`` when this call is not a mutation at all. Otherwise the verb
+        (``"delete"``/``"update"``), and whether it is the attribute (``.delete()``/
+        ``.update()``) form — which needs a ``.query(`` anchor elsewhere in its chain to be
+        treated as SQLAlchemy at all, rather than a dict's own ``.update()``.
     """
     if isinstance(cls_call.func, ast.Name) and cls_call.func.id in set_core_aliases:
         return cls_call.func.id, False
@@ -301,16 +301,16 @@ def _whereless_mutation_problems(
     Parameters
     ----------
     cls_tree : ast.Module
-            The parsed module.
+        The parsed module.
     path_file : pathlib.Path
-            The module's path, for the message.
+        The module's path, for the message.
     list_lines : list of str
-            The source, split into lines, for the escape-hatch check.
+        The source, split into lines, for the escape-hatch check.
 
     Returns
     -------
     list of str
-            Human-readable findings; empty when the file complies.
+        Human-readable findings; empty when the file complies.
     """
     bool_uses_sqlalchemy, set_core_aliases, set_module_aliases = _sqlalchemy_usage(cls_tree)
     if not bool_uses_sqlalchemy:
@@ -351,14 +351,14 @@ def _nolock_message(path_file: pathlib.Path, int_line: int) -> str:
     Parameters
     ----------
     path_file : pathlib.Path
-            The offending file.
+        The offending file.
     int_line : int
-            The line carrying the hint.
+        The line carrying the hint.
 
     Returns
     -------
     str
-            A human-readable finding.
+        A human-readable finding.
     """
     return (
         f"{path_file}:{int_line}: WITH (NOLOCK) reads uncommitted data — dirty reads from "
@@ -377,16 +377,16 @@ def _nolock_problems_in_python(
     Parameters
     ----------
     cls_tree : ast.Module
-            The parsed module.
+        The parsed module.
     path_file : pathlib.Path
-            The module's path, for the message.
+        The module's path, for the message.
     list_lines : list of str
-            The source, split into lines, for the escape-hatch check.
+        The source, split into lines, for the escape-hatch check.
 
     Returns
     -------
     list of str
-            Human-readable findings; empty when the file complies.
+        Human-readable findings; empty when the file complies.
     """
     # ⚠️ Per MATCH, never per constant. `search()` returns ONE boolean for the whole literal
     # and `cls_node.lineno` is where the literal OPENS — so a hatch on the first line
@@ -417,12 +417,12 @@ def _nolock_problems_in_sql(path_file: pathlib.Path) -> list[str]:
     Parameters
     ----------
     path_file : pathlib.Path
-            The ``.sql`` file to scan.
+        The ``.sql`` file to scan.
 
     Returns
     -------
     list of str
-            Human-readable findings; empty when the file complies.
+        Human-readable findings; empty when the file complies.
     """
     # ⚠️ Searched as ONE text stream, never line by line. `_RE_NOLOCK` already tolerates
     # whitespace between its tokens, and in SQL that whitespace is routinely a NEWLINE
@@ -447,12 +447,12 @@ def check_python_file(path_file: pathlib.Path) -> list[str]:
     Parameters
     ----------
     path_file : pathlib.Path
-            The module to check.
+        The module to check.
 
     Returns
     -------
     list of str
-            Human-readable findings; empty when the file complies.
+        Human-readable findings; empty when the file complies.
     """
     str_source = path_file.read_text(encoding="utf-8")
     try:
@@ -472,7 +472,7 @@ def _discovered_files() -> tuple[list[pathlib.Path], list[pathlib.Path]]:
     Returns
     -------
     tuple of (list of pathlib.Path, list of pathlib.Path)
-            ``(list_py, list_sql)``, both sorted; empty when ``src/`` has no such files.
+        ``(list_py, list_sql)``, both sorted; empty when ``src/`` has no such files.
     """
     path_src = pathlib.Path(_SRC_ROOT)
     list_py = sorted(p for p in path_src.rglob("*.py") if "__pycache__" not in p.parts)
@@ -486,7 +486,7 @@ def main() -> int:
     Returns
     -------
     int
-            ``0`` when the tree complies (or ``src/`` does not exist), ``1`` otherwise.
+        ``0`` when the tree complies (or ``src/`` does not exist), ``1`` otherwise.
     """
     path_src = pathlib.Path(_SRC_ROOT)
     if not path_src.is_dir():

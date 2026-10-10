@@ -60,19 +60,19 @@ class _StrictLoader(yaml.SafeLoader if yaml is not None else object):  # type: i
         Parameters
         ----------
         node : object
-                The YAML mapping node.
+            The YAML mapping node.
         deep : bool, optional
-                Passed through to the base loader.
+            Passed through to the base loader.
 
         Returns
         -------
         dict
-                The constructed mapping.
+            The constructed mapping.
 
         Raises
         ------
         ValueError
-                When a key appears more than once in the same mapping.
+            When a key appears more than once in the same mapping.
         """
         list_keys = [self.construct_object(cls_key, deep=deep) for cls_key, _ in node.value]
         set_dupes = {str_key for str_key in list_keys if list_keys.count(str_key) > 1}
@@ -90,12 +90,12 @@ def load_policy(path_root: pathlib.Path) -> dict | None:
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root holding ``.layer-policy.yaml``.
+        The project root holding ``.layer-policy.yaml``.
 
     Returns
     -------
     dict or None
-            The parsed policy, or ``None`` when the file is absent or empty.
+        The parsed policy, or ``None`` when the file is absent or empty.
     """
     path_policy = path_root / _POLICY_FILE
     if yaml is None or not path_policy.is_file():
@@ -122,14 +122,14 @@ def first_party_roots(path_src: pathlib.Path, dict_policy: dict) -> set[str]:
     Parameters
     ----------
     path_src : pathlib.Path
-            The ``src/`` directory.
+        The ``src/`` directory.
     dict_policy : dict
-            The parsed policy, read for ``first_party_extra``.
+        The parsed policy, read for ``first_party_extra``.
 
     Returns
     -------
     set of str
-            Directory names under ``src/``, ``src`` itself, and any declared extras.
+        Directory names under ``src/``, ``src`` itself, and any declared extras.
     """
     set_scanned = {p.name for p in path_src.iterdir() if p.is_dir()} | {_SRC_ROOT}
     return set_scanned | set(dict_policy.get("first_party_extra") or [])
@@ -144,12 +144,12 @@ def annotation_node_ids(cls_tree: ast.Module) -> set[int]:
     Parameters
     ----------
     cls_tree : ast.Module
-            The parsed module.
+        The parsed module.
 
     Returns
     -------
     set of int
-            ``id()`` of each node reachable from an annotation or a TYPE_CHECKING block.
+        ``id()`` of each node reachable from an annotation or a TYPE_CHECKING block.
     """
     set_ids: set[int] = set()
 
@@ -179,12 +179,12 @@ def _is_type_checking_test(cls_test: ast.expr) -> bool:
     Parameters
     ----------
     cls_test : ast.expr
-            The ``if`` statement's test expression.
+        The ``if`` statement's test expression.
 
     Returns
     -------
     bool
-            ``True`` only for bare ``TYPE_CHECKING`` or ``<module>.TYPE_CHECKING``.
+        ``True`` only for bare ``TYPE_CHECKING`` or ``<module>.TYPE_CHECKING``.
     """
     if isinstance(cls_test, ast.Name):
         return cls_test.id == "TYPE_CHECKING"
@@ -197,12 +197,12 @@ def imported_names(cls_node: ast.Import | ast.ImportFrom) -> list[tuple[str, str
     Parameters
     ----------
     cls_node : ast.Import or ast.ImportFrom
-            The import statement.
+        The import statement.
 
     Returns
     -------
     list of tuple of (str, str)
-            One entry per bound name; the alias is what the module body refers to.
+        One entry per bound name; the alias is what the module body refers to.
     """
     list_out: list[tuple[str, str]] = []
     if isinstance(cls_node, ast.Import):
@@ -234,14 +234,14 @@ def resolve_layer(tuple_rel: tuple, dict_policy: dict) -> str:
     Parameters
     ----------
     tuple_rel : tuple of str
-            The file's path components below the source root, filename last.
+        The file's path components below the source root, filename last.
     dict_policy : dict
-            The parsed policy.
+        The parsed policy.
 
     Returns
     -------
     str
-            The policy key to apply.
+        The policy key to apply.
     """
     str_broad = tuple_rel[0] if len(tuple_rel) > 1 else _ROOT_LAYER
     tuple_dirs = tuple_rel[:-1]
@@ -274,14 +274,14 @@ def resolve_layer_policy(dict_policy: dict, str_layer: str) -> tuple[dict, dict]
     Parameters
     ----------
     dict_policy : dict
-            The parsed ``.layer-policy.yaml``.
+        The parsed ``.layer-policy.yaml``.
     str_layer : str
-            The layer being checked.
+        The layer being checked.
 
     Returns
     -------
     tuple of dict
-            ``(dict_allow, dict_annotation_only)`` for this layer.
+        ``(dict_allow, dict_annotation_only)`` for this layer.
     """
     dict_layer = (dict_policy.get("layers", {}) or {}).get(str_layer) or {}
     dict_annotation_only = {
@@ -297,13 +297,13 @@ def function_line_spans(cls_tree: ast.AST) -> list:
     Parameters
     ----------
     cls_tree : ast.AST
-            The parsed module.
+        The parsed module.
 
     Returns
     -------
     list of tuple
-            One ``(int_first, int_last)`` pair per function, used only to phrase the message —
-            an import deferred into a function is judged exactly like a top-level one.
+        One ``(int_first, int_last)`` pair per function, used only to phrase the message —
+        an import deferred into a function is judged exactly like a top-level one.
     """
     return [
         (cls_n.lineno, max(getattr(c, "lineno", cls_n.lineno) for c in ast.walk(cls_n)))
@@ -318,16 +318,16 @@ def _star_import_problem(path_file: pathlib.Path, int_line: int, str_root: str) 
     Parameters
     ----------
     path_file : pathlib.Path
-            The offending module.
+        The offending module.
     int_line : int
-            The import's line number.
+        The import's line number.
     str_root : str
-            The vendor's top-level module name.
+        The vendor's top-level module name.
 
     Returns
     -------
     str
-            A message naming why the star form cannot be annotation-only.
+        A message naming why the star form cannot be annotation-only.
     """
     return (
         f"{path_file}:{int_line}: 'from {str_root} import *' cannot be annotation-only — the "
@@ -349,23 +349,23 @@ def disallowed_import_problems(
     Parameters
     ----------
     cls_tree : ast.AST
-            The parsed module.
+        The parsed module.
     path_file : pathlib.Path
-            The module being checked, for the message.
+        The module being checked, for the message.
     str_layer : str
-            The layer the file belongs to.
+        The layer the file belongs to.
     dict_allow : dict
-            Vendors this layer may import outright.
+        Vendors this layer may import outright.
     dict_annotation_only : dict
-            Vendors this layer may name in annotations only.
+        Vendors this layer may name in annotations only.
     set_first_party : set of str
-            Top-level package names that belong to this project.
+        Top-level package names that belong to this project.
 
     Returns
     -------
     tuple
-            ``(list_problems, dict_annotation_aliases)`` — the findings, and the local names
-            bound to annotation-only vendors, for the second pass to police.
+        ``(list_problems, dict_annotation_aliases)`` — the findings, and the local names
+        bound to annotation-only vendors, for the second pass to police.
     """
     list_functions = function_line_spans(cls_tree)
     list_problems: list[str] = []
@@ -426,20 +426,20 @@ def annotation_only_misuse_problems(
     Parameters
     ----------
     cls_tree : ast.AST
-            The parsed module.
+        The parsed module.
     path_file : pathlib.Path
-            The module being checked, for the message.
+        The module being checked, for the message.
     str_layer : str
-            The layer the file belongs to.
+        The layer the file belongs to.
     dict_annotation_aliases : dict
-            Local name → vendor root, for vendors restricted to annotations.
+        Local name → vendor root, for vendors restricted to annotations.
     dict_annotation_only : dict
-            Vendor root → the written reason, quoted back in the message.
+        Vendor root → the written reason, quoted back in the message.
 
     Returns
     -------
     list of str
-            Human-readable problems; empty when every use is an annotation.
+        Human-readable problems; empty when every use is an annotation.
     """
     set_annotation_ids = annotation_node_ids(cls_tree)
     list_problems: list[str] = []
@@ -470,21 +470,21 @@ def find_file_problems(
     Parameters
     ----------
     path_file : pathlib.Path
-            The module to check.
+        The module to check.
     str_layer : str
-            The layer the file belongs to (its first path component under ``src/``).
+        The layer the file belongs to (its first path component under ``src/``).
     dict_policy : dict
-            The parsed ``.layer-policy.yaml``.
+        The parsed ``.layer-policy.yaml``.
     set_first_party : set of str
-            Top-level package names that belong to this project.
+        Top-level package names that belong to this project.
     tuple_pkg_parts : tuple of str, optional
-            The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
-            to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
+        The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
+        to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
 
     Returns
     -------
     list of str
-            Human-readable problems; empty when the file complies.
+        Human-readable problems; empty when the file complies.
     """
     try:
         cls_tree = ast.parse(path_file.read_text(encoding="utf-8"))
@@ -519,20 +519,20 @@ def relative_import_target(tuple_pkg_parts: tuple, cls_node: ast.ImportFrom) -> 
     Parameters
     ----------
     tuple_pkg_parts : tuple of str
-            The file's package path below the layer root, e.g. ``("utils", "sub")``. Empty when
-            the caller cannot supply it, in which case no relative import is resolved.
+        The file's package path below the layer root, e.g. ``("utils", "sub")``. Empty when
+        the caller cannot supply it, in which case no relative import is resolved.
     cls_node : ast.ImportFrom
-            The relative import statement (``level`` >= 1).
+        The relative import statement (``level`` >= 1).
 
     Returns
     -------
     str or None
-            The target's FULL dotted path, or ``None`` when it cannot be resolved.
+        The target's FULL dotted path, or ``None`` when it cannot be resolved.
 
-            ⚠️ Dotted, not just the first component. ``_matching_deny_key`` accepts a dotted key
-            (``chassis.db_schema``), and returning only ``chassis`` made every such rule miss —
-            so the ABSOLUTE form of an import was rejected while its relative twin passed, which
-            is worse than not having the rule at all.
+        ⚠️ Dotted, not just the first component. ``_matching_deny_key`` accepts a dotted key
+        (``chassis.db_schema``), and returning only ``chassis`` made every such rule miss —
+        so the ABSOLUTE form of an import was rejected while its relative twin passed, which
+        is worse than not having the rule at all.
     """
     if not tuple_pkg_parts:
         return None
@@ -571,21 +571,21 @@ def direction_problems(
     Parameters
     ----------
     cls_tree : ast.Module
-            The parsed module.
+        The parsed module.
     path_file : pathlib.Path
-            The module's path, for the message.
+        The module's path, for the message.
     str_layer : str
-            The layer the file belongs to.
+        The layer the file belongs to.
     dict_policy : dict
-            The parsed ``.layer-policy.yaml``.
+        The parsed ``.layer-policy.yaml``.
     tuple_pkg_parts : tuple of str, optional
-            The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
-            to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
+        The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
+        to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
 
     Returns
     -------
     list of str
-            Human-readable problems; empty when the file complies.
+        Human-readable problems; empty when the file complies.
     """
     dict_layer = (dict_policy.get("layers", {}) or {}).get(str_layer) or {}
     dict_deny = dict_layer.get("deny_layers") or {}
@@ -630,12 +630,12 @@ def imported_modules(cls_node: ast.AST) -> list[str]:
     Parameters
     ----------
     cls_node : ast.AST
-            Any AST node; non-import nodes yield nothing.
+        Any AST node; non-import nodes yield nothing.
 
     Returns
     -------
     list of str
-            Dotted module paths, e.g. ``["chassis.typing"]``.
+        Dotted module paths, e.g. ``["chassis.typing"]``.
     """
     if isinstance(cls_node, ast.Import):
         return [cls_alias.name for cls_alias in cls_node.names]
@@ -654,14 +654,14 @@ def _matching_deny_key(str_target: str, dict_deny: dict) -> str | None:
     Parameters
     ----------
     str_target : str
-            The imported module's dotted path.
+        The imported module's dotted path.
     dict_deny : dict
-            The layer's ``deny_layers`` map.
+        The layer's ``deny_layers`` map.
 
     Returns
     -------
     str or None
-            The matching key, or ``None`` when the import is allowed.
+        The matching key, or ``None`` when the import is allowed.
     """
     list_hits = [
         str_key
@@ -688,12 +688,12 @@ def _report_absent_policy(int_modules: int) -> int:
     Parameters
     ----------
     int_modules : int
-            How many modules were discovered under the source root.
+        How many modules were discovered under the source root.
 
     Returns
     -------
     int
-            ``1`` when there was code to check, ``0`` when there was not.
+        ``1`` when there was code to check, ``0`` when there was not.
     """
     if int_modules == 0:
         print(f"No {_POLICY_FILE} and no modules to check — nothing to do.")
@@ -719,7 +719,7 @@ def main() -> int:
     Returns
     -------
     int
-            ``0`` when the tree complies (or no policy is present), ``1`` otherwise.
+        ``0`` when the tree complies (or no policy is present), ``1`` otherwise.
     """
     path_root = pathlib.Path.cwd()
     path_src = path_root / _SRC_ROOT

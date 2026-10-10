@@ -34,9 +34,9 @@ class _RecordingEmitter(LogEmitter):
         Parameters
         ----------
         str_message : str
-                The message.
+            The message.
         str_level : str
-                The level name (unused here).
+            The level name (unused here).
         """
         self.list_messages.append(str_message)
 
@@ -62,14 +62,14 @@ class _DownloadRecorder:
         Parameters
         ----------
         str_url : str
-                The URL requested.
+            The URL requested.
         path_dest : pathlib.Path
-                Where to write.
+            Where to write.
 
         Returns
         -------
         pathlib.Path
-                ``path_dest``, as the real downloader does.
+            ``path_dest``, as the real downloader does.
         """
         self.list_calls.append(str_url)
         path_dest.write_bytes(self.bytes_payload)
@@ -82,19 +82,19 @@ def _download_that_dies_midway(str_url: str, path_dest: Path) -> Path:
     Parameters
     ----------
     str_url : str
-            Unused; present to satisfy the downloader signature.
+        Unused; present to satisfy the downloader signature.
     path_dest : pathlib.Path
-            Where the partial bytes land.
+        Where the partial bytes land.
 
     Returns
     -------
     pathlib.Path
-            Never returns; always raises.
+        Never returns; always raises.
 
     Raises
     ------
     OSError
-            Always, simulating a transfer dropped mid-write.
+        Always, simulating a transfer dropped mid-write.
     """
     path_dest.write_bytes(b"half a fi")  # non-empty, and wrong
     raise OSError("connection dropped mid-transfer")
@@ -106,14 +106,14 @@ def _download_that_writes_nothing(str_url: str, path_dest: Path) -> Path:
     Parameters
     ----------
     str_url : str
-            Unused; present to satisfy the downloader signature.
+        Unused; present to satisfy the downloader signature.
     path_dest : pathlib.Path
-            Where the empty file lands.
+        Where the empty file lands.
 
     Returns
     -------
     pathlib.Path
-            ``path_dest``.
+        ``path_dest``.
     """
     path_dest.write_bytes(b"")
     return path_dest
@@ -130,18 +130,18 @@ def _call_download(
     Parameters
     ----------
     path_root : pathlib.Path
-            Cache root.
+        Cache root.
     fn_download : object
-            The download stub to inject.
+        The download stub to inject.
     dt_day : datetime.date, optional
-            Reference day, by default 2026-08-17.
+        Reference day, by default 2026-08-17.
     cls_logger : LogEmitter or None, optional
-            Logger to inject, by default ``None``.
+        Logger to inject, by default ``None``.
 
     Returns
     -------
     pathlib.Path
-            The cached artifact's path.
+        The cached artifact's path.
     """
     return download_daily(
         "https://example.com/a.csv",
@@ -160,12 +160,12 @@ def _fake_download(bytes_payload: bytes = b"payload") -> tuple:
     Parameters
     ----------
     bytes_payload : bytes, optional
-            Bytes to write, by default ``b"payload"``.
+        Bytes to write, by default ``b"payload"``.
 
     Returns
     -------
     tuple
-            ``(fn_download, list_calls)``.
+        ``(fn_download, list_calls)``.
     """
     cls_recorder = _DownloadRecorder(bytes_payload)
     return cls_recorder, cls_recorder.list_calls
