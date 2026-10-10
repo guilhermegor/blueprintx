@@ -1913,6 +1913,20 @@ def test_quoted_ladder_count_inside_a_sentence_does_not_declare_zero() -> None:
     assert len(_body_problems([_body_review(str_body)], [])) == 1
 
 
+def test_quoted_actionable_header_mid_line_does_not_clear_a_real_finding() -> None:
+    """Should-fail witness: a claude-rung body quoting the header mid-line still needs a reply."""
+    str_body = (
+        _LADDER_CLAUDE + "- **Major** x: the gate trusts 'Actionable comments posted: 0' anywhere."
+    )
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_actionable_header_at_a_line_start_still_clears_inline_findings() -> None:
+    """The real CodeRabbit shape, `**Actionable comments posted: N**` opening a line, still wins."""
+    str_body = _LADDER_CLAUDE + "**Actionable comments posted: 0**\n\n- **Major** x"
+    assert _body_problems([_body_review(str_body)], []) == []
+
+
 def test_coderabbit_inline_findings_need_no_body_reply() -> None:
     """Its N inline comments are threads `find_thread_problems` already gates (no double-gate).
 
