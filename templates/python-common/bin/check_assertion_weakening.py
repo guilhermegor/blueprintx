@@ -75,10 +75,10 @@ RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
 # identical constant for why this serves both a local pre-commit run and CI.
 STR_INDEX_REF = ""
 
-# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
-# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields. Module-scoped
-# (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as a
-# constant while behaving like a plain variable — moved here to be what it says it is.
+# A `git diff --name-status` row has 2 tab-separated fields ("<status>\t<path>"), or 3 for a
+# rename/copy ("R100\t<old>\t<new>"); `changed_paths` keeps both paths of the 3-field form.
+# Module-scoped (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as
+# a constant while behaving like a plain variable — moved here to be what it says it is.
 _INT_MIN_FIELDS = 2
 # Minimum positional-arg count for `assertEqual(a, b)` — same N806 shape as above.
 _MIN_EQ_ARGS = 2
@@ -196,14 +196,16 @@ def changed_paths(str_base: str) -> list:
     Returns
     -------
     list of tuple
-        ``(status_letter, path)``.
+        ``(status_letter, source_path, destination_path)``. The two paths differ only for
+        a rename or copy; the base version lives at the source, the head version at the
+        destination (blueprintx#590).
     """
-    str_out = _git(["diff", "--cached", "--name-status", str_base])
+    str_out = _git(["diff", "--cached", "--name-status", "--find-renames", str_base])
     list_rows = []
     for str_line in str_out.splitlines():
         list_parts = str_line.split("\t")
         if len(list_parts) >= _INT_MIN_FIELDS:
-            list_rows.append((list_parts[0][0], list_parts[-1]))
+            list_rows.append((list_parts[0][0], list_parts[1], list_parts[-1]))
     return list_rows
 
 
@@ -898,7 +900,7 @@ def _touches_production_code(list_changed: list) -> bool:
     Parameters
     ----------
     list_changed : list of tuple
-        ``(status_letter, path)`` rows from ``changed_paths``.
+        ``(status_letter, source_path, destination_path)`` rows from ``changed_paths``.
 
     Returns
     -------
@@ -906,10 +908,11 @@ def _touches_production_code(list_changed: list) -> bool:
         ``True`` when at least one changed path is neither a test file nor
         documentation — the signal that gates the expected-value-changed rule.
     """
-    for _str_status, str_path in list_changed:
-        if RE_TEST_PATH.search(str_path) or RE_DOC_PATH.search(str_path):
-            continue
-        return True
+    for str_status, str_src, str_path in list_changed:
+        # A rename removes its source, so a production file moved into tests/ still counts.
+        tuple_paths = (str_src, str_path) if str_status == "R" else (str_path,)
+        if any(not (RE_TEST_PATH.search(p) or RE_DOC_PATH.search(p)) for p in tuple_paths):
+            return True
     return False
 
 
@@ -919,7 +922,7 @@ def collect_problems(list_changed: list, str_base: str) -> list:
     Parameters
     ----------
     list_changed : list of tuple
-        ``(status_letter, path)`` rows from ``changed_paths``.
+        ``(status_letter, source_path, destination_path)`` rows from ``changed_paths``.
     str_base : str
         The merge-base commit.
 
@@ -930,7 +933,7 @@ def collect_problems(list_changed: list, str_base: str) -> list:
     """
     list_problems = []
     bool_prod_changed = _touches_production_code(list_changed)
-    for str_status, str_path in list_changed:
+    for str_status, str_src, str_path in list_changed:
         if not RE_TEST_PATH.search(str_path):
             continue
         if str_status == "D":
@@ -946,7 +949,7 @@ def collect_problems(list_changed: list, str_base: str) -> list:
                 )
             continue
         str_new = show(STR_INDEX_REF, str_path)
-        str_old = show(str_base, str_path)
+        str_old = show(str_base, str_src)
         if str_new is None or str_old is None:
             continue  # newly added file — nothing to compare against
         list_problems.extend(_file_findings(str_path, str_old, str_new, bool_prod_changed))
