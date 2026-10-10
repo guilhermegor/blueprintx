@@ -2064,8 +2064,11 @@ def test_completion_is_seen_past_the_display_budget() -> None:
 # --------------------------
 
 
-def _git(path_repo: Path, *list_args: str) -> str:
-    """Run git in ``path_repo`` and return stdout; a non-zero exit is left to the caller.
+def _git(path_repo: Path, *list_args: str, bool_check: bool = True) -> str:
+    """Run git in ``path_repo`` and return stdout, raising on a non-zero exit.
+
+    Raising matters: a silent setup failure would yield empty commit ids, and the negative
+    witnesses would then pass because two broken fingerprints differ.
 
     Parameters
     ----------
@@ -2073,6 +2076,8 @@ def _git(path_repo: Path, *list_args: str) -> str:
             Repository directory.
     *list_args : str
             Arguments after ``git``.
+    bool_check : bool
+            ``False`` only for the one command expected to exit non-zero (a conflicting merge).
 
     Returns
     -------
@@ -2084,7 +2089,7 @@ def _git(path_repo: Path, *list_args: str) -> str:
         [*list_cmd, "-C", str(path_repo), *list_args],
         capture_output=True,
         text=True,
-        check=False,
+        check=bool_check,
     )
     return cls_run.stdout.strip()
 
@@ -2166,12 +2171,15 @@ def dict_repo(tmp_path: Path) -> dict:
     _git(tmp_path, "merge", "--no-edit", "main~1")
     str_clean = _git(tmp_path, "rev-parse", "HEAD")
     _git(tmp_path, "checkout", "-b", "conflict", str_review)
-    _git(tmp_path, "merge", "--no-edit", "main")
+    _git(tmp_path, "merge", "--no-edit", "main", bool_check=False)  # conflicts by design
     str_conflict = _commit(tmp_path, "a.txt", str_text.format("resolved"))
     _git(tmp_path, "checkout", "-b", "more", str_review)
     str_new = _commit(tmp_path, "c.txt", "new\n")
     _git(tmp_path, "checkout", "-b", "rewrite", "main")
     str_rewritten = _commit(tmp_path, "a.txt", str_text.format("rewritten"))
+    list_oids = [str_review, str_clean, str_conflict, str_new, str_rewritten]
+    assert set(map(len, list_oids)) == {40}, "fixture built an empty or malformed commit id"
+    assert len(set(list_oids)) == len(list_oids), "fixture built duplicate commits"
     return {
         "path": tmp_path,
         "review": str_review,
