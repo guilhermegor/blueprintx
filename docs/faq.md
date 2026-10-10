@@ -94,6 +94,26 @@ are also open, the failure lists both. Re-run the check after replying. The test
 `test_review_threads_gate.py` list every shape with a witness that fails without its marker.
 The rule is weaker than a thread: a long comment answers without being tied to a finding.
 
+### When does a review still count after the branch moves?
+
+A review is pinned to the commit it was written against. When no review names the head, the
+gate asks whether the PR's **own patch** changed between the reviewed commit `R` and the head
+`H`. If it did not, the review covers `H` and the gate prints
+`review at R still covers H: the head only merges the base, the PR's own patch is unchanged`.
+That is the case of `update-branch` under the strict-serial ruleset: main is merged in, no code
+is written, and a second review of the same diff would only spend a reviewer rung.
+
+The patch is the diff from the merge base with the base branch to the commit, fingerprinted
+like `git patch-id --stable` (hunk line numbers ignored, everything else compared). The CI
+checkout is shallow (`actions/checkout` defaults to `fetch-depth: 1`), so there is no local
+history for `git merge-base`. The gate reads the same diff from the GitHub compare API
+(`compare/<base>...<commit>`), which computes the merge base server side.
+
+Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
+and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
+closed: a missing commit, an API error, a binary or oversized file with no patch text, or 100
+changed files or more (the page the API returns) is read as "not covered".
+
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.

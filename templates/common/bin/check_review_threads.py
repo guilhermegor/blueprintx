@@ -63,6 +63,9 @@ reviewed".
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
+import functools
+import hashlib
 import json
 import os
 import pathlib
@@ -199,6 +202,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
+      baseRefName
       comments(last:100) { nodes { author { login __typename } body createdAt } }
       reviews(
         first:100, after:$rc,
@@ -499,6 +503,147 @@ def reviewers_who_reported(
         for d in list_reviews
         if not str_commit_oid or ((d.get("commit") or {}).get("oid") or "") == str_commit_oid
     } & set_roster
+
+
+def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str]:
+    """Return the distinct commits a roster member reviewed, in submission order.
+
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews, each with an ``author`` node and a ``commit`` node.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
+
+    Returns
+    -------
+    list of str
+            Commit oids, deduplicated, empty oids dropped.
+    """
+    list_oids = [
+        (d.get("commit") or {}).get("oid") or ""
+        for d in list_reviews
+        if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
+    ]
+    return list(dict.fromkeys(str_oid for str_oid in list_oids if str_oid))
+
+
+# A page of the compare API holds this many files. Reaching it means the list may be cut off,
+# and a cut-off patch cannot be compared, so it fails closed. Repo ceiling is 90 files per PR.
+_INT_COMPARE_FILES = 100
+
+
+def patch_fingerprint(list_files: list[dict]) -> str:
+    """Hash the PR's own patch as the compare API reports it.
+
+    Parameters
+    ----------
+    list_files : list of dict
+            The ``files`` array of ``compare/<base>...<oid>`` (merge-base to oid).
+
+    Returns
+    -------
+    str
+            A digest that ignores hunk line numbers, like ``git patch-id --stable``.
+
+    Raises
+    ------
+    ValueError
+            If the list is empty, possibly truncated, or a file carries no patch text.
+    """
+    if not list_files or len(list_files) >= _INT_COMPARE_FILES:
+        raise ValueError(f"patch unavailable: {len(list_files)} file(s) in the comparison")
+    if any(d.get("patch") is None for d in list_files):
+        raise ValueError("patch unavailable: a file has no patch text (binary or too large)")
+    list_parts = [
+        "\n".join(
+            [
+                d["filename"],
+                d.get("status", ""),
+                d.get("previous_filename", ""),
+                *(s for s in d["patch"].splitlines() if not s.startswith("@@")),
+            ]
+        )
+        for d in sorted(list_files, key=lambda d: d["filename"])
+    ]
+    return hashlib.sha256("\0".join(list_parts).encode()).hexdigest()
+
+
+def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oid: str) -> str:
+    """Return the PR's own patch fingerprint at ``str_oid`` via the compare API.
+
+    The CI checkout is shallow (``actions/checkout`` defaults to ``fetch-depth: 1``), so
+    ``git merge-base`` has no history to read. The three-dot compare computes the merge base
+    server side, which is the same diff ``git diff $(git merge-base base oid) oid`` yields.
+
+    Parameters
+    ----------
+    str_owner : str
+            Repository owner.
+    str_repo : str
+            Repository name.
+    str_base : str
+            The PR's base branch name.
+    str_oid : str
+            The commit whose patch is wanted.
+
+    Returns
+    -------
+    str
+            See :func:`patch_fingerprint`.
+
+    Raises
+    ------
+    RuntimeError
+            If the API call fails.
+    ValueError
+            If the response is unusable, see :func:`patch_fingerprint`.
+    """
+    list_cmd = [
+        "gh",
+        "api",
+        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page={_INT_COMPARE_FILES}",
+    ]
+    # Constant argv built from CI-provided identifiers; no shell is involved.
+    cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
+    if cls_run.returncode != 0:
+        raise RuntimeError(f"compare failed: {cls_run.stderr.strip()[:400]}")
+    return patch_fingerprint(json.loads(cls_run.stdout).get("files") or [])
+
+
+def review_covers_head(
+    fn_fingerprint: Callable[[str], str], str_review_oid: str, str_head_oid: str
+) -> bool:
+    """Return whether a review at an earlier commit still covers the head.
+
+    It does when the PR's own patch is unchanged, so the head only merged the base in. A
+    conflict resolution, a new commit or a force-push changes the patch and stays superseded.
+    ⚠️ Fails CLOSED: any error computing either patch means "not covered", never "covered".
+
+    Parameters
+    ----------
+    fn_fingerprint : Callable[[str], str]
+            Maps a commit oid to its patch fingerprint; raises on an unavailable patch.
+    str_review_oid : str
+            The commit the review was written against.
+    str_head_oid : str
+            The PR's head commit.
+
+    Returns
+    -------
+    bool
+            ``True`` only when both fingerprints were computed and are equal.
+    """
+    try:
+        bool_same = fn_fingerprint(str_review_oid) == fn_fingerprint(str_head_oid)
+    except (RuntimeError, ValueError):
+        return False
+    if bool_same:
+        print(
+            f"review at {str_review_oid[:7]} still covers {str_head_oid[:7]}: the head only "
+            "merges the base, the PR's own patch is unchanged"
+        )
+    return bool_same
 
 
 # Display budget for a quoted notice. ⚠️ It bounds what a HUMAN reads, never what a matcher
@@ -858,6 +1003,7 @@ def find_missing_review_problem(
     str_head_oid: str,
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
+    fn_fingerprint: Callable[[str], str] | None = None,
 ) -> str | None:
     """Return a problem when no declared reviewer ever reported on this PR's HEAD.
 
@@ -881,6 +1027,10 @@ def find_missing_review_problem(
             against, which is the vacuous pass this parameter exists to remove.
     list_notices : list of dict, optional
             The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
+    fn_fingerprint : Callable[[str], str], optional
+            Maps a commit oid to its patch fingerprint. When given, a review at an earlier
+            commit covers HEAD if the PR's own patch is unchanged (see
+            :func:`review_covers_head`). ``None`` keeps the strict pin to HEAD.
 
     Returns
     -------
@@ -902,6 +1052,12 @@ def find_missing_review_problem(
         return None
 
     if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
+        return None
+
+    if fn_fingerprint and any(
+        review_covers_head(fn_fingerprint, str_oid, str_head_oid)
+        for str_oid in reviewed_commits(list_reviews, set_roster)
+    ):
         return None
 
     if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
@@ -1414,6 +1570,27 @@ def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[
     )
 
 
+def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], str]:
+    """Bind the compare-API fingerprint to this PR's repository and base branch.
+
+    Parameters
+    ----------
+    dict_pr : dict
+            The ``pullRequest`` node, read for ``baseRefName``.
+    str_repo_full : str
+            ``owner/name``.
+
+    Returns
+    -------
+    Callable[[str], str]
+            Maps a commit oid to its patch fingerprint.
+    """
+    str_owner, _, str_repo = str_repo_full.partition("/")
+    return functools.partial(
+        fetch_patch_fingerprint, str_owner, str_repo, dict_pr.get("baseRefName") or ""
+    )
+
+
 def main(list_argv: list[str] | None = None) -> int:
     """Check the current PR's review threads.
 
@@ -1447,8 +1624,7 @@ def main(list_argv: list[str] | None = None) -> int:
     set_roster = set(dict_roster)
     set_reviewers = reviewer_logins(dict_roster)
 
-    str_owner, _, str_repo = str_repo_full.partition("/")
-    dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
+    dict_pr = fetch_pull_request(*str_repo_full.split("/", 1), int(str_number))
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 
@@ -1466,6 +1642,7 @@ def main(list_argv: list[str] | None = None) -> int:
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=list_notices,
         str_head_date=_head_committed_date(dict_pr),
+        fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full),
     )
     if str_missing:
         return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)

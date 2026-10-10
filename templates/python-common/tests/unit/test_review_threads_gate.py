@@ -13,6 +13,7 @@ the gate: 14 threads all reading ``isResolved: true`` while 11 held no author re
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 from types import ModuleType
 from unittest.mock import Mock
 
@@ -2056,3 +2057,208 @@ def test_completion_is_seen_past_the_display_budget() -> None:
         _ROSTER_NORMALISED,
         _HEAD_DATE,
     )
+
+
+# --------------------------
+# A review carries forward across a merge of the base (blueprintx#698)
+# --------------------------
+
+
+def _git(path_repo: Path, *list_args: str) -> str:
+    """Run git in ``path_repo`` and return stdout; a non-zero exit is left to the caller.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory.
+    *list_args : str
+            Arguments after ``git``.
+
+    Returns
+    -------
+    str
+            Stripped stdout.
+    """
+    list_cmd = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    cls_run = subprocess.run(  # noqa: S603
+        [*list_cmd, "-C", str(path_repo), *list_args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return cls_run.stdout.strip()
+
+
+def _commit(path_repo: Path, str_file: str, str_text: str) -> str:
+    """Write ``str_text`` to ``str_file``, commit it and return the new commit.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory.
+    str_file : str
+            File to write, relative to the repo.
+    str_text : str
+            File content.
+
+    Returns
+    -------
+    str
+            The new commit oid.
+    """
+    (path_repo / str_file).write_text(str_text)
+    _git(path_repo, "add", str_file)
+    _git(path_repo, "commit", "-m", f"edit {str_file}")
+    return _git(path_repo, "rev-parse", "HEAD")
+
+
+def _patch_id(path_repo: Path, str_oid: str) -> str:
+    """Return ``git patch-id --stable`` of the PR's own patch at ``str_oid``.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory, where ``main`` is the base.
+    str_oid : str
+            Commit to measure.
+
+    Returns
+    -------
+    str
+            The patch id, the oracle the compare-API fingerprint stands in for in CI.
+    """
+    str_base = _git(path_repo, "merge-base", "main", str_oid)
+    str_diff = _git(path_repo, "diff", str_base, str_oid)
+    return subprocess.run(  # noqa: S603
+        ["git", "patch-id", "--stable"],  # noqa: S607
+        input=str_diff + "\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.split()[0]
+
+
+@pytest.fixture
+def dict_repo(tmp_path: Path) -> dict:
+    """Build a PR branch with a review commit ``R`` and four candidate heads.
+
+    Parameters
+    ----------
+    tmp_path : Path
+            Pytest temp dir.
+
+    Returns
+    -------
+    dict
+            ``path``, ``review`` (R) and the heads ``clean_merge``, ``conflict_merge``,
+            ``new_commit`` and ``rewritten``.
+    """
+    str_text = "1\n{}\n3\n4\n5\n6\n7\n8\n9\n"
+    _git(tmp_path, "init", "-b", "main")
+    _commit(tmp_path, "a.txt", str_text.format("2"))
+    _commit(tmp_path, "b.txt", "b\n")
+    _git(tmp_path, "checkout", "-b", "feat")
+    str_review = _commit(tmp_path, "a.txt", str_text.format("feat"))
+    _git(tmp_path, "checkout", "main")
+    _commit(tmp_path, "b.txt", "b main\n")
+    _commit(tmp_path, "a.txt", str_text.format("main"))
+    _git(tmp_path, "checkout", "-b", "clean", str_review)
+    _git(tmp_path, "merge", "--no-edit", "main~1")
+    str_clean = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-b", "conflict", str_review)
+    _git(tmp_path, "merge", "--no-edit", "main")
+    str_conflict = _commit(tmp_path, "a.txt", str_text.format("resolved"))
+    _git(tmp_path, "checkout", "-b", "more", str_review)
+    str_new = _commit(tmp_path, "c.txt", "new\n")
+    _git(tmp_path, "checkout", "-b", "rewrite", "main")
+    str_rewritten = _commit(tmp_path, "a.txt", str_text.format("rewritten"))
+    return {
+        "path": tmp_path,
+        "review": str_review,
+        "clean_merge": str_clean,
+        "conflict_merge": str_conflict,
+        "new_commit": str_new,
+        "rewritten": str_rewritten,
+    }
+
+
+def _covers(dict_repo: dict, str_head_key: str) -> bool:
+    """Ask the gate whether the review at ``R`` covers the head named by ``str_head_key``.
+
+    Parameters
+    ----------
+    dict_repo : dict
+            The :func:`dict_repo` fixture value.
+    str_head_key : str
+            Key of the head commit in that dict.
+
+    Returns
+    -------
+    bool
+            The gate's verdict, using a real ``git patch-id`` as the fingerprint.
+    """
+    return _load_gate().review_covers_head(
+        lambda str_oid: _patch_id(dict_repo["path"], str_oid),
+        dict_repo["review"],
+        dict_repo[str_head_key],
+    )
+
+
+def test_review_covers_head_merge_of_base_without_conflict_carries_forward(
+    dict_repo: dict,
+) -> None:
+    """An update-branch that only merges the base leaves the PR's patch alone."""
+    assert _covers(dict_repo, "clean_merge") is True
+
+
+def test_review_covers_head_conflict_resolving_merge_stays_superseded(dict_repo: dict) -> None:
+    """Resolving a conflict changes what the PR contributes, so the review is stale."""
+    assert _covers(dict_repo, "conflict_merge") is False
+
+
+def test_review_covers_head_new_commit_stays_superseded(dict_repo: dict) -> None:
+    """A new commit adds code nobody reviewed."""
+    assert _covers(dict_repo, "new_commit") is False
+
+
+def test_review_covers_head_rewritten_code_stays_superseded(dict_repo: dict) -> None:
+    """A force-push that rewrites the PR's code is new code under an old review."""
+    assert _covers(dict_repo, "rewritten") is False
+
+
+def test_review_covers_head_patch_unavailable_fails_closed() -> None:
+    """A missing commit or an API error is never read as 'covered'."""
+    cls_gate = _load_gate()
+    fn_broken = Mock(side_effect=RuntimeError("compare failed"))
+    assert cls_gate.review_covers_head(fn_broken, "a" * 40, _HEAD) is False
+
+
+def test_find_missing_review_problem_carried_review_passes(dict_repo: dict) -> None:
+    """End to end: a roster review at R, head H only a base merge, no problem."""
+    cls_gate = _load_gate()
+    assert (
+        cls_gate.find_missing_review_problem(
+            [_review("coderabbitai[bot]", dict_repo["review"])],
+            {"coderabbitai"},
+            str_head_oid=dict_repo["clean_merge"],
+            fn_fingerprint=lambda str_oid: _patch_id(dict_repo["path"], str_oid),
+        )
+        is None
+    )
+
+
+def test_patch_fingerprint_ignores_hunk_line_numbers() -> None:
+    """Main moving lines above the PR's hunk shifts ``@@`` offsets and nothing else."""
+    cls_gate = _load_gate()
+    dict_at_review = {"filename": "a", "status": "modified", "patch": "@@ -2,1 +2,1 @@\n-x\n+y"}
+    dict_at_head = {"filename": "a", "status": "modified", "patch": "@@ -9,1 +9,1 @@ fn\n-x\n+y"}
+    assert cls_gate.patch_fingerprint([dict_at_review]) == cls_gate.patch_fingerprint(
+        [dict_at_head]
+    )
+
+
+def test_patch_fingerprint_file_without_patch_text_raises() -> None:
+    """The API omits ``patch`` for binary or oversized files, which cannot be compared."""
+    cls_gate = _load_gate()
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([{"filename": "big.bin", "status": "added"}])
