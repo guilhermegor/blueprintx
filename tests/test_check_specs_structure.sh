@@ -142,6 +142,18 @@ test_gitkeep_in_features_is_tolerated() {
     expect ".gitkeep keeping an empty features/" "$str_root" pass
 }
 
+test_gitkeep_in_backlog_is_tolerated() {
+    local str_root
+    str_root="$(make_tree)"
+    mkdir -p "$str_root/.specs/backlog"
+    touch "$str_root/.specs/backlog/.gitkeep"
+    expect ".gitkeep keeping an empty backlog/" "$str_root" pass
+    str_root="$(make_tree)"
+    mkdir -p "$str_root/.specs/backlog"
+    touch "$str_root/.specs/backlog/.keep"
+    expect ".keep is not the placeholder" "$str_root" fail "does not match"
+}
+
 test_bad_task_markers_fail() {
     local str_line str_root
     for str_line in '- [?] unknown' '- [X] upper' '- [] empty' '- [~]' '- [~] ' '* [done] word' \
@@ -272,6 +284,7 @@ main() {
     test_malformed_pr_name_fails
     test_non_directory_feature_entry_fails
     test_gitkeep_in_features_is_tolerated
+    test_gitkeep_in_backlog_is_tolerated
     test_bad_task_markers_fail
     test_good_task_markers_pass
     test_fence_tracking

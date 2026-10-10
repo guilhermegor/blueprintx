@@ -595,6 +595,9 @@ lib_minimal_copy_project_scaffolding() {
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
     # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
+    # The work ledger the check-backlog-ledger gate reads; .gitkeep keeps it in git while empty.
+    mkdir -p "$project_path/.specs/backlog"
+    touch "$project_path/.specs/backlog/.gitkeep"
     # The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
     # implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
     cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" "$project_path/bin/check_specs_structure.sh"
@@ -688,12 +691,9 @@ copy_mkdocs_templates() {
         "$project_path/docs/contributing.md"
     cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
-    # Non-published docs/ authoring guide + the excluded backlog folder.
+    # Non-published docs/ authoring guide.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
-    mkdir -p "$project_path/docs/backlog"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/backlog/.keep" \
-        "$project_path/docs/backlog/.keep"
 
 
     print_status "success" "MkDocs templates copied"

@@ -1,7 +1,7 @@
 """Enforce the per-branch work-ledger convention structurally, not by memory.
 
 A branch whose cumulative diff touches a **non-trivial** path must add a work ledger under
-``docs/backlog/<kebab>_YYYYMMDD_HHMMSS.md`` carrying at least one ``- [ ]`` / ``- [x]`` checkbox.
+``.specs/backlog/<kebab>_YYYYMMDD_HHMMSS.md`` carrying at least one ``- [ ]`` / ``- [x]`` checkbox.
 It was the last rule of the flow enforced by memory in a repo that makes every other convention
 structural, so it is wired into both pre-commit and CI (gate parity), like ``check_typing.py``.
 
@@ -113,10 +113,11 @@ def pr_author_login() -> str:
 # routine and a ledger for them would be noise nobody reads.
 LEDGER_CLASSES = frozenset({"src", "ci"})
 
-LEDGER_DIR = "docs/backlog"
+LEDGER_DIR = ".specs/backlog"
 # <kebab-topic>_YYYYMMDD_HHMMSS.md
-LEDGER_RE = re.compile(r"^docs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.md$")
-CHECKBOX_RE = re.compile(r"^\s*[-*]\s+\[[ xX]\]", re.M)
+LEDGER_RE = re.compile(r"^\.specs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.md$")
+# Same marker grammar as bin/ci/check_specs_structure.sh: [ ], [x] and [~] (lowercase x only).
+CHECKBOX_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ x]\]|\[~\][ \t]+[a-z]+/\S)", re.M)
 
 _BIN = pathlib.Path(__file__).resolve().parent
 
@@ -273,14 +274,16 @@ def find_ledger_problems(list_paths: list) -> list:
     for str_ledger in list_ledgers:
         if not LEDGER_RE.match(str_ledger):
             list_problems.append(
-                f"❌ {str_ledger}: name must match <kebab-topic>_YYYYMMDD_HHMMSS.md"
+                f"❌ {str_ledger}: name must match {LEDGER_DIR}/<kebab-topic>_YYYYMMDD_HHMMSS.md"
             )
             continue
         path_ledger = pathlib.Path(str_ledger)
         if path_ledger.is_file() and not CHECKBOX_RE.search(
             path_ledger.read_text(encoding="utf-8")
         ):
-            list_problems.append(f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' checkbox")
+            list_problems.append(
+                f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' / '- [~]' checkbox"
+            )
     # A single valid ledger satisfies the branch.
     return [] if len(list_problems) < len(list_ledgers) else list_problems
 
