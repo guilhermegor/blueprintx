@@ -432,7 +432,7 @@ copy_static_ts_common_files() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-    # commit, never templated principles. See .specs/spec.md for the id conventions.
+    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 }
 

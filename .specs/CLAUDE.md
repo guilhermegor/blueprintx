@@ -52,7 +52,18 @@ published documentation.
 - `bin/ci/check_specs_structure.sh` enforces every rule above except where a rule is marked
   advisory. It runs in the root pre-commit hook and `scaffold_checks.yml` CI, same
   one-implementation pattern as every other gate in this repo (see the root `CLAUDE.md`),
-  and takes `--root <dir>` so any tree can be checked by the same script (it is not copied into scaffolds today).
+  and takes `--root <dir>` so any tree can be checked by the same script.
+- **Scaffolds ship the same contract, not a smaller one.** `templates/common/.specs/` is
+  `CLAUDE.md` + `features/.gitkeep`, and every Python scaffold copies the gate itself (this very
+  file, as-is) to `bin/check_specs_structure.sh`, run by the project's `specs-structure`
+  pre-commit hook and its CI. A generated project's `.specs/CLAUDE.md` is a shorter statement of
+  these rules plus the feature-spec template, so it can never need a rule this file lacks:
+  `backlog/` and `_lessons/` stay legal there, and the shipped tree is itself a witness in
+  `tests/test_check_specs_structure.sh`. There is no second copy of the script under `templates/`.
+  The TypeScript and Bash scaffolds ship the layout but do not run the gate yet.
+- `bin/check_orphan_pr_bodies.sh` (blueprintx#671) is the other direction: working material
+  outside `.specs/` and `docs/`, a `<repo>/.git/*.md` PR body matched by content. It is a local
+  report that needs `gh`, so it stays a separate script rather than a mode of this gate.
 
 ## Trackers
 

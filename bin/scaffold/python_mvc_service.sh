@@ -465,6 +465,8 @@ conditional_copy_email() {
 # one layer down: it exercises PipelineOrchestrator's LabelEnricher degradation path, and
 # LabelEnricher is reached only from the single _pipeline.py this function removes. There is no
 # multi-intent equivalent to point it at, so a replacement would be a test of nothing.
+# tests/unit/test_pipeline_phases.py is deleted for the same reason: it drives the single
+# PipelineOrchestrator's phases (blueprintx#667).
 conditional_apply_multi_pipeline() {
     local project_path="$1"
     if [[ "$INCLUDE_MULTI_PIPELINE" != "true" ]]; then return; fi
@@ -477,6 +479,7 @@ conditional_apply_multi_pipeline() {
     cp "$mp_root/main.py" "$controller_dir/main.py"
     cp "$mp_root/test_pipeline.py" "$project_path/tests/unit/test_pipeline.py"
     rm -f "$project_path/tests/unit/test_pipeline_enrichment.py"
+    rm -f "$project_path/tests/unit/test_pipeline_phases.py"
     rm -f "$controller_dir/_pipeline.py"
     sed_inplace 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
     local intent_env

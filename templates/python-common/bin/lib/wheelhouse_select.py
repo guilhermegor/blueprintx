@@ -306,7 +306,8 @@ def pack_wheelhouse(args: argparse.Namespace) -> int:
     for path_stale in path_zip.parent.glob(f"{path_zip.name}.[0-9][0-9][0-9]"):
         path_stale.unlink()
 
-    int_wheel_count = len(list(dir_wheels.glob("*.whl")))
+    list_wheel_names = sorted(path_wheel.name for path_wheel in dir_wheels.glob("*.whl"))
+    int_wheel_count = len(list_wheel_names)
     str_zip_sha256 = sha256_of(path_zip)
     int_zip_size = path_zip.stat().st_size
     list_parts = split_into_parts(path_zip, args.part_size_mb)
@@ -315,6 +316,7 @@ def pack_wheelhouse(args: argparse.Namespace) -> int:
     dict_manifest = {
         "schema_version": _MANIFEST_SCHEMA_VERSION,
         "wheel_count": int_wheel_count,
+        "wheel_names": list_wheel_names,
         "zip_name": path_zip.name,
         "zip_sha256": str_zip_sha256,
         "zip_size": int_zip_size,
@@ -472,26 +474,44 @@ def unzip_wheels(path_zip: Path, dir_out: Path) -> int:
     return len(list_names)
 
 
-def _loose_wheels_match_manifest(path_manifest: Path, int_loose: int) -> bool:
+def _remove_loose_wheels(dir_out: Path) -> None:
+    """Delete every ``*.whl`` in a directory, so none can sit beside a fresh extraction.
+
+    Parameters
+    ----------
+    dir_out : Path
+        Output directory; a missing one is a no-op.
+    """
+    for path_wheel in dir_out.glob("*.whl"):
+        path_wheel.unlink()
+
+
+def _loose_wheels_match_manifest(path_manifest: Path, list_loose: list[str]) -> bool:
     """Return whether loose wheels in the output dir may stand in for the verified payload.
 
     Parameters
     ----------
     path_manifest : Path
         The payload manifest; absent means there is nothing to compare against.
-    int_loose : int
-        How many ``*.whl`` files already sit in the output directory.
+    list_loose : list of str
+        File names of the ``*.whl`` files already sitting in the output directory.
 
     Returns
     -------
     bool
-        False when a manifest names a different ``wheel_count``: a leftover or half-extracted
-        ``wheels/`` must not shadow the fresh payload.
+        False when the manifest names different wheels: a leftover or half-extracted
+        ``wheels/`` — including N wheels from another lock — must not shadow the fresh
+        payload. A manifest written before ``wheel_names`` existed falls back to comparing
+        ``wheel_count`` alone.
     """
     if not path_manifest.is_file():
         return True
-    int_expected = json.loads(path_manifest.read_text(encoding="utf-8")).get("wheel_count")
-    return int_expected is None or int_expected == int_loose
+    dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
+    list_names = dict_manifest.get("wheel_names")
+    if list_names is not None:
+        return sorted(list_names) == sorted(list_loose)
+    int_expected = dict_manifest.get("wheel_count")
+    return int_expected is None or int_expected == len(list_loose)
 
 
 def assemble_wheelhouse(args: argparse.Namespace) -> int:
@@ -523,8 +543,9 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
     dir_out = Path(args.wheels_out)
 
     path_manifest = Path(args.manifest)
-    int_count = len(list(dir_out.glob("*.whl"))) if dir_out.is_dir() else 0
-    if int_count and _loose_wheels_match_manifest(path_manifest, int_count):
+    list_loose = [path_wheel.name for path_wheel in dir_out.glob("*.whl")]
+    int_count = len(list_loose)
+    if int_count and _loose_wheels_match_manifest(path_manifest, list_loose):
         print(f"{int_count} wheel(s) already loose in {dir_out} — nothing to assemble")
         return 0
 
@@ -538,9 +559,14 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
             raise SystemExit(
                 f"wheelhouse assemble: zip_name {str_zip_name!r} collides with an input file"
             )
-        reassemble_zip(list_parts, dict_manifest, path_zip_tmp)
-        int_count = unzip_wheels(path_zip_tmp, dir_out)
-        path_zip_tmp.unlink()
+        try:
+            reassemble_zip(list_parts, dict_manifest, path_zip_tmp)
+            # Only now: a failed verification above must leave the existing wheels untouched.
+            _remove_loose_wheels(dir_out)
+            int_count = unzip_wheels(path_zip_tmp, dir_out)
+        finally:
+            # A failed archive left behind could later be extracted as "unverified".
+            path_zip_tmp.unlink(missing_ok=True)
         print(f"assembled {int_count} wheel(s) into {dir_out} (manifest-verified)")
         return 0
 
