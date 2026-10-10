@@ -1253,10 +1253,12 @@ def test_the_query_asks_for_the_prs_issue_comments() -> None:
     """The notices are ISSUE comments, not review threads — verified on blueprintx#257.
 
     Reading only ``reviewThreads`` cannot see them, which is why the distinction between
-    "nobody looked" and "already looked" was unavailable to the gate at all.
+    "nobody looked" and "already looked" was unavailable to the gate at all. The connection is
+    paginated (``first`` + cursor) because ``last:100`` silently dropped the older half of a
+    140-comment PR (#282, #319); the old assertion pinned that truncating shape.
     """
     cls_gate = _load_gate()
-    assert "comments(last:100)" in cls_gate._QUERY
+    assert "comments(first:100, after:$cc)" in cls_gate._QUERY
 
 
 # --------------------------
@@ -2059,7 +2061,7 @@ _WALKTHROUGH = "> [!IMPORTANT]\n> ## Review skipped\n> - **Review profile**: CHI
 
 
 def test_coderabbit_walkthrough_comment_is_not_a_review() -> None:
-    """Its summary and rate-limit comments carry an auto-generated marker and are skipped."""
+    """A walkthrough is skipped by SHAPE: it has no ladder head, header or body section."""
     str_body = (
         "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n" + _WALKTHROUGH
     )
@@ -2224,19 +2226,81 @@ def test_ladder_issue_review_without_a_timestamp_fails_closed() -> None:
     assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
 
 
-def _comments_page(int_total: int) -> dict:
-    """Build a PR node whose issue comments report ``int_total`` against one node read."""
-    return {"comments": {"totalCount": int_total, "nodes": [_notice("someone", "hi")]}}
+def _comments_node(list_notices: list[dict], str_cursor: str | None) -> dict:
+    """Build one page of issue comments; ``str_cursor`` set means another page follows."""
+    return {
+        "reviews": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []},
+        "reviewThreads": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []},
+        "comments": {
+            "pageInfo": {"hasNextPage": bool(str_cursor), "endCursor": str_cursor},
+            "nodes": list_notices,
+        },
+    }
 
 
-def test_truncated_issue_comments_fail_closed() -> None:
-    """More comments than the 100 read means a review or answer may be unread."""
-    assert len(_load_gate()._unanswered_bodies(_comments_page(101), [], _BODY_ROSTER)) == 1
+def _fetch_comment_pages(monkeypatch: pytest.MonkeyPatch, list_pages: list[dict]) -> dict:
+    """Run ``fetch_pull_request`` over mocked pages and return the merged node."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "_fetch_page", Mock(side_effect=list_pages))
+    return cls_gate.fetch_pull_request("o", "r", 1)
 
 
-def test_complete_issue_comments_stay_green() -> None:
-    """Should-fail witness: a total equal to the nodes read is not truncated."""
-    assert _load_gate()._unanswered_bodies(_comments_page(1), [], _BODY_ROSTER) == []
+def test_review_on_comment_page_one_answered_on_page_three_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR past 200 comments: the answer on the last page must reach the body check."""
+    str_review = "**Actionable comments posted: 1**\n\n♻️ Duplicate comments (1)\n\nx"
+    list_pages = [
+        _comments_node([_notice("coderabbitai[bot]", str_review, "2026-01-02T00:00:00Z")], "c1"),
+        _comments_node([_notice("someone", "unrelated chatter", "2026-01-02T06:00:00Z")], "c2"),
+        _comments_node([_notice("someone", _BODY_REPLY, _BODY_AFTER)], None),
+    ]
+    dict_pr = _fetch_comment_pages(monkeypatch, list_pages)
+    list_notices = dict_pr["comments"]["nodes"]
+    assert _load_gate().find_review_body_problems([], list_notices, _BODY_ROSTER) == []
+
+
+def test_comment_review_without_the_page_three_answer_is_a_problem(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Should-fail witness: the same review without the last-page answer still fails."""
+    str_review = "**Actionable comments posted: 1**\n\n♻️ Duplicate comments (1)\n\nx"
+    list_pages = [
+        _comments_node([_notice("coderabbitai[bot]", str_review, "2026-01-02T00:00:00Z")], "c1"),
+        _comments_node([_notice("someone", "unrelated chatter", "2026-01-02T06:00:00Z")], "c2"),
+        _comments_node([_notice("someone", "still chatting", _BODY_AFTER)], None),
+    ]
+    dict_pr = _fetch_comment_pages(monkeypatch, list_pages)
+    list_notices = dict_pr["comments"]["nodes"]
+    assert len(_load_gate().find_review_body_problems([], list_notices, _BODY_ROSTER)) == 1
+
+
+def test_comment_pages_are_requested_with_the_comment_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Page two and three are asked for with the previous page's cursor (sixth argument)."""
+    cls_gate = _load_gate()
+    cls_page = Mock(
+        side_effect=[
+            _comments_node([], "c1"),
+            _comments_node([], "c2"),
+            _comments_node([], None),
+        ]
+    )
+    monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
+    cls_gate.fetch_pull_request("o", "r", 1)
+    assert [tuple_args[5] for tuple_args, _ in cls_page.call_args_list] == [None, "c1", "c2"]
+
+
+def test_a_failing_comment_page_raises_instead_of_stopping_early(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail closed: an error on a later page propagates, never a silently short list."""
+    cls_gate = _load_gate()
+    cls_page = Mock(side_effect=[_comments_node([], "c1"), RuntimeError("page two failed")])
+    monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
+    with pytest.raises(RuntimeError, match="page two failed"):
+        cls_gate.fetch_pull_request("o", "r", 1)
 
 
 # ⚠️ WITNESS FOR blueprintx#372 — THE DISPLAY BUDGET MUST NOT REACH A MATCHER.
