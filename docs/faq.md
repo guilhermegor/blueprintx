@@ -86,6 +86,11 @@ heading directly followed by one) is clean. Nitpick and Trivial lines never need
 CodeRabbit's walkthrough, rate-limit and command-reply comments carry an auto-generated marker
 and are not reviews.
 
+Count authority binds to the author, not the body: the `Actionable` header only speaks for
+CodeRabbit, and the `N finding(s) across` count only for the ladder app and only with its
+attribution line. Any other author's counts are ignored and its body is read by structure, so
+quoting a header never clears findings. Quoted lines and fenced blocks are ignored too.
+
 Missing or unrecognised input fails closed: a body section with no parsable count, a ladder
 attribution with nothing after it, a review comment with no timestamp, and a PR with more than
 100 issue comments (the gate reads 100) all count as findings; only an explicit clean statement or

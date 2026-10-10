@@ -1211,10 +1211,10 @@ _RE_BODY_SECTION = re.compile(
     r"\b(?:outside diff range|duplicate) comments(?:\s*\((\d+)\))?", re.IGNORECASE
 )
 _RE_ACTIONABLE = re.compile(
-    r"^[^\w\n]*actionable comments posted:?[\s*]*\d+", re.IGNORECASE | re.MULTILINE
+    r"^[ \t*_#-]*actionable comments posted:?[\s*]*\d+", re.IGNORECASE | re.MULTILINE
 )
 _RE_LADDER_COUNT = re.compile(
-    r"^[^\w\n]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
+    r"^[ \t*_#-]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
 )
 _RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
 _RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
@@ -1235,11 +1235,27 @@ _RE_BODY_CLEAN_SECTION = re.compile(
 _RES_BODY_FINDING = (_RE_BODY_SEVERITY, _RE_BODY_COUNT, _RE_BODY_HEADING, _RE_BODY_REVIEW_LINE)
 
 
-def _declared_findings(str_body: str) -> list[str] | None:
+# Quoted material is never the review's own structure: a fenced block or a "> " line can hold
+# another reviewer's header verbatim, and counting it would let one body clear its own findings.
+_RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*", re.M | re.S)
+
+
+# Count authority belongs to the AUTHOR, never to the body's shape: any body can print any header.
+# The roster carries no per-format data, so the two authors whose counts this gate trusts are
+# named here (docs/faq.md). Any other author's counts are ignored and its body is read by
+# structure alone, which fails closed.
+_SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
+_SET_LADDER_AUTHORS = frozenset({"guilhermegor-review-ladder"})
+
+
+def _declared_findings(str_body: str, str_login: str = "") -> list[str] | None:
     """Return the findings a body's own printed counts declare, or ``None`` if it prints none.
 
-    A non-zero body section (outside the diff, duplicates) wins over a zero inline count, since
-    CodeRabbit prints both. A CodeRabbit header alone means the findings are inline threads.
+    A non-zero body section (outside the diff, duplicates) always counts: it can only add a
+    finding. The counts that can CLEAR a body speak only for their author: the ``Actionable``
+    header for CodeRabbit (its N findings are inline threads, which the thread check holds), the
+    ``N finding(s) across`` count for the ladder app and only with the attribution line. Both are
+    read with quoted lines and fenced blocks removed. Any other author gets no count authority.
     """
     list_sections = [
         cls_section.group(0)
@@ -1248,10 +1264,13 @@ def _declared_findings(str_body: str) -> list[str] | None:
     ]
     if list_sections:
         return list_sections
-    if _RE_ACTIONABLE.search(str_body):
+    str_author = normalise_login(str_login)
+    str_own = _RE_QUOTED.sub("", str_body)
+    if str_author in _SET_HEADER_AUTHORS and _RE_ACTIONABLE.search(str_own):
         return []
-    cls_count = _RE_LADDER_COUNT.search(str_body)
-    if cls_count is None:
+    cls_count = _RE_LADDER_COUNT.search(str_own)
+    is_ladder = str_author in _SET_LADDER_AUTHORS and _RE_LADDER_HEAD.search(str_body)
+    if cls_count is None or not is_ladder:
         return None
     return [cls_count.group(0).strip("* \t")] if int(cls_count.group(1)) else []
 
@@ -1277,13 +1296,17 @@ def _ladder_empty_findings(str_body: str) -> list[str]:
     return ["ladder review with no findings count and no clean statement"]
 
 
-def review_body_finding_lines(str_body: str | None) -> list[str]:
+def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list[str]:
     """Return the lines of a review body that list findings; empty means a clean body.
 
     Parameters
     ----------
     str_body : str or None
             The submitted review's body.
+    str_login : str, optional
+            The author's login. Printed counts clear a body only for the author they speak
+            for (CodeRabbit's header, the ladder app's count); any other author is read by
+            structure alone.
 
     Returns
     -------
@@ -1292,7 +1315,7 @@ def review_body_finding_lines(str_body: str | None) -> list[str]:
             heading. A line that only reports there are none ("No findings.", "Minor: none")
             and a findings heading directly followed by one are dropped first.
     """
-    list_declared = _declared_findings(str_body or "")
+    list_declared = _declared_findings(str_body or "", str_login)
     if list_declared is not None:
         return list_declared
     str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
@@ -1430,7 +1453,12 @@ def find_review_body_problems(
     """
     set_roster = {normalise_login(str_login) for str_login in set_roster}
     list_hits = [
-        (dict_review, review_body_finding_lines(dict_review.get("body")))
+        (
+            dict_review,
+            review_body_finding_lines(
+                dict_review.get("body"), (dict_review.get("author") or {}).get("login") or ""
+            ),
+        )
         for dict_review in list_reviews + _notices_as_reviews(list_notices, set_roster)
         if normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
         and dict_review.get("state") != "DISMISSED"

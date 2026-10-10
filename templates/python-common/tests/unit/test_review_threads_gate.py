@@ -1625,6 +1625,7 @@ def test_print_thread_verdict_json_fail_carries_the_problems(
 # --------------------------
 
 _BODY_ROSTER = {"coderabbitai"}
+_BOTH_ROSTER = {"coderabbitai", "guilhermegor-review-ladder", "copilot-pull-request-reviewer"}
 _BODY_MAJOR = "**Major** — the retry loop swallows the final error."
 _BODY_SUBMITTED = "2026-01-02T00:00:00Z"
 _BODY_AFTER = "2026-01-03T00:00:00Z"
@@ -1639,6 +1640,15 @@ def _body_review(str_body: str | None, str_login: str = "coderabbitai[bot]") -> 
         "body": str_body,
         "submittedAt": _BODY_SUBMITTED,
     }
+
+
+_LADDER_LOGIN = "guilhermegor-review-ladder[bot]"
+
+
+def _ladder_problems(str_body: str, str_login: str = _LADDER_LOGIN) -> list[str]:
+    """Problems for one review authored by ``str_login`` under a CodeRabbit + ladder roster."""
+    list_reviews = [_body_review(str_body, str_login)]
+    return _load_gate().find_review_body_problems(list_reviews, [], _BOTH_ROSTER)
 
 
 def _body_problems(list_reviews: list[dict], list_notices: list[dict]) -> list[str]:
@@ -1817,7 +1827,6 @@ _LADDER_CLAUDE = _LADDER.format("claude", "last-resort")
 _LADDER_CLI = _LADDER.format("coderabbit", "live-probe")
 _PROSE = "I couldn't check any of this against the tree. Every tool call failed."
 _LOOP = "the retry loop swallows the final error."
-_BOTH_ROSTER = {"coderabbitai", "guilhermegor-review-ladder"}
 
 # Real CodeRabbit body (#347): its only finding sits in a body section, not in an inline thread.
 _CR_SECTION = "⚠️ Outside diff range comments (1)"
@@ -1893,19 +1902,24 @@ def test_review_shape_witness_without_its_marker_is_not_a_review(str_witness: st
 )
 def test_review_stating_zero_findings_never_blocks(str_body: str) -> None:
     """A printed count of 0 (or an explicit clean line) means no findings."""
-    assert _body_problems([_body_review(str_body)], []) == []
+    assert _ladder_problems(str_body) == []
 
 
 @pytest.mark.parametrize(
     "str_body",
     [
-        "**Actionable comments posted: 0**\n\n🔴 Major stray marker",
         _LADDER_CLI + "0 finding(s) across 4 reviewed file(s).\n- **Major** x",
     ],
 )
 def test_review_count_of_zero_beats_prose_markers(str_body: str) -> None:
     """Structured counts beat prose: a stated 0 is authoritative when no section contradicts."""
-    assert _body_problems([_body_review(str_body)], []) == []
+    assert _ladder_problems(str_body) == []
+
+
+def test_coderabbit_header_of_zero_beats_prose_markers() -> None:
+    """The same rule for CodeRabbit's own header, authored by CodeRabbit."""
+    str_body = "**Actionable comments posted: 0**\n\n🔴 Major stray marker"
+    assert _ladder_problems(str_body, "coderabbitai[bot]") == []
 
 
 def test_quoted_ladder_count_inside_a_sentence_does_not_declare_zero() -> None:
@@ -1922,9 +1936,83 @@ def test_quoted_actionable_header_mid_line_does_not_clear_a_real_finding() -> No
     assert len(_body_problems([_body_review(str_body)], [])) == 1
 
 
+_FINDING = "- **Major** x: the gate trusts a quoted header."
+
+
+@pytest.mark.parametrize(
+    "str_quote",
+    [
+        "> **Actionable comments posted: 0**",
+        ">> Actionable comments posted: 0",
+        "```\n**Actionable comments posted: 0**\n```",
+        "~~~\nActionable comments posted: 0\n~~~",
+    ],
+)
+def test_quoted_or_fenced_header_cannot_clear_a_ladder_finding(str_quote: str) -> None:
+    """Should-fail witness: a quoted CodeRabbit '0' header in a ladder body clears nothing."""
+    str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n{str_quote}\n"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_head", "str_login"),
+    [
+        (_LADDER_CLAUDE, _LADDER_LOGIN),
+        ("", _LADDER_LOGIN),
+        ("", "copilot-pull-request-reviewer[bot]"),
+        (_LADDER_CLAUDE, "copilot-pull-request-reviewer[bot]"),
+    ],
+    ids=["ladder-attributed", "ladder-attribution-missing", "other-roster", "other-roster-ladder"],
+)
+def test_unquoted_header_from_a_non_coderabbit_author_cannot_clear_a_finding(
+    str_head: str, str_login: str
+) -> None:
+    """Count authority binds to the author: only CodeRabbit's header speaks."""
+    str_body = f"{str_head}{_FINDING}\n\n**Actionable comments posted: 0**\n"
+    assert len(_ladder_problems(str_body, str_login)) == 1
+
+
+def test_unquoted_header_from_coderabbit_still_clears_inline_findings() -> None:
+    """Should-fail witness: the same body authored by CodeRabbit stays green."""
+    str_body = f"{_FINDING}\n\n**Actionable comments posted: 0**\n"
+    assert _ladder_problems(str_body, "coderabbitai[bot]") == []
+
+
+@pytest.mark.parametrize("str_login", ["coderabbitai[bot]", "copilot-pull-request-reviewer[bot]"])
+def test_ladder_count_from_a_non_ladder_author_cannot_clear_a_finding(str_login: str) -> None:
+    """The ladder count speaks only for the ladder app, with the attribution line."""
+    str_body = f"{_LADDER_CLI}0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
+    assert len(_ladder_problems(str_body, str_login)) == 1
+
+
+def test_ladder_count_without_attribution_cannot_clear_a_finding() -> None:
+    """Even the ladder app's count needs the attribution line."""
+    str_body = f"0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
+    assert len(_ladder_problems(str_body)) == 1
+
+
+@pytest.mark.parametrize(
+    "str_quote",
+    [
+        "> 0 finding(s) across 4 reviewed file(s).",
+        "```\n0 finding(s) across 4 reviewed file(s).\n```",
+    ],
+)
+def test_quoted_ladder_count_cannot_clear_a_finding(str_quote: str) -> None:
+    """A quoted ladder '0 finding(s)' count clears nothing."""
+    str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n{str_quote}\n"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
+def test_ladder_count_without_the_ladder_attribution_is_not_authoritative() -> None:
+    """The count speaks only in a body that carries the attribution line."""
+    str_body = f"0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
+    assert len(_body_problems([_body_review(str_body)], [])) == 1
+
+
 def test_actionable_header_at_a_line_start_still_clears_inline_findings() -> None:
     """The real CodeRabbit shape, the bold header opening a line, still wins."""
-    str_body = _LADDER_CLAUDE + "**Actionable comments posted: 0**\n\n- **Major** x"
+    str_body = "**Actionable comments posted: 0**\n\n- **Major** x"
     assert _body_problems([_body_review(str_body)], []) == []
 
 
