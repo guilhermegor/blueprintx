@@ -152,6 +152,11 @@ def test_read_xml_attribute_path_captures_the_currency_a_text_path_cannot(
     )
     assert "ccy" not in df_without_attr.columns
 
+
+def test_read_xml_attribute_path_reaches_the_currency(tmp_path: Path) -> None:
+    """An `@Ccy` path reads the currency a text path cannot see."""
+    path_xml = tmp_path / "fixture.xml"
+    path_xml.write_text(_fixture_xml())
     df_with_attr = read_xml(
         path_xml,
         "Tx",
@@ -225,6 +230,13 @@ def test_find_xml_row_problems_reports_when_no_row_anchor_is_found(tmp_path: Pat
     path_xml.write_text("<Document></Document>")
     cls_report = find_xml_row_problems(path_xml, "Tx", _empty_contract())
     assert cls_report.list_fatal != []
+
+
+def test_find_xml_row_problems_with_no_row_anchor_adds_no_warnings(tmp_path: Path) -> None:
+    """A document with no row tag is fatal only; nothing is duplicated into warnings."""
+    path_xml = tmp_path / "empty.xml"
+    path_xml.write_text("<Document></Document>")
+    cls_report = find_xml_row_problems(path_xml, "Tx", _empty_contract())
     assert cls_report.list_warnings == []
 
 

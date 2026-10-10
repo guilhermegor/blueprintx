@@ -70,9 +70,8 @@ def test_to_decimal_non_finite_returns_default(value: float | Decimal | str) -> 
             A non-finite value the coercion contract must map to ``default`` rather than
             leak (a leaked ``Decimal('NaN')`` raises ``InvalidOperation`` downstream).
     """
-    cls_result = to_decimal(value, 2, default=Decimal("-1"))
-    assert cls_result == Decimal("-1.00")
-    assert cls_result.is_finite()
+    # Equality alone proves finiteness: a NaN never compares equal to anything.
+    assert to_decimal(value, 2, default=Decimal("-1")) == Decimal("-1.00")
 
 
 def test_to_decimal_negative_places_raises() -> None:
@@ -81,17 +80,39 @@ def test_to_decimal_negative_places_raises() -> None:
         to_decimal("1.0", -1)
 
 
-def test_parse_br_number_series_handles_br_and_plain() -> None:
-    """BR-formatted cells normalise; plain decimals/floats keep their point."""
+@pytest.mark.parametrize(
+    ("int_position", "float_expected"),
+    [
+        (0, 2084960.76),
+        (1, 1234.56),
+        # A plain float-repr cell keeps its value and is never inflated tenfold.
+        (2, 5.0),
+        (3, -3.5),
+    ],
+)
+def test_parse_br_number_series_handles_br_and_plain(
+    int_position: int, float_expected: float
+) -> None:
+    """BR-formatted cells normalise; plain decimals/floats keep their point.
+
+    Parameters
+    ----------
+    int_position : int
+        Index of the cell in the input series.
+    float_expected : float
+        The value that cell must parse to.
+    """
     pd = pytest.importorskip("pandas")
     series_in = pd.Series(["2.084.960,76", "1234.56", "5.0", "(3,5)", "x"])
     series_out = parse_br_number_series(series_in)
-    assert series_out.iloc[0] == pytest.approx(2084960.76)
-    assert series_out.iloc[1] == pytest.approx(1234.56)
-    # A plain float-repr cell keeps its value and is never inflated tenfold.
-    assert series_out.iloc[2] == pytest.approx(5.0)
-    assert series_out.iloc[3] == pytest.approx(-3.5)
-    assert pd.isna(series_out.iloc[4])
+    assert series_out.iloc[int_position] == pytest.approx(float_expected)
+
+
+def test_parse_br_number_series_turns_garbage_into_nan() -> None:
+    """A cell that is not a number parses to NaN rather than raising."""
+    pd = pytest.importorskip("pandas")
+    series_out = parse_br_number_series(pd.Series(["x"]))
+    assert pd.isna(series_out.iloc[0])
 
 
 @pytest.mark.parametrize("str_raw", ["2.084.960,76", "1234.56", "10,5"])

@@ -8,6 +8,8 @@ text back, or ``None`` when the source has none), and parses it with
 
 from pathlib import Path
 
+import pytest
+
 # Bare ``utils.`` prefix (not ``src.utils.``), matching the repo's cross-module test convention
 # (see test_provenance / test_logs_emitter): a second module copy under the ``src.`` prefix
 # breaks type identity for a beartype-checked seam.
@@ -27,13 +29,24 @@ def test_parse_sidecar_metadata_maps_fields_by_first_column() -> None:
     """Each field keys the remaining columns by their header name."""
     dict_meta = parse_sidecar_metadata(_META_TEXT)
     assert set(dict_meta) == {"CNPJ", "VALOR"}
+
+
+def test_parse_sidecar_metadata_keys_remaining_columns_by_header() -> None:
+    """A field's entry maps each remaining column by its header name."""
+    dict_meta = parse_sidecar_metadata(_META_TEXT)
     assert dict_meta["CNPJ"] == {"Descricao": "CNPJ do fundo", "Tipo": "string", "Tamanho": "14"}
 
 
-def test_parse_sidecar_metadata_empty_when_no_data_rows() -> None:
-    """A header-only (or blank) descriptor parses to an empty map, not an error."""
-    assert parse_sidecar_metadata("Campo;Tipo\n") == {}
-    assert parse_sidecar_metadata("") == {}
+@pytest.mark.parametrize("str_text", ["Campo;Tipo\n", ""], ids=["header-only", "blank"])
+def test_parse_sidecar_metadata_empty_when_no_data_rows(str_text: str) -> None:
+    """A header-only (or blank) descriptor parses to an empty map, not an error.
+
+    Parameters
+    ----------
+    str_text : str
+        A descriptor with no data rows.
+    """
+    assert parse_sidecar_metadata(str_text) == {}
 
 
 # ⚠️ Download stubs live at MODULE level, not nested inside each test. mccabe charges the
@@ -97,5 +110,11 @@ def test_fetch_sidecar_text_persists_and_returns_text(tmp_path: Path) -> None:
     str_text = fetch_sidecar_text(
         "https://x/META/meta_cad_fi.txt", path_dest, _download_writes_meta
     )
-    assert path_dest.exists()  # persisted to bronze (the runtime half)
     assert str_text == _META_TEXT  # returned for contract definition (the dev-time half)
+
+
+def test_fetch_sidecar_text_persists_to_bronze(tmp_path: Path) -> None:
+    """A present sidecar is written to the bronze path (the runtime half)."""
+    path_dest = tmp_path / "raw" / "meta_cad_fi.txt"
+    fetch_sidecar_text("https://x/META/meta_cad_fi.txt", path_dest, _download_writes_meta)
+    assert path_dest.exists()
