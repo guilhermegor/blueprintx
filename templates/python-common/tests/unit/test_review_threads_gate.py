@@ -10,6 +10,7 @@ Every shape here was measured on a real PR (blueprintx#170), including the one t
 the gate: 14 threads all reading ``isResolved: true`` while 11 held no author reply at all.
 """
 
+import functools
 import importlib.util
 import json
 from pathlib import Path
@@ -2450,17 +2451,124 @@ def _patch_id(path_repo: Path, str_oid: str) -> str:
     Returns
     -------
     str
-            The patch id, the oracle the compare-API fingerprint stands in for in CI.
+            The patch id, an independent oracle for the compare-API fingerprint.
+
+    Raises
+    ------
+    ValueError
+            If ``git patch-id`` prints nothing, which is an empty diff or a failed run.
     """
     str_base = _git(path_repo, "merge-base", "main", str_oid)
     str_diff = _git(path_repo, "diff", str_base, str_oid)
-    return subprocess.run(  # noqa: S603
+    cls_run = subprocess.run(  # noqa: S603
         ["git", "patch-id", "--stable"],  # noqa: S607
         input=str_diff + "\n",
         capture_output=True,
         text=True,
-        check=False,
-    ).stdout.split()[0]
+        check=True,
+    )
+    # `<patch-id> <commit-id>`; unpacking fails loudly on empty output instead of IndexError.
+    str_patch_id, _ = cls_run.stdout.split()
+    return str_patch_id
+
+
+_DICT_STATUS = {"A": "added", "M": "modified", "D": "removed"}
+
+
+def _file_entry(path_repo: Path, str_base: str, str_oid: str, str_line: str) -> dict:
+    """Build one ``files`` entry of the compare API from a real ``git diff``.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory.
+    str_base : str
+            Merge base of ``main`` and the commit.
+    str_oid : str
+            Commit being compared.
+    str_line : str
+            One ``git diff --name-status`` line, ``<code>\\t<path>``.
+
+    Returns
+    -------
+    dict
+            ``filename``, ``status`` and ``patch`` (starting at the first hunk, as the API does).
+    """
+    str_code, str_name = str_line.split("\t")
+    str_diff = _git(path_repo, "diff", str_base, str_oid, "--", str_name)
+    return {
+        "filename": str_name,
+        "status": _DICT_STATUS[str_code],
+        "patch": str_diff[str_diff.index("@@") :],
+    }
+
+
+def _compare_files(path_repo: Path, str_oid: str) -> list[dict]:
+    """Return the compare-shaped ``files`` list of the PR's own patch at ``str_oid``.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory, where ``main`` is the base.
+    str_oid : str
+            Commit to measure.
+
+    Returns
+    -------
+    list of dict
+            What ``compare/main...<oid>`` would list, built from real ``git diff`` output.
+    """
+    str_base = _git(path_repo, "merge-base", "main", str_oid)
+    list_lines = _git(path_repo, "diff", "--name-status", str_base, str_oid).splitlines()
+    return list(map(functools.partial(_file_entry, path_repo, str_base, str_oid), list_lines))
+
+
+def _real_fingerprint(path_repo: Path, str_oid: str) -> str:
+    """Run the PRODUCTION ``patch_fingerprint`` on compare-shaped files from real diffs.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Repository directory, where ``main`` is the base.
+    str_oid : str
+            Commit to measure.
+
+    Returns
+    -------
+    str
+            The gate's own digest.
+    """
+    return _load_gate().patch_fingerprint(_compare_files(path_repo, str_oid))
+
+
+def _overlap_repo(path_repo: Path, str_old: str, str_new: str) -> tuple[str, str]:
+    """Build a PR that edits line 10, then merge a ``main`` that rewrites ``str_old``.
+
+    Parameters
+    ----------
+    path_repo : Path
+            Empty repository directory.
+    str_old : str
+            Text of the 20-line file that ``main`` replaces. Line 12 is inside the PR hunk's
+            3-line context; line 20 and the top of the file are outside it.
+    str_new : str
+            Its replacement.
+
+    Returns
+    -------
+    tuple of str
+            The reviewed commit and the head after the conflict-free merge of ``main``.
+    """
+    str_text = "\n".join(map(str, range(1, 21))) + "\n"
+    _git(path_repo, "init", "-b", "main")
+    _commit(path_repo, "a.txt", str_text)
+    _git(path_repo, "checkout", "-b", "feat")
+    str_review = _commit(path_repo, "a.txt", str_text.replace("\n10\n", "\nfeat\n"))
+    _git(path_repo, "checkout", "main")
+    _commit(path_repo, "a.txt", str_text.replace(str_old, str_new, 1))
+    _git(path_repo, "checkout", "feat")
+    _git(path_repo, "merge", "--no-edit", "main")
+    return str_review, _git(path_repo, "rev-parse", "HEAD")
 
 
 @pytest.fixture
@@ -2641,3 +2749,80 @@ def test_fetch_patch_fingerprint_unknown_base_sha_fails_closed() -> None:
     cls_gate = _load_gate()
     with pytest.raises(ValueError, match="base commit is unknown"):
         cls_gate.fetch_patch_fingerprint("o", "r", "", "headsha")
+
+
+@pytest.mark.parametrize(
+    ("str_head_key", "bool_expected"),
+    [
+        ("clean_merge", True),
+        ("conflict_merge", False),
+        ("new_commit", False),
+        ("rewritten", False),
+    ],
+)
+def test_review_covers_head_production_fingerprint_on_real_diffs(
+    dict_repo: dict, str_head_key: str, bool_expected: bool
+) -> None:
+    """The production digest, fed compare-shaped files from real ``git diff``, decides it."""
+    fn_fingerprint = functools.partial(_real_fingerprint, dict_repo["path"])
+    bool_covered = _load_gate().review_covers_head(
+        fn_fingerprint, dict_repo["review"], dict_repo[str_head_key]
+    )
+    assert bool_covered is bool_expected
+
+
+@pytest.mark.parametrize(
+    ("str_old", "str_new", "bool_expected"),
+    [
+        ("\n20\n", "\nmain\n", True),  # below the hunk
+        ("1\n2\n", "0\n1\n2\n", True),  # a line inserted above shifts the coordinates
+        ("\n12\n", "\nmain\n", False),  # inside the hunk's 3-line context window
+    ],
+)
+def test_review_covers_head_main_edit_relative_to_the_hunk(
+    tmp_path: Path, str_old: str, str_new: str, bool_expected: bool
+) -> None:
+    """A clean merge carries a review forward unless main touched the hunk's context lines.
+
+    Pinned behaviour, not a promise: the digest keeps context lines, so a conflict-free
+    base edit inside the 3-line window makes the review stale (it fails safe), while an
+    edit that only shifts the hunk's coordinates does not.
+    """
+    str_review, str_head = _overlap_repo(tmp_path, str_old, str_new)
+    fn_fingerprint = functools.partial(_real_fingerprint, tmp_path)
+    bool_covered = _load_gate().review_covers_head(fn_fingerprint, str_review, str_head)
+    assert bool_covered is bool_expected
+
+
+def test_patch_fingerprint_whole_file_page_raises() -> None:
+    """A full 300-file list may be cut off by the API, so it is not trusted."""
+    cls_gate = _load_gate()
+    dict_file = {"filename": "a", "status": "modified", "patch": "p"}
+    with pytest.raises(ValueError, match="300 file"):
+        cls_gate.patch_fingerprint([dict_file] * 300)
+
+
+def test_review_covers_head_malformed_file_entry_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A compare response whose file entry lacks ``filename`` is "not covered", not a crash."""
+    cls_gate = _load_gate()
+    json_body = '{"files": [{"patch": "x"}]}'
+    monkeypatch.setattr(
+        cls_gate.subprocess, "run", Mock(return_value=Mock(returncode=0, stdout=json_body))
+    )
+    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
+    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40) is False
+
+
+def test_compare_fingerprint_computes_each_commit_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The head is fingerprinted once however many reviewed commits are compared with it."""
+    cls_gate = _load_gate()
+    fn_fetch = Mock(return_value="digest")
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", fn_fetch)
+    fn_fingerprint = cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r")
+    fn_fingerprint("head")
+    fn_fingerprint("head")
+    assert fn_fetch.call_count == 1

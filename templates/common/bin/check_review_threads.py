@@ -531,6 +531,8 @@ def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str
     list of str
             Commit oids, deduplicated, empty oids dropped.
     """
+    # Every review, not each reviewer's latest as `reviewers_who_reported` does: an equal
+    # fingerprint means identical PR code, so an older identical review is a true carry-forward.
     list_oids = [
         (d.get("commit") or {}).get("oid") or ""
         for d in list_reviews
@@ -539,9 +541,9 @@ def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str
     return list(dict.fromkeys(str_oid for str_oid in list_oids if str_oid))
 
 
-# A page of the compare API holds this many files. Reaching it means the list may be cut off,
-# and a cut-off patch cannot be compared, so it fails closed. Repo ceiling is 90 files per PR.
-_INT_COMPARE_FILES = 100
+# The compare API lists at most this many files, whatever `per_page` says (it pages COMMITS,
+# not files; measured). A full list may be cut off, so it fails closed.
+_INT_COMPARE_FILES = 300
 
 
 def patch_fingerprint(list_files: list[dict]) -> str:
@@ -618,7 +620,7 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
     list_cmd = [
         "gh",
         "api",
-        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page={_INT_COMPARE_FILES}",
+        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1",
     ]
     # Constant argv built from CI-provided identifiers; no shell is involved.
     cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
@@ -634,7 +636,8 @@ def review_covers_head(
 
     It does when the PR's own patch is unchanged, so the head only merged the base in. A
     conflict resolution, a new commit or a force-push changes the patch and stays superseded.
-    ⚠️ Fails CLOSED: any error computing either patch means "not covered", never "covered".
+    ⚠️ Fails CLOSED: any error computing either patch (API failure, a malformed file entry)
+    means "not covered", never "covered".
 
     Parameters
     ----------
@@ -652,7 +655,7 @@ def review_covers_head(
     """
     try:
         bool_same = fn_fingerprint(str_review_oid) == fn_fingerprint(str_head_oid)
-    except (RuntimeError, ValueError):
+    except (RuntimeError, ValueError, LookupError, TypeError, AttributeError):
         return False
     if bool_same:
         print(
@@ -1681,8 +1684,11 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
             Maps a commit oid to its patch fingerprint.
     """
     str_owner, _, str_repo = str_repo_full.partition("/")
-    return functools.partial(
-        fetch_patch_fingerprint, str_owner, str_repo, dict_pr.get("baseRefOid") or ""
+    # Cached so the head is fingerprinted once however many commits were reviewed.
+    return functools.lru_cache(maxsize=None)(
+        functools.partial(
+            fetch_patch_fingerprint, str_owner, str_repo, dict_pr.get("baseRefOid") or ""
+        )
     )
 
 
@@ -1706,8 +1712,7 @@ def main(list_argv: list[str] | None = None) -> int:
     if not str_repo_full or not str_number.isdigit():
         return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
 
-    path_root = pathlib.Path.cwd()
-    dict_roster = load_roster(path_root)
+    dict_roster = load_roster(pathlib.Path.cwd())
     if not dict_roster:
         return _print_skip(
             bool_json, f"No {_ROSTER_FILE} — the review-thread gate is not adopted here"
@@ -1719,7 +1724,8 @@ def main(list_argv: list[str] | None = None) -> int:
     set_roster = set(dict_roster)
     set_reviewers = reviewer_logins(dict_roster)
 
-    dict_pr = fetch_pull_request(*str_repo_full.split("/", 1), int(str_number))
+    str_owner, _, str_repo = str_repo_full.partition("/")
+    dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 

@@ -122,23 +122,32 @@ gate asks whether the PR's **own patch** changed between the reviewed commit `R`
 That is the case of `update-branch` under the strict-serial ruleset: main is merged in, no code
 is written, and a second review of the same diff would only spend a reviewer rung.
 
-The patch is the diff from the merge base with the base branch to the commit, fingerprinted
-like `git patch-id --stable` (hunk line numbers ignored, everything else compared). The CI
-checkout is shallow (`actions/checkout` defaults to `fetch-depth: 1`), so there is no local
-history for `git merge-base`. The gate reads the same diff from the GitHub compare API
+The patch is the diff from the merge base with the base branch to the commit. It is
+fingerprinted as the compare API reports it, with only the hunk coordinates
+(`@@ -a,b +c,d @@`) removed. Everything else is kept: the function context after the closing
+`@@`, the context lines, and all whitespace. This is stricter than `git patch-id --stable`,
+which also drops the function context and normalises whitespace. The CI checkout is shallow
+(`actions/checkout` defaults to `fetch-depth: 1`), so there is no local history for
+`git merge-base`; the gate reads the same diff from the GitHub compare API
 (`compare/<base>...<commit>`), which computes the merge base server side.
 
 Both compares name the base by the commit SHA read once with the PR, never by branch name, so a
 retarget or a push to the base between the two reads cannot make them measure different bases.
-The fingerprint keeps each hunk header's function context, so the same edit moved to another
-function does not match; hunks that shift only by line number do. Known ceiling: an identical
-edit moved within one function, between identical context lines, still matches, as it does for
-`git patch-id`.
+Each commit is fingerprinted once, however many reviewed commits are compared with the head.
+
+What carries forward is therefore narrower than "any update-branch". A base edit that only
+shifts the PR's hunks (lines added above or below them) leaves the fingerprint alone. A
+conflict-free base edit inside a hunk's three context lines changes the context, so the review
+goes stale; that fails safe. The tests pin both cases against real `git diff` output. Known
+ceiling: an identical edit moved within one function, between identical context lines, still
+matches, as it does for `git patch-id`.
 
 Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
-closed: a missing commit, an API error, a binary or oversized file with no patch text, or 100
-changed files or more (the page the API returns) is read as "not covered".
+closed: a missing commit, an API error, a malformed response, a binary or oversized file with
+no patch text, or a full 300-file list is read as "not covered". The compare API returns at most
+300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
+off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
 
 ## Which install methods are supported?
 
