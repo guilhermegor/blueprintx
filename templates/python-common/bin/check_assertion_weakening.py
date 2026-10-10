@@ -908,10 +908,11 @@ def _touches_production_code(list_changed: list) -> bool:
         ``True`` when at least one changed path is neither a test file nor
         documentation — the signal that gates the expected-value-changed rule.
     """
-    for _str_status, _str_src, str_path in list_changed:
-        if RE_TEST_PATH.search(str_path) or RE_DOC_PATH.search(str_path):
-            continue
-        return True
+    for str_status, str_src, str_path in list_changed:
+        # A rename removes its source, so a production file moved into tests/ still counts.
+        tuple_paths = (str_src, str_path) if str_status == "R" else (str_path,)
+        if any(not (RE_TEST_PATH.search(p) or RE_DOC_PATH.search(p)) for p in tuple_paths):
+            return True
     return False
 
 

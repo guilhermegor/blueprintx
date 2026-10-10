@@ -571,3 +571,13 @@ def test_a_renamed_and_weakened_test_file_is_reported(path_renamed_repo: Path) -
 def test_a_merely_renamed_test_file_is_clean(path_renamed_repo: Path) -> None:
     """A pure rename keeps every assertion, so the gate stays green."""
     assert _rename_with(path_renamed_repo, _STR_STRONG) == []
+
+
+def test_a_source_file_renamed_into_tests_touches_production_code() -> None:
+    """A rename's SOURCE is removed, so moving ``src/`` into ``tests/`` changes production."""
+    assert gate._touches_production_code([("R", "src/app.py", "tests/test_app.py")])
+
+
+def test_a_source_file_copied_into_tests_does_not_touch_production_code() -> None:
+    """A copy leaves its source in place, so only the destination counts."""
+    assert not gate._touches_production_code([("C", "src/app.py", "tests/test_app.py")])
