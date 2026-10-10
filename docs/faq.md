@@ -113,6 +113,65 @@ are also open, the failure lists both. Re-run the check after replying. The test
 `test_review_threads_gate.py` list every shape with a witness that fails without its marker.
 The rule is weaker than a thread: a long comment answers without being tied to a finding.
 
+### When does a review still count after the branch moves?
+
+A review is pinned to the commit it was written against. When no review names the head, the
+gate asks whether the PR's **own patch** changed between the reviewed commit `R` and the head
+`H`. If it did not, the review covers `H` and the gate prints
+`review at R still covers H: the head only merges the base, the PR's own patch is unchanged`.
+That is the case of `update-branch` under the strict-serial ruleset: main is merged in, no code
+is written, and a second review of the same diff would only spend a reviewer rung.
+
+The patch is the diff from the merge base with the base branch to the commit. It is
+fingerprinted as the compare API reports it, with only the hunk coordinates
+(`@@ -a,b +c,d @@`) removed. Everything else is kept: the function context after the closing
+`@@`, the context lines, and all whitespace. This is stricter than `git patch-id --stable`,
+which also drops the function context and normalises whitespace. The CI checkout is shallow
+(`actions/checkout` defaults to `fetch-depth: 1`), so there is no local history for
+`git merge-base`; the gate reads the same diff from the GitHub compare API
+(`compare/<base>...<commit>`), which computes the merge base server side.
+
+Both compares name the base by the commit SHA read once with the PR, never by branch name, so a
+retarget or a push to the base between the two reads cannot make them measure different bases.
+The head is fingerprinted once, by the caller, and handed to each comparison, so the guarantee
+does not rest on the compare function caching anything: if the head cannot be read the
+comparison stops there. Reviewed commits are tried newest first and at most five of them
+(`_INT_MAX_REVIEWED_COMMITS`: five 60 second calls stay well inside the job timeout, and a PR
+reviewed at more commits than that is simply re-reviewed), so a PR makes at most six compare
+calls. A pass that rests on a carried-forward review is shown in the verdict: one line in the
+normal output, and a `carried_forward_from` field (the reviewed commit) under `--json`, where
+stdout stays one document. The check runs
+after the completion-notice check, so a PR that already passes makes no compare call. Each call
+has a 60 second timeout, and a timeout, a missing `gh` or an API error all read as "not
+covered", with one line on stderr giving the reason (stdout stays the `--json` document). A
+`DISMISSED` review is never carried forward. Every review's findings, threads or body, are
+audited afterwards whatever the carry-forward decided.
+
+What carries forward is therefore narrower than "any update-branch". A base edit that only
+shifts the PR's hunks (lines added above or below them) leaves the fingerprint alone. A
+conflict-free base edit inside a hunk's three context lines changes the context, so the review
+goes stale; that fails safe. The tests pin both cases against real `git diff` output. Known
+ceilings: an identical edit moved within one function, between identical context lines, still
+matches, as it does for `git patch-id`; and a conflict-free base change can still break the
+unchanged patch semantically (main renames a function the PR calls), which a patch comparison
+cannot see. That is accepted: a review is repeated only when a conflict or new code changes
+the PR's own patch, and CI covers the integration. A PR from a fork whose commits cannot be
+compared fails closed like any other error.
+
+A PR whose base branch was ever changed gets no carry-forward at all. The compare measures the
+patch against today's base, which need not be the base the review was written against, so
+after a retarget the same fingerprint proves nothing. The gate reads the PR's REST timeline for
+a `base_ref_changed` event (an event is never removed, so the refusal is permanent for that
+PR), prints the reason on stderr, and treats an unreadable timeline as a failure rather than as
+"not retargeted".
+
+Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
+and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
+closed: a missing commit, an API error, a malformed response, a binary or oversized file with
+no patch text, or a full 300-file list is read as "not covered". The compare API returns at most
+300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
+off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
+
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.
