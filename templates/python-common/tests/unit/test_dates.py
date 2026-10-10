@@ -60,35 +60,60 @@ def cls_calendar(monkeypatch: pytest.MonkeyPatch) -> _FakeCalendar:
     return cls_fake
 
 
-def test_is_working_day_delegates(cls_calendar: _FakeCalendar) -> None:
-    """``is_working_day`` forwards to the shared calendar and returns its result."""
+def test_is_working_day_returns_the_calendar_result(cls_calendar: _FakeCalendar) -> None:
+    """``is_working_day`` returns the shared calendar's answer."""
+    assert dates.is_working_day(date(2026, 6, 8)) is True
+
+
+def test_is_working_day_forwards_the_date(cls_calendar: _FakeCalendar) -> None:
+    """``is_working_day`` forwards the date to the shared calendar."""
     dt = date(2026, 6, 8)
-    assert dates.is_working_day(dt) is True
+    dates.is_working_day(dt)
     assert cls_calendar.list_calls == [("is_working_day", dt)]
 
 
-def test_add_working_days_delegates(cls_calendar: _FakeCalendar) -> None:
+def test_add_working_days_returns_the_calendar_result(cls_calendar: _FakeCalendar) -> None:
+    """``add_working_days`` returns the shared calendar's date."""
+    assert dates.add_working_days(date(2026, 6, 8), 3) == date(2026, 6, 11)
+
+
+def test_add_working_days_forwards_the_date_and_count(cls_calendar: _FakeCalendar) -> None:
     """``add_working_days`` forwards the date and the day count."""
     dt = date(2026, 6, 8)
-    assert dates.add_working_days(dt, 3) == date(2026, 6, 11)
+    dates.add_working_days(dt, 3)
     assert cls_calendar.list_calls == [("add_working_days", dt, 3)]
 
 
-def test_delta_working_days_delegates(cls_calendar: _FakeCalendar) -> None:
+def test_delta_working_days_returns_the_calendar_result(cls_calendar: _FakeCalendar) -> None:
+    """``delta_working_days`` returns the shared calendar's count."""
+    assert dates.delta_working_days(date(2026, 6, 1), date(2026, 6, 8)) == 5
+
+
+def test_delta_working_days_forwards_both_endpoints(cls_calendar: _FakeCalendar) -> None:
     """``delta_working_days`` forwards both endpoints."""
     dt_a, dt_b = date(2026, 6, 1), date(2026, 6, 8)
-    assert dates.delta_working_days(dt_a, dt_b) == 5
+    dates.delta_working_days(dt_a, dt_b)
     assert cls_calendar.list_calls == [("delta_working_days", dt_a, dt_b)]
+
+
+def test_nearest_working_day_returns_the_calendar_result(cls_calendar: _FakeCalendar) -> None:
+    """``nearest_working_day`` returns the shared calendar's date."""
+    assert dates.nearest_working_day(date(2026, 6, 7)) == date(2026, 6, 8)
 
 
 def test_nearest_working_day_defaults_to_next(cls_calendar: _FakeCalendar) -> None:
     """``nearest_working_day`` rolls forward by default."""
     dt = date(2026, 6, 7)
-    assert dates.nearest_working_day(dt) == date(2026, 6, 8)
+    dates.nearest_working_day(dt)
     assert cls_calendar.list_calls == [("nearest_working_day", dt, True)]
 
 
-def test_holidays_delegates(cls_calendar: _FakeCalendar) -> None:
+def test_holidays_returns_the_calendar_list(cls_calendar: _FakeCalendar) -> None:
     """``holidays`` returns the calendar's holiday list."""
     assert dates.holidays() == [("Confraternização", date(2026, 1, 1))]
+
+
+def test_holidays_asks_the_calendar_once(cls_calendar: _FakeCalendar) -> None:
+    """``holidays`` makes exactly one call to the shared calendar."""
+    dates.holidays()
     assert cls_calendar.list_calls == [("holidays",)]

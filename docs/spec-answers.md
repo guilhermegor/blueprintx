@@ -88,10 +88,15 @@ Named-key support ships per skeleton. Today: the six Python tiers. Call
 
 ### DDD and API tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `api-service-native-db`)
 
+`api-service-native-db` asks the same prompts in the same order as the DDD tiers, so it shares
+their key map (blueprintx#668). `tests/test_spec_answers.sh` compares the two scaffold scripts'
+prompt sequences, so a prompt added to one of them fails there instead of silently misaligning
+the stored answers.
+
 | Key | Default | Notes |
 |---|---|---|
 | `docker_compose` | `n` | `y` also reads `docker_db_backend` (`postgresql`\|`mariadb`\|`mysql`). |
-| `storage` | `n` | Schema-less file storage (JSON/CSV/joblib). DDD-only. |
+| `storage` | `n` | Schema-less file storage (JSON/CSV/joblib). DDD and API tiers; MVC has no such prompt. |
 | `data_dir` | `n` | `y` also reads `data_dir_base` (default `logs`) and `data_dir_dated`. |
 | `webhook` | `n` | `y` also reads `webhook_platform` (`teams`\|`slack`\|`custom`). |
 | `otel` | `n` | OpenTelemetry OTLP log export. |
