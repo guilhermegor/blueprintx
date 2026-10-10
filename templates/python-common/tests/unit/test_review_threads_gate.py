@@ -2328,7 +2328,7 @@ def test_find_missing_review_problem_carried_review_passes(dict_repo: dict) -> N
 def test_patch_fingerprint_ignores_hunk_line_numbers() -> None:
     """Main moving lines above the PR's hunk shifts ``@@`` offsets and nothing else."""
     cls_gate = _load_gate()
-    dict_at_review = {"filename": "a", "status": "modified", "patch": "@@ -2,1 +2,1 @@\n-x\n+y"}
+    dict_at_review = {"filename": "a", "status": "modified", "patch": "@@ -2,1 +2,1 @@ fn\n-x\n+y"}
     dict_at_head = {"filename": "a", "status": "modified", "patch": "@@ -9,1 +9,1 @@ fn\n-x\n+y"}
     assert cls_gate.patch_fingerprint([dict_at_review]) == cls_gate.patch_fingerprint(
         [dict_at_head]
@@ -2340,3 +2340,38 @@ def test_patch_fingerprint_file_without_patch_text_raises() -> None:
     cls_gate = _load_gate()
     with pytest.raises(ValueError, match="no patch text"):
         cls_gate.patch_fingerprint([{"filename": "big.bin", "status": "added"}])
+
+
+def test_patch_fingerprint_same_edit_in_another_function_differs() -> None:
+    """The reviewed hunk text moved to a different function must not carry forward."""
+    cls_gate = _load_gate()
+    dict_reviewed = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ def one\n-x\n+y"}
+    dict_moved = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ def two\n-x\n+y"}
+    assert cls_gate.patch_fingerprint([dict_reviewed]) != cls_gate.patch_fingerprint([dict_moved])
+
+
+def test_patch_fingerprint_field_boundaries_are_unambiguous() -> None:
+    """A filename carrying the old separator must not collide with a different file."""
+    cls_gate = _load_gate()
+    dict_plain = {"filename": "a", "status": "modified", "patch": "p"}
+    dict_crafted = {"filename": "a\nmodified", "status": "", "previous_filename": "p", "patch": ""}
+    assert cls_gate.patch_fingerprint([dict_plain]) != cls_gate.patch_fingerprint([dict_crafted])
+
+
+def test_fetch_patch_fingerprint_compares_against_the_pinned_base_sha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both compares name the base by the SHA read once, never by a movable branch name."""
+    cls_gate = _load_gate()
+    json_body = '{"files": [{"filename": "a", "status": "modified", "patch": "x"}]}'
+    fn_run = Mock(return_value=Mock(returncode=0, stdout=json_body))
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    cls_gate.fetch_patch_fingerprint("o", "r", "basesha", "headsha")
+    assert fn_run.call_args[0][0][2].startswith("repos/o/r/compare/basesha...headsha")
+
+
+def test_fetch_patch_fingerprint_unknown_base_sha_fails_closed() -> None:
+    """No pinned base means no comparison: the gate cannot say which base was measured."""
+    cls_gate = _load_gate()
+    with pytest.raises(ValueError, match="base commit is unknown"):
+        cls_gate.fetch_patch_fingerprint("o", "r", "", "headsha")

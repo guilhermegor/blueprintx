@@ -202,7 +202,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
-      baseRefName
+      baseRefOid
       comments(last:100) { nodes { author { login __typename } body createdAt } }
       reviews(
         first:100, after:$rc,
@@ -544,7 +544,8 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     Returns
     -------
     str
-            A digest that ignores hunk line numbers, like ``git patch-id --stable``.
+            A digest that ignores hunk line numbers but keeps each hunk header's function
+            context, so the same edit moved to another function does not match.
 
     Raises
     ------
@@ -556,17 +557,16 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     if any(d.get("patch") is None for d in list_files):
         raise ValueError("patch unavailable: a file has no patch text (binary or too large)")
     list_parts = [
-        "\n".join(
-            [
-                d["filename"],
-                d.get("status", ""),
-                d.get("previous_filename", ""),
-                *(s for s in d["patch"].splitlines() if not s.startswith("@@")),
-            ]
-        )
+        [
+            d["filename"],
+            d.get("status", ""),
+            d.get("previous_filename", ""),
+            [re.sub(r"^@@ -\S+ \+\S+ @@", "@@", s) for s in d["patch"].splitlines()],
+        ]
         for d in sorted(list_files, key=lambda d: d["filename"])
     ]
-    return hashlib.sha256("\0".join(list_parts).encode()).hexdigest()
+    # JSON is unambiguous: no filename or patch line can collide with a field separator.
+    return hashlib.sha256(json.dumps(list_parts).encode()).hexdigest()
 
 
 def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oid: str) -> str:
@@ -583,7 +583,9 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
     str_repo : str
             Repository name.
     str_base : str
-            The PR's base branch name.
+            The base commit SHA, read once with the PR. ⚠️ Never the branch name: two compares
+            would resolve it at two moments, and a retarget or push in between would measure
+            both patches against different bases.
     str_oid : str
             The commit whose patch is wanted.
 
@@ -597,8 +599,11 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
     RuntimeError
             If the API call fails.
     ValueError
-            If the response is unusable, see :func:`patch_fingerprint`.
+            If the base SHA is empty, or the response is unusable, see
+            :func:`patch_fingerprint`.
     """
+    if not str_base:
+        raise ValueError("patch unavailable: the PR's base commit is unknown")
     list_cmd = [
         "gh",
         "api",
@@ -1609,7 +1614,8 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     Parameters
     ----------
     dict_pr : dict
-            The ``pullRequest`` node, read for ``baseRefName``.
+            The ``pullRequest`` node, read for ``baseRefOid``, pinned in the same query as
+            ``headRefOid``.
     str_repo_full : str
             ``owner/name``.
 
@@ -1620,7 +1626,7 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     """
     str_owner, _, str_repo = str_repo_full.partition("/")
     return functools.partial(
-        fetch_patch_fingerprint, str_owner, str_repo, dict_pr.get("baseRefName") or ""
+        fetch_patch_fingerprint, str_owner, str_repo, dict_pr.get("baseRefOid") or ""
     )
 
 

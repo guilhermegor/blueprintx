@@ -116,6 +116,13 @@ checkout is shallow (`actions/checkout` defaults to `fetch-depth: 1`), so there 
 history for `git merge-base`. The gate reads the same diff from the GitHub compare API
 (`compare/<base>...<commit>`), which computes the merge base server side.
 
+Both compares name the base by the commit SHA read once with the PR, never by branch name, so a
+retarget or a push to the base between the two reads cannot make them measure different bases.
+The fingerprint keeps each hunk header's function context, so the same edit moved to another
+function does not match; hunks that shift only by line number do. Known ceiling: an identical
+edit moved within one function, between identical context lines, still matches, as it does for
+`git patch-id`.
+
 Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
 closed: a missing commit, an API error, a binary or oversized file with no patch text, or 100
