@@ -44,6 +44,11 @@ expect "prefix #12 is not a keyword" "chore/x" "prefix #12" ""
 expect "not fix #12" "chore/x" "This does not fix #12 yet" ""
 expect "won't close #9" "chore/x" "we won't close #9" ""
 expect "never resolves #4" "chore/x" "never resolves #4" ""
+expect "does not fully fix #12" "chore/x" "This does not fully fix #12" ""
+expect "won't actually close #9" "chore/x" "we won't actually close #9" ""
+expect "never really resolves #3" "chore/x" "it never really resolves #3" ""
+expect "negation elsewhere in the sentence" "chore/x" "Not a hotfix, closes #6" "6"
+expect "negation in an earlier sentence" "chore/x" $'It is not done yet.\nFixes #7' "7"
 expect "list form closes only the first" "chore/x" "Closes #1, #2" "1"
 expect "cross-repo ref ignored" "chore/x" "Closes owner/repo#40" ""
 expect "digits glued to letters ignored" "chore/x" "Closes #12abc" ""
@@ -57,6 +62,16 @@ expect "dependabot body quoting upstream Fixes" "dependabot/npm/foo-4" "Fixes #1
 expect "renovate body quoting upstream closes" "renovate/foo" "closes #87" ""
 expect "release branch body" "release/1.2.3" "Closes #5" ""
 expect "no number at all" "feat/add-thing" "just prose" ""
+
+# Workflow wiring: a workflow that calls a file it never fetched fails on every run.
+str_wf="$REPO_ROOT/templates/common/.github/workflows/close-linked-issues.yml"
+str_called=$(sed -nE 's/^ *run: bash (bin\/[a-z_]+\.sh)$/\1/p' "$str_wf")
+if [[ -f "$REPO_ROOT/templates/common/$str_called" ]] && grep -q 'uses: actions/checkout@' "$str_wf"; then
+	echo "ok   - workflow checks out the repo and calls an existing script"
+else
+	echo "FAIL - workflow calls '$str_called' without a checkout, or the script is missing"
+	int_failures=$((int_failures + 1))
+fi
 
 # Error handling, against a stub gh. STUB_API=<404|500|open>, STUB_CLOSE_FAIL=<number>.
 str_bin="$(mktemp -d)"

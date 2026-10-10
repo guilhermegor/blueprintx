@@ -35,8 +35,8 @@ issues_from_body() {
 
 	printf '%s\n' "$str_body" | tr 'A-Z' 'a-z' \
 		| sed -E \
-			-e "s/(^|[^[:alnum:]_])(not|never|cannot)[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
-			-e "s/n['’]t[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
+			-e "s/(^|[^[:alnum:]_])(not|never|cannot)([[:space:]]+[[:alpha:]]+){0,3}[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
+			-e "s/n['’]t([[:space:]]+[[:alpha:]]+){0,3}[[:space:]]+$KEYWORDS:?[[:space:]]+#[0-9]+/ /g" \
 		| { grep -owE "$KEYWORDS:?[[:space:]]+#[0-9]+" || true; } \
 		| grep -oE '[0-9]+$'
 }
