@@ -86,9 +86,14 @@ heading directly followed by one) is clean. Nitpick and Trivial lines never need
 CodeRabbit's walkthrough, rate-limit and command-reply comments carry an auto-generated marker
 and are not reviews.
 
+Missing or unrecognised input fails closed: a body section with no parsable count, a ladder
+attribution with nothing after it, a review comment with no timestamp, and a PR with more than
+100 issue comments (the gate reads 100) all count as findings; only an explicit clean statement or
+a stated `0` clears a review.
+
 ### How the gate classifies an answer
 
-An answer comes from outside the reviewer roster, is not a bot or a deleted (ghost) account,
+An answer comes from outside the reviewer roster, is a user account (not a bot, app, organization or deleted ghost),
 and is posted **after** the review. It counts when it is either 100 characters or longer, or
 has an answer shape at any length: a line that opens with `Reply to review <id>`,
 `Answer(s) to ... review`, `Re: review`, `Verdicts`/`Judgment on the ... review`, or a

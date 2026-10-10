@@ -203,7 +203,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
       author { login }
       headRefOid
       baseRefOid
-      comments(last:100) { nodes { author { login __typename } body createdAt } }
+      comments(last:100) { totalCount nodes { author { login __typename } body createdAt } }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
@@ -1206,7 +1206,7 @@ _RE_BODY_REVIEW_LINE = re.compile(
 # (outside the diff, duplicates) live where no thread can see them. The ladder posts no threads,
 # so its count is the body's. Both are anchored to a line start so quoted output cannot fire them.
 _RE_BODY_SECTION = re.compile(
-    r"\b(?:outside diff range|duplicate) comments\s*\((\d+)\)", re.IGNORECASE
+    r"\b(?:outside diff range|duplicate) comments(?:\s*\((\d+)\))?", re.IGNORECASE
 )
 _RE_ACTIONABLE = re.compile(r"actionable comments posted:?[\s*]*\d+", re.IGNORECASE)
 _RE_LADDER_COUNT = re.compile(
@@ -1214,8 +1214,6 @@ _RE_LADDER_COUNT = re.compile(
 )
 _RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
 _RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
-# CodeRabbit's walkthrough, rate-limit and command replies are not reviews.
-_RE_AUTO_COMMENT = re.compile(r"<!--\s*This is an auto-generated (?:comment|reply)", re.I)
 _STR_CLEAN_LINE = (
     r"^[^\w\n]*(?:(?:review|findings?|summary|result)\s*[:—–-]\s*)?"
     r"(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
@@ -1239,7 +1237,11 @@ def _declared_findings(str_body: str) -> list[str] | None:
     A non-zero body section (outside the diff, duplicates) wins over a zero inline count, since
     CodeRabbit prints both. A CodeRabbit header alone means the findings are inline threads.
     """
-    list_sections = [m.group(0) for m in _RE_BODY_SECTION.finditer(str_body) if int(m.group(1))]
+    list_sections = [
+        cls_section.group(0)
+        for cls_section in _RE_BODY_SECTION.finditer(str_body)
+        if cls_section.group(1) != "0"
+    ]
     if list_sections:
         return list_sections
     if _RE_ACTIONABLE.search(str_body):
@@ -1258,6 +1260,17 @@ def _ladder_prose_line(str_text: str) -> list[str]:
         if str_line.strip()
     ]
     return list_prose[:1]
+
+
+def _ladder_empty_findings(str_body: str) -> list[str]:
+    """Return a finding for a ladder review with no prose, unless it says it is clean.
+
+    An attribution line with nothing after it is a truncated or failed review, not a clean one,
+    so it fails closed; only an explicit clean line ("No findings.") clears it.
+    """
+    if _RE_BODY_CLEAN_LINE.search(str_body):
+        return []
+    return ["ladder review with no findings count and no clean statement"]
 
 
 def review_body_finding_lines(str_body: str | None) -> list[str]:
@@ -1285,7 +1298,7 @@ def review_body_finding_lines(str_body: str | None) -> list[str]:
         if any(re_.search(str_line) for re_ in _RES_BODY_FINDING)
     ]
     if _RE_LADDER_HEAD.search(str_body or ""):
-        return list_lines or _ladder_prose_line(str_text)
+        return list_lines or _ladder_prose_line(str_text) or _ladder_empty_findings(str_body or "")
     return list_lines
 
 
@@ -1349,7 +1362,7 @@ def _is_human_answer(dict_notice: dict, set_roster: set[str], int_min_chars: int
     return (
         bool(str_login)
         and normalise_login(str_login) not in set_roster
-        and dict_author.get("__typename") != "Bot"
+        and dict_author.get("__typename", "User") == "User"
         and not str_login.endswith(_BOT_SUFFIX)
         and (len(str_body) >= int_min_chars or bool(_RE_ANSWER_SHAPE.search(str_body)))
     )
@@ -1372,10 +1385,9 @@ def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[
         }
         for dict_notice in list_notices
         if normalise_login((dict_notice.get("author") or {}).get("login") or "") in set_roster
-        and not _RE_AUTO_COMMENT.search(dict_notice.get("body") or "")
-        and (
-            _RE_LADDER_HEAD.search(dict_notice.get("body") or "")
-            or _RE_ACTIONABLE.search(dict_notice.get("body") or "")
+        and any(
+            re_.search(dict_notice.get("body") or "")
+            for re_ in (_RE_LADDER_HEAD, _RE_ACTIONABLE, _RE_BODY_SECTION)
         )
     ]
 
@@ -1600,12 +1612,23 @@ def _head_committed_date(dict_pr: dict) -> str:
 
 
 def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[str]) -> list[str]:
-    """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
-    return find_review_body_problems(
+    """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node.
+
+    ``comments(last:100)`` is not paginated, so a PR with more issue comments than it returned
+    fails closed: a roster review or its answer may sit in the part that was never read.
+    """
+    dict_comments = dict_pr.get("comments", {})
+    list_problems = find_review_body_problems(
         dict_pr.get("reviews", {}).get("nodes", []),
         list_notices,
         set_roster,
     )
+    if dict_comments.get("totalCount", 0) > len(dict_comments.get("nodes", [])):
+        list_problems.append(
+            "the PR has more issue comments than the 100 the gate reads, so a review body or "
+            "its answer may be unread — shrink the thread or answer in a review thread"
+        )
+    return list_problems
 
 
 def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], str]:
