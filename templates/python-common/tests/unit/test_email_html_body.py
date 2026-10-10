@@ -1,5 +1,7 @@
 """Unit tests for the plain-text-to-HTML e-mail body conversion."""
 
+import time
+
 import pytest
 
 from src.utils.email.html_body import to_html_body
@@ -136,3 +138,25 @@ def test_to_html_body_tag_lookalike_is_escaped_as_plain_text_literal(
             The exact escaped output.
     """
     assert to_html_body(str_text) == str_expected
+
+
+@pytest.mark.parametrize(
+    "str_body",
+    ["<p" + " " * 50000 + "x", "<p" + " a=b" * 20000, "<p a" + " " * 50000 + "/" + " " * 50000],
+    ids=["whitespace-run", "attribute-run", "slash-between-runs"],
+)
+def test_to_html_body_long_whitespace_input_completes_quickly(str_body: str) -> None:
+    """Should-fail witness: the tag grammar is linear, not quadratic, on long runs.
+
+    Measured before the linear tail: 8.1 s for 50k spaces; after, milliseconds. The bound is
+    generous so a slow CI runner does not flake.
+
+    Parameters
+    ----------
+    str_body : str
+            A pathological body that never closes its tag.
+    """
+    float_start = time.perf_counter()
+    to_html_body(str_body)
+
+    assert time.perf_counter() - float_start < 0.5
