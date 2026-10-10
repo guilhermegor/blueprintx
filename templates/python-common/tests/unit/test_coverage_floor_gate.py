@@ -21,7 +21,7 @@ def _load_gate() -> ModuleType:
     Returns
     -------
     ModuleType
-            The loaded gate module.
+        The loaded gate module.
     """
     path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_coverage_floor.py"
     cls_spec = importlib.util.spec_from_file_location("_check_coverage_floor", path_gate)
@@ -38,14 +38,14 @@ def _project(tmp_path: Path, str_omit: str) -> Path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Directory to build in.
+        Directory to build in.
     str_omit : str
-            The ``omit =`` body (indented lines), or ``""`` for an empty list.
+        The ``omit =`` body (indented lines), or ``""`` for an empty list.
 
     Returns
     -------
     pathlib.Path
-            The project root.
+        The project root.
     """
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "__init__.py").write_text("", encoding="utf-8")
@@ -60,13 +60,13 @@ def _capability(path_root: Path, str_name: str, str_layer: str, str_source: str)
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root built by ``_project``.
+        The project root built by ``_project``.
     str_name : str
-            Capability directory name.
+        Capability directory name.
     str_layer : str
-            ``"domain"`` or ``"application"``.
+        ``"domain"`` or ``"application"``.
     str_source : str
-            The module's Python source.
+        The module's Python source.
     """
     path_layer = path_root / "src" / "capabilities" / str_name / str_layer
     path_layer.mkdir(parents=True, exist_ok=True)

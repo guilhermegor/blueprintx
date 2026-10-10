@@ -51,7 +51,7 @@ def test_ensure_dir_creates_directory(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
     """
     ensure_dir(tmp_path / "nested" / "out")
 
@@ -67,7 +67,7 @@ def test_ensure_dir_returns_the_directory_it_created(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
     """
     path_target = tmp_path / "nested" / "out"
 
@@ -86,9 +86,9 @@ def test_date_tokens_builds_substitution_map(str_token: str, str_value: str) -> 
     Parameters
     ----------
     str_token : str
-            The documented token name.
+        The documented token name.
     str_value : str
-            Its value for 2026-04-30.
+        Its value for 2026-04-30.
     """
     assert date_tokens(date(2026, 4, 30))[str_token] == str_value
 
@@ -100,12 +100,12 @@ def path_copied(tmp_path: Path) -> Path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
 
     Returns
     -------
     pathlib.Path
-            The destination the copy landed at.
+        The destination the copy landed at.
     """
     path_src = tmp_path / "report.csv"
     path_src.write_text("a;b\n", encoding="utf-8")
@@ -118,7 +118,7 @@ def test_copy_into_stamps_the_destination_name(path_copied: Path) -> None:
     Parameters
     ----------
     path_copied : pathlib.Path
-            The shared copy destination.
+        The shared copy destination.
     """
     assert path_copied.name == "report_20260430_120000.csv"
 
@@ -132,7 +132,7 @@ def test_copy_into_copies_the_contents(path_copied: Path) -> None:
     Parameters
     ----------
     path_copied : pathlib.Path
-            The shared copy destination.
+        The shared copy destination.
     """
     assert path_copied.read_text(encoding="utf-8") == "a;b\n"
 
@@ -147,12 +147,12 @@ def path_resolved_input(tmp_path: Path) -> Path | None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory.
+        Pytest throwaway directory.
 
     Returns
     -------
     pathlib.Path or None
-            Whatever ``resolve_input`` returned.
+        Whatever ``resolve_input`` returned.
     """
     (tmp_path / "data_old.xlsx").write_text("", encoding="utf-8")
     path_new = tmp_path / "data_new.xlsx"
@@ -168,7 +168,7 @@ def test_resolve_input_finds_a_match_at_all(path_resolved_input: Path | None) ->
     Parameters
     ----------
     path_resolved_input : pathlib.Path or None
-            The shared resolution result.
+        The shared resolution result.
     """
     assert path_resolved_input is not None
 
@@ -179,7 +179,7 @@ def test_resolve_input_picks_latest_match(path_resolved_input: Path) -> None:
     Parameters
     ----------
     path_resolved_input : pathlib.Path
-            The shared resolution result.
+        The shared resolution result.
     """
     assert path_resolved_input.name == "data_new.xlsx"
 
@@ -190,7 +190,7 @@ def test_resolve_input_returns_an_absolute_path(path_resolved_input: Path) -> No
     Parameters
     ----------
     path_resolved_input : pathlib.Path
-            The shared resolution result.
+        The shared resolution result.
     """
     assert path_resolved_input.is_absolute()
 
@@ -213,9 +213,9 @@ def test_to_absolute_relative_path_anchors_to_our_cwd(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory, used as the anchor.
+        Pytest throwaway directory, used as the anchor.
     monkeypatch : pytest.MonkeyPatch
-            Used to move the working directory into it.
+        Used to move the working directory into it.
     """
     monkeypatch.chdir(tmp_path)
 
@@ -251,9 +251,9 @@ def test_the_windows_premise_is_that_driveless_is_not_absolute(
     Parameters
     ----------
     str_path : str
-            A Windows-flavoured path.
+        A Windows-flavoured path.
     bool_absolute : bool
-            What Windows says about it.
+        What Windows says about it.
     """
     assert PureWindowsPath(str_path).is_absolute() is bool_absolute
 
@@ -265,14 +265,14 @@ def path_driveless_anchored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway directory, used as the anchor.
+        Pytest throwaway directory, used as the anchor.
     monkeypatch : pytest.MonkeyPatch
-            Moves the working directory and simulates the Windows verdict.
+        Moves the working directory and simulates the Windows verdict.
 
     Returns
     -------
     pathlib.Path
-            Whatever ``to_absolute`` produced.
+        Whatever ``to_absolute`` produced.
     """
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(Path, "is_absolute", lambda _self: False)
@@ -289,7 +289,7 @@ def test_to_absolute_anchors_a_path_the_platform_calls_driveless(
     Parameters
     ----------
     path_driveless_anchored : pathlib.Path
-            The shared result of the simulated call.
+        The shared result of the simulated call.
     """
     assert os.path.isabs(str(path_driveless_anchored))
 
@@ -302,8 +302,8 @@ def test_the_anchored_path_lands_under_our_own_cwd(
     Parameters
     ----------
     path_driveless_anchored : pathlib.Path
-            The shared result of the simulated call.
+        The shared result of the simulated call.
     tmp_path : pathlib.Path
-            The directory the fixture anchored to.
+        The directory the fixture anchored to.
     """
     assert str(path_driveless_anchored).startswith(str(tmp_path.resolve()))

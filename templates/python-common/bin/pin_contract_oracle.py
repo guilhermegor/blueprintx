@@ -30,21 +30,21 @@ def read_header(path_file: pathlib.Path, str_sep: str, str_encoding: str) -> tup
     Parameters
     ----------
     path_file : pathlib.Path
-            The downloaded artifact (CSV / delimited text).
+        The downloaded artifact (CSV / delimited text).
     str_sep : str
-            Column delimiter.
+        Column delimiter.
     str_encoding : str
-            Text encoding to decode the file with.
+        Text encoding to decode the file with.
 
     Returns
     -------
     tuple of str
-            The header columns, in the file's own order.
+        The header columns, in the file's own order.
 
     Raises
     ------
     ValueError
-            If the file has no non-empty line.
+        If the file has no non-empty line.
     """
     with path_file.open(encoding=str_encoding) as fh:
         for str_line in fh:
@@ -59,7 +59,7 @@ def main() -> int:
     Returns
     -------
     int
-            Process exit code (0 on success).
+        Process exit code (0 on success).
     """
     parser = argparse.ArgumentParser(description="Pin a contract's columns to a source oracle.")
     parser.add_argument("artifact", type=pathlib.Path, help="path to the downloaded artifact")
