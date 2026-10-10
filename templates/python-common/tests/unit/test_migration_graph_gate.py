@@ -145,23 +145,50 @@ def test_main_fails_on_two_heads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert gate.main() == 1
 
 
-def test_two_heads_message_names_both_head_revisions(
+@pytest.fixture
+def str_two_heads_err(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """The message must name the offending heads, not just 'branched'."""
+) -> str:
+    """Run the gate over two migrations branching off one root; return its stderr.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway project root.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate from the project root.
+    capsys : pytest.CaptureFixture[str]
+        Captures the gate's message.
+
+    Returns
+    -------
+    str
+        What the gate wrote to stderr.
+    """
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
     _migration_file(path_versions, "20260901_root.py", "root", "None")
     _migration_file(path_versions, "20260902_branch_a.py", "branch_a", '"root"')
     _migration_file(path_versions, "20260902_branch_b.py", "branch_b", '"root"')
     monkeypatch.chdir(tmp_path)
-
     gate.main()
+    return capsys.readouterr().err
 
-    str_err = capsys.readouterr().err
-    assert "branch_a" in str_err
-    assert "branch_b" in str_err
-    assert "2 head revisions present" in str_err
+
+@pytest.mark.parametrize("str_needle", ["branch_a", "branch_b", "2 head revisions present"])
+def test_two_heads_message_names_both_head_revisions(
+    str_two_heads_err: str, str_needle: str
+) -> None:
+    """The message must name the offending heads, not just 'branched'.
+
+    Parameters
+    ----------
+    str_two_heads_err : str
+        What the gate wrote to stderr.
+    str_needle : str
+        Text the message must contain.
+    """
+    assert str_needle in str_two_heads_err
 
 
 # --------------------------
@@ -231,7 +258,7 @@ def test_main_fails_on_a_file_missing_the_revision_assignment(
 
 
 def test_main_fails_on_a_non_literal_down_revision(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A down_revision this reader cannot evaluate is unverifiable, never a root.
 
@@ -246,16 +273,59 @@ def test_main_fails_on_a_non_literal_down_revision(
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1
-    # The exit code alone is not the assertion: the OLD code also exited 1 here, but via
-    # "2 head revisions present" -- it had silently promoted the unverifiable file to a
-    # root and then complained about the consequence. Assert the cause is named.
-    str_err = capsys.readouterr().err
-    assert "cannot verify" in str_err
-    assert "20260902_child.py" in str_err
+
+
+@pytest.fixture
+def str_non_literal_err(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> str:
+    """Run the gate over a migration whose ``down_revision`` is a bare name; return stderr.
+
+    The exit code alone is not the assertion: the OLD code also exited 1 here, but via
+    "2 head revisions present" -- it had silently promoted the unverifiable file to a root
+    and then complained about the consequence. The tests below assert the cause is named.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway project root.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate from the project root.
+    capsys : pytest.CaptureFixture[str]
+        Captures the gate's message.
+
+    Returns
+    -------
+    str
+        What the gate wrote to stderr.
+    """
+    path_versions = tmp_path / "migrations" / "versions"
+    path_versions.mkdir(parents=True)
+    _migration_file(path_versions, "20260901_root.py", "root", "None")
+    _migration_file(path_versions, "20260902_child.py", "child", "PREVIOUS_REVISION")
+    monkeypatch.chdir(tmp_path)
+    gate.main()
+    return capsys.readouterr().err
+
+
+@pytest.mark.parametrize("str_needle", ["cannot verify", "20260902_child.py"])
+def test_non_literal_down_revision_names_the_cause(
+    str_non_literal_err: str, str_needle: str
+) -> None:
+    """The finding names the unverifiable cause and the file, not a consequence.
+
+    Parameters
+    ----------
+    str_non_literal_err : str
+        What the gate wrote to stderr.
+    str_needle : str
+        Text the message must contain.
+    """
+    assert str_needle in str_non_literal_err
 
 
 def test_main_fails_when_down_revision_is_absent_entirely(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A missing key is 'cannot verify', not 'this is a root' — a root says so explicitly."""
     path_versions = tmp_path / "migrations" / "versions"
@@ -267,10 +337,26 @@ def test_main_fails_when_down_revision_is_absent_entirely(
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1
-    # Same as above: the old code exited 1 for the wrong reason (an extra head). The
-    # finding must name the file whose metadata could not be read.
-    str_err = capsys.readouterr().err
-    assert "no 'down_revision' assignment" in str_err
+
+
+def test_absent_down_revision_names_the_missing_assignment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Same as above: the old code exited 1 for the wrong reason (an extra head).
+
+    The finding must say the metadata could not be read.
+    """
+    path_versions = tmp_path / "migrations" / "versions"
+    path_versions.mkdir(parents=True)
+    _migration_file(path_versions, "20260901_root.py", "root", "None")
+    (path_versions / "20260902_child.py").write_text(
+        '"""synthetic migration"""\n\nrevision: str = "child"\n', encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    gate.main()
+
+    assert "no 'down_revision' assignment" in capsys.readouterr().err
 
 
 def test_main_fails_on_a_tuple_with_a_non_string_element(
@@ -286,13 +372,28 @@ def test_main_fails_on_a_tuple_with_a_non_string_element(
     assert gate.main() == 1
 
 
-def test_main_fails_on_a_cycle_that_coexists_with_a_valid_chain(
+@pytest.fixture
+def tuple_cycle_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Head-counting alone cannot see this: the valid chain supplies the one head.
+) -> tuple:
+    """Run the gate over a 2-node cycle that coexists with a valid root->child chain.
 
-    Two components — a 2-node cycle (loop_a <-> loop_b) and a root->child chain. The head
+    Head-counting alone cannot see this: the valid chain supplies the one head, the head
     count is exactly 1, so the head check passes and the cycle went unreported.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway project root.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate from the project root.
+    capsys : pytest.CaptureFixture[str]
+        Captures the gate's message.
+
+    Returns
+    -------
+    tuple
+        ``(int_status, str_err)``.
     """
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
@@ -301,9 +402,32 @@ def test_main_fails_on_a_cycle_that_coexists_with_a_valid_chain(
     _migration_file(path_versions, "20260903_loop_a.py", "loop_a", '"loop_b"')
     _migration_file(path_versions, "20260904_loop_b.py", "loop_b", '"loop_a"')
     monkeypatch.chdir(tmp_path)
+    int_status = gate.main()
+    return int_status, capsys.readouterr().err
 
-    assert gate.main() == 1
-    str_err = capsys.readouterr().err
-    assert "cycle" in str_err
-    assert "loop_a" in str_err
-    assert "loop_b" in str_err
+
+def test_main_fails_on_a_cycle_that_coexists_with_a_valid_chain(tuple_cycle_run: tuple) -> None:
+    """A cycle beside a valid chain still fails the run.
+
+    Parameters
+    ----------
+    tuple_cycle_run : tuple
+        ``(int_status, str_err)``.
+    """
+    assert tuple_cycle_run[0] == 1
+
+
+@pytest.mark.parametrize("str_needle", ["cycle", "loop_a", "loop_b"])
+def test_a_cycle_finding_names_the_cycle_and_its_members(
+    tuple_cycle_run: tuple, str_needle: str
+) -> None:
+    """The finding says "cycle" and names both revisions on it.
+
+    Parameters
+    ----------
+    tuple_cycle_run : tuple
+        ``(int_status, str_err)``.
+    str_needle : str
+        Text the message must contain.
+    """
+    assert str_needle in tuple_cycle_run[1]
