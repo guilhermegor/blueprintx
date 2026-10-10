@@ -279,6 +279,14 @@ scaffold_copy_leaf_docs() {
 	cp "$COMMON_TEMPLATE_ROOT/src/utils/CLAUDE.md" "$str_project_path/src/utils/CLAUDE.md"
 }
 
+# The tier scaffold already copied the CLAUDE.md @import bridge; this ships its target.
+scaffold_copy_agents_md() {
+	local str_tier="$1"
+	local str_project_path="$2"
+
+	cp "$BLUEPRINTX_ROOT/templates/$str_tier/AGENTS.md" "$str_project_path/AGENTS.md"
+}
+
 scaffold_copy_common_templates() {
 	local str_tier="$1"
 	local str_project_path="$2"
@@ -291,6 +299,7 @@ scaffold_copy_common_templates() {
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
 	scaffold_copy_docs_extras "$str_project_path"
 	scaffold_copy_leaf_docs "$str_project_path"
+	scaffold_copy_agents_md "$str_tier" "$str_project_path"
 	# Every skeleton's root CLAUDE.md points readers at `.claude/CLAUDE.md` for the
 	# conventions shared across all skeletons (blueprintx#549) — copy the single
 	# source so that pointer resolves instead of dangling.
