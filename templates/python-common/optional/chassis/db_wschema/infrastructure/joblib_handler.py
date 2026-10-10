@@ -50,12 +50,12 @@ class JoblibHandler(DatabaseHandler):
     Parameters
     ----------
     dir_path : str or Path
-            Directory where artifact files are stored.
+        Directory where artifact files are stored.
     compress : tuple of (str, int), optional
-            Joblib compression codec and level, by default ``("zlib", 3)`` — zlib is in the
-            standard library, where ``lz4`` is a dependency no tier declares (blueprintx#650).
+        Joblib compression codec and level, by default ``("zlib", 3)`` — zlib is in the
+        standard library, where ``lz4`` is a dependency no tier declares (blueprintx#650).
     secret_key : bytes or None, optional
-            Key for HMAC-SHA256 signing. When ``None`` only SHA256 + metadata checks run.
+        Key for HMAC-SHA256 signing. When ``None`` only SHA256 + metadata checks run.
     """
 
     def __init__(
@@ -78,18 +78,18 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record : Record
-                Data to persist. ``_saved_at`` is injected automatically.
+            Data to persist. ``_saved_at`` is injected automatically.
 
         Returns
         -------
         str
-                Artifact identifier of the form ``{name}_{YYYYMMDD_HHMMSS}_{sha256_prefix8}``.
+            Artifact identifier of the form ``{name}_{YYYYMMDD_HHMMSS}_{sha256_prefix8}``.
 
         Raises
         ------
         ValueError
-                If ``_name`` (after ``_`` becomes ``-``) is not lowercase letters, digits and
-                ``-``. A name with a separator or ``..`` would write outside the store.
+            If ``_name`` (after ``_`` becomes ``-``) is not lowercase letters, digits and
+            ``-``. A name with a separator or ``..`` would write outside the store.
         """
         str_raw_name = str(record.get("_name", uuid.uuid4().hex))
         str_name = self._validate_name(str_raw_name.replace("_", "-"))
@@ -110,18 +110,18 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier returned by ``create()``.
+            Identifier returned by ``create()``.
 
         Returns
         -------
         Record or None
-                Loaded artifact when found and all integrity checks pass.
+            Loaded artifact when found and all integrity checks pass.
 
         Raises
         ------
         ValueError
-                If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
-                component, or any integrity factor fails.
+            If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
+            component, or any integrity factor fails.
         """
         path_artifact = self._artifact_path(record_id, ".joblib")
         if not path_artifact.exists():
@@ -137,7 +137,7 @@ class JoblibHandler(DatabaseHandler):
         Raises
         ------
         NotImplementedError
-                Always. Call ``create()`` to save a new version.
+            Always. Call ``create()`` to save a new version.
         """
         raise NotImplementedError(
             "JoblibHandler stores immutable artifacts — call create() to save a new version"
@@ -149,18 +149,18 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier of the artifact to remove.
+            Identifier of the artifact to remove.
 
         Returns
         -------
         bool
-                ``True`` when the artifact existed and was removed.
+            ``True`` when the artifact existed and was removed.
 
         Raises
         ------
         ValueError
-                If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
-                component.
+            If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
+            component.
         """
         # Both paths are confined BEFORE anything is unlinked: resolving the sidecar after
         # the artifact is gone would leave the store half-deleted when the sidecar is refused.
@@ -178,12 +178,12 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         target_path : str or Path
-                Destination directory.
+            Destination directory.
 
         Returns
         -------
         Path
-                Path to the created backup directory.
+            Path to the created backup directory.
         """
         path_target = Path(target_path)
         shutil.copytree(str(self._dir), str(path_target), dirs_exist_ok=True)
@@ -198,7 +198,7 @@ class JoblibHandler(DatabaseHandler):
         Returns
         -------
         list of str
-                Artifact identifiers (filenames without the ``.joblib`` extension).
+            Artifact identifiers (filenames without the ``.joblib`` extension).
         """
         return [path_f.stem for path_f in sorted(self._dir.glob("*.joblib"))]
 
@@ -209,17 +209,17 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         str_name : str
-                Artifact name, already normalized with ``_`` replaced by ``-``.
+            Artifact name, already normalized with ``_`` replaced by ``-``.
 
         Returns
         -------
         str
-                The same name.
+            The same name.
 
         Raises
         ------
         ValueError
-                If the name is empty or has any character outside ``[a-z0-9-]``.
+            If the name is empty or has any character outside ``[a-z0-9-]``.
         """
         if not _RE_NAME.fullmatch(str_name):
             raise ValueError(f"Invalid _name {str_name!r}: use lowercase letters, digits and '-'")
@@ -231,20 +231,20 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Artifact identifier from the caller.
+            Artifact identifier from the caller.
         str_suffix : str
-                File suffix, ``.joblib`` or ``.sig``.
+            File suffix, ``.joblib`` or ``.sig``.
 
         Returns
         -------
         Path
-                ``<store>/<record_id><suffix>``, guaranteed to resolve inside the store.
+            ``<store>/<record_id><suffix>``, guaranteed to resolve inside the store.
 
         Raises
         ------
         ValueError
-                If ``record_id`` is not the documented shape, or the path resolves outside
-                the store (a symlink planted inside it, for instance).
+            If ``record_id`` is not the documented shape, or the path resolves outside
+            the store (a symlink planted inside it, for instance).
         """
         self._validate_record_id(record_id)
         return self._confined(self._dir / f"{record_id}{str_suffix}")
@@ -256,13 +256,13 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Artifact identifier from the caller.
+            Artifact identifier from the caller.
 
         Raises
         ------
         ValueError
-                If it is not a full match of the documented shape. That shape has no path
-                separator, so a match is a single filename component.
+            If it is not a full match of the documented shape. That shape has no path
+            separator, so a match is a single filename component.
         """
         if not _RE_RECORD_ID.fullmatch(record_id):
             raise ValueError(f"Invalid record_id format: {record_id!r}")
@@ -276,17 +276,17 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         path_candidate : Path
-                Path built from a validated id.
+            Path built from a validated id.
 
         Returns
         -------
         Path
-                The same path.
+            The same path.
 
         Raises
         ------
         ValueError
-                If it resolves outside the store directory.
+            If it resolves outside the store directory.
         """
         if not path_candidate.resolve().is_relative_to(self._dir.resolve()):
             raise ValueError(f"Path escapes the artifact store: {str(path_candidate)!r}")
@@ -298,12 +298,12 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record : Record
-                Data to serialize.
+            Data to serialize.
 
         Returns
         -------
         bytes
-                Compressed serialized bytes.
+            Compressed serialized bytes.
         """
         buf = io.BytesIO()
         joblib.dump(record, buf, compress=self._compress)
@@ -315,15 +315,15 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Artifact identifier, used to extract expected hash and timestamp.
+            Artifact identifier, used to extract expected hash and timestamp.
         bytes_data : bytes
-                Raw bytes read from the artifact file.
+            Raw bytes read from the artifact file.
 
         Raises
         ------
         ValueError
-                If record_id format is invalid, SHA256 prefix mismatches,
-                ``_saved_at`` metadata mismatches, or HMAC verification fails.
+            If record_id format is invalid, SHA256 prefix mismatches,
+            ``_saved_at`` metadata mismatches, or HMAC verification fails.
         """
         self._validate_record_id(record_id)
         self._check_sha256(record_id, bytes_data)
@@ -337,13 +337,13 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier that already passed ``_validate_record_id``.
+            Identifier that already passed ``_validate_record_id``.
 
         Returns
         -------
         list of str
-                ``_INT_RECORD_ID_PARTS`` pieces, split on the last separators so the
-                count and the format cannot drift apart.
+            ``_INT_RECORD_ID_PARTS`` pieces, split on the last separators so the
+            count and the format cannot drift apart.
         """
         return record_id.rsplit("_", _INT_RECORD_ID_PARTS - 1)
 
@@ -353,14 +353,14 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Validated artifact identifier.
+            Validated artifact identifier.
         bytes_data : bytes
-                Raw bytes read from the artifact file.
+            Raw bytes read from the artifact file.
 
         Raises
         ------
         ValueError
-                If the prefix differs.
+            If the prefix differs.
         """
         if self._id_parts(record_id)[-1] != hashlib.sha256(bytes_data).hexdigest()[:8]:
             raise ValueError(
@@ -373,14 +373,14 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Validated artifact identifier.
+            Validated artifact identifier.
         bytes_data : bytes
-                Raw bytes read from the artifact file.
+            Raw bytes read from the artifact file.
 
         Raises
         ------
         ValueError
-                If the sidecar is missing or does not match.
+            If the sidecar is missing or does not match.
         """
         if not self._key:
             return
@@ -392,16 +392,16 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         bytes_key : bytes
-                The configured ``secret_key``.
+            The configured ``secret_key``.
         record_id : str
-                Validated artifact identifier.
+            Validated artifact identifier.
         bytes_data : bytes
-                Raw bytes read from the artifact file.
+            Raw bytes read from the artifact file.
 
         Raises
         ------
         ValueError
-                If the sidecar is missing or does not match.
+            If the sidecar is missing or does not match.
         """
         bytes_sig_actual = hmac.new(bytes_key, bytes_data, hashlib.sha256).digest()
         if not hmac.compare_digest(self._stored_signature(record_id), bytes_sig_actual):
@@ -413,17 +413,17 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Validated artifact identifier.
+            Validated artifact identifier.
 
         Returns
         -------
         bytes
-                The stored signature.
+            The stored signature.
 
         Raises
         ------
         ValueError
-                If the sidecar does not exist.
+            If the sidecar does not exist.
         """
         path_sig = self._artifact_path(record_id, ".sig")
         if not path_sig.exists():
@@ -436,14 +436,14 @@ class JoblibHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Validated artifact identifier.
+            Validated artifact identifier.
         bytes_data : bytes
-                Raw bytes read from the artifact file.
+            Raw bytes read from the artifact file.
 
         Raises
         ------
         ValueError
-                If the metadata differs from the id.
+            If the metadata differs from the id.
         """
         list_parts = self._id_parts(record_id)
         str_ts_expected = f"{list_parts[-3]}_{list_parts[-2]}"

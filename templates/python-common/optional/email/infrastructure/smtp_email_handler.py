@@ -33,19 +33,19 @@ class SmtpEmailHandler:
         Parameters
         ----------
         str_host : str
-                SMTP server hostname.
+            SMTP server hostname.
         int_port : int
-                SMTP server port (e.g. 587 for STARTTLS, 25 for plain).
+            SMTP server port (e.g. 587 for STARTTLS, 25 for plain).
         str_sender : str
-                The ``From`` address.
+            The ``From`` address.
         str_user : str, optional
-                Login user; when blank, no authentication is attempted (open relay / local MTA).
+            Login user; when blank, no authentication is attempted (open relay / local MTA).
         str_password : str, optional
-                Login password (used only when ``str_user`` is set).
+            Login password (used only when ``str_user`` is set).
         bool_use_tls : bool, optional
-                Issue ``STARTTLS`` before sending, by default ``True``.
+            Issue ``STARTTLS`` before sending, by default ``True``.
         int_timeout_s : int, optional
-                Socket timeout in seconds, by default 30.
+            Socket timeout in seconds, by default 30.
         """
         self._str_host = str_host
         self._int_port = int_port
@@ -69,29 +69,29 @@ class SmtpEmailHandler:
         Parameters
         ----------
         str_subject : str
-                Subject line.
+            Subject line.
         list_to : list of str
-                Primary recipients.
+            Primary recipients.
         list_cc : list of str
-                Carbon-copy recipients.
+            Carbon-copy recipients.
         str_body : str
-                Plain-text body.
+            Plain-text body.
         list_attachments : list of str
-                File paths to attach (skipped if missing).
+            File paths to attach (skipped if missing).
         bool_auto_send : bool
-                Accepted for port parity; SMTP always sends (there is no compose window).
+            Accepted for port parity; SMTP always sends (there is no compose window).
 
         Returns
         -------
         bool
-                ``True`` when the message was handed to the SMTP server.
+            ``True`` when the message was handed to the SMTP server.
 
         Raises
         ------
         ValueError
-                If the message is empty, has no recipients, or the host/sender is unconfigured.
+            If the message is empty, has no recipients, or the host/sender is unconfigured.
         OSError
-                If the SMTP connection or send fails.
+            If the SMTP connection or send fails.
         """
         if not str_body and not list_attachments:
             raise ValueError("Refusing to send an empty e-mail (no body, no attachments)")
@@ -123,9 +123,9 @@ class SmtpEmailHandler:
         Parameters
         ----------
         cls_message : email.message.EmailMessage
-                The message being built.
+            The message being built.
         list_attachments : list of str
-                Candidate file paths; a missing path is skipped.
+            Candidate file paths; a missing path is skipped.
         """
         for str_path in list_attachments:
             path_file = Path(str_path)

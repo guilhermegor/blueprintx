@@ -34,16 +34,16 @@ class ExampleSchema(BaseModel):
     Parameters
     ----------
     cnpj : CnpjStr
-            Reporting entity's CNPJ, validated via ``utils.br_identifiers.is_valid_cnpj``.
+        Reporting entity's CNPJ, validated via ``utils.br_identifiers.is_valid_cnpj``.
     valor : Decimal
-            Monetary amount, quantised to 2 decimal places via ``utils.decimals.to_decimal`` —
-            never re-implemented here. Missing, unparsable or non-finite input is **rejected**,
-            not coerced: see :meth:`_quantise_valor`.
+        Monetary amount, quantised to 2 decimal places via ``utils.decimals.to_decimal`` —
+        never re-implemented here. Missing, unparsable or non-finite input is **rejected**,
+        not coerced: see :meth:`_quantise_valor`.
     cod_fundo : str, optional
-            Fund code. The published standard names either a fund or one of its subclasses,
-            never both — see :meth:`_check_exactly_one_fund_reference`.
+        Fund code. The published standard names either a fund or one of its subclasses,
+        never both — see :meth:`_check_exactly_one_fund_reference`.
     cod_subclasse : str, optional
-            Subclass code. See ``cod_fundo``.
+        Subclass code. See ``cod_fundo``.
 
     Field names are **not** type-prefixed on purpose: they mirror the external payload's
     own tag names, which is the entire point of an anti-corruption schema.
@@ -67,17 +67,17 @@ class ExampleSchema(BaseModel):
         Parameters
         ----------
         value : object
-                Raw value as read from the payload.
+            Raw value as read from the payload.
 
         Returns
         -------
         Decimal
-                ``value`` quantised to 2 places, ``ROUND_DOWN`` (``to_decimal``'s default).
+            ``value`` quantised to 2 places, ``ROUND_DOWN`` (``to_decimal``'s default).
 
         Raises
         ------
         ValueError
-                When ``value`` is missing, unparsable, or non-finite (``NaN`` / ``±Inf``).
+            When ``value`` is missing, unparsable, or non-finite (``NaN`` / ``±Inf``).
         """
         cls_quantised = to_decimal(value, 2, default=_UNPARSABLE)
         if cls_quantised.is_nan():
@@ -94,12 +94,12 @@ class ExampleSchema(BaseModel):
         Returns
         -------
         ExampleSchema
-                ``self``, once the invariant is confirmed.
+            ``self``, once the invariant is confirmed.
 
         Raises
         ------
         ValueError
-                When both or neither of ``cod_fundo`` / ``cod_subclasse`` are set.
+            When both or neither of ``cod_fundo`` / ``cod_subclasse`` are set.
         """
         if (self.cod_fundo is None) == (self.cod_subclasse is None):
             raise ValueError("exactly one of cod_fundo or cod_subclasse must be set")

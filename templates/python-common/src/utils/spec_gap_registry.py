@@ -42,8 +42,8 @@ class SpecGapRegistry(metaclass=TypeChecker):
     Parameters
     ----------
     dict_known_gaps : dict of str to frozenset of str
-            Regime name → the column names that regime is KNOWN to lack in the current spec.
-            A regime absent from this dict has no known gaps (every mismatch is reported).
+        Regime name → the column names that regime is KNOWN to lack in the current spec.
+        A regime absent from this dict has no known gaps (every mismatch is reported).
     """
 
     def __init__(self, dict_known_gaps: dict[str, frozenset[str]]) -> None:
@@ -56,15 +56,15 @@ class SpecGapRegistry(metaclass=TypeChecker):
         Parameters
         ----------
         str_regime_name : str
-                The regime whose spec is being compared.
+            The regime whose spec is being compared.
         str_column : str
-                The column name the comparison reported as missing from the spec.
+            The column name the comparison reported as missing from the spec.
 
         Returns
         -------
         bool
-                ``True`` only when this exact pair was registered — never for an unlisted
-                column, however similar, and never for an unlisted regime.
+            ``True`` only when this exact pair was registered — never for an unlisted
+            column, however similar, and never for an unlisted regime.
         """
         return str_column in self.dict_known_gaps.get(str_regime_name, frozenset())
 
@@ -81,15 +81,15 @@ class SpecGapRegistry(metaclass=TypeChecker):
         Parameters
         ----------
         str_regime_name : str
-                The regime the columns were reported against.
+            The regime the columns were reported against.
         set_reported_columns : frozenset of str
-                Columns a comparison reported as missing from the spec.
+            Columns a comparison reported as missing from the spec.
 
         Returns
         -------
         frozenset of str
-                The subset of ``set_reported_columns`` with no registered gap entry — empty
-                when every reported column is an expected, registered gap.
+            The subset of ``set_reported_columns`` with no registered gap entry — empty
+            when every reported column is an expected, registered gap.
         """
         return frozenset(
             str_column

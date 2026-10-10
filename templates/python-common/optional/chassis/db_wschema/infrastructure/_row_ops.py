@@ -15,16 +15,16 @@ def _row_has_id(dict_row: Record, str_id_field: str, record_id: str) -> bool:
     Parameters
     ----------
     dict_row : Record
-            Row to test.
+        Row to test.
     str_id_field : str
-            Name of the identifier field.
+        Name of the identifier field.
     record_id : str
-            Identifier to look for.
+        Identifier to look for.
 
     Returns
     -------
     bool
-            ``True`` when the row's identifier equals ``record_id``.
+        ``True`` when the row's identifier equals ``record_id``.
     """
     return str(dict_row.get(str_id_field)) == str(record_id)
 
@@ -35,16 +35,16 @@ def _find_row(list_rows: Iterable[Record], str_id_field: str, record_id: str) ->
     Parameters
     ----------
     list_rows : Iterable[Record]
-            Rows to search.
+        Rows to search.
     str_id_field : str
-            Name of the identifier field.
+        Name of the identifier field.
     record_id : str
-            Identifier to look for.
+        Identifier to look for.
 
     Returns
     -------
     Record or None
-            First matching row, otherwise ``None``.
+        First matching row, otherwise ``None``.
     """
     return next((row for row in list_rows if _row_has_id(row, str_id_field, record_id)), None)
 
@@ -57,19 +57,19 @@ def _apply_update(
     Parameters
     ----------
     list_rows : list of Record
-            Rows as currently stored; not modified.
+        Rows as currently stored; not modified.
     str_id_field : str
-            Name of the identifier field.
+        Name of the identifier field.
     record_id : str
-            Identifier of the rows to update.
+        Identifier of the rows to update.
     dict_updates : Record
-            Partial payload to merge; the identifier is pinned to ``record_id``.
+        Partial payload to merge; the identifier is pinned to ``record_id``.
 
     Returns
     -------
     tuple of (list of Record, Record or None)
-            The rows to write back, and the last row that was updated (``None`` when no row
-            matched, which tells the caller there is nothing to write).
+        The rows to write back, and the last row that was updated (``None`` when no row
+        matched, which tells the caller there is nothing to write).
     """
     list_out = [
         {**dict_row, **dict_updates, str_id_field: record_id}

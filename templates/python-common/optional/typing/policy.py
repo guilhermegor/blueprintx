@@ -54,8 +54,8 @@ def _int_hint(  # complexity-ok: type metaprogramming
     Returns
     -------
     Any
-            Either bare ``int`` (no override needed) or an ``Annotated``/union hint that
-            widens to ``numpy.integer`` and/or rejects ``bool``, per the knobs above.
+        Either bare ``int`` (no override needed) or an ``Annotated``/union hint that
+        widens to ``numpy.integer`` and/or rejects ``bool``, per the knobs above.
     """
     int_base: Any = int
     if WIDEN_INT_TO_NUMPY:
@@ -76,7 +76,7 @@ def build_conf() -> BeartypeConf:
     Returns
     -------
     BeartypeConf
-            The configuration the engine adapter applies to every checked call.
+        The configuration the engine adapter applies to every checked call.
     """
     int_hint = _int_hint()
     if int_hint is int:

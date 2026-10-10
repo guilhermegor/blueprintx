@@ -41,7 +41,7 @@ class LogEmitter(metaclass=TypeChecker):
         Parameters
         ----------
         cls_logger : logging.Logger, optional
-                The standard-library logger to write to; defaults to the logger for this module.
+            The standard-library logger to write to; defaults to the logger for this module.
         """
         self._cls_logger = cls_logger if cls_logger is not None else _LOGGER
 
@@ -51,10 +51,10 @@ class LogEmitter(metaclass=TypeChecker):
         Parameters
         ----------
         str_message : str
-                The message to log.
+            The message to log.
         str_level : str
-                The level name (e.g. ``"warning"``, ``"info"``); falls back to ``warning`` when
-                the underlying logger has no method of that name.
+            The level name (e.g. ``"warning"``, ``"info"``); falls back to ``warning`` when
+            the underlying logger has no method of that name.
         """
         fn_emit = getattr(self._cls_logger, str_level.lower(), self._cls_logger.warning)
         fn_emit(str_message)

@@ -76,33 +76,33 @@ class FileContract(metaclass=TypeChecker):
     Parameters
     ----------
     str_name : str
-            Human-readable file label (used in logs and notifications).
+        Human-readable file label (used in logs and notifications).
     str_source_key : str
-            Source key used to route notifications (e.g. ``"cadastro"``).
+        Source key used to route notifications (e.g. ``"cadastro"``).
     tuple_required : tuple of str
-            Columns that must be present.
+        Columns that must be present.
     tuple_cnpj_cols : tuple of str
-            Columns that must hold at least one valid CNPJ (coercible-type check).
+        Columns that must hold at least one valid CNPJ (coercible-type check).
     bool_full_column : bool, optional
-            Whether ``tuple_required`` lists the source's **complete** published header (default
-            ``False``). ``tuple_required`` means "the file must contain **at least** these", so a
-            contract is either a deliberate **subset** (require the keys, let the rest flow through
-            as typed text) or **full-column** (generated from the whole header, the pinned-oracle
-            kind). The distinction is load-bearing for the drift job: "a required column vanished
-            from the source" is *always* drift, but "the source has a column we don't require" is
-            drift **only** when the contract claims completeness — flagging it on a subset contract
-            reports every non-required column as a finding. Keep the default ``False`` unless the
-            contract was pinned to the full header; the choice should be conscious per source, not
-            accidental.
+        Whether ``tuple_required`` lists the source's **complete** published header (default
+        ``False``). ``tuple_required`` means "the file must contain **at least** these", so a
+        contract is either a deliberate **subset** (require the keys, let the rest flow through
+        as typed text) or **full-column** (generated from the whole header, the pinned-oracle
+        kind). The distinction is load-bearing for the drift job: "a required column vanished
+        from the source" is *always* drift, but "the source has a column we don't require" is
+        drift **only** when the contract claims completeness — flagging it on a subset contract
+        reports every non-required column as a finding. Keep the default ``False`` unless the
+        contract was pinned to the full header; the choice should be conscious per source, not
+        accidental.
 
     Attributes
     ----------
     PROVENANCE_COLUMNS : tuple of str
-            The fixed provenance columns appended to every ingested frame by
-            :func:`utils.provenance.stamp_provenance`. They describe the full output shape
-            (:attr:`output_columns`) but are **not** in ``tuple_required`` — that validates the
-            *source* artifact, which never carries them, so the stamp is applied *after* the
-            contract check.
+        The fixed provenance columns appended to every ingested frame by
+        :func:`utils.provenance.stamp_provenance`. They describe the full output shape
+        (:attr:`output_columns`) but are **not** in ``tuple_required`` — that validates the
+        *source* artifact, which never carries them, so the stamp is applied *after* the
+        contract check.
     """
 
     str_name: str
@@ -127,7 +127,7 @@ class FileContract(metaclass=TypeChecker):
         Returns
         -------
         tuple of str
-                ``tuple_required + PROVENANCE_COLUMNS`` — what a stamped, ingested frame holds.
+            ``tuple_required + PROVENANCE_COLUMNS`` — what a stamped, ingested frame holds.
         """
         return self.tuple_required + self.PROVENANCE_COLUMNS
 
@@ -138,7 +138,7 @@ class ContractError(Exception, metaclass=TypeChecker):
     Parameters
     ----------
     list_problems : list of str
-            The problem messages describing the violations.
+        The problem messages describing the violations.
     """
 
     def __init__(self, list_problems: list[str]) -> None:
@@ -161,9 +161,9 @@ class ProblemReport(metaclass=TypeChecker):
     Attributes
     ----------
     list_fatal : list of str
-            Problems that make the data unusable; the caller should abort.
+        Problems that make the data unusable; the caller should abort.
     list_warnings : list of str
-            Problems worth logging that do not, on their own, block use of the data.
+        Problems worth logging that do not, on their own, block use of the data.
     """
 
     list_fatal: list[str]
@@ -198,44 +198,44 @@ def read_table(  # noqa: PLR0913 — the public reader API; each argument is a r
     Parameters
     ----------
     path_file : pathlib.Path
-            Path to the workbook, CSV, or JSON. The extension selects the reader.
+        Path to the workbook, CSV, or JSON. The extension selects the reader.
     str_sheet : str
-            Worksheet name (used for Excel; ignored for CSV/JSON). ``""`` reads the first sheet.
+        Worksheet name (used for Excel; ignored for CSV/JSON). ``""`` reads the first sheet.
     dict_dtypes : dict of {str: str}
-            Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
+        Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
     cls_contract : FileContract
-            The contract the file must satisfy (required).
+        The contract the file must satisfy (required).
     list_date_cols : sequence of str, optional
-            Columns coerced to ``datetime.date``.
+        Columns coerced to ``datetime.date``.
     list_decimal_cols : sequence of str, optional
-            Columns coerced to exact :class:`decimal.Decimal`. Use this for money and any other
-            value whose fractional part carries meaning: a binary float dtype would destroy the
-            source's exact value irreversibly and silently.
+        Columns coerced to exact :class:`decimal.Decimal`. Use this for money and any other
+        value whose fractional part carries meaning: a binary float dtype would destroy the
+        source's exact value irreversibly and silently.
     str_csv_sep : str, optional
-            CSV delimiter (default ``";"``); ignored otherwise.
+        CSV delimiter (default ``";"``); ignored otherwise.
     list_columns : sequence of str, optional
-            CSV only: read **headerless** and assign these names in order. Ignored otherwise.
+        CSV only: read **headerless** and assign these names in order. Ignored otherwise.
     str_encoding : str, optional
-            CSV only: text encoding (default ``"utf-8-sig"`` so a leading BOM never corrupts the
-            first cell). Pass ``"ISO-8859-1"`` for Latin-1 exports. Ignored otherwise.
+        CSV only: text encoding (default ``"utf-8-sig"`` so a leading BOM never corrupts the
+        first cell). Pass ``"ISO-8859-1"`` for Latin-1 exports. Ignored otherwise.
     int_header_row : int, optional
-            Excel only: zero-based header-row index (default ``0``). Ignored otherwise.
+        Excel only: zero-based header-row index (default ``0``). Ignored otherwise.
     int_csv_quoting : int, optional
-            CSV only: the :mod:`csv` quoting constant passed to the reader (default
-            ``csv.QUOTE_MINIMAL``, pandas' own default). Pass ``csv.QUOTE_NONE`` for external
-            ``;``-delimited regulatory dumps (e.g. CVM open data), where an upstream submitter's
-            stray ``"`` is literal text, not a field wrapper — the default engine would swallow the
-            delimiter and shift subsequent columns, corrupting the parse. Ignored otherwise.
+        CSV only: the :mod:`csv` quoting constant passed to the reader (default
+        ``csv.QUOTE_MINIMAL``, pandas' own default). Pass ``csv.QUOTE_NONE`` for external
+        ``;``-delimited regulatory dumps (e.g. CVM open data), where an upstream submitter's
+        stray ``"`` is literal text, not a field wrapper — the default engine would swallow the
+        delimiter and shift subsequent columns, corrupting the parse. Ignored otherwise.
 
     Returns
     -------
     pd.DataFrame
-            The rows with the declared types applied.
+        The rows with the declared types applied.
 
     Raises
     ------
     ContractError
-            When the file violates ``cls_contract``.
+        When the file violates ``cls_contract``.
 
     Notes
     -----
@@ -276,28 +276,28 @@ def read_query(
     Parameters
     ----------
     cls_connection : Any
-            An open DB-API 2.0 connection (e.g. from ``config.connection_db.build_connection``).
-            Opaque by design — any driver's connection object is accepted.
+        An open DB-API 2.0 connection (e.g. from ``config.connection_db.build_connection``).
+        Opaque by design — any driver's connection object is accepted.
     str_sql : str
-            The SQL query, with ``?``/``%s`` placeholders for any parameters.
+        The SQL query, with ``?``/``%s`` placeholders for any parameters.
     dict_dtypes : dict of {str: str}
-            Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
+        Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
     cls_contract : FileContract
-            The contract the result must satisfy (required).
+        The contract the result must satisfy (required).
     list_params : sequence, optional
-            Bound query parameters passed to :func:`pandas.read_sql_query`.
+        Bound query parameters passed to :func:`pandas.read_sql_query`.
     list_date_cols : sequence of str, optional
-            Columns coerced to ``datetime.date``.
+        Columns coerced to ``datetime.date``.
 
     Returns
     -------
     pd.DataFrame
-            The query rows with the declared types applied.
+        The query rows with the declared types applied.
 
     Raises
     ------
     ContractError
-            When the result violates ``cls_contract``.
+        When the result violates ``cls_contract``.
     """
     df_raw = pd.read_sql_query(str_sql, cls_connection, params=list_params)
     return _finalize(df_raw, dict_dtypes, list_date_cols, cls_contract)
@@ -312,19 +312,19 @@ def find_file_problems(
     Parameters
     ----------
     cls_contract : FileContract
-            The contract to validate against.
+        The contract to validate against.
     path_file : pathlib.Path
-            The file to read (Excel or CSV).
+        The file to read (Excel or CSV).
     str_sheet : str
-            Worksheet name (used for Excel; ignored for CSV).
+        Worksheet name (used for Excel; ignored for CSV).
     str_csv_sep : str, optional
-            CSV delimiter (default ``";"``); ignored for Excel.
+        CSV delimiter (default ``";"``); ignored for Excel.
 
     Returns
     -------
     ProblemReport
-            ``list_fatal`` and ``list_warnings``, both empty when the file is sound. A missing
-            file is a **finding, not an exception** — see the note below.
+        ``list_fatal`` and ``list_warnings``, both empty when the file is sound. A missing
+        file is a **finding, not an exception** — see the note below.
     """
     # ⚠️ Checked HERE, not left to the raising `_read_raw` — see "Never raises includes a
     # missing file" in utils/CLAUDE.md.
@@ -348,15 +348,15 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
     Parameters
     ----------
     df_input : pd.DataFrame
-            The frame to validate (raw, as read).
+        The frame to validate (raw, as read).
     cls_contract : FileContract
-            The contract to validate against.
+        The contract to validate against.
 
     Returns
     -------
     ProblemReport
-            ``list_fatal`` holds missing required columns; ``list_warnings`` holds CNPJ columns
-            that hold no valid CNPJ.
+        ``list_fatal`` holds missing required columns; ``list_warnings`` holds CNPJ columns
+        that hold no valid CNPJ.
     """
     list_missing = [
         f"Required column missing in '{cls_contract.str_name}': '{str_col}'"
@@ -391,16 +391,16 @@ def _cnpj_column_problem(  # complexity-ok: two acceptance rules, empty-column o
     Parameters
     ----------
     series_col : pd.Series
-            The column to validate.
+        The column to validate.
     str_col : str
-            Its name, for the message.
+        Its name, for the message.
     str_contract : str
-            The contract's name, for the message.
+        The contract's name, for the message.
 
     Returns
     -------
     str or None
-            The problem description, or ``None``.
+        The problem description, or ``None``.
     """
     if series_col.empty:
         return None
@@ -433,19 +433,19 @@ def decode_positional_payload(  # complexity-ok: two rejection rules, never inve
     Parameters
     ----------
     list_columns : sequence of str
-            The header the payload declares, in order.
+        The header the payload declares, in order.
     list_rows : sequence of sequence
-            The rows as positional arrays.
+        The rows as positional arrays.
 
     Returns
     -------
     pd.DataFrame
-            A frame with exactly ``list_columns`` as its columns.
+        A frame with exactly ``list_columns`` as its columns.
 
     Raises
     ------
     ContractError
-            If a row is narrower than the header, or if a surplus position holds a value.
+        If a row is narrower than the header, or if a surplus position holds a value.
     """
     int_declared = len(list_columns)
     list_narrow = [int_i for int_i, seq_row in enumerate(list_rows) if len(seq_row) < int_declared]
@@ -497,19 +497,19 @@ def resolve_sheet_name(  # complexity-ok: three documented resolution outcomes, 
     Parameters
     ----------
     path_file : pathlib.Path
-            The workbook to inspect.
+        The workbook to inspect.
     tuple_known_names : tuple of str
-            Accepted sheet names, in priority order (matched case-insensitively).
+        Accepted sheet names, in priority order (matched case-insensitively).
 
     Returns
     -------
     str
-            The sheet name to read (``""`` for non-Excel files).
+        The sheet name to read (``""`` for non-Excel files).
 
     Raises
     ------
     ContractError
-            When the workbook has multiple sheets and none matches ``tuple_known_names``.
+        When the workbook has multiple sheets and none matches ``tuple_known_names``.
     """
     if path_file.suffix.lower() not in {".xlsx", ".xls", ".xlsm"}:
         return ""
@@ -551,28 +551,28 @@ def _finalize(
     Parameters
     ----------
     df_raw : pd.DataFrame
-            The frame as read (file or query), before validation or typing.
+        The frame as read (file or query), before validation or typing.
     dict_dtypes : dict of {str: str}
-            Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
+        Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
     list_date_cols : sequence of str | None
-            Columns coerced to ``datetime.date``.
+        Columns coerced to ``datetime.date``.
     cls_contract : FileContract
-            The contract validated before typing.
+        The contract validated before typing.
     list_decimal_cols : sequence of str | None
-            Columns coerced to exact ``Decimal`` — money and any other value whose fractional
-            part carries meaning, which must never round-trip through a binary float.
+        Columns coerced to exact ``Decimal`` — money and any other value whose fractional
+        part carries meaning, which must never round-trip through a binary float.
 
     Returns
     -------
     pd.DataFrame
-            The rows with the declared types applied.
+        The rows with the declared types applied.
 
     Raises
     ------
     ContractError
-            When the frame violates ``cls_contract`` — fatal or warning, since this is the
-            STRICT twin: unlike a caller reading :class:`ProblemReport` directly, it aborts on
-            either kind rather than choosing per severity.
+        When the frame violates ``cls_contract`` — fatal or warning, since this is the
+        STRICT twin: unlike a caller reading :class:`ProblemReport` directly, it aborts on
+        either kind rather than choosing per severity.
     """
     cls_report = find_contract_problems(df_raw, cls_contract)
     if cls_report.list_fatal or cls_report.list_warnings:
@@ -655,34 +655,34 @@ def _read_raw_dispatch(
     Parameters
     ----------
     path_file : pathlib.Path
-            The file to read.
+        The file to read.
     str_sheet : str
-            Worksheet name (Excel only; ignored for CSV and JSON).
+        Worksheet name (Excel only; ignored for CSV and JSON).
     str_dtype : str | None
-            Optional dtype applied to every column on read (e.g. ``"str"`` for validation);
-            ``None`` lets the reader infer (types are applied afterwards).
+        Optional dtype applied to every column on read (e.g. ``"str"`` for validation);
+        ``None`` lets the reader infer (types are applied afterwards).
     str_csv_sep : str
-            CSV delimiter (ignored for Excel and JSON).
+        CSV delimiter (ignored for Excel and JSON).
     list_columns : sequence of str, optional
-            CSV only: when given, read headerless and assign these column names.
+        CSV only: when given, read headerless and assign these column names.
     str_encoding : str, optional
-            CSV text encoding (default ``"utf-8-sig"`` so a leading BOM never corrupts the first
-            cell); pass ``"ISO-8859-1"`` for Latin-1 exports.
+        CSV text encoding (default ``"utf-8-sig"`` so a leading BOM never corrupts the first
+        cell); pass ``"ISO-8859-1"`` for Latin-1 exports.
     int_header_row : int, optional
-            Excel header-row index (default ``0``). Ignored for CSV/JSON.
+        Excel header-row index (default ``0``). Ignored for CSV/JSON.
     int_csv_quoting : int, optional
-            CSV :mod:`csv` quoting constant (default ``csv.QUOTE_MINIMAL``). ``csv.QUOTE_NONE``
-            treats a stray ``"`` as literal text — correct for ``;``-delimited regulatory dumps.
+        CSV :mod:`csv` quoting constant (default ``csv.QUOTE_MINIMAL``). ``csv.QUOTE_NONE``
+        treats a stray ``"`` as literal text — correct for ``;``-delimited regulatory dumps.
 
     Returns
     -------
     pd.DataFrame
-            The raw rows as read.
+        The raw rows as read.
 
     Raises
     ------
     FileNotFoundError
-            If ``path_file`` does not exist (fail fast at the read boundary).
+        If ``path_file`` does not exist (fail fast at the read boundary).
     """
     if not path_file.exists():
         raise FileNotFoundError(f"File not found: {path_file}")
@@ -718,24 +718,24 @@ def _read_csv_raw(
     Parameters
     ----------
     path_file : pathlib.Path
-            The file to read.
+        The file to read.
     str_dtype : str or None, optional
-            Dtype passed through to pandas.
+        Dtype passed through to pandas.
     str_csv_sep : str, optional
-            Field separator.
+        Field separator.
     list_columns : sequence of str or None, optional
-            When given, the file is treated as headerless and these names are applied.
+        When given, the file is treated as headerless and these names are applied.
     str_encoding : str, optional
-            Text encoding.
+        Text encoding.
     int_csv_quoting : int, optional
-            ``csv`` quoting constant.
+        ``csv`` quoting constant.
     **_kwargs : object
-            Ignored; present so every reader shares one dispatch signature.
+        Ignored; present so every reader shares one dispatch signature.
 
     Returns
     -------
     pd.DataFrame
-            The raw frame.
+        The raw frame.
     """
     dict_header = {"header": None, "names": list(list_columns)} if list_columns is not None else {}
     return pd.read_csv(
@@ -767,18 +767,18 @@ def _read_json_raw(
     Parameters
     ----------
     path_file : pathlib.Path
-            The file to read.
+        The file to read.
     str_dtype : str or None, optional
-            Dtype applied after decoding.
+        Dtype applied after decoding.
     str_encoding : str, optional
-            Text encoding.
+        Text encoding.
     **_kwargs : object
-            Ignored; present so every reader shares one dispatch signature.
+        Ignored; present so every reader shares one dispatch signature.
 
     Returns
     -------
     pd.DataFrame
-            The raw frame.
+        The raw frame.
     """
     obj_json = json.loads(
         path_file.read_text(encoding=str_encoding), parse_float=str, parse_int=str
@@ -811,20 +811,20 @@ def _read_excel_raw(
     Parameters
     ----------
     path_file : pathlib.Path
-            The workbook to read.
+        The workbook to read.
     str_sheet : str, optional
-            Worksheet name; empty means the first sheet by position.
+        Worksheet name; empty means the first sheet by position.
     str_dtype : str or None, optional
-            Dtype passed through to pandas.
+        Dtype passed through to pandas.
     int_header_row : int, optional
-            Zero-based header row index.
+        Zero-based header row index.
     **_kwargs : object
-            Ignored; present so every reader shares one dispatch signature.
+        Ignored; present so every reader shares one dispatch signature.
 
     Returns
     -------
     pd.DataFrame
-            The raw frame.
+        The raw frame.
     """
     sheet_excel: str | int = 0 if str_sheet == "" else str_sheet
     return pd.read_excel(path_file, sheet_name=sheet_excel, dtype=str_dtype, header=int_header_row)

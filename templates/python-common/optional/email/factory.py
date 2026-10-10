@@ -36,24 +36,24 @@ def build_email_handler(
     Parameters
     ----------
     str_backend : str, optional
-            Backend key (``outlook`` / ``smtp`` / ``none``). When blank, ``EMAIL_BACKEND`` is read
-            (default ``outlook``). A ``none``/blank backend returns a :class:`NullEmailHandler`.
+        Backend key (``outlook`` / ``smtp`` / ``none``). When blank, ``EMAIL_BACKEND`` is read
+        (default ``outlook``). A ``none``/blank backend returns a :class:`NullEmailHandler`.
     str_sender : str, optional
-            The sending account. When blank, ``SENDER_EMAIL`` is read. Used by both backends.
+        The sending account. When blank, ``SENDER_EMAIL`` is read. Used by both backends.
     path_signatures_dir : pathlib.Path | None, optional
-            Signatures directory passed to the Outlook gateway (ignored by SMTP).
+        Signatures directory passed to the Outlook gateway (ignored by SMTP).
     logger : logging.Logger | None, optional
-            Run logger passed to the Outlook gateway.
+        Run logger passed to the Outlook gateway.
 
     Returns
     -------
     EmailHandler
-            An adapter satisfying the port (Outlook, SMTP, or no-op ``NullEmailHandler``).
+        An adapter satisfying the port (Outlook, SMTP, or no-op ``NullEmailHandler``).
 
     Raises
     ------
     ValueError
-            If ``str_backend`` is a non-blank, unknown key.
+        If ``str_backend`` is a non-blank, unknown key.
 
     Examples
     --------

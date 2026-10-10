@@ -19,12 +19,12 @@ class TeamsNotifier:
         Parameters
         ----------
         str_url : str
-                Microsoft Teams incoming webhook URL to validate.
+            Microsoft Teams incoming webhook URL to validate.
 
         Raises
         ------
         ValueError
-                If the URL is empty or does not start with ``https://``.
+            If the URL is empty or does not start with ``https://``.
         """
         if not str_url:
             raise ValueError("Webhook URL cannot be empty")
@@ -37,7 +37,7 @@ class TeamsNotifier:
         Parameters
         ----------
         str_url : str
-                Microsoft Teams incoming webhook URL.
+            Microsoft Teams incoming webhook URL.
         """
         self._validate_url(str_url)
         self._str_url = str_url
@@ -48,14 +48,14 @@ class TeamsNotifier:
         Parameters
         ----------
         str_message : str
-                Message body to deliver.
+            Message body to deliver.
         str_title : str, optional
-                Message title/subject.
+            Message title/subject.
 
         Raises
         ------
         ValueError
-                If the message is empty, or the send fails.
+            If the message is empty, or the send fails.
         """
         if not str_message:
             raise ValueError("Message cannot be empty")

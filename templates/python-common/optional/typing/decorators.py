@@ -17,12 +17,12 @@ def type_checker(func: Callable[..., Any]) -> Callable[..., Any]:
     Parameters
     ----------
     func : Callable[..., Any]
-            Function to wrap.
+        Function to wrap.
 
     Returns
     -------
     Callable[..., Any]
-            Wrapped callable that validates argument types on every call.
+        Wrapped callable that validates argument types on every call.
 
     Examples
     --------

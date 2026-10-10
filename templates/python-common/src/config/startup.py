@@ -130,7 +130,7 @@ def _resolve_out_dir() -> Path:
     Returns
     -------
     Path
-            An existing directory the process can write to.
+        An existing directory the process can write to.
     """
     str_base = str(YAML_INPUTS.get("daily_infos_base_path", "logs"))
     bool_dated = bool(YAML_INPUTS.get("daily_infos_dated", False))
@@ -161,12 +161,12 @@ def output_path(str_name_key: str) -> Path:
     Parameters
     ----------
     str_name_key : str
-            Key in ``outputs.yaml`` (e.g. ``"log_name"``, ``"json_name"``, ``"xlsx_name"``).
+        Key in ``outputs.yaml`` (e.g. ``"log_name"``, ``"json_name"``, ``"xlsx_name"``).
 
     Returns
     -------
     Path
-            Fully-qualified path under the run's output directory, timestamped to import time.
+        Fully-qualified path under the run's output directory, timestamped to import time.
     """
     return _out_dir / YAML_OUTPUTS[str_name_key].format(
         environment=ENVIRONMENT, app_name=APP_NAME, user=USER, date=_str_date, time=_str_time
@@ -190,16 +190,16 @@ def resolve_reference_spec(dict_inputs: dict, str_source: str) -> dict | None:
     Parameters
     ----------
     dict_inputs : dict
-            The loaded ``inputs.yaml`` mapping (``YAML_INPUTS`` at runtime).
+        The loaded ``inputs.yaml`` mapping (``YAML_INPUTS`` at runtime).
     str_source : str
-            The input's top-level key in ``inputs.yaml`` (e.g. ``"example_source"``).
+        The input's top-level key in ``inputs.yaml`` (e.g. ``"example_source"``).
 
     Returns
     -------
     dict or None
-            The override spec when ``str_source`` is listed under ``reference_files``; otherwise
-            the source's own real-input spec, when that key holds a mapping; otherwise ``None`` —
-            the source has neither an override nor a real spec to fall back to.
+        The override spec when ``str_source`` is listed under ``reference_files``; otherwise
+        the source's own real-input spec, when that key holds a mapping; otherwise ``None`` —
+        the source has neither an override nor a real spec to fall back to.
     """
     dict_source = dict_inputs.get(str_source)
     dict_real = dict_source if isinstance(dict_source, dict) else None

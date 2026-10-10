@@ -64,21 +64,21 @@ def _compute_backoff_wait(
     Parameters
     ----------
     str_strategy : str
-            One of ``"exponential"`` (``base * factor ** (attempt - 1)``), ``"linear"``
-            (``base * attempt``), or ``"constant"`` (``base``).
+        One of ``"exponential"`` (``base * factor ** (attempt - 1)``), ``"linear"``
+        (``base * attempt``), or ``"constant"`` (``base``).
     float_base_wait_s : float
-            The base wait, in seconds — the wait before the first retry under every strategy.
+        The base wait, in seconds — the wait before the first retry under every strategy.
     float_factor : float
-            The exponential growth factor; used only by the ``"exponential"`` strategy.
+        The exponential growth factor; used only by the ``"exponential"`` strategy.
     int_attempt : int
-            The 1-indexed number of the attempt that just failed.
+        The 1-indexed number of the attempt that just failed.
     float_max_wait_s : float or None
-            Optional upper bound applied to the computed wait; ``None`` leaves it uncapped.
+        Optional upper bound applied to the computed wait; ``None`` leaves it uncapped.
 
     Returns
     -------
     float
-            The (optionally capped) number of seconds to wait before the next attempt.
+        The (optionally capped) number of seconds to wait before the next attempt.
     """
     # str_strategy is validated by RetryPolicy, so the lookup always hits.
     float_wait = _STRATEGY_WAITS[str_strategy](float_base_wait_s, float_factor, int_attempt)

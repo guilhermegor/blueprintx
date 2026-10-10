@@ -76,14 +76,14 @@ def find_sheet_name_problems(  # complexity-ok: seven independent Excel naming r
     Parameters
     ----------
     str_name : str
-            The candidate worksheet name.
+        The candidate worksheet name.
 
     Returns
     -------
     ProblemReport
-            ``list_fatal`` carries one message per broken rule (empty when the name is sound);
-            ``list_warnings`` is always empty. A blank name short-circuits to a single fatal
-            problem, since none of the other rules say anything useful about it.
+        ``list_fatal`` carries one message per broken rule (empty when the name is sound);
+        ``list_warnings`` is always empty. A blank name short-circuits to a single fatal
+        problem, since none of the other rules say anything useful about it.
     """
     if not str_name:
         return ProblemReport(list_fatal=["Sheet name is blank"], list_warnings=[])
@@ -125,14 +125,14 @@ def find_workbook_sheet_name_problems(list_names: list[str]) -> ProblemReport:
     Parameters
     ----------
     list_names : list of str
-            The proposed sheet names, in the order they would be written.
+        The proposed sheet names, in the order they would be written.
 
     Returns
     -------
     ProblemReport
-            ``list_fatal`` carries every broken rule across every name, followed by any
-            case-insensitive duplicates; ``list_warnings`` is always empty (see
-            :func:`find_sheet_name_problems`).
+        ``list_fatal`` carries every broken rule across every name, followed by any
+        case-insensitive duplicates; ``list_warnings`` is always empty (see
+        :func:`find_sheet_name_problems`).
     """
     list_problems = [
         str_problem

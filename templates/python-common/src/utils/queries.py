@@ -60,17 +60,17 @@ def _require_bare_name(str_value: str, str_label: str, str_why: str) -> None:
     Parameters
     ----------
     str_value : str
-            The candidate segment.
+        The candidate segment.
     str_label : str
-            What the value is, for the error message (e.g. ``"Query name"``).
+        What the value is, for the error message (e.g. ``"Query name"``).
     str_why : str
-            The consequence of accepting it, appended to the error message.
+        The consequence of accepting it, appended to the error message.
 
     Raises
     ------
     ValueError
-            If the value is empty, is a relative-navigation segment, or carries a
-            separator of either flavour.
+        If the value is empty, is a relative-navigation segment, or carries a
+        separator of either flavour.
 
     Notes
     -----
@@ -100,12 +100,12 @@ def _engine_dirs(path_queries_root: Path) -> list[Path]:
     Parameters
     ----------
     path_queries_root : pathlib.Path
-            The ``config/queries`` directory holding one subdirectory per engine.
+        The ``config/queries`` directory holding one subdirectory per engine.
 
     Returns
     -------
     list of pathlib.Path
-            Every engine directory, or an empty list when the root does not exist.
+        Every engine directory, or an empty list when the root does not exist.
     """
     if not path_queries_root.is_dir():
         return []
@@ -124,29 +124,29 @@ def load_query(  # complexity-ok: each branch is a documented lookup failure wit
     Parameters
     ----------
     str_filename : str
-            Bare query filename, e.g. ``example_entity__select_active.sql``. It must not
-            carry a directory component: the engine directory is derived from the configured
-            backend, never spelled by the caller.
+        Bare query filename, e.g. ``example_entity__select_active.sql``. It must not
+        carry a directory component: the engine directory is derived from the configured
+        backend, never spelled by the caller.
     str_backend : str
-            The active engine, supplied by the single function that reads ``DB_BACKEND``. It
-            must also be a single path segment — it comes from a git-ignored ``.env``, which
-            makes it untrusted input, not a trusted constant.
+        The active engine, supplied by the single function that reads ``DB_BACKEND``. It
+        must also be a single path segment — it comes from a git-ignored ``.env``, which
+        makes it untrusted input, not a trusted constant.
     path_queries_root : pathlib.Path
-            The ``config/queries`` directory holding one subdirectory per engine.
+        The ``config/queries`` directory holding one subdirectory per engine.
 
     Returns
     -------
     str
-            The SQL text, read as UTF-8.
+        The SQL text, read as UTF-8.
 
     Raises
     ------
     ValueError
-            If ``str_filename`` or ``str_backend`` is anything other than a single path
-            segment, which would bypass the engine routing this function exists to enforce.
+        If ``str_filename`` or ``str_backend`` is anything other than a single path
+        segment, which would bypass the engine routing this function exists to enforce.
     FileNotFoundError
-            If no file is filed for that engine. The message names the engines that *do* hold
-            the query, so a typo and a misconfiguration do not read identically.
+        If no file is filed for that engine. The message names the engines that *do* hold
+        the query, so a typo and a misconfiguration do not read identically.
     """
     _require_bare_name(
         str_filename,

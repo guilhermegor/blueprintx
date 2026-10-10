@@ -39,14 +39,14 @@ def resolve_signature(path_signatures_dir: Path, str_sender_email: str) -> str:
     Parameters
     ----------
     path_signatures_dir : pathlib.Path
-            Directory holding ``<sender>.html`` / ``default.html``.
+        Directory holding ``<sender>.html`` / ``default.html``.
     str_sender_email : str
-            Sender account; selects ``<sender>.html``.
+        Sender account; selects ``<sender>.html``.
 
     Returns
     -------
     str
-            Signature HTML (``<sender>.html``, else ``default.html``, else empty).
+        Signature HTML (``<sender>.html``, else ``default.html``, else empty).
     """
     # "First existing candidate, else empty" stated as a search rather than a loop with an
     # exit in the middle. The preference order stays visible in the tuple, which is where a
@@ -65,11 +65,11 @@ def to_html(str_body: str) -> str:
     Parameters
     ----------
     str_body : str
-            Plain-text body.
+        Plain-text body.
 
     Returns
     -------
     str
-            HTML body.
+        HTML body.
     """
     return str_body.replace("\n", "<br>\n")

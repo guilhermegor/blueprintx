@@ -74,23 +74,23 @@ def resolve_config_path(  # complexity-ok: each branch is a distinct, documented
     Parameters
     ----------
     str_env : str
-            The environment name (``ENV``). Normalised internally (diacritics/case/spacing), so
-            any reasonable spelling of a known value resolves.
+        The environment name (``ENV``). Normalised internally (diacritics/case/spacing), so
+        any reasonable spelling of a known value resolves.
     str_kind : str
-            Config kind (``"inputs"`` / ``"outputs"``).
+        Config kind (``"inputs"`` / ``"outputs"``).
     path_dir : pathlib.Path
-            Directory holding the config files.
+        Directory holding the config files.
 
     Returns
     -------
     pathlib.Path
-            The resolved, existing config-file path.
+        The resolved, existing config-file path.
 
     Raises
     ------
     SystemExit
-            In env-wise mode, when ``str_env`` maps to no known suffix or the resolved file is
-            absent — after printing a clear error to stderr (exit code 2).
+        In env-wise mode, when ``str_env`` maps to no known suffix or the resolved file is
+        absent — after printing a clear error to stderr (exit code 2).
     """
     path_plain = path_dir / f"{str_kind}.yaml"
     if path_plain.exists():
@@ -116,12 +116,12 @@ def _normalise_keyword(str_raw: str) -> str:
     Parameters
     ----------
     str_raw : str
-            The raw keyword as typed by the operator (e.g. the ``ENV`` value).
+        The raw keyword as typed by the operator (e.g. the ``ENV`` value).
 
     Returns
     -------
     str
-            The normalised token to test against a canonical set.
+        The normalised token to test against a canonical set.
     """
     str_decomposed = unicodedata.normalize("NFKD", str_raw)
     str_ascii = "".join(ch for ch in str_decomposed if not unicodedata.combining(ch))
@@ -135,12 +135,12 @@ def _abort(str_reason: str) -> NoReturn:
     Parameters
     ----------
     str_reason : str
-            The reason shown to the operator.
+        The reason shown to the operator.
 
     Raises
     ------
     SystemExit
-            Always (exit code 2).
+        Always (exit code 2).
     """
     print(f"[startup][ERROR] {str_reason}", file=sys.stderr)
     raise SystemExit(2)

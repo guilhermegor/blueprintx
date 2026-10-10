@@ -25,8 +25,8 @@ class OutlookEmailHandler:
         Parameters
         ----------
         cls_gateway : OutlookGateway
-                The Outlook dependency (constructed by the caller with the sender account +
-                signatures dir + logger), delegated to for send and read operations.
+            The Outlook dependency (constructed by the caller with the sender account +
+            signatures dir + logger), delegated to for send and read operations.
         """
         self._cls_gateway = cls_gateway
 
@@ -44,23 +44,23 @@ class OutlookEmailHandler:
         Parameters
         ----------
         str_subject : str
-                Subject line.
+            Subject line.
         list_to : list of str
-                Primary recipients.
+            Primary recipients.
         list_cc : list of str
-                Carbon-copy recipients.
+            Carbon-copy recipients.
         str_body : str
-                Plain-text (or HTML) body.
+            Plain-text (or HTML) body.
         list_attachments : list of str
-                File paths to attach.
+            File paths to attach.
         bool_auto_send : bool
-                Send without opening the Outlook compose window, by default ``True``.
+            Send without opening the Outlook compose window, by default ``True``.
 
         Returns
         -------
         bool
-                ``True`` when dispatched via Outlook; ``False`` off Windows
-                (logged by the gateway).
+            ``True`` when dispatched via Outlook; ``False`` off Windows
+            (logged by the gateway).
         """
         return self._cls_gateway.send_email(
             str_subject, list_to, list_cc, str_body, list_attachments, bool_auto_send
@@ -85,22 +85,22 @@ class OutlookEmailHandler:
         Parameters
         ----------
         str_email_account : str
-                The Outlook account/store name.
+            The Outlook account/store name.
         str_folder : str
-                The mail folder to search under the account.
+            The mail folder to search under the account.
         str_subject_substring : str
-                Substring the message subject must contain.
+            Substring the message subject must contain.
         path_dest_dir : pathlib.Path
-                Destination directory the attachment is saved into.
+            Destination directory the attachment is saved into.
         str_subfolder : str | None
-                Optional subfolder under ``str_folder``.
+            Optional subfolder under ``str_folder``.
         list_file_formats : list of str | None
-                Allowed attachment extensions without the dot, by default ``["xlsx"]``.
+            Allowed attachment extensions without the dot, by default ``["xlsx"]``.
 
         Returns
         -------
         pathlib.Path | None
-                The saved attachment path, or ``None`` off Windows / on any failure / no match.
+            The saved attachment path, or ``None`` off Windows / on any failure / no match.
         """
         return self._cls_gateway.download_attachment(
             str_email_account,

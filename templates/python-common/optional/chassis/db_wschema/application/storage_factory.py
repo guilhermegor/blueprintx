@@ -22,12 +22,12 @@ def build_storage_handler() -> DatabaseHandler:
     Returns
     -------
     DatabaseHandler
-            Configured backend handler ready for CRUD operations.
+        Configured backend handler ready for CRUD operations.
 
     Raises
     ------
     ValueError
-            If ``STORAGE_BACKEND`` does not match a supported backend.
+        If ``STORAGE_BACKEND`` does not match a supported backend.
 
     Notes
     -----
