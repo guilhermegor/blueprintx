@@ -497,3 +497,77 @@ def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_resolve_base_mid_merge_is_the_incoming_tip(path_mid_merge: Path) -> None:
     """Mid-merge the base is main's tip, never the fork point that charges main's delta."""
     assert gate.resolve_base() == _git_in(path_mid_merge, "rev-parse", "main")
+
+
+# --------------------------
+# Tests — a renamed test file is read at its source path (blueprintx#590)
+# --------------------------
+
+# Padding keeps git's rename similarity above 50% after the one-line weakening.
+_STR_PAD = "".join(
+    f"def test_p{int_i}() -> None:\n    assert g({int_i}) == {int_i}\n" for int_i in range(8)
+)
+_STR_STRONG = _STR_PAD + "def test_v() -> None:\n    assert f() == 1\n"
+_STR_WEAK = _STR_PAD + "def test_v() -> None:\n    assert f() in (1, 2)\n"
+
+
+@pytest.fixture
+def path_renamed_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return a repo on ``feature`` holding ``tests/test_old.py`` committed on ``main``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+            Pytest-provided scratch directory.
+    monkeypatch : pytest.MonkeyPatch
+            Used to run the gate inside the repo.
+
+    Returns
+    -------
+    pathlib.Path
+            The repository, with the base commit on ``main``.
+    """
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    _git_in(tmp_path, "config", "commit.gpgsign", "false")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_old.py").write_text(_STR_STRONG, encoding="utf-8")
+    _git_in(tmp_path, "add", "-A")
+    _git_in(tmp_path, "commit", "-q", "-m", "seed")
+    _git_in(tmp_path, "checkout", "-q", "-b", "feature")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+    return tmp_path
+
+
+def _rename_with(path_repo: Path, str_body: str) -> list[str]:
+    """Rename ``test_old.py`` to ``test_new.py`` with ``str_body``, stage, and run the gate.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+            The repository from ``path_renamed_repo``.
+    str_body : str
+            Content of the renamed file.
+
+    Returns
+    -------
+    list of str
+            The gate's findings.
+    """
+    _git_in(path_repo, "mv", "tests/test_old.py", "tests/test_new.py")
+    (path_repo / "tests" / "test_new.py").write_text(str_body, encoding="utf-8")
+    _git_in(path_repo, "add", "-A")
+    str_base = _git_in(path_repo, "rev-parse", "main")
+    return gate.collect_problems(gate.changed_paths(str_base), str_base)
+
+
+def test_a_renamed_and_weakened_test_file_is_reported(path_renamed_repo: Path) -> None:
+    """Renaming a test and weakening its assertion in one commit must fail the gate."""
+    assert any("test_new.py" in str_f for str_f in _rename_with(path_renamed_repo, _STR_WEAK))
+
+
+def test_a_merely_renamed_test_file_is_clean(path_renamed_repo: Path) -> None:
+    """A pure rename keeps every assertion, so the gate stays green."""
+    assert _rename_with(path_renamed_repo, _STR_STRONG) == []
