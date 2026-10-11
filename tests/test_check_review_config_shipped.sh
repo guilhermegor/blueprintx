@@ -30,7 +30,8 @@ expect_gate() {
 }
 
 drop_copy_line() {
-    sed -i '/\.gitattributes/d' "$1/bin/scaffold/ts_lib.sh"
+    sed '/\.gitattributes/d' "$1/bin/scaffold/ts_lib.sh" >"$1/bin/scaffold/ts_lib.sh.tmp" \
+        && mv "$1/bin/scaffold/ts_lib.sh.tmp" "$1/bin/scaffold/ts_lib.sh"
 }
 
 drop_manifest_file() {
@@ -71,12 +72,32 @@ test_dropped_manifest_file_fails_static() {
     expect_gate "dropped manifest file, static" "$str_root" fail "does not exist under" --static
 }
 
-test_dropped_manifest_file_fails_generated() {
+test_project_missing_manifest_file_fails() {
     local str_root
     str_root="$(make_copy)"
-    drop_manifest_file "$str_root"
-    expect_gate "dropped manifest file, generated" "$str_root" fail "" \
-        --generated --skeleton bash-cli
+    mkdir -p "$str_root/generated-project"
+    expect_gate "project missing manifest file" "$str_root" fail "generated project lacks" \
+        --project "$str_root/generated-project"
+}
+
+test_empty_manifest_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    : >"$str_root/templates/common/review-config.manifest"
+    expect_gate "empty manifest" "$str_root" fail "lists no paths" --static
+}
+
+test_unknown_skeleton_fails() {
+    expect_gate "unknown skeleton" "$(make_copy)" fail "no skeleton named" \
+        --generated --skeleton no-such-skeleton
+}
+
+test_comment_mention_does_not_satisfy_static() {
+    local str_root
+    str_root="$(make_copy)"
+    drop_copy_line "$str_root"
+    printf '# .gitattributes\n' >>"$str_root/bin/scaffold/ts_lib.sh"
+    expect_gate "comment mention, static" "$str_root" fail "ts_lib.sh never copies" --static
 }
 
 test_unshipped_entry_fails_both_modes() {
@@ -95,7 +116,10 @@ test_real_tree_passes_generated
 test_dropped_copy_line_fails_static
 test_dropped_copy_line_fails_generated
 test_dropped_manifest_file_fails_static
-test_dropped_manifest_file_fails_generated
+test_project_missing_manifest_file_fails
+test_empty_manifest_fails
+test_unknown_skeleton_fails
+test_comment_mention_does_not_satisfy_static
 test_unshipped_entry_fails_both_modes
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed" >&2; exit 1; }

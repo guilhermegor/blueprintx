@@ -13,7 +13,7 @@ fail() {
 }
 
 manifest_paths() {
-    grep -vE '^[[:space:]]*$' "$MANIFEST"
+    grep -vE '^[[:space:]]*$' "$MANIFEST" || true
 }
 
 skeleton_meta_files() {
@@ -32,8 +32,20 @@ check_content() {
     :
 }
 
+copies_path() {
+    local str_script="$1" str_path="$2" str_dir="$2" str_cp str_cp_r
+    str_cp="$(grep -E '^[[:space:]]*cp ' "$str_script" || true)"
+    str_cp_r="$(grep -E '^[[:space:]]*cp +-[a-zA-Z]*[rR]' "$str_script" || true)"
+    grep -qF -- "$str_path" <<<"$str_cp" && return 0
+    while [[ "$str_dir" == */* ]]; do
+        str_dir="${str_dir%/*}"
+        grep -qF -- "$str_dir" <<<"$str_cp_r" && return 0
+    done
+    return 1
+}
+
 check_static() {
-    local str_meta str_script str_path str_needle
+    local str_meta str_script str_path
     while IFS= read -r str_path; do
         [ -e "$REPO_ROOT/templates/common/$str_path" ] \
             || fail "manifest path '$str_path' does not exist under templates/common/"
@@ -41,8 +53,7 @@ check_static() {
     while IFS= read -r str_meta; do
         str_script="$REPO_ROOT/$(meta_field "$str_meta" scaffold)"
         while IFS= read -r str_path; do
-            str_needle="${str_path%%/*}"
-            grep -qF "$str_needle" "$str_script" \
+            copies_path "$str_script" "$str_path" \
                 || fail "$(basename "$str_script") never copies '$str_path'"
         done < <(manifest_paths)
     done < <(skeleton_meta_files)
@@ -71,10 +82,12 @@ scaffold_skeleton() {
 
 check_generated() {
     local str_meta str_name str_work int_before
-    git config --global user.email >/dev/null 2>&1 || git config --global user.email "ci-bot@example.com"
-    git config --global user.name >/dev/null 2>&1 || git config --global user.name "ci-bot"
+    local int_seen=0
+    export GIT_AUTHOR_NAME=ci-bot GIT_COMMITTER_NAME=ci-bot
+    export GIT_AUTHOR_EMAIL=ci-bot@example.com GIT_COMMITTER_EMAIL=ci-bot@example.com
     while IFS= read -r str_meta; do
         str_name="$(basename "$(dirname "$str_meta")")"
+        int_seen=$((int_seen + 1))
         str_work="$(mktemp -d)"
         int_before=$int_failures
         if scaffold_skeleton "$str_name" "$(meta_field "$str_meta" scaffold)" "$str_work"; then
@@ -85,10 +98,12 @@ check_generated() {
         rm -rf "$str_work"
         [ "$int_failures" -gt "$int_before" ] && echo "  FAIL $str_name" || echo "  ok   $str_name"
     done < <(skeleton_meta_files "${1:-}")
+    [ "$int_seen" -gt 0 ] || { echo "ERROR: no skeleton named '${1:-}'" >&2; exit 2; }
 }
 
 main() {
     [ -f "$MANIFEST" ] || { echo "ERROR: $MANIFEST missing" >&2; exit 1; }
+    [ -n "$(manifest_paths)" ] || { echo "ERROR: $MANIFEST lists no paths" >&2; exit 1; }
     case "${1:-}" in
         --static) check_static ;;
         --generated)
