@@ -63,8 +63,8 @@ test_secret_is_set_before_the_push() {
 test_failed_push_is_reported_incomplete() {
     local out
     out="$(run_create fail)"
-    if grep -q '^secret pushed=no' <<<"$out" && grep -q '^status=1' <<<"$out" \
-        && grep -q 'git push -u origin main' "$WORK_DIR/fail.out"; then
+    if grep -q '^secret pushed=no' <<<"$out" && grep -q '^status=0' <<<"$out" \
+        && grep -q 'git push -u origin HEAD:main' "$WORK_DIR/fail.out"; then
         echo "ok: a failed push after the repo exists prints the push command"
     else
         echo "FAIL (failed push): $(tr '\n' '|' <<<"$out")"

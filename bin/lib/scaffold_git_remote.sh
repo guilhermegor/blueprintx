@@ -204,10 +204,12 @@ scaffold_create_github_repo() {
 	if (cd "$str_project_path" && gh repo create "$str_slug" --source . --remote origin \
 		"${list_homepage[@]}" --description "$PROJECT_DESCRIPTION" "$str_vis_flag"); then
 		scaffold_set_secret_scan_key
-		if ! git -C "$str_project_path" push -u origin main >/dev/null 2>&1; then
+		if ! git -C "$str_project_path" push -u origin HEAD:main; then
+			# Return 0: the repo exists, so the caller's create-failed fallback must not re-run.
 			print_status "warning" \
-				"Repo ${str_slug} created but the push failed - incomplete. Run: git push -u origin main"
-			return 1
+				"Repo ${str_slug} created but the push failed - incomplete; skipped: default branch, kanban."
+			print_status "info" "Fix the error above, then run: git push -u origin HEAD:main"
+			return 0
 		fi
 		gh repo edit "$str_slug" --default-branch main "${list_homepage[@]}" >/dev/null 2>&1 || true
 		print_status "success" "Repository created and pushed via gh."
