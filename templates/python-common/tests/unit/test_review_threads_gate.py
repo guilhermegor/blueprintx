@@ -2490,6 +2490,46 @@ def test_padded_nonzero_findings_line_beside_a_zero_line_is_rejected() -> None:
     assert _missing_with([dict_padded], _TUPLE_MARKERS) is not None
 
 
+def test_zero_findings_over_zero_files_does_not_clear_the_check() -> None:
+    """A review of no files reviewed nothing, so it proves no review ran."""
+    dict_empty = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 0 reviewed file(s).",
+    }
+    assert _missing_with([dict_empty], _TUPLE_MARKERS) is not None
+
+
+def _marker_findings_comment() -> dict:
+    return {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+    }
+
+
+def test_marker_comment_with_findings_needs_an_answer() -> None:
+    """A trusted marker comment listing findings is read as a review body."""
+    list_problems = _load_gate().find_review_body_problems(
+        [], [_marker_findings_comment()], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert len(list_problems) == 1
+
+
+def test_marker_comment_never_answers_another_reviews_findings() -> None:
+    """A long marker comment by a human must not clear a roster review body unread."""
+    dict_review = {
+        "author": {"login": "coderabbitai", "__typename": "Bot"},
+        "state": "COMMENTED",
+        "body": "- **Major** a bug\n",
+        "submittedAt": "2000-01-01T00:00:00Z",
+    }
+    dict_marker = {**_marker_findings_comment(), "createdAt": "2099-01-01T00:00:00Z"}
+    dict_marker["author"] = {"login": "owner", "__typename": "User"}
+    list_problems = _load_gate().find_review_body_problems(
+        [dict_review], [dict_marker], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert any("coderabbitai" in str_problem for str_problem in list_problems)
+
+
 @pytest.fixture
 def path_marker_root(tmp_path: Path) -> Path:
     """Write a roster holding one reviewer and one marker row."""

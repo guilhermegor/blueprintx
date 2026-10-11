@@ -1136,7 +1136,7 @@ def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
     )
 
 
-_RE_FINDINGS_LINE = re.compile(r"(\d+) finding\(s\) across \d+ reviewed file\(s\)\.")
+_RE_FINDINGS_LINE = re.compile(r"(\d+) finding\(s\) across (\d+) reviewed file\(s\)\.")
 
 
 def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
@@ -1156,7 +1156,8 @@ def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
     """
     list_stripped = [str_line.strip() for str_line in list_lines]
     list_counts = [m.group(1) for m in map(_RE_FINDINGS_LINE.search, list_stripped) if m]
-    return list_counts == ["0"] and any(map(_RE_FINDINGS_LINE.fullmatch, list_stripped))
+    list_zero = [m for m in map(_RE_FINDINGS_LINE.fullmatch, list_stripped) if m]
+    return list_counts == ["0"] and len(list_zero) == 1 and int(list_zero[0].group(2)) > 0
 
 
 def ladder_marker_declared(
@@ -1625,8 +1626,19 @@ def review_body_has_findings(str_body: str | None) -> bool:
     return bool(review_body_finding_lines(str_body))
 
 
+def _is_marker_comment(dict_notice: dict, tuple_markers: tuple[str, ...]) -> bool:
+    """Return whether a comment opens with a roster ``comment-marker`` string."""
+    return bool(tuple_markers) and (
+        (dict_notice.get("body") or "").lstrip().casefold().startswith(tuple_markers)
+    )
+
+
 def _answered_after(
-    list_notices: list[dict], set_roster: set[str], str_when: str, int_min_chars: int
+    list_notices: list[dict],
+    set_roster: set[str],
+    str_when: str,
+    int_min_chars: int,
+    tuple_markers: tuple[str, ...] = (),
 ) -> bool:
     """Return whether a human comment of at least ``int_min_chars`` postdates ``str_when``.
 
@@ -1637,6 +1649,7 @@ def _answered_after(
     """
     return bool(str_when) and any(
         _is_human_answer(dict_notice, set_roster, int_min_chars)
+        and not _is_marker_comment(dict_notice, tuple_markers)
         and (dict_notice.get("createdAt") or "") > str_when
         for dict_notice in list_notices
     )
@@ -1699,11 +1712,29 @@ def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[
     ]
 
 
+def _marker_notices_as_reviews(
+    list_notices: list[dict], tuple_markers: tuple[str, ...]
+) -> list[dict]:
+    """Return trusted ladder-marker comments in review shape, authored by their poster."""
+    return [
+        {
+            "author": dict_notice.get("author"),
+            "state": "COMMENTED",
+            "body": dict_notice.get("body"),
+            "submittedAt": dict_notice.get("createdAt"),
+        }
+        for dict_notice in list_notices
+        if dict_notice.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
+        and _is_marker_comment(dict_notice, tuple_markers)
+    ]
+
+
 def find_review_body_problems(
     list_reviews: list[dict],
     list_notices: list[dict],
     set_roster: set[str],
     int_min_chars: int = _MIN_REPLY_CHARS,
+    tuple_markers: tuple[str, ...] = (),
 ) -> list[str]:
     """Return one problem per roster review whose body lists findings nobody answered.
 
@@ -1724,6 +1755,9 @@ def find_review_body_problems(
             Logins that count as reviewers rather than as answers.
     int_min_chars : int, optional
             Minimum length for a reply to count, the same bar a thread reply meets.
+    tuple_markers : tuple of str, optional
+            Roster ``comment-marker`` strings. A trusted comment opening with one is read as a
+            review (its findings need an answer) and never counts as an answer itself.
 
     Returns
     -------
@@ -1740,9 +1774,14 @@ def find_review_body_problems(
                 (dict_review.get("author") or {}).get("login") or "",
             ),
         )
-        for dict_review in list_reviews + _notices_as_reviews(list_notices, set_roster)
-        if normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
-        and dict_review.get("state") != "DISMISSED"
+        for dict_review in list_reviews
+        + _notices_as_reviews(list_notices, set_roster)
+        + _marker_notices_as_reviews(list_notices, tuple_markers)
+        if dict_review.get("state") != "DISMISSED"
+        and (
+            normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+            or _is_marker_comment(dict_review, tuple_markers)
+        )
     ]
     return [
         f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
@@ -1755,6 +1794,7 @@ def find_review_body_problems(
             set_roster,
             dict_review.get("submittedAt") or "",
             int_min_chars,
+            tuple_markers,
         )
     ]
 
@@ -1944,6 +1984,7 @@ def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[
         dict_pr.get("reviews", {}).get("nodes", []),
         list_notices,
         set_roster,
+        tuple_markers=load_comment_markers(pathlib.Path.cwd()),
     )
 
 
