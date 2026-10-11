@@ -14,6 +14,7 @@ the second test while the first stays green.
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -926,9 +927,25 @@ def test_write_baseline_lowers_an_existing_row(
     assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
 
 
-def test_a_renamed_file_keeps_the_total_and_regenerates(
-    tmp_path: Path, capsys: pytest.CaptureFixture
-) -> None:
+def _git(path_root: Path, *list_args: str) -> None:
+    """Run git quietly inside ``path_root`` with a throwaway identity.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The repository.
+    *list_args : str
+        Git arguments.
+    """
+    subprocess.run(  # noqa: S603 -- fixed git argv, no shell
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *list_args],  # noqa: S607
+        cwd=path_root,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_a_git_detected_rename_regenerates(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Should-fail witness: ``git mv`` of a file with comments needs no hand edit.
 
     Parameters
@@ -938,15 +955,20 @@ def test_a_renamed_file_keeps_the_total_and_regenerates(
     capsys : pytest.CaptureFixture
         Captures the gate's report.
     """
-    _tree(tmp_path, "# one\nX = 1\n", "1 old.py\n")
+    _git(tmp_path, "init", "-q")
+    (tmp_path / "old.py").write_text("# one\nX = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "old.py")
+    _git(tmp_path, "commit", "-qm", "x")
+    _git(tmp_path, "mv", "old.py", "a.py")
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("1 old.py\n", encoding="utf-8")
     _run(tmp_path, capsys, "--write-baseline")
     assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
 
 
-def test_a_new_path_that_grows_the_total_is_refused(
+def test_freed_budget_does_not_transfer_to_a_new_file(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
-    """A new path is allowed only while the total does not grow.
+    """Should-fail witness: a comment deleted in one file cannot be spent in a new one.
 
     Parameters
     ----------
@@ -955,8 +977,26 @@ def test_a_new_path_that_grows_the_total_is_refused(
     capsys : pytest.CaptureFixture
         Captures the gate's report.
     """
-    _tree(tmp_path, "# one\n# two\nX = 1\n", "1 old.py\n")
+    _tree(tmp_path, "X = 1\n", "1 old.py\n")
+    (tmp_path / "old.py").write_text("X = 1\n", encoding="utf-8")
+    (tmp_path / "new.py").write_text("# fresh\nX = 1\n", encoding="utf-8")
     assert _run(tmp_path, capsys, "--write-baseline")[0] == 1
+
+
+def test_prose_that_merely_names_a_directive_is_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: the allowlist matches directive syntax, not a mention.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# Avoid noqa in this file\nX = 1\n")
+    assert _run(tmp_path, capsys)[0] == 1
 
 
 def test_a_hand_raised_baseline_fails_the_comparison(

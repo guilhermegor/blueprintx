@@ -35,6 +35,7 @@ Every rule is pinned by a named test in ``tests/unit/test_comment_budget_gate.py
 
 import pathlib
 import re
+import subprocess
 import sys
 import tokenize
 
@@ -93,6 +94,7 @@ PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PATH_ALLOWLIST = pathlib.Path(__file__).resolve().parent / "comment_budget_allowlist.txt"
 STR_BASELINE_NAME = "comment_budget_baseline.txt"
 STR_WRITE_BASELINE = "--write-baseline"
+STR_ANYWHERE = "~"
 STR_REQUIRE_BASELINE = "--require-baseline"
 STR_COMPARE_BASELINE = "--compare-baseline"
 
@@ -153,7 +155,13 @@ def is_pragma_line(str_content: str, tuple_allowlist: tuple) -> bool:
         exemption (SPDX header, generated-file banner) and must break — never
         extend — a comment run.
     """
-    return any(str_pragma in str_content for str_pragma in tuple_allowlist)
+    str_text = str_content.strip()
+    return any(
+        (str_pragma[1:] in str_text)
+        if str_pragma.startswith(STR_ANYWHERE)
+        else str_text.startswith(str_pragma)
+        for str_pragma in tuple_allowlist
+    )
 
 
 def line_breaks_run(int_line: int, str_raw: str, str_content: str, tuple_allowlist: tuple) -> bool:
@@ -697,12 +705,37 @@ def write_baseline(dict_counts: dict) -> None:
     print(f"wrote {len(dict_counts)} file(s), {sum(dict_counts.values())} comment line(s)")
 
 
-def raised_rows(dict_new: dict, dict_old: dict) -> list:
+def rename_map(str_base: str) -> dict:
+    """Return ``{new_path: old_path}`` for renames git detects between ``str_base`` and now.
+
+    Parameters
+    ----------
+    str_base : str
+        Git ref to diff the working tree against (``HEAD`` locally, ``FETCH_HEAD`` in CI).
+
+    Returns
+    -------
+    dict
+        Empty when git is unavailable or nothing was renamed.
+    """
+    try:
+        str_out = subprocess.run(  # noqa: S603 -- fixed git argv, no shell
+            ["git", "-C", str(PATH_ROOT), "diff", "-M", "--name-status", str_base],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return {}
+    list_rows = [str_row.split("\t") for str_row in str_out.splitlines()]
+    return {list_row[2]: list_row[1] for list_row in list_rows if list_row[0].startswith("R")}
+
+
+def raised_rows(dict_new: dict, dict_old: dict, dict_renames: dict) -> list:
     """Return the reasons ``dict_new`` raises the ratchet over ``dict_old``.
 
-    A row present in both may not grow. A path new to ``dict_old`` (an added or
-    renamed file) is allowed only while the TOTAL does not grow, so ``git mv`` of a
-    file with comments needs no hand edit but a net increase is still refused.
+    A path absent from ``dict_old`` has budget 0, except a git-detected rename, which
+    inherits its source's row. Freed budget never transfers to an unrelated new file.
 
     Parameters
     ----------
@@ -710,24 +743,21 @@ def raised_rows(dict_new: dict, dict_old: dict) -> list:
         Proposed ``{path: count}``.
     dict_old : dict
         Reference ``{path: count}``.
+    dict_renames : dict
+        ``{new_path: old_path}`` from ``rename_map``.
 
     Returns
     -------
     list of str
         One message per violation; empty when the ratchet did not go up.
     """
-    list_out = [
-        f"{str_path}: {int_n} comment line(s), reference {dict_old[str_path]} - "
+    return [
+        f"{str_path}: {int_n} comment line(s), allowed "
+        f"{dict_old.get(str_path, dict_old.get(dict_renames.get(str_path, ''), 0))} - "
         f"the ratchet never goes up"
         for str_path, int_n in sorted(dict_new.items())
-        if str_path in dict_old and int_n > dict_old[str_path]
+        if int_n > dict_old.get(str_path, dict_old.get(dict_renames.get(str_path, ""), 0))
     ]
-    if sum(dict_new.values()) > sum(dict_old.values()):
-        list_out.append(
-            f"total {sum(dict_new.values())} exceeds reference {sum(dict_old.values())} - "
-            f"the ratchet never goes up"
-        )
-    return list_out
 
 
 def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
@@ -750,7 +780,9 @@ def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
         return 1
     dict_counts = current_counts(list_paths)
     dict_old = load_baseline()
-    list_raised = [] if dict_old is None else raised_rows(dict_counts, dict_old)
+    list_raised = (
+        [] if dict_old is None else raised_rows(dict_counts, dict_old, rename_map("HEAD"))
+    )
     for str_message in list_raised:
         print(str_message)
     if list_raised:
@@ -778,7 +810,7 @@ def compare_problems(str_reference: str) -> list:
     for str_line in pathlib.Path(str_reference).read_text(encoding="utf-8").splitlines():
         if str_line.strip():
             dict_ref.update(parse_baseline_row(str_line))
-    return raised_rows(load_baseline() or {}, dict_ref)
+    return raised_rows(load_baseline() or {}, dict_ref, rename_map("FETCH_HEAD"))
 
 
 def baseline_problems(list_paths: list, bool_audit: bool, bool_require: bool) -> list:
