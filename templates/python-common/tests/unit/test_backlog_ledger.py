@@ -70,7 +70,10 @@ def test_ledger_required_for_src_and_ci(str_path: str) -> None:
     assert ledger.needs_ledger([str_path], gate) is True
 
 
-@pytest.mark.parametrize("str_path", ["docs/usage.md", "poetry.lock", "tests/unit/test_x.py"])
+@pytest.mark.parametrize(
+    "str_path",
+    ["docs/usage.md", "poetry.lock", "tests/unit/test_x.py", ".specs/features/x/design.md"],
+)
 def test_ledger_not_required_for_routine_classes(str_path: str) -> None:
     """docs/deps/tests-only branches are routine — a ledger there would be noise."""
     assert ledger.needs_ledger([str_path], gate) is False
@@ -113,6 +116,24 @@ def test_ledger_name_must_be_kebab_plus_timestamp() -> None:
     assert ".specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md" in _first_problem(
         ledger.find_ledger_problems(["src/a.py", ".specs/backlog/BadName.md"])
     )
+
+
+def test_gitkeep_is_not_reported_as_a_misnamed_ledger() -> None:
+    """Only ``.md`` paths are ledgers, so the scaffold's ``.gitkeep`` never trips the name rule."""
+    list_problems = ledger.find_ledger_problems(["src/a.py", ".specs/backlog/.gitkeep"])
+    assert "name must match" not in _first_problem(list_problems)
+
+
+def test_checkbox_inside_a_code_fence_does_not_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The specs gate skips fenced blocks; a ledger whose only checkbox is an example fails."""
+    str_rel = ".specs/backlog/fenced_20260101_000000.md"
+    path_ledger = tmp_path / str_rel
+    path_ledger.parent.mkdir(parents=True)
+    path_ledger.write_text("# t\n\n```\n- [ ] example\n```\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert "outside a code fence" in _first_problem(ledger.find_ledger_problems([str_rel]))
 
 
 @pytest.mark.parametrize(

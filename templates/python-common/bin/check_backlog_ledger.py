@@ -118,6 +118,8 @@ LEDGER_DIR = ".specs/backlog"
 LEDGER_RE = re.compile(r"^\.specs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.md$")
 # Same marker grammar as bin/ci/check_specs_structure.sh: [ ], [x] and [~] (lowercase x only).
 CHECKBOX_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ x]\]|\[~\][ \t]+[a-z]+/\S)", re.M)
+# A fenced block is an example, not a marker: the specs gate skips it, so this one must too.
+FENCE_RE = re.compile(r"^[ \t]*(```+|~~~+)[ \t]*\S*[ \t]*$.*?^[ \t]*\1[ \t]*$", re.M | re.S)
 
 _BIN = pathlib.Path(__file__).resolve().parent
 
@@ -279,10 +281,11 @@ def find_ledger_problems(list_paths: list) -> list:
             continue
         path_ledger = pathlib.Path(str_ledger)
         if path_ledger.is_file() and not CHECKBOX_RE.search(
-            path_ledger.read_text(encoding="utf-8")
+            FENCE_RE.sub("", path_ledger.read_text(encoding="utf-8"))
         ):
             list_problems.append(
-                f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' / '- [~]' checkbox"
+                f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' (lowercase) / "
+                f"'- [~] <type>/<branch>' checkbox outside a code fence"
             )
     # A single valid ledger satisfies the branch.
     return [] if len(list_problems) < len(list_ledgers) else list_problems

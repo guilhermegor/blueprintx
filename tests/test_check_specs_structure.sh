@@ -268,6 +268,33 @@ test_default_root_from_inside_bin_ci() {
     rm -rf "$str_root"
 }
 
+test_ledger_grammar_parity() {
+    # The Python ledger gate (templates/python-common/bin/check_backlog_ledger.py) claims the same
+    # marker grammar as this gate; run both over one table so drift fails here, not in review.
+    local str_line str_root str_shell str_py
+    local -a list_lines=("- [ ] a" "- [x] a" "- [~] feat/a" "1. [x] a" "2) [ ] a" "+ [ ] a"
+        "* [x] a" "- [X] a" "- [] a" "- [?] a" "- [~]" "- [~] doing" "- [~] Feat/a" "- [~] a")
+    for str_line in "${list_lines[@]}"; do
+        str_root="$(make_tree)"
+        feature "$str_root" "one-thing" design.md
+        printf '%s\n' "$str_line" >"$str_root/.specs/features/one-thing/tasks.md"
+        str_shell=0
+        bash "$GATE" --root "$str_root" >/dev/null 2>&1 && str_shell=1
+        rm -rf "$str_root"
+        str_py="$(python3 -I -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("l", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+print(int(bool(mod.CHECKBOX_RE.search(sys.argv[2]))))' \
+            "$REPO_ROOT/templates/python-common/bin/check_backlog_ledger.py" "$str_line")"
+        if [ "$str_shell" != "$str_py" ]; then
+            print_status "error" "marker '$str_line': specs gate pass=$str_shell, ledger gate match=$str_py"
+            int_failures=$((int_failures + 1))
+        fi
+    done
+}
+
 main() {
     test_default_root_from_inside_bin_ci
     test_shipped_skeleton_passes
@@ -290,6 +317,7 @@ main() {
     test_fence_tracking
     test_pr_directory_is_not_a_body
     test_backlog_rules
+    test_ledger_grammar_parity
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
         exit 1
