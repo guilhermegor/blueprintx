@@ -49,7 +49,7 @@
 214 bin/lib/common.sh
 131 bin/lib/scaffold_git_remote.sh
 22 bin/lib/scaffold_kanban.sh
-14 bin/lib/scaffold_package_json.sh
+15 bin/lib/scaffold_package_json.sh
 97 bin/lib/scaffold_python_templates.sh
 115 bin/lib/spec.sh
 26 bin/scaffold/bash_cli.sh
@@ -177,7 +177,7 @@
 70 templates/python-common/.github/workflows/secret_scan.yaml
 153 templates/python-common/.github/workflows/tests.yaml
 14 templates/python-common/.gitleaks.toml
-9 templates/python-common/.hadolint.yaml
+13 templates/python-common/.hadolint.yaml
 31 templates/python-common/.layer-policy.yaml
 136 templates/python-common/.pre-commit-config.yaml
 26 templates/python-common/.review-bots.yaml
@@ -232,7 +232,7 @@
 27 templates/python-common/bin/lint.sh
 47 templates/python-common/bin/lint_actions.sh
 42 templates/python-common/bin/lint_deps.sh
-51 templates/python-common/bin/lint_docker.sh
+60 templates/python-common/bin/lint_docker.sh
 37 templates/python-common/bin/lint_shell.sh
 17 templates/python-common/bin/lint_sql.sh
 11 templates/python-common/bin/lint_yaml.sh
@@ -313,7 +313,7 @@
 32 templates/python-common/tests/unit/test_assertion_weakening_gate.py
 23 templates/python-common/tests/unit/test_backlog_ledger.py
 4 templates/python-common/tests/unit/test_br_identifiers.py
-27 templates/python-common/tests/unit/test_comment_budget_gate.py
+24 templates/python-common/tests/unit/test_comment_budget_gate.py
 37 templates/python-common/tests/unit/test_comment_language_gate.py
 3 templates/python-common/tests/unit/test_config_schemas_example.py
 9 templates/python-common/tests/unit/test_contract_drift.py

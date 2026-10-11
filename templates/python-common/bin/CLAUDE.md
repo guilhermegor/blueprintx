@@ -186,7 +186,7 @@ main() {
 main "$@"
 ```
 
-### Explanatory comments do not count toward the function budget because there are none
+### Explanatory comments belong in docs, not in the function body
 
 `bin/check_function_length.py` caps a function at **60 lines of code** and subtracts the
 **docstring** — and nothing else. Every explanatory comment inside the body counts. In a
@@ -197,8 +197,8 @@ keeping.
 
 So: anything explaining a **policy**, a **supersede**, a measured **trade-off**, or why a
 whole approach was rejected belongs in `docs/` or the function's docstring (which the
-budget subtracts). Delete the comment and leave no pointer: `check_comment_budget.py`
-(blueprintx#304) refuses both a hoisted block and a one-line pointer.
+budget subtracts). Delete the comment and leave no pointer: BlueprintX's ruling
+(blueprintx#304) is that a hoisted block and a one-line pointer both rot.
 
 Measured (blueprintx#264): `find_thread_problems` hit 62 lines and `main` 63 with **no
 logic change** in either — comments alone. Both fell well under after hoisting, and no
@@ -218,7 +218,7 @@ history rigorously, which is exactly why the comment is redundant rather than pr
 
 The rule: a narrative of what the line used to say belongs in
 `docs/decision-records.md` (BlueprintX's own repo) or the issue, and the comment is deleted.
-No pointer is left behind (blueprintx#304): `check_comment_budget.py` refuses it. A
+No pointer is left behind (blueprintx#304). A
 measurement that justifies today's value moves to docs the same way. Only QA-suppression
 comments (`noqa`, `complexity-ok`, `type: ignore`, `codespell:ignore`) stay, with their reason.
 

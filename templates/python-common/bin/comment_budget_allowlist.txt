@@ -48,8 +48,8 @@ orm-guard-ok:
 type-checker-ok:
 identifier-mask-ok:
 pairing:internal
-pipeline-mode
-offline-mode
+pipeline-mode:
+offline-mode:
 lang:pt-ok
 layer-policy
 dtype-ok:
@@ -60,11 +60,13 @@ gate-change-ok:
 DEP00
 
 # hadolint and Dockerfile parser directives
-hadolint
-syntax=
+hadolint ignore
+hadolint global
+hadolint shell
+syntax=docker
 
 # markdownlint
-markdownlint
+markdownlint-
 
 # yamllint
 yamllint disable
@@ -83,7 +85,6 @@ checkov:skip
 fmt: off
 fmt: skip
 prettier-ignore
-prettier-
 
 # TypeScript / JS toolchain
 @ts-expect-error

@@ -94,6 +94,7 @@ PATH_ALLOWLIST = pathlib.Path(__file__).resolve().parent / "comment_budget_allow
 STR_BASELINE_NAME = "comment_budget_baseline.txt"
 STR_WRITE_BASELINE = "--write-baseline"
 STR_REQUIRE_BASELINE = "--require-baseline"
+STR_COMPARE_BASELINE = "--compare-baseline"
 
 # PEP 263 — a `# -*- coding: utf-8 -*-` line is metadata, not prose, and only
 # ever appears on line 1 or 2.
@@ -586,6 +587,30 @@ def shown_path(path_file: pathlib.Path) -> str:
         return path_file.as_posix()
 
 
+def parse_baseline_row(str_line: str) -> dict:
+    """Parse one ``<count> <path>`` baseline row.
+
+    Parameters
+    ----------
+    str_line : str
+        A non-blank baseline line.
+
+    Returns
+    -------
+    dict
+        ``{path: count}``.
+
+    Raises
+    ------
+    ValueError
+        When the row is not a non-negative integer, a space, and a path.
+    """
+    str_count, _, str_path = str_line.partition(" ")
+    if not (str_count.isdigit() and str_path):
+        raise ValueError(f"malformed baseline row: {str_line!r}")
+    return {str_path: int(str_count)}
+
+
 def load_baseline() -> dict | None:
     """Read ``comment_budget_baseline.txt`` from the audit root.
 
@@ -600,8 +625,7 @@ def load_baseline() -> dict | None:
     dict_out = {}
     for str_line in path_baseline.read_text(encoding="utf-8").splitlines():
         if str_line.strip():
-            str_count, str_path = str_line.split(" ", 1)
-            dict_out[str_path] = int(str_count)
+            dict_out.update(parse_baseline_row(str_line))
     return dict_out
 
 
@@ -673,6 +697,39 @@ def write_baseline(dict_counts: dict) -> None:
     print(f"wrote {len(dict_counts)} file(s), {sum(dict_counts.values())} comment line(s)")
 
 
+def raised_rows(dict_new: dict, dict_old: dict) -> list:
+    """Return the reasons ``dict_new`` raises the ratchet over ``dict_old``.
+
+    A row present in both may not grow. A path new to ``dict_old`` (an added or
+    renamed file) is allowed only while the TOTAL does not grow, so ``git mv`` of a
+    file with comments needs no hand edit but a net increase is still refused.
+
+    Parameters
+    ----------
+    dict_new : dict
+        Proposed ``{path: count}``.
+    dict_old : dict
+        Reference ``{path: count}``.
+
+    Returns
+    -------
+    list of str
+        One message per violation; empty when the ratchet did not go up.
+    """
+    list_out = [
+        f"{str_path}: {int_n} comment line(s), reference {dict_old[str_path]} - "
+        f"the ratchet never goes up"
+        for str_path, int_n in sorted(dict_new.items())
+        if str_path in dict_old and int_n > dict_old[str_path]
+    ]
+    if sum(dict_new.values()) > sum(dict_old.values()):
+        list_out.append(
+            f"total {sum(dict_new.values())} exceeds reference {sum(dict_old.values())} - "
+            f"the ratchet never goes up"
+        )
+    return list_out
+
+
 def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
     """Rewrite the baseline from a full audit, refusing any increase over an existing one.
 
@@ -693,17 +750,35 @@ def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
         return 1
     dict_counts = current_counts(list_paths)
     dict_old = load_baseline()
-    list_raised = [
-        str_path
-        for str_path, int_n in sorted(dict_counts.items())
-        if dict_old is not None and int_n > dict_old.get(str_path, 0)
-    ]
-    for str_path in list_raised:
-        print(f"{str_path}: more comments than its baseline - the ratchet never goes up")
+    list_raised = [] if dict_old is None else raised_rows(dict_counts, dict_old)
+    for str_message in list_raised:
+        print(str_message)
     if list_raised:
         return 1
     write_baseline(dict_counts)
     return 0
+
+
+def compare_problems(str_reference: str) -> list:
+    """Compare the committed baseline with a reference copy (the PR's base branch).
+
+    Hand-editing the baseline upward would otherwise pass every other check.
+
+    Parameters
+    ----------
+    str_reference : str
+        Path to the reference baseline file.
+
+    Returns
+    -------
+    list of str
+        Findings; empty when the committed baseline did not go up.
+    """
+    dict_ref = {}
+    for str_line in pathlib.Path(str_reference).read_text(encoding="utf-8").splitlines():
+        if str_line.strip():
+            dict_ref.update(parse_baseline_row(str_line))
+    return raised_rows(load_baseline() or {}, dict_ref)
 
 
 def baseline_problems(list_paths: list, bool_audit: bool, bool_require: bool) -> list:
@@ -759,7 +834,33 @@ def apply_root_flag(list_argv: list) -> list | None:
     return list_argv[2:]
 
 
-def main(list_argv: list) -> int:
+def split_flags(list_rest: list) -> tuple:
+    """Separate the gate's own flags from the file names.
+
+    Parameters
+    ----------
+    list_rest : list of str
+        Arguments after ``--root`` was consumed.
+
+    Returns
+    -------
+    tuple
+        ``(write, require, reference_path, file_names)``; the reference is "" when
+        ``--compare-baseline`` was not given.
+    """
+    str_reference = ""
+    list_names = list(list_rest)
+    if STR_COMPARE_BASELINE in list_names:
+        int_at = list_names.index(STR_COMPARE_BASELINE)
+        str_reference = list_names[int_at + 1]
+        del list_names[int_at : int_at + 2]
+    bool_write = STR_WRITE_BASELINE in list_names
+    bool_require = STR_REQUIRE_BASELINE in list_names
+    tuple_flags = (STR_WRITE_BASELINE, STR_REQUIRE_BASELINE)
+    return bool_write, bool_require, str_reference, [n for n in list_names if n not in tuple_flags]
+
+
+def run(list_argv: list) -> int:
     """Check comments: ratchet against the baseline, long runs, decorative banners.
 
     Parameters
@@ -768,7 +869,9 @@ def main(list_argv: list) -> int:
         Filenames, as pre-commit passes them. Empty means audit the whole
         repository. ``--root <dir>`` (first) repoints the audit; ``--write-baseline``
         regenerates ``comment_budget_baseline.txt`` instead of checking (full audit
-        only, and never upward); ``--require-baseline`` fails when that file is absent.
+        only, never upward); ``--require-baseline`` fails when that file is absent;
+        ``--compare-baseline <file>`` fails when the baseline exceeds that reference
+        copy (CI passes the base branch's).
 
     Returns
     -------
@@ -779,10 +882,7 @@ def main(list_argv: list) -> int:
     if list_rest is None:
         print("❌ --root needs a directory")
         return 1
-    bool_write = STR_WRITE_BASELINE in list_rest
-    bool_require = STR_REQUIRE_BASELINE in list_rest
-    tuple_flags = (STR_WRITE_BASELINE, STR_REQUIRE_BASELINE)
-    list_argv = [str_arg for str_arg in list_rest if str_arg not in tuple_flags]
+    bool_write, bool_require, str_reference, list_argv = split_flags(list_rest)
 
     bool_audit = not list_argv
     list_paths = (
@@ -804,6 +904,8 @@ def main(list_argv: list) -> int:
         return regenerate_baseline(list_paths, bool_audit)
 
     list_problems = baseline_problems(list_paths, bool_audit, bool_require)
+    if str_reference:
+        list_problems.extend(compare_problems(str_reference))
     for path_file in list_paths:
         list_problems.extend(file_problems(path_file))
     for str_problem in list_problems:
@@ -820,6 +922,26 @@ def main(list_argv: list) -> int:
         f"are exempt by design (see comment_budget_allowlist.txt)."
     )
     return 1
+
+
+def main(list_argv: list) -> int:
+    """Run the gate, reporting a malformed baseline as a finding rather than a traceback.
+
+    Parameters
+    ----------
+    list_argv : list of str
+        Arguments, as for ``run``.
+
+    Returns
+    -------
+    int
+        0 when clean, 1 on a violation or a malformed baseline.
+    """
+    try:
+        return run(list_argv)
+    except ValueError as cls_error:
+        print(f"❌ {cls_error}")
+        return 1
 
 
 if __name__ == "__main__":
