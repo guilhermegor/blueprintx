@@ -62,14 +62,14 @@ def _parse_env_bool(str_raw: str | None, bool_default: bool) -> bool:
     Parameters
     ----------
     str_raw : str | None
-            The raw environment value (``None`` when the variable is unset).
+        The raw environment value (``None`` when the variable is unset).
     bool_default : bool
-            The value returned when ``str_raw`` is ``None``, blank, or not a known token.
+        The value returned when ``str_raw`` is ``None``, blank, or not a known token.
 
     Returns
     -------
     bool
-            The parsed flag, or ``bool_default``.
+        The parsed flag, or ``bool_default``.
     """
     # An unset value and an unrecognised one mean the same thing here — fall back to the
     # default — so both are one lookup with a default rather than three branches.
@@ -94,18 +94,18 @@ def _dispatch_flag(
     Parameters
     ----------
     str_prefix : str
-            The variable prefix (``"EMAIL_SEND"`` or ``"EMAIL_AUTO_SEND"``).
+        The variable prefix (``"EMAIL_SEND"`` or ``"EMAIL_AUTO_SEND"``).
     str_block_key : str
-            The ``emails.yaml`` block key (e.g. ``"schema_failure"``); upper-cased for the var.
+        The ``emails.yaml`` block key (e.g. ``"schema_failure"``); upper-cased for the var.
     bool_default : bool
-            The hard default when neither the per-block nor the ``__DEFAULTS`` variable is set.
+        The hard default when neither the per-block nor the ``__DEFAULTS`` variable is set.
     logger : logging.Logger | None
-            Destination for the consulted-variable log lines; ``None`` prints them.
+        Destination for the consulted-variable log lines; ``None`` prints them.
 
     Returns
     -------
     bool
-            The resolved flag.
+        The resolved flag.
     """
     str_block_var_name = f"{str_prefix}__{str_block_key.upper()}"
     str_block_var = os.getenv(str_block_var_name)
@@ -141,15 +141,15 @@ def resolve_dispatch(str_block_key: str, logger: Logger | None = None) -> tuple[
     Parameters
     ----------
     str_block_key : str
-            The ``emails.yaml`` block key (e.g. ``"schema_failure"``).
+        The ``emails.yaml`` block key (e.g. ``"schema_failure"``).
     logger : logging.Logger | None, optional
-            Run logger for the consulted-variable audit lines (see :func:`_dispatch_flag`); when
-            ``None`` they print to stdout instead of being dropped.
+        Run logger for the consulted-variable audit lines (see :func:`_dispatch_flag`); when
+        ``None`` they print to stdout instead of being dropped.
 
     Returns
     -------
     tuple of (bool, bool)
-            ``(bool_send, bool_auto_send)``.
+        ``(bool_send, bool_auto_send)``.
     """
     bool_send = _dispatch_flag("EMAIL_SEND", str_block_key, True, logger)
     bool_auto_send = _dispatch_flag("EMAIL_AUTO_SEND", str_block_key, False, logger)
