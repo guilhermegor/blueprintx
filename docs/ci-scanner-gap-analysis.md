@@ -400,7 +400,7 @@ against #305, not a PR yet.
 ## Deltas (2026-10-11 re-measurement)
 
 Re-run with gitleaks 8.30.1, osv-scanner 2.6.0, jscpd 4.3.0 and semgrep 1.177.0 against
-`origin/main` and fresh scaffolds (`mvc-service-native-db`, `react-spa-webpack`, `ts-lib`).
+`origin/main` at `e5b9f01a` and fresh scaffolds (`mvc-service-native-db`, `react-spa-webpack`, `ts-lib`).
 The verdicts above hold; these four findings are new and change how the adoption PRs must
 be written.
 
@@ -421,9 +421,23 @@ be written.
   osv-scanner flags as CVE-2024-21272 (PYSEC-2026-1685, CVSS 7.7, fixed in 9.1.0). The
   comment on the cap says 9.x needs a system `libmysqlclient`, so lifting it is a trade-off
   for the owner, not a free fix.
-- **semgrep spike: a custom Bash rule works offline.** An 8-line local rule
-  (`pattern: eval $X`, `languages: [bash]`) scanned the tree in 2s with no registry access and
-  flagged `eval "$str_fn"` in `bin/ci/check_review_bot_roster_optout.sh`, which shellcheck
-  does not report. 18 of 93 shell files only parse partially. This is the spike the deferral
-  in §4 asks for; the case for semgrep now rests on custom Bash and YAML rules, since the
-  registry packs still mostly re-find ruff `S` findings.
+- **semgrep spike: initial Bash evidence, comparison still outstanding.** A local rule
+  (`id: bash-eval`, `languages: [bash]`, `severity: WARNING`, `pattern: eval $X`) run as
+  `semgrep scan --metrics=off --disable-version-check --config rules <tree>` scanned a plain
+  copy of `e5b9f01a` in 2s with no registry access and flagged `eval "$str_fn"` in
+  `bin/ci/check_review_bot_roster_optout.sh`, which shellcheck does not report. That line
+  runs a function body extracted from a repository file on purpose, so the hit alone is not
+  a case for blocking a gate. 18 of 93 shell files only parse partially. The comparison §4
+  asks for (line count and false-positive rate against a hand-written equivalent) is not
+  done, so the spike stays open; the case for semgrep rests on custom Bash and YAML rules,
+  since the registry packs still mostly re-find ruff `S` findings.
+
+Commands behind the other three findings, run from the repository root of `e5b9f01a`:
+
+- jscpd: `jscpd . --min-tokens 50 --min-lines 5 --mode strict --gitignore --ignore
+  "**/.git/**,**/node_modules/**,**/.venv/**,**/package-lock.json,**/poetry.lock"` reads 252
+  files; the same command on a `git archive HEAD` copy with `.gitignore` removed reads 961.
+- osv-scanner: `osv-scanner scan source -r <project>` and the same with `--offline`, on the
+  scaffolds (exit codes 1, 127 and 128 as described above).
+- mysql-connector: `poetry lock` in the scaffolded `mvc-service-native-db` project, then
+  `osv-scanner scan source -r .`.
