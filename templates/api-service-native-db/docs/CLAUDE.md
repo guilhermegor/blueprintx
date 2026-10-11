@@ -9,9 +9,9 @@ MkDocs **builds every `.md` under `docs/` into the site**, even files absent fro
 internal note dropped at the `docs/` root *will* ship to readers and can mislead
 them.
 
-New working documents never belong in `docs/`: keep them outside it, in
-`.specs/`. A few legacy files and folders still sit inside `docs/` but are
-excluded from the build; `exclude_docs` in `mkdocs.yml` is the authoritative list.
+Keep working documents outside `docs/`, in `.specs/`. A few legacy files and
+folders still sit inside `docs/` but are excluded from the build; `exclude_docs` in
+`mkdocs.yml` is the authoritative list.
 
 - `.specs/backlog/` — work-to-do backlogs and follow-up notes (outside `docs/`, so
   never published). For any non-trivial branch, keep a

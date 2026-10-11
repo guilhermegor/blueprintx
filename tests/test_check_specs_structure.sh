@@ -329,6 +329,8 @@ print(int(bool(mod.CHECKBOX_RE.search(mod.FENCE_RE.sub("", text)))))' \
     ```|```|1|0
 ```|~~~|0|0
 ```||0|0
+```x```|```|1|0
+```x```||0|0
 CASES
 }
 

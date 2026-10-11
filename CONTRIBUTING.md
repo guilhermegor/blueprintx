@@ -506,7 +506,8 @@ hand-copies the updated template files. Before adopting the new `mkdocs.yml` and
 
 1. Move `docs/backlog/*.md` to `.specs/backlog/` (names are unchanged). Until then the old
    ledgers are not recognized by the gate, and with `backlog/` gone from `exclude_docs` they
-   would be published and warn as "not in nav" under `--strict`.
+   would be published silently: MkDocs reports pages missing from `nav` at `info` level, so even
+   `--strict` does not fail (measured with mkdocs 1.6.1).
 2. Change any uppercase `[X]` marker to `[x]`, and give every `[~]` a `<type>/<branch>`; the
    ledger gate now shares the grammar of `check_specs_structure.sh`.
 3. A branch already in flight with an old-path ledger needs it moved too; there is no
