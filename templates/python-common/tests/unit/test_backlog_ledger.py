@@ -124,14 +124,18 @@ def test_gitkeep_is_not_reported_as_a_misnamed_ledger() -> None:
     assert "name must match" not in _first_problem(list_problems)
 
 
+@pytest.mark.parametrize(
+    "str_fenced",
+    ["```\n- [ ] example\n```\n", "```\n- [ ] example\n````\n", "~~~\n- [ ] example\n~~~~\n"],
+)
 def test_checkbox_inside_a_code_fence_does_not_count(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_fenced: str
 ) -> None:
-    """The specs gate skips fenced blocks; a ledger whose only checkbox is an example fails."""
+    """The specs gate skips fenced blocks, closers may be longer; an example-only ledger fails."""
     str_rel = ".specs/backlog/fenced_20260101_000000.md"
     path_ledger = tmp_path / str_rel
     path_ledger.parent.mkdir(parents=True)
-    path_ledger.write_text("# t\n\n```\n- [ ] example\n```\n", encoding="utf-8")
+    path_ledger.write_text(f"# t\n\n{str_fenced}", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     assert "outside a code fence" in _first_problem(ledger.find_ledger_problems([str_rel]))
 
