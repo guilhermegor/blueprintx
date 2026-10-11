@@ -236,11 +236,18 @@ listed once, one per line, in `templates/common/review-config.manifest`, and
 
 - `--static` (pre-commit hook `review-config-shipped`): every manifest path exists under
   `templates/common/`, and every skeleton script discovered from `templates/*/skeleton.meta`
-  mentions it.
+  has a `cp` that copies it (a loop or an unusual copy is a documented limit; `--generated`
+  covers it).
 - `--generated` (CI job `review-config-shipped`): scaffolds each discovered skeleton with its
   default answers and asserts every manifest path is in the generated tree. This is the real
   oracle: a `cp` line that sits behind a branch the default answers never take passes
   `--static` and fails here. `--skeleton <name>` narrows it to one.
+
+Today the manifest lists only `.gitattributes` (the Graphite `linguist-generated` marker).
+`.coderabbit.yaml` and `.greptile/` are added by the PRs that ship them, so the guard does
+not yet protect those. Both are repo-root files, not GitHub-only assets, so the offline
+scaffold keeps them: `apply_offline_mode` drops only `.github/`.
+
 - `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
   assertion over one already-generated project.
 
