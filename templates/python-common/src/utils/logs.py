@@ -71,12 +71,12 @@ class CreateLog(metaclass=TypeChecker):
         Parameters
         ----------
         path : str
-                Path to validate.
+            Path to validate.
 
         Raises
         ------
         ValueError
-                If ``path`` is empty or not a string.
+            If ``path`` is empty or not a string.
         """
         # ⚠️ Type BEFORE emptiness. The other order described a non-string falsy value, such
         # as zero or an empty list, as "cannot be empty" — which sends the reader looking for
@@ -92,12 +92,12 @@ class CreateLog(metaclass=TypeChecker):
         Parameters
         ----------
         new_path : str
-                Directory path to create.
+            Directory path to create.
 
         Returns
         -------
         bool
-                ``True`` if the folder was created, ``False`` if it already existed.
+            ``True`` if the folder was created, ``False`` if it already existed.
         """
         self._validate_path(new_path)
         if not os.path.exists(new_path):
@@ -111,7 +111,7 @@ class CreateLog(metaclass=TypeChecker):
         Parameters
         ----------
         logger : logging.Logger
-                The logger whose handlers are about to be replaced.
+            The logger whose handlers are about to be replaced.
 
         Returns
         -------
@@ -135,19 +135,19 @@ class CreateLog(metaclass=TypeChecker):
         Parameters
         ----------
         complete_path : str
-                Full path to the log file.
+            Full path to the log file.
         basic_level : Literal['info', 'debug']
-                Logging level (default: ``"info"``).
+            Logging level (default: ``"info"``).
 
         Returns
         -------
         logging.Logger
-                The configured logger instance.
+            The configured logger instance.
 
         Raises
         ------
         ValueError
-                If an invalid logging level is provided.
+            If an invalid logging level is provided.
         """
         self._validate_path(complete_path)
 
@@ -183,16 +183,16 @@ class CreateLog(metaclass=TypeChecker):
         Parameters
         ----------
         logger : logging.Logger | None
-                Logger instance, or ``None`` to print to the console.
+            Logger instance, or ``None`` to print to the console.
         message : str
-                Message to log.
+            Message to log.
         log_level : LogLevel
-                Logging level — one of ``"info"`` / ``"warning"`` / ``"error"`` / ``"critical"``.
+            Logging level — one of ``"info"`` / ``"warning"`` / ``"error"`` / ``"critical"``.
 
         Raises
         ------
         ValueError
-                If ``log_level`` is empty or not a valid logger method.
+            If ``log_level`` is empty or not a valid logger method.
         """
         if not log_level:
             raise ValueError("log_level cannot be empty")
@@ -210,8 +210,8 @@ class CreateLog(metaclass=TypeChecker):
         Returns
         -------
         tuple of (str, str)
-                The caller's class name and method name, with placeholder values when the walk
-                finds no attributable frame.
+            The caller's class name and method name, with placeholder values when the walk
+            finds no attributable frame.
         """
         frame = inspect.currentframe()
         str_class_name = "UnknownClass"
@@ -251,15 +251,15 @@ class CreateLog(metaclass=TypeChecker):
         Parameters
         ----------
         logger : logging.Logger or None
-                The sink; ``None`` prints a formatted line instead.
+            The sink; ``None`` prints a formatted line instead.
         log_level : LogLevel
-                The level name, which must name a logger method.
+            The level name, which must name a logger method.
         message : str
-                The message body.
+            The message body.
         str_class_name : str
-                The caller's class, from :meth:`_caller_context`.
+            The caller's class, from :meth:`_caller_context`.
         str_method_name : str
-                The caller's method, from :meth:`_caller_context`.
+            The caller's method, from :meth:`_caller_context`.
 
         Returns
         -------
@@ -268,7 +268,7 @@ class CreateLog(metaclass=TypeChecker):
         Raises
         ------
         ValueError
-                If ``log_level`` does not name a method on ``logger``.
+            If ``log_level`` does not name a method on ``logger``.
         """
         if logger is None:
             str_timestamp = (
@@ -298,11 +298,11 @@ def log_message(
     Parameters
     ----------
     logger : logging.Logger | None
-            Destination logger; when ``None`` the message is printed with a timestamp.
+        Destination logger; when ``None`` the message is printed with a timestamp.
     str_message : str
-            The message to log.
+        The message to log.
     str_level : LogLevel, optional
-            One of ``"info"``, ``"warning"``, ``"error"``, ``"critical"``; default ``"info"``.
+        One of ``"info"``, ``"warning"``, ``"error"``, ``"critical"``; default ``"info"``.
     """
     _CLS_LOG.log_message(logger, str_message, str_level)
 
@@ -324,11 +324,11 @@ def _report_parent_folder(
     Parameters
     ----------
     cls_create_log : CreateLog
-            The logging helper doing the work and the reporting.
+        The logging helper doing the work and the reporting.
     logger : logging.Logger or None
-            Destination for the report.
+        Destination for the report.
     path_log : str
-            The log-file directory to create.
+        The log-file directory to create.
 
     Returns
     -------
@@ -337,7 +337,7 @@ def _report_parent_folder(
     Raises
     ------
     RuntimeError
-            If the attempt reports an outcome this module does not recognise.
+        If the attempt reports an outcome this module does not recognise.
     """
     bool_dispatch = cls_create_log.creating_parent_folder(path_log)
     cls_create_log.log_message(logger, f"Logs parent directory: {path_log}", "info")
@@ -356,12 +356,12 @@ def _validate_path_log(path_log: str | None) -> None:
     Parameters
     ----------
     path_log : str | None
-            Path for the log-file directory.
+        Path for the log-file directory.
 
     Raises
     ------
     ValueError
-            If ``path_log`` is an empty string.
+        If ``path_log`` is an empty string.
     """
     if path_log == "":
         raise ValueError("Log path cannot be an empty string")
@@ -374,14 +374,14 @@ def initiate_logging(logger: logging.Logger, path_log: str | None = None) -> Non
     Parameters
     ----------
     logger : logging.Logger
-            Logger instance for the run.
+        Logger instance for the run.
     path_log : str | None
-            Path for the log-file directory (default: ``None``).
+        Path for the log-file directory (default: ``None``).
 
     Raises
     ------
     RuntimeError
-            If an unexpected dispatch value is returned from directory creation.
+        If an unexpected dispatch value is returned from directory creation.
     """
     _validate_path_log(path_log)
 

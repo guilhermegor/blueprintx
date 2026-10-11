@@ -39,18 +39,18 @@ class TypeChecker(type):
         Parameters
         ----------
         cls : type[TypeChecker]
-                The metaclass.
+            The metaclass.
         str_name : str
-                Name of the class being created.
+            Name of the class being created.
         tuple_bases : tuple
-                Base classes.
+            Base classes.
         dict_attrs : dict[str, Any]
-                Class namespace dictionary.
+            Class namespace dictionary.
 
         Returns
         -------
         TypeChecker
-                New class with type-checked methods.
+            New class with type-checked methods.
         """
         for str_attr, attr_value in dict_attrs.items():
             if str_attr.startswith("__"):
@@ -71,14 +71,14 @@ def _wrap_attribute(attr_value: Any) -> Any:  # complexity-ok: metaclass machine
     Parameters
     ----------
     attr_value : Any
-            The class-body attribute (function, staticmethod, classmethod, property,
-            or a non-callable).
+        The class-body attribute (function, staticmethod, classmethod, property,
+        or a non-callable).
 
     Returns
     -------
     Any
-            The wrapped attribute (descriptor preserved), or the attribute unchanged
-            when it is not a checkable callable.
+        The wrapped attribute (descriptor preserved), or the attribute unchanged
+        when it is not a checkable callable.
     """
     if isinstance(attr_value, staticmethod):
         return staticmethod(create_type_checked_method(attr_value.__func__))
