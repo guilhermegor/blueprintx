@@ -64,13 +64,13 @@ def _strip_float_artifact(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            Raw identifier as read from a source (CSV cell, DataFrame value, API field).
+        Raw identifier as read from a source (CSV cell, DataFrame value, API field).
 
     Returns
     -------
     str
-            ``str_value`` with a ``".0…"`` tail removed when it is an integer-with-float-tail,
-            else the whitespace-trimmed input.
+        ``str_value`` with a ``".0…"`` tail removed when it is an integer-with-float-tail,
+        else the whitespace-trimmed input.
     """
     cls_match = _RE_FLOAT_ARTIFACT.match(str_value)
     if cls_match is not None:
@@ -85,14 +85,14 @@ def unmask_cnpj(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            A CNPJ in any shape — masked, zero-stripped, or carrying a float ``.0`` tail.
+        A CNPJ in any shape — masked, zero-stripped, or carrying a float ``.0`` tail.
 
     Returns
     -------
     str
-            Uppercased value containing only ``A-Z``/``0-9``. Purely numeric values are
-            left-zero-padded to 14; alphanumeric values are returned as-is (already 14).
-            An empty input yields an empty string.
+        Uppercased value containing only ``A-Z``/``0-9``. Purely numeric values are
+        left-zero-padded to 14; alphanumeric values are returned as-is (already 14).
+        An empty input yields an empty string.
     """
     str_clean = _strip_float_artifact(str_value)
     str_clean = _RE_NON_ALNUM.sub("", str_clean).upper()
@@ -108,13 +108,13 @@ def mask_cnpj(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            A CNPJ in any shape (it is unmasked first).
+        A CNPJ in any shape (it is unmasked first).
 
     Returns
     -------
     str
-            The punctuated CNPJ when it normalises to 14 characters; otherwise the bare
-            unmasked value (so malformed input is surfaced, not silently reformatted).
+        The punctuated CNPJ when it normalises to 14 characters; otherwise the bare
+        unmasked value (so malformed input is surfaced, not silently reformatted).
     """
     str_clean = unmask_cnpj(str_value)
     if len(str_clean) != _LEN_CNPJ:
@@ -129,14 +129,14 @@ def _cnpj_check_digit(str_base: str, tuple_weights: tuple[int, ...]) -> int:
     Parameters
     ----------
     str_base : str
-            The base characters the weights apply to (12 for DV1, 13 for DV2).
+        The base characters the weights apply to (12 for DV1, 13 for DV2).
     tuple_weights : tuple of int
-            Mod-11 weights, paired left-to-right with ``str_base``.
+        Mod-11 weights, paired left-to-right with ``str_base``.
 
     Returns
     -------
     int
-            The check digit (0 when the remainder is below 2, else ``11 - remainder``).
+        The check digit (0 when the remainder is below 2, else ``11 - remainder``).
     """
     int_sum = sum(
         (ord(str_char) - _ASCII_ZERO) * int_weight
@@ -153,14 +153,14 @@ def is_valid_cnpj(str_value: str) -> bool:
     Parameters
     ----------
     str_value : str
-            A CNPJ in any shape (it is unmasked first).
+        A CNPJ in any shape (it is unmasked first).
 
     Returns
     -------
     bool
-            ``True`` when the value normalises to 14 characters whose last two are the
-            correct numeric check digits. Repeated-character numeric values (e.g. all
-            zeros) are rejected.
+        ``True`` when the value normalises to 14 characters whose last two are the
+        correct numeric check digits. Repeated-character numeric values (e.g. all
+        zeros) are rejected.
     """
     str_clean = unmask_cnpj(str_value)
     # One conjunction rather than a stack of early exits. For a pure predicate this states
@@ -183,12 +183,12 @@ def _cnpj_check_digits(str_base: str) -> str:
     Parameters
     ----------
     str_base : str
-            The first 12 characters of an unmasked CNPJ.
+        The first 12 characters of an unmasked CNPJ.
 
     Returns
     -------
     str
-            The two check digits, concatenated.
+        The two check digits, concatenated.
     """
     int_dv1 = _cnpj_check_digit(str_base, _CNPJ_WEIGHTS_DV1)
     int_dv2 = _cnpj_check_digit(f"{str_base}{int_dv1}", _CNPJ_WEIGHTS_DV2)
@@ -202,12 +202,12 @@ def unmask_cpf(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            A CPF in any shape — masked, zero-stripped, or carrying a float ``.0`` tail.
+        A CPF in any shape — masked, zero-stripped, or carrying a float ``.0`` tail.
 
     Returns
     -------
     str
-            Digits only, left-zero-padded to 11 when non-empty; empty input yields ``""``.
+        Digits only, left-zero-padded to 11 when non-empty; empty input yields ``""``.
     """
     str_clean = _strip_float_artifact(str_value)
     str_clean = _RE_NON_DIGIT.sub("", str_clean)
@@ -223,13 +223,13 @@ def mask_cpf(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            A CPF in any shape (it is unmasked first).
+        A CPF in any shape (it is unmasked first).
 
     Returns
     -------
     str
-            The punctuated CPF when it normalises to 11 digits; otherwise the bare
-            unmasked value.
+        The punctuated CPF when it normalises to 11 digits; otherwise the bare
+        unmasked value.
     """
     str_clean = unmask_cpf(str_value)
     if len(str_clean) != _LEN_CPF:
@@ -244,14 +244,14 @@ def _cpf_check_digit(str_base: str, int_start_weight: int) -> int:
     Parameters
     ----------
     str_base : str
-            The base digits the weights apply to (9 for DV1, 10 for DV2).
+        The base digits the weights apply to (9 for DV1, 10 for DV2).
     int_start_weight : int
-            The first (largest) weight; subsequent weights descend by one.
+        The first (largest) weight; subsequent weights descend by one.
 
     Returns
     -------
     int
-            The check digit (0 when the remainder is below 2, else ``11 - remainder``).
+        The check digit (0 when the remainder is below 2, else ``11 - remainder``).
     """
     int_sum = sum(
         int(str_char) * (int_start_weight - int_idx) for int_idx, str_char in enumerate(str_base)
@@ -267,13 +267,13 @@ def is_valid_cpf(str_value: str) -> bool:
     Parameters
     ----------
     str_value : str
-            A CPF in any shape (it is unmasked first).
+        A CPF in any shape (it is unmasked first).
 
     Returns
     -------
     bool
-            ``True`` when the value normalises to 11 digits whose last two are the correct
-            check digits. Repeated-digit values (e.g. all ones) are rejected.
+        ``True`` when the value normalises to 11 digits whose last two are the correct
+        check digits. Repeated-digit values (e.g. all ones) are rejected.
     """
     str_clean = unmask_cpf(str_value)
     # One conjunction rather than a stack of early exits; see the CNPJ validator for why.
@@ -292,12 +292,12 @@ def _cpf_check_digits(str_clean: str) -> str:
     Parameters
     ----------
     str_clean : str
-            An unmasked, 11-digit CPF.
+        An unmasked, 11-digit CPF.
 
     Returns
     -------
     str
-            The two check digits, concatenated.
+        The two check digits, concatenated.
     """
     int_dv1 = _cpf_check_digit(str_clean[:9], 10)
     int_dv2 = _cpf_check_digit(str_clean[:10], 11)

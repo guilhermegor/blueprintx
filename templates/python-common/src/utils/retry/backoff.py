@@ -69,26 +69,26 @@ def call_with_backoff(  # complexity-ok: the retry loop IS the work of this seam
     Parameters
     ----------
     fn : Callable[[], _R]
-            The zero-argument callable to run (wrap arguments in a ``lambda``/``partial``).
+        The zero-argument callable to run (wrap arguments in a ``lambda``/``partial``).
     cls_policy : RetryPolicy, optional
-            The retry schedule; by default a :class:`RetryPolicy` with the module defaults.
+        The retry schedule; by default a :class:`RetryPolicy` with the module defaults.
     cls_logger : LogEmitter, optional
-            Sink each retry warning is written to; by default a stdlib-logger-backed
-            :class:`LogEmitter`.
+        Sink each retry warning is written to; by default a stdlib-logger-backed
+        :class:`LogEmitter`.
     str_label : str, optional
-            Name used in the retry log line; by default ``fn``'s ``__name__`` (a ``lambda`` shows
-            as ``"<lambda>"``, so pass the wrapped callable's name to keep the log meaningful).
+        Name used in the retry log line; by default ``fn``'s ``__name__`` (a ``lambda`` shows
+        as ``"<lambda>"``, so pass the wrapped callable's name to keep the log meaningful).
 
     Returns
     -------
     _R
-            ``fn``'s return value on the first successful attempt.
+        ``fn``'s return value on the first successful attempt.
 
     Raises
     ------
     Exception
-            Re-raises ``fn``'s own exception once the attempts are exhausted (only the policy's
-            transient types are retried; any other exception propagates on the first failure).
+        Re-raises ``fn``'s own exception once the attempts are exhausted (only the policy's
+        transient types are retried; any other exception propagates on the first failure).
     """
     cls_pol: RetryPolicy = cls_policy if cls_policy is not None else RetryPolicy()
     cls_emitter: LogEmitter = cls_logger if cls_logger is not None else LogEmitter()
@@ -146,33 +146,33 @@ def retry_with_backoff(  # complexity-ok: decorator factory, see the note above
     Parameters
     ----------
     int_max_attempts : int, optional
-            Total number of attempts (>= 1), by default 3 (one initial try + two retries).
+        Total number of attempts (>= 1), by default 3 (one initial try + two retries).
     float_base_wait_s : float, optional
-            Wait before the first retry, in seconds, by default 2.0.
+        Wait before the first retry, in seconds, by default 2.0.
     float_factor : float, optional
-            Exponential growth factor of the wait between retries, by default 2.0. Used only by
-            the ``"exponential"`` strategy.
+        Exponential growth factor of the wait between retries, by default 2.0. Used only by
+        the ``"exponential"`` strategy.
     str_strategy : str, optional
-            Backoff schedule: ``"exponential"`` (default), ``"linear"``, or ``"constant"``.
+        Backoff schedule: ``"exponential"`` (default), ``"linear"``, or ``"constant"``.
     float_max_wait_s : float or None, optional
-            Optional upper bound applied to each computed wait, in seconds; ``None`` (default)
-            leaves the schedule uncapped.
+        Optional upper bound applied to each computed wait, in seconds; ``None`` (default)
+        leaves the schedule uncapped.
     tuple_exceptions : tuple of type[Exception], optional
-            The transient exception types that trigger a retry, by default ``(OSError,)``.
+        The transient exception types that trigger a retry, by default ``(OSError,)``.
     cls_logger : LogEmitter, optional
-            Sink each retry warning is written to; by default a stdlib-logger-backed
-            :class:`LogEmitter`. Inject a subclass to route warnings elsewhere.
+        Sink each retry warning is written to; by default a stdlib-logger-backed
+        :class:`LogEmitter`. Inject a subclass to route warnings elsewhere.
 
     Returns
     -------
     Callable[[Callable[_P, _R]], Callable[_P, _R]]
-            A decorator wrapping the target callable with the retry/backoff behaviour.
+        A decorator wrapping the target callable with the retry/backoff behaviour.
 
     Raises
     ------
     ValueError
-            If ``int_max_attempts`` is less than 1, or ``str_strategy`` is not one of
-            ``"exponential"``, ``"linear"``, ``"constant"``.
+        If ``int_max_attempts`` is less than 1, or ``str_strategy`` is not one of
+        ``"exponential"``, ``"linear"``, ``"constant"``.
     """
     # Constructing the policy validates the attempts count and the strategy name for us.
     cls_policy = RetryPolicy(
@@ -190,12 +190,12 @@ def retry_with_backoff(  # complexity-ok: decorator factory, see the note above
         Parameters
         ----------
         fn : Callable[_P, _R]
-                The target callable to make retryable.
+            The target callable to make retryable.
 
         Returns
         -------
         Callable[_P, _R]
-                The wrapped callable with the retry/backoff behaviour.
+            The wrapped callable with the retry/backoff behaviour.
         """
         # A plain function has __name__; a callable instance may not — fall back to its type.
         str_fn_name = getattr(fn, "__name__", type(fn).__name__)
@@ -207,14 +207,14 @@ def retry_with_backoff(  # complexity-ok: decorator factory, see the note above
             Parameters
             ----------
             *args : _P.args
-                    Positional arguments forwarded to the wrapped callable.
+                Positional arguments forwarded to the wrapped callable.
             **kwargs : _P.kwargs
-                    Keyword arguments forwarded to the wrapped callable.
+                Keyword arguments forwarded to the wrapped callable.
 
             Returns
             -------
             _R
-                    The wrapped callable's return value on the first successful attempt.
+                The wrapped callable's return value on the first successful attempt.
             """
             return call_with_backoff(
                 lambda: fn(*args, **kwargs), cls_policy, cls_logger, str_fn_name

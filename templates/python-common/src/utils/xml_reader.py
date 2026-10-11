@@ -101,40 +101,40 @@ def read_xml(  # noqa: PLR0913 — the public reader API; each argument is a rea
     Parameters
     ----------
     path_file : pathlib.Path
-            Path to the XML document.
+        Path to the XML document.
     str_row_anchor : str
-            Local name of the repeating element that anchors one output row (matched anywhere in
-            the document, namespace-agnostic).
+        Local name of the repeating element that anchors one output row (matched anywhere in
+        the document, namespace-agnostic).
     dict_column_paths : dict of {str: tuple of str}
-            Column name to an ORDERED tuple of alternative paths, each relative to the row anchor
-            (or absolute — leading ``/`` — for a document-level value broadcast to every row).
-            Segments are ``/``-separated local names, ``*`` (single-level wildcard), or a trailing
-            ``@name`` to read an attribute. The first alternative that resolves wins.
+        Column name to an ORDERED tuple of alternative paths, each relative to the row anchor
+        (or absolute — leading ``/`` — for a document-level value broadcast to every row).
+        Segments are ``/``-separated local names, ``*`` (single-level wildcard), or a trailing
+        ``@name`` to read an attribute. The first alternative that resolves wins.
     dict_dtypes : dict of {str: str}
-            Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
+        Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
     cls_contract : FileContract
-            The contract the extracted rows must satisfy (required, mirroring
-            :func:`utils.tabular_reader.read_table`).
+        The contract the extracted rows must satisfy (required, mirroring
+        :func:`utils.tabular_reader.read_table`).
     str_row_filter : str | None, optional
-            A path (same grammar, relative to the row anchor) that must resolve for a row-anchor
-            element to be kept — checked by presence, not value. ``None`` keeps every row-anchor
-            match.
+        A path (same grammar, relative to the row anchor) that must resolve for a row-anchor
+        element to be kept — checked by presence, not value. ``None`` keeps every row-anchor
+        match.
     list_date_cols : sequence of str, optional
-            Columns coerced to ``datetime.date``.
+        Columns coerced to ``datetime.date``.
     list_decimal_cols : sequence of str, optional
-            Columns coerced to exact :class:`decimal.Decimal`.
+        Columns coerced to exact :class:`decimal.Decimal`.
 
     Returns
     -------
     pd.DataFrame
-            One row per matching (and filtered-in) row-anchor element, with declared types applied.
+        One row per matching (and filtered-in) row-anchor element, with declared types applied.
 
     Raises
     ------
     FileNotFoundError
-            If ``path_file`` does not exist.
+        If ``path_file`` does not exist.
     ContractError
-            When the extracted rows violate ``cls_contract``.
+        When the extracted rows violate ``cls_contract``.
     """
     if not path_file.exists():
         raise FileNotFoundError(f"File not found: {path_file}")
@@ -181,18 +181,18 @@ def find_xml_row_problems(  # complexity-ok: two independent guards, missing fil
     Parameters
     ----------
     path_file : pathlib.Path
-            The XML document to inspect.
+        The XML document to inspect.
     str_row_anchor : str
-            Local name of the repeating row element.
+        Local name of the repeating row element.
     cls_contract : FileContract
-            Named in the message only, so the problem reads the same as a tabular one.
+        Named in the message only, so the problem reads the same as a tabular one.
 
     Returns
     -------
     ProblemReport
-            ``list_fatal`` and ``list_warnings`` both empty when at least one ``str_row_anchor``
-            element is found; otherwise ``list_fatal`` names the missing file or the missing
-            anchor. A missing file is a **finding, not an exception** — see the note below.
+        ``list_fatal`` and ``list_warnings`` both empty when at least one ``str_row_anchor``
+        element is found; otherwise ``list_fatal`` names the missing file or the missing
+        anchor. A missing file is a **finding, not an exception** — see the note below.
     """
     # ⚠️ Reported, NOT raised — see "Never raises includes a missing file" in utils/CLAUDE.md.
     if not path_file.exists():
@@ -213,12 +213,12 @@ def is_attribute_path(str_path: str) -> bool:
     Parameters
     ----------
     str_path : str
-            A single declared path (one alternative from ``dict_column_paths``).
+        A single declared path (one alternative from ``dict_column_paths``).
 
     Returns
     -------
     bool
-            ``True`` when the path's last segment is ``@name``.
+        ``True`` when the path's last segment is ``@name``.
     """
     list_segments = [str_segment for str_segment in str_path.split("/") if str_segment]
     return bool(list_segments) and list_segments[-1].startswith("@")
@@ -236,12 +236,12 @@ def text_path_columns(dict_column_paths: dict[str, tuple[str, ...]]) -> tuple[st
     Parameters
     ----------
     dict_column_paths : dict of {str: tuple of str}
-            The same mapping passed to :func:`read_xml`.
+        The same mapping passed to :func:`read_xml`.
 
     Returns
     -------
     tuple of str
-            Column names excluding those whose first alternative is an attribute path.
+        Column names excluding those whose first alternative is an attribute path.
     """
     return tuple(
         str_col
@@ -257,12 +257,12 @@ def _local_name(str_tag: str) -> str:
     Parameters
     ----------
     str_tag : str
-            An element's ``.tag`` value.
+        An element's ``.tag`` value.
 
     Returns
     -------
     str
-            The tag without its namespace prefix.
+        The tag without its namespace prefix.
     """
     return str_tag.rsplit("}", 1)[-1]
 
@@ -274,14 +274,14 @@ def _find_rows(cls_root: Element, str_row_anchor: str) -> list[Element]:
     Parameters
     ----------
     cls_root : xml.etree.ElementTree.Element
-            The document root.
+        The document root.
     str_row_anchor : str
-            Local name of the repeating row element.
+        Local name of the repeating row element.
 
     Returns
     -------
     list of xml.etree.ElementTree.Element
-            Every matching element, in document order.
+        Every matching element, in document order.
     """
     return [cls_el for cls_el in cls_root.iter() if _local_name(cls_el.tag) == str_row_anchor]
 
@@ -299,14 +299,14 @@ def _find_child(  # complexity-ok: wildcard vs exact-name match is the whole chi
     Parameters
     ----------
     cls_element : xml.etree.ElementTree.Element
-            The element to search under.
+        The element to search under.
     str_segment : str
-            Either ``"*"`` (matches any child) or a local name to match exactly.
+        Either ``"*"`` (matches any child) or a local name to match exactly.
 
     Returns
     -------
     xml.etree.ElementTree.Element | None
-            The first matching child, or ``None``.
+        The first matching child, or ``None``.
     """
     for cls_child in cls_element:
         if str_segment == "*" or _local_name(cls_child.tag) == str_segment:
@@ -327,14 +327,14 @@ def _matching_children(cls_element: Element, str_segment: str) -> list[Element]:
     Parameters
     ----------
     cls_element : xml.etree.ElementTree.Element
-            The element to search under.
+        The element to search under.
     str_segment : str
-            Either ``"*"`` (matches any child) or a local name to match exactly.
+        Either ``"*"`` (matches any child) or a local name to match exactly.
 
     Returns
     -------
     list of xml.etree.ElementTree.Element
-            Every matching child, in document order.
+        Every matching child, in document order.
     """
     if str_segment == "*":
         return list(cls_element)
@@ -356,14 +356,14 @@ def _get_attribute(  # complexity-ok: linear scan is the whole point of local-na
     Parameters
     ----------
     cls_element : xml.etree.ElementTree.Element
-            The element carrying the attribute.
+        The element carrying the attribute.
     str_name : str
-            The attribute's local name (without any ``@`` prefix or namespace).
+        The attribute's local name (without any ``@`` prefix or namespace).
 
     Returns
     -------
     str | None
-            The attribute's value, or ``None`` when no attribute has that local name.
+        The attribute's value, or ``None`` when no attribute has that local name.
     """
     for str_key, str_value in cls_element.attrib.items():
         if _local_name(str_key) == str_name:
@@ -378,14 +378,14 @@ def _resolve_path(cls_element: Element, str_path: str) -> str | None:
     Parameters
     ----------
     cls_element : xml.etree.ElementTree.Element
-            The element the path is relative to.
+        The element the path is relative to.
     str_path : str
-            A ``/``-separated path; the last segment may be ``@name`` for an attribute.
+        A ``/``-separated path; the last segment may be ``@name`` for an attribute.
 
     Returns
     -------
     str | None
-            The stripped text/attribute value, or ``None`` when unresolved or blank.
+        The stripped text/attribute value, or ``None`` when unresolved or blank.
     """
     list_segments = [str_segment for str_segment in str_path.split("/") if str_segment]
     return _resolve_segments(cls_element, list_segments) if list_segments else None
@@ -400,14 +400,14 @@ def _resolve_segments(  # complexity-ok: leaf (attr vs text) vs intermediate (ba
     Parameters
     ----------
     cls_element : xml.etree.ElementTree.Element
-            The element the remaining segments are relative to.
+        The element the remaining segments are relative to.
     list_segments : list of str
-            The not-yet-consumed path segments (at least one).
+        The not-yet-consumed path segments (at least one).
 
     Returns
     -------
     str | None
-            The resolved value, or ``None`` when no candidate at any level completes the path.
+        The resolved value, or ``None`` when no candidate at any level completes the path.
     """
     str_segment = list_segments[0]
     if len(list_segments) == 1:
@@ -434,14 +434,14 @@ def _path_exists(cls_element: Element, str_path: str) -> bool:
     Parameters
     ----------
     cls_element : xml.etree.ElementTree.Element
-            The element the path is relative to.
+        The element the path is relative to.
     str_path : str
-            A ``/``-separated path; the last segment may be ``@name`` for an attribute.
+        A ``/``-separated path; the last segment may be ``@name`` for an attribute.
 
     Returns
     -------
     bool
-            ``True`` when the path's target exists, regardless of whether it is blank.
+        ``True`` when the path's target exists, regardless of whether it is blank.
     """
     list_segments = [str_segment for str_segment in str_path.split("/") if str_segment]
     return bool(list_segments) and _segments_exist(cls_element, list_segments)
@@ -458,14 +458,14 @@ def _segments_exist(  # complexity-ok: mirrors _resolve_segments' two branches, 
     Parameters
     ----------
     cls_element : xml.etree.ElementTree.Element
-            The element the remaining segments are relative to.
+        The element the remaining segments are relative to.
     list_segments : list of str
-            The not-yet-consumed path segments (at least one).
+        The not-yet-consumed path segments (at least one).
 
     Returns
     -------
     bool
-            ``True`` when some candidate at every level has the rest of the path.
+        ``True`` when some candidate at every level has the rest of the path.
     """
     str_segment = list_segments[0]
     if len(list_segments) == 1:
@@ -490,16 +490,16 @@ def _resolve_column(  # complexity-ok: the loop over ordered alternatives IS "fi
     Parameters
     ----------
     cls_row : xml.etree.ElementTree.Element
-            The current row-anchor element.
+        The current row-anchor element.
     cls_root : xml.etree.ElementTree.Element
-            The document root, used for a broadcast (``/``-prefixed) path.
+        The document root, used for a broadcast (``/``-prefixed) path.
     tuple_paths : tuple of str
-            The column's ordered alternative paths.
+        The column's ordered alternative paths.
 
     Returns
     -------
     str | None
-            The first resolved value, or ``None`` when no alternative resolves.
+        The first resolved value, or ``None`` when no alternative resolves.
     """
     for str_path in tuple_paths:
         str_value = (
