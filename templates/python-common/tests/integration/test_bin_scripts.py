@@ -2294,7 +2294,7 @@ def _materialise_run_sh(path_root: Path) -> Path:
     _write(path_root / "src" / "main.py", '"""Entrypoint stub."""\n')
 
     path_python = path_root / ".venv" / "bin" / "python"
-    _write(path_python, '#!/bin/sh\necho "PYTHON_ARGV:$*"\n')
+    _write(path_python, "#!/bin/sh\nprintf 'ARG:%s\\n' \"$@\"\n")
     path_python.chmod(0o755)
     # Newer than pyproject.toml with a margin, so the `-nt` mtime check in
     # runtime_env_needs_bootstrap is unambiguous regardless of filesystem mtime resolution.
@@ -2303,7 +2303,7 @@ def _materialise_run_sh(path_root: Path) -> Path:
     return path_script
 
 
-def _run_run_sh(path_script: Path, list_args: list[str]) -> subprocess.CompletedProcess:
+def _run_run_sh(path_script: Path, list_args: list[str]) -> subprocess.CompletedProcess[str]:
     """Invoke the materialised ``run.sh`` with extra CLI arguments.
 
     Parameters
@@ -2318,20 +2318,13 @@ def _run_run_sh(path_script: Path, list_args: list[str]) -> subprocess.Completed
     subprocess.CompletedProcess
         The completed run.
     """
-    dict_env = dict(os.environ)
-    dict_env.pop("FORCE_COLOR", None)
-    dict_env.pop("CLICOLOR_FORCE", None)
-    dict_env.pop("NO_COLOR", None)
-    dict_env.pop("LC_ALL", None)
-    dict_env.pop("COLUMNS", None)
-    dict_env.pop("TZ", None)
     # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     return subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script), *list_args],
         capture_output=True,
         text=True,
         check=False,
-        env=dict_env,
+        timeout=60,
     )
 
 
@@ -2350,11 +2343,16 @@ def test_run_forwards_an_argument_to_the_entrypoint(tmp_path: Path) -> None:
     """
     path_script = _materialise_run_sh(tmp_path)
 
-    cls_result = _run_run_sh(path_script, ["reconcile"])
+    cls_result = _run_run_sh(path_script, ["reconcile", "two words"])
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
-    assert "PYTHON_ARGV:-m src.main reconcile" in str_all, str_all
+    assert cls_result.stdout.splitlines()[-4:] == [
+        "ARG:-m",
+        "ARG:src.main",
+        "ARG:reconcile",
+        "ARG:two words",
+    ], str_all
 
 
 def test_run_with_no_extra_argument_still_calls_the_entrypoint(tmp_path: Path) -> None:
@@ -2365,4 +2363,4 @@ def test_run_with_no_extra_argument_still_calls_the_entrypoint(tmp_path: Path) -
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
-    assert "PYTHON_ARGV:-m src.main" in str_all, str_all
+    assert cls_result.stdout.splitlines()[-2:] == ["ARG:-m", "ARG:src.main"], str_all
