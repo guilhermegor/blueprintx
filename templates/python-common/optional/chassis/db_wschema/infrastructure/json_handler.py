@@ -17,9 +17,9 @@ class JSONDatabaseHandler(DatabaseHandler):
     Parameters
     ----------
     file_path : str or Path
-            Location of the JSON file.
+        Location of the JSON file.
     id_field : str, optional
-            Identifier field name, by default ``"id"``.
+        Identifier field name, by default ``"id"``.
     """
 
     def __init__(self, file_path: str | Path, id_field: str = "id") -> None:
@@ -35,12 +35,12 @@ class JSONDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record : Record
-                Data to persist.
+            Data to persist.
 
         Returns
         -------
         str
-                Identifier assigned to the stored record.
+            Identifier assigned to the stored record.
         """
         record = ensure_id(record, self.id_field)
         list_rows = self._read_all()
@@ -54,12 +54,12 @@ class JSONDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier to look up.
+            Identifier to look up.
 
         Returns
         -------
         Record or None
-                Stored record when present, otherwise ``None``.
+            Stored record when present, otherwise ``None``.
         """
         return _find_row(self._read_all(), self.id_field, record_id)
 
@@ -69,14 +69,14 @@ class JSONDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to update.
+            Identifier of the record to update.
         updates : Record
-                Partial payload containing fields to merge.
+            Partial payload containing fields to merge.
 
         Returns
         -------
         Record or None
-                Updated record when found, otherwise ``None``.
+            Updated record when found, otherwise ``None``.
         """
         list_rows, dict_updated = _apply_update(
             self._read_all(), self.id_field, record_id, updates
@@ -91,12 +91,12 @@ class JSONDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to remove.
+            Identifier of the record to remove.
 
         Returns
         -------
         bool
-                ``True`` when a record was deleted, ``False`` otherwise.
+            ``True`` when a record was deleted, ``False`` otherwise.
         """
         list_rows = self._read_all()
         list_remaining = [r for r in list_rows if str(r.get(self.id_field)) != str(record_id)]
@@ -121,7 +121,7 @@ class JSONDatabaseHandler(DatabaseHandler):
         Returns
         -------
         list of Record
-                Records contained in the JSON file.
+            Records contained in the JSON file.
         """
         if not self.file_path.exists():
             return []
@@ -134,6 +134,6 @@ class JSONDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         rows : list of Record
-                Records to persist.
+            Records to persist.
         """
         self.file_path.write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")

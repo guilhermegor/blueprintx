@@ -22,17 +22,17 @@ def resolve_placeholders(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            A single step field value, e.g. ``"${VENDOR_PASSWORD}"``.
+        A single step field value, e.g. ``"${VENDOR_PASSWORD}"``.
 
     Returns
     -------
     str
-            ``str_value`` with every ``${ENV_VAR}`` reference replaced.
+        ``str_value`` with every ``${ENV_VAR}`` reference replaced.
 
     Raises
     ------
     BrowserStepError
-            If ``str_value`` references an environment variable that is not set.
+        If ``str_value`` references an environment variable that is not set.
     """
     try:
         return Template(str_value).substitute(os.environ)
