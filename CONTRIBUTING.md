@@ -514,6 +514,22 @@ Measured 2026-09-16: 4 `catch (err)` sites across both tiers' `src/`
 `.catch(cb)` callbacks and no non-`Error` `throw` — both rules cost zero
 findings today, same as the Python side.
 
+## Migrating a generated project from `docs/backlog/` to `.specs/backlog/`
+
+Scaffolds are generated once and never re-synced, so this applies only to a project that
+hand-copies the updated template files. Before adopting the new `mkdocs.yml` and
+`check_backlog_ledger.py`:
+
+1. Move `docs/backlog/*.md` to `.specs/backlog/` (names are unchanged). Until then the old
+   ledgers are not recognized by the gate, and with `backlog/` gone from `exclude_docs` they
+   would be published. The tier `mkdocs.yml` files set `validation.nav.omitted_files: warn`, so
+   a forgotten legacy page raises a warning that names the file. It fails only a build run
+   with `mkdocs build --strict`, which no generated-project step does today.
+2. Change any uppercase `[X]` marker to `[x]`, and give every `[~]` a `<type>/<branch>`; the
+   ledger gate now shares the grammar of `check_specs_structure.sh`.
+3. A branch already in flight with an old-path ledger needs it moved too; there is no
+   transitional acceptance.
+
 ## Best Practices
 
 - **Keep branches focused** - one feature/bugfix per branch
