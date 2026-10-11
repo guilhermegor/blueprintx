@@ -200,8 +200,15 @@ scaffold_create_github_repo() {
 	[ "$str_vis_choice" = "2" ] && str_vis_flag="--private"
 	[ -n "$SCAFFOLD_REPO_HOMEPAGE" ] && list_homepage=(--homepage "$SCAFFOLD_REPO_HOMEPAGE")
 
-	if (cd "$str_project_path" && gh repo create "$str_slug" --source . --remote origin --push \
+	# No --push: the key must exist before the first push, or the first secret_scan run goes red.
+	if (cd "$str_project_path" && gh repo create "$str_slug" --source . --remote origin \
 		"${list_homepage[@]}" --description "$PROJECT_DESCRIPTION" "$str_vis_flag"); then
+		scaffold_set_secret_scan_key
+		if ! git -C "$str_project_path" push -u origin main >/dev/null 2>&1; then
+			print_status "warning" \
+				"Repo ${str_slug} created but the push failed - incomplete. Run: git push -u origin main"
+			return 1
+		fi
 		gh repo edit "$str_slug" --default-branch main "${list_homepage[@]}" >/dev/null 2>&1 || true
 		print_status "success" "Repository created and pushed via gh."
 		scaffold_kanban_setup
@@ -335,10 +342,11 @@ scaffold_prompt_git_remote_setup() {
 	# Read by each scaffold's `main` (a different file), which shellcheck cannot follow.
 	# shellcheck disable=SC2034
 	SCAFFOLD_REMOTE_VERIFIED=1
+	# On success the create step already set the scan key before its push.
 	if ! scaffold_create_github_repo "$str_project_path"; then
 		scaffold_push_initial_commit "$str_project_path"
+		scaffold_set_secret_scan_key
 	fi
 	scaffold_set_review_trigger_secret
-	scaffold_set_secret_scan_key
 	print_status "success" "Git repo initialized."
 }
