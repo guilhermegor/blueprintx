@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Table-driven should-fail tests for templates/common/bin/check_pr_policy.sh (blueprintx#604).
-# Usage: bash tests/test_check_pr_policy.sh
 
 set -uo pipefail
 
@@ -11,7 +9,6 @@ TEMPLATE="$REPO_ROOT/templates/common/.github/PULL_REQUEST_TEMPLATE.md"
 
 int_failures=0
 
-# expect <description> <want: pass|fail> <command...>
 expect() {
 	local str_desc="$1" str_want="$2" str_got=pass
 	shift 2

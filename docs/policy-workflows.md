@@ -17,3 +17,16 @@ Untrusted branch, title and body text reaches the scripts through `env:` only.
 
 Moving cards to In progress / In review is out of scope: `GITHUB_TOKEN` cannot write a
 user-owned Projects v2 board, so that stays in a local hook or behind a PAT secret.
+
+## Design notes
+
+- The check workflows run on `pull_request` and check out the **base** commit, so a PR cannot rewrite
+  the script that judges it. Bot authors (`user.type == 'Bot'`) are skipped.
+- `check_pr_policy.sh` takes `BRANCH`, `TITLE` or `BODY` (plus `TEMPLATE`, default
+  `.github/PULL_REQUEST_TEMPLATE.md`) from the environment and exits 0 (pass), 1 (violation) or 2
+  (bad usage). Sourcing it defines the functions without running them, which the tests use.
+- A trailing `-<N>` in a branch name is not an issue number (`chore/bump-node-20` is a version).
+- `pr-self-assign.yml` skips fork PRs (read-only token) and needs only `pull-requests: write`.
+- The new check names are deliberately absent from each tier's `bin/required-checks.txt`, which
+  allows a name only after a real PR has emitted it. Add them once they have reported.
+- Offline scaffolds drop `.github/` but keep the two `bin/` scripts (tracked in #727).

@@ -1,6 +1,5 @@
 name: PR title conventional
 
-# Rules and rationale: BlueprintX docs, policy-workflows (blueprintx#604).
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
@@ -16,7 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          # The policy runs from the base commit, so a PR cannot rewrite its own check.
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
       - name: Require a Conventional Commit title
