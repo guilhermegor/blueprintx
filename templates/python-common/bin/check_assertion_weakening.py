@@ -959,9 +959,10 @@ def _removed_findings(str_base: str, str_path: str) -> list:
     str_old = show(str_base, str_path)
     dict_old_funcs = parse_functions(str_old) if str_old is not None else {}
     if str_old is not None and dict_old_funcs is None:
-        return [f"{str_path}: could not parse deleted test file — not checked"]
+        return [f"{str_path}: could not parse the removed test file — not checked"]
     if dict_old_funcs:
-        return [f"{str_path}: entire test file deleted ({len(dict_old_funcs)} test(s) with it)"]
+        int_n = len(dict_old_funcs)
+        return [f"{str_path}: entire test file deleted or moved out of tests/ ({int_n} test(s))"]
     return []
 
 

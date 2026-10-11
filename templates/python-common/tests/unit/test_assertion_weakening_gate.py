@@ -601,3 +601,26 @@ def test_a_source_file_renamed_into_tests_is_not_read_as_an_old_test(
     (path_renamed_repo / "tests" / "test_app.py").write_text(_STR_WEAK, encoding="utf-8")
     _git_in(path_renamed_repo, "add", "-A")
     assert gate.collect_problems(gate.changed_paths(str_base), str_base) == []
+
+
+@pytest.mark.parametrize(
+    ("str_status", "str_src", "str_dst", "bool_expected"),
+    [
+        ("D", "tests/test_a.py", "tests/test_a.py", True),
+        ("D", "src/a.py", "src/a.py", False),
+        ("R", "tests/test_a.py", "src/a.py", True),
+        ("R", "tests/test_a.py", "tests/test_b.py", False),
+        ("R", "src/a.py", "tests/test_a.py", False),
+        ("R", "tests/test_a.py", "src/test_a.py", True),
+    ],
+)
+def test_test_file_removed_classifies_each_row_shape(
+    str_status: str, str_src: str, str_dst: str, bool_expected: bool
+) -> None:
+    """Only a deleted test, or one moved to a non-test path, has left the suite."""
+    assert gate._test_file_removed(str_status, str_src, str_dst) is bool_expected
+
+
+def test_moving_a_test_into_src_arms_the_expected_value_rule() -> None:
+    """Intended: a test moved into ``src/`` is a production-path change for the whole diff."""
+    assert gate._touches_production_code([("R", "tests/test_a.py", "src/a.py")])
