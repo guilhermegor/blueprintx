@@ -3271,15 +3271,23 @@ _LIST_WORKFLOWS = (
 )
 
 
-def test_pinned_job_minutes_do_not_exceed_any_present_workflow() -> None:
-    """A workflow shortened below the pinned cap fails here instead of timing out in CI."""
-    path_root = Path(__file__).resolve().parents[3]
-    list_minutes = [
-        int(re.search(r"timeout-minutes:\s*(\d+)", (path_root / str_rel).read_text("utf-8"))[1])
-        for str_rel in _LIST_WORKFLOWS
-        if (path_root / str_rel).exists()
-    ]
-    assert min(list_minutes, default=_INT_SHORTEST_JOB_MINUTES) >= _INT_SHORTEST_JOB_MINUTES
+# tests/unit -> python-common -> templates -> checkout root. Outside a BlueprintX checkout (a
+# generated project) the workflows are not shipped, so the test is skipped, never vacuous.
+_PATH_ROOT = Path(__file__).resolve().parents[4]
+
+
+@pytest.mark.skipif(
+    not (_PATH_ROOT / "templates").is_dir(),
+    reason="workflows are not shipped in a generated project",
+)
+def test_pinned_job_minutes_do_not_exceed_any_workflow() -> None:
+    """A workflow shortened below the pinned cap fails here instead of timing out in CI.
+
+    A missing workflow raises ``FileNotFoundError``, so the test cannot pass by finding none.
+    """
+    list_texts = [(_PATH_ROOT / str_rel).read_text("utf-8") for str_rel in _LIST_WORKFLOWS]
+    list_minutes = [int(m) for t in list_texts for m in re.findall(r"timeout-minutes:\s*(\d+)", t)]
+    assert min(list_minutes) >= _INT_SHORTEST_JOB_MINUTES
 
 
 def test_carry_forward_worst_case_fits_half_the_shortest_job_timeout() -> None:
