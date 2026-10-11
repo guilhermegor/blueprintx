@@ -70,7 +70,10 @@ def test_ledger_required_for_src_and_ci(str_path: str) -> None:
     assert ledger.needs_ledger([str_path], gate) is True
 
 
-@pytest.mark.parametrize("str_path", ["docs/usage.md", "poetry.lock", "tests/unit/test_x.py"])
+@pytest.mark.parametrize(
+    "str_path",
+    ["docs/usage.md", "poetry.lock", "tests/unit/test_x.py", ".specs/features/x/design.md"],
+)
 def test_ledger_not_required_for_routine_classes(str_path: str) -> None:
     """docs/deps/tests-only branches are routine — a ledger there would be noise."""
     assert ledger.needs_ledger([str_path], gate) is False
@@ -97,21 +100,78 @@ def test_membership_is_asked_per_path_not_over_the_whole_list() -> None:
 
 def test_a_valid_ledger_satisfies_the_branch() -> None:
     """A correctly named ledger clears the requirement."""
-    assert (
-        ledger.find_ledger_problems(["src/a.py", "docs/backlog/my-topic_20260720_101500.md"]) == []
-    )
+    list_files = ["src/a.py", ".specs/backlog/my-topic_20260720_101500.md"]
+    assert ledger.find_ledger_problems(list_files) == []
 
 
 def test_missing_ledger_is_reported() -> None:
     """A src-touching branch with no ledger fails, and the message says what to create."""
-    assert "docs/backlog" in _first_problem(ledger.find_ledger_problems(["src/a.py"]))
+    assert "Create .specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md" in _first_problem(
+        ledger.find_ledger_problems(["src/a.py"])
+    )
 
 
 def test_ledger_name_must_be_kebab_plus_timestamp() -> None:
     """A misnamed ledger is rejected — the timestamped kebab name is the convention."""
-    assert "kebab" in _first_problem(
-        ledger.find_ledger_problems(["src/a.py", "docs/backlog/BadName.md"])
+    assert ".specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md" in _first_problem(
+        ledger.find_ledger_problems(["src/a.py", ".specs/backlog/BadName.md"])
     )
+
+
+def test_gitkeep_is_not_reported_as_a_misnamed_ledger() -> None:
+    """Only ``.md`` paths are ledgers, so the scaffold's ``.gitkeep`` never trips the name rule."""
+    list_problems = ledger.find_ledger_problems(["src/a.py", ".specs/backlog/.gitkeep"])
+    assert not any("name must match" in str_problem for str_problem in list_problems)
+
+
+def test_crlf_ledger_with_a_closed_fence_keeps_its_real_checkboxes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A CRLF checkout must not turn every closed fence into an unclosed one."""
+    str_rel = ".specs/backlog/crlf_20260101_000000.md"
+    path_ledger = tmp_path / str_rel
+    path_ledger.parent.mkdir(parents=True)
+    path_ledger.write_bytes(b"# t\r\n\r\n```\r\nexample\r\n```\r\n\r\n- [ ] real\r\n")
+    monkeypatch.chdir(tmp_path)
+    assert ledger.find_ledger_problems([str_rel]) == []
+
+
+@pytest.mark.parametrize(
+    "str_fenced",
+    [
+        "```\n- [ ] example\n```\n",
+        "```\n- [ ] example\n````\n",
+        "~~~\n- [ ] example\n~~~~\n",
+        "```\n- [ ] example\n",
+    ],
+)
+def test_checkbox_inside_a_code_fence_does_not_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_fenced: str
+) -> None:
+    """The specs gate skips fenced blocks, closers may be longer; an example-only ledger fails."""
+    str_rel = ".specs/backlog/fenced_20260101_000000.md"
+    path_ledger = tmp_path / str_rel
+    path_ledger.parent.mkdir(parents=True)
+    path_ledger.write_text(f"# t\n\n{str_fenced}", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert "outside a code fence" in _first_problem(ledger.find_ledger_problems([str_rel]))
+
+
+@pytest.mark.parametrize(
+    "str_line", ["- [ ] todo", "- [x] done", "- [~] feat/a doing", "+ [ ] plus"]
+)
+def test_checkbox_grammar_accepts_the_specs_markers(str_line: str) -> None:
+    """The ledger gate accepts the same markers check_specs_structure.sh does."""
+    assert ledger.CHECKBOX_RE.search(str_line)
+
+
+@pytest.mark.parametrize(
+    "str_line",
+    ["- [X] upper", "- [] empty", "- [?] unknown", "- plain", "- [~]", "- [~] doing", "- [~]\t"],
+)
+def test_checkbox_grammar_rejects_what_the_specs_gate_rejects(str_line: str) -> None:
+    """NEGATIVE CONTROL: a marker the specs gate rejects does not count as a checkbox."""
+    assert not ledger.CHECKBOX_RE.search(str_line)
 
 
 # --------------------------
