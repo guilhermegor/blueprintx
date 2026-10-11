@@ -154,6 +154,7 @@ copy_templates() {
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" GITHUB_USERNAME="$GITHUB_USERNAME" \
         envsubst '${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME}' \
