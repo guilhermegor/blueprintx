@@ -1,6 +1,6 @@
 31 .coderabbit.yaml
 18 .cz.toml
-44 .github/dependabot.yml
+48 .github/dependabot.yml
 15 .github/workflows/behind_base_gate_report.yml
 109 .github/workflows/coderabbit_trigger.yml
 4 .github/workflows/docs.yml
@@ -53,6 +53,7 @@
 98 bin/lib/scaffold_python_templates.sh
 115 bin/lib/spec.sh
 13 bin/preview.sh
+72 bin/promote_offline_to_online.sh
 26 bin/scaffold/bash_cli.sh
 170 bin/scaffold/python_api_service.sh
 171 bin/scaffold/python_ddd_service.sh
@@ -184,7 +185,7 @@
 26 templates/python-common/.review-bots.yaml
 26 templates/python-common/bin/build_wheelhouse.sh
 8 templates/python-common/bin/check_all_exports.py
-18 templates/python-common/bin/check_assertion_weakening.py
+20 templates/python-common/bin/check_assertion_weakening.py
 31 templates/python-common/bin/check_backlog_ledger.py
 23 templates/python-common/bin/check_clean_index.sh
 47 templates/python-common/bin/check_comment_budget.py
@@ -308,10 +309,10 @@
 15 templates/python-common/src/utils/xml_reader.py
 11 templates/python-common/src/utils/zip_extractor.py
 4 templates/python-common/tests/conftest.py
-169 templates/python-common/tests/integration/test_bin_scripts.py
+173 templates/python-common/tests/integration/test_bin_scripts.py
 2 templates/python-common/tests/integration/test_resourcewarning_unraisable_gate.py
 7 templates/python-common/tests/unit/test_all_exports_gate.py
-32 templates/python-common/tests/unit/test_assertion_weakening_gate.py
+36 templates/python-common/tests/unit/test_assertion_weakening_gate.py
 24 templates/python-common/tests/unit/test_backlog_ledger.py
 4 templates/python-common/tests/unit/test_br_identifiers.py
 24 templates/python-common/tests/unit/test_comment_budget_gate.py
@@ -363,7 +364,7 @@
 1 templates/python-common/tests/unit/test_wheelhouse_select.py
 6 templates/python-common/tests/unit/test_xml_reader.py
 1 templates/react-spa-webpack/.prettierrc.js
-80 templates/react-spa-webpack/eslint.config.js
+81 templates/react-spa-webpack/eslint.config.js
 6 templates/react-spa-webpack/lint-staged.config.js
 18 templates/react-spa-webpack/optional/deploy/pages/deploy-spa.yml
 39 templates/react-spa-webpack/optional/deploy/vercel/deploy-vercel.yml
@@ -416,6 +417,7 @@
 16 tests/test_check_specs_structure.sh
 16 tests/test_close_linked_issues.sh
 16 tests/test_docs_locale_prompt.sh
+34 tests/test_promote_offline_to_online.sh
 13 tests/test_scaffold_kanban.sh
 31 tests/test_spec_answers.sh
 39 tests/test_validate_meta.sh
