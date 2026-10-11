@@ -15,7 +15,7 @@ class NullNotifier:
         Parameters
         ----------
         str_message : str
-                Message body (ignored).
+            Message body (ignored).
         str_title : str, optional
-                Message title/subject (ignored).
+            Message title/subject (ignored).
         """
