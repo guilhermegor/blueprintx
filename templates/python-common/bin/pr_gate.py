@@ -61,7 +61,7 @@ RISK_PATHS = {
     # `.specs/` (the ledger + feature specs) is documentation, as `docs/backlog/` was.
     "docs": (
         "docs/",
-        ".specs/",
+        ".specs/backlog/",
         "mkdocs.yml",
         "README.md",
         "CHANGELOG.md",

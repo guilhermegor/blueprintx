@@ -124,6 +124,18 @@ def test_gitkeep_is_not_reported_as_a_misnamed_ledger() -> None:
     assert not any("name must match" in str_problem for str_problem in list_problems)
 
 
+def test_crlf_ledger_with_a_closed_fence_keeps_its_real_checkboxes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A CRLF checkout must not turn every closed fence into an unclosed one."""
+    str_rel = ".specs/backlog/crlf_20260101_000000.md"
+    path_ledger = tmp_path / str_rel
+    path_ledger.parent.mkdir(parents=True)
+    path_ledger.write_bytes(b"# t\r\n\r\n```\r\nexample\r\n```\r\n\r\n- [ ] real\r\n")
+    monkeypatch.chdir(tmp_path)
+    assert ledger.find_ledger_problems([str_rel]) == []
+
+
 @pytest.mark.parametrize(
     "str_fenced",
     [
