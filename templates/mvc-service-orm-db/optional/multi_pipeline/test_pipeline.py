@@ -38,7 +38,7 @@ def _build_args(tmp_path: Path) -> tuple:
     Returns
     -------
     tuple
-            ``(logger, fn_build_connection, fn_output_path, path_json, dict_context)``.
+            ``(cls_logger, fn_build_connection, fn_output_path, path_json, dict_context)``.
     """
     return (
         None,
