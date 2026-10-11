@@ -3273,11 +3273,13 @@ _LIST_WORKFLOWS = (
 
 # tests/unit -> python-common -> templates -> checkout root. Outside a BlueprintX checkout (a
 # generated project) the workflows are not shipped, so the test is skipped, never vacuous.
-_PATH_ROOT = Path(__file__).resolve().parents[4]
+# A slice never raises: at a shallow path (/app/tests/unit) it is empty and the test skips,
+# where an index would raise IndexError at import and break collection of the whole file.
+_LIST_ROOTS = list(Path(__file__).resolve().parents[4:5])
 
 
 @pytest.mark.skipif(
-    not (_PATH_ROOT / "templates").is_dir(),
+    not _LIST_ROOTS or not (_LIST_ROOTS[0] / "templates").is_dir(),
     reason="workflows are not shipped in a generated project",
 )
 def test_pinned_job_minutes_do_not_exceed_any_workflow() -> None:
@@ -3285,7 +3287,7 @@ def test_pinned_job_minutes_do_not_exceed_any_workflow() -> None:
 
     A missing workflow raises ``FileNotFoundError``, so the test cannot pass by finding none.
     """
-    list_texts = [(_PATH_ROOT / str_rel).read_text("utf-8") for str_rel in _LIST_WORKFLOWS]
+    list_texts = [(_LIST_ROOTS[0] / str_rel).read_text("utf-8") for str_rel in _LIST_WORKFLOWS]
     list_minutes = [int(m) for t in list_texts for m in re.findall(r"timeout-minutes:\s*(\d+)", t)]
     assert min(list_minutes) >= _INT_SHORTEST_JOB_MINUTES
 
