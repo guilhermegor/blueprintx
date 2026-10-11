@@ -82,22 +82,22 @@ class _NoRedirectHandler(request.HTTPRedirectHandler, metaclass=TypeChecker):
         Parameters
         ----------
         req : urllib.request.Request
-                The original request.
+            The original request.
         fp : IO[bytes]
-                The response file object.
+            The response file object.
         code : int
-                The 3xx status code.
+            The 3xx status code.
         msg : str
-                The status message.
+            The status message.
         headers : HTTPMessage
-                The response headers.
+            The response headers.
         newurl : str
-                The redirect target.
+            The redirect target.
 
         Raises
         ------
         urllib.error.HTTPError
-                Always — redirects are not followed.
+            Always — redirects are not followed.
         """
         raise error.HTTPError(req.full_url, code, f"redirect blocked to {newurl!r}", headers, fp)
 
@@ -124,24 +124,24 @@ def download_file(str_url: str, path_dest: Path, int_timeout_s: int = _TIMEOUT_S
     Parameters
     ----------
     str_url : str
-            The (http/https) URL to download.
+        The (http/https) URL to download.
     path_dest : pathlib.Path
-            Destination file path; its parent is created if missing.
+        Destination file path; its parent is created if missing.
     int_timeout_s : int, optional
-            Socket timeout in seconds, by default :data:`_TIMEOUT_SECONDS`.
+        Socket timeout in seconds, by default :data:`_TIMEOUT_SECONDS`.
 
     Returns
     -------
     pathlib.Path
-            The path the content was written to (``path_dest``).
+        The path the content was written to (``path_dest``).
 
     Raises
     ------
     ValueError
-            If the URL is empty, its scheme is not http/https, or its host resolves to a
-            non-public (private / loopback / link-local / reserved) address.
+        If the URL is empty, its scheme is not http/https, or its host resolves to a
+        non-public (private / loopback / link-local / reserved) address.
     OSError
-            If the download fails (network error, non-2xx status, redirect, timeout, write).
+        If the download fails (network error, non-2xx status, redirect, timeout, write).
     """
     # Three jobs, three functions. Validate the URL, fetch the bytes, write them down. They
     # used to be one body, so a reader could not tell which failure belonged to which stage.
@@ -160,7 +160,7 @@ def _assert_url_allowed(
     Parameters
     ----------
     str_url : str
-            The URL to validate.
+        The URL to validate.
 
     Returns
     -------
@@ -169,9 +169,9 @@ def _assert_url_allowed(
     Raises
     ------
     ValueError
-            If the URL is blank, its scheme is not allowed, or its host is not public.
+        If the URL is blank, its scheme is not allowed, or its host is not public.
     OSError
-            If the host cannot be resolved.
+        If the host cannot be resolved.
     """
     if not str_url.strip():
         raise ValueError("empty download URL")
@@ -194,19 +194,19 @@ def _fetch_bytes(
     Parameters
     ----------
     str_url : str
-            An already-validated URL.
+        An already-validated URL.
     int_timeout_s : int
-            Socket timeout in seconds.
+        Socket timeout in seconds.
 
     Returns
     -------
     bytes
-            The response body.
+        The response body.
 
     Raises
     ------
     OSError
-            On a non-2xx status or any transport failure.
+        On a non-2xx status or any transport failure.
     """
     cls_request = request.Request(str_url, method="GET")  # noqa: S310
     try:
@@ -232,14 +232,14 @@ def _assert_public_host(
     Parameters
     ----------
     str_url : str
-            The URL whose host is validated.
+        The URL whose host is validated.
 
     Raises
     ------
     ValueError
-            If the host is empty or resolves to a non-public address.
+        If the host is empty or resolves to a non-public address.
     OSError
-            If the host cannot be resolved.
+        If the host cannot be resolved.
     """
     str_host = (urlsplit(str_url).hostname or "").rstrip(".").lower()
     if not str_host:
