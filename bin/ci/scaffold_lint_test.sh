@@ -17,6 +17,13 @@ SKELETON="${1:?skeleton name required}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=bin/lib/spec.sh
 source "$REPO_ROOT/bin/lib/spec.sh"
+
+# The offline run below drops .github/, so it cannot see a CODEOWNERS that kept its literal
+# `${GITHUB_USERNAME}`; assert the render at the source instead (#715).
+if grep -nE 'cp .*\.github/CODEOWNERS' "$REPO_ROOT"/bin/scaffold/*.sh; then
+    echo "ERROR: a scaffold copies CODEOWNERS with cp; render it with envsubst '\${GITHUB_USERNAME}'" >&2
+    exit 1
+fi
 META="$REPO_ROOT/templates/$SKELETON/skeleton.meta"
 
 [ -f "$META" ] || { echo "ERROR: skeleton '$SKELETON' not found" >&2; exit 1; }

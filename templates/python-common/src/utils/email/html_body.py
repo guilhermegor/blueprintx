@@ -33,7 +33,7 @@ else:
         from chassis.typing import type_checker
 
 re_html_tag = re.compile(
-    r"""<(?:br|p)
+    r"""<(?:br|p|div|table|ul|ol|h[1-6])
     (?:[ \t\r\n\f]+[a-z][a-z0-9:_.-]*
         (?:[ \t\r\n\f]*=[ \t\r\n\f]*(?:"[^"]*"|'[^']*'|[^ \t\r\n\f"'=<>`]+))?
     )*
@@ -52,18 +52,18 @@ def to_html_body(str_body: str) -> str:
     is left untouched — the caller composed real markup on purpose, and escaping it would
     show the reader literal angle brackets instead of the formatting it asked for.
 
-    "Looks like HTML" means the body contains a complete ``br`` or ``p`` start tag:
-    ``<br`` or ``<p``, zero or more attributes, optional whitespace, an optional ``/``,
+    "Looks like HTML" means the body contains a complete start tag of ``br``, ``p`` or one
+    of the block-level ``div``, ``table``, ``ul``, ``ol``, ``h1``-``h6``: ``<`` and the tag
+    name, zero or more attributes, optional whitespace, an optional ``/``,
     optional whitespace, then ``>``. An attribute is whitespace and a name
     (``[a-z][a-z0-9:_.-]*``), optionally ``=`` with a double-quoted, single-quoted or
     unquoted value (no whitespace and none of ``"'=<>```). Matching is ASCII and
     case-insensitive. So ``<p class="x">``, ``<p hidden class='a'>`` and ``<br/ >`` count,
-    while ``<bravo>``, ``a<br/b`` and prose like ``<p 0.05`` or ``<p n=30 & x`` (no closing
-    ``>``) do not.
+    while ``<bravo>``, ``<tablex>``, ``<h7>``, ``a<br/b`` and prose like ``<p 0.05`` or
+    ``a <div 3`` (no closing ``>``) do not.
 
-    Only ``br``/``p`` START tags count: ``<div>``/``<b>`` markup without one of them is still
-    escaped, and a body holding only a closing tag (``text</p>``) is not detected either
-    (tracked in blueprintx#701).
+    Only START tags of that allowlist count: ``<span>``/``<b>`` markup without one of them is
+    still escaped, and a body holding only a closing tag (``text</p>``) is not detected either.
 
     ⚠️ Detection is all-or-nothing: ONE detected tag makes the WHOLE body pass through raw.
     Never concatenate untrusted text into a body that carries such a tag — the untrusted

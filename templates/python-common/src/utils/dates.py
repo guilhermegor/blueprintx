@@ -65,12 +65,12 @@ def is_working_day(dt_date: date | datetime) -> bool:
     Parameters
     ----------
     dt_date : datetime.date | datetime.datetime
-            The date to test.
+        The date to test.
 
     Returns
     -------
     bool
-            ``True`` when ``dt_date`` is neither a weekend nor an ANBIMA holiday.
+        ``True`` when ``dt_date`` is neither a weekend nor an ANBIMA holiday.
     """
     return _CLS_CALENDAR.is_working_day(dt_date)
 
@@ -82,12 +82,12 @@ def is_holiday(dt_date: date | datetime) -> bool:
     Parameters
     ----------
     dt_date : datetime.date | datetime.datetime
-            The date to test.
+        The date to test.
 
     Returns
     -------
     bool
-            ``True`` when ``dt_date`` falls on an ANBIMA holiday.
+        ``True`` when ``dt_date`` falls on an ANBIMA holiday.
     """
     return _CLS_CALENDAR.is_holiday(dt_date)
 
@@ -99,14 +99,14 @@ def add_working_days(dt_date: date | datetime, int_days: int) -> date:
     Parameters
     ----------
     dt_date : datetime.date | datetime.datetime
-            The starting date.
+        The starting date.
     int_days : int
-            Number of working days to add (may be negative to go backwards).
+        Number of working days to add (may be negative to go backwards).
 
     Returns
     -------
     datetime.date
-            The resulting business day.
+        The resulting business day.
     """
     return _CLS_CALENDAR.add_working_days(dt_date, int_days)
 
@@ -118,14 +118,14 @@ def delta_working_days(dt_start: date | datetime, dt_end: date | datetime) -> in
     Parameters
     ----------
     dt_start : datetime.date | datetime.datetime
-            Start date (inclusive per wwdates' convention).
+        Start date (inclusive per wwdates' convention).
     dt_end : datetime.date | datetime.datetime
-            End date.
+        End date.
 
     Returns
     -------
     int
-            The number of working days between ``dt_start`` and ``dt_end``.
+        The number of working days between ``dt_start`` and ``dt_end``.
     """
     return _CLS_CALENDAR.delta_working_days(dt_start, dt_end)
 
@@ -137,16 +137,16 @@ def nearest_working_day(dt_date: date | datetime, bool_next: bool = True) -> dat
     Parameters
     ----------
     dt_date : datetime.date | datetime.datetime
-            The reference date.
+        The reference date.
     bool_next : bool, optional
-            When ``True`` (default) roll forward to the next working day; when
-            ``False`` roll back to the previous one.
+        When ``True`` (default) roll forward to the next working day; when
+        ``False`` roll back to the previous one.
 
     Returns
     -------
     datetime.date
-            ``dt_date`` if it is already a working day, else the nearest one in the
-            requested direction.
+        ``dt_date`` if it is already a working day, else the nearest one in the
+        requested direction.
     """
     return _CLS_CALENDAR.nearest_working_day(dt_date, bool_next)
 
@@ -158,7 +158,7 @@ def holidays() -> list[tuple[str, date]]:
     Returns
     -------
     list of tuple of (str, datetime.date)
-            Each holiday's name and date. Read from the package's bundled table — no
-            network call, so this is safe in a test suite and behind a corporate proxy.
+        Each holiday's name and date. Read from the package's bundled table — no
+        network call, so this is safe in a test suite and behind a corporate proxy.
     """
     return _CLS_CALENDAR.holidays()

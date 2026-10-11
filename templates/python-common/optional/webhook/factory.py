@@ -31,17 +31,17 @@ def detect_platform(str_url: str) -> str:
     Parameters
     ----------
     str_url : str
-            The incoming-webhook URL.
+        The incoming-webhook URL.
 
     Returns
     -------
     str
-            The platform key (``"teams"`` or ``"slack"``).
+        The platform key (``"teams"`` or ``"slack"``).
 
     Raises
     ------
     ValueError
-            If no known platform signature matches ``str_url``.
+        If no known platform signature matches ``str_url``.
     """
     str_lower = str_url.lower()
     for str_signature, str_platform in _DICT_PLATFORM_SIGNATURES.items():
@@ -59,18 +59,18 @@ def build_webhook(str_url: str) -> WebhookNotifier:
     Parameters
     ----------
     str_url : str
-            Incoming webhook URL. A blank/whitespace URL opts out and returns a
-            :class:`NullNotifier`.
+        Incoming webhook URL. A blank/whitespace URL opts out and returns a
+        :class:`NullNotifier`.
 
     Returns
     -------
     WebhookNotifier
-            An adapter satisfying the notifier port (or a no-op ``NullNotifier``).
+        An adapter satisfying the notifier port (or a no-op ``NullNotifier``).
 
     Raises
     ------
     ValueError
-            If a non-blank URL matches no known platform signature.
+        If a non-blank URL matches no known platform signature.
 
     Examples
     --------

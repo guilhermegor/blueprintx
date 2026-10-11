@@ -67,6 +67,13 @@ def test_to_html_body_p_tag_with_attributes_is_left_untouched() -> None:
         "a<br/ >b",
         "a<br / >b",
         "<p class='a' id=b>x</p>",
+        "<table><tr><td>x</td></tr></table>",
+        "<div>x</div>",
+        '<div class="a" id=b>x</div>',
+        "<ul><li>x</li></ul>",
+        "<OL>x</OL>",
+        "<h2>x</h2>",
+        "<h6 hidden>x</h6>",
     ],
     ids=[
         "br",
@@ -80,10 +87,17 @@ def test_to_html_body_p_tag_with_attributes_is_left_untouched() -> None:
         "br-slash-space",
         "br-space-slash-space",
         "p-mixed-quotes",
+        "table-only",
+        "div-only",
+        "div-attributes",
+        "ul-only",
+        "ol-upper",
+        "h2-only",
+        "h6-boolean-attribute",
     ],
 )
 def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
-    """A well-formed ``<br>``/``<p>`` start tag, with any attributes, is returned unchanged.
+    """A well-formed ``<br>``/``<p>``/block-level start tag is returned unchanged.
 
     Parameters
     ----------
@@ -110,6 +124,14 @@ def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
         ("a<p/b", "a&lt;p/b"),
         ("a<br/b", "a&lt;br/b"),
         ("<p \u212a=1>", "&lt;p \u212a=1&gt;"),
+        ("a <div 3", "a &lt;div 3"),
+        ("x <tablex>", "x &lt;tablex&gt;"),
+        ("<h7>", "&lt;h7&gt;"),
+        ("<h10>", "&lt;h10&gt;"),
+        ("<ulx>", "&lt;ulx&gt;"),
+        ("<ol3>", "&lt;ol3&gt;"),
+        ("a <table n=30 & x", "a &lt;table n=30 &amp; x"),
+        ("a<div/b", "a&lt;div/b"),
     ],
     ids=[
         "pre",
@@ -123,17 +145,25 @@ def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
         "p-slash-prose",
         "br-slash-prose",
         "kelvin-sign",
+        "div-prose",
+        "table-lookalike",
+        "h7",
+        "h10",
+        "ul-lookalike",
+        "ol-lookalike",
+        "table-name-value-prose",
+        "div-slash-prose",
     ],
 )
 def test_to_html_body_tag_lookalike_is_escaped_as_plain_text_literal(
     str_text: str, str_expected: str
 ) -> None:
-    """Should-fail witness: ``<br``/``<p`` not shaped like a tag is plain text, escaped.
+    """Should-fail witness: ``<br``/``<p``/block-tag text not shaped like a tag is escaped.
 
     Parameters
     ----------
     str_text : str
-            Plain text that merely contains ``<br`` or ``<p``.
+            Plain text that merely contains ``<br``, ``<p`` or a block-tag name.
     str_expected : str
             The exact escaped output.
     """
