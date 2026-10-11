@@ -275,6 +275,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(scaffold_kanban|common)\.sh|bin/lib/scaffold_git_remote\.sh|tests/test_scaffold_kanban\.sh)$
 
+      - id: scaffold-git-remote-tests
+        name: scaffold git-remote secret-before-push should-fail tests (blueprintx#732)
+        entry: bash tests/test_scaffold_git_remote.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/(scaffold_git_remote|common)\.sh|tests/test_scaffold_git_remote\.sh)$
+
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)
         entry: bash bin/ci/check_specs_structure.sh --root .

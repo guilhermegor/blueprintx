@@ -449,6 +449,9 @@ jobs:
       - name: Run the kanban should-fail suite (blueprintx#592)
         run: bash tests/test_scaffold_kanban.sh
 
+      - name: Run the scaffold git-remote should-fail suite (blueprintx#732)
+        run: bash tests/test_scaffold_git_remote.sh
+
   specs-structure:
     name: .specs/ structure guard
     runs-on: ubuntu-latest
