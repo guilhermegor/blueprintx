@@ -56,6 +56,7 @@ import sys
 _PROVENANCE_FILENAME = ".blueprintx-provenance.yaml"
 _SCAFFOLD_LIB_RELPATH = pathlib.Path("bin/lib/scaffold_python_templates.sh")
 _COMMON_TEMPLATE_RELPATH = pathlib.Path("templates/python-common")
+_TIERS_OUTSIDE_SHARED_LIB = frozenset({"lib-minimal"})
 
 # One regex for every `cp [flags] SRC DST` the scaffold lib uses. SRC is rooted at
 # `$COMMON_TEMPLATE_ROOT` / `$SHARED_TEMPLATE_ROOT` (braced or not), DST at `$str_project_path`.
@@ -394,6 +395,14 @@ def main(list_argv: list) -> int:
             f"SKIPPED: tier is '{str_tier}' but no BlueprintX checkout is available to compare "
             f"against — pass --blueprintx-root or set BLUEPRINTX_TEMPLATE_ROOT. This run proves "
             f"nothing about drift."
+        )
+        return 0
+
+    if str_tier in _TIERS_OUTSIDE_SHARED_LIB:
+        print(
+            f"SKIPPED: tier '{str_tier}' copies files through its own scaffold script, not "
+            f"{_SCAFFOLD_LIB_RELPATH}, so there is no required list to compare against. This "
+            f"run proves nothing about drift."
         )
         return 0
 

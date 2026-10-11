@@ -624,12 +624,16 @@ lib_minimal_copy_project_scaffolding() {
 lib_minimal_stamp_provenance() {
     local project_path="$1"
 
-    local str_version
-    str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null \
-		|| sed -n 's/^BLUEPRINTX_VERSION="\(.*\)"$/\1/p' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" 2>/dev/null \
-		|| echo unknown)"
-    local str_commit
-    str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+    local str_version=""
+    local str_commit=unknown
+    # Only trust git when BLUEPRINTX_ROOT is itself a checkout: git -C walks UP, so a packaged
+    # install under an unrelated repo (e.g. Homebrew's) would stamp that repo's tag.
+    if [[ -e "$BLUEPRINTX_ROOT/.git" ]]; then
+        str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || true)"
+        str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+    fi
+    [[ -n "$str_version" ]] || str_version="$(sed -n 's/^BLUEPRINTX_VERSION="\(.*\)"$/\1/p' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" 2>/dev/null || true)"
+    [[ -n "$str_version" ]] || str_version=unknown
     local str_scaffolded_at
     str_scaffolded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 

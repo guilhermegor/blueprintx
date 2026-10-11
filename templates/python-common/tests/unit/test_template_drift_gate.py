@@ -111,7 +111,7 @@ def test_the_conditional_destination_is_reported_as_conditional(tmp_path: Path) 
 def test_provenance_records_the_roster_choice(tmp_path: Path) -> None:
     """The stamp is what lets the checker recover an opt-out instead of guessing."""
     (tmp_path / gate._PROVENANCE_FILENAME).write_text(
-        "tier: lib-minimal\nreview_bot_roster: false\n", encoding="utf-8"
+        "tier: mvc-service-native-db\nreview_bot_roster: false\n", encoding="utf-8"
     )
 
     assert gate.review_bot_roster_enabled(tmp_path) is False
@@ -119,7 +119,9 @@ def test_provenance_records_the_roster_choice(tmp_path: Path) -> None:
 
 def test_a_project_predating_the_stamp_reads_as_unknown(tmp_path: Path) -> None:
     """`None`, never `False` — the caller must not assume either answer for old projects."""
-    (tmp_path / gate._PROVENANCE_FILENAME).write_text("tier: lib-minimal\n", encoding="utf-8")
+    (tmp_path / gate._PROVENANCE_FILENAME).write_text(
+        "tier: mvc-service-native-db\n", encoding="utf-8"
+    )
 
     assert gate.review_bot_roster_enabled(tmp_path) is None
 
@@ -153,7 +155,7 @@ def test_roster_opt_in_against_a_checkout_without_the_lib_skips_instead_of_crash
     path_project = tmp_path / "project"
     path_project.mkdir()
     (path_project / gate._PROVENANCE_FILENAME).write_text(
-        "tier: lib-minimal\nreview_bot_roster: true\n", encoding="utf-8"
+        "tier: mvc-service-native-db\nreview_bot_roster: true\n", encoding="utf-8"
     )
     path_empty_checkout = tmp_path / "checkout"
     path_empty_checkout.mkdir()
@@ -282,3 +284,22 @@ def test_a_flag_without_a_value_fails_loudly() -> None:
 def test_a_one_line_if_with_a_trailing_tail_is_still_one_line(str_line: str) -> None:
     """A trailing comment or `;`/`||` after `fi` must not leave the block looking open."""
     assert gate._line_kind(str_line) == "oneline"
+
+
+def test_a_tier_outside_the_shared_lib_is_skipped_loudly(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """lib-minimal has its own copy list; comparing it to the service-tier list is a false flood.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Pytest temp dir used as the project root.
+    capsys : pytest.CaptureFixture
+        Captures the printed report.
+    """
+    (tmp_path / gate._PROVENANCE_FILENAME).write_text("tier: lib-minimal\n", encoding="utf-8")
+
+    gate.main(["--root", str(tmp_path), "--blueprintx-root", str(tmp_path)])
+
+    assert "SKIPPED" in capsys.readouterr().out
