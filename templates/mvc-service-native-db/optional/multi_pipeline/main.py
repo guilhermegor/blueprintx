@@ -47,7 +47,7 @@ STR_INTENT = resolve_intent(raw_intent(sys.argv, os.getenv("PIPELINE_INTENT", "s
 
 build_pipeline(
     STR_INTENT,
-    logger=LOGGER,
+    cls_logger=LOGGER,
     fn_build_connection=build_connection,
     fn_output_path=output_path,
     path_json=PATH_JSON,
