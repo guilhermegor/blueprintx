@@ -1,65 +1,36 @@
-r"""Bound comment volume, with quality-assurance suppression pragmas exempt.
+"""Refuse comments: zero tolerance outside an allowlist, enforced as a ratchet.
 
-Owner's ruling (2026-08-28): a comment worth keeping is short enough to sit at its
-call site; an explanation longer than that was always documentation wearing comment
-syntax and belongs in ``docs/``, ``README.md`` or ``CONTRIBUTING.md``, with **one**
-line left behind naming the decision and pointing at where the reasoning lives —
-e.g. ``# ROUND_DOWN by contract; see docs/decisions/money.md``.
+Owner's ruling (blueprintx#304, 2026-10-11): comments rot, so the tree carries none
+except machine-read forms (``noqa``, ``type: ignore``, ``*-ok: <reason>`` markers,
+shebangs, linter directives; the full list is ``comment_budget_allowlist.txt``). An
+explanation worth keeping lives in ``docs/``, ``README.md`` or ``CONTRIBUTING.md``
+and leaves **nothing** at the code site, not even a pointer.
 
-Two independent, differently-decidable defects (blueprintx#303), never conflated:
+Three independent checks, never conflated:
 
-1. **The essay block** — a long run of consecutive comment lines. Bounded by
-   RUN LENGTH, not by ratio: a config file explaining every setting on its own
-   line is good and scores badly on density; one 80-line block above a single
-   ``on:`` is bad and can score the same. The metric the owner is actually
-   describing is the block, not how dense the file reads overall.
-2. **The decorative banner** — a comment whose content is only punctuation
-   (``# -------``), or a one-line comment sandwiched between two such rules
-   (``# ----`` / ``# LINTING`` / ``# ----``). Trivially decidable by regex, and
-   always a defect: the rule adds nothing and the middle line restates what the
-   code directly beneath it already says.
+1. **The ratchet** (``comment_budget_baseline.txt`` at the root, ``<count> <path>``).
+   Every non-allowlisted comment line counts. A file above its baseline fails; a file
+   absent from the baseline has a baseline of 0, so a new file carries no comments; a
+   file BELOW its baseline fails too ("lower it"), so the number only ever goes down
+   and each sweep PR must record its win. ``--write-baseline`` regenerates the file.
+   Without a baseline file the ratchet is off and only checks 2 and 3 run, which is
+   how a generated project behaves until the shipped templates are themselves swept.
+2. **The essay block**: a run of consecutive comment lines longer than ``INT_MAX_RUN``.
+3. **The decorative banner**: a comment of only punctuation (``# -------``), or a
+   one-line comment between two such rules.
 
-A third shape — a comment paraphrasing the identifier on the next line — is real
-noise but is NOT decidable by a machine, so it is deliberately absent here; per
-this repo's own routing rule (a decidable question is a gate, a judgment call is a
-review skill), that shape belongs to a review skill, never to this file.
+Comments come from ``tokenize`` for Python (a ``#`` inside a string is never one, and
+docstrings are not comments) and from line-start markers for ``#`` and ``//`` file
+types. Trailing comments in non-Python files and ``/* */`` blocks are not seen, and
+markdown is not scanned at all, so the ``<!-- -->`` template instructions are out of
+scope by construction.
 
-QUALITY-ASSURANCE SUPPRESSIONS ARE NOT COMMENTS IN THE SENSE BEING BOUNDED. A
-``# noqa``, a ``# type: ignore``, a ``# complexity-ok: <reason>`` is machine-read
-configuration that happens to live in comment syntax — it must never count toward
-a run, never be flagged as a banner, and never be stripped. Read from a DATA FILE
-(``comment_budget_allowlist.txt``, beside this script) rather than a literal in the
-parser, so adding a newly-adopted tool's pragma is a one-line data change that
-needs no review of this file. The allowlist is ANTICIPATORY — built from every
-pragma form the toolchain can emit, not from what the tree happens to contain
-today (see the data file's own header for the ``codespell:ignore`` worked example).
+A pragma or structural line (shebang, coding cookie) is never counted and BREAKS a
+run rather than extending it. The allowlist is a data file of substrings, anticipatory
+rather than a census. Escape hatch for checks 2 and 3 only:
+``# comment-budget-ok: <reason>``; it never exempts a comment from the ratchet.
 
-Structural exemptions — shebang and PEP 263 encoding declarations — are handled
-here directly, because they are positional (line 1 or 2), not textual; SPDX
-headers and generated-file banners are textual and live in the same allowlist.
-
-THE CEILING IS A STATED RATCHET, not a zero-violation number (blueprintx#168/PR
-#295: a threshold must name which criterion set it). Measured on this tree
-2026-08-28: the worst block was 80 lines (a workflow's header comment); ``INT_MAX_RUN``
-is set just above that, so today's tree has zero run-length violations and the
-number is honest about being lenient rather than quietly permissive. Tightening it
-is the follow-up sweep, blueprintx#304 — deliberately out of scope here, since it
-touches ~90% of the tree's comment lines and would collide with everything else
-open. The DECORATIVE BANNER check carries no such ratchet: it is unconditionally a
-defect, and this PR fixes the ones it finds in BlueprintX's own tree rather than
-deferring them, because removing a banner is a strict subtraction with nothing to
-move to ``docs/``.
-
-Escape hatch: ``# comment-budget-ok: <reason>`` anywhere in a flagged block, reason
-required — a bare marker does not exempt it, exactly like ``# complexity-ok:``.
-
-⚠️ **The calibration IS the deliverable.** ``check_comment_language.py``'s first
-draft reported 19 findings, 18 false. Every rule here — pragma lines break a run
-rather than extending it; python comments come from ``tokenize`` so a ``#`` inside
-a string is never mistaken for one; docstrings are excluded from the python count,
-matching the issue's own measured table — is pinned by a named test in
-``tests/unit/test_comment_budget_gate.py``. Do not "simplify" one away without
-re-running it.
+Every rule is pinned by a named test in ``tests/unit/test_comment_budget_gate.py``.
 """
 
 import pathlib
@@ -120,6 +91,8 @@ TUPLE_SKIP_DIRS = (
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PATH_ALLOWLIST = pathlib.Path(__file__).resolve().parent / "comment_budget_allowlist.txt"
+STR_BASELINE_NAME = "comment_budget_baseline.txt"
+STR_WRITE_BASELINE = "--write-baseline"
 
 # PEP 263 — a `# -*- coding: utf-8 -*-` line is metadata, not prose, and only
 # ever appears on line 1 or 2.
@@ -521,7 +494,7 @@ def file_problems(path_file: pathlib.Path) -> list:
             list_problems.append(
                 f"{str_shown}:{int_start}: comment block is {int_length} lines "
                 f"(max {INT_MAX_RUN}) — move the explanation to docs/, README.md or "
-                f"CONTRIBUTING.md, leave one line pointing at it; escape hatch: "
+                f"CONTRIBUTING.md and delete the comment; escape hatch: "
                 f"# {STR_ESCAPE} <reason>"
             )
         if not bool_hatched:
@@ -565,32 +538,187 @@ def audit_paths() -> list:
     return sorted(set(list_paths))
 
 
+def comment_line_count(path_file: pathlib.Path) -> int:
+    """Count the non-allowlisted comment lines in one file.
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The file to count. An unsupported or unreadable file counts 0.
+
+    Returns
+    -------
+    int
+        Comment lines outside the allowlist; docstrings and pragmas excluded.
+    """
+    str_marker = marker_for(path_file)
+    if not str_marker:
+        return 0
+    try:
+        str_source = path_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return 0
+    list_blocks = (
+        python_blocks(str_source)
+        if path_file.suffix == ".py"
+        else marker_blocks(str_source, str_marker)
+    )
+    return sum(len(list_lines) for _, list_lines in list_blocks)
+
+
+def shown_path(path_file: pathlib.Path) -> str:
+    """Return the root-relative POSIX path a baseline row is keyed by.
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        A file under ``PATH_ROOT``.
+
+    Returns
+    -------
+    str
+        The relative path, or the path as given when it lies outside the root.
+    """
+    try:
+        return path_file.relative_to(PATH_ROOT).as_posix()
+    except ValueError:
+        return path_file.as_posix()
+
+
+def load_baseline() -> dict | None:
+    """Read ``comment_budget_baseline.txt`` from the audit root.
+
+    Returns
+    -------
+    dict or None
+        ``{relative_path: count}``, or None when the file is absent (ratchet off).
+    """
+    path_baseline = PATH_ROOT / STR_BASELINE_NAME
+    if not path_baseline.is_file():
+        return None
+    dict_out = {}
+    for str_line in path_baseline.read_text(encoding="utf-8").splitlines():
+        if str_line.strip():
+            str_count, str_path = str_line.split(" ", 1)
+            dict_out[str_path] = int(str_count)
+    return dict_out
+
+
+def current_counts(list_paths: list) -> dict:
+    """Return ``{relative_path: count}`` for every file with at least one comment.
+
+    Parameters
+    ----------
+    list_paths : list of pathlib.Path
+        Files to count.
+
+    Returns
+    -------
+    dict
+        Only files with a non-zero count, so absence means 0.
+    """
+    dict_counts = {
+        shown_path(path_file): comment_line_count(path_file) for path_file in list_paths
+    }
+    return {str_path: int_n for str_path, int_n in dict_counts.items() if int_n}
+
+
+def ratchet_problems(dict_counts: dict, dict_baseline: dict, set_scope: set | None) -> list:
+    """Compare counts with the baseline in both directions.
+
+    Parameters
+    ----------
+    dict_counts : dict
+        Current ``{path: count}``, non-zero only.
+    dict_baseline : dict
+        Recorded ``{path: count}``.
+    set_scope : set of str or None
+        Paths being checked; None means the whole tree (so a vanished file is stale).
+
+    Returns
+    -------
+    list of str
+        One finding per file above its baseline, and one per file below it.
+    """
+    list_problems = []
+    for str_path in sorted(set(dict_counts) | set(dict_baseline)):
+        if set_scope is not None and str_path not in set_scope:
+            continue
+        int_now = dict_counts.get(str_path, 0)
+        int_was = dict_baseline.get(str_path, 0)
+        if int_now > int_was:
+            list_problems.append(
+                f"{str_path}: {int_now} comment line(s), baseline {int_was} - comments are not "
+                f"allowed here; delete them and move any explanation to docs/"
+            )
+        elif int_now < int_was:
+            list_problems.append(
+                f"{str_path}: {int_now} comment line(s), baseline {int_was} - stale baseline, "
+                f"lower it with --write-baseline"
+            )
+    return list_problems
+
+
+def write_baseline(dict_counts: dict) -> None:
+    """Write the baseline file at the audit root, sorted by path.
+
+    Parameters
+    ----------
+    dict_counts : dict
+        ``{relative_path: count}`` to record.
+    """
+    str_rows = "".join(f"{int_n} {str_path}\n" for str_path, int_n in sorted(dict_counts.items()))
+    (PATH_ROOT / STR_BASELINE_NAME).write_text(str_rows, encoding="utf-8")
+    print(f"wrote {len(dict_counts)} file(s), {sum(dict_counts.values())} comment line(s)")
+
+
 # `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
 _INT_FLAG_WITH_VALUE = 2
 
 
+def apply_root_flag(list_argv: list) -> list | None:
+    """Consume a leading ``--root <dir>`` and repoint ``PATH_ROOT`` at it.
+
+    Parameters
+    ----------
+    list_argv : list of str
+        Raw arguments.
+
+    Returns
+    -------
+    list or None
+        The remaining arguments, or None when ``--root`` has no value.
+    """
+    global PATH_ROOT  # noqa: PLW0603 -- see check_function_length.py for the same accepted pattern
+    if list_argv[:1] != ["--root"]:
+        return list_argv
+    if len(list_argv) < _INT_FLAG_WITH_VALUE:
+        return None
+    PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
+    return list_argv[2:]
+
+
 def main(list_argv: list) -> int:
-    """Check every named file for an over-long comment run or a decorative banner.
+    """Check comments: ratchet against the baseline, long runs, decorative banners.
 
     Parameters
     ----------
     list_argv : list of str
         Filenames, as pre-commit passes them. Empty means audit the whole
-        repository; ``--root <dir>`` (first, like the other `--root`-enabled
-        gates) repoints the audit and every relative-path display.
+        repository. ``--root <dir>`` (first) repoints the audit; ``--write-baseline``
+        regenerates ``comment_budget_baseline.txt`` instead of checking.
 
     Returns
     -------
     int
-        0 when every file is clean, 1 on a violation.
+        0 when everything is clean, 1 on a violation.
     """
-    global PATH_ROOT  # noqa: PLW0603 -- see check_function_length.py for the same accepted pattern
-    if list_argv[:1] == ["--root"]:
-        if len(list_argv) < _INT_FLAG_WITH_VALUE:
-            print("❌ --root needs a directory")
-            return 1
-        PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
-        list_argv = list_argv[2:]
+    list_rest = apply_root_flag(list_argv)
+    if list_rest is None:
+        print("❌ --root needs a directory")
+        return 1
+    bool_write = STR_WRITE_BASELINE in list_rest
+    list_argv = [str_arg for str_arg in list_rest if str_arg != STR_WRITE_BASELINE]
 
     bool_audit = not list_argv
     list_paths = (
@@ -608,7 +736,17 @@ def main(list_argv: list) -> int:
         )
         return 1
 
+    if bool_write:
+        write_baseline(current_counts(list_paths))
+        return 0
+
     list_problems = []
+    dict_baseline = load_baseline()
+    if dict_baseline is not None:
+        set_scope = None if bool_audit else {shown_path(path_file) for path_file in list_paths}
+        list_problems.extend(
+            ratchet_problems(current_counts(list_paths), dict_baseline, set_scope)
+        )
     for path_file in list_paths:
         list_problems.extend(file_problems(path_file))
     for str_problem in list_problems:
@@ -619,10 +757,10 @@ def main(list_argv: list) -> int:
         return 0
 
     print(
-        f"\n{len(list_problems)} finding(s). A long block: move it to docs/, README.md or "
-        f"CONTRIBUTING.md and leave one line pointing at it. A decorative banner: delete it. "
-        f"Never touch a QA suppression — noqa, type: ignore, complexity-ok and friends are exempt "
-        f"by design (see comment_budget_allowlist.txt)."
+        f"\n{len(list_problems)} finding(s). Delete the comment and put any explanation in "
+        f"docs/, README.md or CONTRIBUTING.md; leave nothing behind. A stale baseline is "
+        f"lowered with --write-baseline. QA suppressions (noqa, type: ignore, *-ok: markers) "
+        f"are exempt by design (see comment_budget_allowlist.txt)."
     )
     return 1
 

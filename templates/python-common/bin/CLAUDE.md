@@ -186,7 +186,7 @@ main() {
 main "$@"
 ```
 
-### A comment about the FUNCTION goes above the `def`/`name()`, not inside it
+### Explanatory comments do not count toward the function budget because there are none
 
 `bin/check_function_length.py` caps a function at **60 lines of code** and subtracts the
 **docstring** — and nothing else. Every explanatory comment inside the body counts. In a
@@ -196,9 +196,9 @@ rejects it — and the reflex fix is to delete the reasoning, which is the one t
 keeping.
 
 So: anything explaining a **policy**, a **supersede**, a measured **trade-off**, or why a
-whole approach was rejected is a comment about the function — hoist it above the
-signature. Leave a one-line pointer inline (`# … — see the OUTDATED block above the
-function`). A comment about the **next statement** stays where it is.
+whole approach was rejected belongs in `docs/` or the function's docstring (which the
+budget subtracts). Delete the comment and leave no pointer: `check_comment_budget.py`
+(blueprintx#304) refuses both a hoisted block and a one-line pointer.
 
 Measured (blueprintx#264): `find_thread_problems` hit 62 lines and `main` 63 with **no
 logic change** in either — comments alone. Both fell well under after hoisting, and no

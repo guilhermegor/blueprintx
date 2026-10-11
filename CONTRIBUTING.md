@@ -146,9 +146,10 @@ happening silently:
    house rule**.
 2. **These decisions live in `README.md` / `CONTRIBUTING.md` / `docs/`, never as a code
    comment.** The one exception is a QA-suppression comment (`noqa`, `complexity-ok`,
-   `type: ignore`, `codespell:ignore` — blueprintx#303 exempts these explicitly). A config file
-   (`ruff.toml`, `eslint.config.js`) may carry the rule line plus a short pointer comment; the
-   long justification belongs in the docs, not inline.
+   `type: ignore`, `codespell:ignore` — blueprintx#303 exempts these explicitly). No pointer is
+   left behind either: every comment rots, so `check_comment_budget.py` refuses any comment
+   outside `comment_budget_allowlist.txt`, ratcheted down from `comment_budget_baseline.txt`
+   (blueprintx#304).
 
 **The rules themselves live in `quality-rules.yaml` at the repo root** (blueprintx#432) — one
 entry per rule, with its per-language `tool`/`rule` (or an explicit `status: not-implemented` /
@@ -370,8 +371,8 @@ annotated tag), never from memory or another repo's copy.
 
 ## Ruff Rule Adoption Log
 
-`templates/python-common/ruff.toml` only carries a short pointer comment beside each
-rule-set entry in `[lint].select` — the full measurement and, where a rule needed a
+`templates/python-common/ruff.toml` carries no comment beside the
+rule-set entries in `[lint].select`; the full measurement and, where a rule needed a
 case-by-case call, the reasoning for each finding lives here.
 
 ### `RET` (flake8-return) — blueprintx#426

@@ -673,3 +673,259 @@ def test_a_clean_tree_reports_the_file_count_on_success(
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
     gate.main([])
     assert "✅ comment budget OK (1 file" in capsys.readouterr().out
+
+
+# --------------------------
+# Zero tolerance with a ratchet (blueprintx#304)
+# --------------------------
+
+
+_PATH_REPO = Path(__file__).resolve().parents[4]
+
+
+def _run(path_root: Path, capsys: pytest.CaptureFixture, *list_args: str) -> tuple:
+    """Run the gate over ``path_root`` and return ``(exit_code, stdout)``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The tree to audit.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    *list_args : str
+        Extra flags after ``--root``.
+
+    Returns
+    -------
+    tuple
+        The exit code and everything printed.
+    """
+    int_code = gate.main(["--root", str(path_root), *list_args])
+    return int_code, capsys.readouterr().out
+
+
+def _tree(path_root: Path, str_text: str, str_baseline: str = "") -> None:
+    """Write ``a.py`` and a baseline file under ``path_root``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Tree root.
+    str_text : str
+        Content of ``a.py``.
+    str_baseline : str, optional
+        Baseline file text; an empty string still creates the file (ratchet on).
+    """
+    (path_root / "a.py").write_text(str_text, encoding="utf-8")
+    (path_root / gate.STR_BASELINE_NAME).write_text(str_baseline, encoding="utf-8")
+
+
+def test_a_new_file_with_one_prose_comment_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: a file absent from the baseline has a baseline of 0.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# why this exists\nX = 1\n")
+    int_code, str_out = _run(tmp_path, capsys)
+    assert (int_code, "a.py: 1 comment line(s), baseline 0" in str_out) == (1, True)
+
+
+def test_a_file_above_its_baseline_fails(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Should-fail witness: one comment more than the recorded count is a finding.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\n# two\nX = 1\n", "1 a.py\n")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_a_file_below_its_baseline_is_a_stale_baseline(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: removing a comment without lowering the baseline fails.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "3 a.py\n")
+    int_code, str_out = _run(tmp_path, capsys)
+    assert (int_code, "stale baseline" in str_out) == (1, True)
+
+
+def test_a_vanished_file_with_a_baseline_row_is_stale(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A deleted file's row must be removed, or the ratchet would never reach zero.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "X = 1\n", "2 gone.py\n")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_a_file_at_its_baseline_passes(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Exactly the recorded count is clean.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "1 a.py\n")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_without_a_baseline_file_the_ratchet_is_off(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A generated project ships no baseline, so a short comment is not a finding yet.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "a.py").write_text("# one\nX = 1\n", encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_write_baseline_records_counts_and_then_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """``--write-baseline`` regenerates the file and the next run is green.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "b.py").write_text("X = 1\n", encoding="utf-8")
+    _tree(tmp_path, "# one\n# two\nX = 1\n")
+    _run(tmp_path, capsys, "--write-baseline")
+    str_written = (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")
+    assert (str_written, _run(tmp_path, capsys)[0]) == ("2 a.py\n", 0)
+
+
+def test_docstrings_are_not_counted(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """A docstring is documentation, so a new file may carry one.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, '"""Module doc."""\n\n\ndef f() -> None:\n\t"""Doc."""\n')
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+_DICT_ALLOWED = {
+    "noqa": "X = 1  # noqa: E501\n",
+    "type_ignore": "X = 1  # type: ignore[assignment]\n",
+    "pragma": "X = 1  # pragma: no cover\n",
+    "pyright": "# pyright: basic\nX = 1\n",
+    "mypy": "# mypy: ignore-errors\nX = 1\n",
+    "ok_marker": "# complexity-ok: parser branches\nX = 1\n",
+    "one_assert_ok": "# one-assert-ok: table-driven\nX = 1\n",
+    "pairing": "# pairing:internal\nX = 1\n",
+    "pipeline_mode": "# pipeline-mode: single\nX = 1\n",
+    "shellcheck_disable": "# shellcheck disable=SC2086\nX=1\n",
+    "shellcheck_source": "# shellcheck source=lib/common.sh\nX=1\n",
+    "shellcheck_shell": "# shellcheck shell=bash\nX=1\n",
+    "codespell": "# codespell:ignore teh\nX=1\n",
+    "markdownlint": "# markdownlint-disable MD013\nX=1\n",
+    "eslint": "// eslint-disable-next-line no-console\nconst x = 1;\n",
+    "stylelint": "// stylelint-disable\nconst x = 1;\n",
+    "prettier": "// prettier-ignore\nconst x = 1;\n",
+    "ts_expect": "// @ts-expect-error legacy\nconst x = 1;\n",
+    "ts_ignore": "// @ts-ignore\nconst x = 1;\n",
+    "hadolint": "# hadolint ignore=DL3008\nX=1\n",
+    "shebang": "#!/usr/bin/env bash\nX=1\n",
+    "syntax": "# syntax=docker/dockerfile:1\nX=1\n",
+    "coding": "# -*- coding: utf-8 -*-\nX = 1\n",
+    "sha_pin_version": "uses: actions/checkout@" + "a" * 40 + " # v7.0.1\n",
+    "provenance": "# Written by BlueprintX at scaffold time - do not edit by hand.\nX: 1\n",
+}
+_DICT_SUFFIX = {
+    "eslint": ".ts",
+    "stylelint": ".ts",
+    "prettier": ".ts",
+    "ts_expect": ".ts",
+    "ts_ignore": ".ts",
+    "sha_pin_version": ".yaml",
+    "provenance": ".yaml",
+    "shellcheck_disable": ".sh",
+    "shellcheck_source": ".sh",
+    "shellcheck_shell": ".sh",
+    "hadolint": ".sh",
+    "shebang": ".sh",
+    "syntax": ".sh",
+    "markdownlint": ".sh",
+    "codespell": ".sh",
+    "pairing": ".mk",
+}
+
+
+@pytest.mark.parametrize("str_form", sorted(_DICT_ALLOWED))
+def test_each_allowlisted_form_is_not_counted(
+    str_form: str, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Every agreed keep-list form passes in a new file against an empty baseline.
+
+    Parameters
+    ----------
+    str_form : str
+        Key into ``_DICT_ALLOWED``.
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    str_name = "probe" + _DICT_SUFFIX.get(str_form, ".py")
+    _tree(tmp_path, "")
+    (tmp_path / str_name).write_text(_DICT_ALLOWED[str_form], encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+@pytest.mark.skipif(
+    not (_PATH_REPO / gate.STR_BASELINE_NAME).is_file(), reason="not the BlueprintX root"
+)
+def test_the_current_tree_passes_against_the_committed_baseline(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """The committed baseline matches the tree it was generated from.
+
+    Parameters
+    ----------
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    assert _run(_PATH_REPO, capsys)[0] == 0
