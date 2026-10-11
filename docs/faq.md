@@ -54,7 +54,7 @@ after the head commit, and come from an `OWNER`, `MEMBER` or `COLLABORATOR` (Git
 `authorAssociation`), so an outside commenter cannot forge it. A comment posted by a GitHub App reports `NONE` and
 is rejected, so post the marker with the owner's own token. The row has no `login:` and is
 ignored when absent. The comment must also contain the line `0 finding(s) across N reviewed file(s).`; a count above zero, or no such line, fails closed, so a ladder review with findings never satisfies the gate on its own (blueprintx#630). Like a clean-review notice, it proves a review ran, never that a thread was
-answered. The workflow needs the `issue_comment` trigger to re-run on that comment. The Python roster
+answered. The workflow needs the `issue_comment` trigger to re-run on that comment (created, edited or deleted). A run triggered by a comment reports on the default branch's head, not the PR's, so a red "Review threads answered" on `main`'s tip after such a comment is that run's own verdict, not a broken `main`; the PR's check is refreshed by the stale-run step. The Python roster
 (`templates/python-common/.review-bots.yaml`) and the TypeScript one
 (`templates/ts-common/.github/.review-bots.yaml`, workflow `review-threads.yml`) both ship the row and the trigger. See
 blueprintx#593.

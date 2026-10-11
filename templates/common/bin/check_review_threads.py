@@ -1121,7 +1121,7 @@ def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
     -------
     tuple of str
             Lower-cased marker strings; empty when the file, the key or the row is absent, so a
-            roster without the row behaves exactly as before. Rationale: docs/faq.md.
+            roster without the row behaves exactly as before.
     """
     path_roster = path_root / _ROSTER_FILE
     if yaml is None or not path_roster.is_file():
@@ -1130,7 +1130,8 @@ def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
     return tuple(
         str(d["marker"]).strip().casefold()
         for d in (dict_yaml.get("reviewers") or [])
-        if d.get("kind") == _KIND_COMMENT_MARKER and str(d.get("marker") or "").strip()
+        if isinstance(d, dict)
+        and d.get("kind") == _KIND_COMMENT_MARKER and str(d.get("marker") or "").strip()
     )
 
 
@@ -1450,7 +1451,7 @@ def find_thread_problems(
     return list_problems
 
 
-# A review BODY carries findings the thread count cannot see (blueprintx#630, docs/faq.md).
+# A review BODY carries findings the thread count cannot see (blueprintx#630).
 _STR_SEVERITY = r"critical|major|minor|blocker"
 # Nitpick and Trivial are deliberately absent: optional by definition, so they need no reply.
 # A marker counts only at the START of a line (after a list marker), as bold or a bracket, so
@@ -1467,7 +1468,7 @@ _RE_BODY_COUNT = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 _RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
-# A review declares itself by structure (docs/faq.md, "How the gate classifies"): a heading, a
+# A review declares itself by structure: a heading, a
 # bullet or a bold label that starts with "Review" or "Finding(s)". Ambiguity counts as a review.
 _RE_BODY_REVIEW_LINE = re.compile(
     r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b"
@@ -1520,7 +1521,7 @@ _RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*
 
 # Count authority belongs to the AUTHOR, never to the body's shape: any body can print any header.
 # The roster carries no per-format data, so the two authors whose counts this gate trusts are
-# named here (docs/faq.md). Any other author's counts are ignored and its body is read by
+# named here. Any other author's counts are ignored and its body is read by
 # structure alone, which fails closed.
 _SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
 _SET_LADDER_AUTHORS = frozenset({"guilhermegor-review-ladder"})
@@ -1710,7 +1711,7 @@ def find_review_body_problems(
     posted after the latest findings body therefore answers all earlier ones; a reply must
     postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
     maintainer's explicit answer. A roster issue comment that is shaped like a review counts as
-    one, since some ladder rungs post that way (docs/faq.md, "How the gate classifies").
+    one, since some ladder rungs post that way.
 
     Parameters
     ----------

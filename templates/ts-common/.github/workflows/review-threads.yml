@@ -40,7 +40,7 @@ on:
   pull_request_review_comment:
   # A clean review and a ladder fallback review arrive only as issue comments (docs/faq.md).
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
 
 permissions:
   contents: read

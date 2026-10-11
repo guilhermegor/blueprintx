@@ -2516,6 +2516,15 @@ def test_load_comment_markers_skips_a_row_without_a_marker(tmp_path: Path, str_r
     assert _load_gate().load_comment_markers(tmp_path) == ()
 
 
+def test_load_comment_markers_ignores_a_scalar_reviewer_row(tmp_path: Path) -> None:
+    """A bare-string reviewers entry is skipped, never an AttributeError."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - coderabbitai[bot]\n  - kind: comment-marker\n    marker: m\n",
+        encoding="utf-8",
+    )
+    assert _load_gate().load_comment_markers(tmp_path) == ("m",)
+
+
 def test_load_roster_ignores_the_marker_row(path_marker_root: Path) -> None:
     """A marker row has no login, so the login roster is untouched."""
     assert _load_gate().load_roster(path_marker_root) == {"coderabbitai": "threads"}
