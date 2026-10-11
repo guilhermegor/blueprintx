@@ -193,7 +193,8 @@ comparison stops there. Reviewed commits are tried newest first and at most five
 (`_INT_MAX_REVIEWED_COMMITS`: a PR reviewed at more commits than that is simply re-reviewed),
 so a PR makes at most six compare calls. The retarget check below reads the same GraphQL
 response as the reviews, so it adds no call of its own; a test pins the worst case, six calls
-at the timeout below, to half of the shortest job timeout (10 minutes). A pass that rests on a carried-forward review is shown in the verdict: one line in the
+at the timeout below, to half of the shortest job timeout (10 minutes). A pass that rests on a
+carried-forward review is shown in the verdict: one line in the
 normal output, and a `carried_forward_from` field (the reviewed commit) under `--json`, where
 stdout stays one document. The check runs
 after the completion-notice check, so a PR that already passes makes no compare call. Each call
@@ -216,7 +217,8 @@ compared fails closed like any other error.
 
 A PR whose base branch was ever changed gets no carry-forward at all. The compare measures the
 patch against today's base, which need not be the base the review was written against, so
-after a retarget the same fingerprint proves nothing. The gate looks for a `BASE_REF_CHANGED_EVENT` or `AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT`
+after a retarget the same fingerprint proves nothing. The gate looks for a `BASE_REF_CHANGED_EVENT` or
+`AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT`
 timeline item (the second is what GitHub records when it retargets a PR itself after its base
 branch is merged and deleted) in the same GraphQL query as the reviews. An event is never
 removed, so the refusal is permanent for that PR. The gate prints the reason on stderr, and a

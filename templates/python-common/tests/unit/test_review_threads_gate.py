@@ -14,6 +14,7 @@ import functools
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 from types import ModuleType
 from unittest.mock import Mock, call
@@ -3260,8 +3261,25 @@ def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> 
 
 
 # The shortest job that runs the gate (ts-common's review-threads) times out at this many minutes.
-# A constant, not a file read: the workflows are not shipped into every generated project.
+# Pinned here, then checked against every workflow that exists in the tree under test: the
+# workflows are not shipped into every generated project, so absence is skipped, drift is not.
 _INT_SHORTEST_JOB_MINUTES = 10
+_LIST_WORKFLOWS = (
+    ".github/workflows/review_threads.yml",
+    "templates/ts-common/.github/workflows/review-threads.yml",
+    "templates/python-common/.github/workflows/review_threads.yaml",
+)
+
+
+def test_pinned_job_minutes_do_not_exceed_any_present_workflow() -> None:
+    """A workflow shortened below the pinned cap fails here instead of timing out in CI."""
+    path_root = Path(__file__).resolve().parents[3]
+    list_minutes = [
+        int(re.search(r"timeout-minutes:\s*(\d+)", (path_root / str_rel).read_text("utf-8"))[1])
+        for str_rel in _LIST_WORKFLOWS
+        if (path_root / str_rel).exists()
+    ]
+    assert min(list_minutes, default=_INT_SHORTEST_JOB_MINUTES) >= _INT_SHORTEST_JOB_MINUTES
 
 
 def test_carry_forward_worst_case_fits_half_the_shortest_job_timeout() -> None:

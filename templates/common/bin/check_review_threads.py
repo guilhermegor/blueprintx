@@ -1230,9 +1230,26 @@ def check_missing_review(
     return _zero_review_message(str_quote, set_roster, list_notices or []), ""
 
 
-def find_missing_review_problem(*list_args: object, **dict_kwargs: object) -> str | None:
-    """Return only the problem half of :func:`check_missing_review`."""
-    return check_missing_review(*list_args, **dict_kwargs)[0]
+def find_missing_review_problem(
+    list_reviews: list[dict],
+    set_reviewers: set[str],
+    str_pr_author: str = "",
+    *,
+    str_head_oid: str,
+    list_notices: list[dict] | None = None,
+    str_head_date: str = "",
+    fn_fingerprint: Callable[[str], str] | None = None,
+) -> str | None:
+    """Return only the problem half of :func:`check_missing_review` (same parameters)."""
+    return check_missing_review(
+        list_reviews,
+        set_reviewers,
+        str_pr_author,
+        str_head_oid=str_head_oid,
+        list_notices=list_notices,
+        str_head_date=str_head_date,
+        fn_fingerprint=fn_fingerprint,
+    )[0]
 
 
 #
