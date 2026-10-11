@@ -247,6 +247,13 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
 
+      - id: close-linked-issues-tests
+        name: close_linked_issues.sh should-fail regression tests (blueprintx#604)
+        entry: bash tests/test_close_linked_issues.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/common/bin/close_linked_issues\.sh|templates/common/\.github/workflows/close-linked-issues\.yml|tests/test_close_linked_issues\.sh)$
+
       - id: docs-locale-prompt-tests
         name: docs-locale prompt should-fail regression tests (blueprintx#247)
         entry: bash tests/test_docs_locale_prompt.sh
@@ -281,6 +288,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/ci/check_specs_structure\.sh|tests/test_check_specs_structure\.sh|bin/lib/common\.sh)$
+
+      - id: promote-offline-to-online-tests
+        name: promote_offline_to_online.sh refusal-path tests (blueprintx#382)
+        entry: bash tests/test_promote_offline_to_online.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/promote_offline_to_online\.sh|tests/test_promote_offline_to_online\.sh|bin/lib/common\.sh|templates/(common|python-common|lib-minimal|react-spa-webpack)/(\.github/|SECURITY\.md|optional/deploy/|docs_version/))
 
       - id: docs-boundary
         name: docs/ boundary guard (working material stays out of docs/, blueprintx#536)

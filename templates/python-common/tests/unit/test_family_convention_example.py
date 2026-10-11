@@ -87,6 +87,6 @@ def test_member_declares_the_convention(cls_member: type) -> None:
     Parameters
     ----------
     cls_member : type
-            A family member discovered from the public surface.
+        A family member discovered from the public surface.
     """
     assert isinstance(cls_member._KNOB, int)

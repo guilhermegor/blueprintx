@@ -28,7 +28,7 @@ jobs:
       # commit on a pull_request event, so the default would run the very gate script the PR is
       # allowed to edit — a PR could rewrite check_issue_scope.py to exit 0 and judge itself.
       # Reading the base means the rule applied is the one already on the default branch.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
@@ -57,7 +57,7 @@ jobs:
       # head, because a job triggered by `issues` is attached to no PR's check suite.
       statuses: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
