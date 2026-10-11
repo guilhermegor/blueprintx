@@ -68,7 +68,7 @@ _RE_CP = re.compile(
 # cp patterns run, so a wrapped `cp` parses exactly like an unwrapped one.
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
 _RE_CHAINED_CP = re.compile(r"(?:&&|\|\|)\s*cp\b")
-_RE_ONE_LINE_ESAC = re.compile(r"\besac\s*$")
+_RE_ONE_LINE_ESAC = re.compile(r"\besac\b(?:\s*#.*)?$")
 
 
 def read_tier(path_root: pathlib.Path) -> str | None:
@@ -94,7 +94,7 @@ def read_tier(path_root: pathlib.Path) -> str | None:
     return None
 
 
-_RE_ONE_LINE_FI = re.compile(r";\s*fi\s*$")
+_RE_ONE_LINE_FI = re.compile(r";\s*fi\b(?:\s*(?:;|\|\||#).*)?$")
 
 
 def _cp_destinations(str_line: str) -> set[str]:
@@ -202,7 +202,7 @@ def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
     for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
         str_stripped = str_line.strip()
         if str_stripped.startswith("review_bot_roster:"):
-            return str_stripped.split(":", 1)[1].strip() == "true"
+            return str_stripped.split(":", 1)[1].strip().lower() in {"true", "yes", "y", "1"}
     return None
 
 
@@ -272,17 +272,17 @@ def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) 
     list of str
             POSIX paths relative to ``path_dir``.
     """
+    dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     cls_git = subprocess.run(  # noqa: S603
         ["git", "-C", str(path_blueprintx_root), "ls-files", "-z", "--", str(path_dir)],  # noqa: S607
         capture_output=True,
         check=False,
+        env=dict_env,
     )
-    if cls_git.returncode == 0:
-        return [
-            pathlib.Path(str_f).relative_to(path_dir.relative_to(path_blueprintx_root)).as_posix()
-            for str_f in cls_git.stdout.decode().split("\0")
-            if str_f
-        ]
+    list_tracked = [str_f for str_f in cls_git.stdout.decode().split("\0") if str_f]
+    if cls_git.returncode == 0 and list_tracked:
+        path_rel_dir = path_dir.relative_to(path_blueprintx_root)
+        return [pathlib.Path(str_f).relative_to(path_rel_dir).as_posix() for str_f in list_tracked]
     return [
         path_f.relative_to(path_dir).as_posix()
         for path_f in sorted(path_dir.rglob("*"))

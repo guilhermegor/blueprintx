@@ -8,6 +8,7 @@ project that legitimately opted out.
 
 import importlib.util
 from pathlib import Path
+import os
 import subprocess
 import sys
 from types import ModuleType
@@ -252,11 +253,13 @@ def test_untracked_files_in_a_git_checkout_are_not_required(tmp_path: Path) -> N
     path_bin.mkdir(parents=True)
     (path_bin / "tracked.sh").write_text("x", encoding="utf-8")
     (path_bin / "stray.log").write_text("x", encoding="utf-8")
-    subprocess.run(["git", "init", "-q"], cwd=path_root, check=True)  # noqa: S603, S607
+    dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    subprocess.run(["git", "init", "-q"], cwd=path_root, check=True, env=dict_env)  # noqa: S603, S607
     subprocess.run(  # noqa: S603, S607
         ["git", "add", "-f", str(path_bin / "tracked.sh")],  # noqa: S607
         cwd=path_root,
         check=True,
+        env=dict_env,
     )
 
     assert gate.required_relpaths(path_root) == {"bin/tracked.sh"}
@@ -266,3 +269,12 @@ def test_a_flag_without_a_value_fails_loudly() -> None:
     """A valueless `--root` must not silently fall back to cwd."""
     with pytest.raises(SystemExit):
         gate._parse_args(["--root"])
+
+
+@pytest.mark.parametrize(
+    "str_line",
+    ["if [ -f x ]; then cp a b; fi  # why", "if x; then cp a b; fi;", "if x; then cp a b; fi || true"],
+)
+def test_a_one_line_if_with_a_trailing_tail_is_still_one_line(str_line: str) -> None:
+    """A trailing comment or `;`/`||` after `fi` must not leave the block looking open."""
+    assert gate._line_kind(str_line) == "oneline"

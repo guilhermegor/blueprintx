@@ -621,7 +621,9 @@ lib_minimal_stamp_provenance() {
     local project_path="$1"
 
     local str_version
-    str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || echo unknown)"
+    str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null \
+		|| sed -n 's/^BLUEPRINTX_VERSION="\(.*\)"$/\1/p' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" 2>/dev/null \
+		|| echo unknown)"
     local str_commit
     str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
     local str_scaffolded_at

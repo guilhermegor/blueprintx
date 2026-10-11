@@ -253,15 +253,16 @@ scaffold_stamp_provenance() {
 	# Records WHICH tier and WHICH BlueprintX commit a project was scaffolded from
 	# (blueprintx#109). Without this, a drift check has no baseline: it cannot tell
 	# "this project was scaffolded before the fix landed" from "this project removed the
-	# file on purpose". Nothing recorded this before — grepped for BLUEPRINTX_VERSION /
-	# scaffold_version / a commit stamp anywhere in bin/ or templates/ and found nothing,
-	# so this file is new, not a rename. Read by
+	# file on purpose". Version falls back to the BLUEPRINTX_VERSION literal in
+	# bin/blueprintx.sh for packaged installs with no .git. Read by
 	# templates/python-common/bin/check_template_drift.py.
 	local str_tier="$1"
 	local str_project_path="$2"
 
 	local str_version
-	str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || echo unknown)"
+	str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null \
+		|| sed -n 's/^BLUEPRINTX_VERSION="\(.*\)"$/\1/p' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" 2>/dev/null \
+		|| echo unknown)"
 	local str_commit
 	str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
 	local str_scaffolded_at
