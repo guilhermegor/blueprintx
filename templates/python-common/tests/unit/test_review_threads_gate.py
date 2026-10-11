@@ -14,6 +14,7 @@ import functools
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 from types import ModuleType
 from unittest.mock import Mock, call
@@ -2873,8 +2874,11 @@ def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> M
     """
     fn_fetch = Mock(side_effect=RuntimeError("compare failed: 502"))
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", fn_fetch)
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
     return fn_fetch
+
+
+_PR_PLAIN = {"baseRefOid": "base", "timelineItems": {"totalCount": 0}}
+_PR_RETARGETED = {"baseRefOid": "base", "timelineItems": {"totalCount": 1}}
 
 
 def _three_reviews() -> list[dict]:
@@ -2898,7 +2902,7 @@ def test_find_missing_review_problem_failing_head_compare_is_called_once(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
     )
     assert fn_fetch.call_count == 1
 
@@ -2913,7 +2917,7 @@ def test_find_missing_review_problem_failing_head_compare_reports_the_reason(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
     )
     assert "compare failed: 502" in capsys.readouterr().err
 
@@ -2928,7 +2932,7 @@ def test_find_missing_review_problem_failing_head_compare_leaves_stdout_empty(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
     )
     assert capsys.readouterr().out == ""
 
@@ -3010,6 +3014,7 @@ def test_main_carried_review_still_owes_a_later_findings_body(
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
         "baseRefOid": "base",
+        "timelineItems": {"totalCount": 0},
         "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
         "reviews": {
             "nodes": [
@@ -3032,7 +3037,6 @@ def test_main_carried_review_still_owes_a_later_findings_body(
     }
     monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
     assert cls_gate.main([]) == int_expected
 
 
@@ -3064,6 +3068,7 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
         "baseRefOid": "base",
+        "timelineItems": {"totalCount": 0},
         "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
         "reviews": {"nodes": [{**_review("coderabbitai[bot]", "a" * 40), "state": "COMMENTED"}]},
         "reviewThreads": {"nodes": []},
@@ -3071,7 +3076,6 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
     }
     monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
     return cls_gate.main(list_argv)
 
 
@@ -3091,39 +3095,17 @@ def test_main_carried_review_is_a_json_field_and_nothing_else_on_stdout(
     assert json.loads(capsys.readouterr().out)["carried_forward_from"] == "a" * 40
 
 
-def test_fetch_retargeted_reads_the_timeline_for_a_base_change(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A ``base_ref_changed`` event in the timeline means the PR was retargeted."""
-    cls_gate = _load_gate()
-    fn_run = Mock(return_value=Mock(returncode=0, stdout="base_ref_changed\n"))
-    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-    assert cls_gate.fetch_retargeted("o", "r", 7) is True
-
-
-def test_fetch_retargeted_unreadable_timeline_fails_closed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A failed timeline call is an error, never read as 'not retargeted'."""
-    cls_gate = _load_gate()
-    fn_run = Mock(return_value=Mock(returncode=1, stderr="502"))
-    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-    with pytest.raises(RuntimeError, match="timeline failed"):
-        cls_gate.fetch_retargeted("o", "r", 7)
-
-
 def test_find_missing_review_problem_retargeted_pr_stays_superseded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An otherwise-equal fingerprint is not enough once the base branch was changed."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: True)
     str_problem = cls_gate.find_missing_review_problem(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_RETARGETED, "o/r"),
     )
     assert "SUPERSEDED" in str_problem
 
@@ -3134,12 +3116,11 @@ def test_find_missing_review_problem_retargeted_pr_says_why_on_stderr(
     """The refusal is diagnosable: the reason names the base change."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: True)
     cls_gate.find_missing_review_problem(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_RETARGETED, "o/r"),
     )
     assert "base branch was changed" in capsys.readouterr().err
 
@@ -3169,3 +3150,104 @@ def test_review_carried_forward_computes_the_head_digest_once_without_a_cache() 
     fn_counting = Mock(side_effect=lambda str_oid: str_oid)
     cls_gate.review_carried_forward(fn_counting, _three_reviews(), {"coderabbitai"}, _HEAD)
     assert fn_counting.call_args_list.count(call(_HEAD)) == 1
+
+
+def test_compare_fingerprint_unknown_retarget_state_fails_closed() -> None:
+    """A PR node without the timeline count is "unknown", and unknown is not "not retargeted"."""
+    cls_gate = _load_gate()
+    fn_fingerprint = cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r")
+    with pytest.raises(ValueError, match="base branch"):
+        fn_fingerprint("a" * 40)
+
+
+def test_query_reads_both_retarget_event_types() -> None:
+    """Manual and automatic retargets both change the base the review was written against."""
+    str_query = _load_gate()._QUERY
+    assert "BASE_REF_CHANGED_EVENT" in str_query
+    assert "AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT" in str_query
+
+
+@pytest.mark.parametrize(
+    "json_body", ['{"files": ["x"]}', '{"files": {"a": 1}}', "not json", '{"files": [null]}']
+)
+def test_review_covers_head_malformed_files_body_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, json_body: str
+) -> None:
+    """Malformed ``files`` (wrong container, non-dict entries, non-JSON) is "not covered"."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(
+        cls_gate.subprocess, "run", Mock(return_value=Mock(returncode=0, stdout=json_body))
+    )
+    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
+    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
+
+
+def test_patch_fingerprint_pure_rename_has_a_fingerprint() -> None:
+    """A rename with no content change has no ``patch`` and still compares by its names."""
+    cls_gate = _load_gate()
+    dict_rename = {
+        "filename": "b",
+        "previous_filename": "a",
+        "status": "renamed",
+        "changes": 0,
+    }
+    assert cls_gate.patch_fingerprint([dict_rename]) == cls_gate.patch_fingerprint([dict_rename])
+
+
+def test_patch_fingerprint_pure_renames_from_different_files_differ() -> None:
+    """The names are the whole content of a pure rename, so they must be hashed."""
+    cls_gate = _load_gate()
+    dict_from_a = {"filename": "c", "previous_filename": "a", "status": "renamed", "changes": 0}
+    dict_from_b = {"filename": "c", "previous_filename": "b", "status": "renamed", "changes": 0}
+    assert cls_gate.patch_fingerprint([dict_from_a]) != cls_gate.patch_fingerprint([dict_from_b])
+
+
+def test_patch_fingerprint_renamed_with_changes_but_no_patch_raises() -> None:
+    """A rename that also edits a file too large to show its patch is not a pure rename."""
+    cls_gate = _load_gate()
+    dict_big = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 9}
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_big])
+
+
+def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> None:
+    """The carrying commit is a return value, not an out-parameter."""
+    cls_gate = _load_gate()
+    tuple_result = cls_gate.check_missing_review(
+        [_review("coderabbitai[bot]", "a" * 40)],
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=lambda str_oid: "same",
+    )
+    assert tuple_result == (None, "a" * 40)
+
+
+def _job_timeout_minutes(path_workflow: Path) -> int:
+    """Return the ``timeout-minutes`` of a workflow file.
+
+    Parameters
+    ----------
+    path_workflow : Path
+        The workflow to read.
+
+    Returns
+    -------
+    int
+        Its first ``timeout-minutes`` value.
+    """
+    return int(re.search(r"timeout-minutes:\s*(\d+)", path_workflow.read_text("utf-8"))[1])
+
+
+def test_carry_forward_worst_case_fits_every_workflow_timeout() -> None:
+    """Every subprocess call the carry-forward can make, at its timeout, fits the shortest job.
+
+    The head compare plus one compare per reviewed commit; the retarget read is part of the
+    GraphQL fetch and makes no call of its own.
+    """
+    cls_gate = _load_gate()
+    int_calls = 1 + cls_gate._INT_MAX_REVIEWED_COMMITS
+    int_worst_s = int_calls * cls_gate._INT_COMPARE_TIMEOUT_S
+    list_wf = Path(__file__).resolve().parents[2].glob(".github/workflows/review[_-]threads.y*ml")
+    # ts-common's job is the shortest at 10 minutes and is not shipped here, so it is the cap.
+    int_minutes = min(map(_job_timeout_minutes, list_wf), default=10)
+    assert int_worst_s <= min(int_minutes, 10) * 60 // 2
