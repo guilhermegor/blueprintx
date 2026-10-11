@@ -2469,6 +2469,27 @@ def test_ladder_marker_without_a_findings_line_is_rejected() -> None:
     assert _missing_with([dict_prose], _TUPLE_MARKERS) is not None
 
 
+def test_later_ladder_comment_with_findings_supersedes_an_earlier_clean_one() -> None:
+    """The latest qualifying marker decides: a re-run that found something blocks."""
+    dict_later = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+        "createdAt": "2099-02-01T00:00:00Z",
+    }
+    assert _missing_with([_marker_comment("OWNER"), dict_later], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_later, _marker_comment("OWNER")], _TUPLE_MARKERS) is not None
+
+
+def test_padded_nonzero_findings_line_beside_a_zero_line_is_rejected() -> None:
+    """Trailing or leading whitespace must not hide a non-zero findings line."""
+    dict_padded = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).\n"
+        "  3 finding(s) across 3 reviewed file(s). \r",
+    }
+    assert _missing_with([dict_padded], _TUPLE_MARKERS) is not None
+
+
 @pytest.fixture
 def path_marker_root(tmp_path: Path) -> Path:
     """Write a roster holding one reviewer and one marker row."""
