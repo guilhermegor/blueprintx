@@ -15,7 +15,7 @@ check_branch() {
 
 check_title() {
 	local str_title="$1"
-	[[ "$str_title" =~ ^($CC_TYPES)(\([^\)]+\))?!?:\ .+ ]] && return 0
+	[[ "$str_title" =~ ^($CC_TYPES)(\([^\)]+\))?!?:\ .*[^[:space:]] ]] && return 0
 	echo "Title '$str_title' is not a Conventional Commit (type(scope): subject)." >&2
 	return 1
 }

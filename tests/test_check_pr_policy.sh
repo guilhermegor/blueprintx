@@ -24,7 +24,7 @@ expect() {
 expect "typed branch with number" pass check_branch "feat/604-policies"
 expect "slugless number" pass check_branch "feat/604"
 expect "version suffix is not an issue" fail check_branch "chore/bump-node-20"
-expect "trailing number is not an issue" fail check_branch "my-fix-12"
+expect "trailing number is not an issue" fail check_branch "feat/my-fix-12"
 expect "release branch exempt" pass check_branch "release/1.2.0"
 expect "bot branch exempt" pass check_branch "dependabot/npm/foo"
 expect "branch without number" fail check_branch "feat/policies"
@@ -36,6 +36,7 @@ expect "title without type" fail check_title "Add thing"
 expect "title without space" fail check_title "feat:add thing"
 expect "unknown type" fail check_title "wip: thing"
 expect "empty subject" fail check_title "feat: "
+expect "whitespace-only subject" fail check_title "feat:    "
 
 str_full=$(tr -d '\r' < "$TEMPLATE")
 expect "template as body" pass check_body "$str_full" "$TEMPLATE"
@@ -47,6 +48,16 @@ expect "heading with regex metacharacters" pass check_body $'## Testing (CI chec
 expect "metacharacter heading must not match by regex" fail check_body $'## Testing CI checklist\n## AxB+C' "$str_meta"
 rm -f "$str_meta"
 expect "missing template is an error" fail check_body "$str_full" "/nonexistent"
+
+SCRIPT="$REPO_ROOT/templates/common/bin/check_pr_policy.sh"
+expect "script branch mode, env interface" pass env BRANCH="feat/604-x" bash "$SCRIPT" branch
+expect "script branch mode rejects" fail env BRANCH="feat/x" bash "$SCRIPT" branch
+expect "script title mode, env interface" pass env TITLE="fix: x" bash "$SCRIPT" title
+expect "script body mode, env interface" pass env BODY="$str_full" TEMPLATE="$TEMPLATE" bash "$SCRIPT" body
+expect "script body mode rejects" fail env BODY="" TEMPLATE="$TEMPLATE" bash "$SCRIPT" body
+int_usage=0
+bash "$SCRIPT" bogus >/dev/null 2>&1 || int_usage=$?
+expect "usage path exits 2" pass test "$int_usage" -eq 2
 
 if ((int_failures > 0)); then
 	echo "$int_failures failure(s)"
