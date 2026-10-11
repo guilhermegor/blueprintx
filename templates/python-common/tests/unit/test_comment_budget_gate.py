@@ -828,6 +828,7 @@ def test_write_baseline_records_counts_and_then_passes(
     """
     (tmp_path / "b.py").write_text("X = 1\n", encoding="utf-8")
     _tree(tmp_path, "# one\n# two\nX = 1\n")
+    (tmp_path / gate.STR_BASELINE_NAME).unlink()
     _run(tmp_path, capsys, "--write-baseline")
     str_written = (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")
     assert (str_written, _run(tmp_path, capsys)[0]) == ("2 a.py\n", 0)
@@ -845,6 +846,77 @@ def test_docstrings_are_not_counted(tmp_path: Path, capsys: pytest.CaptureFixtur
     """
     _tree(tmp_path, '"""Module doc."""\n\n\ndef f() -> None:\n\t"""Doc."""\n')
     assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_a_required_baseline_that_is_missing_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: the root hook must not pass because the baseline was deleted.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "a.py").write_text("# one\nX = 1\n", encoding="utf-8")
+    assert _run(tmp_path, capsys, "--require-baseline")[0] == 1
+
+
+def test_a_scoped_write_baseline_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Should-fail witness: naming a file would overwrite every other baseline row.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "1 a.py\n")
+    int_code = gate.main(["--root", str(tmp_path), "--write-baseline", str(tmp_path / "a.py")])
+    assert (int_code, (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")) == (
+        1,
+        "1 a.py\n",
+    )
+
+
+def test_write_baseline_refuses_to_raise_an_existing_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: regenerating must not accept a file that gained comments.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\n# two\nX = 1\n", "1 a.py\n")
+    int_code = _run(tmp_path, capsys, "--write-baseline")[0]
+    assert (int_code, (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")) == (
+        1,
+        "1 a.py\n",
+    )
+
+
+def test_write_baseline_lowers_an_existing_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Regenerating after a sweep records the lower count.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "3 a.py\n")
+    _run(tmp_path, capsys, "--write-baseline")
+    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
 
 
 _DICT_ALLOWED = {

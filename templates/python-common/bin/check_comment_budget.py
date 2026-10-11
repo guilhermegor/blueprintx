@@ -93,6 +93,7 @@ PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PATH_ALLOWLIST = pathlib.Path(__file__).resolve().parent / "comment_budget_allowlist.txt"
 STR_BASELINE_NAME = "comment_budget_baseline.txt"
 STR_WRITE_BASELINE = "--write-baseline"
+STR_REQUIRE_BASELINE = "--require-baseline"
 
 # PEP 263 — a `# -*- coding: utf-8 -*-` line is metadata, not prose, and only
 # ever appears on line 1 or 2.
@@ -672,6 +673,66 @@ def write_baseline(dict_counts: dict) -> None:
     print(f"wrote {len(dict_counts)} file(s), {sum(dict_counts.values())} comment line(s)")
 
 
+def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
+    """Rewrite the baseline from a full audit, refusing any increase over an existing one.
+
+    Parameters
+    ----------
+    list_paths : list of pathlib.Path
+        The files counted.
+    bool_audit : bool
+        Whether this is a whole-tree run; a scoped run would drop every other row.
+
+    Returns
+    -------
+    int
+        0 after writing, 1 when refused.
+    """
+    if not bool_audit:
+        print("❌ --write-baseline needs a full audit; do not name files")
+        return 1
+    dict_counts = current_counts(list_paths)
+    dict_old = load_baseline()
+    list_raised = [
+        str_path
+        for str_path, int_n in sorted(dict_counts.items())
+        if dict_old is not None and int_n > dict_old.get(str_path, 0)
+    ]
+    for str_path in list_raised:
+        print(f"{str_path}: more comments than its baseline - the ratchet never goes up")
+    if list_raised:
+        return 1
+    write_baseline(dict_counts)
+    return 0
+
+
+def baseline_problems(list_paths: list, bool_audit: bool, bool_require: bool) -> list:
+    """Return the ratchet findings, or one finding when a required baseline is missing.
+
+    Parameters
+    ----------
+    list_paths : list of pathlib.Path
+        The files checked.
+    bool_audit : bool
+        Whether this is a whole-tree run.
+    bool_require : bool
+        True for the repository-root invocation, where no baseline file means the
+        ratchet was deleted rather than never adopted.
+
+    Returns
+    -------
+    list of str
+        Findings; empty when the ratchet is off or clean.
+    """
+    dict_baseline = load_baseline()
+    if dict_baseline is None:
+        return [
+            f"{STR_BASELINE_NAME} is missing but {STR_REQUIRE_BASELINE} was given"
+        ] * bool_require
+    set_scope = None if bool_audit else {shown_path(path_file) for path_file in list_paths}
+    return ratchet_problems(current_counts(list_paths), dict_baseline, set_scope)
+
+
 # `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
 _INT_FLAG_WITH_VALUE = 2
 
@@ -706,7 +767,8 @@ def main(list_argv: list) -> int:
     list_argv : list of str
         Filenames, as pre-commit passes them. Empty means audit the whole
         repository. ``--root <dir>`` (first) repoints the audit; ``--write-baseline``
-        regenerates ``comment_budget_baseline.txt`` instead of checking.
+        regenerates ``comment_budget_baseline.txt`` instead of checking (full audit
+        only, and never upward); ``--require-baseline`` fails when that file is absent.
 
     Returns
     -------
@@ -718,7 +780,9 @@ def main(list_argv: list) -> int:
         print("❌ --root needs a directory")
         return 1
     bool_write = STR_WRITE_BASELINE in list_rest
-    list_argv = [str_arg for str_arg in list_rest if str_arg != STR_WRITE_BASELINE]
+    bool_require = STR_REQUIRE_BASELINE in list_rest
+    tuple_flags = (STR_WRITE_BASELINE, STR_REQUIRE_BASELINE)
+    list_argv = [str_arg for str_arg in list_rest if str_arg not in tuple_flags]
 
     bool_audit = not list_argv
     list_paths = (
@@ -737,16 +801,9 @@ def main(list_argv: list) -> int:
         return 1
 
     if bool_write:
-        write_baseline(current_counts(list_paths))
-        return 0
+        return regenerate_baseline(list_paths, bool_audit)
 
-    list_problems = []
-    dict_baseline = load_baseline()
-    if dict_baseline is not None:
-        set_scope = None if bool_audit else {shown_path(path_file) for path_file in list_paths}
-        list_problems.extend(
-            ratchet_problems(current_counts(list_paths), dict_baseline, set_scope)
-        )
+    list_problems = baseline_problems(list_paths, bool_audit, bool_require)
     for path_file in list_paths:
         list_problems.extend(file_problems(path_file))
     for str_problem in list_problems:
