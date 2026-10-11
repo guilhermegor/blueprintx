@@ -1,0 +1,5 @@
+- Domain imports nothing outside itself and performs no I/O.
+- Application depends on domain only.
+- Infrastructure implements domain ports; adapters never leak into domain or application.
+- One class per file; ports are ABCs in domain/ports.py.
+- Every DataFrame or SQL load declares its dtypes through apply_dtypes.

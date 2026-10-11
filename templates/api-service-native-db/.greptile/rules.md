@@ -1,0 +1,4 @@
+- Transport (FastAPI) stays at the edge: routes translate requests and call use cases, with no business logic.
+- Domain imports nothing outside itself and performs no I/O.
+- Application depends on domain only; infrastructure implements domain ports.
+- One class per file; ports are ABCs in domain/ports.py.
