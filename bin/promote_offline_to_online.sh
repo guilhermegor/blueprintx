@@ -7,8 +7,8 @@
 # pushes, applies best-effort branch protection, and removes/neutralises the offline-only
 # fallbacks (git-diff scripts, poe_tasks.offline.toml, the swapped protect-branch hook).
 #
-# Deliberately standalone: it does NOT source or edit any bin/scaffold/*.sh — those are
-# held by other PRs (see docs/offline-to-online.md for the manifest this script mirrors).
+# Deliberately standalone: it does NOT source or edit any bin/scaffold/*.sh — it
+# transcribes their manifests (see docs/offline-to-online.md for the manifest this script mirrors).
 #
 # Usage: bin/promote_offline_to_online.sh <project_path> --tier <tier> [options]
 # See usage() below or --help for the full flag list.
@@ -62,6 +62,13 @@ require_flag_value() {
     [ $# -ge 2 ] || exit_usage_error "$1 requires a value"
 }
 
+require_valid_visibility() {
+    case "$VISIBILITY" in
+        public | private) ;;
+        *) exit_usage_error "--visibility must be public or private" ;;
+    esac
+}
+
 parse_args() {
     [ $# -eq 0 ] && exit_usage_error "project_path is required"
     while [ $# -gt 0 ]; do
@@ -101,6 +108,10 @@ parse_args() {
                 ;;
             --)
                 shift
+                if [ $# -gt 0 ] && [ -z "$PROJECT_PATH" ]; then
+                    PROJECT_PATH="$1"
+                    shift
+                fi
                 break
                 ;;
             -*)
@@ -115,10 +126,7 @@ parse_args() {
     done
     [ -n "$PROJECT_PATH" ] || exit_usage_error "project_path is required"
     [ -n "$TIER" ] || exit_usage_error "--tier is required"
-    case "$VISIBILITY" in
-        public | private) ;;
-        *) exit_usage_error "--visibility must be public or private" ;;
-    esac
+    require_valid_visibility
 }
 
 # --publish / --deploy-target are tier-specific. A typo, or a value for a tier that ignores the
@@ -150,17 +158,14 @@ require_known_tier() {
         || exit_error "Tier '$TIER' has no templates/$TIER/skeleton.meta in this BlueprintX checkout — inventory missing, refusing to half-promote."
 }
 
-tier_common_root() {
-    case "$TIER" in
-        react-spa-webpack) echo "ts-common" ;;
-        *) echo "python-common" ;;
-    esac
-}
-
 require_git_repo() {
     [ -d "$PROJECT_PATH" ] || exit_error "No such directory: $PROJECT_PATH"
     git -C "$PROJECT_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
         || exit_error "$PROJECT_PATH is not a git repository — refusing to promote."
+    # rev-parse succeeds for any directory INSIDE another repo; add -A and gh repo create
+    # --source=. would then stage and publish the parent.
+    [ "$(git -C "$PROJECT_PATH" rev-parse --show-toplevel)" = "$(cd "$PROJECT_PATH" && pwd -P)" ] \
+        || exit_error "$PROJECT_PATH is inside another git repository, not its root — refusing to promote the parent."
 }
 
 # gh repo create --push pushes the CURRENT branch while protection targets main, so a promotion
@@ -435,6 +440,11 @@ if local_hook not in text:
     sys.exit(0)
 
 text = text.replace(local_hook, "repos:\n", 1)
+if "id: no-commit-to-branch" in text:
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    print("restored")
+    sys.exit(0)
 text, count = re.subn(
     r"(- repo: https://github\.com/pre-commit/pre-commit-hooks\n(?:    rev:.*\n)?    hooks:\n)",
     r"\1      - id: no-commit-to-branch\n        args:\n          - --branch=main\n",
@@ -497,7 +507,7 @@ commit_promotion_changes() {
 # `gh repo create --push` records refs/remotes/origin/<branch> only when the push succeeded, so
 # a local ref check (no network) tells "online" apart from "remote added, nothing pushed".
 has_pushed_remote_ref() {
-    [ -n "$(git -C "$PROJECT_PATH" for-each-ref --count=1 refs/remotes/origin)" ]
+    git -C "$PROJECT_PATH" show-ref --verify --quiet refs/remotes/origin/main
 }
 
 # gh repo create --source=. --push both creates the remote GitHub repo AND pushes the
@@ -540,11 +550,13 @@ apply_branch_protection() {
 }
 JSON
     )
-    if gh api --method PUT "repos/$REPOSITORY/branches/main/protection" \
-        -H "Accept: application/vnd.github+json" --input - <<<"$payload" >/dev/null 2>&1; then
+    local gh_err
+    if gh_err="$(gh api --method PUT "repos/$REPOSITORY/branches/main/protection" \
+        -H "Accept: application/vnd.github+json" --input - <<<"$payload" 2>&1 >/dev/null)"; then
         PROTECTION_APPLIED=true
         print_status "success" "Applied baseline branch protection on main (force-push and deletion blocked; required reviews and status checks are NOT configured)"
     else
+        print_status "warning" "Branch protection failed: ${gh_err:-no error text} — private repos on a free plan return 403."
         print_status "warning" "Could not apply branch protection automatically; configure it on GitHub manually (re-running cannot retry it: the project now reads as online)."
     fi
 }

@@ -13,8 +13,8 @@ the online workflow was scaffolding a second project and moving the code across 
 
 ## Why this is a standalone script, not a scaffold change
 
-The 5 Python `bin/scaffold/python_*.sh` scripts and `ts_react_app.sh` are held by other PRs at
-the time this shipped, so this script does not source or edit any of them — it transcribes their
+The 5 Python `bin/scaffold/python_*.sh` scripts and `ts_react_app.sh` are left untouched on purpose:
+this script does not source or edit any of them — it transcribes their
 `copy_github_assets` / `apply_offline_mode` manifests instead (see the table below) and runs
 independently. It does not use `bin/enable_repo_rules.sh` or `bin/enable_security.sh` either —
 neither exists in this repo (measured: `grep -rln "enable_repo_rules\|enable_security" bin/`
@@ -95,7 +95,7 @@ and authenticated. All of these run before any `gh` call that changes anything.
 
 Every mutation is independently safe to re-run: file copies overwrite identical content, removals
 use `-f`/check-first, the poe-include and pre-commit-hook edits detect their own prior
-application and no-op, and `package.json` script stripping is a `dict.pop(..., None)`. The poe-include
+application and no-op, and `package.json` script stripping only rewrites the file when a `git:diff:*` entry is present. The poe-include
 and pre-commit-hook edits **fail loudly** when they find the entry in a shape they do not recognise,
 rather than reporting success over a half-edited project.
 
@@ -126,7 +126,7 @@ throwaway local git repos with no network or `gh` auth required.
 promote → diff against an online scaffold of the same tier) needs a real `gh`-authenticated
 environment with network access to create a repository — the should-fail witness the issue asks
 for ("diff the two trees and report the count"). That is a manual verification step for whoever
-runs this against a real project, not something this sandbox can execute.
+runs this against a real project; CI cannot create repositories.
 
 ## Relationship to #109 and #129
 
@@ -136,5 +136,5 @@ where this compares against the *online inventory*. If #109 lands, promotion cou
 of it rather than a second walker; until then, keeping this standalone avoids inventing a tier
 marker or a data-file abstraction (`.review-bots.yaml`-shaped) for a single consumer. Branch
 protection here is inline `gh api`, independent of blueprintx#129's `bin/enable_repo_rules.sh`
-(not yet merged at the time this shipped) — once that lands, this script's `apply_branch_protection`
+(a separate script) — if that is adopted, this script's `apply_branch_protection`
 is a natural place to delegate to it instead.

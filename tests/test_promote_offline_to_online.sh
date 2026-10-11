@@ -128,7 +128,16 @@ test_already_online_is_a_noop() {
     git -C "$dir" add -A
     git -C "$dir" commit -q -m "chore: seed github assets"
     git -C "$dir" update-ref refs/remotes/origin/main HEAD
+    local before after
+    before="$(git -C "$dir" rev-parse HEAD)$(git -C "$dir" status --porcelain)"
     expect_succeeds "already-online project is a clean no-op" "$dir" --tier lib-minimal
+    after="$(git -C "$dir" rev-parse HEAD)$(git -C "$dir" status --porcelain)"
+    if [ "$before" = "$after" ]; then
+        echo "ok: the no-op left HEAD and the tree untouched"
+    else
+        echo "FAIL (no-op untouched): the already-online run changed the project"
+        int_failures=$((int_failures + 1))
+    fi
 }
 
 test_origin_never_pushed_is_not_online() {
@@ -192,6 +201,35 @@ test_copy_manifests_match_templates() {
             int_failures=$((int_failures + 1))
         fi
     done
+}
+
+test_nested_repo_is_refused() {
+    local parent
+    parent="$(make_git_repo "nested-parent")"
+    mkdir -p "$parent/child"
+    expect_refuses_with "a directory inside another repo is refused" "inside another git repository" "$parent/child" --tier lib-minimal
+}
+
+test_double_dash_takes_the_path() {
+    local out
+    out="$("$PROMOTE_SCRIPT" --tier lib-minimal -- "$WORK_DIR/nope" 2>&1)" || true
+    if [[ "$out" == *"No such directory"* ]]; then
+        echo "ok: -- passes the project path through"
+    else
+        echo "FAIL (-- passes the project path through): $out"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
+# Resume = GitHub assets, no origin. A dirty path OUTSIDE the allowlist is the user's work and
+# must be refused; this is the resume path's one safety property.
+test_resume_refuses_foreign_dirty_path() {
+    local dir
+    dir="$(make_git_repo "resume-foreign")"
+    mkdir -p "$dir/.github"
+    echo "* @example" >"$dir/.github/CODEOWNERS"
+    echo "mine" >"$dir/src_notes.txt"
+    expect_refuses_with "resume refuses a dirty path outside the promotion's own" "changes outside a previous promotion" "$dir" --tier lib-minimal
 }
 
 # The restored no-commit-to-branch hook must not block the promotion commit on main, and no
@@ -276,6 +314,9 @@ main() {
     test_already_online_is_a_noop
     test_origin_never_pushed_is_not_online
     test_flag_without_value
+    test_nested_repo_is_refused
+    test_double_dash_takes_the_path
+    test_resume_refuses_foreign_dirty_path
     test_react_without_workflows_reads_as_online
     test_poe_strip_keeps_sibling_keys
     test_copy_manifests_match_templates
