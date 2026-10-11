@@ -24,7 +24,7 @@ check_body() {
 	local str_body="$1" str_template="$2" str_head int_missing=0
 	[[ -f "$str_template" ]] || { echo "Template $str_template not found." >&2; return 2; }
 	while IFS= read -r str_head; do
-		if ! printf '%s\n' "$str_body" | tr -d '\r' | sed -E 's/[[:space:]]+$//' | grep -qixF -- "$str_head"; then
+		if ! printf '%s\n' "$str_body" | tr -d '\r' | sed -E 's/[[:space:]]+$//' | grep -ixF -- "$str_head" >/dev/null; then
 			echo "PR body is missing the '$str_head' section." >&2
 			int_missing=1
 		fi

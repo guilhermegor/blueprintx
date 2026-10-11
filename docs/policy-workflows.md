@@ -20,8 +20,9 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
 
 ## Design notes
 
-- The check workflows run on `pull_request` and check out the **base** commit, so a PR cannot rewrite
-  the script that judges it. Bot authors (`user.type == 'Bot'`) are skipped.
+- The three check workflows run on `pull_request_target`, so the workflow definition, the script and the
+  template all come from the base branch and a PR cannot rewrite the check that judges it. They never
+  check out PR code: branch, title and body arrive through `env:` from the event only. Bot authors (`user.type == 'Bot'`) are skipped.
 - `check_pr_policy.sh` takes `BRANCH`, `TITLE` or `BODY` (plus `TEMPLATE`, default
   `.github/PULL_REQUEST_TEMPLATE.md`) from the environment and exits 0 (pass), 1 (violation) or 2
   (bad usage). Sourcing it defines the functions without running them, which the tests use.
