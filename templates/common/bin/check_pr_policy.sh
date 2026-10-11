@@ -13,11 +13,12 @@ set -uo pipefail
 EXEMPT_BRANCHES='^(release|dependabot|renovate)/'
 CC_TYPES='feat|fix|chore|test|docs|refactor|perf|build|ci|style|revert'
 
-# Passes a `<type>/<N>-<slug>` branch or a trailing `-<N>` one.
+# Passes a `<type>/<N>-<slug>` (or slugless `<type>/<N>`) branch. A trailing `-<N>` is not
+# accepted: `chore/bump-node-20` is a version, not an issue.
 check_branch() {
 	local str_branch="$1"
 	[[ "$str_branch" =~ $EXEMPT_BRANCHES ]] && return 0
-	[[ "$str_branch" =~ ^[a-z]+/[0-9]+- || "$str_branch" =~ -[0-9]+$ ]] && return 0
+	[[ "$str_branch" =~ ^[a-z]+/[0-9]+(-|$) ]] && return 0
 	echo "Branch '$str_branch' carries no issue number (<type>/<N>-<slug>)." >&2
 	return 1
 }
@@ -35,7 +36,7 @@ check_body() {
 	local str_body="$1" str_template="$2" str_head int_missing=0
 	[[ -f "$str_template" ]] || { echo "Template $str_template not found." >&2; return 2; }
 	while IFS= read -r str_head; do
-		if ! printf '%s\n' "$str_body" | tr -d '\r' | grep -qiE "^${str_head}[[:space:]]*$"; then
+		if ! printf '%s\n' "$str_body" | tr -d '\r' | sed -E 's/[[:space:]]+$//' | grep -qixF -- "$str_head"; then
 			echo "PR body is missing the '$str_head' section." >&2
 			int_missing=1
 		fi

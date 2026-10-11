@@ -7,7 +7,7 @@ Offline scaffolds (no GitHub remote) do not receive them.
 | Workflow | Rule |
 |----------|------|
 | `close-linked-issues.yml` | On a merged same-repo PR into the default branch, closes the issues named by the branch (`<type>/<N>-<slug>`) or by `Closes/Fixes/Resolves #N`. |
-| `branch-has-issue.yml` | Fails a PR whose head branch carries no issue number (`<type>/<N>-<slug>` or a trailing `-<N>`). `release/`, `dependabot/` and `renovate/` branches are exempt. |
+| `branch-has-issue.yml` | Fails a PR whose head branch carries no issue number (`<type>/<N>-<slug>`). `release/`, `dependabot/` and `renovate/` branches are exempt. |
 | `pr-title-conventional.yml` | Fails a PR title that is not a Conventional Commit; squash merges use it as the commit subject. |
 | `pr-body-template.yml` | Fails a PR body missing a `## ` section of `.github/PULL_REQUEST_TEMPLATE.md`. |
 | `pr-self-assign.yml` | Assigns the author when a same-repo PR is opened. |

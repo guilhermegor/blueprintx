@@ -494,7 +494,11 @@ copy_repo_policy_workflows() {
     local common_root
     common_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/templates/common"
     mkdir -p "$project_path/.github/workflows" "$project_path/bin"
-    cp "$common_root"/.github/workflows/*.yml "$project_path/.github/workflows/"
+    local str_wf
+    for str_wf in close-linked-issues branch-has-issue pr-title-conventional \
+        pr-body-template pr-self-assign; do
+        cp "$common_root/.github/workflows/$str_wf.yml" "$project_path/.github/workflows/"
+    done
     cp "$common_root/bin/close_linked_issues.sh" "$common_root/bin/check_pr_policy.sh" \
         "$project_path/bin/"
     chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"

@@ -25,7 +25,9 @@ expect() {
 }
 
 expect "typed branch with number" pass check_branch "feat/604-policies"
-expect "trailing number" pass check_branch "my-fix-12"
+expect "slugless number" pass check_branch "feat/604"
+expect "version suffix is not an issue" fail check_branch "chore/bump-node-20"
+expect "trailing number is not an issue" fail check_branch "my-fix-12"
 expect "release branch exempt" pass check_branch "release/1.2.0"
 expect "bot branch exempt" pass check_branch "dependabot/npm/foo"
 expect "branch without number" fail check_branch "feat/policies"
@@ -42,6 +44,11 @@ str_full=$(tr -d '\r' < "$TEMPLATE")
 expect "template as body" pass check_body "$str_full" "$TEMPLATE"
 expect "empty body" fail check_body "" "$TEMPLATE"
 expect "body missing a section" fail check_body "${str_full//## Testing/}" "$TEMPLATE"
+str_meta=$(mktemp)
+printf '## Testing (CI checklist)\n## A.B+C\n' > "$str_meta"
+expect "heading with regex metacharacters" pass check_body $'## Testing (CI checklist)  \n## A.B+C' "$str_meta"
+expect "metacharacter heading must not match by regex" fail check_body $'## Testing CI checklist\n## AxB+C' "$str_meta"
+rm -f "$str_meta"
 expect "missing template is an error" fail check_body "$str_full" "/nonexistent"
 
 if ((int_failures > 0)); then
