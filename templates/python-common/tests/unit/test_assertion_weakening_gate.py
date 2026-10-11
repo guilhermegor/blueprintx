@@ -579,6 +579,25 @@ def test_a_source_file_renamed_into_tests_touches_production_code() -> None:
     assert gate._touches_production_code([("R", "src/app.py", "tests/test_app.py")])
 
 
-def test_a_source_file_copied_into_tests_does_not_touch_production_code() -> None:
-    """A copy leaves its source in place, so only the destination counts."""
-    assert not gate._touches_production_code([("C", "src/app.py", "tests/test_app.py")])
+def test_a_test_file_moved_out_of_tests_is_reported(path_renamed_repo: Path) -> None:
+    """Moving ``tests/test_old.py`` to ``src/`` removes its tests, so the gate names it."""
+    (path_renamed_repo / "src").mkdir()
+    _git_in(path_renamed_repo, "mv", "tests/test_old.py", "src/old.py")
+    str_base = _git_in(path_renamed_repo, "rev-parse", "main")
+    list_found = gate.collect_problems(gate.changed_paths(str_base), str_base)
+    assert any("tests/test_old.py" in str_f for str_f in list_found)
+
+
+def test_a_source_file_renamed_into_tests_is_not_read_as_an_old_test(
+    path_renamed_repo: Path,
+) -> None:
+    """A ``src/`` file moved into ``tests/`` has no test baseline, so it is not compared."""
+    (path_renamed_repo / "src").mkdir()
+    (path_renamed_repo / "src" / "app.py").write_text(_STR_STRONG, encoding="utf-8")
+    _git_in(path_renamed_repo, "add", "-A")
+    _git_in(path_renamed_repo, "commit", "-q", "-m", "src")
+    str_base = _git_in(path_renamed_repo, "rev-parse", "HEAD")
+    _git_in(path_renamed_repo, "mv", "src/app.py", "tests/test_app.py")
+    (path_renamed_repo / "tests" / "test_app.py").write_text(_STR_WEAK, encoding="utf-8")
+    _git_in(path_renamed_repo, "add", "-A")
+    assert gate.collect_problems(gate.changed_paths(str_base), str_base) == []

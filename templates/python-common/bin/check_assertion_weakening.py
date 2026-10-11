@@ -76,7 +76,7 @@ RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
 STR_INDEX_REF = ""
 
 # A `git diff --name-status` row has 2 tab-separated fields ("<status>\t<path>"), or 3 for a
-# rename/copy ("R100\t<old>\t<new>"); `changed_paths` keeps both paths of the 3-field form.
+# rename ("R100\t<old>\t<new>"); `changed_paths` keeps both paths of the 3-field form.
 # Module-scoped (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as
 # a constant while behaving like a plain variable — moved here to be what it says it is.
 _INT_MIN_FIELDS = 2
@@ -197,7 +197,7 @@ def changed_paths(str_base: str) -> list:
     -------
     list of tuple
         ``(status_letter, source_path, destination_path)``. The two paths differ only for
-        a rename or copy; the base version lives at the source, the head version at the
+        a rename; the base version lives at the source, the head version at the
         destination (blueprintx#590).
     """
     str_out = _git(["diff", "--cached", "--name-status", "--find-renames", str_base])
@@ -911,9 +911,58 @@ def _touches_production_code(list_changed: list) -> bool:
     for str_status, str_src, str_path in list_changed:
         # A rename removes its source, so a production file moved into tests/ still counts.
         tuple_paths = (str_src, str_path) if str_status == "R" else (str_path,)
-        if any(not (RE_TEST_PATH.search(p) or RE_DOC_PATH.search(p)) for p in tuple_paths):
+        if any(
+            not (RE_TEST_PATH.search(str_p) or RE_DOC_PATH.search(str_p)) for str_p in tuple_paths
+        ):
             return True
     return False
+
+
+def _test_file_removed(str_status: str, str_src: str, str_path: str) -> bool:
+    """Return whether a row takes a test file out of the suite (deleted, or moved off tests/).
+
+    Parameters
+    ----------
+    str_status : str
+        The row's status letter.
+    str_src : str
+        The row's source path.
+    str_path : str
+        The row's destination path.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``D`` on a test path, or ``R`` from a test path to a non-test path.
+    """
+    if str_status == "D":
+        return bool(RE_TEST_PATH.search(str_path))
+    moved_off = RE_TEST_PATH.search(str_src) and not RE_TEST_PATH.search(str_path)
+    return str_status == "R" and bool(moved_off)
+
+
+def _removed_findings(str_base: str, str_path: str) -> list:
+    """Return the findings for a test file that left the suite.
+
+    Parameters
+    ----------
+    str_base : str
+        The merge-base commit.
+    str_path : str
+        The test file's path at the base.
+
+    Returns
+    -------
+    list of str
+        One finding when the base file held tests (or cannot be parsed), else empty.
+    """
+    str_old = show(str_base, str_path)
+    dict_old_funcs = parse_functions(str_old) if str_old is not None else {}
+    if str_old is not None and dict_old_funcs is None:
+        return [f"{str_path}: could not parse deleted test file — not checked"]
+    if dict_old_funcs:
+        return [f"{str_path}: entire test file deleted ({len(dict_old_funcs)} test(s) with it)"]
+    return []
 
 
 def collect_problems(list_changed: list, str_base: str) -> list:
@@ -934,22 +983,14 @@ def collect_problems(list_changed: list, str_base: str) -> list:
     list_problems = []
     bool_prod_changed = _touches_production_code(list_changed)
     for str_status, str_src, str_path in list_changed:
+        if _test_file_removed(str_status, str_src, str_path):
+            list_problems.extend(_removed_findings(str_base, str_src))
+            continue
         if not RE_TEST_PATH.search(str_path):
             continue
-        if str_status == "D":
-            str_old = show(str_base, str_path)
-            dict_old_funcs = parse_functions(str_old) if str_old is not None else {}
-            if str_old is not None and dict_old_funcs is None:
-                list_problems.append(
-                    f"{str_path}: could not parse deleted test file — not checked"
-                )
-            elif dict_old_funcs:
-                list_problems.append(
-                    f"{str_path}: entire test file deleted ({len(dict_old_funcs)} test(s) with it)"
-                )
-            continue
         str_new = show(STR_INDEX_REF, str_path)
-        str_old = show(str_base, str_src)
+        # A non-test source (src/ moved into tests/) defines no baseline: treat as newly added.
+        str_old = show(str_base, str_src) if RE_TEST_PATH.search(str_src) else None
         if str_new is None or str_old is None:
             continue  # newly added file — nothing to compare against
         list_problems.extend(_file_findings(str_path, str_old, str_new, bool_prod_changed))
