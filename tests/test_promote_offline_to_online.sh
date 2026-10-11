@@ -84,6 +84,14 @@ test_unknown_tier() {
     expect_refuses_with "unknown --tier is refused" "Unknown --tier" "$WORK_DIR/nonexistent" --tier not-a-real-tier
 }
 
+# A supported tier must get PAST the tier check: a non-git dir then trips the next gate.
+test_supported_tiers_are_known() {
+    local tier
+    for tier in api-service-native-db; do
+        expect_refuses_with "$tier is a known tier (reaches the git-repo check)" "not a git repository" "$WORK_DIR" --tier "$tier"
+    done
+}
+
 test_not_a_git_repo() {
     local dir="$WORK_DIR/plain-dir"
     mkdir -p "$dir"
@@ -190,7 +198,7 @@ test_poe_strip_keeps_sibling_keys() {
 # template fails here instead of mid-copy on a user's project; CODEOWNERS must be rendered.
 test_copy_manifests_match_templates() {
     local tier dir
-    for tier in ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db lib-minimal react-spa-webpack; do
+    for tier in ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db api-service-native-db lib-minimal react-spa-webpack; do
         dir="$WORK_DIR/manifest-$tier"
         mkdir -p "$dir"
         if bash -c 'source "$1"; PROJECT_PATH="$2"; TIER="$3"; GITHUB_USERNAME=octo; PROJECT_DISPLAY_NAME=Demo; REPOSITORY=octo/demo; export GITHUB_USERNAME PROJECT_DISPLAY_NAME REPOSITORY; copy_online_assets' _ "$PROMOTE_SCRIPT" "$dir" "$tier" >/dev/null 2>&1 \
@@ -342,6 +350,7 @@ EOF
 
 main() {
     test_unknown_tier
+    test_supported_tiers_are_known
     test_not_a_git_repo
     test_dirty_tree
     test_gh_unauthenticated

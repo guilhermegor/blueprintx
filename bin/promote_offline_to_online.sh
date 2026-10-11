@@ -20,7 +20,7 @@ BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
-TIERS=(ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db lib-minimal react-spa-webpack)
+TIERS=(ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db api-service-native-db lib-minimal react-spa-webpack)
 
 PROJECT_PATH=""
 TIER=""
@@ -39,7 +39,7 @@ Required:
   <project_path>           Path to the offline-scaffolded project to promote.
   --tier <tier>             ddd-service-native-db | ddd-service-orm-db |
                              mvc-service-native-db | mvc-service-orm-db |
-                             lib-minimal | react-spa-webpack
+                             api-service-native-db | lib-minimal | react-spa-webpack
 
 Options:
   --github-user <user>      GitHub owner for the new repo (default: `gh api user`).
@@ -227,8 +227,8 @@ resolve_identity() {
     export PROJECT_NAME PROJECT_DISPLAY_NAME GITHUB_USERNAME REPOSITORY
 }
 
-# Mirrors copy_github_assets() in the 4 native/ORM service scaffolds (bin/scaffold/python_*.sh) —
-# identical manifest across all four, transcribed rather than sourced (those scripts are held
+# Mirrors copy_github_assets() in the 5 service scaffolds (bin/scaffold/python_*_service*.sh) —
+# identical manifest across all five, transcribed rather than sourced (those scripts are held
 # by other PRs). See docs/offline-to-online.md for the source table.
 copy_online_assets_service_tier() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
