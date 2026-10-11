@@ -232,6 +232,42 @@ test_resume_refuses_foreign_dirty_path() {
     expect_refuses_with "resume refuses a dirty path outside the promotion's own" "changes outside a previous promotion" "$dir" --tier lib-minimal
 }
 
+# The GitGuardian key must exist BEFORE the push that triggers secret_scan.yaml, or the first
+# run on main is red. A logging gh stub records whether main already sat on the remote at each call.
+test_secret_is_set_before_the_push() {
+    local dir bare log
+    dir="$(make_git_repo "secret-order")"
+    bare="$WORK_DIR/secret-order.git"
+    git init -q --bare "$bare"
+    mkdir -p "$dir/.github/workflows"
+    echo "name: s" >"$dir/.github/workflows/secret_scan.yaml"
+    git -C "$dir" add -A
+    git -C "$dir" commit -q -m "chore: seed"
+    log="$WORK_DIR/secret-order.log"
+    : >"$log"
+    GITGUARDIAN_API_KEY=k bash -c '
+        source "$1"
+        PROJECT_PATH="$2"; REPOSITORY=o/r; VISIBILITY=private; BARE="$3"; LOG="$4"
+        gh() {
+            if [ "$1 $2" = "repo create" ]; then
+                echo "create $*" >>"$LOG"
+                git -C "$PROJECT_PATH" remote add origin "$BARE"
+            else
+                cat >/dev/null
+                echo "secret pushed=$(git -C "$BARE" rev-parse --verify -q refs/heads/main >/dev/null && echo yes || echo no)" >>"$LOG"
+            fi
+        }
+        create_remote; set_secret_scan_key; push_initial_commit
+    ' _ "$PROMOTE_SCRIPT" "$dir" "$bare" "$log" >/dev/null 2>&1
+    if grep -q '^secret pushed=no' "$log" && ! grep -q -- '--push' "$log" \
+        && git -C "$bare" rev-parse --verify -q refs/heads/main >/dev/null; then
+        echo "ok: the secret is set before the first push"
+    else
+        echo "FAIL (secret before push): $(tr '\n' '|' <"$log")"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 # The restored no-commit-to-branch hook must not block the promotion commit on main, and no
 # OTHER hook may be skipped: the stub refuses unless SKIP is exactly that one hook id.
 test_promotion_commit_skips_only_no_commit_to_branch() {
@@ -314,6 +350,7 @@ main() {
     test_already_online_is_a_noop
     test_origin_never_pushed_is_not_online
     test_flag_without_value
+    test_secret_is_set_before_the_push
     test_nested_repo_is_refused
     test_double_dash_takes_the_path
     test_resume_refuses_foreign_dirty_path

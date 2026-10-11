@@ -510,16 +510,22 @@ has_pushed_remote_ref() {
     git -C "$PROJECT_PATH" show-ref --verify --quiet refs/remotes/origin/main
 }
 
-# gh repo create --source=. --push both creates the remote GitHub repo AND pushes the
-# current branch in one step, provided the local commit above already landed.
-create_remote_and_push() {
+# Created WITHOUT --push so the secret can be set before the push that triggers the workflows;
+# otherwise the first secret_scan run starts with no key and is red.
+create_remote() {
     local visibility_flag="--private"
     [ "$VISIBILITY" = "public" ] && visibility_flag="--public"
-    (cd "$PROJECT_PATH" && gh repo create "$REPOSITORY" "$visibility_flag" --source=. --remote=origin --push) \
-        || exit_error "Failed to create/push $REPOSITORY via gh repo create. If the repo now exists on GitHub, add it with: git -C $PROJECT_PATH remote add origin <url> && git -C $PROJECT_PATH push -u origin HEAD"
+    (cd "$PROJECT_PATH" && gh repo create "$REPOSITORY" "$visibility_flag" --source=. --remote=origin) \
+        || exit_error "Failed to create $REPOSITORY via gh repo create. If it now exists on GitHub, add it with: git -C $PROJECT_PATH remote add origin <url> && git -C $PROJECT_PATH push -u origin HEAD"
+    print_status "success" "Created $REPOSITORY"
+}
+
+push_initial_commit() {
+    git -C "$PROJECT_PATH" push -q -u origin HEAD \
+        || exit_error "$REPOSITORY was created but the push failed — promotion is INCOMPLETE. Run: git -C $PROJECT_PATH push -u origin HEAD"
     has_pushed_remote_ref \
-        || exit_error "$REPOSITORY was created but nothing was pushed — promotion is INCOMPLETE. Run: git -C $PROJECT_PATH push -u origin HEAD"
-    print_status "success" "Created $REPOSITORY and pushed"
+        || exit_error "$REPOSITORY was created but main was not pushed — promotion is INCOMPLETE. Run: git -C $PROJECT_PATH push -u origin HEAD"
+    print_status "success" "Pushed $REPOSITORY"
 }
 
 # Key on stdin, never --body: --body exposes it in gh's process arguments (CWE-200).
@@ -600,8 +606,9 @@ main() {
     copy_online_assets
     remove_offline_only
     commit_promotion_changes
-    create_remote_and_push
+    create_remote
     set_secret_scan_key
+    push_initial_commit
     apply_branch_protection
     print_final_summary
 }
