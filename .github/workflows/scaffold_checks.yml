@@ -130,8 +130,11 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch --depth=1 origin "$BASE_REF"
-          if git show FETCH_HEAD:comment_budget_baseline.txt > "$RUNNER_TEMP/base_baseline.txt"; then
+          if [ -n "$(git ls-tree --name-only FETCH_HEAD -- comment_budget_baseline.txt)" ]; then
+            git show FETCH_HEAD:comment_budget_baseline.txt > "$RUNNER_TEMP/base_baseline.txt"
             python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline --compare-baseline "$RUNNER_TEMP/base_baseline.txt"
+          else
+            echo "base branch has no baseline yet; nothing to compare"
           fi
 
   complexity:

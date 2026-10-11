@@ -1068,6 +1068,170 @@ def test_prose_that_merely_mentions_a_linter_is_counted(
     assert _run(tmp_path, capsys)[0] == 1
 
 
+def test_a_trailing_comment_in_yaml_is_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: ``key: 1  # why`` is a comment.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    (tmp_path / "a.yaml").write_text("key: 1  # why\n", encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_a_hash_inside_a_yaml_string_is_not_a_comment(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A ``#`` inside quotes is data.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    (tmp_path / "a.yaml").write_text('key: "a # b"\n', encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_a_jsdoc_block_and_trailing_slash_comment_are_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: ``/** */`` and ``x; // y`` in TypeScript count per line.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    (tmp_path / "a.ts").write_text("/**\n * Doc.\n */\nconst x = 1; // y\n", encoding="utf-8")
+    int_code, str_out = _run(tmp_path, capsys)
+    assert (int_code, "a.ts: 4 comment line(s)" in str_out) == (1, True)
+
+
+def test_a_url_inside_a_ts_string_is_not_a_comment(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """``"http://x"`` holds no ``//`` comment.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    (tmp_path / "a.ts").write_text('const u = "http://x";\n', encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_a_banner_word_outside_the_file_head_is_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: ``~`` entries only exempt a generated-file banner near the top.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    str_source = "X = 1\n" * 20 + "# this is not @generated at all\n"
+    (tmp_path / "a.py").write_text(str_source, encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_an_empty_allowlist_pattern_is_rejected(
+    tmp_path: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Should-fail witness: a lone ``~`` would exempt everything, so it is an error.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    monkeypatch : pytest.MonkeyPatch
+        Points the gate at a bad allowlist.
+    """
+    (tmp_path / "a.py").write_text("# prose\nX = 1\n", encoding="utf-8")
+    path_list = tmp_path / "allow.txt"
+    path_list.write_text("~\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "PATH_ALLOWLIST", path_list)
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_compare_baseline_without_a_value_is_a_finding(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: no traceback for a missing flag value.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "X = 1\n")
+    assert gate.main(["--root", str(tmp_path), "--compare-baseline"]) == 1
+
+
+def test_compare_baseline_with_a_missing_file_is_a_finding(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: no traceback for an unreadable reference.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "X = 1\n")
+    assert _run(tmp_path, capsys, "--compare-baseline", str(tmp_path / "nope.txt"))[0] == 1
+
+
+def test_a_committed_rename_is_still_detected(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: rename detection uses the merge-base, not just ``HEAD``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _git(tmp_path, "init", "-q", "-b", "main")
+    (tmp_path / "old.py").write_text("# one\nX = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "old.py")
+    _git(tmp_path, "commit", "-qm", "x")
+    _git(tmp_path, "update-ref", "refs/remotes/origin/main", "HEAD")
+    _git(tmp_path, "mv", "old.py", "a.py")
+    _git(tmp_path, "commit", "-qm", "mv")
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("1 old.py\n", encoding="utf-8")
+    _run(tmp_path, capsys, "--write-baseline")
+    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
+
+
 _DICT_ALLOWED = {
     "noqa": "X = 1  # noqa: E501\n",
     "type_ignore": "X = 1  # type: ignore[assignment]\n",

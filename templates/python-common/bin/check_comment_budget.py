@@ -20,10 +20,12 @@ Three independent checks, never conflated:
    one-line comment between two such rules.
 
 Comments come from ``tokenize`` for Python (a ``#`` inside a string is never one, and
-docstrings are not comments) and from line-start markers for ``#`` and ``//`` file
-types. Trailing comments in non-Python files and ``/* */`` blocks are not seen, and
-markdown is not scanned at all, so the ``<!-- -->`` template instructions are out of
-scope by construction.
+docstrings are not comments) and from a string-aware scan for ``#`` and ``//`` file
+types, which counts trailing comments and ``/* */`` / JSDoc blocks line by line. The
+run-length and banner checks still look only at full-line runs. Markdown is not
+scanned at all, so the ``<!-- -->`` template instructions are out of scope by
+construction. Allowlist entries match the START of a comment; ``~text`` entries
+(generated-file banners) match anywhere but only in a file's first lines.
 
 A pragma or structural line (shebang, coding cookie) is never counted and BREAKS a
 run rather than extending it. The allowlist is a data file of substrings, anticipatory
@@ -95,6 +97,7 @@ PATH_ALLOWLIST = pathlib.Path(__file__).resolve().parent / "comment_budget_allow
 STR_BASELINE_NAME = "comment_budget_baseline.txt"
 STR_WRITE_BASELINE = "--write-baseline"
 STR_ANYWHERE = "~"
+INT_BANNER_HEAD = 10
 STR_REQUIRE_BASELINE = "--require-baseline"
 STR_COMPARE_BASELINE = "--compare-baseline"
 
@@ -131,14 +134,43 @@ def load_allowlist() -> tuple:
         see ``main``'s zero-discovery guard for the same principle applied here.
     """
     str_text = PATH_ALLOWLIST.read_text(encoding="utf-8")
-    return tuple(
+    tuple_entries = tuple(
         str_line.strip()
         for str_line in str_text.splitlines()
         if str_line.strip() and not str_line.lstrip().startswith("#")
     )
+    if any(not str_entry.lstrip(STR_ANYWHERE) for str_entry in tuple_entries):
+        raise ValueError(
+            f"{PATH_ALLOWLIST.name} has an empty pattern, which would exempt everything"
+        )
+    return tuple_entries
 
 
-def is_pragma_line(str_content: str, tuple_allowlist: tuple) -> bool:
+def matches_entry(str_entry: str, str_text: str, int_line: int) -> bool:
+    """Return whether one allowlist entry exempts a comment.
+
+    Parameters
+    ----------
+    str_entry : str
+        An entry: a prefix of the comment, or ``~text`` for a generated-file banner,
+        which matches anywhere in the comment but only within the first
+        ``INT_BANNER_HEAD`` lines of a file.
+    str_text : str
+        The comment's text, marker stripped.
+    int_line : int
+        The comment's 1-indexed line.
+
+    Returns
+    -------
+    bool
+        True when the entry exempts the comment.
+    """
+    if not str_entry.startswith(STR_ANYWHERE):
+        return str_text.startswith(str_entry)
+    return int_line <= INT_BANNER_HEAD and str_entry[1:] in str_text
+
+
+def is_pragma_line(str_content: str, tuple_allowlist: tuple, int_line: int = 1) -> bool:
     """Return whether a comment line is machine-read configuration, not prose.
 
     Parameters
@@ -146,7 +178,9 @@ def is_pragma_line(str_content: str, tuple_allowlist: tuple) -> bool:
     str_content : str
         The comment's text, marker already stripped.
     tuple_allowlist : tuple of str
-        Suppression substrings from ``load_allowlist``.
+        Suppression entries from ``load_allowlist``.
+    int_line : int, optional
+        The comment's 1-indexed line; ``~`` entries only match near the top.
 
     Returns
     -------
@@ -155,13 +189,8 @@ def is_pragma_line(str_content: str, tuple_allowlist: tuple) -> bool:
         exemption (SPDX header, generated-file banner) and must break — never
         extend — a comment run.
     """
-    str_text = str_content.strip()
-    return any(
-        (str_pragma[1:] in str_text)
-        if str_pragma.startswith(STR_ANYWHERE)
-        else str_text.startswith(str_pragma)
-        for str_pragma in tuple_allowlist
-    )
+    str_text = str_content.strip().lstrip("*").strip()
+    return any(matches_entry(str_pragma, str_text, int_line) for str_pragma in tuple_allowlist)
 
 
 def line_breaks_run(int_line: int, str_raw: str, str_content: str, tuple_allowlist: tuple) -> bool:
@@ -190,7 +219,7 @@ def line_breaks_run(int_line: int, str_raw: str, str_content: str, tuple_allowli
     bool_structural = int_line <= INT_STRUCTURAL_LINE_LIMIT and (
         str_raw.startswith("#!") or bool(RE_ENCODING_DECL.search(str_content))
     )
-    return bool_structural or is_pragma_line(str_content, tuple_allowlist)
+    return bool_structural or is_pragma_line(str_content, tuple_allowlist, int_line)
 
 
 def _flush_block(list_out: list, int_start: int, list_block: list) -> list:
@@ -548,8 +577,76 @@ def audit_paths() -> list:
     return sorted(set(list_paths))
 
 
+RE_HASH_TOKEN = re.compile(r"""'[^'\n]*'|"(?:\\.|[^"\\\n])*"|(?<!\S)#[^\n]*""")
+RE_SLASH_TOKEN = re.compile(
+    r"""'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`[^`]*`|//[^\n]*|/\*.*?\*/""", re.DOTALL
+)
+RE_SHA_PIN = re.compile(r"@[0-9a-f]{40}\b")
+RE_VERSION_NOTE = re.compile(r"^\s*v?\d+(\.\d+)*\S*\s*$")
+
+
+def scan_comments(str_source: str, str_marker: str) -> list:
+    """Return every comment line in a ``#`` or ``//`` file, trailing and ``/* */`` included.
+
+    Strings are skipped so a ``#`` or ``//`` inside one is not a comment. A multi-line
+    block comment yields one entry per line it spans.
+
+    Parameters
+    ----------
+    str_source : str
+        The file's text.
+    str_marker : str
+        ``"#"`` or ``"//"``.
+
+    Returns
+    -------
+    list of tuple
+        ``(int_line, str_text)``, text with the marker (``#``, ``//``, ``/*``) removed.
+    """
+    re_token = RE_HASH_TOKEN if str_marker == "#" else RE_SLASH_TOKEN
+    list_out = []
+    for cls_match in re_token.finditer(str_source):
+        str_found = cls_match.group()
+        if not str_found.startswith((str_marker, "/*")):
+            continue
+        int_first = str_source.count("\n", 0, cls_match.start()) + 1
+        str_body = (
+            str_found[len(str_marker) :] if str_found.startswith(str_marker) else str_found[2:-2]
+        )
+        list_out.extend(
+            (int_first + int_i, str_text) for int_i, str_text in enumerate(str_body.split("\n"))
+        )
+    return list_out
+
+
+def counted_comments(str_source: str, str_marker: str) -> list:
+    """Return the comment lines that count: every one outside the allowlist.
+
+    Parameters
+    ----------
+    str_source : str
+        The file's text.
+    str_marker : str
+        ``"#"`` or ``"//"``.
+
+    Returns
+    -------
+    list of tuple
+        ``(int_line, str_text)`` per counted comment line. A ``# vX`` after a SHA-pinned
+        ``uses:`` is exempt: Dependabot rewrites it and it is the only readable version.
+    """
+    tuple_allowlist = load_allowlist()
+    list_lines = str_source.splitlines()
+    return [
+        (int_line, str_text)
+        for int_line, str_text in scan_comments(str_source, str_marker)
+        if not line_breaks_run(int_line, str_marker + str_text, str_text, tuple_allowlist)
+        and not (RE_SHA_PIN.search(list_lines[int_line - 1]) and RE_VERSION_NOTE.match(str_text))
+    ]
+
+
 def comment_line_count(path_file: pathlib.Path) -> int:
-    """Count the non-allowlisted comment lines in one file.
+    """Count the non-allowlisted comment lines in one file, trailing comments included.
 
     Parameters
     ----------
@@ -568,12 +665,9 @@ def comment_line_count(path_file: pathlib.Path) -> int:
         str_source = path_file.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return 0
-    list_blocks = (
-        python_blocks(str_source)
-        if path_file.suffix == ".py"
-        else marker_blocks(str_source, str_marker)
-    )
-    return sum(len(list_lines) for _, list_lines in list_blocks)
+    if path_file.suffix == ".py":
+        return sum(len(list_lines) for _, list_lines in python_blocks(str_source))
+    return len(counted_comments(str_source, str_marker))
 
 
 def shown_path(path_file: pathlib.Path) -> str:
@@ -705,30 +799,69 @@ def write_baseline(dict_counts: dict) -> None:
     print(f"wrote {len(dict_counts)} file(s), {sum(dict_counts.values())} comment line(s)")
 
 
+def git_out(*list_args: str) -> str:
+    """Run a read-only git command inside ``PATH_ROOT`` and return stdout, "" on failure.
+
+    Parameters
+    ----------
+    *list_args : str
+        Git arguments.
+
+    Returns
+    -------
+    str
+        Standard output, or an empty string when git is unavailable or fails.
+    """
+    try:
+        return subprocess.run(  # noqa: S603 -- fixed git argv, no shell
+            ["git", "-C", str(PATH_ROOT), *list_args],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+def default_base() -> str:
+    """Return the ref renames are detected against: the merge-base with origin's default.
+
+    Returns
+    -------
+    str
+        ``merge-base(origin/main, HEAD)`` or the ``origin/master`` equivalent; ``HEAD``
+        when neither exists, which still sees an uncommitted ``git mv``.
+    """
+    for str_ref in ("origin/main", "origin/master"):
+        str_base = git_out("merge-base", str_ref, "HEAD").strip()
+        if str_base:
+            return str_base
+    return "HEAD"
+
+
 def rename_map(str_base: str) -> dict:
     """Return ``{new_path: old_path}`` for renames git detects between ``str_base`` and now.
 
     Parameters
     ----------
     str_base : str
-        Git ref to diff the working tree against (``HEAD`` locally, ``FETCH_HEAD`` in CI).
+        Git ref to diff the working tree against; committed and uncommitted renames
+        both show.
 
     Returns
     -------
     dict
         Empty when git is unavailable or nothing was renamed.
     """
-    try:
-        str_out = subprocess.run(  # noqa: S603 -- fixed git argv, no shell
-            ["git", "-C", str(PATH_ROOT), "diff", "-M", "--name-status", str_base],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-    except (OSError, subprocess.CalledProcessError):
-        return {}
-    list_rows = [str_row.split("\t") for str_row in str_out.splitlines()]
-    return {list_row[2]: list_row[1] for list_row in list_rows if list_row[0].startswith("R")}
+    list_tokens = git_out("diff", "-M", "-z", "--name-status", str_base, "--").split("\0")
+    dict_out = {}
+    int_i = 0
+    while int_i < len(list_tokens) - 1:
+        bool_rename = list_tokens[int_i].startswith("R")
+        if bool_rename:
+            dict_out[list_tokens[int_i + 2]] = list_tokens[int_i + 1]
+        int_i += 3 if bool_rename else 2
+    return dict_out
 
 
 def raised_rows(dict_new: dict, dict_old: dict, dict_renames: dict) -> list:
@@ -781,7 +914,7 @@ def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
     dict_counts = current_counts(list_paths)
     dict_old = load_baseline()
     list_raised = (
-        [] if dict_old is None else raised_rows(dict_counts, dict_old, rename_map("HEAD"))
+        [] if dict_old is None else raised_rows(dict_counts, dict_old, rename_map(default_base()))
     )
     for str_message in list_raised:
         print(str_message)
@@ -807,7 +940,11 @@ def compare_problems(str_reference: str) -> list:
         Findings; empty when the committed baseline did not go up.
     """
     dict_ref = {}
-    for str_line in pathlib.Path(str_reference).read_text(encoding="utf-8").splitlines():
+    try:
+        str_ref_text = pathlib.Path(str_reference).read_text(encoding="utf-8")
+    except OSError as cls_error:
+        raise ValueError(f"cannot read the reference baseline {str_reference}") from cls_error
+    for str_line in str_ref_text.splitlines():
         if str_line.strip():
             dict_ref.update(parse_baseline_row(str_line))
     return raised_rows(load_baseline() or {}, dict_ref, rename_map("FETCH_HEAD"))
@@ -884,6 +1021,8 @@ def split_flags(list_rest: list) -> tuple:
     list_names = list(list_rest)
     if STR_COMPARE_BASELINE in list_names:
         int_at = list_names.index(STR_COMPARE_BASELINE)
+        if int_at + 1 >= len(list_names):
+            raise ValueError(f"{STR_COMPARE_BASELINE} needs a file")
         str_reference = list_names[int_at + 1]
         del list_names[int_at : int_at + 2]
     bool_write = STR_WRITE_BASELINE in list_names

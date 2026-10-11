@@ -216,8 +216,8 @@ comment that narrates what the line *used to* say and why that reasoning was rep
 i.e. a changelog living inside the file. Git, the issue, and the PR body already keep that
 history rigorously, which is exactly why the comment is redundant rather than precious.
 
-The rule: a narrative of what the line used to say belongs in
-`docs/decision-records.md` (BlueprintX's own repo) or the issue, and the comment is deleted.
+The rule: a narrative of what the line used to say belongs in the issue or PR, and the
+comment is deleted.
 No pointer is left behind (blueprintx#304). A
 measurement that justifies today's value moves to docs the same way. Only QA-suppression
 comments (`noqa`, `complexity-ok`, `type: ignore`, `codespell:ignore`) stay, with their reason.
