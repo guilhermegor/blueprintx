@@ -24,6 +24,7 @@ nav:
   - Coverage Floor: coverage-floor.md
   - Decision Records: decision-records.md
   - Issue Scope: issue-scope.md
+  - Offline to Online: offline-to-online.md
   - Quality Gate Blind Spots: quality-gate-blind-spots.md
   - Required Status Checks: required-status-checks.md
   - SonarQube Evaluation: sonarqube-evaluation.md
