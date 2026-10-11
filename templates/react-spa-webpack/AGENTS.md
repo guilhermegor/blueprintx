@@ -30,8 +30,9 @@ it through `--build-arg NODE_VERSION="$(cat .nvmrc)"`. `package.json`'s
 
 ## Deployment — GitHub Pages
 
-The scaffold ships `.github/workflows/deploy-spa.yml`, which on every push
-to `main`:
+Applies only if GitHub Pages was chosen at scaffold time (Vercel ships
+`.github/workflows/deploy-vercel.yml` and `vercel.json` instead). It ships
+`.github/workflows/deploy-spa.yml`, which on every push to `main`:
 
 1. Builds the SPA with `PUBLIC_PATH=/<repo-name>/` so assets resolve under
    the project-site subpath. The same value is inlined into the bundle
@@ -149,8 +150,10 @@ docker run --rm -p 8080:80 ${PROJECT_NAME}   # → http://localhost:8080
 
 Build-time env vars (e.g. an API key) reach the bundle via the BuildKit secret
 mounted at `/run/secrets/env`; webpack's `readEnvFile()` + `DefinePlugin` inline
-them. Because it's a *secret mount* (not `ARG`/`ENV`), the value never lands in
-an image layer or the image metadata. `nginx.conf` provides the SPA route
+them. Because it's a *secret mount* (not `ARG`/`ENV`), the source `.env` never
+lands in an image layer or the image metadata. But whatever `DefinePlugin` inlines
+is in the shipped client bundle, so never put a real secret in a build-time var.
+`nginx.conf` provides the SPA route
 fallback (`try_files … /index.html`) and long-lived immutable caching for the
 fingerprinted `[contenthash]` assets.
 
