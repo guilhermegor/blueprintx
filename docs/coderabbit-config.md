@@ -17,11 +17,14 @@ reviews on a repository with fewer than 10 stars, and that threshold is not conf
 
 ## It is not the quota driver
 
-`coderabbit_trigger.yaml` fires on `synchronize` (every push to an open PR) and posts an
-explicit review request, which CodeRabbit honours regardless of this file. Measured on
-2026-08-30 across 71 PRs updated in the prior 7 days: 773 CodeRabbit events followed each
-PR's opening review, 42 (5.4%) produced a new finding, and 538 (69.6%) were rate-limit notices.
-The remedy for that waste is in the trigger workflow, not here.
+Online Python projects ship `coderabbit_trigger.yaml`, which posts an explicit review request
+on `opened`, `reopened`, and `ready_for_review`, regardless of this file. It no longer fires on
+`synchronize`; another review is requested deliberately with `@coderabbitai full review`.
+
+Before `synchronize` was removed, measurements on 2026-08-30 across 71 PRs updated in the prior
+7 days found 773 CodeRabbit events after each PR's opening review. Of those, 42 (5.4%) produced
+a new finding and 538 (69.6%) were rate-limit notices. Removing the push trigger addressed that
+waste; this configuration does not control explicit review requests.
 
 ## Validation
 
