@@ -1131,7 +1131,8 @@ def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
         str(d["marker"]).strip().casefold()
         for d in (dict_yaml.get("reviewers") or [])
         if isinstance(d, dict)
-        and d.get("kind") == _KIND_COMMENT_MARKER and str(d.get("marker") or "").strip()
+        and d.get("kind") == _KIND_COMMENT_MARKER
+        and str(d.get("marker") or "").strip()
     )
 
 
