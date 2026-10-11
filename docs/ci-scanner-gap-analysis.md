@@ -396,3 +396,34 @@ against #305, not a PR yet.
 - **semgrep** — deferred per §4; the next step is a spike (one custom rule, e.g. a Semgrep
   equivalent of `check_layer_imports.py`'s core check, measured against the hand-written
   version's line count and false-positive rate) before an adoption PR is worth writing.
+
+## Deltas (2026-10-11 re-measurement)
+
+Re-run with gitleaks 8.30.1, osv-scanner 2.6.0, jscpd 4.3.0 and semgrep 1.177.0 against
+`origin/main` and fresh scaffolds (`mvc-service-native-db`, `react-spa-webpack`, `ts-lib`).
+The verdicts above hold; these four findings are new and change how the adoption PRs must
+be written.
+
+- **jscpd: `--gitignore` silently drops most of `templates/`.** With `--gitignore` (the shape
+  copied from ditto) jscpd read 252 files; on a copy of the tree with the root `.gitignore`
+  removed it read 961 (676 clones, 14.6% duplicated lines, 12s). The root `.gitignore`
+  negation block for `templates/` is not honoured by jscpd's matcher, so a gate configured
+  that way would report a clean-looking number for about a quarter of the repo. The adoption
+  PR must use explicit `ignore` globs and assert the scanned-file count.
+- **osv-scanner: `--offline` is a false green.** With no cached database, `scan source
+  --offline` exits 127 with "Total 0 packages affected", which reads as a clean scan.
+  A TS library scaffold with no lockfile exits 128 ("No package sources found"), and a fresh
+  Python scaffold ships no `poetry.lock`, only the 3-line bootstrap `requirements.txt`. The
+  gate must run after `poetry lock`/`npm install`, treat 127 and 128 as failures, and never
+  use `--offline` without a downloaded database.
+- **The `mysql-connector-python` cap forces a known CVE.** The `>=8.3,<9.0` constraint in
+  the ddd, api and mvc native-db templates resolves to 8.4.0 (`poetry lock`, 11s), which
+  osv-scanner flags as CVE-2024-21272 (PYSEC-2026-1685, CVSS 7.7, fixed in 9.1.0). The
+  comment on the cap says 9.x needs a system `libmysqlclient`, so lifting it is a trade-off
+  for the owner, not a free fix.
+- **semgrep spike: a custom Bash rule works offline.** An 8-line local rule
+  (`pattern: eval $X`, `languages: [bash]`) scanned the tree in 2s with no registry access and
+  flagged `eval "$str_fn"` in `bin/ci/check_review_bot_roster_optout.sh`, which shellcheck
+  does not report. 18 of 93 shell files only parse partially. This is the spike the deferral
+  in §4 asks for; the case for semgrep now rests on custom Bash and YAML rules, since the
+  registry packs still mostly re-find ruff `S` findings.
