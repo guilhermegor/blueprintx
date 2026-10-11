@@ -684,7 +684,6 @@ jobs:
           SCAFFOLD_SPEC_FILE: bin/ci/optin_specs/storage.answers
         run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
 
-  # Scaffolds for real, then builds and lints (#726); rationale: CONTRIBUTING.md, "TypeScript build + lint gate".
   typecheck-ts:
     name: TypeScript build + lint — ${{ matrix.skeleton }} template
     runs-on: ubuntu-latest
@@ -709,16 +708,13 @@ jobs:
           GITHUB_USERNAME: ci-bot
           SKELETON: ${{ matrix.skeleton }}
         run: |
-          # Git identity is required for the scaffold's first commit; CI runners have none.
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "ci-bot"
           scaffold="$(grep '^scaffold=' "templates/$SKELETON/skeleton.meta" | cut -d= -f2-)"
-          # Finite stdin: every prompt takes its default (CONTRIBUTING.md, "TypeScript build + lint gate").
           bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" </dev/null
 
       - name: Install npm dependencies (npm ci where a lockfile ships, #464)
         working-directory: ${{ runner.temp }}/ci-scaffold
-        # ts-lib ships no lockfile, so its leg floats on npm install, as a user's first install does.
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
       - name: Type-check (tsc --noEmit)
