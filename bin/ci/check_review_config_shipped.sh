@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$REPO_ROOT/bin/lib/spec.sh"
+
+MANIFEST="$REPO_ROOT/templates/common/review-config.manifest"
+int_failures=0
+
+fail() {
+    echo "ERROR: $*" >&2
+    int_failures=$((int_failures + 1))
+}
+
+manifest_paths() {
+    grep -vE '^[[:space:]]*$' "$MANIFEST"
+}
+
+skeleton_meta_files() {
+    local str_only="${1:-}" str_meta
+    for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
+        [ -z "$str_only" ] || [ "$(basename "$(dirname "$str_meta")")" = "$str_only" ] || continue
+        printf '%s\n' "$str_meta"
+    done
+}
+
+meta_field() {
+    grep "^$2=" "$1" | cut -d= -f2-
+}
+
+check_content() {
+    :
+}
+
+check_static() {
+    local str_meta str_script str_path str_needle
+    while IFS= read -r str_path; do
+        [ -e "$REPO_ROOT/templates/common/$str_path" ] \
+            || fail "manifest path '$str_path' does not exist under templates/common/"
+    done < <(manifest_paths)
+    while IFS= read -r str_meta; do
+        str_script="$REPO_ROOT/$(meta_field "$str_meta" scaffold)"
+        while IFS= read -r str_path; do
+            str_needle="${str_path%%/*}"
+            grep -qF "$str_needle" "$str_script" \
+                || fail "$(basename "$str_script") never copies '$str_path'"
+        done < <(manifest_paths)
+    done < <(skeleton_meta_files)
+}
+
+check_project() {
+    local str_project="$1" str_path
+    while IFS= read -r str_path; do
+        [ -e "$str_project/$str_path" ] || fail "generated project lacks '$str_path'"
+    done < <(manifest_paths)
+    check_content "$str_project"
+}
+
+scaffold_skeleton() {
+    local str_name="$1" str_scaffold="$2" str_work="$3"
+    if spec_skeleton_supported "$str_name"; then
+        spec_stdin_for_skeleton "$str_name" "" \
+            | GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold" \
+                "$str_work" ci-scaffold "CI review-config check" "0.0.1" >/dev/null
+    else
+        GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold" \
+            "$str_work" ci-scaffold "CI review-config check" "0.0.1" \
+            < <(printf '\n%.0s' {1..100}) >/dev/null
+    fi
+}
+
+check_generated() {
+    local str_meta str_name str_work int_before
+    git config --global user.email >/dev/null 2>&1 || git config --global user.email "ci-bot@example.com"
+    git config --global user.name >/dev/null 2>&1 || git config --global user.name "ci-bot"
+    while IFS= read -r str_meta; do
+        str_name="$(basename "$(dirname "$str_meta")")"
+        str_work="$(mktemp -d)"
+        int_before=$int_failures
+        if scaffold_skeleton "$str_name" "$(meta_field "$str_meta" scaffold)" "$str_work"; then
+            check_project "$str_work/ci-scaffold"
+        else
+            fail "scaffolding '$str_name' failed"
+        fi
+        rm -rf "$str_work"
+        [ "$int_failures" -gt "$int_before" ] && echo "  FAIL $str_name" || echo "  ok   $str_name"
+    done < <(skeleton_meta_files "${1:-}")
+}
+
+main() {
+    [ -f "$MANIFEST" ] || { echo "ERROR: $MANIFEST missing" >&2; exit 1; }
+    case "${1:-}" in
+        --static) check_static ;;
+        --generated)
+            [ "${2:-}" != "--skeleton" ] || [ -n "${3:-}" ] || { echo "ERROR: --skeleton needs a name" >&2; exit 2; }
+            check_generated "${3:-}"
+            ;;
+        --project) check_project "${2:?generated project dir required}" ;;
+        *) echo "usage: $0 --static | --generated [--skeleton <name>] | --project <dir>" >&2; exit 2 ;;
+    esac
+    [ "$int_failures" -eq 0 ] || exit 1
+    echo "OK: every skeleton ships the review config in $(basename "$MANIFEST")."
+}
+
+main "$@"

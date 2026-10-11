@@ -226,6 +226,30 @@ no patch text, or a full 300-file list is read as "not covered". The compare API
 300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
 
+## Why does every scaffold have to ship the hosted-reviewer config?
+
+Every generated project ships the configuration for the hosted reviewers (CodeRabbit,
+Greptile and Graphite). Left as a copy list maintained by hand in nine scaffold scripts, that
+drifts: MVC once silently lacked `poetry.toml` and `.coveragerc`. The required paths are
+listed once, one per line, in `templates/common/review-config.manifest`, and
+`bin/ci/check_review_config_shipped.sh` checks them in three modes:
+
+- `--static` (pre-commit hook `review-config-shipped`): every manifest path exists under
+  `templates/common/`, and every skeleton script discovered from `templates/*/skeleton.meta`
+  mentions it.
+- `--generated` (CI job `review-config-shipped`): scaffolds each discovered skeleton with its
+  default answers and asserts every manifest path is in the generated tree. This is the real
+  oracle: a `cp` line that sits behind a branch the default answers never take passes
+  `--static` and fails here. `--skeleton <name>` narrows it to one.
+- `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
+  assertion over one already-generated project.
+
+The manifest only grows: the change that ships a reviewer config file adds that file's path
+to the manifest in the same pull request. `check_content` in the script is the hook point for
+content checks, such as keeping Greptile queue-only. `tests/test_check_review_config_shipped.sh`
+removes a `cp` line, a manifest file and an unshipped entry from a copy of the tree and shows
+the gate going red in both modes.
+
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.

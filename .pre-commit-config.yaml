@@ -340,6 +340,13 @@ repos:
         pass_filenames: false
         files: ^(Makefile|tasks\.sh|bin/help\.sh|bin/check_makefile_pairing\.sh)$
 
+      - id: review-config-shipped
+        name: every skeleton ships the hosted-reviewer config (blueprintx#740)
+        entry: bash bin/ci/check_review_config_shipped.sh --static
+        language: system
+        pass_filenames: false
+        files: ^(bin/scaffold/.*\.sh|templates/common/.*|templates/[^/]+/skeleton\.meta|bin/ci/check_review_config_shipped\.sh)$
+
       - id: precommit-ci-parity
         name: pre-commit and CI run the same checks, both directions (blueprintx#384)
         entry: bash bin/check_precommit_ci_parity.sh
