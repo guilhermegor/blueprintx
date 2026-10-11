@@ -986,6 +986,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#deltas-2026-10-11-re-measurement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deltas (2026-10-11 re-measurement)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1976,6 +1987,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#deltas-2026-10-11-re-measurement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deltas (2026-10-11 re-measurement)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2412,6 +2434,50 @@ against #305, not a PR yet.</p>
 <li><strong>semgrep</strong> — deferred per §4; the next step is a spike (one custom rule, e.g. a Semgrep
   equivalent of <code>check_layer_imports.py</code>'s core check, measured against the hand-written
   version's line count and false-positive rate) before an adoption PR is worth writing.</li>
+</ul>
+<h2 id="deltas-2026-10-11-re-measurement">Deltas (2026-10-11 re-measurement)<a class="headerlink" href="#deltas-2026-10-11-re-measurement" title="Permanent link">&para;</a></h2>
+<p>Re-run with gitleaks 8.30.1, osv-scanner 2.6.0, jscpd 4.3.0 and semgrep 1.177.0 against
+<code>origin/main</code> at <code>e5b9f01a</code> and fresh scaffolds (<code>mvc-service-native-db</code>, <code>react-spa-webpack</code>, <code>ts-lib</code>).
+The verdicts above hold; these four findings are new and change how the adoption PRs must
+be written.</p>
+<ul>
+<li><strong>jscpd: <code>--gitignore</code> silently drops most of <code>templates/</code>.</strong> With <code>--gitignore</code> (the shape
+  copied from ditto) jscpd read 252 files; on a copy of the tree with the root <code>.gitignore</code>
+  removed it read 961 (676 clones, 14.6% duplicated lines, 12s). The root <code>.gitignore</code>
+  negation block for <code>templates/</code> is not honoured by jscpd's matcher, so a gate configured
+  that way would report a clean-looking number for about a quarter of the repo. The adoption
+  PR must use explicit <code>ignore</code> globs and assert the scanned-file count.</li>
+<li><strong>osv-scanner: <code>--offline</code> is a false green.</strong> With no cached database, <code>scan source
+  --offline</code> exits 127 with "Total 0 packages affected", which reads as a clean scan.
+  A TS library scaffold with no lockfile exits 128 ("No package sources found"), and a fresh
+  Python scaffold ships no <code>poetry.lock</code>, only the 3-line bootstrap <code>requirements.txt</code>. The
+  gate must run after <code>poetry lock</code>/<code>npm install</code>, treat 127 and 128 as failures, and never
+  use <code>--offline</code> without a downloaded database.</li>
+<li><strong>The <code>mysql-connector-python</code> cap forces a known CVE.</strong> The <code>&gt;=8.3,&lt;9.0</code> constraint in
+  the ddd, api and mvc native-db templates resolves to 8.4.0 (<code>poetry lock</code>, 11s), which
+  osv-scanner flags as CVE-2024-21272 (PYSEC-2026-1685, CVSS 7.7, fixed in 9.1.0). The
+  comment on the cap says 9.x needs a system <code>libmysqlclient</code>, so lifting it is a trade-off
+  for the owner, not a free fix.</li>
+<li><strong>semgrep spike: initial Bash evidence, comparison still outstanding.</strong> A local rule
+  (<code>id: bash-eval</code>, <code>languages: [bash]</code>, <code>severity: WARNING</code>, <code>pattern: eval $X</code>) run as
+  <code>semgrep scan --metrics=off --disable-version-check --config rules &lt;tree&gt;</code> scanned a plain
+  copy of <code>e5b9f01a</code> in 2s with no registry access and flagged <code>eval "$str_fn"</code> in
+  <code>bin/ci/check_review_bot_roster_optout.sh</code>, which shellcheck does not report. That line
+  runs a function body extracted from a repository file on purpose, so the hit alone is not
+  a case for blocking a gate. 18 of 93 shell files only parse partially. The comparison §4
+  asks for (line count and false-positive rate against a hand-written equivalent) is not
+  done, so the spike stays open; the case for semgrep rests on custom Bash and YAML rules,
+  since the registry packs still mostly re-find ruff <code>S</code> findings.</li>
+</ul>
+<p>Commands behind the other three findings, run from the repository root of <code>e5b9f01a</code>:</p>
+<ul>
+<li>jscpd: <code>jscpd . --min-tokens 50 --min-lines 5 --mode strict --gitignore --ignore
+  "**/.git/**,**/node_modules/**,**/.venv/**,**/package-lock.json,**/poetry.lock"</code> reads 252
+  files; the same command on a <code>git archive HEAD</code> copy with <code>.gitignore</code> removed reads 961.</li>
+<li>osv-scanner: <code>osv-scanner scan source -r &lt;project&gt;</code> and the same with <code>--offline</code>, on the
+  scaffolds (exit codes 1, 127 and 128 as described above).</li>
+<li>mysql-connector: <code>poetry lock</code> in the scaffolded <code>mvc-service-native-db</code> project, then
+  <code>osv-scanner scan source -r .</code>.</li>
 </ul>
 
 
