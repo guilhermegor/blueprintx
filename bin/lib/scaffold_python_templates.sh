@@ -227,8 +227,13 @@ scaffold_copy_executables_and_vscode() {
 	cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" \
 		"$str_project_path/bin/check_review_threads.py"
 	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-	# commit, never templated principles. See .specs/spec.md for the id conventions.
+	# commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
 	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
+	# The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
+	# implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
+	cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" \
+		"$str_project_path/bin/check_specs_structure.sh"
+	chmod +x "$str_project_path/bin/check_specs_structure.sh"
 
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"
@@ -274,6 +279,14 @@ scaffold_copy_leaf_docs() {
 	cp "$COMMON_TEMPLATE_ROOT/src/utils/CLAUDE.md" "$str_project_path/src/utils/CLAUDE.md"
 }
 
+# The tier scaffold already copied the CLAUDE.md @import bridge; this ships its target.
+scaffold_copy_agents_md() {
+	local str_tier="$1"
+	local str_project_path="$2"
+
+	cp "$BLUEPRINTX_ROOT/templates/$str_tier/AGENTS.md" "$str_project_path/AGENTS.md"
+}
+
 scaffold_copy_common_templates() {
 	local str_tier="$1"
 	local str_project_path="$2"
@@ -286,6 +299,7 @@ scaffold_copy_common_templates() {
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
 	scaffold_copy_docs_extras "$str_project_path"
 	scaffold_copy_leaf_docs "$str_project_path"
+	scaffold_copy_agents_md "$str_tier" "$str_project_path"
 	# Every skeleton's root CLAUDE.md points readers at `.claude/CLAUDE.md` for the
 	# conventions shared across all skeletons (blueprintx#549) — copy the single
 	# source so that pointer resolves instead of dangling.

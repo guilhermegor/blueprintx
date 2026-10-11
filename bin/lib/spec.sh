@@ -62,6 +62,10 @@ spec_get() {
         # normal, expected case of "fall back to default" — not tail/cut's own
         # (always 0) status. `|| true` keeps that from reading as a failure.
         value=$(grep "^${key}=" "$file" | tail -n1 | cut -d= -f2-) || true
+        # A spec saved with CRLF line endings (Windows) leaves a trailing \r on every value, and
+        # `[:space:]` covers it. Trimmed here, where every caller reads, not only in spec_yn.
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
     fi
     printf '%s' "${value:-$default}"
 }
@@ -187,13 +191,15 @@ _spec_answer_publish_targets() {
 # support ships incrementally, tier by tier — see docs/spec-answers.md for
 # what is mapped and what remains a follow-up.
 
-_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db lib-minimal"
+_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db api-service-native-db mvc-service-native-db mvc-service-orm-db lib-minimal"
 
 spec_skeleton_supported() {
-    case " $_SPEC_SUPPORTED_SKELETONS " in
-        *" $1 "*) return 0 ;;
-        *) return 1 ;;
-    esac
+    local str_name
+    # Exact equality per name: a substring match accepted two supported names joined by a space.
+    for str_name in $_SPEC_SUPPORTED_SKELETONS; do
+        [ "$1" = "$str_name" ] && return 0
+    done
+    return 1
 }
 
 # The supported skeletons, comma-separated, for an error message.
@@ -213,9 +219,10 @@ spec_stdin_for_skeleton() {
     local skeleton="$1" file="$2"
     # Defence in depth: callers validate in the main shell first (see spec_validate_answers),
     # because a failure here, inside a pipeline, would emit no answers rather than stop it.
+    # scaffold_from_spec also reads this function's own status from PIPESTATUS.
     spec_validate_answers "$skeleton" "$file" || return 1
     case "$skeleton" in
-        ddd-service-native-db | ddd-service-orm-db)
+        ddd-service-native-db | ddd-service-orm-db | api-service-native-db)
             _spec_answer_docker_compose "$file"
             _spec_answer_storage "$file"
             _spec_answer_data_dir "$file"
@@ -257,7 +264,7 @@ _spec_key_map() {
     local skeleton="$1"
     local -a keys=()
     case "$skeleton" in
-        ddd-service-native-db | ddd-service-orm-db)
+        ddd-service-native-db | ddd-service-orm-db | api-service-native-db)
             keys=(docker_compose:n docker_db_backend:postgresql storage:n \
                 data_dir:n data_dir_base:logs data_dir_dated:n \
                 webhook:n webhook_platform:teams otel:n \

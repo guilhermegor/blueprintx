@@ -24,7 +24,7 @@ def _load_gate() -> ModuleType:
     Returns
     -------
     ModuleType
-            The imported ``pr_gate`` module.
+        The imported ``pr_gate`` module.
     """
     cls_spec = importlib.util.spec_from_file_location("pr_gate", _GATE_PATH)
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -71,9 +71,9 @@ def test_classify_risk_returns_the_most_dangerous_class(
     Parameters
     ----------
     list_paths : list of str
-            The changed paths.
+        The changed paths.
     str_class : str
-            The class the mix must collapse to.
+        The class the mix must collapse to.
     """
     assert gate.classify_risk(list_paths) == str_class
 
@@ -127,9 +127,9 @@ def test_is_lockfile_only_is_narrow(list_paths: list[str], bool_only: bool) -> N
     Parameters
     ----------
     list_paths : list of str
-            The changed paths.
+        The changed paths.
     bool_only : bool
-            Whether the diff is lockfile-only.
+        Whether the diff is lockfile-only.
     """
     assert gate.is_lockfile_only(list_paths) is bool_only
 
@@ -171,9 +171,9 @@ def test_xl_veto_applies_to_handwritten_but_is_waived_for_a_lockfile(
     Parameters
     ----------
     bool_lockfile_only : bool
-            Whether the diff touches nothing but the lockfile.
+        Whether the diff touches nothing but the lockfile.
     bool_mergeable : bool
-            Whether the XL veto is waived.
+        Whether the XL veto is waived.
     """
     assert (
         gate.is_auto_mergeable("deps", "XL", [], bool_lockfile_only=bool_lockfile_only)
@@ -196,9 +196,9 @@ def test_gate_state_lets_red_outrank_pending(dict_axes: dict, str_state: str) ->
     Parameters
     ----------
     dict_axes : dict
-            Axis name to its state.
+        Axis name to its state.
     str_state : str
-            The collapsed display state.
+        The collapsed display state.
     """
     assert gate.gate_state(dict_axes) == str_state
 
@@ -221,9 +221,9 @@ def test_terminality_is_separate_from_display_state(dict_axes: dict, bool_termin
     Parameters
     ----------
     dict_axes : dict
-            Axis name to its state.
+        Axis name to its state.
     bool_terminal : bool
-            Whether every axis has reported.
+        Whether every axis has reported.
     """
     assert gate.axes_are_terminal(dict_axes) is bool_terminal
 
@@ -281,7 +281,7 @@ def test_render_comment_carries_the_sticky_marker_and_the_failing_names(
     Parameters
     ----------
     str_fragment : str
-            A fragment the rendered body must contain.
+        A fragment the rendered body must contain.
     """
     assert str_fragment in gate.render_comment(
         "deps", "L", {"tests": "failure"}, False, {"tests": ["Run Automated Tests (ubuntu)"]}
@@ -337,16 +337,16 @@ def _fake_api_for_main(str_method: str, str_url: str, dict_payload: dict | None 
     Parameters
     ----------
     str_method : str
-            HTTP method (ignored — the fake distinguishes calls by URL only).
+        HTTP method (ignored — the fake distinguishes calls by URL only).
     str_url : str
-            Absolute URL requested.
+        Absolute URL requested.
     dict_payload : dict, optional
-            JSON body (ignored).
+        JSON body (ignored).
 
     Returns
     -------
     object
-            The canned response for ``str_url``, or ``None`` when unmapped.
+        The canned response for ``str_url``, or ``None`` when unmapped.
     """
     return _DICT_MAIN_API_RESPONSES.get(str_url)
 
@@ -365,9 +365,9 @@ class _CallRecorder:
         Parameters
         ----------
         list_target : list
-                The call log every recorder instance appends its label to, in call order.
+            The call log every recorder instance appends its label to, in call order.
         str_label : str
-                The label this instance appends when invoked.
+            The label this instance appends when invoked.
         """
         self._list_target = list_target
         self._str_label = str_label
@@ -378,14 +378,14 @@ class _CallRecorder:
         Parameters
         ----------
         *args : object
-                Ignored positional arguments from the real seam's call site.
+            Ignored positional arguments from the real seam's call site.
         **kwargs : object
-                Ignored keyword arguments from the real seam's call site.
+            Ignored keyword arguments from the real seam's call site.
 
         Returns
         -------
         tuple of dict
-                ``({}, {})`` — valid whether the caller destructures it or discards it.
+            ``({}, {})`` — valid whether the caller destructures it or discards it.
         """
         self._list_target.append(self._str_label)
         return {}, {}

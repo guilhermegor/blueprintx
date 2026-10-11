@@ -11,8 +11,8 @@ bin/${PROJECT_NAME} --version
 
 ## Feature specs
 
-Feature specs live under `.specs/features/` — copy `.specs/spec.md` for the
-template and its `US-`/`AC-`/`ASM-`/`Q-XXX` id conventions.
+Feature specs live under `.specs/features/` — `.specs/CLAUDE.md` holds the
+layout rules and the template with its `US-`/`AC-`/`ASM-`/`Q-XXX` id conventions.
 
 ## Development
 

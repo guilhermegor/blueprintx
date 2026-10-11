@@ -1,25 +1,18 @@
 #!/usr/bin/env bash
-# Validates the .specs/ layout (blueprintx#447), matching the same one-implementation
-# pattern as every other gate in this repo (see the root CLAUDE.md): a bin/ci/*.sh script
-# both the root pre-commit hook and scaffold_checks.yml CI call.
+# Validates the .specs/ layout (blueprintx#447, #583). One implementation, two callers: this
+# repo's own tree and every generated project, which gets this file copied to its bin/ at
+# scaffold time (there is no second copy under templates/). Either way the tree is `--root <dir>`;
+# without it the root is two levels up from bin/ci/ here, one level up from bin/ in a project.
+# .specs/CLAUDE.md is the human-facing version of every rule below; each is checked, not claimed.
 #
-# Rules (see .specs/CLAUDE.md for the human-facing version):
 #   1. If .specs/ exists, .specs/CLAUDE.md must exist.
-#   2. The only allowed top-level entries under .specs/ are CLAUDE.md, features/, backlog/,
-#      _lessons/.
-#   3. Every entry directly under .specs/features/ must be a directory.
-#   4. Every .specs/features/<name>/ must contain at least one of design.md, plan.md or
-#      tasks.md. tasks.md is the per-feature slice tracker (blueprintx#575) — a feature can
-#      legitimately be tracked before it has a written design.
-#   5. _lessons/ has no content requirement — it is machine-populated and git-ignored.
-#   6. <name> is kebab-case, as .specs/CLAUDE.md requires. A gate that states a rule its
-#      own doc makes and then does not check it is worse than one that never claimed to.
-#   7. Every file directly under .specs/backlog/ is <kebab-topic>_YYYYMMDD_HHMMSS.md — the
-#      home for a multi-step effort that maps to no single feature. Same reasoning as 6:
-#      .specs/CLAUDE.md states the pattern, so the gate checks it.
-#
-# Root-repo-only: .specs/ is a BlueprintX convention for this repo's own specs/plans, not
-# a scaffolded-project concept, so this script is not part of templates/.
+#   2. Top level allows only CLAUDE.md, features/, backlog/, _lessons/ (_lessons/ is free-form).
+#   3. features/ holds directories only, kebab-case with a letter, and never a change TYPE
+#      (bugfix/, chore/, ... — dotfiles-dev#442: features/ splits on lifecycle, not change type).
+#   4. features/<name>/ holds at least one of design.md, plan.md, tasks.md. pr.md or
+#      pr-<N>-<kebab>.md are recognized but never sufficient; any other pr[-_0-9]*.md name fails.
+#   5. Every task line in tasks.md uses [ ], [~] <branch> or [x] — [~] must name a <type>/<name> branch.
+#   6. backlog/ is flat, <kebab-topic>_YYYYMMDD_HHMMSS.md.
 
 set -euo pipefail
 
@@ -29,79 +22,162 @@ set -euo pipefail
 # yielding the literal pattern as a filename.
 shopt -s dotglob nullglob
 
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+case "$(basename "$SCRIPT_DIR")" in
+ci) REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)" ;;
+*) REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)" ;;
+esac
+if [ "${1:-}" = "--root" ]; then
+	# A missing --root must fail: every later check would see "no .specs/" and report success.
+	[ -n "${2:-}" ] && [ -d "$2" ] || {
+		echo "ERROR: --root needs an existing directory (got '${2:-}')" >&2
+		exit 2
+	}
+	REPO_ROOT="$(cd "$2" && pwd)"
+	shift 2
+fi
+[ "$#" -eq 0 ] || {
+	echo "ERROR: unexpected argument '$1' (usage: check_specs_structure.sh [--root <dir>])" >&2
+	exit 2
+}
 SPECS_DIR="$REPO_ROOT/.specs"
 errors=0
 
+# Conventional-Commit and branch types — a feature directory named after one is a type-folder.
+is_change_type() {
+	case "$1" in
+	feat | feature | fix | bugfix | hotfix | chore | docs | refactor | perf | test | tests | style | build | ci | revert | release)
+		return 0
+		;;
+	*) return 1 ;;
+	esac
+}
+
+# Every task line (`-`/`*`/`+`/`1.` bullets, outside code fences) must be [ ], [~] <type>/<branch>
+# or [x]. A fence closes on the same character, at least as long, with nothing after it.
+check_tasks_markers() {
+	local file="$1" label="$2" bad
+	bad="$(awk '
+        fence {
+            if (match($0, /^[[:space:]]*(```+|~~~+)[[:space:]]*$/)) {
+                run = $0; gsub(/[[:space:]]/, "", run)
+                if (substr(run, 1, 1) == fchar && length(run) >= flen) fence = 0
+            }
+            next
+        }
+        match($0, /^[[:space:]]*(```+|~~~+)/) {
+            run = substr($0, RSTART, RLENGTH); gsub(/[[:space:]]/, "", run)
+            fence = 1; fchar = substr(run, 1, 1); flen = length(run); fline = NR; next
+        }
+        match($0, /^[[:space:]]*([-*+]|[0-9]+[.)]) \[[^]]*\]/) {
+            mark = substr($0, RSTART, RLENGTH); sub(/^[^[]*\[/, "", mark); sub(/\]$/, "", mark)
+            rest = substr($0, RLENGTH + 1)
+            if (mark != " " && mark != "~" && mark != "x") print NR ": " $0
+            else if (mark == "~" && rest !~ /^[[:space:]]+[a-z]+\/[^[:space:]]+/) print NR ": " $0
+        }
+        END { if (fence) print fline ": unclosed code fence" }' "$file")"
+	if [ -n "$bad" ]; then
+		printf '%s\n' "$bad" | while IFS= read -r line; do
+			echo "ERROR: $label line $line — markers are [ ], [~] <branch> and [x]" >&2
+		done
+		errors=$((errors + $(printf '%s\n' "$bad" | wc -l)))
+	fi
+}
+
 # No .specs/ at all is not an error — it's simply not adopted yet.
 if [ ! -d "$SPECS_DIR" ]; then
-    echo "check_specs_structure: no .specs/ directory — nothing to check."
-    exit 0
+	echo "check_specs_structure: no .specs/ directory — nothing to check."
+	exit 0
 fi
 
 if [ ! -f "$SPECS_DIR/CLAUDE.md" ]; then
-    echo "ERROR: .specs/ exists but .specs/CLAUDE.md is missing" >&2
-    errors=$((errors + 1))
+	echo "ERROR: .specs/ exists but .specs/CLAUDE.md is missing" >&2
+	errors=$((errors + 1))
 fi
 
 for entry in "$SPECS_DIR"/*; do
-    name="$(basename "$entry")"
-    case "$name" in
-        CLAUDE.md|features|backlog|_lessons) ;;
-        *)
-            echo "ERROR: unexpected top-level entry .specs/$name (only CLAUDE.md, features/, backlog/, _lessons/ are allowed)" >&2
-            errors=$((errors + 1))
-            ;;
-    esac
+	name="$(basename "$entry")"
+	case "$name" in
+	CLAUDE.md | features | backlog | _lessons) ;;
+	*)
+		echo "ERROR: unexpected top-level entry .specs/$name (only CLAUDE.md, features/, backlog/, _lessons/ are allowed)" >&2
+		errors=$((errors + 1))
+		;;
+	esac
 done
 
 if [ -d "$SPECS_DIR/features" ]; then
-    for entry in "$SPECS_DIR/features"/*; do
-        [ -e "$entry" ] || continue
-        name="$(basename "$entry")"
-        if [ ! -d "$entry" ]; then
-            echo "ERROR: .specs/features/$name is not a directory" >&2
-            errors=$((errors + 1))
-            continue
-        fi
-        # Kebab-case AND at least one letter. `[a-z0-9]` alone accepts a bare `447`,
-        # which is the exact case this check was added for — an issue number is not a
-        # feature name. Caught by the fixture, not by reading the pattern.
-        if ! printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$' ||
-            ! printf '%s' "$name" | grep -q '[a-z]'; then
-            echo "ERROR: .specs/features/$name is not kebab-case — .specs/CLAUDE.md" \
-                 "requires lowercase words joined by single hyphens (e.g. 'specs-directory'," \
-                 "not '447' or 'Specs_Directory')" >&2
-            errors=$((errors + 1))
-        fi
-        if [ ! -f "$entry/design.md" ] && [ ! -f "$entry/plan.md" ] &&
-            [ ! -f "$entry/tasks.md" ]; then
-            echo "ERROR: .specs/features/$name has none of design.md, plan.md or tasks.md" >&2
-            errors=$((errors + 1))
-        fi
-    done
+	for entry in "$SPECS_DIR/features"/*; do
+		[ -e "$entry" ] || continue
+		name="$(basename "$entry")"
+		# A placeholder that keeps an otherwise empty features/ in git, as the scaffold ships.
+		[ "$name" = ".gitkeep" ] && [ -f "$entry" ] && continue
+		if [ ! -d "$entry" ]; then
+			echo "ERROR: .specs/features/$name is not a directory" >&2
+			errors=$((errors + 1))
+			continue
+		fi
+		# Kebab-case AND at least one letter. `[a-z0-9]` alone accepts a bare `447`,
+		# which is the exact case this check was added for — an issue number is not a
+		# feature name. Caught by the fixture, not by reading the pattern.
+		if ! printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$' ||
+			! printf '%s' "$name" | grep -q '[a-z]'; then
+			echo "ERROR: .specs/features/$name is not kebab-case — .specs/CLAUDE.md" \
+				"requires lowercase words joined by single hyphens (e.g. 'specs-directory'," \
+				"not '447' or 'Specs_Directory')" >&2
+			errors=$((errors + 1))
+		fi
+		if is_change_type "$name"; then
+			echo "ERROR: .specs/features/$name is a change type, not a feature — features/ splits" \
+				"on lifecycle; the type already lives in the branch name and the commit prefix" \
+				"(dotfiles-dev#442)" >&2
+			errors=$((errors + 1))
+		fi
+		if [ ! -f "$entry/design.md" ] && [ ! -f "$entry/plan.md" ] &&
+			[ ! -f "$entry/tasks.md" ]; then
+			echo "ERROR: .specs/features/$name has none of design.md, plan.md or tasks.md" \
+				"(pr.md alone is not a feature)" >&2
+			errors=$((errors + 1))
+		fi
+		for member in "$entry"/[pP][rR].md "$entry"/[pP][rR][-_0-9]*.md; do
+			if [ ! -f "$member" ]; then
+				echo "ERROR: .specs/features/$name/$(basename "$member") is not a file" >&2
+				errors=$((errors + 1))
+				continue
+			fi
+			member_name="$(basename "$member")"
+			if ! printf '%s' "$member_name" | grep -qE '^pr(-[0-9]+-[a-z0-9]+(-[a-z0-9]+)*)?\.md$'; then
+				echo "ERROR: .specs/features/$name/$member_name is not pr.md or" \
+					"pr-<N>-<kebab-slug>.md" >&2
+				errors=$((errors + 1))
+			fi
+		done
+		if [ -f "$entry/tasks.md" ]; then
+			check_tasks_markers "$entry/tasks.md" ".specs/features/$name/tasks.md"
+		fi
+	done
 fi
 
 if [ -d "$SPECS_DIR/backlog" ]; then
-    for entry in "$SPECS_DIR/backlog"/*; do
-        [ -e "$entry" ] || continue
-        name="$(basename "$entry")"
-        if [ ! -f "$entry" ]; then
-            echo "ERROR: .specs/backlog/$name is not a file — .specs/backlog/ is flat" >&2
-            errors=$((errors + 1))
-            continue
-        fi
-        if ! printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*_[0-9]{8}_[0-9]{6}\.md$'; then
-            echo "ERROR: .specs/backlog/$name does not match" \
-                 "<kebab-topic>_YYYYMMDD_HHMMSS.md — .specs/CLAUDE.md" >&2
-            errors=$((errors + 1))
-        fi
-    done
+	for entry in "$SPECS_DIR/backlog"/*; do
+		[ -e "$entry" ] || continue
+		name="$(basename "$entry")"
+		if [ ! -f "$entry" ]; then
+			echo "ERROR: .specs/backlog/$name is not a file — .specs/backlog/ is flat" >&2
+			errors=$((errors + 1))
+			continue
+		fi
+		if ! printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*_[0-9]{8}_[0-9]{6}\.md$'; then
+			echo "ERROR: .specs/backlog/$name does not match" \
+				"<kebab-topic>_YYYYMMDD_HHMMSS.md — .specs/CLAUDE.md" >&2
+			errors=$((errors + 1))
+		fi
+	done
 fi
 
 if [ "$errors" -gt 0 ]; then
-    echo "check_specs_structure: $errors error(s) found." >&2
-    exit 1
+	echo "check_specs_structure: $errors error(s) found." >&2
+	exit 1
 fi
 
 echo "check_specs_structure: .specs/ layout is valid."

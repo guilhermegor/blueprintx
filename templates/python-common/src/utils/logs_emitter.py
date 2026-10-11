@@ -37,9 +37,11 @@ class LogsEmitter(LogEmitter):
         Parameters
         ----------
         cls_logger : logging.Logger, optional
-                The standard-library logger to route to. When ``None`` (the default) the rich line
-                is printed to the screen instead.
+            The standard-library logger to route to. When ``None`` (the default) the rich line
+            is printed to the screen instead.
         """
+        # super() swaps None for a module logger; keep the original (blueprintx#597).
+        self._cls_logger_or_none = cls_logger
         super().__init__(cls_logger)
         self._cls_create_log = CreateLog()
 
@@ -49,13 +51,13 @@ class LogsEmitter(LogEmitter):
         Parameters
         ----------
         str_message : str
-                The message to emit.
+            The message to emit.
         str_level : str
-                The level name; an unrecognised level falls back to ``"warning"`` (mirroring the
-                forgiving behaviour of the base :class:`LogEmitter`).
+            The level name; an unrecognised level falls back to ``"warning"`` (mirroring the
+            forgiving behaviour of the base :class:`LogEmitter`).
         """
         str_normalized = str_level.lower()
         log_level = cast(
             LogLevel, str_normalized if str_normalized in _VALID_LOG_LEVELS else "warning"
         )
-        self._cls_create_log.log_message(self._cls_logger, str_message, log_level)
+        self._cls_create_log.log_message(self._cls_logger_or_none, str_message, log_level)

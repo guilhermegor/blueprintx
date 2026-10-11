@@ -22,17 +22,21 @@ def build_storage_handler() -> DatabaseHandler:
     Returns
     -------
     DatabaseHandler
-            Configured backend handler ready for CRUD operations.
+        Configured backend handler ready for CRUD operations.
 
     Raises
     ------
     ValueError
-            If ``STORAGE_BACKEND`` does not match a supported backend.
+        If ``STORAGE_BACKEND`` does not match a supported backend.
 
     Notes
     -----
     Reads ``STORAGE_BACKEND`` (separate from ``DB_BACKEND``) to pick the backend.
     Supported values: ``json``, ``csv``, ``joblib``.
+    ⚠️ ``update()`` is part of the ``DatabaseHandler`` contract but the ``joblib`` backend
+    cannot honor it: its artifacts are immutable, so ``update()`` raises
+    ``NotImplementedError``. Call ``create()`` to save a new version. A caller that must
+    update in place picks ``json`` or ``csv``.
     Uses ``DATA_DIR`` as the base directory for all backends.
     Set ``JOBLIB_SECRET_KEY`` to enable HMAC tamper-detection for joblib artifacts.
     """

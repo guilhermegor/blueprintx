@@ -120,11 +120,33 @@ is_denied() {
     return 1
 }
 
+# Judge what git would publish (blueprintx#632), but only in a repo whose top level IS
+# REPO_ROOT: an enclosing repo's .gitignore must not decide for a plain directory inside it.
+# Computed once; a non-repo or an enclosed dir leaves every entry "not ignored".
+# GIT_DIR/GIT_WORK_TREE inherited from a hook would re-point the probe, and the developer's
+# global excludes would make a local verdict differ from CI's, so neither reaches git here.
+# GIT_INDEX_FILE is kept on purpose: a pre-commit run judges the index being committed.
+unset GIT_DIR GIT_WORK_TREE
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+bool_own_repo=0
+if [ -z "$(git -C "$REPO_ROOT" rev-parse --show-prefix 2>/dev/null || echo x)" ]; then
+    bool_own_repo=1
+fi
+
+is_git_ignored() {
+    [ "$bool_own_repo" -eq 1 ] || return 1
+    git -C "$REPO_ROOT" check-ignore -q -- "$1" 2>/dev/null
+}
+
 walk() {
     # $1 = absolute directory to walk.
     local dir="$1" entry rel reason
     for entry in "$dir"/*; do
         [ -e "$entry" ] || continue
+        # An ignored entry is skipped whole, like a denied directory.
+        if is_git_ignored "$entry"; then
+            continue
+        fi
         rel="${entry#"$DOCS_DIR"/}"
         checked=$((checked + 1))
         if reason="$(is_denied "$rel")"; then

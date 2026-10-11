@@ -24,30 +24,30 @@ import pytest
 # Target -> a DSN whose database segment is a real mysqldump/pg_dump long option. Each handler's
 # ``_parse_dsn`` reads it via ``urlparse(...).path.lstrip("/")``, landing in ``self.dbname``.
 DICT_MALICIOUS_DSN = {
-	"mysql_handler.MySQLDatabaseHandler": "mysql://user:pass@localhost:3306/--file=/tmp/pwned",
-	"mariadb_handler.MariaDBDatabaseHandler": (
-		"mariadb://user:pass@localhost:3306/--file=/tmp/pwned"
-	),
-	"postgres_handler.PostgresDatabaseHandler": (
-		"postgresql://user:pass@localhost:5432/--file=/tmp/pwned"
-	),
+    "mysql_handler.MySQLDatabaseHandler": "mysql://user:pass@localhost:3306/--file=/tmp/pwned",
+    "mariadb_handler.MariaDBDatabaseHandler": (
+        "mariadb://user:pass@localhost:3306/--file=/tmp/pwned"
+    ),
+    "postgres_handler.PostgresDatabaseHandler": (
+        "postgresql://user:pass@localhost:5432/--file=/tmp/pwned"
+    ),
 }
 
 
 @pytest.mark.parametrize(("str_target", "str_dsn"), sorted(DICT_MALICIOUS_DSN.items()))
 def test_dashed_dbname_rejected_before_subprocess_runs(str_target: str, str_dsn: str) -> None:
-	"""A dashed database name is rejected at construction, never reaching ``subprocess.run``.
+    """A dashed database name is rejected at construction, never reaching ``subprocess.run``.
 
-	Parameters
-	----------
-	str_target : str
-		``<module stem>.<class name>`` inside ``chassis.db_schema.infrastructure``.
-	str_dsn : str
-		DSN whose database segment would be read as a dump-tool option flag.
-	"""
-	str_module, str_class = str_target.split(".")
-	cls_module = importlib.import_module(f"chassis.db_schema.infrastructure.{str_module}")
-	cls_handler_type = getattr(cls_module, str_class)
-	with patch("subprocess.run") as mock_run, pytest.raises(ValueError, match="database name"):
-		cls_handler_type(str_dsn)
-	assert mock_run.call_count == 0
+    Parameters
+    ----------
+    str_target : str
+        ``<module stem>.<class name>`` inside ``chassis.db_schema.infrastructure``.
+    str_dsn : str
+        DSN whose database segment would be read as a dump-tool option flag.
+    """
+    str_module, str_class = str_target.split(".")
+    cls_module = importlib.import_module(f"chassis.db_schema.infrastructure.{str_module}")
+    cls_handler_type = getattr(cls_module, str_class)
+    with patch("subprocess.run") as mock_run, pytest.raises(ValueError, match="database name"):
+        cls_handler_type(str_dsn)
+    assert mock_run.call_count == 0

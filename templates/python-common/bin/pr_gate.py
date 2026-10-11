@@ -77,12 +77,12 @@ def classify_path(str_path: str) -> str:
     Parameters
     ----------
     str_path : str
-            A repository-relative path from the PR's file list.
+        A repository-relative path from the PR's file list.
 
     Returns
     -------
     str
-            One of ``RISK_ORDER``.
+        One of ``RISK_ORDER``.
     """
     for str_class in RISK_ORDER:
         for str_rule in RISK_PATHS.get(str_class, ()):
@@ -100,12 +100,12 @@ def classify_risk(list_paths: list) -> str:
     Parameters
     ----------
     list_paths : list of str
-            Every path changed by the PR.
+        Every path changed by the PR.
 
     Returns
     -------
     str
-            The first class of ``RISK_ORDER`` present among the paths; ``docs`` for an empty list.
+        The first class of ``RISK_ORDER`` present among the paths; ``docs`` for an empty list.
 
     Notes
     -----
@@ -128,12 +128,12 @@ def classify_size(int_changed_lines: int) -> str:
     Parameters
     ----------
     int_changed_lines : int
-            additions + deletions across the PR.
+        additions + deletions across the PR.
 
     Returns
     -------
     str
-            ``XS`` / ``S`` / ``M`` / ``L`` / ``XL``.
+        ``XS`` / ``S`` / ``M`` / ``L`` / ``XL``.
     """
     for str_bucket, int_limit in SIZE_BUCKETS:
         if int_changed_lines <= int_limit:
@@ -155,12 +155,12 @@ def is_lockfile_only(list_paths: list) -> bool:
     Parameters
     ----------
     list_paths : list of str
-            Every path changed by the PR.
+        Every path changed by the PR.
 
     Returns
     -------
     bool
-            ``True`` when ``LOCKFILE`` is the only changed file.
+        ``True`` when ``LOCKFILE`` is the only changed file.
     """
     return set(list_paths) == {LOCKFILE}
 
@@ -173,18 +173,18 @@ def is_auto_mergeable(
     Parameters
     ----------
     str_risk : str
-            The PR's risk class from :func:`classify_risk`.
+        The PR's risk class from :func:`classify_risk`.
     str_size : str
-            The PR's size bucket from :func:`classify_size`.
+        The PR's size bucket from :func:`classify_size`.
     list_labels : list of str
-            Labels currently on the PR.
+        Labels currently on the PR.
     bool_lockfile_only : bool, optional
-            From :func:`is_lockfile_only`; waives the XL veto only for a generated lockfile.
+        From :func:`is_lockfile_only`; waives the XL veto only for a generated lockfile.
 
     Returns
     -------
     bool
-            ``True`` when the PR may be handed to auto-merge.
+        ``True`` when the PR may be handed to auto-merge.
     """
     if str_risk not in AUTO_MERGEABLE:
         return False
@@ -203,12 +203,12 @@ def gate_state(dict_axes: dict) -> str:
     Parameters
     ----------
     dict_axes : dict of {str: str}
-            Axis name -> ``"success"`` / ``"failure"`` / ``"pending"``.
+        Axis name -> ``"success"`` / ``"failure"`` / ``"pending"``.
 
     Returns
     -------
     str
-            ``"failure"``, ``"pending"`` or ``"success"``.
+        ``"failure"``, ``"pending"`` or ``"success"``.
     """
     if any(v == "failure" for v in dict_axes.values()):
         return "failure"
@@ -228,12 +228,12 @@ def axes_are_terminal(dict_axes: dict) -> bool:
     Parameters
     ----------
     dict_axes : dict of {str: str}
-            Axis name -> state.
+        Axis name -> state.
 
     Returns
     -------
     bool
-            ``True`` when no axis is still pending.
+        ``True`` when no axis is still pending.
     """
     return not any(v == "pending" for v in dict_axes.values())
 
@@ -250,20 +250,20 @@ def render_comment(
     Parameters
     ----------
     str_risk : str
-            Risk class.
+        Risk class.
     str_size : str
-            Size bucket.
+        Size bucket.
     dict_axes : dict of {str: str}
-            Axis name -> state.
+        Axis name -> state.
     bool_eligible : bool
-            Whether the PR is eligible for auto-merge.
+        Whether the PR is eligible for auto-merge.
     dict_failing : dict of {str: list}
-            Axis name -> the NAMES of its failing checks.
+        Axis name -> the NAMES of its failing checks.
 
     Returns
     -------
     str
-            The full comment body, marker included.
+        The full comment body, marker included.
     """
     dict_icon = {"success": "✅", "failure": "❌", "pending": "⏳"}
     list_rows = []
@@ -295,16 +295,16 @@ def _api(str_method: str, str_url: str, dict_payload: dict | None = None) -> obj
     Parameters
     ----------
     str_method : str
-            HTTP method.
+        HTTP method.
     str_url : str
-            Absolute URL.
+        Absolute URL.
     dict_payload : dict, optional
-            JSON body.
+        JSON body.
 
     Returns
     -------
     object
-            Parsed JSON, or ``None`` on a 4xx/5xx (the gate degrades rather than failing the run).
+        Parsed JSON, or ``None`` on a 4xx/5xx (the gate degrades rather than failing the run).
     """
     bytes_body = json.dumps(dict_payload).encode() if dict_payload is not None else None
     cls_req = urllib.request.Request(str_url, data=bytes_body, method=str_method)  # noqa: S310
@@ -331,14 +331,14 @@ def _graphql(str_query: str, dict_vars: dict) -> object:
     Parameters
     ----------
     str_query : str
-            The GraphQL document.
+        The GraphQL document.
     dict_vars : dict
-            Query variables.
+        Query variables.
 
     Returns
     -------
     object
-            Parsed JSON, or ``None`` on a transport error (from :func:`_api`).
+        Parsed JSON, or ``None`` on a transport error (from :func:`_api`).
     """
     dict_response = _api("POST", f"{API}/graphql", {"query": str_query, "variables": dict_vars})
     list_errors = dict_response.get("errors") if isinstance(dict_response, dict) else None
@@ -360,7 +360,7 @@ def _enable_auto_merge(str_node_id: str) -> None:
     Parameters
     ----------
     str_node_id : str
-            The pull request's GraphQL node id.
+        The pull request's GraphQL node id.
 
     Returns
     -------
@@ -386,14 +386,14 @@ def collect_axes(list_check_runs: list, dict_axis_rules: dict) -> tuple:
     Parameters
     ----------
     list_check_runs : list of dict
-            The ``check_runs`` array for the PR's head SHA.
+        The ``check_runs`` array for the PR's head SHA.
     dict_axis_rules : dict of {str: tuple}
-            Axis name -> name substrings identifying the checks that carry its conclusion.
+        Axis name -> name substrings identifying the checks that carry its conclusion.
 
     Returns
     -------
     tuple of (dict, dict)
-            ``(axis -> state, axis -> [failing check names])``.
+        ``(axis -> state, axis -> [failing check names])``.
     """
     dict_axes, dict_failing = {}, {}
     for str_axis, tuple_matches in dict_axis_rules.items():
@@ -427,11 +427,11 @@ def upsert_comment(str_repo: str, int_pr: int, str_body: str) -> None:
     Parameters
     ----------
     str_repo : str
-            ``owner/repo``.
+        ``owner/repo``.
     int_pr : int
-            PR number.
+        PR number.
     str_body : str
-            Rendered comment body (carries ``COMMENT_MARKER``).
+        Rendered comment body (carries ``COMMENT_MARKER``).
 
     Returns
     -------
@@ -460,18 +460,18 @@ def poll_axes_until_terminal(
     Parameters
     ----------
     str_repo : str
-            ``owner/name``.
+        ``owner/name``.
     str_head_sha : str
-            The PR head commit whose check runs are read.
+        The PR head commit whose check runs are read.
     int_max_polls : int
-            Maximum polls before giving up and reporting whatever was last seen.
+        Maximum polls before giving up and reporting whatever was last seen.
     int_poll_seconds : int
-            Seconds between polls.
+        Seconds between polls.
 
     Returns
     -------
     tuple of dict
-            ``(dict_axes, dict_failing)`` as returned by :func:`collect_axes`.
+        ``(dict_axes, dict_failing)`` as returned by :func:`collect_axes`.
     """
     import time
 
@@ -510,13 +510,13 @@ def sync_gate_labels(str_repo: str, int_pr: int, list_current: list, list_desire
     Parameters
     ----------
     str_repo : str
-            ``owner/name``.
+        ``owner/name``.
     int_pr : int
-            The pull request number.
+        The pull request number.
     list_current : list of str
-            Labels currently on the PR.
+        Labels currently on the PR.
     list_desired : list of str
-            The labels this run computed.
+        The labels this run computed.
     """
     _api(
         "POST",
@@ -534,13 +534,13 @@ def main() -> int:
     Returns
     -------
     int
-            0 when every polled axis is green (or still pending after the poll budget — an
-            inconclusive run is not a confirmed failure). Nonzero when an axis is confirmed
-            ``"failure"``. blueprintx#564 made "Classify and gate this PR" itself a required
-            status check (see required-checks.txt) — a job that always exits 0 would then be a
-            required check nothing can ever fail, defeating the point of requiring it. The
-            RULESET is still the merge-blocking mechanism; this exit code is what lets the
-            ruleset see a confirmed-red run at all.
+        0 when every polled axis is green (or still pending after the poll budget — an
+        inconclusive run is not a confirmed failure). Nonzero when an axis is confirmed
+        ``"failure"``. blueprintx#564 made "Classify and gate this PR" itself a required
+        status check (see required-checks.txt) — a job that always exits 0 would then be a
+        required check nothing can ever fail, defeating the point of requiring it. The
+        RULESET is still the merge-blocking mechanism; this exit code is what lets the
+        ruleset see a confirmed-red run at all.
     """
     str_repo = os.environ["GITHUB_REPOSITORY"]
     int_pr = int(os.environ["PR_NUMBER"])

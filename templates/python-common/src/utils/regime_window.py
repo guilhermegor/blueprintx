@@ -53,14 +53,14 @@ def _validate_period(int_period: int | None, str_field: str) -> None:
     Parameters
     ----------
     int_period : int or None
-            The bound to validate. ``None`` means the window is open on that side.
+        The bound to validate. ``None`` means the window is open on that side.
     str_field : str
-            The attribute name, used in the error message.
+        The attribute name, used in the error message.
 
     Raises
     ------
     ValueError
-            If the value is not a six-digit ``YYYYMM`` with a month in ``01``-``12``.
+        If the value is not a six-digit ``YYYYMM`` with a month in ``01``-``12``.
 
     Returns
     -------
@@ -81,15 +81,15 @@ class RegimeWindow(metaclass=TypeChecker):
     Parameters
     ----------
     str_name : str
-            The regime's name. Name it after what changed (the columns), never after a
-            regulation or a guessed cutover date — only a pinned-header fixture proves either,
-            and a wrong date-derived name is an assertion nothing re-checks.
+        The regime's name. Name it after what changed (the columns), never after a
+        regulation or a guessed cutover date — only a pinned-header fixture proves either,
+        and a wrong date-derived name is an assertion nothing re-checks.
     int_period_start : int | None
-            First period this regime covers, ``YYYYMM``. ``None`` means no known earlier bound.
+        First period this regime covers, ``YYYYMM``. ``None`` means no known earlier bound.
     int_period_end : int | None
-            Last period this regime covers, ``YYYYMM``. ``None`` means the regime is still open
-            (the currently published schema) — it has no closed-regime default (see
-            :class:`utils.regime_registry.RegimeRegistry`).
+        Last period this regime covers, ``YYYYMM``. ``None`` means the regime is still open
+        (the currently published schema) — it has no closed-regime default (see
+        :class:`utils.regime_registry.RegimeRegistry`).
     """
 
     str_name: str
@@ -102,7 +102,7 @@ class RegimeWindow(metaclass=TypeChecker):
         Raises
         ------
         ValueError
-                If a bound is not a valid ``YYYYMM`` period, or the start is after the end.
+            If a bound is not a valid ``YYYYMM`` period, or the start is after the end.
 
         Returns
         -------
@@ -129,13 +129,13 @@ class RegimeWindow(metaclass=TypeChecker):
         Parameters
         ----------
         int_period : int
-                The period to check, ``YYYYMM``.
+            The period to check, ``YYYYMM``.
 
         Returns
         -------
         bool
-                ``True`` when ``int_period`` is within ``[int_period_start, int_period_end]``
-                (either bound may be open).
+            ``True`` when ``int_period`` is within ``[int_period_start, int_period_end]``
+            (either bound may be open).
         """
         # Bounds are validated on construction; the queried period was not. Without this,
         # an open window reports month 13 as covered and the adapter bound to it reads a
@@ -152,6 +152,6 @@ class RegimeWindow(metaclass=TypeChecker):
         Returns
         -------
         bool
-                ``True`` when ``int_period_end`` is set.
+            ``True`` when ``int_period_end`` is set.
         """
         return self.int_period_end is not None

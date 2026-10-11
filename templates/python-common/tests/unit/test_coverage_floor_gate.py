@@ -21,7 +21,7 @@ def _load_gate() -> ModuleType:
     Returns
     -------
     ModuleType
-            The loaded gate module.
+        The loaded gate module.
     """
     path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_coverage_floor.py"
     cls_spec = importlib.util.spec_from_file_location("_check_coverage_floor", path_gate)
@@ -38,14 +38,14 @@ def _project(tmp_path: Path, str_omit: str) -> Path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Directory to build in.
+        Directory to build in.
     str_omit : str
-            The ``omit =`` body (indented lines), or ``""`` for an empty list.
+        The ``omit =`` body (indented lines), or ``""`` for an empty list.
 
     Returns
     -------
     pathlib.Path
-            The project root.
+        The project root.
     """
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "__init__.py").write_text("", encoding="utf-8")
@@ -60,13 +60,13 @@ def _capability(path_root: Path, str_name: str, str_layer: str, str_source: str)
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root built by ``_project``.
+        The project root built by ``_project``.
     str_name : str
-            Capability directory name.
+        Capability directory name.
     str_layer : str
-            ``"domain"`` or ``"application"``.
+        ``"domain"`` or ``"application"``.
     str_source : str
-            The module's Python source.
+        The module's Python source.
     """
     path_layer = path_root / "src" / "capabilities" / str_name / str_layer
     path_layer.mkdir(parents=True, exist_ok=True)
@@ -145,33 +145,77 @@ def test_widened_omit_swallows_new_capability_logic_is_flagged(
     )
     _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
     monkeypatch.chdir(path_root)
-    assert _load_gate().main() == 1
+    _load_gate().main()
     str_err = capsys.readouterr().err
     assert "orders/domain/service.py" in str_err
 
 
-def test_single_misomitted_file_in_a_narrowly_excluded_capability_is_flagged(
-	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+def test_widened_omit_swallowing_new_capability_logic_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-	"""Detection is per MODULE even when the capability carries narrower exclusions.
+    """The same widened-omit probe exits 1, not 0.
 
-	Pins the distinction the design record gets asked about: the capability-root
-	coarseness is the EXEMPTION granularity (only a literal whole-capability pattern
-	exempts), not the detection granularity. ``orders`` below keeps a legitimate
-	``infrastructure/*`` exclusion and is therefore NOT exempt, so its one mis-omitted
-	domain module must still be named. Documented as uncaught until 2026-09-18; it was
-	caught all along, and a doc that understates a gate invites a redundant second one.
-	"""
-	path_root = _project(
-		tmp_path,
-		"    src/capabilities/example_feature/*\n"
-		"    src/capabilities/*/infrastructure/*\n"
-		"    src/capabilities/orders/domain/service.py\n",
-	)
-	_capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
-	monkeypatch.chdir(path_root)
-	assert _load_gate().main() == 1
-	assert "orders/domain/service.py" in capsys.readouterr().err
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway project root.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate from the project root.
+    """
+    path_root = _project(
+        tmp_path,
+        "    src/capabilities/example_feature/*\n    src/capabilities/*\n",
+    )
+    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    monkeypatch.chdir(path_root)
+    assert _load_gate().main() == 1
+
+
+def test_single_misomitted_file_in_a_narrowly_excluded_capability_is_flagged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Detection is per MODULE even when the capability carries narrower exclusions.
+
+    Pins the distinction the design record gets asked about: the capability-root
+    coarseness is the EXEMPTION granularity (only a literal whole-capability pattern
+    exempts), not the detection granularity. ``orders`` below keeps a legitimate
+    ``infrastructure/*`` exclusion and is therefore NOT exempt, so its one mis-omitted
+    domain module must still be named. Documented as uncaught until 2026-09-18; it was
+    caught all along, and a doc that understates a gate invites a redundant second one.
+    """
+    path_root = _project(
+        tmp_path,
+        "    src/capabilities/example_feature/*\n"
+        "    src/capabilities/*/infrastructure/*\n"
+        "    src/capabilities/orders/domain/service.py\n",
+    )
+    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    monkeypatch.chdir(path_root)
+    _load_gate().main()
+    assert "orders/domain/service.py" in capsys.readouterr().err
+
+
+def test_single_misomitted_file_in_a_narrowly_excluded_capability_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same single mis-omitted module makes the gate exit 1.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway project root.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate from the project root.
+    """
+    path_root = _project(
+        tmp_path,
+        "    src/capabilities/example_feature/*\n"
+        "    src/capabilities/*/infrastructure/*\n"
+        "    src/capabilities/orders/domain/service.py\n",
+    )
+    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    monkeypatch.chdir(path_root)
+    assert _load_gate().main() == 1
 
 
 def test_enum_only_module_is_never_in_the_must_cover_set(tmp_path: Path) -> None:

@@ -60,11 +60,17 @@ Answer `bin/blueprintx.sh`'s own prompts (before any scaffold script runs):
 
 ## Value rules and flags
 
+- **Values are trimmed.** Leading and trailing whitespace, including the `\r` a spec saved with
+  CRLF line endings leaves on every line, is stripped from every value, so `otel=yes` reads the
+  same on Windows. Whitespace inside a value is kept. A value that is blank after trimming
+  means the key's default, for every key. Keys are not trimmed: write `otel=yes`, never
+  ` otel=yes` or `otel = yes`, or the line is ignored and the default applies.
 - **y/n keys** take `y`/`yes`/`true` or `n`/`no`/`false`, in any case; an empty value means the
   key's default. Any other value (for example `maybe`, or a mistyped `yes`) **stops the run before anything is
   created**, naming the key. It is never read as `n`.
 - **`--dev`** scaffolds into a fresh temp directory instead of `project_root`/`$PWD`, and
-  **`--clean`** (with `--dev`) deletes it on exit — the same as the interactive flow. With `--dev`,
+  **`--clean`** (with `--dev`) deletes it on exit — the same as the interactive flow, and the
+  closing notice says the printed project path will not exist afterwards. With `--dev`,
   `project_root` is ignored.
 - **`--dry-run`** prints the resolved answers and the structure, and creates nothing.
 
@@ -77,15 +83,20 @@ are not edited by this mechanism — so when one of them gains a new prompt, upd
 one function is what keeps every spec-driven caller correct, instead of every stored
 answer string everywhere.
 
-Named-key support ships per skeleton. Today: the five Python tiers. Call
+Named-key support ships per skeleton. Today: the six Python tiers. Call
 `spec_skeleton_supported <skeleton>` to check before relying on `spec_stdin_for_skeleton`.
 
-### DDD tiers (`ddd-service-native-db`, `ddd-service-orm-db`)
+### DDD and API tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `api-service-native-db`)
+
+`api-service-native-db` asks the same prompts in the same order as the DDD tiers, so it shares
+their key map (blueprintx#668). `tests/test_spec_answers.sh` compares the two scaffold scripts'
+prompt sequences, so a prompt added to one of them fails there instead of silently misaligning
+the stored answers.
 
 | Key | Default | Notes |
 |---|---|---|
 | `docker_compose` | `n` | `y` also reads `docker_db_backend` (`postgresql`\|`mariadb`\|`mysql`). |
-| `storage` | `n` | Schema-less file storage (JSON/CSV/joblib). DDD-only. |
+| `storage` | `n` | Schema-less file storage (JSON/CSV/joblib). DDD and API tiers; MVC has no such prompt. |
 | `data_dir` | `n` | `y` also reads `data_dir_base` (default `logs`) and `data_dir_dated`. |
 | `webhook` | `n` | `y` also reads `webhook_platform` (`teams`\|`slack`\|`custom`). |
 | `otel` | `n` | OpenTelemetry OTLP log export. |
@@ -131,10 +142,15 @@ here — scope note from blueprintx#481.
 `react-spa-webpack`, `ts-lib`, and any future non-Python skeleton have no entry in
 `spec_stdin_for_skeleton` yet. `--spec` still resolves their top-level answers (project
 name, language, skeleton, license, …); their scaffold-internal prompts stay interactive
-until a named-key map is added for them, the same way the five Python tiers were —
+until a named-key map is added for them, the same way the six Python tiers were —
 `spec_skeleton_supported` returns `false` for them today. `blueprintx new --spec` **refuses**
 such a skeleton before creating anything (a half-interactive run would hang an unattended
 caller); `--spec ... --dry-run` still reports the resolved top-level answers with a warning.
+The refusal is deliberately unconditional, not "only when stdin is not a terminal" (considered
+in #636): `--spec` exists to run without a person, and a spec whose internal answers are
+silently ignored in favour of live prompts would be a different, half-honoured contract.
+`--spec` names a skeleton by exact equality, so two supported names joined by a space do not
+match.
 
 ## Used by CI
 

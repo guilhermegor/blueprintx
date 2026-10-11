@@ -89,6 +89,52 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 
 5. **GitGuardian exceptions**: a false positive in the secret scan is silenced in the root `.gitguardian.yaml` (`secret.ignored_matches`), never by editing history. Every entry needs a `name` stating why the match is not a credential.
 
+## Repository Secrets (Actions)
+
+This repo's own Actions secrets (`gh secret list`) are set by hand and reproducible from
+`.env.example`, not from memory — the pattern `dotfiles-dev` uses for its own credentials.
+`.env.example` (tracked) documents every secret's consumer and minimum scope; `.env`
+(git-ignored, `*.env` in `.gitignore`) holds the real values. **`.env` does NOT feed CI** —
+GitHub Actions cannot read it — it is only the source you `gh secret set` from.
+
+| Secret | Consumer(s) | Minimum scope |
+|---|---|---|
+| `GH_PAT_REVIEW_TRIGGER` | `coderabbit_trigger.yml`, `review_retry.yml`, `verify_branch_protection.yml` | Fine-grained PAT, this repo only, `Pull requests: Read and write` + `Administration: Read` (not `Issues: write`) |
+| `GITGUARDIAN_API_KEY` | `scaffold_checks.yml` (`secret-scan` job) | GitGuardian API key with the `scan` scope |
+| `APT_GPG_KEY_ID` | `release_apt.yml`, `release.yml` | GPG key ID of `APT_GPG_PRIVATE_KEY` |
+| `APT_GPG_PASSPHRASE` | `release_apt.yml`, `release.yml` | Passphrase for `APT_GPG_PRIVATE_KEY` |
+| `APT_GPG_PRIVATE_KEY` | `release_apt.yml`, `release.yml` | Armored GPG private key that signs the APT repo |
+| `SNAPCRAFT_STORE_CREDENTIALS` | `release_snap.yml`, `release.yml` | Snap Store login exported with `snapcraft export-login`; first-time setup is in `.specs/features/snap-publishing/plan.md` |
+
+**Re-provisioning a lost/rotated value:**
+1. Mint the new credential (fine-grained PAT at github.com/settings/personal-access-tokens,
+   API key at the vendor, or the GPG key exported to a private file outside the work tree,
+   never to the terminal: `f=$(mktemp) && gpg --export-secret-keys --armor <key-id> > "$f"`
+   (`mktemp` creates it mode 600 under `/tmp`, so a stray `git add -A` cannot stage it), paste
+   it into `.env`, then `shred -u "$f"`, or `rm "$f"` where `shred` is unavailable) with the
+   scope from the table above, never broader. The PAT's `Issues: write` stays off: a token
+   with it was measured (2026-09-10) to 403 on issues and 422 on PRs, and the workflows only
+   ever comment on PRs.
+2. `[ -e .env ] || install -m 600 .env.example .env; chmod 600 .env` (never overwrites a
+   `.env` that already holds real values, and tightens one with loose permissions), then
+   replace the `KEY-GOES-HERE` placeholder of the secret you are setting.
+3. Source it in a subshell, so the variables do not outlive the command, without `set -a`, so
+   they are never exported into `gh`'s environment (`printf` is a builtin, so the value still
+   reaches the pipe), and upload over stdin, so the value never lands in `ps`/`/proc` argv
+   (single-quote any value containing `$` so sourcing keeps it literal; a literal `'` inside
+   is written `'\''`). The command refuses to upload when `.env` fails to source, when
+   `<NAME>` is unset or empty, or when it still equals the placeholder, so a typo can never
+   overwrite a working secret with an empty or placeholder value:
+   `( . ./.env || exit 1; v=${<NAME>:?unset or empty in .env}; [ "$v" != KEY-GOES-HERE ] || { echo "<NAME> is still the placeholder" >&2; exit 1; }; printf '%s' "$v" | gh secret set <NAME> --repo guilhermegor/blueprintx )`.
+   Skip `APT_GPG_PASSPHRASE` when the key has none (the workflow treats it as optional); when
+   rotating from a key that had one to a key that has none, also run
+   `gh secret delete APT_GPG_PASSPHRASE --repo guilhermegor/blueprintx`, so the old value is
+   not left behind.
+   Replacing `APT_GPG_PRIVATE_KEY` with a different key changes the public key APT users
+   trust, so they must re-import it or `apt update` fails the signature check.
+4. Verify: `gh secret list --repo guilhermegor/blueprintx` shows an updated timestamp for
+   `<NAME>`, and the workflow that consumes it succeeds on its next run.
+
 ## Cross-Language Quality Parity
 
 BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality
@@ -257,6 +303,37 @@ changed files (`Review skipped: N files exceed the limit of 100`), and a PR in t
 never merge. Over the 100 most recent PRs, exactly **1** exceeded even 90 files, and the
 largest legitimate PR in that set was 59 files — so 90 leaves headroom on both sides without
 being a rule nobody pays.
+
+### PR template layout — blueprintx#587
+
+`bin/ci/check_pr_template.sh` checks a PR body against the layout
+`.github/PULL_REQUEST_TEMPLATE.md` declares, not just its five `##` headings. It runs in CI
+(the `pr-template` job in `pr_template.yml`, reading the live body from the API and re-running
+when the body is edited) and its should-fail tests run in
+pre-commit and CI. The contract is walked out of the template itself, so editing the template
+changes what the gate enforces; only the split below is recorded in the script, because
+syntax cannot say which labels are optional.
+
+A heading or `**Label**:` must start its line (prose, fenced code and HTML comments do not
+count; `**Label:**` and `**Label** :` are accepted, a list marker, indent or `> ` quote is
+not), carry content, and leave none of the template's own placeholder lines in place. Fields
+are matched per `##` section, so an `**Added**:` under the wrong section does not count.
+
+| Element | Rule | Why |
+|---|---|---|
+| The five `##` sections, `**What**` / `**Why**` / `**How**`, `**Reviewer Focus**` | **Mandatory** | Every PR has a motivation, a mechanism and something a reviewer should look at first. |
+| `**Added**` / `**Updated**` / `**Fixed**` | At least **one** filled under Changes Made | A PR changes something, but which verb applies depends on the PR; `**Fixed**` alone is only true when an issue is fixed. |
+| `### Manual Testing` / `### Automated Testing` | Mandatory **unless** `**Not Applicable**` explains the gap | A docs-only change has no manual run; forcing the subsection would produce filler. |
+| `**Not Applicable**` | Required **exactly when** a testing subsection is not filled in | It is the stated reason for skipping, so it is demanded only when something is skipped. |
+| `**Dependencies**` / `**Follow-up**` | **Optional**, may be deleted | Most PRs have neither; requiring them yields text that looks answered and is not. Left as the template text, they fail. |
+
+Bot authors (`dependabot[bot]` and any other `[bot]` login) are exempt: they create PRs
+server-side and cannot write prose fields, and an unfixable red teaches everyone to ignore the
+gate. The local `pr_template_guard.sh` hook stays as the fast pre-flight; CI covers the PRs it
+cannot see (the web UI, Dependabot, API-created PRs).
+
+The job is **not yet a required check**. As with #507 and #535, it becomes one once the open-PR
+population is clean, because requiring a gate that most open PRs fail blocks them all at once.
 
 ### GitHub Actions are pinned by commit SHA — blueprintx#369
 

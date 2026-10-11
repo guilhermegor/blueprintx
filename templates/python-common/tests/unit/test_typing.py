@@ -26,7 +26,7 @@ class _Sample(metaclass=TypeChecker):
         Parameters
         ----------
         n : int
-                A number.
+            A number.
         """
         self.n = n
 
@@ -37,12 +37,12 @@ class _Sample(metaclass=TypeChecker):
         Parameters
         ----------
         x : int
-                A number.
+            A number.
 
         Returns
         -------
         int
-                ``x * 2``.
+            ``x * 2``.
         """
         return x * 2
 
@@ -52,12 +52,12 @@ class _Sample(metaclass=TypeChecker):
         Parameters
         ----------
         value : str | None
-                Optional text.
+            Optional text.
 
         Returns
         -------
         str
-                The value or ``"<none>"``.
+            The value or ``"<none>"``.
         """
         return value or "<none>"
 
@@ -67,26 +67,33 @@ class _Sample(metaclass=TypeChecker):
         Parameters
         ----------
         values : list[int]
-                Numbers to add.
+            Numbers to add.
 
         Returns
         -------
         int
-                The sum.
+            The sum.
         """
         return sum(values)
 
 
 def test_metaclass_allows_valid_calls() -> None:
     """Correctly-typed calls pass through unchanged."""
-    cls_sample = _Sample(10)
-    assert cls_sample.n == 10
-    assert cls_sample.maybe("x") == "x"
+    assert _Sample(10).n == 10
+
+
+def test_metaclass_allows_a_valid_optional_call() -> None:
+    """A correctly-typed call to a method with an optional parameter passes through."""
+    assert _Sample(10).maybe("x") == "x"
 
 
 def test_metaclass_staticmethod_via_instance_not_broken() -> None:
     """A static method called via an instance does not receive ``self``."""
     assert _Sample(1).doubled(5) == 10
+
+
+def test_metaclass_staticmethod_via_class_not_broken() -> None:
+    """A static method called via the class works as before."""
     assert _Sample.doubled(5) == 10
 
 
@@ -118,14 +125,14 @@ def _add(a: int, b: int) -> int:
     Parameters
     ----------
     a : int
-            First addend.
+        First addend.
     b : int
-            Second addend.
+        Second addend.
 
     Returns
     -------
     int
-            The sum.
+        The sum.
     """
     return a + b
 
@@ -133,6 +140,10 @@ def _add(a: int, b: int) -> int:
 def test_decorator_checks_standalone_function() -> None:
     """The decorator validates a standalone function's arguments."""
     assert _add(1, 2) == 3
+
+
+def test_decorator_rejects_a_wrong_type_on_a_standalone_function() -> None:
+    """The decorator rejects a wrong-typed argument to a standalone function."""
     with pytest.raises(TypeError):
         _add(1, "two")
 
@@ -157,6 +168,10 @@ def test_bool_rejected_inside_a_generic_container() -> None:
     Asserting on a multi-element list here would be a flaky test.
     """
     assert _Sample(1).total([1, 2]) == 3
+
+
+def test_bool_rejected_inside_a_single_element_container() -> None:
+    """A single-element container holding a ``bool`` is rejected deterministically."""
     with pytest.raises(TypeError):
         _Sample(1).total([True])
 
@@ -169,6 +184,10 @@ def test_bare_mock_is_rejected_but_specced_mock_passes() -> None:
     """
     with pytest.raises(TypeError):
         _Sample(MagicMock())
+
+
+def test_specced_mock_passes_the_annotation() -> None:
+    """A ``spec=``-ed mock satisfies the annotation."""
     assert _Sample(MagicMock(spec=int)).n is not None
 
 

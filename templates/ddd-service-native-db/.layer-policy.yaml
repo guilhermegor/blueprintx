@@ -102,6 +102,10 @@ layers:
         OTLP log export behind chassis/otel_logging.py (opt-in, blueprintx#438). The ONLY
         place this vendor is imported — application code calls configure_otel_logging(logger),
         never opentelemetry directly, so a later exporter swap touches one adapter.
+      joblib: >-
+        Binary artifact store behind chassis/db_wschema/joblib_handler.py (schema-less storage
+        opt-in, blueprintx#650). Application code reaches it through the DatabaseHandler port
+        and build_storage_handler(), never joblib directly.
 
   utils:
     # utils/ IS the seam layer — this is where vendors are supposed to live. Listed

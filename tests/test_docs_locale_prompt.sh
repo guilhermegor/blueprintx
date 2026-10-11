@@ -41,9 +41,12 @@ run_prompt() {
 
 expect_prompt() {
     # $1 = stdin answer, $2 = expected value
-    local str_got
-    str_got="$(run_prompt "$1")"
-    if [ "$str_got" = "$2" ]; then
+    local str_got int_rc=0
+    # Under `set -e` a bare capture aborts the whole run with no FAIL line naming the case.
+    str_got="$(run_prompt "$1")" || int_rc=$?
+    if [ "$int_rc" -ne 0 ]; then
+        fail "answer '$1' -> prompt exited $int_rc (expected '$2')"
+    elif [ "$str_got" = "$2" ]; then
         pass "answer '$1' -> '$2'"
     else
         fail "answer '$1' -> '$str_got' (expected '$2')"
@@ -55,10 +58,15 @@ test_prompt_mapping() {
     expect_prompt "1" "en"
     expect_prompt "2" "pt-BR"
     # An invalid answer re-prompts and reads the next line; "9" must never leak through.
-    local str_got
-    str_got="$(run_prompt $'9\n2')"
-    [ "$str_got" = "pt-BR" ] && pass "invalid answer re-prompts, then accepts '2'" \
-        || fail "invalid answer produced '$str_got'"
+    local str_got int_rc=0
+    str_got="$(run_prompt $'9\n2')" || int_rc=$?
+    if [ "$int_rc" -ne 0 ]; then
+        fail "invalid answer then '2' -> prompt exited $int_rc"
+    elif [ "$str_got" = "pt-BR" ]; then
+        pass "invalid answer re-prompts, then accepts '2'"
+    else
+        fail "invalid answer produced '$str_got'"
+    fi
 }
 
 test_templates_and_scaffolds_wired() {

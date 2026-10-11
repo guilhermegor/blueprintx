@@ -42,14 +42,14 @@ def collect_sources(str_corporate: str, path_out: pathlib.Path) -> list:
     Parameters
     ----------
     str_corporate : str
-            Path to the corporate proxy's certificate.
+        Path to the corporate proxy's certificate.
     path_out : pathlib.Path
-            Where the union will be written.
+        Where the union will be written.
 
     Returns
     -------
     list of str
-            Candidate paths; not all of them necessarily exist.
+        Candidate paths; not all of them necessarily exist.
     """
     list_sources = [str_corporate]
 
@@ -75,13 +75,13 @@ def dedupe_certificates(list_sources: list) -> tuple:
     Parameters
     ----------
     list_sources : list of str
-            Candidate paths, corporate certificate at index 0.
+        Candidate paths, corporate certificate at index 0.
 
     Returns
     -------
     tuple
-            ``(list_blocks, int_non_corporate)`` — the unique PEM blocks in first-seen order,
-            and how many of them came from a source OTHER than the corporate certificate.
+        ``(list_blocks, int_non_corporate)`` — the unique PEM blocks in first-seen order,
+        and how many of them came from a source OTHER than the corporate certificate.
     """
     list_blocks: list[str] = []
     set_bodies: set[str] = set()
@@ -111,8 +111,8 @@ def main() -> int:
     Returns
     -------
     int
-            0 after writing, 1 when there is nothing to write or the union would be a
-            replacement.
+        0 after writing, 1 when there is nothing to write or the union would be a
+        replacement.
     """
     path_out = pathlib.Path(os.environ["BX_CA_OUT"])
     list_sources = collect_sources(os.environ["BX_CA_CORPORATE"], path_out)
