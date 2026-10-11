@@ -205,15 +205,16 @@ copy_shared_ts_source() {
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src"
 }
 
-# The OTLP opt-in adds dependencies, so the shipped base lockfile no longer matches package.json
-# and `npm ci` would fail on it. Regenerate it, or ship none rather than a wrong one (#735).
 refresh_lockfile_for_otel() {
     local project_path="$1"
-    if (cd "$project_path" && npm install --package-lock-only --silent >/dev/null 2>&1); then
+    local -a list_bound=()
+    command -v timeout >/dev/null 2>&1 && list_bound=(timeout 120)
+    print_status "info" "Refreshing package-lock.json for the OTLP dependencies (up to 120s)..."
+    if (cd "$project_path" && "${list_bound[@]}" npm install --package-lock-only --silent >/dev/null 2>&1); then
         return
     fi
     rm -f "$project_path/package-lock.json"
-    print_status "warning" "lockfile refresh failed (npm missing or offline): package-lock.json omitted — run 'npm install' before the first push"
+    print_status "warning" "lockfile refresh failed (npm missing, offline or timed out): package-lock.json omitted — run 'npm install' before the first push"
 }
 
 # OTLP log export (opt-in, blueprintx#438): the emitter (imports @opentelemetry/* — the ONLY
