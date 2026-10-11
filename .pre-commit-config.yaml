@@ -345,7 +345,7 @@ repos:
         entry: bash bin/ci/check_review_config_shipped.sh --static
         language: system
         pass_filenames: false
-        files: ^(bin/scaffold/.*\.sh|templates/common/.*|templates/[^/]+/skeleton\.meta|bin/ci/check_review_config_shipped\.sh)$
+        files: ^(bin/scaffold/.*\.sh|bin/lib/.*\.sh|templates/common/.*|templates/[^/]+/skeleton\.meta|bin/ci/check_review_config_shipped\.sh)$
 
       - id: precommit-ci-parity
         name: pre-commit and CI run the same checks, both directions (blueprintx#384)

@@ -242,8 +242,8 @@ off. The gate asks for `per_page=1` to keep the commit list, which it does not u
 
 Every generated project ships the configuration for the hosted reviewers (CodeRabbit,
 Greptile and Graphite). Left as a copy list maintained by hand in nine scaffold scripts, that
-drifts: MVC once silently lacked `poetry.toml` and `.coveragerc`. The required paths are
-listed once, one per line, in `templates/common/review-config.manifest`, and
+drifts: MVC once silently lacked shared files (`poetry.toml`, `.coveragerc`). The required
+paths are listed once, one per line, in `templates/common/review-config.manifest`, and
 `bin/ci/check_review_config_shipped.sh` checks them in three modes:
 
 - `--static` (pre-commit hook `review-config-shipped`): every manifest path exists under
@@ -254,14 +254,13 @@ listed once, one per line, in `templates/common/review-config.manifest`, and
   default answers and asserts every manifest path is in the generated tree. This is the real
   oracle: a `cp` line that sits behind a branch the default answers never take passes
   `--static` and fails here. `--skeleton <name>` narrows it to one.
+- `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
+  assertion over one already-generated project.
 
 Today the manifest lists only `.gitattributes` (the Graphite `linguist-generated` marker).
 `.coderabbit.yaml` and `.greptile/` are added by the PRs that ship them, so the guard does
 not yet protect those. Both are repo-root files, not GitHub-only assets, so the offline
 scaffold keeps them: `apply_offline_mode` drops only `.github/`.
-
-- `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
-  assertion over one already-generated project.
 
 `--static` is a fast heuristic over direct `cp` commands. It reads the scaffold script plus the
 `bin/lib/*.sh` helpers it sources, resolves the `*_TEMPLATE_ROOT` variables, and accepts a
