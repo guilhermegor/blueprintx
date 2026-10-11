@@ -7,8 +7,8 @@ project that legitimately opted out.
 """
 
 import importlib.util
-from pathlib import Path
 import os
+from pathlib import Path
 import subprocess
 import sys
 from types import ModuleType
@@ -273,7 +273,11 @@ def test_a_flag_without_a_value_fails_loudly() -> None:
 
 @pytest.mark.parametrize(
     "str_line",
-    ["if [ -f x ]; then cp a b; fi  # why", "if x; then cp a b; fi;", "if x; then cp a b; fi || true"],
+    [
+        "if [ -f x ]; then cp a b; fi  # why",
+        "if x; then cp a b; fi;",
+        "if x; then cp a b; fi || true",
+    ],
 )
 def test_a_one_line_if_with_a_trailing_tail_is_still_one_line(str_line: str) -> None:
     """A trailing comment or `;`/`||` after `fi` must not leave the block looking open."""
