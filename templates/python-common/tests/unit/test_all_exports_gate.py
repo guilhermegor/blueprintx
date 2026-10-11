@@ -19,7 +19,7 @@ def _load_gate() -> ModuleType:
     Returns
     -------
     ModuleType
-            The loaded gate module.
+        The loaded gate module.
     """
     path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_all_exports.py"
     cls_spec = importlib.util.spec_from_file_location("_check_all_exports", path_gate)
@@ -39,16 +39,16 @@ def _package(tmp_path: Path, str_init: str, str_member: str) -> Path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Directory to build in.
+        Directory to build in.
     str_init : str
-            Source of ``__init__.py``.
+        Source of ``__init__.py``.
     str_member : str
-            Source of the sibling submodule ``member.py``.
+        Source of the sibling submodule ``member.py``.
 
     Returns
     -------
     pathlib.Path
-            Path to the written ``__init__.py``.
+        Path to the written ``__init__.py``.
     """
     path_pkg = tmp_path / "pkg"
     path_pkg.mkdir(exist_ok=True)
@@ -68,12 +68,12 @@ def _sole(list_problems: list[str]) -> str:
     Parameters
     ----------
     list_problems : list of str
-            Whatever the gate reported.
+        Whatever the gate reported.
 
     Returns
     -------
     str
-            The single problem.
+        The single problem.
     """
     assert len(list_problems) == 1, list_problems
     return list_problems[0]

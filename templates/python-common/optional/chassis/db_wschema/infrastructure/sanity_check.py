@@ -16,10 +16,10 @@ class SanityCheck:
     Parameters
     ----------
     expected_class_name : str or None, optional
-            Exact ``__name__`` of the expected class, e.g. ``"RandomForestClassifier"``.
-            Pass ``None`` to skip class name checking.
+        Exact ``__name__`` of the expected class, e.g. ``"RandomForestClassifier"``.
+        Pass ``None`` to skip class name checking.
     required_attrs : list of str, optional
-            Attribute names the loaded object must expose, e.g. ``["predict", "fit"]``.
+        Attribute names the loaded object must expose, e.g. ``["predict", "fit"]``.
 
     Examples
     --------
@@ -36,14 +36,14 @@ class SanityCheck:
         Parameters
         ----------
         obj : Any
-                The loaded object to validate.
+            The loaded object to validate.
 
         Raises
         ------
         TypeError
-                If ``expected_class_name`` is set and ``type(obj).__name__`` does not match.
+            If ``expected_class_name`` is set and ``type(obj).__name__`` does not match.
         AttributeError
-                If any attribute in ``required_attrs`` is absent from ``obj``.
+            If any attribute in ``required_attrs`` is absent from ``obj``.
         """
         self._check_class(obj)
         self._check_attrs(obj)
@@ -54,12 +54,12 @@ class SanityCheck:
         Parameters
         ----------
         obj : Any
-                The loaded object to validate.
+            The loaded object to validate.
 
         Raises
         ------
         TypeError
-                If ``expected_class_name`` is set and ``type(obj).__name__`` does not match.
+            If ``expected_class_name`` is set and ``type(obj).__name__`` does not match.
         """
         if self.expected_class_name is not None and type(obj).__name__ != self.expected_class_name:
             raise TypeError(
@@ -72,12 +72,12 @@ class SanityCheck:
         Parameters
         ----------
         obj : Any
-                The loaded object to validate.
+            The loaded object to validate.
 
         Raises
         ------
         AttributeError
-                If any attribute in ``required_attrs`` is absent from ``obj``.
+            If any attribute in ``required_attrs`` is absent from ``obj``.
         """
         str_missing = next(
             (str_attr for str_attr in self.required_attrs if not hasattr(obj, str_attr)), None

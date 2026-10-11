@@ -23,12 +23,12 @@ def _load(str_name: str) -> ModuleType:
     Parameters
     ----------
     str_name : str
-            Module stem under ``bin/``.
+        Module stem under ``bin/``.
 
     Returns
     -------
     ModuleType
-            The imported module.
+        The imported module.
     """
     cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -53,12 +53,12 @@ def _first_problem(list_problems: list[str]) -> str:
     Parameters
     ----------
     list_problems : list of str
-            Whatever the gate reported.
+        Whatever the gate reported.
 
     Returns
     -------
     str
-            The first problem.
+        The first problem.
     """
     assert list_problems, "the gate reported nothing at all"
     return list_problems[0]
@@ -148,14 +148,14 @@ def _write_event(path_dir: Path, dict_payload: dict) -> str:
     Parameters
     ----------
     path_dir : pathlib.Path
-            Directory to write the payload into.
+        Directory to write the payload into.
     dict_payload : dict
-            The event body, e.g. ``{"pull_request": {"user": {"login": "x"}}}``.
+        The event body, e.g. ``{"pull_request": {"user": {"login": "x"}}}``.
 
     Returns
     -------
     str
-            Path to the written JSON file.
+        Path to the written JSON file.
     """
     path_event = path_dir / "event.json"
     path_event.write_text(json.dumps(dict_payload), encoding="utf-8")
@@ -175,9 +175,9 @@ def test_pr_author_comes_from_the_payload_never_the_actor(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the event payload.
+        Pytest throwaway dir holding the event payload.
     monkeypatch : pytest.MonkeyPatch
-            Used to set the GitHub Actions environment variables.
+        Used to set the GitHub Actions environment variables.
     """
     str_event = _write_event(tmp_path, {"pull_request": {"user": {"login": "dependabot[bot]"}}})
     monkeypatch.setenv("GITHUB_EVENT_PATH", str_event)
@@ -208,9 +208,9 @@ def test_a_push_run_has_no_pr_author_and_stays_enforced(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir holding the event payload.
+        Pytest throwaway dir holding the event payload.
     monkeypatch : pytest.MonkeyPatch
-            Used to set the GitHub Actions environment variables.
+        Used to set the GitHub Actions environment variables.
     """
     str_event = _write_event(tmp_path, {"ref": "refs/heads/main"})
     monkeypatch.setenv("GITHUB_EVENT_PATH", str_event)
@@ -231,9 +231,9 @@ def test_a_missing_event_file_exempts_nobody(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir; the payload path deliberately points at nothing.
+        Pytest throwaway dir; the payload path deliberately points at nothing.
     monkeypatch : pytest.MonkeyPatch
-            Used to set the GitHub Actions environment variables.
+        Used to set the GitHub Actions environment variables.
     """
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(tmp_path / "does_not_exist.json"))
     monkeypatch.setenv("GITHUB_ACTOR", "dependabot[bot]")
@@ -255,9 +255,9 @@ def test_a_missing_event_file_resolves_to_no_author_at_all(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest throwaway dir; the payload path deliberately points at nothing.
+        Pytest throwaway dir; the payload path deliberately points at nothing.
     monkeypatch : pytest.MonkeyPatch
-            Used to set the GitHub Actions environment variables.
+        Used to set the GitHub Actions environment variables.
     """
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(tmp_path / "does_not_exist.json"))
     monkeypatch.setenv("GITHUB_ACTOR", "dependabot[bot]")
@@ -710,14 +710,14 @@ def _stub_show(str_ref: str, _str_path: str) -> str:
     Parameters
     ----------
     str_ref : str
-            ``STR_INDEX_REF`` (the new content) or anything else (the merge-base content).
+        ``STR_INDEX_REF`` (the new content) or anything else (the merge-base content).
     _str_path : str
-            Unused — ``show``'s real signature, kept for ``monkeypatch.setattr`` compatibility.
+        Unused — ``show``'s real signature, kept for ``monkeypatch.setattr`` compatibility.
 
     Returns
     -------
     str
-            ``_TEST_NEW_WEAKENED`` for the index ref, ``_TEST_OLD`` otherwise.
+        ``_TEST_NEW_WEAKENED`` for the index ref, ``_TEST_OLD`` otherwise.
     """
     return {gate_integrity.STR_INDEX_REF: _TEST_NEW_WEAKENED}.get(str_ref, _TEST_OLD)
 
@@ -836,14 +836,14 @@ def _git_in(path_repo: Path, *args: str) -> str:
     Parameters
     ----------
     path_repo : pathlib.Path
-            The repository to run in.
+        The repository to run in.
     *args : str
-            Arguments after ``git``.
+        Arguments after ``git``.
 
     Returns
     -------
     str
-            Captured stdout, stripped.
+        Captured stdout, stripped.
     """
     cls_proc = subprocess.run(  # noqa: S603
         ["git", "-C", str(path_repo), *args],  # noqa: S607
@@ -864,14 +864,14 @@ def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided scratch directory.
+        Pytest-provided scratch directory.
     monkeypatch : pytest.MonkeyPatch
-            Used to run the gate inside the repo.
+        Used to run the gate inside the repo.
 
     Returns
     -------
     pathlib.Path
-            The repository, left mid-merge.
+        The repository, left mid-merge.
     """
     _git_in(tmp_path, "init", "-q", "--initial-branch=main")
     _git_in(tmp_path, "config", "user.email", "t@example.com")
