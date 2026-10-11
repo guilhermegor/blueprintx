@@ -45,4 +45,4 @@ reviewers:
     marker: "Fallback review — runtime:"
     note: >-
       The reviewer ladder's attribution line. Counts as a review only in a comment by an
-      OWNER, MEMBER or COLLABORATOR posted after the head commit (docs/faq.md).
+      OWNER, MEMBER or COLLABORATOR posted after the head commit.
