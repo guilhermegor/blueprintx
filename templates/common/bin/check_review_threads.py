@@ -64,7 +64,6 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
-import functools
 import hashlib
 import json
 import os
@@ -203,6 +202,10 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       author { login }
       headRefOid
       baseRefOid
+      timelineItems(
+        first:1,
+        itemTypes:[BASE_REF_CHANGED_EVENT, AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT]
+      ) { nodes { __typename } }
       comments(first:100, after:$cc) {
         pageInfo { hasNextPage endCursor }
         nodes { author { login __typename } body createdAt }
@@ -553,10 +556,10 @@ _INT_COMPARE_FILES = 300
 
 # One compare call may not stall the job: a hang would end as `cancelled` at the job timeout,
 # which reads like a human cancelling (#192).
-_INT_COMPARE_TIMEOUT_S = 60
+_INT_COMPARE_TIMEOUT_S = 20
 
-# At most this many reviewed commits are compared with the head: 5 calls x 60 s stays well inside
-# the job's `timeout-minutes`, and a PR with more reviewed commits than that is re-reviewed.
+# At most this many reviewed commits are compared with the head: (1 head + 5) calls x 20 s stays
+# well inside the job's `timeout-minutes` (pinned by a test); a PR with more is re-reviewed.
 _INT_MAX_REVIEWED_COMMITS = 5
 
 # Everything that means "the patch could not be computed": an API or `gh` failure, a timeout, a
@@ -568,6 +571,19 @@ _TUPLE_FINGERPRINT_ERRORS = (
     OSError,
     subprocess.TimeoutExpired,
 )
+
+
+def _is_pure_rename(dict_file: dict) -> bool:
+    """Return whether a file entry is a rename with no patch text AND a blob ``sha`` to hash.
+
+    The API reports ``changes == 0`` for a binary file too, so the blob ``sha`` is what proves
+    the content; without it the entry is not trusted.
+    """
+    return (
+        dict_file.get("status") == "renamed"
+        and dict_file.get("changes") == 0
+        and bool(dict_file.get("sha"))
+    )
 
 
 def patch_fingerprint(list_files: list[dict]) -> str:
@@ -587,11 +603,14 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     Raises
     ------
     ValueError
-            If the list is empty, possibly truncated, or a file carries no patch text.
+            If the list is malformed, empty, possibly truncated, or a file carries no patch text
+            (a pure rename has none and is hashed by its names).
     """
+    if not isinstance(list_files, list) or not all(isinstance(d, dict) for d in list_files):
+        raise ValueError("patch unavailable: the file list is malformed")
     if not list_files or len(list_files) >= _INT_COMPARE_FILES:
         raise ValueError(f"patch unavailable: {len(list_files)} file(s) in the comparison")
-    if any(d.get("patch") is None for d in list_files):
+    if any(d.get("patch") is None and not _is_pure_rename(d) for d in list_files):
         raise ValueError("patch unavailable: a file has no patch text (binary or too large)")
     try:
         list_parts = [
@@ -599,7 +618,11 @@ def patch_fingerprint(list_files: list[dict]) -> str:
                 d["filename"],
                 d.get("status", ""),
                 d.get("previous_filename", ""),
-                [re.sub(r"^@@ -\S+ \+\S+ @@", "@@", s) for s in d["patch"].splitlines()],
+                d.get("sha", "") if d.get("patch") is None else "",
+                [
+                    re.sub(r"^@@ -\S+ \+\S+ @@", "@@", s)
+                    for s in (d.get("patch") or "").splitlines()
+                ],
             ]
             for d in sorted(list_files, key=lambda d: d["filename"])
         ]
@@ -662,55 +685,7 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
     dict_compare = json.loads(cls_run.stdout)
     if not isinstance(dict_compare, dict):
         raise ValueError("patch unavailable: the compare response is not an object")
-    return patch_fingerprint(dict_compare.get("files") or [])
-
-
-def fetch_retargeted(str_owner: str, str_repo: str, int_number: int) -> bool:
-    """Return whether the PR's base branch was ever changed, from its timeline.
-
-    The compare is measured against today's base, which is not necessarily the base a review
-    was written against: a PR reviewed against ``develop`` and then retargeted to ``main`` would
-    otherwise carry a review over code the reviewer never saw. A change is never undone in the
-    timeline, so a retargeted PR simply gets no carry-forward (it fails closed).
-
-    Parameters
-    ----------
-    str_owner : str
-            Repository owner.
-    str_repo : str
-            Repository name.
-    int_number : int
-            Pull-request number.
-
-    Returns
-    -------
-    bool
-            ``True`` when the timeline holds a ``base_ref_changed`` event.
-
-    Raises
-    ------
-    RuntimeError
-            If the API call fails, so an unreadable timeline is never read as "not retargeted".
-    """
-    list_cmd = [
-        "gh",
-        "api",
-        f"repos/{str_owner}/{str_repo}/issues/{int_number}/timeline",
-        "--paginate",
-        "--jq",
-        '.[] | select(.event == "base_ref_changed") | .event',
-    ]
-    # Constant argv built from CI-provided identifiers; no shell is involved.
-    cls_run = subprocess.run(  # noqa: S603
-        list_cmd,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=_INT_COMPARE_TIMEOUT_S,
-    )
-    if cls_run.returncode != 0:
-        raise RuntimeError(f"timeline failed: {cls_run.stderr.strip()[:400]}")
-    return bool(cls_run.stdout.strip())
+    return patch_fingerprint(dict_compare.get("files"))
 
 
 def review_covers_head(
@@ -1161,7 +1136,7 @@ def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: lis
 # ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
 # #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
 # ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
-def find_missing_review_problem(
+def check_missing_review(
     list_reviews: list[dict],
     set_reviewers: set[str],
     str_pr_author: str = "",
@@ -1170,9 +1145,8 @@ def find_missing_review_problem(
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
     fn_fingerprint: Callable[[str], str] | None = None,
-    dict_carried: dict | None = None,
-) -> str | None:
-    """Return a problem when no declared reviewer ever reported on this PR's HEAD.
+) -> tuple[str | None, str]:
+    """Return ``(problem, carried_from)`` for a PR no declared reviewer reported on at HEAD.
 
     Parameters
     ----------
@@ -1198,15 +1172,13 @@ def find_missing_review_problem(
             Maps a commit oid to its patch fingerprint. When given, a review at an earlier
             commit covers HEAD if the PR's own patch is unchanged (see
             :func:`review_covers_head`). ``None`` keeps the strict pin to HEAD.
-    dict_carried : dict, optional
-            Out-parameter: receives ``{"from": <commit>}`` when a carried-forward review is what
-            satisfied the check, so the caller can show it in the verdict.
 
     Returns
     -------
-    str or None
+    tuple of (str or None, str)
             A human-readable problem, or ``None`` when a reviewer reported on the head commit
-            (or declared those commits already reviewed).
+            (or declared those commits already reviewed); and the commit of the carried-forward
+            review that satisfied the check, ``""`` when none did, so the caller can show it.
     """
     set_roster = {normalise_login(s) for s in set_reviewers}
     if normalise_login(str_pr_author) in set_roster:
@@ -1219,21 +1191,19 @@ def find_missing_review_problem(
         # which opens workflow PRs) skipped the check entirely — yet that author cannot
         # review, so a real reviewer CAN look at its PR and there is nothing unsatisfiable
         # about asking. The exemption is "do not ask X to review X", not "bots are exempt".
-        return None
+        return None, ""
 
     if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
-        return None
+        return None, ""
 
     if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
         # A CLEAN review is not a missing one — see the COMPLETION block above the function.
-        return None
+        return None, ""
 
     # After the notice check, so a PR that already passes makes no compare call at all.
     str_carried = review_carried_forward(fn_fingerprint, list_reviews, set_roster, str_head_oid)
     if str_carried:
-        if dict_carried is not None:
-            dict_carried["from"] = str_carried
-        return None
+        return None, str_carried
 
     # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
     # is (never ran / refused / rate-limited). Display only — see the notice block above.
@@ -1244,7 +1214,7 @@ def find_missing_review_problem(
 
     # TWO FAILURES, TWO SENTENCES — see the block above the function.
     if reviewers_who_reported(list_reviews, set_roster):
-        return (
+        str_problem = (
             f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "
             f"is attributed to the head commit {str_head_oid[:7] or '?'}. A review is pinned to "
             "the commit it was written against and nothing re-pins it when the branch moves, so "
@@ -1255,8 +1225,31 @@ def find_missing_review_problem(
             "plain 'review' disregards what was already reviewed) and re-run this check."
             + str_quote
         )
+        return str_problem, ""
 
-    return _zero_review_message(str_quote, set_roster, list_notices or [])
+    return _zero_review_message(str_quote, set_roster, list_notices or []), ""
+
+
+def find_missing_review_problem(
+    list_reviews: list[dict],
+    set_reviewers: set[str],
+    str_pr_author: str = "",
+    *,
+    str_head_oid: str,
+    list_notices: list[dict] | None = None,
+    str_head_date: str = "",
+    fn_fingerprint: Callable[[str], str] | None = None,
+) -> str | None:
+    """Return only the problem half of :func:`check_missing_review` (same parameters)."""
+    return check_missing_review(
+        list_reviews,
+        set_reviewers,
+        str_pr_author,
+        str_head_oid=str_head_oid,
+        list_notices=list_notices,
+        str_head_date=str_head_date,
+        fn_fingerprint=fn_fingerprint,
+    )[0]
 
 
 #
@@ -1838,9 +1831,7 @@ def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[
     )
 
 
-def _compare_fingerprint(
-    dict_pr: dict, str_repo_full: str, int_number: int
-) -> Callable[[str], str]:
+def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], str]:
     """Bind the compare-API fingerprint to this PR's repository and base branch.
 
     A retargeted PR gets no fingerprint at all: the compare is measured against today's base,
@@ -1849,29 +1840,26 @@ def _compare_fingerprint(
     Parameters
     ----------
     dict_pr : dict
-            The ``pullRequest`` node, read for ``baseRefOid``, pinned in the same query as
-            ``headRefOid``.
+            The ``pullRequest`` node, read for ``baseRefOid`` (pinned in the same query as
+            ``headRefOid``) and ``timelineItems.nodes``, the base-change events.
     str_repo_full : str
             ``owner/name``.
-    int_number : int
-            Pull-request number, for the retarget check.
 
     Returns
     -------
     Callable[[str], str]
-            Maps a commit oid to its patch fingerprint; raises ``ValueError`` when retargeted.
+            Maps a commit oid to its patch fingerprint; raises ``ValueError`` when the base was
+            changed or the events are missing (unknown is not "never retargeted").
     """
     str_owner, _, str_repo = str_repo_full.partition("/")
     str_base = dict_pr.get("baseRefOid") or ""
-
-    # Cached: one timeline read however many commits are compared (a failure is not cached,
-    # and the head fingerprint, computed first, fails before any other commit is tried).
-    fn_retargeted = functools.cache(
-        functools.partial(fetch_retargeted, str_owner, str_repo, int_number)
-    )
+    # ⚠️ `nodes`, never `totalCount`: the count ignores `itemTypes` and counts the whole timeline.
+    list_changes = (dict_pr.get("timelineItems") or {}).get("nodes")
 
     def fn_fingerprint(str_oid: str) -> str:
-        if fn_retargeted():
+        if not isinstance(list_changes, list):
+            raise ValueError("the PR's retarget state is unknown: a review is not carried across")
+        if list_changes:
             raise ValueError("the PR's base branch was changed: a review is not carried across")
         return fetch_patch_fingerprint(str_owner, str_repo, str_base, str_oid)
 
@@ -1881,20 +1869,17 @@ def _compare_fingerprint(
 def _missing_review(
     dict_pr: dict,
     str_repo_full: str,
-    int_number: int,
-    dict_roster: dict,
-    dict_carried: dict,
-) -> str | None:
-    """Return :func:`find_missing_review_problem` for one fetched ``pullRequest`` node."""
-    return find_missing_review_problem(
+    set_reviewers: set[str],
+) -> tuple[str | None, str]:
+    """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
+    return check_missing_review(
         dict_pr.get("reviews", {}).get("nodes", []),
-        reviewer_logins(dict_roster),
+        set_reviewers,
         (dict_pr.get("author") or {}).get("login") or "",
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=dict_pr.get("comments", {}).get("nodes", []),
         str_head_date=_head_committed_date(dict_pr),
-        fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full, int_number),
-        dict_carried=dict_carried,
+        fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full),
     )
 
 
@@ -1942,10 +1927,7 @@ def main(list_argv: list[str] | None = None) -> int:
     # merging with unfinished review conversations could not stop one merging with NO REVIEW
     # AT ALL, the only case where nothing else is watching. Measured on #204: 29 of 30 checks
     # passed and it merged with the reviewer having posted only its refusal notice.
-    dict_carried: dict = {}
-    str_missing = _missing_review(
-        dict_pr, str_repo_full, int(str_number), dict_roster, dict_carried
-    )
+    str_missing, str_carried = _missing_review(dict_pr, str_repo_full, set_reviewers)
     if str_missing:
         return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
 
@@ -1967,7 +1949,7 @@ def main(list_argv: list[str] | None = None) -> int:
         list_problems,
         len(list_threads),
         bool_require_resolved,
-        dict_carried.get("from", ""),
+        str_carried,
     )
 
 
