@@ -58,7 +58,7 @@ RISK_PATHS = {
     "tests": ("tests/",),
     "ci": (".github/", "bin/", "Makefile", "tasks.sh", ".pre-commit-config.yaml"),
     "deps": ("pyproject.toml", LOCKFILE, "requirements.txt"),
-    # `.specs/` (the ledger + feature specs) is documentation, as `docs/backlog/` was.
+    # Only the ledger, `.specs/backlog/`, is documentation; feature specs stay `other` on purpose.
     "docs": (
         "docs/",
         ".specs/backlog/",

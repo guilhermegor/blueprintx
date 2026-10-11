@@ -18,7 +18,7 @@ folders still sit inside `docs/` but are excluded from the build; `exclude_docs`
   **per-branch work ledger** here at `.specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md`
   (timestamped filename, set at creation, never renamed) recording **what was done**
   and **what remains / is open**, updated as the work proceeds. Tracked in git but
-  excluded from the site, so knowledge survives across sessions. Distinct from
+  outside the site source, so knowledge survives across sessions. Distinct from
   generalizable lessons: the ledger is *this branch's* state. When every item is done,
   tick the last box and add a "Completed — kept as a record" note — do **not** delete it;
   a finished ledger is the team-reviewable record of what was done and why.
