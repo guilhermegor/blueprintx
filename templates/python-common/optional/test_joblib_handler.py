@@ -215,6 +215,21 @@ def test_a_created_record_can_be_deleted(cls_store: JoblibHandler) -> None:
     assert cls_store.delete(str_record_id) is True
 
 
+def test_the_default_codec_needs_no_extra_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A handler built with no ``compress=`` round-trips with ``lz4`` made unimportable.
+
+    The old ``("lz4", 3)`` default raised ``LZ4 is not installed`` in a generated project,
+    because no tier declares ``lz4`` (blueprintx#650). joblib caches its ``lz4`` import at
+    load time, so the witness patches that cached module, not ``sys.modules``.
+    """
+    monkeypatch.setattr("joblib.compressor.lz4", None)
+    cls_default = JoblibHandler(tmp_path / "default")
+
+    assert cls_default.read(cls_default.create({"_name": "plain", "value": 5}))["value"] == 5
+
+
 def test_update_raises_because_artifacts_are_immutable(cls_store: JoblibHandler) -> None:
     """``update()`` is part of the port but not of this backend (see the factory docstring)."""
     with pytest.raises(NotImplementedError):

@@ -27,6 +27,10 @@ def test_normalize_text_empty_string_returns_empty() -> None:
 def test_safe_str_nan_returns_default() -> None:
     """A float NaN never becomes the literal string 'nan'."""
     assert safe_str(float("nan")) == ""
+
+
+def test_safe_str_nan_returns_the_given_default() -> None:
+    """A float NaN returns a caller-supplied default."""
     assert safe_str(float("nan"), default="-") == "-"
 
 
@@ -38,4 +42,8 @@ def test_safe_str_none_returns_default() -> None:
 def test_safe_str_normal_values_stringify_and_strip() -> None:
     """Real values are stringified and trimmed."""
     assert safe_str("  hi  ") == "hi"
+
+
+def test_safe_str_stringifies_non_strings() -> None:
+    """A non-string value is stringified."""
     assert safe_str(42) == "42"

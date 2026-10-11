@@ -119,6 +119,30 @@ def test_render_uses_configured_sheet_name(
     mock_to_excel = mocker.patch.object(pd.DataFrame, "to_excel")
     path_out = tmp_path / "report.xlsx"
     RenderToExcel(path_out, str_sheet_name="custom").render(df_sample)
-    mock_to_excel.assert_called_once()
     _, dict_kwargs = mock_to_excel.call_args
     assert dict_kwargs["sheet_name"] == "custom"
+
+
+def test_render_writes_the_workbook_once(
+    df_sample: pd.DataFrame,
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    """The renderer crosses the I/O boundary exactly once.
+
+    Parameters
+    ----------
+    df_sample : pd.DataFrame
+            Sample data to render.
+    tmp_path : pathlib.Path
+            Pytest-provided temporary directory.
+    mocker : MockerFixture
+            pytest-mock fixture for patching.
+
+    Returns
+    -------
+    None
+    """
+    mock_to_excel = mocker.patch.object(pd.DataFrame, "to_excel")
+    RenderToExcel(tmp_path / "report.xlsx", str_sheet_name="custom").render(df_sample)
+    mock_to_excel.assert_called_once()

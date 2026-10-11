@@ -247,7 +247,7 @@ copy_shared_github_overlay() {
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
+    GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
 }
 
@@ -307,7 +307,7 @@ copy_static_ts_lib_files() {
     copy_shared_github_overlay "$project_path"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-    # commit, never templated principles. See .specs/spec.md for the id conventions.
+    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 
     # Ship the repo->LLM context exporter (and its print_status helper) unconditionally,

@@ -45,11 +45,186 @@ by language: for Python copy `templates/python-common/.review-bots.yaml` to the 
 TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
+## How does a scaffolded repo close the issue a merged PR delivered?
+
+BlueprintX carries `close-linked-issues.yml` and its `bin/close_linked_issues.sh` under
+`templates/common/` (blueprintx#604), but generated projects do not receive them yet: the scaffold
+scripts do not copy them until the wiring step tracked in
+[#604](https://github.com/guilhermegor/blueprintx/issues/604) lands. Once wired, it behaves as
+follows.
+
+GitHub's own `Closes #N` linking can come back empty (a `Closes: #N` with a colon, or a merge
+that did not link), which leaves the issue open and keeps a Projects "Item closed" -> Done
+automation from firing. On a merged same-repo PR **into the default branch** the workflow closes,
+matching strictly (a wrong closure is worse than a missed one). A PR merged into another branch (a
+stacked PR) closes nothing, because the work has not reached the default branch. Merges made with
+the default `GITHUB_TOKEN` (an auto-merge or merge-queue action) never trigger
+`pull_request: closed`, so only merges by a person, an App token or a PAT are covered:
+
+- the issue number in a branch named `<type>/<N>-<slug>`, where the type is `feat`, `feature`,
+  `fix`, `bugfix`, `hotfix`, `docs`, `refactor`, `chore` or `test` and `N` is not a year-month
+  date (`feat/12-add-thing` closes issue 12; `feat/1999-x` closes 1999; `chore/2026-10-cleanup`
+  and `fix/python-3-12` close nothing, and a trailing `-N` is never read). A real issue number
+  that looks like a year-month, such as `feat/2010-12-factor-app`, is skipped too: a miss, never a
+  wrong closure;
+- each `Closes #N`, `Fixes #N` or `Resolves #N` pair in the PR body (GitHub's closing keywords
+  `close`, `fix` and `resolve` in their `-s`/`-d`/`-es` forms; colon allowed), at a word
+  boundary. `Closes #1, #2` closes only `#1`. Like GitHub's own linker, it ignores fenced code
+  blocks, inline code, `>` quotes and `<!-- -->` comments. A negated use is ignored, also across
+  a line break: `not`, `never`, `cannot`, `n't`, `no longer`, `revert(s|ed|ing)` or `without`,
+  followed by up to three words and the keyword ("does not fully fix #12", "this reverts the
+  change that fixes #8"). Any other wording, such as "I doubt this fixes #8", still closes.
+
+It skips the whole PR, branch and body alike, for `dependabot/*`, `renovate/*` and `release/*`
+branches (their bodies quote upstream `Fixes #N` text, and a trailing `-4` is a version). It also
+skips the PR's own number, any number that is a PR, and `owner/repo#N` references, which point at
+another repository. A fork PR is skipped too: its token is read-only. A missing issue (HTTP 404, or 410 for a deleted issue or a repo with Issues
+disabled) is skipped; any other API error fails the job, and one failed close does not stop the others. The
+branch name and PR body are untrusted text and reach the script only through `env:`. It
+complements, and does not replace, the Projects "Item closed -> Done" workflow. It is dropped with
+the rest of `.github/` in offline mode.
+
+## The scaffolder offered me a kanban board and labels — what does it do?
+
+After it creates the GitHub repo, the scaffolder creates the house labels (`type:task`,
+`type:research`, `type:grilling`, `hitl`, `afk`, `oracle:strong`, `oracle:weak`,
+`do-not-merge`) and asks whether to create a `<repo> kanban` GitHub Project. Answer yes and it
+creates the board, links it to the repo, sets `Status` to Backlog / Ready / In progress / In
+review / Done, and adds `Priority`, `Size`, `Estimate`, `Start date`, `Target date` and
+`Points`. Visibility defaults to the repo's own.
+
+It is safe to re-run: labels use `--force`, an existing `<repo> kanban` board is skipped, and two
+boards with that title are reported, never guessed between. A token without the `project` scope
+prints `gh auth refresh -s project` and scaffolding carries on. Views and the built-in workflows
+(auto-add items, item closed to Done) have no public API, so enable them at the URL the
+scaffolder prints (`.../projects/<n>/workflows`).
+
 ## How is BlueprintX itself versioned?
 
 The version is the git tag. Cut a release from the **Release** GitHub Action (enter the version
 once); `blueprintx --version` resolves it via `git describe` from a checkout, or a stamped
 literal for a packaged install. See the [Changelog](changelog.md).
+
+## Does a review that only has a body need an answer?
+
+Yes. A roster reviewer that posts findings as the review **body**, with no inline thread, used
+to satisfy `Review threads answered` unread, because the gate only counted threads (16 PRs
+merged that way on 2026-10-05, blueprintx#630). The gate does not parse prose to guess; it
+classifies a comment by the structure the comment declares for itself, and when that is
+ambiguous it counts the comment as a review, so a valid review is never dropped.
+
+### How the gate classifies a review
+
+A roster author's review (on any commit, as threads are; a `DISMISSED` one is skipped) or issue
+comment is a review when it has one of these shapes. A roster issue comment counts only with the
+ladder attribution line or a CodeRabbit header, so a status notice such as `Review ladder: all
+rungs failed` is not a review. A printed count wins over everything else:
+
+- CodeRabbit's body sections `Outside diff range comments (N)` and `Duplicate comments (N)`
+  with `N > 0`: these live only in the body, so they need a reply even when `Actionable comments
+  posted: 0`;
+- `Actionable comments posted: N` alone: the N findings are inline threads, which the thread
+  check already holds (reply and resolve), so the body needs no extra reply for them;
+- `N finding(s) across M reviewed file(s)` at the start of a line (the ladder posts no
+  threads): `0` is clean, `N > 0` needs a reply;
+- the ladder attribution line `Fallback review — runtime: <x>, model: <y> (selected by: <z>)`
+  without a count (the claude rung writes prose): a review, unless the prose is only
+  `No findings.`;
+- a `Review` or `Findings` heading, bullet, bold label or `Review:` line, and numbered
+  `Finding 1:` items;
+- a severity emoji, `Major`/`Critical`/`Minor`/`Blocker` opening a line as bold, in brackets or
+  before `:`/a dash, `Severity: <word>`, or a count that opens a line (`2 finding(s)`).
+
+A line that is only `No findings.`, `Review: no findings`, `Minor: none` or `None.` (and a
+heading directly followed by one) is clean. Nitpick and Trivial lines never need a reply.
+CodeRabbit's walkthrough, rate-limit and command-reply comments are not reviews because of their
+SHAPE: they carry no ladder attribution line, `Actionable` header or body section, and a roster
+issue comment counts as a review only with one of those.
+
+Count authority binds to the author, not the body: the `Actionable` header only speaks for
+CodeRabbit, and the `N finding(s) across` count only for the ladder app and only with its
+attribution line. Any other author's counts are ignored and its body is read by structure, so
+quoting a header never clears findings. Quoted lines and fenced blocks are ignored too.
+
+Missing or unrecognised input fails closed: a body section with no parsable count, a ladder
+attribution with nothing after it, and a review comment with no timestamp all count as findings;
+only an explicit clean statement or a stated `0` clears a review. Issue comments, reviews and
+threads are all paginated, so a PR with 140 comments is read in full; a page that fails to load
+fails the check instead of shortening the list.
+
+### How the gate classifies an answer
+
+An answer comes from outside the reviewer roster, is a user account (not a bot, app, organization or deleted ghost),
+and is posted **after** the review. It counts when it is either 100 characters or longer, or
+has an answer shape at any length: a line that opens with `Reply to review <id>`,
+`Answer(s) to ... review`, `Re: review`, `Verdicts`/`Judgment on the ... review`, or a
+`review <id>` citation,
+`Addressed in <sha>`/`Fixed in <sha>`, a `Finding N:` heading, or a `> quoted finding`
+followed by a response. A review request (`@coderabbitai re-review`, `Ready for re-review`) or a status line (`Not
+answered yet`) is neither. One reply after the latest
+review answers the earlier ones; a body has no thread, so nothing needs resolving. When threads
+are also open, the failure lists both. Re-run the check after replying. The tests in
+`test_review_threads_gate.py` list every shape with a witness that fails without its marker.
+The rule is weaker than a thread: a long comment answers without being tied to a finding.
+
+### When does a review still count after the branch moves?
+
+A review is pinned to the commit it was written against. When no review names the head, the
+gate asks whether the PR's **own patch** changed between the reviewed commit `R` and the head
+`H`. If it did not, the review covers `H` and the gate prints
+`review at R still covers H: the head only merges the base, the PR's own patch is unchanged`.
+That is the case of `update-branch` under the strict-serial ruleset: main is merged in, no code
+is written, and a second review of the same diff would only spend a reviewer rung.
+
+The patch is the diff from the merge base with the base branch to the commit. It is
+fingerprinted as the compare API reports it, with only the hunk coordinates
+(`@@ -a,b +c,d @@`) removed. Everything else is kept: the function context after the closing
+`@@`, the context lines, and all whitespace. This is stricter than `git patch-id --stable`,
+which also drops the function context and normalises whitespace. The CI checkout is shallow
+(`actions/checkout` defaults to `fetch-depth: 1`), so there is no local history for
+`git merge-base`; the gate reads the same diff from the GitHub compare API
+(`compare/<base>...<commit>`), which computes the merge base server side.
+
+Both compares name the base by the commit SHA read once with the PR, never by branch name, so a
+retarget or a push to the base between the two reads cannot make them measure different bases.
+The head is fingerprinted once, by the caller, and handed to each comparison, so the guarantee
+does not rest on the compare function caching anything: if the head cannot be read the
+comparison stops there. Reviewed commits are tried newest first and at most five of them
+(`_INT_MAX_REVIEWED_COMMITS`: five 60 second calls stay well inside the job timeout, and a PR
+reviewed at more commits than that is simply re-reviewed), so a PR makes at most six compare
+calls. A pass that rests on a carried-forward review is shown in the verdict: one line in the
+normal output, and a `carried_forward_from` field (the reviewed commit) under `--json`, where
+stdout stays one document. The check runs
+after the completion-notice check, so a PR that already passes makes no compare call. Each call
+has a 60 second timeout, and a timeout, a missing `gh` or an API error all read as "not
+covered", with one line on stderr giving the reason (stdout stays the `--json` document). A
+`DISMISSED` review is never carried forward. Every review's findings, threads or body, are
+audited afterwards whatever the carry-forward decided.
+
+What carries forward is therefore narrower than "any update-branch". A base edit that only
+shifts the PR's hunks (lines added above or below them) leaves the fingerprint alone. A
+conflict-free base edit inside a hunk's three context lines changes the context, so the review
+goes stale; that fails safe. The tests pin both cases against real `git diff` output. Known
+ceilings: an identical edit moved within one function, between identical context lines, still
+matches, as it does for `git patch-id`; and a conflict-free base change can still break the
+unchanged patch semantically (main renames a function the PR calls), which a patch comparison
+cannot see. That is accepted: a review is repeated only when a conflict or new code changes
+the PR's own patch, and CI covers the integration. A PR from a fork whose commits cannot be
+compared fails closed like any other error.
+
+A PR whose base branch was ever changed gets no carry-forward at all. The compare measures the
+patch against today's base, which need not be the base the review was written against, so
+after a retarget the same fingerprint proves nothing. The gate reads the PR's REST timeline for
+a `base_ref_changed` event (an event is never removed, so the refusal is permanent for that
+PR), prints the reason on stderr, and treats an unreadable timeline as a failure rather than as
+"not retargeted".
+
+Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
+and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
+closed: a missing commit, an API error, a malformed response, a binary or oversized file with
+no patch text, or a full 300-file list is read as "not covered". The compare API returns at most
+300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
+off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
 
 ## Which install methods are supported?
 

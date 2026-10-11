@@ -11,6 +11,7 @@ unchanged RHS constant must not be read as an edited expected value).
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -26,12 +27,12 @@ def _load(str_name: str) -> ModuleType:
     Parameters
     ----------
     str_name : str
-            Module stem under ``bin/``.
+        Module stem under ``bin/``.
 
     Returns
     -------
     ModuleType
-            The imported module.
+        The imported module.
     """
     cls_spec = importlib.util.spec_from_file_location(str_name, _BIN / f"{str_name}.py")
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -49,16 +50,16 @@ def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) ->
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff.
+        Whether a non-test file also changed in this diff.
 
     Returns
     -------
     list of str
-            Findings from ``gate._file_findings``.
+        Findings from ``gate._file_findings``.
     """
     return gate._file_findings("tests/unit/test_sample.py", str_old, str_new, bool_prod_changed)
 
@@ -74,16 +75,16 @@ def _sole_finding(str_old: str, str_new: str, *, bool_prod_changed: bool = False
     Parameters
     ----------
     str_old : str
-            Content at the merge-base.
+        Content at the merge-base.
     str_new : str
-            Content in this change.
+        Content in this change.
     bool_prod_changed : bool
-            Whether a non-test file also changed in this diff.
+        Whether a non-test file also changed in this diff.
 
     Returns
     -------
     str
-            The one finding.
+        The one finding.
     """
     list_problems = _findings(str_old, str_new, bool_prod_changed=bool_prod_changed)
     assert len(list_problems) == 1, list_problems
@@ -307,7 +308,7 @@ def test_the_report_passes_a_flagged_diff_with_a_justification_trailer(
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-            Replaces the gate's git runner so the trailer search reads a fixed commit message.
+        Replaces the gate's git runner so the trailer search reads a fixed commit message.
     """
     monkeypatch.setattr(
         gate,
@@ -399,7 +400,7 @@ def test_a_call_trivialised_to_any_truthy_constant_is_reported(str_new_assert: s
     Parameters
     ----------
     str_new_assert : str
-            The trivialised assertion replacing the unittest call.
+        The trivialised assertion replacing the unittest call.
     """
     assert "truthy constant" in _sole_finding(
         "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n",
@@ -418,8 +419,81 @@ def test_a_call_replaced_by_a_falsy_constant_is_not_a_weakening(str_new_assert: 
     Parameters
     ----------
     str_new_assert : str
-            The falsy assertion replacing the unittest call.
+        The falsy assertion replacing the unittest call.
     """
     str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
     str_new = f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n"
     assert _findings(str_old, str_new) == []
+
+
+# --------------------------
+# Tests — the merge-base mid-merge (a merge of main into the branch in progress)
+# --------------------------
+
+
+def _git_in(path_repo: Path, *args: str) -> str:
+    """Run ``git`` inside a throwaway repo and return its stripped stdout.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        The repository to run in.
+    *args : str
+        Arguments after ``git``.
+
+    Returns
+    -------
+    str
+        Captured stdout, stripped.
+    """
+    cls_proc = subprocess.run(  # noqa: S603
+        ["git", "-C", str(path_repo), *args],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return cls_proc.stdout.strip()
+
+
+@pytest.fixture
+def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return a repo whose ``feature`` has a merge of ``main`` in progress.
+
+    ``main`` moves on after the fork, so a base resolved from the pre-merge HEAD (the fork
+    point) differs from main's tip.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided scratch directory.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate inside the repo.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository, left mid-merge.
+    """
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    _git_in(tmp_path, "config", "commit.gpgsign", "false")
+    _git_in(tmp_path, "commit", "-q", "--allow-empty", "-m", "seed")
+    _git_in(tmp_path, "checkout", "-q", "-b", "feature")
+    (tmp_path / "own").write_text("own", encoding="utf-8")
+    _git_in(tmp_path, "add", "own")
+    _git_in(tmp_path, "commit", "-q", "-m", "own")
+    _git_in(tmp_path, "checkout", "-q", "main")
+    (tmp_path / "theirs").write_text("theirs", encoding="utf-8")
+    _git_in(tmp_path, "add", "theirs")
+    _git_in(tmp_path, "commit", "-q", "-m", "theirs")
+    _git_in(tmp_path, "checkout", "-q", "feature")
+    _git_in(tmp_path, "merge", "-q", "--no-commit", "--no-ff", "main")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
+    return tmp_path
+
+
+def test_resolve_base_mid_merge_is_the_incoming_tip(path_mid_merge: Path) -> None:
+    """Mid-merge the base is main's tip, never the fork point that charges main's delta."""
+    assert gate.resolve_base() == _git_in(path_mid_merge, "rev-parse", "main")

@@ -5,6 +5,19 @@ title: ""
 labels: []
 ---
 
+<!--
+Required when the issue carries the `state:blocked` label:
+  - a `**Blocked by:**` line naming each blocker — an issue ref (`repo#N`) where one exists, or
+    `decision: …` when the blocker is a choice nobody has made yet. "Blocked" with no named
+    blocker is not a status, it is a question the board cannot answer.
+    Full convention: docs/contributing.md ("Blocked work").
+    Add the line under "What / Why" only when blocked, in the form:
+    **Blocked by:** repo#N, repo#N — or decision: …
+
+Machine-readable form of the rule above, read by the guard (keep it on one line):
+issue-template-guard: require "**Blocked by:**" if-label state:blocked
+-->
+
 ## What / Why
 
 <!-- What should change, and why. -->

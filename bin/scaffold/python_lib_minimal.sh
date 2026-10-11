@@ -496,7 +496,7 @@ lib_minimal_copy_github_assets() {
     # GitHub-remote-only, like the release workflows — apply_offline_mode drops all of .github/.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/docs.yaml" \
         "$project_path/.github/workflows/docs.yaml"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
+    GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     # SECURITY.md (root; GitHub auto-detects it and flips "Security policy" to Enabled) +
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
     # bin/enable_security.sh). Both are GitHub-platform features, hence GitHub-only.
@@ -595,8 +595,12 @@ lib_minimal_copy_project_scaffolding() {
     # before, so review_threads.yaml's `python bin/check_review_threads.py` needs no change.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-    # commit, never templated principles. See .specs/spec.md for the id conventions.
+    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
+    # The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
+    # implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
+    cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" "$project_path/bin/check_specs_structure.sh"
+    chmod +x "$project_path/bin/check_specs_structure.sh"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).

@@ -16,8 +16,10 @@ Two should-fail/should-pass pairs carry the whole point of the issue this gate a
   this test now pins so it cannot regress silently a second time).
 """
 
+import importlib.metadata
 import importlib.util
 from pathlib import Path
+import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -83,6 +85,65 @@ def test_vulture_absent_is_a_legitimate_skip(
     assert cls_gate.main(["--root", str(tmp_path)]) == 0
 
 
+def test_vulture_genuinely_missing_resolves_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``ModuleNotFoundError`` naming ``vulture`` itself is the one skippable absence (#640)."""
+    monkeypatch.setitem(sys.modules, "vulture", None)
+    assert _load_gate().resolve_vulture() is None
+
+
+def test_vulture_broken_transitive_import_is_not_a_skip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An installed ``vulture`` whose own import fails must raise, never skip green (#640)."""
+    _write_module(tmp_path, "vulture/__init__.py", "import broken_transitive_dep\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    with pytest.raises(ModuleNotFoundError, match="broken_transitive_dep"):
+        _load_gate().resolve_vulture()
+
+
+def test_vulture_plain_import_error_is_not_a_skip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A plain ``ImportError`` inside an installed ``vulture`` must raise, never skip (#640)."""
+    _write_module(tmp_path, "vulture/__init__.py", "from os import no_such_name\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    with pytest.raises(ImportError, match="no_such_name"):
+        _load_gate().resolve_vulture()
+
+
+def test_vulture_half_removed_install_is_not_a_skip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Metadata present but package gone (``exc.name == "vulture"``) must raise, not skip."""
+    monkeypatch.setitem(sys.modules, "vulture", None)
+    monkeypatch.setattr(importlib.metadata, "version", lambda str_name: "2.14")
+    with pytest.raises(ModuleNotFoundError):
+        _load_gate().resolve_vulture()
+
+
+def test_broken_vulture_prints_one_line_and_exits_nonzero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """``main()`` turns a broken vulture into a one-line stderr message, not a traceback."""
+    _write_module(tmp_path, "src/thing.py", "def used():\n    return 1\n")
+    _write_module(tmp_path, "vulture/__init__.py", "import broken_transitive_dep\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    _load_gate().main(["--root", str(tmp_path)])
+    assert "vulture is installed but failed to import" in capsys.readouterr().err
+
+
+def test_broken_vulture_main_returns_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A broken vulture fails the gate (exit 1) rather than propagating out of ``main()``."""
+    _write_module(tmp_path, "src/thing.py", "def used():\n    return 1\n")
+    _write_module(tmp_path, "vulture/__init__.py", "import broken_transitive_dep\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vulture", raising=False)
+    assert _load_gate().main(["--root", str(tmp_path)]) == 1
+
+
 def test_provable_dead_parameter_at_gate_confidence_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
@@ -98,10 +159,33 @@ def test_provable_dead_parameter_at_gate_confidence_fails(
         "src/thing.py",
         "def compute(unused_arg: int) -> int:\n    return 2\n",
     )
+    _load_gate().main(["--root", str(tmp_path)])
+    assert "unused_arg" in capsys.readouterr().err
+
+
+def test_provable_dead_parameter_report_names_the_gate_confidence(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The failure message states the confidence bar that made it gate."""
+    pytest.importorskip("vulture")
+    _write_module(
+        tmp_path,
+        "src/thing.py",
+        "def compute(unused_arg: int) -> int:\n    return 2\n",
+    )
+    _load_gate().main(["--root", str(tmp_path)])
+    assert ">=80% confidence" in capsys.readouterr().err
+
+
+def test_provable_dead_parameter_exits_nonzero(tmp_path: Path) -> None:
+    """An unused function parameter at gate confidence fails the run."""
+    pytest.importorskip("vulture")
+    _write_module(
+        tmp_path,
+        "src/thing.py",
+        "def compute(unused_arg: int) -> int:\n    return 2\n",
+    )
     assert _load_gate().main(["--root", str(tmp_path)]) == 1
-    str_err = capsys.readouterr().err
-    assert "unused_arg" in str_err
-    assert ">=80% confidence" in str_err
 
 
 def test_unparsable_file_fails_instead_of_reporting_a_clean_tree(
@@ -115,8 +199,16 @@ def test_unparsable_file_fails_instead_of_reporting_a_clean_tree(
     pytest.importorskip("vulture")
     _write_module(tmp_path, "src/ok.py", "def used() -> int:\n    return 1\n")
     _write_module(tmp_path, "src/broken.py", "def broken(:\n")
-    assert _load_gate().main(["--root", str(tmp_path)]) == 1
+    _load_gate().main(["--root", str(tmp_path)])
     assert "could not read or parse" in capsys.readouterr().err
+
+
+def test_unparsable_file_exits_nonzero(tmp_path: Path) -> None:
+    """A file vulture cannot parse makes the run exit non-zero."""
+    pytest.importorskip("vulture")
+    _write_module(tmp_path, "src/ok.py", "def used() -> int:\n    return 1\n")
+    _write_module(tmp_path, "src/broken.py", "def broken(:\n")
+    assert _load_gate().main(["--root", str(tmp_path)]) == 1
 
 
 def test_shipped_but_uncalled_function_does_not_gate(
@@ -134,8 +226,19 @@ def test_shipped_but_uncalled_function_does_not_gate(
         "src/thing.py",
         "def uncalled_seam() -> int:\n    return 1\n",
     )
-    assert _load_gate().main(["--root", str(tmp_path)]) == 0
+    _load_gate().main(["--root", str(tmp_path)])
     assert "uncalled_seam" in capsys.readouterr().out
+
+
+def test_shipped_but_uncalled_function_exits_zero(tmp_path: Path) -> None:
+    """A function nothing calls yet does not fail the run."""
+    pytest.importorskip("vulture")
+    _write_module(
+        tmp_path,
+        "src/thing.py",
+        "def uncalled_seam() -> int:\n    return 1\n",
+    )
+    assert _load_gate().main(["--root", str(tmp_path)]) == 0
 
 
 def test_discover_python_files_ignores_skip_dir_named_ancestor(tmp_path: Path) -> None:
@@ -179,7 +282,21 @@ def test_classify_findings_splits_on_gate_threshold() -> None:
         SimpleNamespace(confidence=100),
     ]
 
-    list_gate, list_report = cls_gate.classify_findings(list_items)
+    list_gate, _ = cls_gate.classify_findings(list_items)
 
     assert (list_gate[0].confidence, list_gate[1].confidence) == (80, 100)
+
+
+def test_classify_findings_reports_below_the_gate_threshold() -> None:
+    """Items under the >=80% boundary land in the report bucket, not the gating one."""
+    cls_gate = _load_gate()
+    list_items = [
+        SimpleNamespace(confidence=60),
+        SimpleNamespace(confidence=79),
+        SimpleNamespace(confidence=80),
+        SimpleNamespace(confidence=100),
+    ]
+
+    _, list_report = cls_gate.classify_findings(list_items)
+
     assert (list_report[0].confidence, list_report[1].confidence) == (60, 79)

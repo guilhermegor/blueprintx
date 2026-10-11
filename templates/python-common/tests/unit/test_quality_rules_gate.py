@@ -168,6 +168,19 @@ def test_every_declared_pattern_is_checked_not_only_the_first(tmp_path: Path) ->
     dict_entry = {"file": "conf.txt", "patterns": ["first_value=1", "second_value=2"]}
     list_problems = gate.config_pattern_problems([{"id": "r", "python": dict_entry}], tmp_path)
     assert len(list_problems) == 1
+
+
+def test_the_drifted_second_pattern_is_named(tmp_path: Path) -> None:
+    """The finding names the second pattern, the one that drifted.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    (tmp_path / "conf.txt").write_text("first_value=1\n", encoding="utf-8")
+    dict_entry = {"file": "conf.txt", "patterns": ["first_value=1", "second_value=2"]}
+    list_problems = gate.config_pattern_problems([{"id": "r", "python": dict_entry}], tmp_path)
     assert "second_value=2" in list_problems[0]
 
 
@@ -223,6 +236,23 @@ def test_an_unrecognised_status_value_does_not_buy_coverage(str_bogus: str) -> N
     }
     list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
     assert len(list_problems) == 1, f"{str_bogus!r} was accepted as coverage"
+
+
+@pytest.mark.parametrize("str_bogus", ["planned", "not_implemented", "todo", "wip"])
+def test_an_unrecognised_status_finding_names_the_language(str_bogus: str) -> None:
+    """The finding for a bogus status names the language left without coverage.
+
+    Parameters
+    ----------
+    str_bogus : str
+        A status value the gate must not accept as coverage.
+    """
+    dict_rule = {
+        "id": "r",
+        "python": {"tool": "ruff", "rule": "C901"},
+        "typescript": {"status": str_bogus, "note": "tracked in an issue"},
+    }
+    list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
     assert "typescript" in list_problems[0]
 
 
@@ -235,6 +265,16 @@ def test_an_entry_with_neither_implementation_nor_exception_is_flagged() -> None
     }
     list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
     assert len(list_problems) == 1
+
+
+def test_an_entry_with_neither_implementation_nor_exception_names_the_language() -> None:
+    """The bare-note finding names the language left uncovered."""
+    dict_rule = {
+        "id": "r",
+        "python": {"tool": "ruff", "rule": "C901"},
+        "typescript": {"note": "no tool, no rule, no stated exception"},
+    }
+    list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
     assert "typescript" in list_problems[0]
 
 
@@ -246,6 +286,10 @@ def test_a_comment_only_note_does_not_satisfy_the_reason_requirement() -> None:
     In YAML the value is empty; the restricted parser disagreed, permissively.
     """
     assert gate._parse_scalar("# reason") == ""
+
+
+def test_a_bare_hash_is_an_empty_value() -> None:
+    """A lone ``#`` with leading whitespace is an empty value too."""
     assert gate._parse_scalar("  #") == ""
 
 
@@ -257,6 +301,10 @@ def test_a_trailing_comment_is_stripped_from_a_bare_value() -> None:
 def test_a_quoted_hash_is_a_real_string_not_a_comment() -> None:
     """The negative control: quoting is how you mean a literal '#'."""
     assert gate._parse_scalar('"# literal hash"') == "# literal hash"
+
+
+def test_a_quoted_hash_inside_prose_stays_in_the_string() -> None:
+    """A quoted value containing ``#430`` keeps the whole text."""
     assert gate._parse_scalar('"see #430 for why"') == "see #430 for why"
 
 
@@ -269,4 +317,13 @@ def test_a_comment_only_note_is_reported_as_a_missing_reason() -> None:
     }
     list_problems = gate.reason_required_problems([dict_rule])
     assert len(list_problems) == 1
-    assert "typescript" in list_problems[0]
+
+
+def test_a_comment_only_note_missing_reason_names_the_language() -> None:
+    """The missing-reason finding names the language whose note was only a comment."""
+    dict_rule = {
+        "id": "r",
+        "python": {"tool": "ruff", "rule": "C901"},
+        "typescript": {"status": "not-implemented", "note": gate._parse_scalar("# reason")},
+    }
+    assert "typescript" in gate.reason_required_problems([dict_rule])[0]

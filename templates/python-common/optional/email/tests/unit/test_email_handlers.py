@@ -54,15 +54,27 @@ def test_smtp_handler_rejects_unconfigured_host() -> None:
         cls_smtp.send_email("subject", ["to@example.com"], [], "body", [])
 
 
-def test_outlook_handler_delegates_send_and_download(tmp_path: Path) -> None:
-    """The Outlook handler forwards send_email and download_attachment to the gateway."""
+def test_outlook_handler_returns_the_gateway_send_result() -> None:
+    """The Outlook handler returns whatever the gateway's ``send_email`` returned."""
     cls_gateway = MagicMock()
     cls_gateway.send_email.return_value = True
-    cls_gateway.download_attachment.return_value = tmp_path / "out.xlsx"
     cls_handler = OutlookEmailHandler(cls_gateway)
 
     assert cls_handler.send_email("subject", ["to@example.com"], [], "body", []) is True
+
+
+def test_outlook_handler_forwards_send_email_to_the_gateway() -> None:
+    """The Outlook handler calls the gateway's ``send_email`` exactly once."""
+    cls_gateway = MagicMock()
+    OutlookEmailHandler(cls_gateway).send_email("subject", ["to@example.com"], [], "body", [])
+
     cls_gateway.send_email.assert_called_once()
 
-    cls_handler.download_attachment("acct", "Inbox", "subject~", tmp_path)
+
+def test_outlook_handler_forwards_download_attachment_to_the_gateway(tmp_path: Path) -> None:
+    """The Outlook handler calls the gateway's ``download_attachment`` exactly once."""
+    cls_gateway = MagicMock()
+    cls_gateway.download_attachment.return_value = tmp_path / "out.xlsx"
+    OutlookEmailHandler(cls_gateway).download_attachment("acct", "Inbox", "subject~", tmp_path)
+
     cls_gateway.download_attachment.assert_called_once()

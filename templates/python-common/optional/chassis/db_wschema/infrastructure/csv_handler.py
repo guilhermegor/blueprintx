@@ -9,6 +9,7 @@ import shutil
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id
+from chassis.db_wschema.infrastructure._row_ops import _apply_update, _find_row
 
 
 class CSVDatabaseHandler(DatabaseHandler):
@@ -17,9 +18,9 @@ class CSVDatabaseHandler(DatabaseHandler):
     Parameters
     ----------
     file_path : str or Path
-            Location of the CSV file.
+        Location of the CSV file.
     id_field : str, optional
-            Identifier column name, by default ``"id"``.
+        Identifier column name, by default ``"id"``.
     """
 
     def __init__(self, file_path: str | Path, id_field: str = "id") -> None:
@@ -35,12 +36,12 @@ class CSVDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record : Record
-                Data to persist.
+            Data to persist.
 
         Returns
         -------
         str
-                Identifier assigned to the stored record.
+            Identifier assigned to the stored record.
         """
         record = ensure_id(record, self.id_field)
         list_rows = self._read_all()
@@ -54,17 +55,14 @@ class CSVDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier to look up.
+            Identifier to look up.
 
         Returns
         -------
         Record or None
-                Matching record when found, otherwise ``None``.
+            Matching record when found, otherwise ``None``.
         """
-        for dict_row in self._read_all():
-            if str(dict_row.get(self.id_field)) == str(record_id):
-                return dict_row
-        return None
+        return _find_row(self._read_all(), self.id_field, record_id)
 
     def update(self, record_id: str, updates: Record) -> Record | None:
         """Update a stored record.
@@ -72,26 +70,18 @@ class CSVDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to update.
+            Identifier of the record to update.
         updates : Record
-                Partial payload to merge.
+            Partial payload to merge.
 
         Returns
         -------
         Record or None
-                Updated record when it exists, otherwise ``None``.
+            Updated record when it exists, otherwise ``None``.
         """
-        dict_updated: Record | None = None
-        list_rows: list[Record] = []
-        for dict_row in self._read_all():
-            # A separate name rather than rebinding the loop variable — dict_row would then
-            # mean two different things in one body, the row as READ and the row as it will
-            # be WRITTEN, and a later edit between the two reads whichever it happens to hit.
-            dict_out = dict_row
-            if str(dict_row.get(self.id_field)) == str(record_id):
-                dict_out = {**dict_row, **updates, self.id_field: record_id}
-                dict_updated = dict_out
-            list_rows.append(dict_out)
+        list_rows, dict_updated = _apply_update(
+            self._read_all(), self.id_field, record_id, updates
+        )
         if dict_updated is not None:
             self._write_all(list_rows)
         return dict_updated
@@ -102,12 +92,12 @@ class CSVDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         record_id : str
-                Identifier of the record to remove.
+            Identifier of the record to remove.
 
         Returns
         -------
         bool
-                ``True`` when a record was deleted, ``False`` otherwise.
+            ``True`` when a record was deleted, ``False`` otherwise.
         """
         list_rows = self._read_all()
         list_remaining = [r for r in list_rows if str(r.get(self.id_field)) != str(record_id)]
@@ -132,7 +122,7 @@ class CSVDatabaseHandler(DatabaseHandler):
         Returns
         -------
         list of Record
-                All records currently stored.
+            All records currently stored.
         """
         if not self.file_path.exists() or self.file_path.stat().st_size == 0:
             return []
@@ -146,7 +136,7 @@ class CSVDatabaseHandler(DatabaseHandler):
         Parameters
         ----------
         rows : Iterable[Record]
-                Records to persist.
+            Records to persist.
         """
         list_rows = list(rows)
         if not list_rows:
@@ -156,5 +146,4 @@ class CSVDatabaseHandler(DatabaseHandler):
         with self.file_path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=list_fieldnames)
             writer.writeheader()
-            for dict_row in list_rows:
-                writer.writerow(dict_row)
+            writer.writerows(list_rows)

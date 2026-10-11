@@ -43,18 +43,18 @@ def _validate_cnpj(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            Candidate CNPJ, already coerced to ``str`` by the field's base type.
+        Candidate CNPJ, already coerced to ``str`` by the field's base type.
 
     Returns
     -------
     str
-            ``str_value``, once validated.
+        ``str_value``, once validated.
 
     Raises
     ------
     ValueError
-            When ``utils.br_identifiers.is_valid_cnpj`` rejects ``str_value`` — Pydantic turns
-            this into a ``ValidationError`` naming the field.
+        When ``utils.br_identifiers.is_valid_cnpj`` rejects ``str_value`` — Pydantic turns
+        this into a ``ValidationError`` naming the field.
     """
     if not is_valid_cnpj(str_value):
         raise ValueError(f"invalid CNPJ: {str_value!r}")
@@ -68,18 +68,18 @@ def _validate_cpf(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            Candidate CPF, already coerced to ``str`` by the field's base type.
+        Candidate CPF, already coerced to ``str`` by the field's base type.
 
     Returns
     -------
     str
-            ``str_value``, once validated.
+        ``str_value``, once validated.
 
     Raises
     ------
     ValueError
-            When ``utils.br_identifiers.is_valid_cpf`` rejects ``str_value`` — Pydantic turns
-            this into a ``ValidationError`` naming the field.
+        When ``utils.br_identifiers.is_valid_cpf`` rejects ``str_value`` — Pydantic turns
+        this into a ``ValidationError`` naming the field.
     """
     if not is_valid_cpf(str_value):
         raise ValueError(f"invalid CPF: {str_value!r}")

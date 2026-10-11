@@ -223,8 +223,15 @@ _STR_WORKFLOW_BASE = (
 # --------------------------
 
 
-def test_precommit_conflict_resolution_drops_gate_integrity_310_shape() -> None:
-    """Replay #310: keeping ``check-secrets`` while dropping ``gate-integrity`` is caught."""
+@pytest.fixture
+def list_precommit_310_problems() -> list[str]:
+    """Return the findings for #310's shape: ``check-secrets`` kept, ``gate-integrity`` dropped.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
     str_new = (
         "repos:\n"
         "  - repo: local\n"
@@ -235,12 +242,36 @@ def test_precommit_conflict_resolution_drops_gate_integrity_310_shape() -> None:
         "        name: some other hook\n"
     )
 
-    str_shown = ".pre-commit-config.yaml"
-    list_problems = gate.precommit_problems(_STR_PRECOMMIT_BASE, str_new, str_shown)
+    return gate.precommit_problems(_STR_PRECOMMIT_BASE, str_new, ".pre-commit-config.yaml")
 
-    assert len(list_problems) == 1
-    assert "gate-integrity" in list_problems[0]
-    assert "removed" in list_problems[0]
+
+def test_precommit_conflict_resolution_drops_gate_integrity_310_shape(
+    list_precommit_310_problems: list[str],
+) -> None:
+    """Replay #310: keeping ``check-secrets`` while dropping ``gate-integrity`` is caught.
+
+    Parameters
+    ----------
+    list_precommit_310_problems : list[str]
+        The gate's findings.
+    """
+    assert len(list_precommit_310_problems) == 1
+
+
+@pytest.mark.parametrize("str_needle", ["gate-integrity", "removed"])
+def test_precommit_310_finding_names_the_dropped_hook(
+    list_precommit_310_problems: list[str], str_needle: str
+) -> None:
+    """The finding names the dropped hook and says it was removed.
+
+    Parameters
+    ----------
+    list_precommit_310_problems : list[str]
+        The gate's findings.
+    str_needle : str
+        Text the finding must contain.
+    """
+    assert str_needle in list_precommit_310_problems[0]
 
 
 def test_precommit_both_sides_kept_is_clean() -> None:
@@ -273,8 +304,15 @@ def test_precommit_unrelated_addition_alone_is_clean() -> None:
 # --------------------------
 
 
-def test_workflow_conflict_resolution_drops_gate_integrity_312_shape() -> None:
-    """Replay #312: keeping ``docs-code-refs`` while dropping ``gate-integrity`` is caught."""
+@pytest.fixture
+def list_workflow_312_problems() -> list[str]:
+    """Return the findings for #312's shape: ``docs-code-refs`` kept, ``gate-integrity`` dropped.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
     str_new = (
         "jobs:\n"
         "  docs-code-refs:\n"
@@ -285,11 +323,36 @@ def test_workflow_conflict_resolution_drops_gate_integrity_312_shape() -> None:
         "    runs-on: ubuntu-latest\n"
     )
 
-    list_problems = gate.workflow_problems(_STR_WORKFLOW_BASE, str_new, "scaffold_checks.yml")
+    return gate.workflow_problems(_STR_WORKFLOW_BASE, str_new, "scaffold_checks.yml")
 
-    assert len(list_problems) == 1
-    assert "gate-integrity" in list_problems[0]
-    assert "removed" in list_problems[0]
+
+def test_workflow_conflict_resolution_drops_gate_integrity_312_shape(
+    list_workflow_312_problems: list[str],
+) -> None:
+    """Replay #312: keeping ``docs-code-refs`` while dropping ``gate-integrity`` is caught.
+
+    Parameters
+    ----------
+    list_workflow_312_problems : list[str]
+        The gate's findings.
+    """
+    assert len(list_workflow_312_problems) == 1
+
+
+@pytest.mark.parametrize("str_needle", ["gate-integrity", "removed"])
+def test_workflow_312_finding_names_the_dropped_job(
+    list_workflow_312_problems: list[str], str_needle: str
+) -> None:
+    """The finding names the dropped job and says it was removed.
+
+    Parameters
+    ----------
+    list_workflow_312_problems : list[str]
+        The gate's findings.
+    str_needle : str
+        Text the finding must contain.
+    """
+    assert str_needle in list_workflow_312_problems[0]
 
 
 def test_workflow_both_sides_kept_is_clean() -> None:

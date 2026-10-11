@@ -114,7 +114,7 @@ Checking at the template root is a false green: the generated project pins diffe
 versions. The integration suite matters specifically because it is the only place a `bin/*.sh`
 seam is actually executed.
 
-**Run all five tiers with `make verify_tiers`** (`bin/ci/scaffold_lint_test_all.sh`; `JOBS=1` to
+**Run all six Python tiers with `make verify_tiers`** (`bin/ci/scaffold_lint_test_all.sh`; `JOBS=1` to
 serialise while debugging). It fans the tiers out in parallel — measured 477s of work in 103s wall
 clock — and CI needs none of it, because `tests.yaml` already runs one job per tier.
 
@@ -223,6 +223,7 @@ BlueprintX/
 │   └── scaffold/
 │       ├── python_ddd_service.sh      # DDD native-DB scaffold logic
 │       ├── python_ddd_service_orm.sh  # DDD SQLAlchemy ORM scaffold logic
+│       ├── python_api_service.sh      # API service (FastAPI) native-DB scaffold logic
 │       ├── python_mvc_service.sh      # MVC native-DB scaffold logic
 │       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold logic
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold logic
@@ -277,15 +278,15 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 
 ## How scaffolding works
 
-**Eight skeletons ship today** — five Python (`ddd-service-native-db`, `ddd-service-orm-db`,
-`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`), two TypeScript
+**Nine skeletons ship today** — six Python (`ddd-service-native-db`, `ddd-service-orm-db`,
+`api-service-native-db`, `mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`), two TypeScript
 (`react-spa-webpack`, `ts-lib`) and one Bash (`bash-cli`), one `skeleton.meta` each (see "Repo architecture" above and
 "Discovery system" below). `bin/ci/validate_meta.sh` enforces that every one of these
 directory names is also named here — this count is a should-fail witness in its own right:
 add or remove a skeleton without updating it and the number goes stale before the paragraph
 does (blueprintx#478).
 
-### Python skeletons (`python_ddd_service.sh`, `python_ddd_service_orm.sh`, `python_mvc_service.sh`, `python_mvc_service_orm.sh`, `python_lib_minimal.sh`)
+### Python skeletons (`python_ddd_service.sh`, `python_ddd_service_orm.sh`, `python_api_service.sh`, `python_mvc_service.sh`, `python_mvc_service_orm.sh`, `python_lib_minimal.sh`)
 
 1. `validate_inputs` — checks required args.
 2. `resolve_github_username` — env var → `gh` CLI → interactive prompt.
@@ -428,7 +429,8 @@ with an empty `closingIssuesReferences`, so #355 never closed) in a cheaper file
 team-reviewable record of what was done and why. When complete, tick the last box and add
 a short "Completed — kept as a record" note instead of removing the file. `.specs/` is
 outside the MkDocs source tree entirely, so nothing has to be excluded to keep it
-unpublished. `bin/ci/check_specs_structure.sh` enforces the layout. (Lesson:
+unpublished. `bin/ci/check_specs_structure.sh` enforces the layout, here via `--root .` and in every
+Python scaffold as a copy of that same file. (Lesson:
 persist-todo-in-docs-backlog, written when trackers lived in `docs/backlog/`; they moved
 in blueprintx#575.)
 
