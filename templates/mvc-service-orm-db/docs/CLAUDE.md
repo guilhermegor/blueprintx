@@ -11,15 +11,7 @@ them.
 
 New working documents never belong in `docs/`: keep them outside it, in
 `.specs/`. A few legacy files and folders still sit inside `docs/` but are
-excluded from the build; they are listed in `exclude_docs` in `mkdocs.yml`:
-
-```yaml
-exclude_docs: |
-  superpowers/
-  CLAUDE.md
-  blueprintx-lessons.md
-  dotfiles-dev-lessons.md
-```
+excluded from the build; `exclude_docs` in `mkdocs.yml` is the authoritative list.
 
 - `.specs/backlog/` — work-to-do backlogs and follow-up notes (outside `docs/`, so
   never published). For any non-trivial branch, keep a

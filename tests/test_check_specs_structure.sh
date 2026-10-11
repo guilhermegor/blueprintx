@@ -295,6 +295,43 @@ print(int(bool(mod.CHECKBOX_RE.search(sys.argv[2]))))' \
     done
 }
 
+test_fence_grammar_parity() {
+    # Fence handling, compared across both gates. Columns: opener, closer, then the outcome each
+    # gate must reach: the specs gate accepting a bad marker inside, the ledger gate still
+    # counting a good one inside. An unclosed fence is an error for the specs gate and swallows
+    # the rest of the file for the ledger gate; both reject.
+    local str_open str_close str_want_pass str_want_count str_root str_shell str_count
+    while IFS='|' read -r str_open str_close str_want_pass str_want_count; do
+        str_root="$(make_tree)"
+        feature "$str_root" "one-thing" design.md
+        printf '%s\n- [?] x\n%s\n' "$str_open" "$str_close" \
+            >"$str_root/.specs/features/one-thing/tasks.md"
+        str_shell=0
+        bash "$GATE" --root "$str_root" >/dev/null 2>&1 && str_shell=1
+        rm -rf "$str_root"
+        str_count="$(python3 -I -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("l", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+text = sys.argv[2] + "\n- [ ] x\n" + sys.argv[3] + "\n"
+print(int(bool(mod.CHECKBOX_RE.search(mod.FENCE_RE.sub("", text)))))' \
+            "$REPO_ROOT/templates/python-common/bin/check_backlog_ledger.py" \
+            "$str_open" "$str_close")"
+        if [ "$str_shell" != "$str_want_pass" ] || [ "$str_count" != "$str_want_count" ]; then
+            print_status "error" "fence '$str_open'..'$str_close': specs pass=$str_shell (want $str_want_pass), ledger counted=$str_count (want $str_want_count)"
+            int_failures=$((int_failures + 1))
+        fi
+    done <<'CASES'
+```|```|1|0
+```|````|1|0
+~~~|~~~~|1|0
+    ```|```|1|0
+```|~~~|0|0
+```||0|0
+CASES
+}
+
 main() {
     test_default_root_from_inside_bin_ci
     test_shipped_skeleton_passes
@@ -318,6 +355,7 @@ main() {
     test_pr_directory_is_not_a_body
     test_backlog_rules
     test_ledger_grammar_parity
+    test_fence_grammar_parity
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
         exit 1

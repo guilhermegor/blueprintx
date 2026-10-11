@@ -126,7 +126,12 @@ def test_gitkeep_is_not_reported_as_a_misnamed_ledger() -> None:
 
 @pytest.mark.parametrize(
     "str_fenced",
-    ["```\n- [ ] example\n```\n", "```\n- [ ] example\n````\n", "~~~\n- [ ] example\n~~~~\n"],
+    [
+        "```\n- [ ] example\n```\n",
+        "```\n- [ ] example\n````\n",
+        "~~~\n- [ ] example\n~~~~\n",
+        "```\n- [ ] example\n",
+    ],
 )
 def test_checkbox_inside_a_code_fence_does_not_count(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_fenced: str

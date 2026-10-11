@@ -119,10 +119,11 @@ LEDGER_RE = re.compile(r"^\.specs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.
 # Same marker grammar as bin/ci/check_specs_structure.sh: [ ], [x] and [~] (lowercase x only).
 CHECKBOX_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ x]\]|\[~\][ \t]+[a-z]+/\S)", re.M)
 # A fenced block is an example, not a marker: the specs gate skips it, so this one must too.
-# A closing fence is the opener's character, at least as long (CommonMark).
+# A closing fence is the opener's character, at least as long (CommonMark);
+# an unclosed fence runs to end of file, as in the specs gate.
 FENCE_RE = re.compile(
-    r"^[ \t]*(?:(?P<b>`{3,})[^`\n]*$.*?^[ \t]*(?P=b)`*[ \t]*$"
-    r"|(?P<t>~{3,})[^\n]*$.*?^[ \t]*(?P=t)~*[ \t]*$)",
+    r"^[ \t]*(?:(?P<b>`{3,})[^`\n]*$.*?^[ \t]*(?:(?P=b)`*[ \t]*$|\Z)"
+    r"|(?P<t>~{3,})[^\n]*$.*?^[ \t]*(?:(?P=t)~*[ \t]*$|\Z))",
     re.M | re.S,
 )
 
