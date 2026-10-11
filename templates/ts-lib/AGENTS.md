@@ -1,11 +1,10 @@
 # AGENTS.md
 
-Guidance for Claude Code (or any agent) working in this repository.
+Guidance for agents working in this repository.
 
 ## Engineering principles
 
-See @PRINCIPLES.md (read `PRINCIPLES.md` directly if your tool does not expand
-`@` imports) for the single-responsibility and function-design rules this project follows.
+Read `PRINCIPLES.md` for the single-responsibility and function-design rules this project follows.
 
 ## What this is
 

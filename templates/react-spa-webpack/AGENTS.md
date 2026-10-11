@@ -1,11 +1,10 @@
 # AGENTS.md
 
-Guidance for Claude Code (or any agent) working in this repository.
+Guidance for agents working in this repository.
 
 ## Engineering principles
 
-See @PRINCIPLES.md (read `PRINCIPLES.md` directly if your tool does not expand
-`@` imports) for the single-responsibility and function-design rules this project follows.
+Read `PRINCIPLES.md` for the single-responsibility and function-design rules this project follows.
 
 ## What this project is
 
@@ -120,10 +119,10 @@ basename becomes `/<repo>`. Both environments serve the same code.
 
 ### Custom domain
 
-If you set a custom domain, add a `CNAME` file at the repo root of the
-`gh-pages` branch (or via the Pages settings UI), and the workflow's
-`rsync --delete` will preserve it because the action commits to the
-existing branch each run rather than rebuilding it from scratch.
+If you set a custom domain, make sure a `CNAME` file ends up in `dist/` (for example by copying it from
+the static assets in the build). The workflow's `rsync --delete` removes anything
+in `gh-pages` that `dist/` lacks, so a `CNAME` added only on the branch or via the
+Pages settings UI is deleted on the next deploy.
 
 ## Docker
 

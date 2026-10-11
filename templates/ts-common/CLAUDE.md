@@ -5,7 +5,7 @@
 > works inside the BlueprintX repo. Per-project Claude guidance for scaffolded
 > TypeScript projects lives in each skeleton's own root `AGENTS.md`
 > (e.g. `templates/react-spa-webpack/AGENTS.md`), which **is** rendered into
-> every scaffolded project via `envsubst`; a 3-line `CLAUDE.md` shim that
+> every scaffolded project via `envsubst`; a short `CLAUDE.md` shim that
 > imports it is copied verbatim beside it.
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
