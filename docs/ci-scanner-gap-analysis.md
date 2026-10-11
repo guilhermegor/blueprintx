@@ -396,3 +396,48 @@ against #305, not a PR yet.
 - **semgrep** — deferred per §4; the next step is a spike (one custom rule, e.g. a Semgrep
   equivalent of `check_layer_imports.py`'s core check, measured against the hand-written
   version's line count and false-positive rate) before an adoption PR is worth writing.
+
+## Deltas (2026-10-11 re-measurement)
+
+Re-run with gitleaks 8.30.1, osv-scanner 2.6.0, jscpd 4.3.0 and semgrep 1.177.0 against
+`origin/main` at `e5b9f01a` and fresh scaffolds (`mvc-service-native-db`, `react-spa-webpack`, `ts-lib`).
+The verdicts above hold; these four findings are new and change how the adoption PRs must
+be written.
+
+- **jscpd: `--gitignore` silently drops most of `templates/`.** With `--gitignore` (the shape
+  copied from ditto) jscpd read 252 files; on a copy of the tree with the root `.gitignore`
+  removed it read 961 (676 clones, 14.6% duplicated lines, 12s). The root `.gitignore`
+  negation block for `templates/` is not honoured by jscpd's matcher, so a gate configured
+  that way would report a clean-looking number for about a quarter of the repo. The adoption
+  PR must use explicit `ignore` globs and assert the scanned-file count.
+- **osv-scanner: `--offline` is a false green.** With no cached database, `scan source
+  --offline` exits 127 with "Total 0 packages affected", which reads as a clean scan.
+  A TS library scaffold with no lockfile exits 128 ("No package sources found"), and a fresh
+  Python scaffold ships no `poetry.lock`, only the 3-line bootstrap `requirements.txt`. The
+  gate must run after `poetry lock`/`npm install`, treat 127 and 128 as failures, and never
+  use `--offline` without a downloaded database.
+- **The `mysql-connector-python` cap forces a known CVE.** The `>=8.3,<9.0` constraint in
+  the ddd, api and mvc native-db templates resolves to 8.4.0 (`poetry lock`, 11s), which
+  osv-scanner flags as CVE-2024-21272 (PYSEC-2026-1685, CVSS 7.7, fixed in 9.1.0). The
+  comment on the cap says 9.x needs a system `libmysqlclient`, so lifting it is a trade-off
+  for the owner, not a free fix.
+- **semgrep spike: initial Bash evidence, comparison still outstanding.** A local rule
+  (`id: bash-eval`, `languages: [bash]`, `severity: WARNING`, `pattern: eval $X`) run as
+  `semgrep scan --metrics=off --disable-version-check --config rules <tree>` scanned a plain
+  copy of `e5b9f01a` in 2s with no registry access and flagged `eval "$str_fn"` in
+  `bin/ci/check_review_bot_roster_optout.sh`, which shellcheck does not report. That line
+  runs a function body extracted from a repository file on purpose, so the hit alone is not
+  a case for blocking a gate. 18 of 93 shell files only parse partially. The comparison §4
+  asks for (line count and false-positive rate against a hand-written equivalent) is not
+  done, so the spike stays open; the case for semgrep rests on custom Bash and YAML rules,
+  since the registry packs still mostly re-find ruff `S` findings.
+
+Commands behind the other three findings, run from the repository root of `e5b9f01a`:
+
+- jscpd: `jscpd . --min-tokens 50 --min-lines 5 --mode strict --gitignore --ignore
+  "**/.git/**,**/node_modules/**,**/.venv/**,**/package-lock.json,**/poetry.lock"` reads 252
+  files; the same command on a `git archive HEAD` copy with `.gitignore` removed reads 961.
+- osv-scanner: `osv-scanner scan source -r <project>` and the same with `--offline`, on the
+  scaffolds (exit codes 1, 127 and 128 as described above).
+- mysql-connector: `poetry lock` in the scaffolded `mvc-service-native-db` project, then
+  `osv-scanner scan source -r .`.
