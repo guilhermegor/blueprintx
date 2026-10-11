@@ -14,7 +14,6 @@ import functools
 import importlib.util
 import json
 from pathlib import Path
-import re
 import subprocess
 from types import ModuleType
 from unittest.mock import Mock, call
@@ -2877,8 +2876,11 @@ def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> M
     return fn_fetch
 
 
-_PR_PLAIN = {"baseRefOid": "base", "timelineItems": {"totalCount": 0}}
-_PR_RETARGETED = {"baseRefOid": "base", "timelineItems": {"totalCount": 1}}
+_PR_PLAIN = {"baseRefOid": "base", "timelineItems": {"nodes": []}}
+_PR_RETARGETED = {
+    "baseRefOid": "base",
+    "timelineItems": {"nodes": [{"__typename": "BaseRefChangedEvent"}]},
+}
 
 
 def _three_reviews() -> list[dict]:
@@ -3014,7 +3016,7 @@ def test_main_carried_review_still_owes_a_later_findings_body(
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
         "baseRefOid": "base",
-        "timelineItems": {"totalCount": 0},
+        "timelineItems": {"nodes": []},
         "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
         "reviews": {
             "nodes": [
@@ -3068,7 +3070,7 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
         "baseRefOid": "base",
-        "timelineItems": {"totalCount": 0},
+        "timelineItems": {"nodes": []},
         "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
         "reviews": {"nodes": [{**_review("coderabbitai[bot]", "a" * 40), "state": "COMMENTED"}]},
         "reviewThreads": {"nodes": []},
@@ -3153,11 +3155,30 @@ def test_review_carried_forward_computes_the_head_digest_once_without_a_cache() 
 
 
 def test_compare_fingerprint_unknown_retarget_state_fails_closed() -> None:
-    """A PR node without the timeline count is "unknown", and unknown is not "not retargeted"."""
+    """A PR node without the timeline events is "unknown", and unknown is not "not retargeted"."""
     cls_gate = _load_gate()
     fn_fingerprint = cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r")
-    with pytest.raises(ValueError, match="base branch"):
+    with pytest.raises(ValueError, match="retarget state is unknown"):
         fn_fingerprint("a" * 40)
+
+
+def test_query_reads_the_filtered_nodes_never_the_unfiltered_count() -> None:
+    """``totalCount`` ignores ``itemTypes`` (measured: 6 on a PR with no retarget)."""
+    str_query = _load_gate()._QUERY
+    assert "totalCount" not in str_query
+
+
+def test_fetch_pull_request_keeps_timeline_items_across_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Later pages extend the first node in place, so the retarget events survive pagination."""
+    cls_gate = _load_gate()
+    dict_first = _pr_page([_body_review("LGTM")], True)
+    dict_first["timelineItems"] = {"nodes": [{"__typename": "BaseRefChangedEvent"}]}
+    list_pages = [dict_first, _pr_page([_body_review("ok")], False)]
+    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: list_pages.pop(0))
+    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+    assert dict_pr["timelineItems"]["nodes"]
 
 
 def test_query_reads_both_retarget_event_types() -> None:
@@ -3182,30 +3203,46 @@ def test_review_covers_head_malformed_files_body_fails_closed(
     assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
 
 
-def test_patch_fingerprint_pure_rename_has_a_fingerprint() -> None:
-    """A rename with no content change has no ``patch`` and still compares by its names."""
+def test_patch_fingerprint_pure_renames_of_different_blobs_differ() -> None:
+    """A binary rename also reports ``changes == 0``, so the blob ``sha`` must be hashed."""
+    cls_gate = _load_gate()
+    dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
+    assert cls_gate.patch_fingerprint([{**dict_rename, "sha": "1"}]) != cls_gate.patch_fingerprint(
+        [{**dict_rename, "sha": "2"}]
+    )
+
+
+def test_patch_fingerprint_pure_rename_with_same_blob_matches() -> None:
+    """The same rename of the same blob at two commits is the same fingerprint."""
     cls_gate = _load_gate()
     dict_rename = {
         "filename": "b",
         "previous_filename": "a",
         "status": "renamed",
         "changes": 0,
+        "sha": "1",
     }
     assert cls_gate.patch_fingerprint([dict_rename]) == cls_gate.patch_fingerprint([dict_rename])
 
 
-def test_patch_fingerprint_pure_renames_from_different_files_differ() -> None:
-    """The names are the whole content of a pure rename, so they must be hashed."""
+def test_patch_fingerprint_pure_rename_without_blob_sha_raises() -> None:
+    """No ``sha`` means nothing proves the content, so the entry is not trusted."""
     cls_gate = _load_gate()
-    dict_from_a = {"filename": "c", "previous_filename": "a", "status": "renamed", "changes": 0}
-    dict_from_b = {"filename": "c", "previous_filename": "b", "status": "renamed", "changes": 0}
-    assert cls_gate.patch_fingerprint([dict_from_a]) != cls_gate.patch_fingerprint([dict_from_b])
+    dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_rename])
 
 
 def test_patch_fingerprint_renamed_with_changes_but_no_patch_raises() -> None:
     """A rename that also edits a file too large to show its patch is not a pure rename."""
     cls_gate = _load_gate()
-    dict_big = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 9}
+    dict_big = {
+        "filename": "b",
+        "previous_filename": "a",
+        "status": "renamed",
+        "changes": 9,
+        "sha": "1",
+    }
     with pytest.raises(ValueError, match="no patch text"):
         cls_gate.patch_fingerprint([dict_big])
 
@@ -3222,32 +3259,18 @@ def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> 
     assert tuple_result == (None, "a" * 40)
 
 
-def _job_timeout_minutes(path_workflow: Path) -> int:
-    """Return the ``timeout-minutes`` of a workflow file.
-
-    Parameters
-    ----------
-    path_workflow : Path
-        The workflow to read.
-
-    Returns
-    -------
-    int
-        Its first ``timeout-minutes`` value.
-    """
-    return int(re.search(r"timeout-minutes:\s*(\d+)", path_workflow.read_text("utf-8"))[1])
+# The shortest job that runs the gate (ts-common's review-threads) times out at this many minutes.
+# A constant, not a file read: the workflows are not shipped into every generated project.
+_INT_SHORTEST_JOB_MINUTES = 10
 
 
-def test_carry_forward_worst_case_fits_every_workflow_timeout() -> None:
-    """Every subprocess call the carry-forward can make, at its timeout, fits the shortest job.
+def test_carry_forward_worst_case_fits_half_the_shortest_job_timeout() -> None:
+    """The head compare plus one compare per reviewed commit, each at its timeout, fit.
 
-    The head compare plus one compare per reviewed commit; the retarget read is part of the
-    GraphQL fetch and makes no call of its own.
+    The retarget read is part of the GraphQL fetch and makes no call of its own. Half the job
+    is left for checkout, setup and the GraphQL fetch.
     """
     cls_gate = _load_gate()
     int_calls = 1 + cls_gate._INT_MAX_REVIEWED_COMMITS
     int_worst_s = int_calls * cls_gate._INT_COMPARE_TIMEOUT_S
-    list_wf = Path(__file__).resolve().parents[2].glob(".github/workflows/review[_-]threads.y*ml")
-    # ts-common's job is the shortest at 10 minutes and is not shipped here, so it is the cap.
-    int_minutes = min(map(_job_timeout_minutes, list_wf), default=10)
-    assert int_worst_s <= min(int_minutes, 10) * 60 // 2
+    assert int_worst_s <= _INT_SHORTEST_JOB_MINUTES * 60 // 2

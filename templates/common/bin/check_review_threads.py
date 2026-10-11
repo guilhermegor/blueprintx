@@ -205,7 +205,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       timelineItems(
         first:1,
         itemTypes:[BASE_REF_CHANGED_EVENT, AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT]
-      ) { totalCount }
+      ) { nodes { __typename } }
       comments(first:100, after:$cc) {
         pageInfo { hasNextPage endCursor }
         nodes { author { login __typename } body createdAt }
@@ -574,8 +574,16 @@ _TUPLE_FINGERPRINT_ERRORS = (
 
 
 def _is_pure_rename(dict_file: dict) -> bool:
-    """Return whether a file entry is a rename with no content change, hence no patch text."""
-    return dict_file.get("status") == "renamed" and dict_file.get("changes") == 0
+    """Return whether a file entry is a rename with no patch text AND a blob ``sha`` to hash.
+
+    The API reports ``changes == 0`` for a binary file too, so the blob ``sha`` is what proves
+    the content; without it the entry is not trusted.
+    """
+    return (
+        dict_file.get("status") == "renamed"
+        and dict_file.get("changes") == 0
+        and bool(dict_file.get("sha"))
+    )
 
 
 def patch_fingerprint(list_files: list[dict]) -> str:
@@ -610,6 +618,7 @@ def patch_fingerprint(list_files: list[dict]) -> str:
                 d["filename"],
                 d.get("status", ""),
                 d.get("previous_filename", ""),
+                d.get("sha", "") if d.get("patch") is None else "",
                 [
                     re.sub(r"^@@ -\S+ \+\S+ @@", "@@", s)
                     for s in (d.get("patch") or "").splitlines()
@@ -1815,7 +1824,7 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     ----------
     dict_pr : dict
             The ``pullRequest`` node, read for ``baseRefOid`` (pinned in the same query as
-            ``headRefOid``) and ``timelineItems.totalCount``, the count of base-change events.
+            ``headRefOid``) and ``timelineItems.nodes``, the base-change events.
     str_repo_full : str
             ``owner/name``.
 
@@ -1823,14 +1832,17 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     -------
     Callable[[str], str]
             Maps a commit oid to its patch fingerprint; raises ``ValueError`` when the base was
-            changed or the count is missing (unknown is not "never retargeted").
+            changed or the events are missing (unknown is not "never retargeted").
     """
     str_owner, _, str_repo = str_repo_full.partition("/")
     str_base = dict_pr.get("baseRefOid") or ""
-    int_changes = (dict_pr.get("timelineItems") or {}).get("totalCount")
+    # ⚠️ `nodes`, never `totalCount`: the count ignores `itemTypes` and counts the whole timeline.
+    list_changes = (dict_pr.get("timelineItems") or {}).get("nodes")
 
     def fn_fingerprint(str_oid: str) -> str:
-        if int_changes != 0:
+        if not isinstance(list_changes, list):
+            raise ValueError("the PR's retarget state is unknown: a review is not carried across")
+        if list_changes:
             raise ValueError("the PR's base branch was changed: a review is not carried across")
         return fetch_patch_fingerprint(str_owner, str_repo, str_base, str_oid)
 
