@@ -716,17 +716,17 @@ jobs:
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "ci-bot"
           scaffold="$(grep '^scaffold=' "templates/$SKELETON/skeleton.meta" | cut -d= -f2-)"
-          # `yes n` declines every prompt (OTLP, review-bot roster, GitHub remote, ...). It is
-          # fed by process substitution, not a pipe: `yes` dies of SIGPIPE when the scaffold
-          # stops reading, and the runner's `bash -eo pipefail` would fail the step on that.
-          bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" "0.0.1" < <(yes n)
+          # stdin is /dev/null, not an endless `yes n`: every prompt reads with `|| true` and falls
+          # back to its default (verified byte-identical to answering `n`), and a prompt that
+          # cannot fall back fails fast on EOF instead of looping until the 20-minute bound.
+          bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" </dev/null
 
-      - name: Install npm dependencies (npm ci enforces the committed lockfile, #464)
+      - name: Install npm dependencies (npm ci where a lockfile ships, #464)
         working-directory: ${{ runner.temp }}/ci-scaffold
-        # ts-lib ships no lockfile (its devDependencies float), so it falls back to install.
+        # ts-lib ships no lockfile, so its leg floats on npm install, as a user's first install does.
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-      - name: Run tsc --noEmit (type errors only, no output files)
+      - name: Type-check (tsc --noEmit)
         working-directory: ${{ runner.temp }}/ci-scaffold
         run: npm run type-check
 
