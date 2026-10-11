@@ -244,6 +244,19 @@ listed once, one per line, in `templates/common/review-config.manifest`, and
 - `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
   assertion over one already-generated project.
 
+`--static` is a fast heuristic over direct `cp` commands. It reads the scaffold script plus the
+`bin/lib/*.sh` helpers it sources, resolves the `*_TEMPLATE_ROOT` variables, and accepts a
+path only when a `cp` takes exactly `templates/common/<path>` into a destination ending in
+`<path>`, or a recursive copy (`-r`, `-R`, `-a`, `--recursive`) of `templates/common` or one of
+its parent directories. Comments, backup files, another template root and unrelated parent
+directories do not count. It cannot follow a copy whose source is built at run time (a `for`
+loop over a variable, say), so such a script fails `--static` even when it ships the file.
+That is the safe direction: write the copy out directly, or rely on `--generated`.
+
+Every project ships the config, offline ones included, because an offline project can later be
+promoted to GitHub. `scaffold_lint_test.sh` only forbids four GitHub-only workflow files in an
+offline project, none of which is reviewer config.
+
 The manifest only grows: the change that ships a reviewer config file adds that file's path
 to the manifest in the same pull request. `check_content` in the script is the hook point for
 content checks, such as keeping Greptile queue-only. `tests/test_check_review_config_shipped.sh`
