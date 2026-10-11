@@ -71,3 +71,7 @@ exclude_docs: |
   checkpoints.md
   # git-ignored scaffolding-lessons record, never published
   blueprintx-lessons.md
+
+validation:
+  nav:
+    omitted_files: warn
