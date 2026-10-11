@@ -1885,6 +1885,8 @@ was measured:</p>
 <h2 id="building-the-wheelhouse-on-a-machine-with-internet-access">Building the wheelhouse (on a machine WITH internet access)<a class="headerlink" href="#building-the-wheelhouse-on-a-machine-with-internet-access" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>poe<span class="w"> </span>wheelhouse
 </span></code></pre></div>
+<p>In VS Code, the same step is the <code>wheelhouse</code> entry in the Tasks menu (and
+<code>wheelhouse_assemble</code> for the target-side step below).</p>
 <p>This writes a <strong>sibling</strong> payload — <code>../_wheels/&lt;repo-name&gt;/</code>, one level <em>outside</em> the
 project — never inside it: code changes constantly, wheels almost never, and a payload
 inside the repo would be a <code>git add</code> candidate and would not survive a re-clone. It is
