@@ -274,14 +274,18 @@ def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) 
             POSIX paths relative to ``path_dir``.
     """
     dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    cls_git = subprocess.run(  # noqa: S603
-        ["git", "-C", str(path_blueprintx_root), "ls-files", "-z", "--", str(path_dir)],  # noqa: S607
-        capture_output=True,
-        check=False,
-        env=dict_env,
-    )
-    list_tracked = [str_f for str_f in cls_git.stdout.decode().split("\0") if str_f]
-    if cls_git.returncode == 0 and list_tracked:
+    try:
+        cls_git = subprocess.run(  # noqa: S603
+            ["git", "-C", str(path_blueprintx_root), "ls-files", "-z", "--", str(path_dir)],  # noqa: S607, E501
+            capture_output=True,
+            check=False,
+            env=dict_env,
+        )
+    except FileNotFoundError:
+        cls_git = None
+    str_out = cls_git.stdout.decode() if cls_git else ""
+    list_tracked = [str_f for str_f in str_out.split("\0") if str_f]
+    if cls_git and cls_git.returncode == 0 and list_tracked:
         path_rel_dir = path_dir.relative_to(path_blueprintx_root)
         return [pathlib.Path(str_f).relative_to(path_rel_dir).as_posix() for str_f in list_tracked]
     return [

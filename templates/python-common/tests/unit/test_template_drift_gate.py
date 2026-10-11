@@ -267,6 +267,24 @@ def test_untracked_files_in_a_git_checkout_are_not_required(tmp_path: Path) -> N
     assert gate.required_relpaths(path_root) == {"bin/tracked.sh"}
 
 
+def _no_git(*args: object, **kwargs: object) -> None:
+    """Stand in for ``subprocess.run`` on a host without git."""
+    raise FileNotFoundError("git")
+
+
+def test_a_missing_git_executable_falls_back_to_the_directory_walk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No ``git`` on PATH is treated like a failed git command, not a crash."""
+    path_dir = tmp_path / "tpl"
+    path_dir.mkdir()
+    (path_dir / "a.txt").write_text("x", encoding="utf-8")
+
+    monkeypatch.setattr(subprocess, "run", _no_git)
+
+    assert gate._template_files(tmp_path, path_dir) == ["a.txt"]
+
+
 def test_a_flag_without_a_value_fails_loudly() -> None:
     """A valueless `--root` must not silently fall back to cwd."""
     with pytest.raises(SystemExit):
