@@ -356,6 +356,7 @@ copy_templates() {
     # No .env / .env.example: a distributable library has no runtime env to seed (unlike the
     # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/AGENTS.md" "$project_path/AGENTS.md"
     # This root CLAUDE.md points at `.claude/CLAUDE.md` for shared conventions
     # (blueprintx#549) — copy the single source so that pointer resolves.
     mkdir -p "$project_path/.claude"
