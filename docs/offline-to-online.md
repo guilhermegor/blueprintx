@@ -29,7 +29,7 @@ bin/promote_offline_to_online.sh <project_path> --tier <tier> [options]
 | Flag | Required | Meaning |
 |---|---|---|
 | `<project_path>` | yes | Path to the offline-scaffolded project. |
-| `--tier` | yes | One of the tiers below. No inference — a wrong guess silently promotes the wrong inventory, so the caller must say which one. `ts-lib` and `bash-cli` have no promotion manifest yet and are refused as unknown tiers. |
+| `--tier` | yes | One of the tiers below. No inference — a wrong guess silently promotes the wrong inventory, so the caller must say which one. |
 | `--github-user` | no | GitHub owner for the new repo. Default: `gh api user`. |
 | `--visibility public\|private` | no | Default `private`. |
 | `--deploy-target none\|pages\|vercel` | no | `react-spa-webpack` only. Default `none` (see caveat below). |
@@ -55,6 +55,13 @@ plus `release-pypi.yaml` / `release-test-pypi.yaml` gated by `--publish`.
 (envsubst `GITHUB_USERNAME`), `.github/PULL_REQUEST_TEMPLATE.md`, and — gated by `--deploy-target` —
 either `deploy-spa.yml` or `deploy-vercel.yml` + `vercel.json`. No `SECURITY.md` or
 `dependabot.yml`: `templates/ts-common/` ships neither.
+
+`ts-lib` (from `ts_lib.sh`) ships `.github/workflows/{docs,docs-deploy,pack-smoke,release-npm}.yml`
+(`release-npm.yml` rendered with `PROJECT_NAME`) plus the shared `CLAUDE.md`, `CODEOWNERS` and PR
+template. `bash-cli` (from `bash_cli.sh`) ships `ci.yml` and `release.yml` (rendered with
+`PROJECT_NAME`) plus the same three shared files. Neither ships `SECURITY.md`, `dependabot.yml` or
+`secret_scan.yaml`. Offline removal is the react one: git-diff trio, `git_diffs/` and, where a
+`package.json` exists, its `git:diff:*` scripts.
 
 ## The two "which one was it" gaps
 
