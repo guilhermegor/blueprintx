@@ -13,6 +13,7 @@ nav:
   - Examples: examples.md
   - CLI Reference: cli-reference.md
   - FAQ: faq.md
+  - Policy Workflows: policy-workflows.md
   - Complexity Ceilings Measured: complexity-ceilings-measured.md
   - Troubleshooting: troubleshooting.md
   - Offline Wheelhouse: offline-wheelhouse.md

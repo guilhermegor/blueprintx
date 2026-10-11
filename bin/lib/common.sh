@@ -485,3 +485,17 @@ copy_repo_rules_provisioner() {
     cp "$required_checks_src" "$project_path/bin/required-checks.txt"
     chmod +x "$project_path/bin/enable_repo_rules.sh"
 }
+
+# Ship the repo-level PR/issue policy workflows and the scripts they run (blueprintx#604).
+# The scripts are copied into the project, never fetched at run time (blueprintx#175).
+# GitHub-only: an offline scaffold removes `.github/`, so call it next to the PR template.
+copy_repo_policy_workflows() {
+    local project_path="$1"
+    local common_root
+    common_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/templates/common"
+    mkdir -p "$project_path/.github/workflows" "$project_path/bin"
+    cp "$common_root"/.github/workflows/*.yml "$project_path/.github/workflows/"
+    cp "$common_root/bin/close_linked_issues.sh" "$common_root/bin/check_pr_policy.sh" \
+        "$project_path/bin/"
+    chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
+}
