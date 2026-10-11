@@ -57,12 +57,12 @@ class OutlookGateway(metaclass=TypeChecker):
     Parameters
     ----------
     str_sender : str
-            The sending account (used as send-on-behalf-of).
+        The sending account (used as send-on-behalf-of).
     path_signatures_dir : pathlib.Path | None
-            Directory holding ``<sender>.html`` / ``default.html``; when set, the matching HTML
-            signature is attached to every e-mail.
+        Directory holding ``<sender>.html`` / ``default.html``; when set, the matching HTML
+        signature is attached to every e-mail.
     logger : logging.Logger | None
-            Run logger for the audit lines.
+        Run logger for the audit lines.
     """
 
     def __init__(
@@ -89,22 +89,22 @@ class OutlookGateway(metaclass=TypeChecker):
         Parameters
         ----------
         str_subject : str
-                Subject line.
+            Subject line.
         list_to : list of str
-                Primary recipients.
+            Primary recipients.
         list_cc : list of str
-                Carbon-copy recipients.
+            Carbon-copy recipients.
         str_body : str
-                Plain-text (or HTML) body.
+            Plain-text (or HTML) body.
         list_attachments : list of str
-                File paths to attach.
+            File paths to attach.
         bool_auto_send : bool
-                Send without opening the Outlook compose window, by default ``True``.
+            Send without opening the Outlook compose window, by default ``True``.
 
         Returns
         -------
         bool
-                ``True`` when dispatched via Outlook; ``False`` off Windows (logged).
+            ``True`` when dispatched via Outlook; ``False`` off Windows (logged).
         """
         if not running_on_windows():
             log_message(
@@ -158,17 +158,17 @@ class OutlookGateway(metaclass=TypeChecker):
         Parameters
         ----------
         str_email_account : str
-                The Outlook account/store name (top-level folder in the MAPI namespace).
+            The Outlook account/store name (top-level folder in the MAPI namespace).
         str_folder : str
-                The mail folder to search under the account.
+            The mail folder to search under the account.
         str_subject_substring : str
-                Substring the message subject must contain.
+            Substring the message subject must contain.
         path_dest_dir : pathlib.Path
-                Destination directory the attachment is saved into.
+            Destination directory the attachment is saved into.
         str_subfolder : str | None
-                Optional subfolder under ``str_folder``.
+            Optional subfolder under ``str_folder``.
         list_file_formats : list of str | None
-                Allowed attachment extensions without the dot, by default ``["xlsx"]``.
+            Allowed attachment extensions without the dot, by default ``["xlsx"]``.
 
         Returns
         -------
@@ -243,19 +243,19 @@ class OutlookGateway(metaclass=TypeChecker):
         Parameters
         ----------
         str_email_account : str
-                The Outlook account/store name (top-level folder in the MAPI namespace).
+            The Outlook account/store name (top-level folder in the MAPI namespace).
         str_folder : str
-                The mail folder to search under the account.
+            The mail folder to search under the account.
         str_subject_substring : str
-                Substring the message subject must contain.
+            Substring the message subject must contain.
         str_subfolder : str | None
-                Optional subfolder under ``str_folder``.
+            Optional subfolder under ``str_folder``.
 
         Returns
         -------
         list[dict[str, object]]
-                One dict per matching message (``subject`` / ``last_edition`` / ``creation_time`` /
-                ``body``); empty off Windows or on any failure (all logged).
+            One dict per matching message (``subject`` / ``last_edition`` / ``creation_time`` /
+            ``body``); empty off Windows or on any failure (all logged).
         """
         if not running_on_windows():
             log_message(
@@ -290,7 +290,7 @@ def running_on_windows() -> bool:
     Returns
     -------
     bool
-            ``True`` on Windows.
+        ``True`` on Windows.
     """
     return platform.system() == "Windows"
 
@@ -311,26 +311,26 @@ def _com_send_email(  # complexity-ok: COM interop, optional fields and non-fata
     Parameters
     ----------
     str_subject : str
-            Subject line.
+        Subject line.
     str_to : str
-            Semicolon-joined primary recipients.
+        Semicolon-joined primary recipients.
     str_cc : str
-            Semicolon-joined CC recipients.
+        Semicolon-joined CC recipients.
     str_body : str
-            HTML body.
+        HTML body.
     list_attachments : list of str
-            File paths to attach (each skipped when missing on disk).
+        File paths to attach (each skipped when missing on disk).
     str_send_behalf_of : str
-            Account to send on behalf of.
+        Account to send on behalf of.
     bool_auto_send : bool
-            Send without opening the compose window.
+        Send without opening the compose window.
     str_html_signature : str
-            HTML signature appended to the body (may be empty).
+        HTML signature appended to the body (may be empty).
 
     Raises
     ------
     RuntimeError
-            If the auto-send fails.
+        If the auto-send fails.
     """
     import win32com.client as win32
 
@@ -377,22 +377,22 @@ def _com_download_attachment(  # complexity-ok: COM interop, non-fatal degradati
     Parameters
     ----------
     str_email_account : str
-            Outlook account name (top-level MAPI folder).
+        Outlook account name (top-level MAPI folder).
     str_folder : str
-            Mail folder to search under the account.
+        Mail folder to search under the account.
     str_subject_substring : str
-            Substring the message subject must contain.
+        Substring the message subject must contain.
     str_dest_dir : str
-            Destination directory for the attachments.
+        Destination directory for the attachments.
     list_file_formats : list of str
-            Allowed extensions without the dot.
+        Allowed extensions without the dot.
     str_subfolder : str | None
-            Optional subfolder under ``str_folder`` (default: ``None``).
+        Optional subfolder under ``str_folder`` (default: ``None``).
 
     Returns
     -------
     dict[str, bool]
-            Mapping of the saved path to whether the file now exists; returns after the first save.
+        Mapping of the saved path to whether the file now exists; returns after the first save.
     """
     import win32com.client as win32
 
@@ -431,19 +431,19 @@ def _com_get_body_content(  # complexity-ok: COM interop, non-fatal degradation
     Parameters
     ----------
     str_email_account : str
-            Outlook account name (top-level MAPI folder).
+        Outlook account name (top-level MAPI folder).
     str_folder : str
-            Mail folder to search under the account.
+        Mail folder to search under the account.
     str_subject_substring : str
-            Substring the message subject must contain.
+        Substring the message subject must contain.
     str_subfolder : str | None
-            Optional subfolder under ``str_folder`` (default: ``None``).
+        Optional subfolder under ``str_folder`` (default: ``None``).
 
     Returns
     -------
     list[dict[str, object]]
-            One dict per matching message with ``subject`` / ``last_edition`` / ``creation_time`` /
-            ``body`` keys.
+        One dict per matching message with ``subject`` / ``last_edition`` / ``creation_time`` /
+        ``body`` keys.
     """
     import win32com.client as win32
 

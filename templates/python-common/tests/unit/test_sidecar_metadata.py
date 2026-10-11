@@ -59,19 +59,19 @@ def _download_absent(_str_url: str, _path_dest: Path) -> Path:
     Parameters
     ----------
     _str_url : str
-            Unused.
+        Unused.
     _path_dest : pathlib.Path
-            Unused.
+        Unused.
 
     Returns
     -------
     pathlib.Path
-            Never returns.
+        Never returns.
 
     Raises
     ------
     OSError
-            Always.
+        Always.
     """
     raise OSError("404 Not Found")
 
@@ -82,14 +82,14 @@ def _download_writes_meta(_str_url: str, path_target: Path) -> Path:
     Parameters
     ----------
     _str_url : str
-            Unused.
+        Unused.
     path_target : pathlib.Path
-            Where the bytes land; parents are created.
+        Where the bytes land; parents are created.
 
     Returns
     -------
     pathlib.Path
-            ``path_target``.
+        ``path_target``.
     """
     path_target.parent.mkdir(parents=True, exist_ok=True)
     path_target.write_bytes(_META_TEXT.encode("utf-8"))

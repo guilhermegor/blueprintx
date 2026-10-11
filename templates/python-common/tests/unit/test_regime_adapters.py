@@ -31,8 +31,8 @@ def cls_registry() -> RegimeRegistry:
     Returns
     -------
     RegimeRegistry
-            A registry with the legacy ``cnpj_keyed`` regime (closed at ``202311``) and the
-            current ``cnpj_classe_keyed`` regime (open from ``202312``).
+        A registry with the legacy ``cnpj_keyed`` regime (closed at ``202311``) and the
+        current ``cnpj_classe_keyed`` regime (open from ``202312``).
     """
     return RegimeRegistry(
         [
@@ -53,7 +53,7 @@ def test_window_covers_period_at_its_closed_end(cls_registry: RegimeRegistry) ->
     Parameters
     ----------
     cls_registry : RegimeRegistry
-            The two-regime fixture registry.
+        The two-regime fixture registry.
 
     Returns
     -------
@@ -68,7 +68,7 @@ def test_window_covers_period_at_the_new_regimes_start(cls_registry: RegimeRegis
     Parameters
     ----------
     cls_registry : RegimeRegistry
-            The two-regime fixture registry.
+        The two-regime fixture registry.
 
     Returns
     -------
@@ -85,7 +85,7 @@ def test_default_period_for_closed_regime_returns_its_last_covered_period(
     Parameters
     ----------
     cls_registry : RegimeRegistry
-            The two-regime fixture registry.
+        The two-regime fixture registry.
 
     Returns
     -------
@@ -100,7 +100,7 @@ def test_default_period_for_open_regime_raises(cls_registry: RegimeRegistry) -> 
     Parameters
     ----------
     cls_registry : RegimeRegistry
-            The two-regime fixture registry.
+        The two-regime fixture registry.
 
     Returns
     -------
@@ -132,7 +132,7 @@ def test_adapter_bound_to_the_right_regime_accepts_its_own_period(
     Parameters
     ----------
     cls_registry : RegimeRegistry
-            The two-regime fixture registry.
+        The two-regime fixture registry.
 
     Returns
     -------
@@ -154,7 +154,7 @@ def test_adapter_bound_to_the_wrong_regime_refuses_naming_the_sibling(
     Parameters
     ----------
     cls_registry : RegimeRegistry
-            The two-regime fixture registry.
+        The two-regime fixture registry.
 
     Returns
     -------
@@ -172,7 +172,7 @@ def test_adapter_with_no_period_defaults_to_its_regimes_last_covered_period(
     Parameters
     ----------
     cls_registry : RegimeRegistry
-            The two-regime fixture registry.
+        The two-regime fixture registry.
 
     Returns
     -------
