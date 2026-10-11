@@ -26,7 +26,7 @@ class _Sample(metaclass=TypeChecker):
         Parameters
         ----------
         n : int
-                A number.
+            A number.
         """
         self.n = n
 
@@ -37,12 +37,12 @@ class _Sample(metaclass=TypeChecker):
         Parameters
         ----------
         x : int
-                A number.
+            A number.
 
         Returns
         -------
         int
-                ``x * 2``.
+            ``x * 2``.
         """
         return x * 2
 
@@ -52,12 +52,12 @@ class _Sample(metaclass=TypeChecker):
         Parameters
         ----------
         value : str | None
-                Optional text.
+            Optional text.
 
         Returns
         -------
         str
-                The value or ``"<none>"``.
+            The value or ``"<none>"``.
         """
         return value or "<none>"
 
@@ -67,12 +67,12 @@ class _Sample(metaclass=TypeChecker):
         Parameters
         ----------
         values : list[int]
-                Numbers to add.
+            Numbers to add.
 
         Returns
         -------
         int
-                The sum.
+            The sum.
         """
         return sum(values)
 
@@ -125,14 +125,14 @@ def _add(a: int, b: int) -> int:
     Parameters
     ----------
     a : int
-            First addend.
+        First addend.
     b : int
-            Second addend.
+        Second addend.
 
     Returns
     -------
     int
-            The sum.
+        The sum.
     """
     return a + b
 

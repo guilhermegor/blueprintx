@@ -41,12 +41,12 @@ def _param_names(line: str) -> list:
     Parameters
     ----------
     line : str
-            A single docstring line.
+        A single docstring line.
 
     Returns
     -------
     list
-            Declared parameter names (empty when the line is not a definition).
+        Declared parameter names (empty when the line is not a definition).
     """
     match = _PARAM_DEF_RE.match(line)
     if not match:
@@ -88,12 +88,12 @@ def _canonical_type_tokens(text: str) -> list:
     Parameters
     ----------
     text : str
-            A type annotation string (from ``ast.unparse``) or a docstring type.
+        A type annotation string (from ``ast.unparse``) or a docstring type.
 
     Returns
     -------
     list
-            Sorted token multiset suitable for equality comparison.
+        Sorted token multiset suitable for equality comparison.
     """
     text = str(text).replace("typing.", "").lower()
     # ``Optional[...]`` (bracketed) means the value may be None; emit that token
@@ -125,14 +125,14 @@ def compare_types(hint: object, doc: str) -> bool:
     Parameters
     ----------
     hint : object
-            Parsed type annotation (already a string from ``ast.unparse``).
+        Parsed type annotation (already a string from ``ast.unparse``).
     doc : str
-            Type string from the docstring.
+        Type string from the docstring.
 
     Returns
     -------
     bool
-            True if types are considered equivalent.
+        True if types are considered equivalent.
     """
     if hint is Any or doc.lower().strip() == "any":
         return True
@@ -153,12 +153,12 @@ def parse_raises_section(docstring: str) -> dict[str, str]:
     Parameters
     ----------
     docstring : str
-            Full docstring text.
+        Full docstring text.
 
     Returns
     -------
     dict[str, str]
-            Mapping of exception name to description.
+        Mapping of exception name to description.
     """
     # Two jobs, kept apart: WHICH lines belong to the Raises section, and WHAT one entry in
     # it means. They were one loop, so a change to either had to be made inside the other.
@@ -179,12 +179,12 @@ def _raises_section_lines(docstring: str) -> list[str]:
     Parameters
     ----------
     docstring : str
-            The docstring to scan; may be empty.
+        The docstring to scan; may be empty.
 
     Returns
     -------
     list of str
-            The stripped content lines of the section, in order.
+        The stripped content lines of the section, in order.
     """
     if not docstring:
         return []
@@ -212,12 +212,12 @@ def _parse_raises_entry(str_line: str) -> tuple[str, str] | None:
     Parameters
     ----------
     str_line : str
-            One stripped line from the section.
+        One stripped line from the section.
 
     Returns
     -------
     tuple of (str, str) or None
-            The exception name and its inline description, or ``None`` for a continuation line.
+        The exception name and its inline description, or ``None`` for a continuation line.
     """
     cls_match = re.match(r"^([\w.]+)\s*:\s*(.*)", str_line)
     if cls_match is not None:
@@ -233,12 +233,12 @@ def get_actual_raises(node: ast.AST) -> set[str]:
     Parameters
     ----------
     node : ast.AST
-            AST node representing a function definition.
+        AST node representing a function definition.
 
     Returns
     -------
     set[str]
-            Set of exception class names raised.
+        Set of exception class names raised.
     """
     raises: set[str] = set()
     for n in ast.walk(node):
@@ -261,12 +261,12 @@ def normalize_exception_name(name: str) -> str:
     Parameters
     ----------
     name : str
-            Possibly qualified exception name (e.g., ``builtins.ValueError``).
+        Possibly qualified exception name (e.g., ``builtins.ValueError``).
 
     Returns
     -------
     str
-            Unqualified exception name.
+        Unqualified exception name.
     """
     return name.split(".")[-1]
 
@@ -280,12 +280,12 @@ def _is_checkable(node: ast.AST) -> bool:
     Parameters
     ----------
     node : ast.AST
-            A function-definition node.
+        A function-definition node.
 
     Returns
     -------
     bool
-            True when the node is in scope for the consistency checks.
+        True when the node is in scope for the consistency checks.
     """
     if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         return False
@@ -301,12 +301,12 @@ def _extract_documented_return(doc_lines: list) -> str | None:
     Parameters
     ----------
     doc_lines : list
-            The docstring split into right-stripped lines.
+        The docstring split into right-stripped lines.
 
     Returns
     -------
     str or None
-            The joined type text, or ``None`` when no ``Returns`` body is present.
+        The joined type text, or ``None`` when no ``Returns`` body is present.
     """
     for i, line in enumerate(doc_lines):
         if line.strip().lower() != "returns":
@@ -339,16 +339,16 @@ def _check_return_type(node: ast.AST, docstring: str, filepath: str) -> tuple:
     Parameters
     ----------
     node : ast.AST
-            Function node (must have a return annotation).
+        Function node (must have a return annotation).
     docstring : str
-            The function docstring.
+        The function docstring.
     filepath : str
-            Source file (for messages).
+        Source file (for messages).
 
     Returns
     -------
     tuple
-            ``(errors, warnings)`` counts.
+        ``(errors, warnings)`` counts.
     """
     doc_lines = [ln.rstrip() for ln in docstring.split("\n")]
     if not any(line.strip().lower() == "returns" for line in doc_lines):
@@ -378,14 +378,14 @@ def _documented_param_type(arg_name: str, param_lines: list) -> str | None:
     Parameters
     ----------
     arg_name : str
-            The parameter name to find.
+        The parameter name to find.
     param_lines : list
-            The docstring split into lines.
+        The docstring split into lines.
 
     Returns
     -------
     str or None
-            The documented type text, or ``None`` when the parameter is absent.
+        The documented type text, or ``None`` when the parameter is absent.
     """
     for li, line in enumerate(param_lines):
         if arg_name not in _param_names(line):
@@ -413,16 +413,16 @@ def _check_parameters(node: ast.AST, docstring: str, filepath: str) -> tuple:
     Parameters
     ----------
     node : ast.AST
-            Function node.
+        Function node.
     docstring : str
-            The function docstring.
+        The function docstring.
     filepath : str
-            Source file (for messages).
+        Source file (for messages).
 
     Returns
     -------
     tuple
-            ``(errors, warnings)`` counts.
+        ``(errors, warnings)`` counts.
     """
     errors = 0
     warnings = 0
@@ -463,16 +463,16 @@ def _check_raises(node: ast.AST, docstring: str, filepath: str) -> int:
     Parameters
     ----------
     node : ast.AST
-            Function node.
+        Function node.
     docstring : str
-            The function docstring.
+        The function docstring.
     filepath : str
-            Source file (for messages).
+        Source file (for messages).
 
     Returns
     -------
     int
-            Number of warnings (raises drift is never a hard error).
+        Number of warnings (raises drift is never a hard error).
     """
     doc_exceptions = {normalize_exception_name(e) for e in parse_raises_section(docstring)}
     actual_exceptions = {normalize_exception_name(e) for e in get_actual_raises(node)}
@@ -498,14 +498,14 @@ def check_file(filepath: str) -> int:
     Parameters
     ----------
     filepath : str
-            Path to the Python source file.
+        Path to the Python source file.
 
     Returns
     -------
     int
-            Number of hard (type-mismatch) errors found. Soft style warnings
-            (missing docstrings, undocumented fixture params, exception-doc drift) are
-            printed but do not count toward the failing total.
+        Number of hard (type-mismatch) errors found. Soft style warnings
+        (missing docstrings, undocumented fixture params, exception-doc drift) are
+        printed but do not count toward the failing total.
     """
     errors = 0
     warnings = 0

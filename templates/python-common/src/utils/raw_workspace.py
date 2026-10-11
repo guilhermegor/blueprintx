@@ -57,15 +57,15 @@ def raw_workspace(path_raw: Path | None = None) -> Iterator[Path]:
     Parameters
     ----------
     path_raw : pathlib.Path or None, optional
-            Bronze-layer destination. ``None`` (the default) means the bytes are scratch: a
-            temporary directory is used and destroyed on exit. A path means the artifact is
-            kept — the directory is created if missing, parents included, and left in place.
+        Bronze-layer destination. ``None`` (the default) means the bytes are scratch: a
+        temporary directory is used and destroyed on exit. A path means the artifact is
+        kept — the directory is created if missing, parents included, and left in place.
 
     Yields
     ------
     pathlib.Path
-            An existing directory to write the downloaded artifact (and anything extracted
-            from it) into.
+        An existing directory to write the downloaded artifact (and anything extracted
+        from it) into.
 
     Examples
     --------

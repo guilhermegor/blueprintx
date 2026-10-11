@@ -20,7 +20,7 @@ def _load_gate() -> types.ModuleType:
     Returns
     -------
     types.ModuleType
-            The loaded gate module.
+        The loaded gate module.
     """
     path_gate = pathlib.Path(__file__).resolve().parents[2] / "bin" / "check_docs_code_refs.py"
     cls_spec = importlib.util.spec_from_file_location("check_docs_code_refs", path_gate)
@@ -40,12 +40,12 @@ def path_src(tmp_path: pathlib.Path) -> pathlib.Path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            pytest's per-test temporary directory.
+        pytest's per-test temporary directory.
 
     Returns
     -------
     pathlib.Path
-            The ``src/`` directory of the fabricated project.
+        The ``src/`` directory of the fabricated project.
     """
     path_root = tmp_path / "src"
     path_pkg = path_root / "chassis"
