@@ -3260,9 +3260,6 @@ def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> 
     assert tuple_result == (None, "a" * 40)
 
 
-# The shortest job that runs the gate (ts-common's review-threads) times out at this many minutes.
-# Pinned here, then checked against every workflow that exists in the tree under test: the
-# workflows are not shipped into every generated project, so absence is skipped, drift is not.
 _INT_SHORTEST_JOB_MINUTES = 10
 _LIST_WORKFLOWS = (
     ".github/workflows/review_threads.yml",
@@ -3271,10 +3268,6 @@ _LIST_WORKFLOWS = (
 )
 
 
-# tests/unit -> python-common -> templates -> checkout root. Outside a BlueprintX checkout (a
-# generated project) the workflows are not shipped, so the test is skipped, never vacuous.
-# A slice never raises: at a shallow path (/app/tests/unit) it is empty and the test skips,
-# where an index would raise IndexError at import and break collection of the whole file.
 _LIST_ROOTS = list(Path(__file__).resolve().parents[4:5])
 
 
