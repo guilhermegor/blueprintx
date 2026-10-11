@@ -1,11 +1,11 @@
 # AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+Guidance for Claude Code (or any agent) working in this repository.
 
 ## Engineering principles
 
-See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+See @PRINCIPLES.md (read `PRINCIPLES.md` directly if your tool does not expand
+`@` imports) for the single-responsibility and function-design rules this project follows.
 
 ## What this project is
 
@@ -277,7 +277,7 @@ The separator is purely syntactic; `1_000 === 1000` is `true` at runtime.
 
 `eslint.config.js` wires ESLint's built-in `complexity` rule — no new tool, it
 ships with ESLint. The ceiling differs by tree, same idea as the Python
-skeletons' ruff `C901` gate (`templates/python-common/CLAUDE.md`), but **not
+skeletons' ruff `C901` gate, but **not
 copied by symmetry**: JSX branching and optional chaining inflate ESLint's
 count in ways mccabe/ruff never see, so the number here was measured against
 this template's own source, not inherited. Currently: **3** for

@@ -1,11 +1,12 @@
 # AGENTS.md
 
-Guidance for Claude Code when working in this repository — a standalone Bash CLI
+Guidance for Claude Code (or any agent) working in this repository — a standalone Bash CLI
 scaffolded from BlueprintX's `bash-cli` skeleton.
 
 ## Engineering principles
 
-See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+See @PRINCIPLES.md (read `PRINCIPLES.md` directly if your tool does not expand
+`@` imports) for the single-responsibility and function-design rules this project follows.
 
 ## Layout
 

@@ -4,7 +4,8 @@ Guidance for Claude Code (or any agent) working in this repository.
 
 ## Engineering principles
 
-See @PRINCIPLES.md for the single-responsibility and function-design rules this project follows.
+See @PRINCIPLES.md (read `PRINCIPLES.md` directly if your tool does not expand
+`@` imports) for the single-responsibility and function-design rules this project follows.
 
 ## What this is
 
@@ -77,8 +78,8 @@ shared TS source tree, mirroring `templates/python-common/src/utils/`. It export
 `LogEmitter` port and `NULL_EMITTER` (this package's default). A published library must not
 write to a host's console on its own initiative, so every call site accepts a `LogEmitter`
 and defaults to `NULL_EMITTER`; the host injects `CONSOLE_EMITTER` or its own implementation.
-This file has no internal relative imports on purpose — see `ts-common/CLAUDE.md` for why one
-file cannot carry an extension that satisfies both this package's Node-ESM output and
+This file has no internal relative imports on purpose: one file cannot carry an extension
+that satisfies both this package's Node-ESM output and
 `react-spa-webpack`'s webpack resolution.
 
 ## Build
