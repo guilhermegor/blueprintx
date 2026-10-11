@@ -48,16 +48,16 @@ class ExamplePort(Generic[_T], metaclass=ABCTypeCheckerMeta):
         Parameters
         ----------
         item : _T
-                The value the concrete adapter operates on.
+            The value the concrete adapter operates on.
 
         Returns
         -------
         _T
-                The operation's result.
+            The operation's result.
 
         Raises
         ------
         NotImplementedError
-                Always — a concrete adapter must override this method.
+            Always — a concrete adapter must override this method.
         """
         raise NotImplementedError

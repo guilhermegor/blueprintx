@@ -25,12 +25,12 @@ class SlackNotifier:
         Parameters
         ----------
         str_url : str
-                Slack incoming webhook URL to validate.
+            Slack incoming webhook URL to validate.
 
         Raises
         ------
         ValueError
-                If the URL is empty or does not start with ``https://``.
+            If the URL is empty or does not start with ``https://``.
         """
         if not str_url:
             raise ValueError("Webhook URL cannot be empty")
@@ -43,7 +43,7 @@ class SlackNotifier:
         Parameters
         ----------
         str_url : str
-                Slack incoming webhook URL.
+            Slack incoming webhook URL.
         """
         self._validate_url(str_url)
         self._str_url = str_url
@@ -59,14 +59,14 @@ class SlackNotifier:
         Parameters
         ----------
         str_message : str
-                Message body to deliver.
+            Message body to deliver.
         str_title : str, optional
-                Message title/subject, rendered bold.
+            Message title/subject, rendered bold.
 
         Raises
         ------
         ValueError
-                If the message is empty, or the POST fails / returns a non-2xx status.
+            If the message is empty, or the POST fails / returns a non-2xx status.
         """
         if not str_message:
             raise ValueError("Message cannot be empty")
