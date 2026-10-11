@@ -59,29 +59,29 @@ def send_email_block(  # noqa: PLR0913 — one orchestration call, each argument
     Parameters
     ----------
     fn_send_email : Callable[[str, list of str, list of str, str, list of str, bool], bool]
-            The concrete sender, matching ``EmailHandler.send_email``'s signature — pass a bound
-            method such as ``cls_handler.send_email``.
+        The concrete sender, matching ``EmailHandler.send_email``'s signature — pass a bound
+        method such as ``cls_handler.send_email``.
     str_block_key : str
-            The ``emails.yaml`` block key controlling this send's dispatch policy.
+        The ``emails.yaml`` block key controlling this send's dispatch policy.
     str_subject : str
-            Subject line.
+        Subject line.
     list_to : list of str
-            Primary recipients.
+        Primary recipients.
     list_cc : list of str
-            Carbon-copy recipients.
+        Carbon-copy recipients.
     str_body : str
-            Plain-text (or HTML) body; converted via :func:`utils.email.html_body.to_html_body`.
+        Plain-text (or HTML) body; converted via :func:`utils.email.html_body.to_html_body`.
     list_attachments : list of str | None, optional
-            File paths to attach; ``None`` sends none.
+        File paths to attach; ``None`` sends none.
     logger : logging.Logger | None, optional
-            Run logger, forwarded to :func:`~utils.email.dispatch.resolve_dispatch` and used for
-            the skip line.
+        Run logger, forwarded to :func:`~utils.email.dispatch.resolve_dispatch` and used for
+        the skip line.
 
     Returns
     -------
     bool
-            ``True`` when ``fn_send_email`` was called and dispatched; ``False`` when the block's
-            dispatch policy skipped the send.
+        ``True`` when ``fn_send_email`` was called and dispatched; ``False`` when the block's
+        dispatch policy skipped the send.
     """
     bool_send, bool_auto_send = resolve_dispatch(str_block_key, logger)
     if not bool_send:
