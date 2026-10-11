@@ -2486,6 +2486,15 @@ def test_load_comment_markers_reads_the_marker_row(path_marker_root: Path) -> No
     assert _load_gate().load_comment_markers(path_marker_root) == _TUPLE_MARKERS
 
 
+@pytest.mark.parametrize("str_row", ["    marker:\n", '    marker: ""\n', ""])
+def test_load_comment_markers_skips_a_row_without_a_marker(tmp_path: Path, str_row: str) -> None:
+    """A comment-marker row with no usable marker is dropped, never a KeyError."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n" + str_row, encoding="utf-8"
+    )
+    assert _load_gate().load_comment_markers(tmp_path) == ()
+
+
 def test_load_roster_ignores_the_marker_row(path_marker_root: Path) -> None:
     """A marker row has no login, so the login roster is untouched."""
     assert _load_gate().load_roster(path_marker_root) == {"coderabbitai": "threads"}
