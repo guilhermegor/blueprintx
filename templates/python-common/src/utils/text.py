@@ -46,12 +46,12 @@ def normalize_text(str_value: str) -> str:
     Parameters
     ----------
     str_value : str
-            Raw text (may carry accents, tabs, doubled or edge whitespace).
+        Raw text (may carry accents, tabs, doubled or edge whitespace).
 
     Returns
     -------
     str
-            Lower-cased, accent-stripped text with whitespace collapsed and trimmed.
+        Lower-cased, accent-stripped text with whitespace collapsed and trimmed.
     """
     str_decomposed = unicodedata.normalize("NFKD", str(str_value))
     str_ascii = "".join(ch for ch in str_decomposed if not unicodedata.combining(ch))
@@ -71,14 +71,14 @@ def safe_str(value: object, default: str = "") -> str:
     Parameters
     ----------
     value : object
-            The value to stringify.
+        The value to stringify.
     default : str, optional
-            Returned for ``None`` or a NaN float, by default ``""``.
+        Returned for ``None`` or a NaN float, by default ``""``.
 
     Returns
     -------
     str
-            ``str(value).strip()``, or ``default`` when ``value`` is ``None``/NaN.
+        ``str(value).strip()``, or ``default`` when ``value`` is ``None``/NaN.
     """
     # Both guards ask one question — "is this a missing-value sentinel?" — so they are one
     # predicate and one conditional expression rather than two exits.
