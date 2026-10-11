@@ -684,10 +684,7 @@ jobs:
           SCAFFOLD_SPEC_FILE: bin/ci/optin_specs/storage.answers
         run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
 
-  # The job id stays `typecheck-ts` (docs and the PR template cite it). It scaffolds for real
-  # instead of hand-assembling a workspace: the hand-built one drifted from the scaffold
-  # (#436) and could not see webpack, stylelint or eslint at all, so a ts-common dependency
-  # bump that broke `npm run build` merged green (#726).
+  # Scaffolds for real, then builds and lints (#726); rationale: CONTRIBUTING.md, "TypeScript build + lint gate".
   typecheck-ts:
     name: TypeScript build + lint — ${{ matrix.skeleton }} template
     runs-on: ubuntu-latest
@@ -716,9 +713,7 @@ jobs:
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "ci-bot"
           scaffold="$(grep '^scaffold=' "templates/$SKELETON/skeleton.meta" | cut -d= -f2-)"
-          # stdin is /dev/null, not an endless `yes n`: every prompt reads with `|| true` and falls
-          # back to its default (verified byte-identical to answering `n`), and a prompt that
-          # cannot fall back fails fast on EOF instead of looping until the 20-minute bound.
+          # Finite stdin: every prompt takes its default (CONTRIBUTING.md, "TypeScript build + lint gate").
           bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" </dev/null
 
       - name: Install npm dependencies (npm ci where a lockfile ships, #464)
