@@ -243,8 +243,7 @@ drifted from the scaffold (#436) and could not see webpack, stylelint or eslint,
 - **Stdin is `/dev/null`.** Every scaffold prompt reads with `|| true` and falls back to its
   default (no remote, no opt-ins), measured byte-identical to answering `n`; a prompt with no
   default fails fast on EOF instead of looping until the job timeout.
-- **Install is `npm ci`** where the skeleton ships a lockfile (`react-spa-webpack`); `ts-lib`
-  has none yet and floats on `npm install` (#735).
+- **Install is `npm ci`** for both skeletons, from the lockfile each ships (`ts-lib`'s since #735).
 - **No required check.** Only `Review threads answered` is required by the `pr-quality-gate`
   ruleset, so the job's display name can change without orphaning a branch rule.
 
