@@ -122,8 +122,8 @@ CHECKBOX_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ x]\]|\[~\][ \t]+[a-z]+
 # A closing fence is the opener's character, at least as long (CommonMark);
 # an unclosed fence runs to end of file, as in the specs gate.
 FENCE_RE = re.compile(
-    r"^[ \t]*(?:(?P<b>`{3,})[^`\n]*$.*?^[ \t]*(?:(?P=b)`*[ \t]*$|\Z)"
-    r"|(?P<t>~{3,})[^\n]*$.*?^[ \t]*(?:(?P=t)~*[ \t]*$|\Z))",
+    r"^[ \t]*(?:(?P<b>`{3,})[^`\n]*$.*?(?:^[ \t]*(?P=b)`*[ \t]*$|\Z)"
+    r"|(?P<t>~{3,})[^\n]*$.*?(?:^[ \t]*(?P=t)~*[ \t]*$|\Z))",
     re.M | re.S,
 )
 

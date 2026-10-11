@@ -121,7 +121,7 @@ def test_ledger_name_must_be_kebab_plus_timestamp() -> None:
 def test_gitkeep_is_not_reported_as_a_misnamed_ledger() -> None:
     """Only ``.md`` paths are ledgers, so the scaffold's ``.gitkeep`` never trips the name rule."""
     list_problems = ledger.find_ledger_problems(["src/a.py", ".specs/backlog/.gitkeep"])
-    assert "name must match" not in _first_problem(list_problems)
+    assert not any("name must match" in str_problem for str_problem in list_problems)
 
 
 @pytest.mark.parametrize(
