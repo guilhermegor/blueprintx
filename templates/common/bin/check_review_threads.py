@@ -1152,8 +1152,9 @@ def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
             and no line reports a non-zero count. A missing or unparseable line is "has
             findings", so a prose review never satisfies the gate (blueprintx#630).
     """
-    list_counts = [m.group(1) for m in map(_RE_FINDINGS_LINE.fullmatch, list_lines) if m]
-    return list_counts == ["0"]
+    list_stripped = [str_line.strip() for str_line in list_lines]
+    list_counts = [m.group(1) for m in map(_RE_FINDINGS_LINE.search, list_stripped) if m]
+    return list_counts == ["0"] and any(map(_RE_FINDINGS_LINE.fullmatch, list_stripped))
 
 
 def ladder_marker_declared(
@@ -1181,22 +1182,27 @@ def ladder_marker_declared(
     -------
     bool
             ``True`` only for an OWNER/MEMBER/COLLABORATOR comment carrying a marker and
-            postdating the head, whose second line names the head SHA and which reports zero
-            findings, so an outside commenter cannot forge it and a review of an older head
+            postdating the head, whose second line names the head SHA and whose LATEST such
+            comment reports zero findings (a later ladder run supersedes an earlier clean
+            one), so an outside commenter cannot forge it and a review of an older head
             cannot be reused.
     """
     if not str_head_date or not str_head_oid:
         return False
     str_reviewed = f"reviewed head: {str_head_oid}".casefold()
-    return any(
-        d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
+    list_qualifying = [
+        d
+        for d in list_notices
+        if d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
         and (d.get("createdAt") or "") >= str_head_date
         and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
         and [s.strip() for s in (d.get("body") or "").lstrip().casefold().splitlines()[1:2]]
         == [str_reviewed]
-        and ladder_reports_zero_findings((d.get("body") or "").strip().splitlines())
-        for d in list_notices
-    )
+    ]
+    if not list_qualifying:
+        return False
+    dict_latest = max(list_qualifying, key=lambda d: d.get("createdAt") or "")
+    return ladder_reports_zero_findings((dict_latest.get("body") or "").strip().splitlines())
 
 
 # ⚠️ THE FILE-CAP MESSAGE IS A THIRD SENTENCE, NOT A THIRD VERDICT (blueprintx#433).
