@@ -178,6 +178,14 @@ at, so one has not yet been needed (blueprintx#551). While a merge is in progres
 (`MERGE_HEAD` exists) the base is `git merge-base origin/<branch> HEAD MERGE_HEAD`, so the
 incoming side's files are not charged to the branch (measured: 186 reported vs 69 real).
 
+The **hosted-reviewer config guard** (`bin/ci/check_review_config_shipped.sh`, pre-commit hook
+`review-config-shipped`, the `review-config-shipped` CI job) fails when any skeleton found by
+`templates/*/skeleton.meta` does not ship a path listed in `templates/common/review-config.manifest`.
+`--static` checks the copy lists, `--generated` scaffolds every skeleton and is the real oracle.
+Today the manifest lists only `.gitattributes`; each change that ships a reviewer config file (#737, #739) adds its path to the manifest in the same PR; see
+`docs/faq.md`. Root-repo-only, like `check_makefile_pairing.sh`. ⚠️ The manifest needs the
+`!templates/common/review-config.manifest` line in `.gitignore`, because `*.manifest` is ignored.
+
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
 GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes
