@@ -14,6 +14,7 @@ import functools
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 from types import ModuleType
 from unittest.mock import Mock, call
@@ -2380,6 +2381,297 @@ def test_completion_is_seen_past_the_display_budget() -> None:
     )
 
 
+_MARKER = "Fallback review — runtime: codex"
+_TUPLE_MARKERS = ("fallback review — runtime:",)
+
+
+_LADDER_APP = "guilhermegor-review-ladder[bot]"
+_SET_POSTERS = frozenset({"guilhermegor-review-ladder"})
+
+
+def _marker_comment(
+    str_association: str, str_login: str = _LADDER_APP, str_typename: str = "Bot"
+) -> dict:
+    return {
+        "author": {"login": str_login, "__typename": str_typename},
+        "authorAssociation": str_association,
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).",
+        "createdAt": "2099-01-01T00:00:00Z",
+    }
+
+
+def _missing_with(list_notices: list[dict], tuple_markers: tuple[str, ...]) -> str | None:
+    return _load_gate().find_missing_review_problem(
+        [],
+        {"coderabbitai"},
+        "someone-else",
+        str_head_oid=_HEAD,
+        list_notices=list_notices,
+        str_head_date=_HEAD_DATE,
+        tuple_markers=tuple_markers,
+        set_posters=_SET_POSTERS,
+    )
+
+
+def test_ladder_marker_from_the_pr_author_owner_is_rejected() -> None:
+    """The PR author is the repo OWNER: typing the marker must not self-approve (#761)."""
+    dict_forged = _marker_comment("OWNER", "someone-else")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_from_the_ladder_app_is_accepted() -> None:
+    """The ladder App posts as a Bot with association NONE; its login is what is trusted."""
+    assert _missing_with([_marker_comment("NONE")], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_from_a_user_with_the_bare_app_login_is_rejected() -> None:
+    """A human registering `guilhermegor-review-ladder` is a User, not the App's Bot actor."""
+    dict_forged = _marker_comment("NONE", "guilhermegor-review-ladder", "User")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_without_an_author_type_is_rejected() -> None:
+    """An author with no `__typename` fails closed."""
+    dict_untyped = {**_marker_comment("NONE"), "author": {"login": _LADDER_APP}}
+    assert _missing_with([dict_untyped], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_from_a_non_roster_collaborator_is_rejected() -> None:
+    """A COLLABORATOR outside the posters allowlist cannot forge the marker."""
+    dict_forged = _marker_comment("COLLABORATOR", "a-collaborator")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_without_any_posters_is_rejected() -> None:
+    """An empty allowlist fails closed, even for the ladder App's login."""
+    cls_gate = _load_gate()
+    assert not cls_gate.ladder_marker_declared(
+        [_marker_comment("NONE")], _TUPLE_MARKERS, _HEAD_DATE, _HEAD
+    )
+
+
+def test_later_marker_from_a_non_poster_does_not_supersede_a_clean_one() -> None:
+    """A forged later marker is ignored, so it can neither approve nor block."""
+    dict_forged = {**_marker_comment("OWNER", "someone-else"), "createdAt": "2099-02-01T00:00:00Z"}
+    assert _missing_with([_marker_comment("NONE"), dict_forged], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_without_the_roster_row_changes_nothing() -> None:
+    """No `comment-marker` row, no behaviour change."""
+    assert _missing_with([_marker_comment("OWNER")], ()) is not None
+
+
+def test_ladder_marker_quoted_on_a_later_line_is_rejected() -> None:
+    """Only the attribution line itself counts, never a quotation of it."""
+    dict_quoted = {**_marker_comment("OWNER"), "body": f"see below\n> {_MARKER}"}
+    assert _missing_with([dict_quoted], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_older_than_the_head_is_rejected() -> None:
+    """A marker posted before the head commit describes superseded code."""
+    dict_old = {**_marker_comment("OWNER"), "createdAt": "2000-01-01T00:00:00Z"}
+    assert _missing_with([dict_old], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_for_another_head_is_rejected() -> None:
+    """A marker whose `Reviewed head:` line names a different SHA is not this head's review."""
+    dict_other = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {'0' * 40}\n\n0 finding(s) across 3 reviewed file(s).",
+    }
+    assert _missing_with([dict_other], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_with_findings_is_rejected() -> None:
+    """A ladder review that lists findings must be judged, not auto-accepted (#630)."""
+    dict_found = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+    }
+    assert _missing_with([dict_found], _TUPLE_MARKERS) is not None
+
+
+@pytest.mark.parametrize(
+    "str_head_line",
+    [f"Reviewed head: {_HEAD}  ", f"Reviewed head: {_HEAD}\r", f"  Reviewed head: {_HEAD}"],
+)
+def test_ladder_marker_tolerates_whitespace_around_the_head_line(str_head_line: str) -> None:
+    """Cosmetic whitespace on the SHA line must not silently block every PR."""
+    dict_ws = {
+        **_marker_comment("MEMBER"),
+        "body": f"{_MARKER}\n{str_head_line}\n\n0 finding(s) across 3 reviewed file(s).",
+    }
+    assert _missing_with([dict_ws], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_without_a_findings_line_is_rejected() -> None:
+    """Unparseable means "has findings": a prose review never passes."""
+    dict_prose = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n- a bug",
+    }
+    assert _missing_with([dict_prose], _TUPLE_MARKERS) is not None
+
+
+def test_later_ladder_comment_with_findings_supersedes_an_earlier_clean_one() -> None:
+    """The latest qualifying marker decides: a re-run that found something blocks."""
+    dict_later = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+        "createdAt": "2099-02-01T00:00:00Z",
+    }
+    assert _missing_with([_marker_comment("OWNER"), dict_later], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_later, _marker_comment("OWNER")], _TUPLE_MARKERS) is not None
+
+
+@pytest.mark.parametrize("str_head_line", ["Reviewed head: " + "0" * 40, "no head line here"])
+def test_later_marker_naming_no_valid_head_supersedes_an_earlier_clean_one(
+    str_head_line: str,
+) -> None:
+    """A later malformed or other-head marker fails closed instead of exposing the clean one."""
+    dict_later = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\n{str_head_line}\n\n0 finding(s) across 3 reviewed file(s).",
+        "createdAt": "2099-02-01T00:00:00Z",
+    }
+    assert _missing_with([_marker_comment("OWNER"), dict_later], _TUPLE_MARKERS) is not None
+
+
+def test_padded_nonzero_findings_line_beside_a_zero_line_is_rejected() -> None:
+    """Trailing or leading whitespace must not hide a non-zero findings line."""
+    dict_padded = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).\n"
+        "  3 finding(s) across 3 reviewed file(s). \r",
+    }
+    assert _missing_with([dict_padded], _TUPLE_MARKERS) is not None
+
+
+def test_zero_findings_over_zero_files_does_not_clear_the_check() -> None:
+    """A review of no files reviewed nothing, so it proves no review ran."""
+    dict_empty = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 0 reviewed file(s).",
+    }
+    assert _missing_with([dict_empty], _TUPLE_MARKERS) is not None
+
+
+def _marker_findings_comment() -> dict:
+    return {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+    }
+
+
+def test_marker_comment_with_findings_needs_an_answer() -> None:
+    """A trusted marker comment listing findings is read as a review body."""
+    list_problems = _load_gate().find_review_body_problems(
+        [], [_marker_findings_comment()], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert len(list_problems) == 1
+
+
+def test_roster_authored_marker_comment_is_one_problem_not_two() -> None:
+    """A marker comment from a roster login is read once, not as a notice AND as a marker."""
+    dict_roster_marker = {**_marker_findings_comment(), "author": {"login": "coderabbitai"}}
+    list_problems = _load_gate().find_review_body_problems(
+        [], [dict_roster_marker], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert len(list_problems) == 1
+
+
+def test_clean_marker_comment_needs_no_answer() -> None:
+    """A trusted marker comment reporting zero findings is not a review body with findings."""
+    list_problems = _load_gate().find_review_body_problems(
+        [], [_marker_comment("OWNER")], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert list_problems == []
+
+
+def test_marker_comment_never_answers_another_reviews_findings() -> None:
+    """A long marker comment by a human must not clear a roster review body unread."""
+    dict_review = {
+        "author": {"login": "coderabbitai", "__typename": "Bot"},
+        "state": "COMMENTED",
+        "body": "- **Major** a bug\n",
+        "submittedAt": "2000-01-01T00:00:00Z",
+    }
+    dict_marker = {**_marker_findings_comment(), "createdAt": "2099-01-01T00:00:00Z"}
+    dict_marker["author"] = {"login": "owner", "__typename": "User"}
+    list_problems = _load_gate().find_review_body_problems(
+        [dict_review], [dict_marker], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert any("coderabbitai" in str_problem for str_problem in list_problems)
+
+
+@pytest.fixture
+def path_marker_root(tmp_path: Path) -> Path:
+    """Write a roster holding one reviewer and one marker row."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n"
+        "  - login: coderabbitai[bot]\n    posts: threads\n"
+        '  - kind: comment-marker\n    marker: "Fallback review — runtime:"\n',
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_load_comment_markers_reads_the_marker_row(path_marker_root: Path) -> None:
+    """The marker row is returned lower-cased."""
+    assert _load_gate().load_comment_markers(path_marker_root) == _TUPLE_MARKERS
+
+
+@pytest.mark.parametrize("str_row", ["    marker:\n", '    marker: ""\n', ""])
+def test_load_comment_markers_skips_a_row_without_a_marker(tmp_path: Path, str_row: str) -> None:
+    """A comment-marker row with no usable marker is dropped, never a KeyError."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n" + str_row, encoding="utf-8"
+    )
+    assert _load_gate().load_comment_markers(tmp_path) == ()
+
+
+def test_load_comment_markers_ignores_a_scalar_reviewer_row(tmp_path: Path) -> None:
+    """A bare-string reviewers entry is skipped, never an AttributeError."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - coderabbitai[bot]\n  - kind: comment-marker\n    marker: m\n",
+        encoding="utf-8",
+    )
+    assert _load_gate().load_comment_markers(tmp_path) == ("m",)
+
+
+def test_load_marker_posters_normalises_the_bot_suffix(tmp_path: Path) -> None:
+    """`posters:` is read in the REST spelling and compared in the GraphQL one."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n    marker: m\n"
+        "    posters:\n      - x[bot]\n      - y\n",
+        encoding="utf-8",
+    )
+    assert _load_gate().load_marker_posters(tmp_path) == frozenset({"x", "y"})
+
+
+@pytest.mark.parametrize(
+    "str_posters",
+    ["    posters: foo\n", "    posters:\n      - 7\n", '    posters:\n      - ""\n'],
+)
+def test_load_marker_posters_rejects_a_malformed_value(tmp_path: Path, str_posters: str) -> None:
+    """A scalar or non-string entry trusts nobody instead of becoming single characters."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n    marker: m\n" + str_posters,
+        encoding="utf-8",
+    )
+    assert _load_gate().load_marker_posters(tmp_path) == frozenset()
+
+
+def test_load_marker_posters_is_empty_without_the_field(path_marker_root: Path) -> None:
+    """A marker row with no `posters:` allows nobody."""
+    assert _load_gate().load_marker_posters(path_marker_root) == frozenset()
+
+
+def test_load_roster_ignores_the_marker_row(path_marker_root: Path) -> None:
+    """A marker row has no login, so the login roster is untouched."""
+    assert _load_gate().load_roster(path_marker_root) == {"coderabbitai": "threads"}
+
+
 # --------------------------
 # A review carries forward across a merge of the base (blueprintx#698)
 # --------------------------
@@ -2873,8 +3165,14 @@ def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> M
     """
     fn_fetch = Mock(side_effect=RuntimeError("compare failed: 502"))
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", fn_fetch)
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
     return fn_fetch
+
+
+_PR_PLAIN = {"baseRefOid": "base", "timelineItems": {"nodes": []}}
+_PR_RETARGETED = {
+    "baseRefOid": "base",
+    "timelineItems": {"nodes": [{"__typename": "BaseRefChangedEvent"}]},
+}
 
 
 def _three_reviews() -> list[dict]:
@@ -2898,7 +3196,7 @@ def test_find_missing_review_problem_failing_head_compare_is_called_once(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
     )
     assert fn_fetch.call_count == 1
 
@@ -2913,7 +3211,7 @@ def test_find_missing_review_problem_failing_head_compare_reports_the_reason(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
     )
     assert "compare failed: 502" in capsys.readouterr().err
 
@@ -2928,7 +3226,7 @@ def test_find_missing_review_problem_failing_head_compare_leaves_stdout_empty(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
     )
     assert capsys.readouterr().out == ""
 
@@ -3010,6 +3308,7 @@ def test_main_carried_review_still_owes_a_later_findings_body(
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
         "baseRefOid": "base",
+        "timelineItems": {"nodes": []},
         "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
         "reviews": {
             "nodes": [
@@ -3032,7 +3331,6 @@ def test_main_carried_review_still_owes_a_later_findings_body(
     }
     monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
     assert cls_gate.main([]) == int_expected
 
 
@@ -3064,6 +3362,7 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
         "baseRefOid": "base",
+        "timelineItems": {"nodes": []},
         "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
         "reviews": {"nodes": [{**_review("coderabbitai[bot]", "a" * 40), "state": "COMMENTED"}]},
         "reviewThreads": {"nodes": []},
@@ -3071,7 +3370,6 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
     }
     monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: False)
     return cls_gate.main(list_argv)
 
 
@@ -3091,39 +3389,17 @@ def test_main_carried_review_is_a_json_field_and_nothing_else_on_stdout(
     assert json.loads(capsys.readouterr().out)["carried_forward_from"] == "a" * 40
 
 
-def test_fetch_retargeted_reads_the_timeline_for_a_base_change(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A ``base_ref_changed`` event in the timeline means the PR was retargeted."""
-    cls_gate = _load_gate()
-    fn_run = Mock(return_value=Mock(returncode=0, stdout="base_ref_changed\n"))
-    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-    assert cls_gate.fetch_retargeted("o", "r", 7) is True
-
-
-def test_fetch_retargeted_unreadable_timeline_fails_closed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A failed timeline call is an error, never read as 'not retargeted'."""
-    cls_gate = _load_gate()
-    fn_run = Mock(return_value=Mock(returncode=1, stderr="502"))
-    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-    with pytest.raises(RuntimeError, match="timeline failed"):
-        cls_gate.fetch_retargeted("o", "r", 7)
-
-
 def test_find_missing_review_problem_retargeted_pr_stays_superseded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An otherwise-equal fingerprint is not enough once the base branch was changed."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: True)
     str_problem = cls_gate.find_missing_review_problem(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_RETARGETED, "o/r"),
     )
     assert "SUPERSEDED" in str_problem
 
@@ -3134,12 +3410,11 @@ def test_find_missing_review_problem_retargeted_pr_says_why_on_stderr(
     """The refusal is diagnosable: the reason names the base change."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    monkeypatch.setattr(cls_gate, "fetch_retargeted", lambda *_: True)
     cls_gate.find_missing_review_problem(
         _three_reviews(),
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r", 1),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_RETARGETED, "o/r"),
     )
     assert "base branch was changed" in capsys.readouterr().err
 
@@ -3169,3 +3444,145 @@ def test_review_carried_forward_computes_the_head_digest_once_without_a_cache() 
     fn_counting = Mock(side_effect=lambda str_oid: str_oid)
     cls_gate.review_carried_forward(fn_counting, _three_reviews(), {"coderabbitai"}, _HEAD)
     assert fn_counting.call_args_list.count(call(_HEAD)) == 1
+
+
+def test_compare_fingerprint_unknown_retarget_state_fails_closed() -> None:
+    """A PR node without the timeline events is "unknown", and unknown is not "not retargeted"."""
+    cls_gate = _load_gate()
+    fn_fingerprint = cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r")
+    with pytest.raises(ValueError, match="retarget state is unknown"):
+        fn_fingerprint("a" * 40)
+
+
+def test_query_reads_the_filtered_nodes_never_the_unfiltered_count() -> None:
+    """``totalCount`` ignores ``itemTypes`` (measured: 6 on a PR with no retarget)."""
+    str_query = _load_gate()._QUERY
+    assert "totalCount" not in str_query
+
+
+def test_fetch_pull_request_keeps_timeline_items_across_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Later pages extend the first node in place, so the retarget events survive pagination."""
+    cls_gate = _load_gate()
+    dict_first = _pr_page([_body_review("LGTM")], True)
+    dict_first["timelineItems"] = {"nodes": [{"__typename": "BaseRefChangedEvent"}]}
+    list_pages = [dict_first, _pr_page([_body_review("ok")], False)]
+    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: list_pages.pop(0))
+    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+    assert dict_pr["timelineItems"]["nodes"]
+
+
+def test_query_reads_both_retarget_event_types() -> None:
+    """Manual and automatic retargets both change the base the review was written against."""
+    str_query = _load_gate()._QUERY
+    assert "BASE_REF_CHANGED_EVENT" in str_query
+    assert "AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT" in str_query
+
+
+@pytest.mark.parametrize(
+    "json_body", ['{"files": ["x"]}', '{"files": {"a": 1}}', "not json", '{"files": [null]}']
+)
+def test_review_covers_head_malformed_files_body_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, json_body: str
+) -> None:
+    """Malformed ``files`` (wrong container, non-dict entries, non-JSON) is "not covered"."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(
+        cls_gate.subprocess, "run", Mock(return_value=Mock(returncode=0, stdout=json_body))
+    )
+    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
+    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
+
+
+def test_patch_fingerprint_pure_renames_of_different_blobs_differ() -> None:
+    """A binary rename also reports ``changes == 0``, so the blob ``sha`` must be hashed."""
+    cls_gate = _load_gate()
+    dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
+    assert cls_gate.patch_fingerprint([{**dict_rename, "sha": "1"}]) != cls_gate.patch_fingerprint(
+        [{**dict_rename, "sha": "2"}]
+    )
+
+
+def test_patch_fingerprint_pure_rename_with_same_blob_matches() -> None:
+    """The same rename of the same blob at two commits is the same fingerprint."""
+    cls_gate = _load_gate()
+    dict_rename = {
+        "filename": "b",
+        "previous_filename": "a",
+        "status": "renamed",
+        "changes": 0,
+        "sha": "1",
+    }
+    assert cls_gate.patch_fingerprint([dict_rename]) == cls_gate.patch_fingerprint([dict_rename])
+
+
+def test_patch_fingerprint_pure_rename_without_blob_sha_raises() -> None:
+    """No ``sha`` means nothing proves the content, so the entry is not trusted."""
+    cls_gate = _load_gate()
+    dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_rename])
+
+
+def test_patch_fingerprint_renamed_with_changes_but_no_patch_raises() -> None:
+    """A rename that also edits a file too large to show its patch is not a pure rename."""
+    cls_gate = _load_gate()
+    dict_big = {
+        "filename": "b",
+        "previous_filename": "a",
+        "status": "renamed",
+        "changes": 9,
+        "sha": "1",
+    }
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_big])
+
+
+def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> None:
+    """The carrying commit is a return value, not an out-parameter."""
+    cls_gate = _load_gate()
+    tuple_result = cls_gate.check_missing_review(
+        [_review("coderabbitai[bot]", "a" * 40)],
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=lambda str_oid: "same",
+    )
+    assert tuple_result == (None, "a" * 40)
+
+
+_INT_SHORTEST_JOB_MINUTES = 10
+_LIST_WORKFLOWS = (
+    ".github/workflows/review_threads.yml",
+    "templates/ts-common/.github/workflows/review-threads.yml",
+    "templates/python-common/.github/workflows/review_threads.yaml",
+)
+
+
+_LIST_ROOTS = list(Path(__file__).resolve().parents[4:5])
+
+
+@pytest.mark.skipif(
+    not _LIST_ROOTS or not (_LIST_ROOTS[0] / "templates").is_dir(),
+    reason="workflows are not shipped in a generated project",
+)
+def test_pinned_job_minutes_do_not_exceed_any_workflow() -> None:
+    """A workflow shortened below the pinned cap fails here instead of timing out in CI.
+
+    A missing workflow raises ``FileNotFoundError``, so the test cannot pass by finding none.
+    """
+    list_texts = [(_LIST_ROOTS[0] / str_rel).read_text("utf-8") for str_rel in _LIST_WORKFLOWS]
+    list_minutes = [int(m) for t in list_texts for m in re.findall(r"timeout-minutes:\s*(\d+)", t)]
+    assert min(list_minutes) >= _INT_SHORTEST_JOB_MINUTES
+
+
+def test_carry_forward_worst_case_fits_half_the_shortest_job_timeout() -> None:
+    """The head compare plus one compare per reviewed commit, each at its timeout, fit.
+
+    The retarget read is part of the GraphQL fetch and makes no call of its own. Half the job
+    is left for checkout, setup and the GraphQL fetch.
+    """
+    cls_gate = _load_gate()
+    int_calls = 1 + cls_gate._INT_MAX_REVIEWED_COMMITS
+    int_worst_s = int_calls * cls_gate._INT_COMPARE_TIMEOUT_S
+    assert int_worst_s <= _INT_SHORTEST_JOB_MINUTES * 60 // 2

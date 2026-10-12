@@ -40,3 +40,12 @@ reviewers:
   - login: copilot-pull-request-reviewer[bot]
     posts: threads
     note: GitHub's built-in reviewer; enabled per-repo by enable_repo_rules.sh.
+
+  - kind: comment-marker
+    marker: "Fallback review — runtime:"
+    posters: []
+    note: >-
+      The reviewer ladder's attribution line. Counts as a review only in a comment authored by
+      a login in `posters:` and posted after the head commit (docs/faq.md). The author
+      association is never consulted, so the PR author cannot forge it (blueprintx#761).
+      Empty means no marker is accepted; list the ladder App's login here.

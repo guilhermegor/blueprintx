@@ -634,7 +634,7 @@ scaffold_from_spec() {
         exit_error "--spec: could not resolve the answers for '$SKELETON_CHOICE'."
     }
     GITHUB_USERNAME="$(spec_get "$SPEC_FILE" github_username "${GITHUB_USERNAME:-}")" \
-        LICENSE_CHOICE="$LICENSE_CHOICE" DOCS_LOCALE="$DOCS_LOCALE" \
+        LICENSE_CHOICE="$LICENSE_CHOICE" DOCS_LOCALE="$DOCS_LOCALE" BLUEPRINTX_STDIN_ANSWERS=1 \
         bash "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" \
         <"$path_answers" || { rm -f "$path_answers"; return 1; }
     rm -f "$path_answers"

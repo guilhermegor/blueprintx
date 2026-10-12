@@ -47,6 +47,8 @@ gate = _load_gate()
         ("poetry.lock", "deps"),
         ("docs/usage.md", "docs"),
         ("mkdocs.yml", "docs"),
+        (".specs/features/x/design.md", "other"),
+        (".specs/backlog/topic_20260101_000000.md", "docs"),
         ("some/unknown/thing.xyz", "other"),
     ],
 )

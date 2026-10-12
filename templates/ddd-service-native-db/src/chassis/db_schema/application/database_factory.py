@@ -84,12 +84,12 @@ def active_backend() -> str:
     Returns
     -------
     str
-            The lower-cased engine name, defaulting to ``sqlite``.
+        The lower-cased engine name, defaulting to ``sqlite``.
 
     Raises
     ------
     ValueError
-            If ``DB_BACKEND`` does not name a supported engine.
+        If ``DB_BACKEND`` does not name a supported engine.
 
     Notes
     -----
@@ -121,7 +121,7 @@ def build_database_handler() -> DatabaseHandler:
     Returns
     -------
     DatabaseHandler
-            Configured backend handler ready for CRUD operations.
+        Configured backend handler ready for CRUD operations.
 
     Notes
     -----

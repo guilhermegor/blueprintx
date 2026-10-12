@@ -38,6 +38,8 @@ on:
   pull_request:
   pull_request_review:
   pull_request_review_comment:
+  issue_comment:
+    types: [created, edited, deleted]
 
 permissions:
   contents: read
@@ -48,6 +50,9 @@ jobs:
     name: Review threads answered
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: >-
+      github.event_name != 'issue_comment' ||
+      github.event.issue.pull_request != null
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -83,6 +88,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python bin/check_review_threads.py
