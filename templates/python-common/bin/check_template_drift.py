@@ -68,7 +68,7 @@ _RE_GLOB_CP = re.compile(
     r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?"/([^\s"]*[*?\[][^\s"]*)\s+'
     r'"\$\{?str_project_path\}?(/[^"]*)?"(/[^\s;&|]*)?'
 )
-_RE_RM = re.compile(r'rm\s+(?:-[A-Za-z]+\s+)*"\$\{?str_project_path\}?/([^"]+)"')
+_RE_RM = re.compile(r'(?m)^[^#\n]*?\brm\s+(?:-[A-Za-z]+\s+)*"\$\{?str_project_path\}?/([^"]+)"')
 _RE_CHAINED_CP = re.compile(r"(?:&&|\|\|)\s*cp\b")
 _RE_ONE_LINE_ESAC = re.compile(r"\besac\b(?:\s*#.*)?$")
 

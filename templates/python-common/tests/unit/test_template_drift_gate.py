@@ -414,3 +414,11 @@ def test_a_glob_destination_stops_at_a_shell_separator(tmp_path: Path) -> None:
     path_root = _checkout(tmp_path, str_lib, ["a.md"])
 
     assert gate.required_relpaths(path_root) == {"a.md"}
+
+
+def test_a_commented_out_rm_does_not_remove_a_required_path(tmp_path: Path) -> None:
+    """`# rm -f dst` is prose, not a command: the scaffold still keeps the file."""
+    str_lib = _LIB_GLOB_RM.replace("\trm -f", "\t# rm -f")
+    path_root = _checkout(tmp_path, str_lib, ["d/.keep", "d/real.py"])
+
+    assert gate.required_relpaths(path_root) == {"d/.keep", "d/real.py"}
