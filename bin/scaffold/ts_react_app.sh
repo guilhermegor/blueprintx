@@ -689,6 +689,7 @@ apply_offline_mode() {
     # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
     # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
+    remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
     # vercel.json lives at the project ROOT, so the .github sweep above does not reach it —
     # and a Vercel config with no workflow to read it is dead configuration pointing at a

@@ -532,3 +532,8 @@ copy_repo_policy_workflows() {
         "$project_path/bin/"
     chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
 }
+
+remove_repo_policy_scripts() {
+    local project_path="$1"
+    rm -f "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
+}
