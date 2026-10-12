@@ -533,7 +533,6 @@ copy_repo_policy_workflows() {
     chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
 }
 
-# Offline mode drops the workflows above; their scripts have no other consumer, so drop them too.
 remove_repo_policy_scripts() {
     local project_path="$1"
     rm -f "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
