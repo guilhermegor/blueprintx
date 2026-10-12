@@ -54,9 +54,7 @@ resolve_github_username() {
     local input
     # No terminal on stdin: skip the read entirely rather than let a stray pipe line
     # answer as a username — falls straight to DEFAULT_GITHUB_USERNAME below (#539).
-    if [ -t 0 ]; then
-        read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
-    fi
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -73,9 +71,7 @@ prompt_state_management() {
     echo "  3) Redux Toolkit  (enterprise, RTK Query)"
     # No terminal on stdin: skip the read so a stray pipe line can't pick a variant nobody
     # chose — falls straight to the "1" default below (#539).
-    if [ -t 0 ]; then
-        read -r -p "$(prompt_main "Choice [1]: ")" sm_choice || true
-    fi
+    prompt_read sm_choice "$(prompt_main "Choice [1]: ")"
     STATE_MGMT_CHOICE="${sm_choice:-1}"
     case "$STATE_MGMT_CHOICE" in
         1) print_status "config" "State management: React Context" ;;
@@ -97,9 +93,7 @@ prompt_deploy_target() {
     echo "  3) None          (no deploy workflow)"
     # No terminal on stdin: skip the read so a stray pipe line can't pick a deploy target
     # nobody chose — falls straight to the "1" default below (#539).
-    if [ -t 0 ]; then
-        read -r -p "$(prompt_main "Choice [1]: ")" deploy_choice || true
-    fi
+    prompt_read deploy_choice "$(prompt_main "Choice [1]: ")"
     DEPLOY_TARGET_CHOICE="${deploy_choice:-1}"
     case "$DEPLOY_TARGET_CHOICE" in
         1) print_status "config" "Deploy target: GitHub Pages" ;;

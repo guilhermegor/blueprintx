@@ -78,6 +78,23 @@ prompt_sub() {
     printf "    ${PROMPT_SUB}└${NC} %s" "$1"
 }
 
+# prompt_can_read: true when stdin may answer a prompt. That is a terminal, or a harness that
+# feeds answers on purpose by exporting BLUEPRINTX_STDIN_ANSWERS=1 (the bin/lib/spec.sh
+# pipes). A stray piped line without that opt-in is never an answer (blueprintx#539).
+prompt_can_read() {
+    [ -t 0 ] || [ "${BLUEPRINTX_STDIN_ANSWERS:-}" = "1" ]
+}
+
+# prompt_read <var_name> <rendered_prompt>: `read -r -p` that leaves <var_name> empty (so the
+# caller's own default applies) when prompt_can_read is false or stdin is at EOF.
+prompt_read() {
+    local _prompt_read_value=""
+    if prompt_can_read; then
+        read -r -p "$2" _prompt_read_value || true
+    fi
+    printf -v "$1" '%s' "$_prompt_read_value"
+}
+
 #
 # Usage:
 #   prompt_yes_no <var_name> "$(prompt_main "Question? [y/N]: ")" [default: y|n]
@@ -107,9 +124,7 @@ prompt_yes_no() {
     local default="${3:-n}"
     local answer=""
 
-    if [ -t 0 ]; then
-        read -r -p "$rendered_prompt" answer || true
-    fi
+    prompt_read answer "$rendered_prompt"
 
     case "$answer" in
         y | Y | yes | YES) printf -v "$var_name" 'true' ;;

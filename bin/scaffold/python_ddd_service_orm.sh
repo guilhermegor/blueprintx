@@ -78,9 +78,7 @@ resolve_github_username() {
     local input
     # No terminal on stdin: skip the read entirely rather than let a stray pipe line
     # answer as a username — falls straight to DEFAULT_GITHUB_USERNAME below (#539).
-    if [ -t 0 ]; then
-        read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
-    fi
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -323,7 +321,7 @@ prompt_docker_compose() {
     # default "n": ships a whole database Compose stack nobody asked for (#539).
     prompt_yes_no INCLUDE_DOCKER_COMPOSE "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")"
     if [ "$INCLUDE_DOCKER_COMPOSE" = "true" ]; then
-        read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans || true
+        prompt_read db_ans "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")"
         case "${db_ans:-postgresql}" in
             mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
             *) DB_COMPOSE_BACKEND="postgresql" ;;
@@ -345,7 +343,7 @@ prompt_data_dir() {
     # default "n": changing the on-disk output layout must never happen silently (#539).
     prompt_yes_no INCLUDE_DATA_DIR "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")"
     if [ "$INCLUDE_DATA_DIR" = "true" ]; then
-        read -r -p "$(prompt_sub "Output base directory [logs]: ")" base_ans || true
+        prompt_read base_ans "$(prompt_sub "Output base directory [logs]: ")"
         DATA_DIR_BASE="${base_ans:-logs}"
         # default "n": matches the pre-existing fallback (flat, non-date-organised output).
         prompt_yes_no DATA_DIR_DATED "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")"
@@ -359,7 +357,7 @@ prompt_webhook() {
     # network calls to a platform nobody named (#539).
     prompt_yes_no INCLUDE_WEBHOOK "$(prompt_main "Include outbound webhook notifications? [y/N]: ")"
     if [ "$INCLUDE_WEBHOOK" = "true" ]; then
-        read -r -p "$(prompt_sub "Which platform? [teams/slack/custom] (default: teams): ")" platform_ans || true
+        prompt_read platform_ans "$(prompt_sub "Which platform? [teams/slack/custom] (default: teams): ")"
         case "${platform_ans:-teams}" in
             slack|custom) WEBHOOK_PLATFORM="$platform_ans" ;;
             *) WEBHOOK_PLATFORM="teams" ;;
@@ -726,7 +724,7 @@ conditional_copy_webhooks_yaml() {
 
 prompt_otel() {
     local answer
-    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
     case "$answer" in
         y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
         *) INCLUDE_OTEL=false ;;
@@ -735,11 +733,11 @@ prompt_otel() {
 
 prompt_email() {
     local answer backend_ans
-    read -r -p "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")"
     case "$answer" in
         y | Y)
             INCLUDE_EMAIL=true
-            read -r -p "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")" backend_ans || true
+            prompt_read backend_ans "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")"
             case "${backend_ans:-outlook}" in
                 smtp) EMAIL_BACKEND="smtp" ;;
                 *) EMAIL_BACKEND="outlook" ;;

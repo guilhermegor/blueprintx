@@ -538,5 +538,6 @@ hand-copies the updated template files. Before adopting the new `mkdocs.yml` and
 - **Update documentation** - when adding new features
 - **Follow existing patterns** - maintain consistency
 - **Communicate early** - if you're stuck or need clarification
+- **Prompt through the `bin/lib/common.sh` helpers, never a bare `read`** - `prompt_yes_no <var> "$(prompt_main "...")" [y|n]` for y/n questions, `prompt_read <var> "..."` for choices and text. A piped stdin is not an answer: with no terminal both leave the variable at its default, so a stray line on a pipe cannot enable an opt-in. Pick the non-interactive default per prompt (`n` for an opt-in, `y` only when "yes" is the safe unattended answer). A harness that feeds answers on purpose (`bin/lib/spec.sh`) exports `BLUEPRINTX_STDIN_ANSWERS=1`. `bin/blueprintx.sh` menus are exempt: they have no safe default. `tests/test_prompt_tty_guard.sh` fails on an unguarded `read` in `bin/scaffold/` or `bin/lib/scaffold_*.sh`.
 
 We appreciate your contributions and look forward to collaborating with you!
