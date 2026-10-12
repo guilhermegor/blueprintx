@@ -20,11 +20,6 @@
 # templates/python-common/ (copied to every generated project's root as `.gitleaks.toml`,
 # exactly like ruff.toml/mypy.ini), so no `--config` flag is needed here.
 #
-# TWO MODES, ONE SCRIPT (blueprintx#759): the default scans the WHOLE history — what CI runs,
-# so nothing reaching main is scanned less. `--staged` scans only the index, which is all a
-# commit can add; pre-commit uses it because history was already scanned when it was
-# committed, and re-scanning all of it on every commit costs minutes and grows with the repo.
-#
 # Resolve, don't install: a missing gitleaks is a graceful skip on a contributor's box, and a
 # hard failure only when GITLEAKS_REQUIRED=1 (CI sets it) — a skip in CI is a gate reporting
 # its own blindness as OK.
@@ -59,8 +54,6 @@ parse_args() {
 }
 
 scan_gitleaks() {
-	# Newer gitleaks spells the index scan `git --staged`; older releases only have
-	# `protect --staged`, so probe the help text rather than parse a version.
 	if [[ "$BOOL_STAGED" != "1" ]]; then
 		gitleaks git "$STR_ROOT" --no-banner --redact -v
 	elif gitleaks git --help 2>&1 | grep -q -- '--staged'; then

@@ -1,12 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for templates/python-common/bin/check_secrets.sh (blueprintx#759).
-#
-# Pre-commit scans only the index (--staged); CI scans the whole history (no flag). Each case
-# builds a real throwaway git repo, because gitleaks' only interface IS git. The fake secret is
-# assembled at runtime so this file never holds a literal that a history scan would flag.
-# The two gitleaks-absent cases need no gitleaks; the rest skip, loudly, when it is not installed.
-#
-# Usage: bash tests/test_check_secrets.sh
 
 set -euo pipefail
 
@@ -15,8 +7,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/bin/lib/common.sh"
 GATE="$REPO_ROOT/templates/python-common/bin/check_secrets.sh"
 
-# Under pre-commit, GIT_INDEX_FILE/GIT_DIR point at the real repo and would redirect every
-# `git -C <tmp>` below into it (it staged four stray files there).
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX
 
 int_failures=0
@@ -27,7 +17,6 @@ fake_secret() {
 	printf '%s%s' "ghp_" "R8kT2mXq9LwZ4vNc7YbH1dJf5GsA3pUe6QoE"
 }
 
-# A repo with one clean commit on main.
 make_repo() {
 	local str_repo
 	str_repo="$(mktemp -d)"
@@ -41,7 +30,6 @@ make_repo() {
 	printf '%s' "$str_repo"
 }
 
-# $1 label, $2 expected exit ("pass"|"fail"), $3 repo, rest: gate args
 expect_gate() {
 	local str_label="$1" str_expect="$2" str_repo="$3" int_rc=0
 	shift 3
@@ -55,8 +43,6 @@ expect_gate() {
 	int_failures=$((int_failures + 1))
 }
 
-# The current PATH minus every directory that holds gitleaks, so the gate still finds
-# dirname/date/grep but not the scanner.
 path_without_gitleaks() {
 	local str_dir str_out="" list_dirs
 	IFS=: read -ra list_dirs <<<"$PATH"
@@ -102,8 +88,6 @@ test_clean_staged_change_passes() {
 	expect_gate "clean staged change, staged mode" "pass" "$str_repo" --staged
 }
 
-# The secret lives only in an old commit; the tip is clean. Staged mode must NOT rescan it
-# (that is the speed-up), full mode MUST still catch it (that is what CI keeps).
 test_old_history_secret_full_mode_only() {
 	local str_repo
 	str_repo="$(make_repo)"
