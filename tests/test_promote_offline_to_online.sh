@@ -84,7 +84,6 @@ test_unknown_tier() {
     expect_refuses_with "unknown --tier is refused" "Unknown --tier" "$WORK_DIR/nonexistent" --tier not-a-real-tier
 }
 
-# A supported tier must get PAST the tier check: a non-git dir then trips the next gate.
 test_supported_tiers_are_known() {
     local tier
     for tier in api-service-native-db ts-lib bash-cli; do

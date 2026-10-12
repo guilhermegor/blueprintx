@@ -269,8 +269,6 @@ test_default_root_from_inside_bin_ci() {
 }
 
 test_ledger_grammar_parity() {
-    # The Python ledger gate (templates/python-common/bin/check_backlog_ledger.py) claims the same
-    # marker grammar as this gate; run both over one table so drift fails here, not in review.
     local str_line str_root str_shell str_py
     local -a list_lines=("- [ ] a" "- [x] a" "- [~] feat/a" "1. [x] a" "2) [ ] a" "+ [ ] a"
         "* [x] a" "- [X] a" "- [] a" "- [?] a" "- [~]" "- [~] doing" "- [~] Feat/a" "- [~] a")
@@ -296,10 +294,6 @@ print(int(bool(mod.CHECKBOX_RE.search(sys.argv[2]))))' \
 }
 
 test_fence_grammar_parity() {
-    # Fence handling, compared across both gates. Columns: opener, closer, then the outcome each
-    # gate must reach: the specs gate accepting a bad marker inside, the ledger gate still
-    # counting a good one inside. An unclosed fence is an error for the specs gate and swallows
-    # the rest of the file for the ledger gate; both reject.
     local str_open str_close str_want_pass str_want_count str_root str_shell str_count
     while IFS='|' read -r str_open str_close str_want_pass str_want_count; do
         str_root="$(make_tree)"

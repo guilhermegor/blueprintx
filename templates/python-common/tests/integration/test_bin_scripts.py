@@ -2268,9 +2268,6 @@ def test_deps_gate_hard_fails_when_deptry_is_unresolvable_instead_of_skipping(
     assert "skip" not in str_all.lower()
 
 
-# --------------------------
-# check_template_drift.py — presence-only tier drift report (blueprintx#109)
-# --------------------------
 
 
 def _run_template_drift(list_args: list[str]) -> subprocess.CompletedProcess:
@@ -2290,8 +2287,6 @@ def _run_template_drift(list_args: list[str]) -> subprocess.CompletedProcess:
         The completed run, stdout and stderr captured as text.
     """
     str_python = shutil.which("python3") or shutil.which("python") or "python3"
-    # Constant, trusted argv built from repo-internal + tmp_path-derived paths — no user
-    # input reaches it.
     return subprocess.run(  # noqa: S603
         [str_python, str(_bin_script("check_template_drift.py")), *list_args],
         capture_output=True,
@@ -2364,7 +2359,6 @@ def test_template_drift_reports_a_file_the_project_never_received(tmp_path: Path
     _seed_fake_blueprintx_checkout(path_blueprintx)
     path_project = tmp_path / "project"
     _write(path_project / ".blueprintx-provenance.yaml", "tier: mvc-service-native-db\n")
-    # .codespellrc deliberately NOT created — the missing path under test.
     _write(path_project / "bin" / "check_complexity.sh", "#!/bin/bash\n")
 
     cls_result = _run_template_drift(

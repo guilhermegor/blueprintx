@@ -486,9 +486,6 @@ copy_repo_rules_provisioner() {
     chmod +x "$project_path/bin/enable_repo_rules.sh"
 }
 
-# Ship the repo-level PR/issue policy workflows and the scripts they run (blueprintx#604).
-# The scripts are copied into the project, never fetched at run time (blueprintx#175).
-# GitHub-only: an offline scaffold removes `.github/`, so call it next to the PR template.
 copy_repo_policy_workflows() {
     local project_path="$1"
     local common_root

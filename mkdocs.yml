@@ -29,6 +29,7 @@ nav:
   - Quality Gate Blind Spots: quality-gate-blind-spots.md
   - Required Status Checks: required-status-checks.md
   - SonarQube Evaluation: sonarqube-evaluation.md
+  - Template Drift: template-drift.md
   - CI Scanner Gap Analysis: ci-scanner-gap-analysis.md
   - Spec Answers: spec-answers.md
   - Python:

@@ -58,7 +58,7 @@
 170 bin/scaffold/python_api_service.sh
 171 bin/scaffold/python_ddd_service.sh
 178 bin/scaffold/python_ddd_service_orm.sh
-297 bin/scaffold/python_lib_minimal.sh
+295 bin/scaffold/python_lib_minimal.sh
 192 bin/scaffold/python_mvc_service.sh
 193 bin/scaffold/python_mvc_service_orm.sh
 81 bin/scaffold/ts_lib.sh
@@ -70,8 +70,8 @@
 25 quality-rules.yaml
 17 tasks.sh
 59 templates/api-service-native-db/.layer-policy.yaml
-16 templates/api-service-native-db/mkdocs.yml
-63 templates/api-service-native-db/pyproject.toml
+15 templates/api-service-native-db/mkdocs.yml
+62 templates/api-service-native-db/pyproject.toml
 2 templates/api-service-native-db/src/capabilities/example_feature/application/factories.py
 4 templates/api-service-native-db/src/capabilities/example_feature/infrastructure/repositories.py
 20 templates/api-service-native-db/src/chassis/db_schema/application/database_factory.py
@@ -103,8 +103,8 @@
 11 templates/common/docs_version/docs.yaml
 8 templates/common/poe_tasks.offline.toml
 54 templates/ddd-service-native-db/.layer-policy.yaml
-16 templates/ddd-service-native-db/mkdocs.yml
-58 templates/ddd-service-native-db/pyproject.toml
+15 templates/ddd-service-native-db/mkdocs.yml
+57 templates/ddd-service-native-db/pyproject.toml
 2 templates/ddd-service-native-db/src/capabilities/example_feature/application/factories.py
 6 templates/ddd-service-native-db/src/chassis/db_schema/application/database_factory.py
 8 templates/ddd-service-native-db/src/chassis/db_schema/infrastructure/postgres_handler.py
@@ -117,7 +117,7 @@
 54 templates/ddd-service-orm-db/.layer-policy.yaml
 6 templates/ddd-service-orm-db/alembic.ini
 8 templates/ddd-service-orm-db/migrations/env.py
-16 templates/ddd-service-orm-db/mkdocs.yml
+15 templates/ddd-service-orm-db/mkdocs.yml
 68 templates/ddd-service-orm-db/pyproject.toml
 2 templates/ddd-service-orm-db/src/capabilities/example_feature/application/factories.py
 1 templates/ddd-service-orm-db/src/chassis/db_schema/infrastructure/repository.py
@@ -128,15 +128,15 @@
 28 templates/lib-minimal/.github/workflows/release-test-pypi.yaml
 31 templates/lib-minimal/.layer-policy.yaml
 8 templates/lib-minimal/main.py
-16 templates/lib-minimal/mkdocs.yml
+15 templates/lib-minimal/mkdocs.yml
 16 templates/lib-minimal/poe_tasks.library.toml
 48 templates/lib-minimal/pyproject.toml
 31 templates/mvc-service-native-db/.layer-policy.yaml
-16 templates/mvc-service-native-db/mkdocs.yml
+15 templates/mvc-service-native-db/mkdocs.yml
 7 templates/mvc-service-native-db/optional/multi_pipeline/main.py
 12 templates/mvc-service-native-db/optional/multi_pipeline/pipeline_dispatch.py
 9 templates/mvc-service-native-db/optional/multi_pipeline/test_pipeline.py
-51 templates/mvc-service-native-db/pyproject.toml
+50 templates/mvc-service-native-db/pyproject.toml
 11 templates/mvc-service-native-db/src/config/connection_db.py
 3 templates/mvc-service-native-db/src/config/emails.yaml
 3 templates/mvc-service-native-db/src/config/query_loader.py
@@ -152,7 +152,7 @@
 30 templates/mvc-service-orm-db/.layer-policy.yaml
 6 templates/mvc-service-orm-db/alembic.ini
 12 templates/mvc-service-orm-db/migrations/env.py
-16 templates/mvc-service-orm-db/mkdocs.yml
+15 templates/mvc-service-orm-db/mkdocs.yml
 7 templates/mvc-service-orm-db/optional/multi_pipeline/main.py
 12 templates/mvc-service-orm-db/optional/multi_pipeline/pipeline_dispatch.py
 9 templates/mvc-service-orm-db/optional/multi_pipeline/test_pipeline.py
