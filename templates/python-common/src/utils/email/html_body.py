@@ -79,7 +79,7 @@ def to_html_body(str_body: str) -> str:
     Parameters
     ----------
     str_body : str
-            The plain-text body (possibly with ``\n`` / ``\r\n`` line breaks).
+        The plain-text body (possibly with ``\n`` / ``\r\n`` line breaks).
 
     Returns
     -------
