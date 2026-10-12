@@ -20,7 +20,7 @@ class SQLAlchemyRecordRepository(Repository):
     Parameters
     ----------
     session : Session
-            SQLAlchemy session for database operations.
+        SQLAlchemy session for database operations.
 
     Examples
     --------
@@ -42,12 +42,12 @@ class SQLAlchemyRecordRepository(Repository):
         Parameters
         ----------
         entity : dict
-                Dictionary containing record data.
+            Dictionary containing record data.
 
         Returns
         -------
         dict
-                Persisted record data, including the assigned ``id``.
+            Persisted record data, including the assigned ``id``.
         """
         record_id = entity.get("id") or generate_uuid()
         record = RecordModel(
@@ -64,12 +64,12 @@ class SQLAlchemyRecordRepository(Repository):
         Parameters
         ----------
         entity_id : str
-                Unique identifier of the record.
+            Unique identifier of the record.
 
         Returns
         -------
         dict or None
-                Record data if found, otherwise ``None``.
+            Record data if found, otherwise ``None``.
         """
         record = self.session.get(RecordModel, entity_id)
         if record is None:
@@ -82,12 +82,12 @@ class SQLAlchemyRecordRepository(Repository):
         Parameters
         ----------
         entity : dict
-                Dictionary containing record data with ``id`` field.
+            Dictionary containing record data with ``id`` field.
 
         Returns
         -------
         dict or None
-                Updated record data if found, otherwise ``None``.
+            Updated record data if found, otherwise ``None``.
         """
         entity_id = entity.get("id")
         if not entity_id:
@@ -108,12 +108,12 @@ class SQLAlchemyRecordRepository(Repository):
         Parameters
         ----------
         entity_id : str
-                Unique identifier of the record to delete.
+            Unique identifier of the record to delete.
 
         Returns
         -------
         bool
-                ``True`` if record was deleted, ``False`` if not found.
+            ``True`` if record was deleted, ``False`` if not found.
         """
         record = self.session.get(RecordModel, entity_id)
         if record is None:
@@ -128,7 +128,7 @@ class SQLAlchemyRecordRepository(Repository):
         Returns
         -------
         list[dict]
-                List of all record data dictionaries.
+            List of all record data dictionaries.
         """
         records = self.session.query(RecordModel).all()
         return [json.loads(r.data) if r.data else {"id": r.id} for r in records]
