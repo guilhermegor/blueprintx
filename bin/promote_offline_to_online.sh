@@ -20,7 +20,7 @@ BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
-TIERS=(ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db lib-minimal react-spa-webpack)
+TIERS=(ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db api-service-native-db lib-minimal react-spa-webpack ts-lib bash-cli)
 
 PROJECT_PATH=""
 TIER=""
@@ -39,7 +39,8 @@ Required:
   <project_path>           Path to the offline-scaffolded project to promote.
   --tier <tier>             ddd-service-native-db | ddd-service-orm-db |
                              mvc-service-native-db | mvc-service-orm-db |
-                             lib-minimal | react-spa-webpack
+                             api-service-native-db | lib-minimal | react-spa-webpack |
+                             ts-lib | bash-cli
 
 Options:
   --github-user <user>      GitHub owner for the new repo (default: `gh api user`).
@@ -227,8 +228,8 @@ resolve_identity() {
     export PROJECT_NAME PROJECT_DISPLAY_NAME GITHUB_USERNAME REPOSITORY
 }
 
-# Mirrors copy_github_assets() in the 4 native/ORM service scaffolds (bin/scaffold/python_*.sh) —
-# identical manifest across all four, transcribed rather than sourced (those scripts are held
+# Mirrors copy_github_assets() in the 5 service scaffolds (bin/scaffold/python_*_service*.sh) —
+# identical manifest across all five, transcribed rather than sourced (those scripts are held
 # by other PRs). See docs/offline-to-online.md for the source table.
 copy_online_assets_service_tier() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
@@ -278,6 +279,7 @@ copy_online_assets_react() {
     local shared="$BLUEPRINTX_ROOT/templates/common" dest="$PROJECT_PATH"
     local deploy_root="$BLUEPRINTX_ROOT/templates/react-spa-webpack/optional/deploy"
     mkdir -p "$dest/.github/workflows"
+    cp -r "$BLUEPRINTX_ROOT/templates/ts-common/.github/." "$dest/.github"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
@@ -293,11 +295,44 @@ copy_online_assets_react() {
     print_status "success" "GitHub assets copied (.github, deploy-target=$DEPLOY_TARGET)"
 }
 
+# Mirrors the .github copy in bin/scaffold/ts_lib.sh: ts-common workflows, the skeleton's own
+# (release-npm is rendered with PROJECT_NAME) plus the shared CLAUDE.md/CODEOWNERS/PR template.
+copy_online_assets_ts_lib() {
+    local shared="$BLUEPRINTX_ROOT/templates/common" skeleton="$BLUEPRINTX_ROOT/templates/ts-lib"
+    local dest="$PROJECT_PATH" wf
+    mkdir -p "$dest/.github/workflows"
+    cp -r "$BLUEPRINTX_ROOT/templates/ts-common/.github/." "$dest/.github"
+    for wf in docs docs-deploy pack-smoke; do
+        cp "$skeleton/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"
+    done
+    envsubst '${PROJECT_NAME}' <"$skeleton/.github/workflows/release-npm.yml" >"$dest/.github/workflows/release-npm.yml"
+    copy_shared_github_overlay
+    print_status "success" "GitHub assets copied (.github)"
+}
+
+# Mirrors the .github copy in bin/scaffold/bash_cli.sh (release.yml rendered with PROJECT_NAME).
+copy_online_assets_bash_cli() {
+    local skeleton="$BLUEPRINTX_ROOT/templates/bash-cli" dest="$PROJECT_PATH"
+    mkdir -p "$dest/.github/workflows"
+    cp "$skeleton/.github/workflows/ci.yml" "$dest/.github/workflows/ci.yml"
+    envsubst '${PROJECT_NAME}' <"$skeleton/.github/workflows/release.yml" >"$dest/.github/workflows/release.yml"
+    copy_shared_github_overlay
+    print_status "success" "GitHub assets copied (.github)"
+}
+
+# The three files every non-service TS/bash scaffold copies from templates/common/.github.
+copy_shared_github_overlay() {
+    local shared="$BLUEPRINTX_ROOT/templates/common" dest="$PROJECT_PATH"
+    cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
+    envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
+    cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
+}
+
 # secret_scan.yaml is opt-in: the scaffolds ship it only when GITGUARDIAN_API_KEY is exported,
 # because ggshield fails every non-bot scan in a repo that has no such secret. Same rule here;
-# set_secret_scan_key then gives the new repo the key. react-spa-webpack never shipped it.
+# set_secret_scan_key then gives the new repo the key. The TS and bash tiers never shipped it.
 copy_secret_scan_if_keyed() {
-    [ "$TIER" = "react-spa-webpack" ] && return 0
+    case "$TIER" in react-spa-webpack | ts-lib | bash-cli) return 0 ;; esac
     [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0
     cp "$BLUEPRINTX_ROOT/templates/python-common/.github/workflows/secret_scan.yaml" \
         "$PROJECT_PATH/.github/workflows/secret_scan.yaml"
@@ -307,6 +342,8 @@ copy_online_assets() {
     case "$TIER" in
         lib-minimal) copy_online_assets_lib_minimal ;;
         react-spa-webpack) copy_online_assets_react ;;
+        ts-lib) copy_online_assets_ts_lib ;;
+        bash-cli) copy_online_assets_bash_cli ;;
         *) copy_online_assets_service_tier ;;
     esac
     copy_secret_scan_if_keyed
@@ -339,7 +376,8 @@ remove_offline_only_python() {
     remove_git_diffs_dir
 }
 
-# Mirrors the removal half of apply_offline_mode() in bin/scaffold/ts_react_app.sh: no
+# Mirrors the removal half of apply_offline_mode() in ts_react_app.sh, ts_lib.sh and bash_cli.sh
+# (bash-cli has no package.json; the strip is then a no-op): no
 # new_branch/git_merge_to_main/protect_branch or poe include there, so only the git-diff
 # trio + git_diffs/ + the package.json script entries come back off.
 remove_offline_only_react() {
@@ -353,7 +391,7 @@ remove_offline_only_react() {
 
 remove_offline_only() {
     case "$TIER" in
-        react-spa-webpack) remove_offline_only_react ;;
+        react-spa-webpack | ts-lib | bash-cli) remove_offline_only_react ;;
         *)
             remove_offline_only_python
             strip_poe_include

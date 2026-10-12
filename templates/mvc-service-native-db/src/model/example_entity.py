@@ -42,14 +42,14 @@ class ExampleEntity(metaclass=TypeChecker):
     Parameters
     ----------
     cls_connection : Any
-            An open DB-API 2.0 connection (see :func:`config.connection_db.build_connection`).
+        An open DB-API 2.0 connection (see :func:`config.connection_db.build_connection`).
     str_table : str, optional
-            Table name to operate on, by default ``"example"``.
+        Table name to operate on, by default ``"example"``.
 
     Raises
     ------
     ValueError
-            When ``str_table`` is not ``[A-Za-z_][A-Za-z0-9_]*``.
+        When ``str_table`` is not ``[A-Za-z_][A-Za-z0-9_]*``.
     """
 
     def __init__(self, cls_connection: Any, str_table: str = "example") -> None:
@@ -75,7 +75,7 @@ class ExampleEntity(metaclass=TypeChecker):
         Parameters
         ----------
         str_title : str
-                Value for the ``title`` column.
+            Value for the ``title`` column.
         """
         cls_cursor = self.cls_connection.cursor()
         # noqa justified: str_table was validated against RE_SQL_IDENTIFIER in __init__.
@@ -92,7 +92,7 @@ class ExampleEntity(metaclass=TypeChecker):
         Returns
         -------
         pd.DataFrame
-                One row per record, every declared column typed.
+            One row per record, every declared column typed.
         """
         cls_cursor = self.cls_connection.cursor()
         try:
