@@ -53,7 +53,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/scaffold_kanban.sh"
 # self-skip (report success) instead of demanding a reviewer that will never exist.
 scaffold_prompt_review_bot_roster() {
 	local str_answer
-	read -r -p "$(prompt_main "Do you have (or will you install) a PR review bot such as CodeRabbit on this repo? [Y/n]: ")" str_answer || true
+	prompt_read str_answer "$(prompt_main "Do you have (or will you install) a PR review bot such as CodeRabbit on this repo? [Y/n]: ")"
 	case "$str_answer" in
 	n | N)
 		# Read by each scaffold's copy step (a different file), which shellcheck cannot follow.
@@ -186,7 +186,8 @@ scaffold_create_github_repo() {
 		return 1
 	fi
 
-	read -r -p "Create GitHub repo ${str_slug} and push now? [y/N]: " str_create_ans || true
+	str_create_ans=""
+	prompt_read str_create_ans "Create GitHub repo ${str_slug} and push now? [y/N]: "
 	case "$str_create_ans" in
 	y | Y) ;;
 	*)
@@ -195,7 +196,7 @@ scaffold_create_github_repo() {
 		;;
 	esac
 
-	read -r -p "Visibility [1] Public (default)  [2] Private: " str_vis_choice || true
+	prompt_read str_vis_choice "Visibility [1] Public (default)  [2] Private: "
 	str_vis_flag="--public"
 	[ "$str_vis_choice" = "2" ] && str_vis_flag="--private"
 	[ -n "$SCAFFOLD_REPO_HOMEPAGE" ] && list_homepage=(--homepage "$SCAFFOLD_REPO_HOMEPAGE")
@@ -328,7 +329,7 @@ scaffold_prompt_git_remote_setup() {
 
 	print_status "info" \
 		"Optional: add a remote origin / create a GitHub repo (the local repo is already initialized)"
-	read -r -p "Add remote origin and (optionally) create the GitHub repo now? [y/N]: " str_answer || true
+	prompt_read str_answer "Add remote origin and (optionally) create the GitHub repo now? [y/N]: "
 
 	case "$str_answer" in
 	y | Y) ;;

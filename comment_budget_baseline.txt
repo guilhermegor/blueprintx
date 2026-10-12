@@ -62,7 +62,7 @@
 192 bin/scaffold/python_mvc_service.sh
 193 bin/scaffold/python_mvc_service_orm.sh
 81 bin/scaffold/ts_lib.sh
-116 bin/scaffold/ts_react_app.sh
+112 bin/scaffold/ts_react_app.sh
 23 bin/scaffold/ts_react_capability.sh
 6 bin/update_licenses.sh
 3 mkdocs.yml

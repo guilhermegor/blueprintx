@@ -26,6 +26,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239) |
 | `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |
 | `offline-to-online.md` | Utility page | Promoting an offline scaffold to online with `bin/promote_offline_to_online.sh` — per-tier manifests, flags, preconditions, idempotency (blueprintx#382) |
+| `prompt-defaults.md` | Utility page | The non-terminal stdin guard on scaffold prompts, the helpers, and the per-prompt default table (blueprintx#539) |
 | `template-drift.md` | Utility page | The drift doctor and the provenance stamp it reads, plus the promote-script mirror notes (blueprintx#109) |
 | `quality-rules.md` | Utility page | The machine-readable quality-rule registry (`quality-rules.yaml`) and the gate that keeps it honest — one entry per rule, with the intent each ceiling encodes (blueprintx#432) |
 | `quality-gate-blind-spots.md` | Utility page | Measured audit of what the quality gates cannot see (blueprintx#169) |
@@ -166,6 +167,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
 | `coverage-floor.md` | Gate design record | What the gate enforces, why `fail_under` alone is insufficient, the coarse-by-design boundary, and what stays out of scope |
 | `offline-to-online.md` | Offline-to-online promotion record | The flags and per-tier manifests, the ordered preconditions, idempotency and resume-before-first-push, what stays manual afterwards (branch protection, secret key), and the live round trip stated as unverified |
+| `prompt-defaults.md` | Prompt-guard record | Why a piped line must not answer a prompt, the four helpers, how a default is chosen per prompt (with the table), and the three legs of the regression test |
 | `template-drift.md` | Drift doctor record | The provenance stamp and its version fallback, how the scaffold lib is parsed (cp regex, line continuations), conditional copies, the should-fail witness, the manual poe task |
 | `offline-wheelhouse.md` | Air-gapped install record | The three subcommands (`select`/`pack`/`assemble`), what the manifest authenticates and what it does not, the part-splitting contract, and the target-triple inputs the selector resolves markers against |
 | `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
