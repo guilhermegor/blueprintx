@@ -1,7 +1,4 @@
 #!/bin/bash
-# Regression tests for bin/ci/check_agents_md_bridge.sh (blueprintx#754).
-#
-# Usage: bash tests/test_check_agents_md_bridge.sh
 
 set -euo pipefail
 
@@ -13,7 +10,6 @@ GATE="$REPO_ROOT/bin/ci/check_agents_md_bridge.sh"
 int_failures=0
 
 make_fixture() {
-	# A copy of the real tree's inputs, so a case mutates it without touching the repo.
 	local str_root
 	str_root="$(mktemp -d)"
 	mkdir -p "$str_root/templates" "$str_root/bin"
@@ -25,7 +21,6 @@ make_fixture() {
 }
 
 expect_gate() {
-	# $1 = description, $2 = pass|fail, $3 = needle, $4 = root passed to the gate.
 	local str_got="pass" str_out
 	str_out="$(BRIDGE_REPO_ROOT="$4" bash "$GATE" 2>&1)" || str_got="fail"
 	if [ "$str_got" != "$2" ]; then

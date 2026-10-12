@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Every skeleton's CLAUDE.md is a bridge: @import lines plus one fixed shim sentence.
-# Fails when an @import names a file the skeleton's scaffold never ships, or when the bridge
-# carries anything outside that allowlist. See blueprintx#754.
 
 set -euo pipefail
 
@@ -13,7 +10,6 @@ readonly -a ARR_SHIMS=(
 )
 
 scaffold_text() {
-	# The skeleton's scaffold script plus the shared helpers it may delegate its copies to.
 	local str_dir="$1" str_scaffold
 	str_scaffold="$(sed -n 's/^scaffold=//p' "$str_dir/skeleton.meta")"
 	cat "$REPO_ROOT/$str_scaffold" "$REPO_ROOT"/bin/lib/scaffold_*.sh
