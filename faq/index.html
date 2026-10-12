@@ -566,6 +566,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-does-every-scaffold-have-to-ship-the-hosted-reviewer-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does every scaffold have to ship the hosted-reviewer config?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#which-install-methods-are-supported" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2037,6 +2048,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-does-every-scaffold-have-to-ship-the-hosted-reviewer-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does every scaffold have to ship the hosted-reviewer config?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#which-install-methods-are-supported" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2272,6 +2294,44 @@ forward. The <code>sha</code> is required: a binary file also reports zero chang
 proves the content. The compare API returns at most
 300 files whatever <code>per_page</code> says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for <code>per_page=1</code> to keep the commit list, which it does not use, small.</p>
+<h2 id="why-does-every-scaffold-have-to-ship-the-hosted-reviewer-config">Why does every scaffold have to ship the hosted-reviewer config?<a class="headerlink" href="#why-does-every-scaffold-have-to-ship-the-hosted-reviewer-config" title="Permanent link">&para;</a></h2>
+<p>Every generated project must ship the configuration for the hosted reviewers (CodeRabbit,
+Greptile and Graphite); today only Graphite's is listed. Left as a copy list maintained by hand in nine scaffold scripts, that
+drifts: MVC once silently lacked shared files (<code>poetry.toml</code>, <code>.coveragerc</code>). The required
+paths are listed once, one bare path per line (blank and <code>#</code> lines are ignored), in <code>templates/common/review-config.manifest</code>, and
+<code>bin/ci/check_review_config_shipped.sh</code> checks them in three modes:</p>
+<ul>
+<li><code>--static</code> (pre-commit hook <code>review-config-shipped</code>): every manifest path exists under
+  <code>templates/common/</code>, and every skeleton script discovered from <code>templates/*/skeleton.meta</code>
+  has a <code>cp</code> that copies it (a loop or an unusual copy is a documented limit; <code>--generated</code>
+  covers it).</li>
+<li><code>--generated</code> (CI job <code>review-config-shipped</code>): scaffolds each discovered skeleton with its
+  default answers and asserts every manifest path is in the generated tree. This is the real
+  oracle: a <code>cp</code> line that sits behind a branch the default answers never take passes
+  <code>--static</code> and fails here. <code>--skeleton &lt;name&gt;</code> narrows it to one.</li>
+<li><code>--project &lt;dir&gt;</code> (called by <code>scaffold_lint_test.sh</code> for each Python tier): the same
+  assertion over one already-generated project.</li>
+</ul>
+<p>Today the manifest lists only <code>.gitattributes</code> (the Graphite <code>linguist-generated</code> marker).
+<code>.coderabbit.yaml</code> and <code>.greptile/</code> are added by the PRs that ship them, so the guard does
+not yet protect those. Both are repo-root files, not GitHub-only assets, so the offline
+scaffold keeps them: <code>apply_offline_mode</code> drops only <code>.github/</code>.</p>
+<p><code>--static</code> is a fast heuristic over direct <code>cp</code> commands. It reads the scaffold script plus the
+<code>bin/lib/*.sh</code> helpers it sources, resolves the <code>*_TEMPLATE_ROOT</code> variables, and accepts a
+path only when a <code>cp</code> takes exactly <code>templates/common/&lt;path&gt;</code> into a destination ending in
+<code>&lt;path&gt;</code>, or a recursive copy (<code>-r</code>, <code>-R</code>, <code>-a</code>, <code>--recursive</code>) of <code>templates/common</code> or one of
+its parent directories. Comments, backup files, another template root and unrelated parent
+directories do not count. It cannot follow a copy whose source is built at run time (a <code>for</code>
+loop over a variable, say), so such a script fails <code>--static</code> even when it ships the file.
+That is the safe direction: write the copy out directly, or rely on <code>--generated</code>.</p>
+<p>Every project ships the config, offline ones included, because an offline project can later be
+promoted to GitHub. <code>scaffold_lint_test.sh</code> only forbids four GitHub-only workflow files in an
+offline project, none of which is reviewer config.</p>
+<p>The manifest only grows: the change that ships a reviewer config file adds that file's path
+to the manifest in the same pull request. <code>check_content</code> in the script is the hook point for
+content checks, such as keeping Greptile queue-only. <code>tests/test_check_review_config_shipped.sh</code>
+removes a <code>cp</code> line, a manifest file and an unshipped entry from a copy of the tree and shows
+the gate going red in both modes.</p>
 <h2 id="which-install-methods-are-supported">Which install methods are supported?<a class="headerlink" href="#which-install-methods-are-supported" title="Permanent link">&para;</a></h2>
 <p>Homebrew, Chocolatey, Snap, apt, and <code>make install</code> from a clone — see the project README.</p>
 
