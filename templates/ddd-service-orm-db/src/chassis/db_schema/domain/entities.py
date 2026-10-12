@@ -17,7 +17,7 @@ class BaseEntity:
     Attributes
     ----------
     id : str
-            Unique identifier assigned at instantiation time.
+        Unique identifier assigned at instantiation time.
     """
 
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
@@ -28,6 +28,6 @@ class BaseEntity:
         Returns
         -------
         Record
-                Dictionary representation suitable for persistence.
+            Dictionary representation suitable for persistence.
         """
         return asdict(self)
