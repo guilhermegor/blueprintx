@@ -480,6 +480,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="I don&#39;t use a PR review bot — will the generated project&#39;s required check ever pass?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-does-a-fallback-ladder-review-satisfy-the-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How does a fallback (ladder) review satisfy the gate?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1962,6 +1979,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="I don&#39;t use a PR review bot — will the generated project&#39;s required check ever pass?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-does-a-fallback-ladder-review-satisfy-the-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How does a fallback (ladder) review satisfy the gate?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2124,6 +2158,16 @@ later and re-adding the roster turns the gate back on — at the path the gate r
 by language: for Python copy <code>templates/python-common/.review-bots.yaml</code> to the project root; for
 TypeScript copy <code>templates/ts-common/.github/.review-bots.yaml</code> to <code>.github/.review-bots.yaml</code>. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).</p>
+<h3 id="how-does-a-fallback-ladder-review-satisfy-the-gate">How does a fallback (ladder) review satisfy the gate?<a class="headerlink" href="#how-does-a-fallback-ladder-review-satisfy-the-gate" title="Permanent link">&para;</a></h3>
+<p>A roster row with <code>kind: comment-marker</code> and a <code>marker:</code> string (here <code>Fallback review — runtime:</code>)
+lets a plain issue comment count as a review. The comment must start with the marker, name the head SHA on its
+second line (<code>Reviewed head: &lt;sha&gt;</code>), be posted
+after the head commit, and come from an <code>OWNER</code>, <code>MEMBER</code> or <code>COLLABORATOR</code> (GitHub's
+<code>authorAssociation</code>), so an outside commenter cannot forge it. A comment posted by a GitHub App reports <code>NONE</code> and
+is rejected, so post the marker with the owner's own token. The row has no <code>login:</code> and is
+ignored when absent. The comment must also contain the line <code>0 finding(s) across N reviewed file(s).</code>; a count above zero, or no such line, fails closed, so a ladder review with findings never satisfies the gate on its own (blueprintx#630). Like a clean-review notice, it proves a review ran, never that a thread was
+answered. The workflow needs the <code>issue_comment</code> trigger to re-run on that comment (created, edited or deleted). A run triggered by a comment reports on the default branch's head, not the PR's, so a red "Review threads answered" on <code>main</code>'s tip after such a comment is that run's own verdict, not a broken <code>main</code>; the PR's check is refreshed by the stale-run step. See
+blueprintx#593.</p>
 <h2 id="how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered">How does a scaffolded repo close the issue a merged PR delivered?<a class="headerlink" href="#how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered" title="Permanent link">&para;</a></h2>
 <p>BlueprintX carries <code>close-linked-issues.yml</code> and its <code>bin/close_linked_issues.sh</code> under
 <code>templates/common/</code> (blueprintx#604), but generated projects do not receive them yet: the scaffold
