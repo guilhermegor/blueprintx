@@ -13,7 +13,7 @@ This is the skeleton `publishprobe` (greenfield#26) is scaffolded from.
 - `Makefile` — `lint` (shellcheck + shfmt), `test` (bats), `install`.
 - `.github/workflows/ci.yml` — lint + test jobs, each with `timeout-minutes`.
 - `.github/workflows/release.yml`, `.pre-commit-config.yaml`, `.gitignore`,
-  `README.md`, `CLAUDE.md`.
+  `README.md`, `AGENTS.md` (with a `CLAUDE.md` shim that imports it).
 
 ## Versioning — mirrors how BlueprintX releases itself
 
