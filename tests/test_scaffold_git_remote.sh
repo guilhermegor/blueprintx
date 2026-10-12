@@ -23,6 +23,7 @@ run_create() {
     git -C "$dir" init -q -b main
     git -C "$dir" -c user.email=t@example.com -c user.name=T commit -q --allow-empty -m "chore: seed"
     git init -q --bare "$bare"
+    git -C "$dir" remote add origin "$bare"
     : >"$log"
     printf 'y\n1\n' | GITGUARDIAN_API_KEY=k bash -c '
         source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
@@ -33,7 +34,8 @@ run_create() {
             case "$1 $2" in
             "repo create")
                 echo "create $*" >>"$LOG"
-                git -C "$PROJECT_PATH" remote add origin "$BARE"
+                # Real gh adds the remote itself under --source/--remote and fails if it exists.
+                case "$*" in *--source*|*--remote*) return 1 ;; esac
                 case "$*" in *--push*) git -C "$PROJECT_PATH" push -q -u origin main ;; esac ;;
             "secret set")
                 cat >/dev/null
@@ -114,13 +116,14 @@ test_prompt_fails_when_first_push_fails() {
     git -C "$dir" init -q -b main
     git -C "$dir" -c user.email=t@example.com -c user.name=T commit -q --allow-empty -m "chore: seed"
     git init -q --bare "$bare"
+    git -C "$dir" remote add origin "$bare"
     printf 'y\ny\n1\n' | bash -c '
         source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
         PROJECT_PATH="$2"; BARE="$3"
         GITHUB_USERNAME=o; PROJECT_NAME=r; PROJECT_DESCRIPTION=d
         scaffold_set_review_trigger_secret() { :; }
         scaffold_add_git_remote() { :; }
-        gh() { [ "$1 $2" = "repo create" ] && git -C "$PROJECT_PATH" remote add origin "$BARE"; return 0; }
+        gh() { return 0; }
         git() { [ "$3" = push ] && return 1; command git "$@"; }
         scaffold_prompt_git_remote_setup "$2"
     ' _ "$REPO_ROOT" "$dir" "$bare" >"$WORK_DIR/pf.out" 2>&1

@@ -201,8 +201,9 @@ scaffold_create_github_repo() {
 	[ -n "$SCAFFOLD_REPO_HOMEPAGE" ] && list_homepage=(--homepage "$SCAFFOLD_REPO_HOMEPAGE")
 
 	# No --push: the key must exist before the first push, or the first secret_scan run goes red.
-	if (cd "$str_project_path" && gh repo create "$str_slug" --source . --remote origin \
-		"${list_homepage[@]}" --description "$PROJECT_DESCRIPTION" "$str_vis_flag"); then
+	# No --source/--remote either: origin is already added, and gh fails on an existing remote.
+	if gh repo create "$str_slug" "${list_homepage[@]}" \
+		--description "$PROJECT_DESCRIPTION" "$str_vis_flag"; then
 		scaffold_set_secret_scan_key
 		if ! git -C "$str_project_path" push -u origin HEAD:main; then
 			# Return 0: the repo exists, so the caller's create-failed fallback must not re-run.
