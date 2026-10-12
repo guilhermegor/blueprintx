@@ -217,7 +217,7 @@
 27 templates/python-common/bin/check_unix_filenames.sh
 5 templates/python-common/bin/db.sh
 28 templates/python-common/bin/enable_pages.sh
-207 templates/python-common/bin/enable_repo_rules.sh
+190 templates/python-common/bin/enable_repo_rules.sh
 61 templates/python-common/bin/enable_security.sh
 8 templates/python-common/bin/ensure_env.sh
 18 templates/python-common/bin/export_deps.sh
