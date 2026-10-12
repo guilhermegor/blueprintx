@@ -11,6 +11,6 @@ def df_sample() -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-            Sample data with an ``id`` and a ``title`` column.
+        Sample data with an ``id`` and a ``title`` column.
     """
     return pd.DataFrame({"id": [1, 2], "title": ["alpha", "beta"]})

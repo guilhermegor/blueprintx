@@ -76,7 +76,7 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -154,6 +154,8 @@ copy_templates() {
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" GITHUB_USERNAME="$GITHUB_USERNAME" \
         envsubst '${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME}' \
@@ -239,27 +241,27 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
-    case "$protect_ans" in
-        y|Y)
-            # A solo maintainer cannot satisfy a required-approving-review
-            # rule — GitHub forbids self-approval, so the first PR's merge
-            # would be permanently blocked. Ask whether human reviewers will
-            # gate merges, and build the protection payload accordingly.
-            local reviews_json
-            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
-            case "$reviews_ans" in
-                y|Y)
-                    reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
-                    ;;
-                *)
-                    reviews_json='"required_pull_request_reviews": null,'
-                    ;;
-            esac
-            if gh api --method PUT \
-                -H "Accept: application/vnd.github+json" \
-                "/repos/$repo/branches/$branch/protection" \
-                --input - <<EOF
+    local do_protect reviews_ans reviews_json
+    prompt_yes_no do_protect "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
+    if [ "$do_protect" != "true" ]; then
+        print_status "info" "Skipped branch protection"
+        return
+    fi
+
+    # A solo maintainer cannot satisfy a required-approving-review
+    # rule — GitHub forbids self-approval, so the first PR's merge
+    # would be permanently blocked. Ask whether human reviewers will
+    # gate merges, and build the protection payload accordingly.
+    prompt_yes_no reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
+    if [ "$reviews_ans" = "true" ]; then
+        reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
+    else
+        reviews_json='"required_pull_request_reviews": null,'
+    fi
+    if gh api --method PUT \
+        -H "Accept: application/vnd.github+json" \
+        "/repos/$repo/branches/$branch/protection" \
+        --input - <<EOF
 {
   "required_status_checks": { "strict": true, "contexts": [] },
   "enforce_admins": true,
@@ -270,14 +272,11 @@ apply_branch_protection() {
   "required_linear_history": true
 }
 EOF
-            then
-                print_status "success" "Branch '$branch' protected on GitHub."
-            else
-                print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
-            fi
-            ;;
-        *) print_status "info" "Skipped branch protection";;
-    esac
+    then
+        print_status "success" "Branch '$branch' protected on GitHub."
+    else
+        print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
+    fi
 }
 
 # Always initialise a local git repo with a first commit, independent of any
@@ -315,71 +314,47 @@ prompt_git_remote_setup() {
 }
 
 prompt_docker_compose() {
-    local answer db_ans
-    read -r -p "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y)
-            INCLUDE_DOCKER_COMPOSE=true
-            read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans || true
-            case "${db_ans:-postgresql}" in
-                mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
-                *) DB_COMPOSE_BACKEND="postgresql" ;;
-            esac
-            print_status "config" "Docker Compose: $DB_COMPOSE_BACKEND"
-            ;;
-        *)
-            INCLUDE_DOCKER_COMPOSE=false
-            ;;
-    esac
+    local db_ans
+    prompt_yes_no INCLUDE_DOCKER_COMPOSE "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")"
+    if [ "$INCLUDE_DOCKER_COMPOSE" = "true" ]; then
+        prompt_read db_ans "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")"
+        case "${db_ans:-postgresql}" in
+            mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
+            *) DB_COMPOSE_BACKEND="postgresql" ;;
+        esac
+        print_status "config" "Docker Compose: $DB_COMPOSE_BACKEND"
+    fi
 }
 
 prompt_storage() {
-    local answer
-    read -r -p "$(prompt_main "Include schema-less file storage (JSON/CSV/joblib)? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y) INCLUDE_STORAGE=true; print_status "config" "Schema-less storage: enabled" ;;
-        *) INCLUDE_STORAGE=false ;;
-    esac
+    prompt_yes_no INCLUDE_STORAGE "$(prompt_main "Include schema-less file storage (JSON/CSV/joblib)? [y/N]: ")"
+    if [ "$INCLUDE_STORAGE" = "true" ]; then
+        print_status "config" "Schema-less storage: enabled"
+    fi
 }
 
 prompt_data_dir() {
-    local answer base_ans dated_ans
-    read -r -p "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y)
-            INCLUDE_DATA_DIR=true
-            read -r -p "$(prompt_sub "Output base directory [logs]: ")" base_ans || true
-            DATA_DIR_BASE="${base_ans:-logs}"
-            read -r -p "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")" dated_ans || true
-            case "$dated_ans" in
-                y|Y) DATA_DIR_DATED=true ;;
-                *) DATA_DIR_DATED=false ;;
-            esac
-            print_status "config" "Output dir: $DATA_DIR_BASE (date-organised: $DATA_DIR_DATED)"
-            ;;
-        *)
-            INCLUDE_DATA_DIR=false
-            ;;
-    esac
+    local base_ans
+    prompt_yes_no INCLUDE_DATA_DIR "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")"
+    if [ "$INCLUDE_DATA_DIR" = "true" ]; then
+        prompt_read base_ans "$(prompt_sub "Output base directory [logs]: ")"
+        DATA_DIR_BASE="${base_ans:-logs}"
+        prompt_yes_no DATA_DIR_DATED "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")"
+        print_status "config" "Output dir: $DATA_DIR_BASE (date-organised: $DATA_DIR_DATED)"
+    fi
 }
 
 prompt_webhook() {
-    local answer platform_ans
-    read -r -p "$(prompt_main "Include outbound webhook notifications? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y)
-            INCLUDE_WEBHOOK=true
-            read -r -p "$(prompt_sub "Which platform? [teams/slack/custom] (default: teams): ")" platform_ans || true
-            case "${platform_ans:-teams}" in
-                slack|custom) WEBHOOK_PLATFORM="$platform_ans" ;;
-                *) WEBHOOK_PLATFORM="teams" ;;
-            esac
-            print_status "config" "Webhook platform: $WEBHOOK_PLATFORM"
-            ;;
-        *)
-            INCLUDE_WEBHOOK=false
-            ;;
-    esac
+    local platform_ans
+    prompt_yes_no INCLUDE_WEBHOOK "$(prompt_main "Include outbound webhook notifications? [y/N]: ")"
+    if [ "$INCLUDE_WEBHOOK" = "true" ]; then
+        prompt_read platform_ans "$(prompt_sub "Which platform? [teams/slack/custom] (default: teams): ")"
+        case "${platform_ans:-teams}" in
+            slack|custom) WEBHOOK_PLATFORM="$platform_ans" ;;
+            *) WEBHOOK_PLATFORM="teams" ;;
+        esac
+        print_status "config" "Webhook platform: $WEBHOOK_PLATFORM"
+    fi
 }
 
 copy_global_config() {
@@ -585,6 +560,7 @@ copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_policy_workflows "$project_path"
     print_status "success" "GitHub assets copied (.github)"
 }
 
@@ -700,31 +676,23 @@ conditional_copy_webhooks_yaml() {
 }
 
 prompt_otel() {
-    local answer
-    read -r -p "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: " answer || true
-    case "$answer" in
-        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
-        *) INCLUDE_OTEL=false ;;
-    esac
+    prompt_yes_no INCLUDE_OTEL "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
+    if [ "$INCLUDE_OTEL" = "true" ]; then
+        print_status "config" "OTLP log export: enabled"
+    fi
 }
 
 prompt_email() {
-    local answer backend_ans
-    read -r -p "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")" answer || true
-    case "$answer" in
-        y | Y)
-            INCLUDE_EMAIL=true
-            read -r -p "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")" backend_ans || true
-            case "${backend_ans:-outlook}" in
-                smtp) EMAIL_BACKEND="smtp" ;;
-                *) EMAIL_BACKEND="outlook" ;;
-            esac
-            print_status "config" "E-mail backend: $EMAIL_BACKEND"
-            ;;
-        *)
-            INCLUDE_EMAIL=false
-            ;;
-    esac
+    local backend_ans
+    prompt_yes_no INCLUDE_EMAIL "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")"
+    if [ "$INCLUDE_EMAIL" = "true" ]; then
+        prompt_read backend_ans "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")"
+        case "${backend_ans:-outlook}" in
+            smtp) EMAIL_BACKEND="smtp" ;;
+            *) EMAIL_BACKEND="outlook" ;;
+        esac
+        print_status "config" "E-mail backend: $EMAIL_BACKEND"
+    fi
 }
 
 # E-mail handler seam (opt-in): copy optional/email into src/chassis/email (canonical

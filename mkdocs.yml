@@ -13,6 +13,7 @@ nav:
   - Examples: examples.md
   - CLI Reference: cli-reference.md
   - FAQ: faq.md
+  - Policy Workflows: policy-workflows.md
   - Complexity Ceilings Measured: complexity-ceilings-measured.md
   - Troubleshooting: troubleshooting.md
   - Offline Wheelhouse: offline-wheelhouse.md
@@ -24,10 +25,14 @@ nav:
   - Coverage Floor: coverage-floor.md
   - Decision Records: decision-records.md
   - Issue Scope: issue-scope.md
+  - Lockfile Sync: lockfile-sync.md
   - Offline to Online: offline-to-online.md
+  - Prompt Defaults: prompt-defaults.md
   - Quality Gate Blind Spots: quality-gate-blind-spots.md
   - Required Status Checks: required-status-checks.md
+  - CodeRabbit Configuration: coderabbit-config.md
   - SonarQube Evaluation: sonarqube-evaluation.md
+  - Template Drift: template-drift.md
   - CI Scanner Gap Analysis: ci-scanner-gap-analysis.md
   - Spec Answers: spec-answers.md
   - Python:

@@ -186,7 +186,7 @@ main() {
 main "$@"
 ```
 
-### A comment about the FUNCTION goes above the `def`/`name()`, not inside it
+### Explanatory comments belong in docs, not in the function body
 
 `bin/check_function_length.py` caps a function at **60 lines of code** and subtracts the
 **docstring** — and nothing else. Every explanatory comment inside the body counts. In a
@@ -196,9 +196,9 @@ rejects it — and the reflex fix is to delete the reasoning, which is the one t
 keeping.
 
 So: anything explaining a **policy**, a **supersede**, a measured **trade-off**, or why a
-whole approach was rejected is a comment about the function — hoist it above the
-signature. Leave a one-line pointer inline (`# … — see the OUTDATED block above the
-function`). A comment about the **next statement** stays where it is.
+whole approach was rejected belongs in `docs/` or the function's docstring (which the
+budget subtracts). Delete the comment and leave no pointer: BlueprintX's ruling
+(blueprintx#304) is that a hoisted block and a one-line pointer both rot.
 
 Measured (blueprintx#264): `find_thread_problems` hit 62 lines and `main` 63 with **no
 logic change** in either — comments alone. Both fell well under after hoisting, and no
@@ -211,25 +211,16 @@ head at once, and a comment is something they read.
 
 ### Decision records move to docs, not a changelog inside the comment
 
-(blueprintx#239.) This repo's comments are unusually load-bearing, and most long ones
-earn their place — length alone is not the signal. The signal is a `SUPERSEDED …` block: a
+(blueprintx#239.) The signal for a comment to go is a `SUPERSEDED …` block: a
 comment that narrates what the line *used to* say and why that reasoning was replaced,
 i.e. a changelog living inside the file. Git, the issue, and the PR body already keep that
 history rigorously, which is exactly why the comment is redundant rather than precious.
 
-The test: a comment earns its inline place if removing it would let someone make a
-*wrong edit to this line*. If removing it only loses history, move the narrative to
-`docs/decision-records.md` (BlueprintX's own repo) and leave a **one-line** pointer in
-its place — `# do not re-add X, see blueprintx#N` — keeping any part of the block that is
-still live guidance (why the current shape is safe/required) inline. A file that ships
-into generated projects (anything under `templates/`) must point at the issue number,
-never at a BlueprintX-only doc path that would not exist in the generated repo.
-
-This does **not** apply to a measurement that justifies why the code is shaped the way it
-is *today*, with nothing superseded or rejected (e.g. a dated "measured N on PR #M" backing
-a live constant) — deleting that turns a justified value into a magic one, so it stays
-inline. It also does not apply to QA-suppression comments (`noqa`, `complexity-ok`,
-`type: ignore`, `codespell:ignore`), which keep their inline reason unconditionally.
+The rule: a narrative of what the line used to say belongs in the issue or PR, and the
+comment is deleted.
+No pointer is left behind (blueprintx#304). A
+measurement that justifies today's value moves to docs the same way. Only QA-suppression
+comments (`noqa`, `complexity-ok`, `type: ignore`, `codespell:ignore`) stay, with their reason.
 
 ## Status output
 

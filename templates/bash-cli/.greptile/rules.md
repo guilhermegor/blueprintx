@@ -1,0 +1,3 @@
+- Quote every expansion; scripts pass shellcheck.
+- Logic lives in bin/ scripts; keep the entrypoint thin.
+- Version comes from the git tag, never a hand-edited literal.

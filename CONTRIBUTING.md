@@ -89,6 +89,8 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 
 5. **GitGuardian exceptions**: a false positive in the secret scan is silenced in the root `.gitguardian.yaml` (`secret.ignored_matches`), never by editing history. Every entry needs a `name` stating why the match is not a credential.
 
+6. **Template lockfiles**: a dependency change to any `templates/*/package.json` regenerates that tier's `package-lock.json` in the same commit (`npm install --package-lock-only` in a rendered copy of the tier). `bin/ci/check_lockfile_sync.sh` fails the commit and the `lockfile-sync` job otherwise; an out-of-sync lock makes `npm ci` refuse to install and turns every open PR red (#588).
+
 ## Repository Secrets (Actions)
 
 This repo's own Actions secrets (`gh secret list`) are set by hand and reproducible from
@@ -146,9 +148,10 @@ happening silently:
    house rule**.
 2. **These decisions live in `README.md` / `CONTRIBUTING.md` / `docs/`, never as a code
    comment.** The one exception is a QA-suppression comment (`noqa`, `complexity-ok`,
-   `type: ignore`, `codespell:ignore` — blueprintx#303 exempts these explicitly). A config file
-   (`ruff.toml`, `eslint.config.js`) may carry the rule line plus a short pointer comment; the
-   long justification belongs in the docs, not inline.
+   `type: ignore`, `codespell:ignore` — blueprintx#303 exempts these explicitly). No pointer is
+   left behind either: every comment rots, so `check_comment_budget.py` refuses any comment
+   outside `comment_budget_allowlist.txt`, ratcheted down from `comment_budget_baseline.txt`
+   (blueprintx#304).
 
 **The rules themselves live in `quality-rules.yaml` at the repo root** (blueprintx#432) — one
 entry per rule, with its per-language `tool`/`rule` (or an explicit `status: not-implemented` /
@@ -243,8 +246,7 @@ drifted from the scaffold (#436) and could not see webpack, stylelint or eslint,
 - **Stdin is `/dev/null`.** Every scaffold prompt reads with `|| true` and falls back to its
   default (no remote, no opt-ins), measured byte-identical to answering `n`; a prompt with no
   default fails fast on EOF instead of looping until the job timeout.
-- **Install is `npm ci`** where the skeleton ships a lockfile (`react-spa-webpack`); `ts-lib`
-  has none yet and floats on `npm install` (#735).
+- **Install is `npm ci`** for both skeletons, from the lockfile each ships (`ts-lib`'s since #735).
 - **No required check.** Only `Review threads answered` is required by the `pr-quality-gate`
   ruleset, so the job's display name can change without orphaning a branch rule.
 
@@ -386,8 +388,8 @@ annotated tag), never from memory or another repo's copy.
 
 ## Ruff Rule Adoption Log
 
-`templates/python-common/ruff.toml` only carries a short pointer comment beside each
-rule-set entry in `[lint].select` — the full measurement and, where a rule needed a
+`templates/python-common/ruff.toml` carries no comment beside the
+rule-set entries in `[lint].select`; the full measurement and, where a rule needed a
 case-by-case call, the reasoning for each finding lives here.
 
 ### `RET` (flake8-return) — blueprintx#426
@@ -538,5 +540,6 @@ hand-copies the updated template files. Before adopting the new `mkdocs.yml` and
 - **Update documentation** - when adding new features
 - **Follow existing patterns** - maintain consistency
 - **Communicate early** - if you're stuck or need clarification
+- **Prompt through the `bin/lib/common.sh` helpers, never a bare `read`** - `prompt_yes_no <var> "$(prompt_main "...")" [y|n]` for y/n questions, `prompt_read <var> "..."` for choices and text. A piped stdin is not an answer: with no terminal both leave the variable at its default, so a stray line on a pipe cannot enable an opt-in. Pick the non-interactive default per prompt (`n` for an opt-in, `y` only when "yes" is the safe unattended answer). When a prompt falls back to its default because stdin is not a terminal, the helper prints one line to stderr naming the prompt and the default (stdout and the exit status are unchanged). A harness that feeds answers on purpose exports `BLUEPRINTX_STDIN_ANSWERS=1`; `bin/lib/spec.sh` (named-key answers, `--spec`) is the supported non-interactive path and sets up that feed, so prefer it over hand-built pipes. `bin/blueprintx.sh` menus are exempt: they have no safe default. `tests/test_prompt_tty_guard.sh` fails on an unguarded `read` in `bin/scaffold/` or `bin/lib/scaffold_*.sh`.
 
 We appreciate your contributions and look forward to collaborating with you!

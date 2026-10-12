@@ -166,6 +166,8 @@ scaffold_copy_shared_test_gates() {
 	# contract registry and therefore no drift driver.
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_drift.py" \
 		"$str_project_path/tests/unit/test_contract_drift.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
+		"$str_project_path/tests/unit/test_template_drift_gate.py"
 
 	mkdir -p "$str_project_path/tests/fixtures"
 	cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \
@@ -229,7 +231,6 @@ scaffold_copy_executables_and_vscode() {
 	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
 	# commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
 	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
-	# The work ledger the check-backlog-ledger gate reads; .gitkeep keeps it in git while empty.
 	mkdir -p "$str_project_path/.specs/backlog"
 	touch "$str_project_path/.specs/backlog/.gitkeep"
 	# The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
@@ -252,6 +253,30 @@ scaffold_copy_executables_and_vscode() {
 	# its own (its task set genuinely differs) and copies it in its own scaffold.
 	cp "$COMMON_TEMPLATE_ROOT/.vscode/tasks.json" \
 		"$str_project_path/.vscode/tasks.json"
+}
+
+scaffold_stamp_provenance() {
+	local str_tier="$1"
+	local str_project_path="$2"
+
+	local str_version=""
+	local str_commit=unknown
+	if [[ -e "$BLUEPRINTX_ROOT/.git" ]]; then
+		str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || true)"
+		str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+	fi
+	[[ -n "$str_version" ]] || str_version="$(sed -n 's/^BLUEPRINTX_VERSION="\(.*\)"$/\1/p' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" 2>/dev/null || true)"
+	[[ -n "$str_version" ]] || str_version=unknown
+	local str_scaffolded_at
+	str_scaffolded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+	cat >"$str_project_path/.blueprintx-provenance.yaml" <<-EOF
+	tier: ${str_tier}
+	review_bot_roster: $([[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] && echo true || echo false)
+	blueprintx_version: ${str_version#v}
+	blueprintx_commit: ${str_commit}
+	scaffolded_at: ${str_scaffolded_at}
+	EOF
 }
 
 scaffold_copy_docs_extras() {
@@ -300,6 +325,7 @@ scaffold_copy_common_templates() {
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	scaffold_stamp_provenance "$str_tier" "$str_project_path"
 	scaffold_copy_docs_extras "$str_project_path"
 	scaffold_copy_leaf_docs "$str_project_path"
 	scaffold_copy_agents_md "$str_tier" "$str_project_path"

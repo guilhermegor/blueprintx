@@ -86,11 +86,10 @@ exact failure the gate family exists to prevent. Its verification is
 per-tier in each `pyproject.toml` and **cannot** be single-sourced into a shared `deptry.toml`:
 `--config <file>` re-points deptry at that file as the *manifest* as well, so it stops reading
 the tier's dependency table. That is the one-implementation rule losing to a measured
-constraint, which is why the reason is written into all five manifests rather than remembered
-— a short, few-line technical note, not the long rationale block blueprintx#303 bounds. An
-inline comment stays inline only while it fits that gate's ratchet; a longer explanation
-belongs in `docs/`, `README.md` or `CONTRIBUTING.md`, with one line at the code site pointing
-at it.
+constraint, which is why the reason is in `CONTRIBUTING.md` rather than remembered. The five
+manifests still carry a comment about it today (baselined, removed by the #304 sweep). An
+explanation belongs in `docs/`, `README.md` or `CONTRIBUTING.md`, and nothing is left at the
+code site: BlueprintX's own comment gate is zero-tolerance outside its allowlist (blueprintx#304).
 
 The **review-thread gate** follows the same rule, reached from the other direction: it *did* have
 two 543-line copies, and `.github/workflows/review_threads.yml` now runs the shared
@@ -177,6 +176,14 @@ inherits. No escape hatch — every real violation measured so far had an honest
 at, so one has not yet been needed (blueprintx#551). While a merge is in progress
 (`MERGE_HEAD` exists) the base is `git merge-base origin/<branch> HEAD MERGE_HEAD`, so the
 incoming side's files are not charged to the branch (measured: 186 reported vs 69 real).
+
+The **hosted-reviewer config guard** (`bin/ci/check_review_config_shipped.sh`, pre-commit hook
+`review-config-shipped`, the `review-config-shipped` CI job) fails when any skeleton found by
+`templates/*/skeleton.meta` does not ship a path listed in `templates/common/review-config.manifest`.
+`--static` checks the copy lists, `--generated` scaffolds every skeleton and is the real oracle.
+Today the manifest lists `.gitattributes` and `.coderabbit.yaml`; each change that ships a reviewer config file (#737, #739) adds its path to the manifest in the same PR; see
+`docs/faq.md`. Root-repo-only, like `check_makefile_pairing.sh`. ⚠️ The manifest needs the
+`!templates/common/review-config.manifest` line in `.gitignore`, because `*.manifest` is ignored.
 
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`

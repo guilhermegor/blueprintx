@@ -2381,6 +2381,297 @@ def test_completion_is_seen_past_the_display_budget() -> None:
     )
 
 
+_MARKER = "Fallback review — runtime: codex"
+_TUPLE_MARKERS = ("fallback review — runtime:",)
+
+
+_LADDER_APP = "guilhermegor-review-ladder[bot]"
+_SET_POSTERS = frozenset({"guilhermegor-review-ladder"})
+
+
+def _marker_comment(
+    str_association: str, str_login: str = _LADDER_APP, str_typename: str = "Bot"
+) -> dict:
+    return {
+        "author": {"login": str_login, "__typename": str_typename},
+        "authorAssociation": str_association,
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).",
+        "createdAt": "2099-01-01T00:00:00Z",
+    }
+
+
+def _missing_with(list_notices: list[dict], tuple_markers: tuple[str, ...]) -> str | None:
+    return _load_gate().find_missing_review_problem(
+        [],
+        {"coderabbitai"},
+        "someone-else",
+        str_head_oid=_HEAD,
+        list_notices=list_notices,
+        str_head_date=_HEAD_DATE,
+        tuple_markers=tuple_markers,
+        set_posters=_SET_POSTERS,
+    )
+
+
+def test_ladder_marker_from_the_pr_author_owner_is_rejected() -> None:
+    """The PR author is the repo OWNER: typing the marker must not self-approve (#761)."""
+    dict_forged = _marker_comment("OWNER", "someone-else")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_from_the_ladder_app_is_accepted() -> None:
+    """The ladder App posts as a Bot with association NONE; its login is what is trusted."""
+    assert _missing_with([_marker_comment("NONE")], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_from_a_user_with_the_bare_app_login_is_rejected() -> None:
+    """A human registering `guilhermegor-review-ladder` is a User, not the App's Bot actor."""
+    dict_forged = _marker_comment("NONE", "guilhermegor-review-ladder", "User")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_without_an_author_type_is_rejected() -> None:
+    """An author with no `__typename` fails closed."""
+    dict_untyped = {**_marker_comment("NONE"), "author": {"login": _LADDER_APP}}
+    assert _missing_with([dict_untyped], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_from_a_non_roster_collaborator_is_rejected() -> None:
+    """A COLLABORATOR outside the posters allowlist cannot forge the marker."""
+    dict_forged = _marker_comment("COLLABORATOR", "a-collaborator")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_without_any_posters_is_rejected() -> None:
+    """An empty allowlist fails closed, even for the ladder App's login."""
+    cls_gate = _load_gate()
+    assert not cls_gate.ladder_marker_declared(
+        [_marker_comment("NONE")], _TUPLE_MARKERS, _HEAD_DATE, _HEAD
+    )
+
+
+def test_later_marker_from_a_non_poster_does_not_supersede_a_clean_one() -> None:
+    """A forged later marker is ignored, so it can neither approve nor block."""
+    dict_forged = {**_marker_comment("OWNER", "someone-else"), "createdAt": "2099-02-01T00:00:00Z"}
+    assert _missing_with([_marker_comment("NONE"), dict_forged], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_without_the_roster_row_changes_nothing() -> None:
+    """No `comment-marker` row, no behaviour change."""
+    assert _missing_with([_marker_comment("OWNER")], ()) is not None
+
+
+def test_ladder_marker_quoted_on_a_later_line_is_rejected() -> None:
+    """Only the attribution line itself counts, never a quotation of it."""
+    dict_quoted = {**_marker_comment("OWNER"), "body": f"see below\n> {_MARKER}"}
+    assert _missing_with([dict_quoted], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_older_than_the_head_is_rejected() -> None:
+    """A marker posted before the head commit describes superseded code."""
+    dict_old = {**_marker_comment("OWNER"), "createdAt": "2000-01-01T00:00:00Z"}
+    assert _missing_with([dict_old], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_for_another_head_is_rejected() -> None:
+    """A marker whose `Reviewed head:` line names a different SHA is not this head's review."""
+    dict_other = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {'0' * 40}\n\n0 finding(s) across 3 reviewed file(s).",
+    }
+    assert _missing_with([dict_other], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_with_findings_is_rejected() -> None:
+    """A ladder review that lists findings must be judged, not auto-accepted (#630)."""
+    dict_found = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+    }
+    assert _missing_with([dict_found], _TUPLE_MARKERS) is not None
+
+
+@pytest.mark.parametrize(
+    "str_head_line",
+    [f"Reviewed head: {_HEAD}  ", f"Reviewed head: {_HEAD}\r", f"  Reviewed head: {_HEAD}"],
+)
+def test_ladder_marker_tolerates_whitespace_around_the_head_line(str_head_line: str) -> None:
+    """Cosmetic whitespace on the SHA line must not silently block every PR."""
+    dict_ws = {
+        **_marker_comment("MEMBER"),
+        "body": f"{_MARKER}\n{str_head_line}\n\n0 finding(s) across 3 reviewed file(s).",
+    }
+    assert _missing_with([dict_ws], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_without_a_findings_line_is_rejected() -> None:
+    """Unparseable means "has findings": a prose review never passes."""
+    dict_prose = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n- a bug",
+    }
+    assert _missing_with([dict_prose], _TUPLE_MARKERS) is not None
+
+
+def test_later_ladder_comment_with_findings_supersedes_an_earlier_clean_one() -> None:
+    """The latest qualifying marker decides: a re-run that found something blocks."""
+    dict_later = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+        "createdAt": "2099-02-01T00:00:00Z",
+    }
+    assert _missing_with([_marker_comment("OWNER"), dict_later], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_later, _marker_comment("OWNER")], _TUPLE_MARKERS) is not None
+
+
+@pytest.mark.parametrize("str_head_line", ["Reviewed head: " + "0" * 40, "no head line here"])
+def test_later_marker_naming_no_valid_head_supersedes_an_earlier_clean_one(
+    str_head_line: str,
+) -> None:
+    """A later malformed or other-head marker fails closed instead of exposing the clean one."""
+    dict_later = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\n{str_head_line}\n\n0 finding(s) across 3 reviewed file(s).",
+        "createdAt": "2099-02-01T00:00:00Z",
+    }
+    assert _missing_with([_marker_comment("OWNER"), dict_later], _TUPLE_MARKERS) is not None
+
+
+def test_padded_nonzero_findings_line_beside_a_zero_line_is_rejected() -> None:
+    """Trailing or leading whitespace must not hide a non-zero findings line."""
+    dict_padded = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).\n"
+        "  3 finding(s) across 3 reviewed file(s). \r",
+    }
+    assert _missing_with([dict_padded], _TUPLE_MARKERS) is not None
+
+
+def test_zero_findings_over_zero_files_does_not_clear_the_check() -> None:
+    """A review of no files reviewed nothing, so it proves no review ran."""
+    dict_empty = {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 0 reviewed file(s).",
+    }
+    assert _missing_with([dict_empty], _TUPLE_MARKERS) is not None
+
+
+def _marker_findings_comment() -> dict:
+    return {
+        **_marker_comment("OWNER"),
+        "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
+    }
+
+
+def test_marker_comment_with_findings_needs_an_answer() -> None:
+    """A trusted marker comment listing findings is read as a review body."""
+    list_problems = _load_gate().find_review_body_problems(
+        [], [_marker_findings_comment()], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert len(list_problems) == 1
+
+
+def test_roster_authored_marker_comment_is_one_problem_not_two() -> None:
+    """A marker comment from a roster login is read once, not as a notice AND as a marker."""
+    dict_roster_marker = {**_marker_findings_comment(), "author": {"login": "coderabbitai"}}
+    list_problems = _load_gate().find_review_body_problems(
+        [], [dict_roster_marker], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert len(list_problems) == 1
+
+
+def test_clean_marker_comment_needs_no_answer() -> None:
+    """A trusted marker comment reporting zero findings is not a review body with findings."""
+    list_problems = _load_gate().find_review_body_problems(
+        [], [_marker_comment("OWNER")], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert list_problems == []
+
+
+def test_marker_comment_never_answers_another_reviews_findings() -> None:
+    """A long marker comment by a human must not clear a roster review body unread."""
+    dict_review = {
+        "author": {"login": "coderabbitai", "__typename": "Bot"},
+        "state": "COMMENTED",
+        "body": "- **Major** a bug\n",
+        "submittedAt": "2000-01-01T00:00:00Z",
+    }
+    dict_marker = {**_marker_findings_comment(), "createdAt": "2099-01-01T00:00:00Z"}
+    dict_marker["author"] = {"login": "owner", "__typename": "User"}
+    list_problems = _load_gate().find_review_body_problems(
+        [dict_review], [dict_marker], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert any("coderabbitai" in str_problem for str_problem in list_problems)
+
+
+@pytest.fixture
+def path_marker_root(tmp_path: Path) -> Path:
+    """Write a roster holding one reviewer and one marker row."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n"
+        "  - login: coderabbitai[bot]\n    posts: threads\n"
+        '  - kind: comment-marker\n    marker: "Fallback review — runtime:"\n',
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_load_comment_markers_reads_the_marker_row(path_marker_root: Path) -> None:
+    """The marker row is returned lower-cased."""
+    assert _load_gate().load_comment_markers(path_marker_root) == _TUPLE_MARKERS
+
+
+@pytest.mark.parametrize("str_row", ["    marker:\n", '    marker: ""\n', ""])
+def test_load_comment_markers_skips_a_row_without_a_marker(tmp_path: Path, str_row: str) -> None:
+    """A comment-marker row with no usable marker is dropped, never a KeyError."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n" + str_row, encoding="utf-8"
+    )
+    assert _load_gate().load_comment_markers(tmp_path) == ()
+
+
+def test_load_comment_markers_ignores_a_scalar_reviewer_row(tmp_path: Path) -> None:
+    """A bare-string reviewers entry is skipped, never an AttributeError."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - coderabbitai[bot]\n  - kind: comment-marker\n    marker: m\n",
+        encoding="utf-8",
+    )
+    assert _load_gate().load_comment_markers(tmp_path) == ("m",)
+
+
+def test_load_marker_posters_normalises_the_bot_suffix(tmp_path: Path) -> None:
+    """`posters:` is read in the REST spelling and compared in the GraphQL one."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n    marker: m\n"
+        "    posters:\n      - x[bot]\n      - y\n",
+        encoding="utf-8",
+    )
+    assert _load_gate().load_marker_posters(tmp_path) == frozenset({"x", "y"})
+
+
+@pytest.mark.parametrize(
+    "str_posters",
+    ["    posters: foo\n", "    posters:\n      - 7\n", '    posters:\n      - ""\n'],
+)
+def test_load_marker_posters_rejects_a_malformed_value(tmp_path: Path, str_posters: str) -> None:
+    """A scalar or non-string entry trusts nobody instead of becoming single characters."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n    marker: m\n" + str_posters,
+        encoding="utf-8",
+    )
+    assert _load_gate().load_marker_posters(tmp_path) == frozenset()
+
+
+def test_load_marker_posters_is_empty_without_the_field(path_marker_root: Path) -> None:
+    """A marker row with no `posters:` allows nobody."""
+    assert _load_gate().load_marker_posters(path_marker_root) == frozenset()
+
+
+def test_load_roster_ignores_the_marker_row(path_marker_root: Path) -> None:
+    """A marker row has no login, so the login roster is untouched."""
+    assert _load_gate().load_roster(path_marker_root) == {"coderabbitai": "threads"}
+
+
 # --------------------------
 # A review carries forward across a merge of the base (blueprintx#698)
 # --------------------------
@@ -3260,9 +3551,6 @@ def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> 
     assert tuple_result == (None, "a" * 40)
 
 
-# The shortest job that runs the gate (ts-common's review-threads) times out at this many minutes.
-# Pinned here, then checked against every workflow that exists in the tree under test: the
-# workflows are not shipped into every generated project, so absence is skipped, drift is not.
 _INT_SHORTEST_JOB_MINUTES = 10
 _LIST_WORKFLOWS = (
     ".github/workflows/review_threads.yml",
@@ -3271,10 +3559,6 @@ _LIST_WORKFLOWS = (
 )
 
 
-# tests/unit -> python-common -> templates -> checkout root. Outside a BlueprintX checkout (a
-# generated project) the workflows are not shipped, so the test is skipped, never vacuous.
-# A slice never raises: at a shallow path (/app/tests/unit) it is empty and the test skips,
-# where an index would raise IndexError at import and break collection of the whole file.
 _LIST_ROOTS = list(Path(__file__).resolve().parents[4:5])
 
 

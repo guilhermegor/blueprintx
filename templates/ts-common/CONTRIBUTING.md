@@ -2,13 +2,16 @@
 
 ## Branch naming
 
+`<N>` is the issue number; the `branch-has-issue` workflow rejects a branch without it
+(`release/`, `dependabot/` and `renovate/` are exempt).
+
 | Type | Pattern |
 |------|---------|
-| Feature | `feat/<short-description>` |
-| Bug fix | `fix/<short-description>` |
-| Docs | `docs/<short-description>` |
-| Refactor | `refactor/<short-description>` |
-| Chore | `chore/<short-description>` |
+| Feature | `feat/<N>-<short-description>` |
+| Bug fix | `fix/<N>-<short-description>` |
+| Docs | `docs/<N>-<short-description>` |
+| Refactor | `refactor/<N>-<short-description>` |
+| Chore | `chore/<N>-<short-description>` |
 
 ## Commit style
 

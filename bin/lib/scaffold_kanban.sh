@@ -49,7 +49,7 @@ scaffold_kanban_visibility() {
 	# Prints PUBLIC or PRIVATE. Default is the repo's own visibility, so the board never leaks
 	# a private repo's work or hides a public one's by accident.
 	local str_slug="$1" str_choice str_private
-	read -r -p "$(prompt_sub "Project visibility [1] same as repo (default)  [2] public  [3] private: ")" str_choice || true
+	prompt_read str_choice "$(prompt_sub "Project visibility [1] same as repo (default)  [2] public  [3] private: ")"
 	case "$str_choice" in
 	2) printf 'PUBLIC' ;;
 	3) printf 'PRIVATE' ;;
@@ -156,7 +156,13 @@ scaffold_kanban_setup() {
 
 	scaffold_create_house_labels "$str_slug"
 
-	read -r -p "$(prompt_main "Create a '${str_title}' GitHub Project linked to this repo? [Y/n]: ")" str_answer || str_answer=n # EOF is no: never create a GitHub Project unasked
+	# EOF or no readable stdin is no: never create a GitHub Project unasked
+	str_answer=n
+	if prompt_can_read; then
+		read -r -p "$(prompt_main "Create a '${str_title}' GitHub Project linked to this repo? [Y/n]: ")" str_answer || str_answer=n
+	else
+		prompt_warn_default "$(prompt_main "Create a '${str_title}' GitHub Project linked to this repo? [Y/n]: ")" "'n'"
+	fi
 	case "$str_answer" in
 	n | N)
 		print_status "info" "Skipped the kanban board"
