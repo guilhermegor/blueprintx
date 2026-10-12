@@ -46,13 +46,13 @@ class ScopeFilterPrice(metaclass=TypeChecker):
     Parameters
     ----------
     int_rows_before : int
-            Row count before the filter.
+        Row count before the filter.
     int_rows_after : int
-            Row count after the filter (equals ``int_rows_before`` when inactive).
+        Row count after the filter (equals ``int_rows_before`` when inactive).
     int_rows_dropped : int
-            Rows removed by the filter (``0`` when inactive).
+        Rows removed by the filter (``0`` when inactive).
     bool_filter_active : bool
-            Whether the kill switch resolved on for this run.
+        Whether the kill switch resolved on for this run.
     """
 
     int_rows_before: int
@@ -76,17 +76,17 @@ def resolve_kill_switch(
     Parameters
     ----------
     str_env_var : str
-            The environment variable naming this kill switch (e.g.
-            ``"SCOPE_FILTER_EXCLUDE_FII"``).
+        The environment variable naming this kill switch (e.g.
+        ``"SCOPE_FILTER_EXCLUDE_FII"``).
     bool_default : bool
-            Returned when the variable is unset, blank, or an unrecognised token.
+        Returned when the variable is unset, blank, or an unrecognised token.
     logger : logging.Logger | None, optional
-            Destination for the consulted-variable log line; ``None`` prints it.
+        Destination for the consulted-variable log line; ``None`` prints it.
 
     Returns
     -------
     bool
-            Whether the exclusion is active for this run.
+        Whether the exclusion is active for this run.
     """
     str_raw = os.getenv(str_env_var)
     bool_set = bool(str_raw is not None and str_raw.strip())
@@ -114,23 +114,23 @@ def apply_scope_filter(
     Parameters
     ----------
     df_input : pandas.DataFrame
-            The frame to filter, returned unmodified when the kill switch resolves off.
+        The frame to filter, returned unmodified when the kill switch resolves off.
     str_column : str
-            Column whose values decide exclusion.
+        Column whose values decide exclusion.
     set_excluded_values : frozenset of str
-            Values in ``str_column`` that mark a row for exclusion when the switch is on.
+        Values in ``str_column`` that mark a row for exclusion when the switch is on.
     str_env_var : str
-            Kill-switch environment variable (see :func:`resolve_kill_switch`).
+        Kill-switch environment variable (see :func:`resolve_kill_switch`).
     bool_default_exclude : bool
-            Safe-side default forwarded to :func:`resolve_kill_switch` — see that function for
-            why this must be the cheap-to-fail side, never "whatever the code already did".
+        Safe-side default forwarded to :func:`resolve_kill_switch` — see that function for
+        why this must be the cheap-to-fail side, never "whatever the code already did".
     logger : logging.Logger | None, optional
-            Forwarded to :func:`resolve_kill_switch`.
+        Forwarded to :func:`resolve_kill_switch`.
 
     Returns
     -------
     tuple of (pandas.DataFrame, ScopeFilterPrice)
-            The (possibly filtered) frame, and the measured price of this run.
+        The (possibly filtered) frame, and the measured price of this run.
     """
     int_rows_before = len(df_input)
     bool_active = resolve_kill_switch(str_env_var, bool_default_exclude, logger)
