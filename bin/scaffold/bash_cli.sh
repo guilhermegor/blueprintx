@@ -121,6 +121,7 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/bash-cli/.greptile/"* "$project_path/.greptile/"
     # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
     # file, language-agnostic; bash-cli was added after #540 was scoped, included here
     # for consistency with the other seven skeleton roots.

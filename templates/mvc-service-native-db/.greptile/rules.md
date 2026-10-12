@@ -1,0 +1,3 @@
+- Keep controller, model and view separate; a controller never touches the database driver directly.
+- One class per file; never mix layers in one file.
+- Every DataFrame or SQL load declares its dtypes through apply_dtypes.
