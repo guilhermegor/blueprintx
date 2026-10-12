@@ -422,6 +422,9 @@ jobs:
       - name: Should-fail regression tests for the docs-locale prompt
         run: bash tests/test_docs_locale_prompt.sh
 
+      - name: Should-fail regression tests for the prompt tty guard
+        run: bash tests/test_prompt_tty_guard.sh
+
       - name: Should-fail regression tests for close_linked_issues.sh
         run: bash tests/test_close_linked_issues.sh
 
@@ -761,9 +764,9 @@ jobs:
           scaffold="$(grep '^scaffold=' "templates/$SKELETON/skeleton.meta" | cut -d= -f2-)"
           bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" </dev/null
 
-      - name: Install npm dependencies (npm ci where a lockfile ships, #464)
+      - name: Install npm dependencies (npm ci enforces the committed lockfile, #464, #735)
         working-directory: ${{ runner.temp }}/ci-scaffold
-        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+        run: npm ci
 
       - name: Type-check (tsc --noEmit)
         working-directory: ${{ runner.temp }}/ci-scaffold

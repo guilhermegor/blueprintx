@@ -69,7 +69,7 @@ run_setup() {
         for str_kv in "$@"; do export "${str_kv?}"; done
         # shellcheck source=bin/lib/scaffold_git_remote.sh
         source "$REPO_ROOT/bin/lib/scaffold_git_remote.sh"
-        printf '%b' "$str_answers" | scaffold_kanban_setup 2>&1
+        printf '%b' "$str_answers" | BLUEPRINTX_STDIN_ANSWERS=1 scaffold_kanban_setup 2>&1
     )
 }
 

@@ -53,7 +53,7 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     GITHUB_USERNAME="${input:-$DEFAULT_GITHUB_USERNAME}"
     print_status "config" "GitHub username (prompt): $GITHUB_USERNAME"
 }
@@ -150,7 +150,8 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
+    protect_ans=""
+    prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y | Y)
             local reviews_json='"required_pull_request_reviews": null,'

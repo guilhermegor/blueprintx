@@ -15,6 +15,7 @@ verbatim at scaffold time, the same as `react-spa-webpack`.
 
 ```bash
 project/
+  package-lock.json        # committed lockfile; CI installs with `npm ci`
   src/
     index.ts               # public barrel — only what this file re-exports is public API
     example.ts             # starting-point module; rename or split as the library grows

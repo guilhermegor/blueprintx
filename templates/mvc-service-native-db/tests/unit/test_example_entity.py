@@ -27,12 +27,12 @@ def cls_connection(tmp_path: Path) -> Iterator[sqlite3.Connection]:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Yields
     ------
     sqlite3.Connection
-            Connection for ``tmp_path / "example.db"``, closed after the test.
+        Connection for ``tmp_path / "example.db"``, closed after the test.
     """
     cls_built = sqlite3.connect(tmp_path / "example.db")
     yield cls_built
@@ -46,12 +46,12 @@ def cls_entity(cls_connection: sqlite3.Connection) -> ExampleEntity:
     Parameters
     ----------
     cls_connection : sqlite3.Connection
-            Connection to the throwaway database.
+        Connection to the throwaway database.
 
     Returns
     -------
     ExampleEntity
-            Entity with ``ensure_table()`` already applied.
+        Entity with ``ensure_table()`` already applied.
     """
     cls_built = ExampleEntity(cls_connection)
     cls_built.ensure_table()
