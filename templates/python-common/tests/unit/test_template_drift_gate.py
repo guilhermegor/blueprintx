@@ -390,3 +390,19 @@ def test_a_destination_the_scaffold_removes_is_not_required(tmp_path: Path) -> N
     path_root = _checkout(tmp_path, _LIB_GLOB_RM, ["d/.keep", "d/real.py"])
 
     assert gate.required_relpaths(path_root) == {"d/real.py"}
+
+
+def test_a_cp_on_the_elif_line_itself_is_conditional() -> None:
+    """`elif ...; then cp` is guarded by that arm, not unconditional."""
+    str_cp = 'cp "$COMMON_TEMPLATE_ROOT/e" "$str_project_path/e"'
+    str_lib = f'if a; then :\nelif [[ "$X" == 1 ]]; then {str_cp}\nfi\n'
+
+    assert gate.conditional_relpaths(str_lib) == {"e"}
+
+
+def test_a_removal_with_a_doubled_separator_still_matches(tmp_path: Path) -> None:
+    """`d//.keep` and `d/.keep` are the same file."""
+    str_lib = _LIB_GLOB_RM.replace("d/.keep", "d//.keep")
+    path_root = _checkout(tmp_path, str_lib, ["d/.keep", "d/real.py"])
+
+    assert gate.required_relpaths(path_root) == {"d/real.py"}

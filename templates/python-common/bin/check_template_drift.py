@@ -48,6 +48,7 @@ would risk false positives on conditional tier files it cannot see.
 import argparse
 import os
 import pathlib
+import posixpath
 import re
 import subprocess
 import sys
@@ -186,7 +187,7 @@ def conditional_relpaths(str_lib: str, str_flag: str | None = None) -> set[str]:
             list_guards[-1] = bool_match if str_stripped.startswith("elif") else str_flag is None
         elif str_kind == "close" and list_guards:
             list_guards.pop()
-        bool_guarded = (str_kind in ("open", "oneline", "chain") and bool_match) or (
+        bool_guarded = (str_kind in ("open", "oneline", "chain", "branch") and bool_match) or (
             str_kind == "plain" and any(list_guards)
         )
         if bool_guarded:
@@ -207,7 +208,8 @@ def _line_kind(str_stripped: str) -> str:
     str
             ``open`` (``if``/``case`` block start), ``oneline`` (a self-closing ``if``/``case``;
             counting it as open would mark every later ``cp`` conditional, a false green),
-            ``branch`` (``else``/``elif``), ``close`` (``fi``/``esac``), ``chain`` (``&& cp`` / ``|| cp``) or ``plain``.
+            ``branch`` (``else``/``elif``), ``close`` (``fi``/``esac``),
+            ``chain`` (``&& cp`` / ``|| cp``) or ``plain``.
     """
     if str_stripped.startswith(("if ", "if[", "case ")) or str_stripped == "if":
         bool_closed = _RE_ONE_LINE_FI.search(str_stripped) or _RE_ONE_LINE_ESAC.search(
@@ -309,7 +311,11 @@ def _is_removed(str_rel: str, set_removed: set) -> bool:
     bool
             ``True`` when ``str_rel`` never survives a scaffold.
     """
-    return any(str_rel == str_rm or str_rel.startswith(f"{str_rm.rstrip('/')}/") for str_rm in set_removed)
+    str_rel = posixpath.normpath(str_rel)
+    return any(
+        str_rel == str_rm or str_rel.startswith(f"{str_rm}/")
+        for str_rm in map(posixpath.normpath, set_removed)
+    )
 
 
 def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) -> list[str]:
