@@ -2139,6 +2139,11 @@ at test time rather than checked in.</p>
 non-Python tiers deliberately ship <strong>no</strong> <code>.gitleaks.toml</code>: gitleaks falls
 back to its embedded default ruleset, and an allowlist is added only for a
 measured false positive, never preemptively.</p>
+<p>On the Python tiers the <strong>pre-commit</strong> hook runs <code>bin/check_secrets.sh
+--staged</code>, which scans only the index: a commit can add only staged content,
+and rescanning the whole history on every commit cost minutes on a mature
+repo (blueprintx#759). CI and <code>poe lint</code> run the same script without the
+flag and keep the full-history scan.</p>
 <h2 id="why-gitguardian-is-opt-in">Why GitGuardian is opt-in<a class="headerlink" href="#why-gitguardian-is-opt-in" title="Permanent link">&para;</a></h2>
 <p><code>secret_scan.yaml</code> reads <code>${{ secrets.GITGUARDIAN_API_KEY }}</code>, and GitHub
 resolves that secret <strong>in the repository where the workflow runs</strong>. A key
