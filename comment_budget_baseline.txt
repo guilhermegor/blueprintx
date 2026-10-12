@@ -1,4 +1,3 @@
-31 .coderabbit.yaml
 18 .cz.toml
 48 .github/dependabot.yml
 15 .github/workflows/behind_base_gate_report.yml
