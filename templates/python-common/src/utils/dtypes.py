@@ -63,12 +63,12 @@ def _resolve_text_dtypes(dict_dtypes: dict[str, str]) -> dict[str, str]:
     Parameters
     ----------
     dict_dtypes : dict of {str: str}
-            The caller's column→dtype mapping.
+        The caller's column→dtype mapping.
 
     Returns
     -------
     dict of {str: str}
-            The same mapping with every ``"str"`` replaced by ``"string"``.
+        The same mapping with every ``"str"`` replaced by ``"string"``.
     """
     return {
         str_col: (_DTYPE_TEXT if str_dtype == "str" else str_dtype)
@@ -93,17 +93,17 @@ def _to_decimal(value: object) -> object:
     Parameters
     ----------
     value : object
-            One cell from a decimal-typed column.
+        One cell from a decimal-typed column.
 
     Returns
     -------
     object
-            A :class:`decimal.Decimal`, or :data:`pandas.NA` for a missing value.
+        A :class:`decimal.Decimal`, or :data:`pandas.NA` for a missing value.
 
     Raises
     ------
     ValueError
-            If ``value`` is a binary ``float`` — precision was already lost upstream.
+        If ``value`` is a binary ``float`` — precision was already lost upstream.
     """
     if value is pd.NA:
         return pd.NA
@@ -122,12 +122,12 @@ def _decimal_by_type(value: object) -> object:
     Parameters
     ----------
     value : object
-            One cell from a decimal-typed column.
+        One cell from a decimal-typed column.
 
     Returns
     -------
     object
-            A :class:`decimal.Decimal`, or :data:`pandas.NA`.
+        A :class:`decimal.Decimal`, or :data:`pandas.NA`.
     """
     str_value = str(value).strip()
     if not str_value or str_value.lower() in _FROZENSET_MISSING_TEXT:
@@ -143,12 +143,12 @@ def _decimal_from_none(value: None) -> object:
     Parameters
     ----------
     value : None
-            The missing value.
+        The missing value.
 
     Returns
     -------
     object
-            :data:`pandas.NA`.
+        :data:`pandas.NA`.
     """
     return pd.NA
 
@@ -161,12 +161,12 @@ def _decimal_from_decimal(value: Decimal) -> object:
     Parameters
     ----------
     value : Decimal
-            The value.
+        The value.
 
     Returns
     -------
     object
-            ``value``.
+        ``value``.
     """
     return value
 
@@ -179,12 +179,12 @@ def _decimal_from_int(value: int) -> object:
     Parameters
     ----------
     value : int
-            The value.
+        The value.
 
     Returns
     -------
     object
-            The converted value.
+        The converted value.
     """
     return Decimal(value)
 
@@ -201,17 +201,17 @@ def _decimal_from_float(value: float) -> object:
     Parameters
     ----------
     value : float
-            The rejected value.
+        The rejected value.
 
     Returns
     -------
     object
-            :data:`pandas.NA` for NaN; never returns otherwise.
+        :data:`pandas.NA` for NaN; never returns otherwise.
 
     Raises
     ------
     ValueError
-            For any non-NaN float — precision was already lost upstream.
+        For any non-NaN float — precision was already lost upstream.
     """
     if value != value:  # noqa: PLR0124 — NaN is the only value not equal to itself
         return pd.NA
@@ -240,39 +240,39 @@ def apply_dtypes(
     Parameters
     ----------
     df_input : pd.DataFrame
-            The source frame (left unmodified — work happens on a copy).
+        The source frame (left unmodified — work happens on a copy).
     dict_dtypes : dict of {str: str}, optional
-            Column→dtype mapping passed to :meth:`pandas.DataFrame.astype` (e.g. ``"str"``,
-            ``"int64"``). A ``"str"`` declaration is normalised to the nullable ``"string"``
-            dtype so a missing value stays NA instead of becoming the literal ``"nan"`` on
-            pandas 2 — see :data:`_DTYPE_TEXT`. **Do not declare a binary float dtype for an
-            ingested source column** — use ``list_decimal_cols`` (see below).
+        Column→dtype mapping passed to :meth:`pandas.DataFrame.astype` (e.g. ``"str"``,
+        ``"int64"``). A ``"str"`` declaration is normalised to the nullable ``"string"``
+        dtype so a missing value stays NA instead of becoming the literal ``"nan"`` on
+        pandas 2 — see :data:`_DTYPE_TEXT`. **Do not declare a binary float dtype for an
+        ingested source column** — use ``list_decimal_cols`` (see below).
     list_date_cols : sequence of str, optional
-            Columns coerced to ``datetime.date`` (date only, no time component).
+        Columns coerced to ``datetime.date`` (date only, no time component).
     list_datetime_cols : sequence of str, optional
-            Columns coerced to ``datetime64`` timestamps.
+        Columns coerced to ``datetime64`` timestamps.
     list_decimal_cols : sequence of str, optional
-            Columns coerced to exact :class:`decimal.Decimal` values (``object`` dtype), for any
-            number whose fractional part carries meaning — money, volumes, rates, quantities.
-            ``float64`` cannot represent most decimal fractions: ``1984223115.42`` is stored as
-            ``1984223115.4200000762939453125``, and that loss is **irreversible and silent**,
-            surfacing later as a reconciliation that misses by a hair. The source's own scale is
-            preserved exactly; no precision is *chosen* here, because choosing one is a
-            downstream (warehouse) decision this layer cannot make.
+        Columns coerced to exact :class:`decimal.Decimal` values (``object`` dtype), for any
+        number whose fractional part carries meaning — money, volumes, rates, quantities.
+        ``float64`` cannot represent most decimal fractions: ``1984223115.42`` is stored as
+        ``1984223115.4200000762939453125``, and that loss is **irreversible and silent**,
+        surfacing later as a reconciliation that misses by a hair. The source's own scale is
+        preserved exactly; no precision is *chosen* here, because choosing one is a
+        downstream (warehouse) decision this layer cannot make.
 
     Returns
     -------
     pd.DataFrame
-            A new frame with the requested types applied.
+        A new frame with the requested types applied.
 
     Raises
     ------
     KeyError
-            If any referenced column is absent from ``df_input``.
+        If any referenced column is absent from ``df_input``.
     ValueError
-            If a column appears in more than one of the four sets, a date/datetime column
-            cannot be parsed (``to_datetime`` uses ``errors="raise"``), or a decimal column
-            already holds a binary ``float`` (see :func:`_to_decimal`).
+        If a column appears in more than one of the four sets, a date/datetime column
+        cannot be parsed (``to_datetime`` uses ``errors="raise"``), or a decimal column
+        already holds a binary ``float`` (see :func:`_to_decimal`).
     """
     dict_dtypes = dict_dtypes or {}
     list_date_cols = list(list_date_cols or [])
@@ -317,9 +317,9 @@ def _validate_referenced_columns(  # complexity-ok: two distinct validation faul
     Parameters
     ----------
     df_input : pd.DataFrame
-            The source frame.
+        The source frame.
     list_referenced : list of str
-            Every column named across the four target-type sets, in declaration order.
+        Every column named across the four target-type sets, in declaration order.
 
     Returns
     -------
@@ -328,9 +328,9 @@ def _validate_referenced_columns(  # complexity-ok: two distinct validation faul
     Raises
     ------
     KeyError
-            If any referenced column is absent from ``df_input``.
+        If any referenced column is absent from ``df_input``.
     ValueError
-            If a column appears in more than one of the four sets.
+        If a column appears in more than one of the four sets.
     """
     set_missing = {str_col for str_col in list_referenced if str_col not in df_input.columns}
     if set_missing:

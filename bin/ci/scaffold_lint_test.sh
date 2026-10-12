@@ -17,6 +17,13 @@ SKELETON="${1:?skeleton name required}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=bin/lib/spec.sh
 source "$REPO_ROOT/bin/lib/spec.sh"
+
+# The offline run below drops .github/, so it cannot see a CODEOWNERS that kept its literal
+# `${GITHUB_USERNAME}`; assert the render at the source instead (#715).
+if grep -nE 'cp .*\.github/CODEOWNERS' "$REPO_ROOT"/bin/scaffold/*.sh; then
+    echo "ERROR: a scaffold copies CODEOWNERS with cp; render it with envsubst '\${GITHUB_USERNAME}'" >&2
+    exit 1
+fi
 META="$REPO_ROOT/templates/$SKELETON/skeleton.meta"
 
 [ -f "$META" ] || { echo "ERROR: skeleton '$SKELETON' not found" >&2; exit 1; }
@@ -140,6 +147,8 @@ for str_online_only in coderabbit_trigger.yaml review_threads.yaml review_retry.
     fi
 done
 echo "No GitHub-only workflows in the offline project."
+
+bash "$REPO_ROOT/bin/ci/check_review_config_shipped.sh" --project "$PROJECT_PATH"
 
 # The .specs/ gate ships into every Python project (blueprintx#583). Run the PROJECT'S copy on
 # the shipped skeleton (must pass) and on a copy with a stray top-level note (must fail): a gate

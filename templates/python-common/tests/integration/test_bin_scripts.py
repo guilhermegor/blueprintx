@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from types import MappingProxyType
 
 import pytest
@@ -2265,3 +2266,232 @@ def test_deps_gate_hard_fails_when_deptry_is_unresolvable_instead_of_skipping(
     assert cls_result.returncode != 0, f"an absent gate reported success: {str_all}"
     assert "not resolvable" in str_all
     assert "skip" not in str_all.lower()
+
+
+# --------------------------
+# check_template_drift.py — presence-only tier drift report (blueprintx#109)
+# --------------------------
+
+
+def _run_template_drift(list_args: list[str]) -> subprocess.CompletedProcess:
+    """Run ``check_template_drift.py`` with explicit CLI args.
+
+    Unlike the cwd-discovering gates above, this script takes ``--root``/``--blueprintx-root``
+    explicitly, so the runner passes argv through rather than relying on ``cwd``.
+
+    Parameters
+    ----------
+    list_args : list of str
+        CLI arguments, e.g. ``["--root", str(path), "--blueprintx-root", str(path)]``.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The completed run, stdout and stderr captured as text.
+    """
+    str_python = shutil.which("python3") or shutil.which("python") or "python3"
+    # Constant, trusted argv built from repo-internal + tmp_path-derived paths — no user
+    # input reaches it.
+    return subprocess.run(  # noqa: S603
+        [str_python, str(_bin_script("check_template_drift.py")), *list_args],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+
+def _seed_fake_blueprintx_checkout(path_root: Path) -> None:
+    """Materialise a minimal fake BlueprintX checkout the drift script can parse.
+
+    Only what ``required_relpaths`` reads: the shared scaffold-lib file (one ``cp`` line plus
+    one wholesale ``cp -r`` directory line) and the two source paths it names.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Root of the fake checkout.
+
+    Returns
+    -------
+    None
+    """
+    _write(
+        path_root / "bin" / "lib" / "scaffold_python_templates.sh",
+        'cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$str_project_path/.codespellrc"\n'
+        'cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$str_project_path/bin"\n',
+    )
+    _write(path_root / "templates" / "python-common" / ".codespellrc", "ignore-words-list =\n")
+    _write(
+        path_root / "templates" / "python-common" / "bin" / "check_complexity.sh", "#!/bin/bash\n"
+    )
+
+
+def test_template_drift_skips_loudly_with_no_provenance_stamp(tmp_path: Path) -> None:
+    """⚠️ No stamp must SKIP loudly, never silently pass as if compared and clean.
+
+    This is the path BlueprintX's own tree always takes when the gate runs over itself
+    (``--root .``) — it has no tier, so the self-skip must say so out loud rather than print
+    an all-clear for a comparison that never happened.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest's per-test temporary directory.
+    """
+    path_project = tmp_path / "project"
+    path_project.mkdir()
+
+    cls_result = _run_template_drift(["--root", str(path_project)])
+
+    assert cls_result.returncode == 0
+    assert "SKIPPED" in cls_result.stdout
+    assert "no template drift detected" not in cls_result.stdout.lower()
+
+
+def test_template_drift_reports_a_file_the_project_never_received(tmp_path: Path) -> None:
+    """The should-fail witness: a file the template ships but the project lacks is named.
+
+    Mirrors the two real cases in blueprintx#109 — a file added to
+    ``templates/python-common/`` after a project was scaffolded, never backfilled.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest's per-test temporary directory.
+    """
+    path_blueprintx = tmp_path / "blueprintx"
+    _seed_fake_blueprintx_checkout(path_blueprintx)
+    path_project = tmp_path / "project"
+    _write(path_project / ".blueprintx-provenance.yaml", "tier: mvc-service-native-db\n")
+    # .codespellrc deliberately NOT created — the missing path under test.
+    _write(path_project / "bin" / "check_complexity.sh", "#!/bin/bash\n")
+
+    cls_result = _run_template_drift(
+        ["--root", str(path_project), "--blueprintx-root", str(path_blueprintx)]
+    )
+
+    assert cls_result.returncode == 0
+    assert "drift detected" in cls_result.stdout.lower()
+    assert ".codespellrc" in cls_result.stdout
+
+
+def test_template_drift_clean_when_every_required_path_is_present(tmp_path: Path) -> None:
+    """The restore half of the witness: nothing missing reports a clean pass, not silence.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest's per-test temporary directory.
+    """
+    path_blueprintx = tmp_path / "blueprintx"
+    _seed_fake_blueprintx_checkout(path_blueprintx)
+    path_project = tmp_path / "project"
+    _write(path_project / ".blueprintx-provenance.yaml", "tier: mvc-service-native-db\n")
+    _write(path_project / ".codespellrc", "ignore-words-list =\n")
+    _write(path_project / "bin" / "check_complexity.sh", "#!/bin/bash\n")
+
+    cls_result = _run_template_drift(
+        ["--root", str(path_project), "--blueprintx-root", str(path_blueprintx)]
+    )
+
+    assert cls_result.returncode == 0
+    assert "no template drift detected" in cls_result.stdout.lower()
+
+
+# run.sh — blueprintx#252: an argument passed to `poe run <x>` must reach the entrypoint
+
+
+def _materialise_run_sh(path_root: Path) -> Path:
+    """Build a throwaway project tree with ``run.sh`` + its libs, ready to invoke.
+
+    Seeds the pieces ``run.sh`` needs before it reaches ``run_entrypoint``: a ``src/main.py``
+    entrypoint and an executable, up-to-date stub project venv, so ``ensure_runtime_env``
+    short-circuits ("using existing virtualenv") without touching Poetry or pip. The stub
+    venv "python" just echoes its own argv, which is what makes a forwarded token observable.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Project root to build.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the copied ``run.sh`` inside the throwaway tree.
+    """
+    path_script = _materialise_gate_tree(path_root, "run.sh")
+    _write(path_root / "pyproject.toml", "[tool.poetry]\n")
+    _write(path_root / "src" / "main.py", '"""Entrypoint stub."""\n')
+
+    path_python = path_root / ".venv" / "bin" / "python"
+    _write(path_python, "#!/bin/sh\nprintf 'ARG:%s\\n' \"$@\"\n")
+    path_python.chmod(0o755)
+    # Newer than pyproject.toml with a margin, so the `-nt` mtime check in
+    # runtime_env_needs_bootstrap is unambiguous regardless of filesystem mtime resolution.
+    float_future = time.time() + 60
+    os.utime(path_python, (float_future, float_future))
+    return path_script
+
+
+def _run_run_sh(path_script: Path, list_args: list[str]) -> subprocess.CompletedProcess[str]:
+    """Invoke the materialised ``run.sh`` with extra CLI arguments.
+
+    Parameters
+    ----------
+    path_script : pathlib.Path
+        The copied ``run.sh``, as returned by ``_materialise_run_sh``.
+    list_args : list[str]
+        Extra tokens to pass, mimicking ``poe run <these>``.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The completed run.
+    """
+    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
+    return subprocess.run(  # noqa: S603
+        [_STR_BASH, str(path_script), *list_args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+
+def test_run_forwards_an_argument_to_the_entrypoint(tmp_path: Path) -> None:
+    """The should-fail control for blueprintx#252.
+
+    Before the fix, ``run_entrypoint`` invoked ``python -m <module>`` on all three resolution
+    branches with no ``"$@"`` — a token like ``poe run reconcile`` reached ``main()`` and was
+    silently dropped two hops later, so the default pipeline ran instead of failing or
+    selecting anything. The stub venv python echoes its own argv, so the forwarded token is
+    directly observable.
+
+    Only the executable-venv branch is exercised: the Poetry and bare ``$PYTHON`` branches of
+    ``run_entrypoint`` are reachable only after a bootstrap that leaves no venv python, and
+    both bootstrap paths return non-zero in that state, so ``main`` never gets there.
+    """
+    path_script = _materialise_run_sh(tmp_path)
+
+    cls_result = _run_run_sh(path_script, ["reconcile", "two words"])
+    str_all = cls_result.stdout + cls_result.stderr
+
+    assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
+    assert cls_result.stdout.splitlines()[-4:] == [
+        "ARG:-m",
+        "ARG:src.main",
+        "ARG:reconcile",
+        "ARG:two words",
+    ], str_all
+
+
+def test_run_with_no_extra_argument_still_calls_the_entrypoint(tmp_path: Path) -> None:
+    """Forwarding ``"$@"`` must not break the existing zero-argument invocation."""
+    path_script = _materialise_run_sh(tmp_path)
+
+    cls_result = _run_run_sh(path_script, [])
+    str_all = cls_result.stdout + cls_result.stderr
+
+    assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
+    assert cls_result.stdout.splitlines()[-2:] == ["ARG:-m", "ARG:src.main"], str_all

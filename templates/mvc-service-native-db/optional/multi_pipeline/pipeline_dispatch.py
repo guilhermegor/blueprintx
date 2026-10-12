@@ -75,7 +75,7 @@ def resolve_intent(str_raw: str) -> str:
     ----------
     str_raw : str
         The environment value (any reasonable spelling — case, accents and spaces/hyphens are
-        normalised).
+            normalised).
 
     Returns
     -------
@@ -86,7 +86,7 @@ def resolve_intent(str_raw: str) -> str:
     ------
     SystemExit
         When ``str_raw`` maps to no known intent — after printing a clear error to stderr
-        (exit code 2).
+            (exit code 2).
     """
     str_norm = normalize_text(str_raw).replace(" ", "_").replace("-", "_")
     str_intent = _INTENT_ALIASES.get(str_norm)
@@ -106,7 +106,7 @@ def resolve_intent(str_raw: str) -> str:
 # pipeline visible in one place.
 def build_pipeline(  # noqa: PLR0913
     str_intent: str,
-    logger: Logger | None,
+    cls_logger: Logger | None,
     fn_build_connection: Callable[[], Any],
     fn_output_path: Callable[[str], Path],
     path_json: Path,
@@ -121,7 +121,7 @@ def build_pipeline(  # noqa: PLR0913
     ----------
     str_intent : str
         A canonical intent key (as returned by :func:`resolve_intent`).
-    logger : logging.Logger | None
+    cls_logger : logging.Logger | None
         The run logger.
     fn_build_connection : Callable[[], Any]
         Zero-arg callable opening a DB-API connection.
@@ -152,7 +152,7 @@ def build_pipeline(  # noqa: PLR0913
     if cls_builder is None:
         _abort(f"no pipeline registered for intent {str_intent!r}")
     return cls_builder(
-        logger,
+        cls_logger,
         fn_build_connection,
         fn_output_path,
         path_json,

@@ -96,7 +96,7 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/jest.config.cjs" "$project_path/jest.config.cjs"
     # .mjs (not .js): package.json's "type" field is left absent (Node treats that
     # identically to "type": "commonjs", so dist/cjs needs no per-file marker — see
-    # templates/ts-lib/CLAUDE.md), and these three configs are authored as ESM — the
+    # templates/ts-lib/AGENTS.md), and these three configs are authored as ESM — the
     # explicit extension makes each tool load them as ESM regardless of the package's
     # own module type.
     cp "$SKELETON_TEMPLATE_ROOT/eslint.config.mjs" "$project_path/eslint.config.mjs"
@@ -247,8 +247,9 @@ copy_shared_github_overlay() {
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
+    GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_policy_workflows "$project_path"
 }
 
 copy_common_templates() {
@@ -260,8 +261,9 @@ copy_common_templates() {
     export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME
     render_package_json "$project_path"
     envsubst '${PROJECT_NAME}' \
-        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
-        > "$project_path/CLAUDE.md"
+        < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" \
+        > "$project_path/AGENTS.md"
+    cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
     # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
     # file, language-agnostic, so it lives in templates/common not ts-common.
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"

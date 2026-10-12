@@ -57,14 +57,14 @@ def _empty_frame(
     Parameters
     ----------
     dict_dtypes : dict of {str: str}
-            Column→dtype mapping declared by the caller.
+        Column→dtype mapping declared by the caller.
     list_date_cols : list of str, optional
-            Columns coerced to dates. Disjoint from ``dict_dtypes`` (``apply_dtypes`` requires it).
+        Columns coerced to dates. Disjoint from ``dict_dtypes`` (``apply_dtypes`` requires it).
 
     Returns
     -------
     pandas.DataFrame
-            An empty frame holding every declared column, typed.
+        An empty frame holding every declared column, typed.
     """
     list_columns = list(dict_dtypes) + list(list_date_cols or [])
     return apply_dtypes(
@@ -96,16 +96,16 @@ def from_cursor(
     Parameters
     ----------
     cls_cursor : Any
-            A DB-API 2.0 cursor on which ``execute`` has already been called.
+        A DB-API 2.0 cursor on which ``execute`` has already been called.
     dict_dtypes : dict of {str: str}
-            Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
+        Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
     list_date_cols : list of str, optional
-            Columns coerced to dates, forwarded to :func:`utils.dtypes.apply_dtypes`.
+        Columns coerced to dates, forwarded to :func:`utils.dtypes.apply_dtypes`.
 
     Returns
     -------
     pandas.DataFrame
-            One row per record, every declared column typed.
+        One row per record, every declared column typed.
     """
     if cls_cursor.description is None:
         return _empty_frame(dict_dtypes, list_date_cols)
@@ -134,16 +134,16 @@ def from_records(
     Parameters
     ----------
     list_records : sequence of mapping
-            One mapping per row, keyed by column name.
+        One mapping per row, keyed by column name.
     dict_dtypes : dict of {str: str}
-            Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
+        Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
     list_date_cols : list of str, optional
-            Columns coerced to dates, forwarded to :func:`utils.dtypes.apply_dtypes`.
+        Columns coerced to dates, forwarded to :func:`utils.dtypes.apply_dtypes`.
 
     Returns
     -------
     pandas.DataFrame
-            One row per record, every declared column typed.
+        One row per record, every declared column typed.
     """
     if not list_records:
         return _empty_frame(dict_dtypes, list_date_cols)
@@ -165,15 +165,15 @@ def map_with_default(series_value: pd.Series, dict_mapping: dict, default: objec
     Parameters
     ----------
     series_value : pandas.Series
-            The column whose values are relabelled.
+        The column whose values are relabelled.
     dict_mapping : dict
-            ``{raw_value: label}`` mapping applied to each cell.
+        ``{raw_value: label}`` mapping applied to each cell.
     default : Any
-            The value assigned to any cell whose raw value is not a key in ``dict_mapping``.
+        The value assigned to any cell whose raw value is not a key in ``dict_mapping``.
 
     Returns
     -------
     pandas.Series
-            A new Series of mapped values, with ``default`` wherever the input was unmapped.
+        A new Series of mapped values, with ``default`` wherever the input was unmapped.
     """
     return series_value.map(dict_mapping).where(series_value.isin(dict_mapping), default)

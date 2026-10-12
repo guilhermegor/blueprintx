@@ -356,8 +356,7 @@ copy_templates() {
     # No .env / .env.example: a distributable library has no runtime env to seed (unlike the
     # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
-    # This root CLAUDE.md points at `.claude/CLAUDE.md` for shared conventions
-    # (blueprintx#549) — copy the single source so that pointer resolves.
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/AGENTS.md" "$project_path/AGENTS.md"
     mkdir -p "$project_path/.claude"
     cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$project_path/.claude/CLAUDE.md"
     # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
@@ -496,7 +495,7 @@ lib_minimal_copy_github_assets() {
     # GitHub-remote-only, like the release workflows — apply_offline_mode drops all of .github/.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/docs.yaml" \
         "$project_path/.github/workflows/docs.yaml"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
+    GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     # SECURITY.md (root; GitHub auto-detects it and flips "Security policy" to Enabled) +
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
     # bin/enable_security.sh). Both are GitHub-platform features, hence GitHub-only.
@@ -530,6 +529,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_coverage_floor_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
         "$project_path/tests/unit/test_function_length_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
+        "$project_path/tests/unit/test_template_drift_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
         "$project_path/tests/unit/test_comment_budget_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" \
@@ -595,6 +596,9 @@ lib_minimal_copy_project_scaffolding() {
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
     # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
+    # The work ledger the check-backlog-ledger gate reads; .gitkeep keeps it in git while empty.
+    mkdir -p "$project_path/.specs/backlog"
+    touch "$project_path/.specs/backlog/.gitkeep"
     # The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
     # implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
     cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" "$project_path/bin/check_specs_structure.sh"
@@ -622,10 +626,16 @@ lib_minimal_copy_project_scaffolding() {
 lib_minimal_stamp_provenance() {
     local project_path="$1"
 
-    local str_version
-    str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || echo unknown)"
-    local str_commit
-    str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+    local str_version=""
+    local str_commit=unknown
+    # Only trust git when BLUEPRINTX_ROOT is itself a checkout: git -C walks UP, so a packaged
+    # install under an unrelated repo (e.g. Homebrew's) would stamp that repo's tag.
+    if [[ -e "$BLUEPRINTX_ROOT/.git" ]]; then
+        str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || true)"
+        str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+    fi
+    [[ -n "$str_version" ]] || str_version="$(sed -n 's/^BLUEPRINTX_VERSION="\(.*\)"$/\1/p' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" 2>/dev/null || true)"
+    [[ -n "$str_version" ]] || str_version=unknown
     local str_scaffolded_at
     str_scaffolded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -688,12 +698,9 @@ copy_mkdocs_templates() {
         "$project_path/docs/contributing.md"
     cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
-    # Non-published docs/ authoring guide + the excluded backlog folder.
+    # Non-published docs/ authoring guide.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
-    mkdir -p "$project_path/docs/backlog"
-    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/backlog/.keep" \
-        "$project_path/docs/backlog/.keep"
 
 
     print_status "success" "MkDocs templates copied"
