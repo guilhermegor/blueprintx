@@ -2166,7 +2166,9 @@ after the head commit, and come from an <code>OWNER</code>, <code>MEMBER</code> 
 <code>authorAssociation</code>), so an outside commenter cannot forge it. A comment posted by a GitHub App reports <code>NONE</code> and
 is rejected, so post the marker with the owner's own token. The row has no <code>login:</code> and is
 ignored when absent. The comment must also contain the line <code>0 finding(s) across N reviewed file(s).</code>; a count above zero, or no such line, fails closed, so a ladder review with findings never satisfies the gate on its own (blueprintx#630). Like a clean-review notice, it proves a review ran, never that a thread was
-answered. The workflow needs the <code>issue_comment</code> trigger to re-run on that comment (created, edited or deleted). A run triggered by a comment reports on the default branch's head, not the PR's, so a red "Review threads answered" on <code>main</code>'s tip after such a comment is that run's own verdict, not a broken <code>main</code>; the PR's check is refreshed by the stale-run step. See
+answered. The workflow needs the <code>issue_comment</code> trigger to re-run on that comment (created, edited or deleted). A run triggered by a comment reports on the default branch's head, not the PR's, so a red "Review threads answered" on <code>main</code>'s tip after such a comment is that run's own verdict, not a broken <code>main</code>; the PR's check is refreshed by the stale-run step. The Python roster
+(<code>templates/python-common/.review-bots.yaml</code>) and the TypeScript one
+(<code>templates/ts-common/.github/.review-bots.yaml</code>, workflow <code>review-threads.yml</code>) both ship the row and the trigger. See
 blueprintx#593.</p>
 <h2 id="how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered">How does a scaffolded repo close the issue a merged PR delivered?<a class="headerlink" href="#how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered" title="Permanent link">&para;</a></h2>
 <p>BlueprintX carries <code>close-linked-issues.yml</code> and its <code>bin/close_linked_issues.sh</code> under
