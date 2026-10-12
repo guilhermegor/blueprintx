@@ -37,6 +37,10 @@ check_bridge() {
 	str_bridge="$str_dir/CLAUDE.md"
 	str_text="$(scaffold_text "$str_dir")"
 
+	grep -qx '@AGENTS.md' "$str_bridge" || {
+		echo "$str_name: CLAUDE.md bridge does not import @AGENTS.md" >&2
+		int_fail=1
+	}
 	while IFS= read -r str_line || [ -n "$str_line" ]; do
 		if [ -z "$str_line" ] || is_shim "$str_line"; then
 			continue
@@ -66,6 +70,10 @@ main() {
 		int_count=$((int_count + 1))
 		check_bridge "$str_dir" || int_fail=1
 	done
+	if [ "$int_count" -eq 0 ]; then
+		echo "no skeleton ships a CLAUDE.md bridge; the gate checked nothing" >&2
+		int_fail=1
+	fi
 	if [ "$int_fail" -ne 0 ]; then
 		exit 1
 	fi

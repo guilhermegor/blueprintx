@@ -53,4 +53,14 @@ sed_inplace 's#/PRINCIPLES.md"#/OTHER.md"#g' "$str_fx/bin/scaffold/python_lib_mi
 expect_gate "import copied only by an unsourced helper fails" fail "never copies" "$str_fx"
 rm -rf "$str_fx"
 
+str_fx="$(make_fixture)"
+printf '<!-- Edit AGENTS.md, not this file. Claude-Code-only lines go below this one. -->\n' >"$str_fx/templates/lib-minimal/CLAUDE.md"
+expect_gate "bridge without @AGENTS.md fails" fail "does not import @AGENTS.md" "$str_fx"
+rm -rf "$str_fx"
+
+str_fx="$(make_fixture)"
+rm "$str_fx/templates/lib-minimal/CLAUDE.md"
+expect_gate "zero bridges fails" fail "checked nothing" "$str_fx"
+rm -rf "$str_fx"
+
 [ "$int_failures" -eq 0 ]
