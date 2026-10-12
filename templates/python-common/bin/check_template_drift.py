@@ -250,6 +250,49 @@ def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
     return None
 
 
+def _template_roots(path_blueprintx_root: pathlib.Path) -> dict[str, pathlib.Path]:
+    """Map the scaffold lib's ``COMMON``/``SHARED`` roots to their template directories.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+            Root of a BlueprintX checkout.
+
+    Returns
+    -------
+    dict of str to pathlib.Path
+            ``COMMON`` and ``SHARED`` mapped to their directories.
+    """
+    return {
+        "COMMON": path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
+        "SHARED": path_blueprintx_root / "templates/common",
+    }
+
+
+def _scaffold_lib_text(path_blueprintx_root: pathlib.Path) -> str:
+    """Read the shared scaffold lib with continuations spliced and globs expanded.
+
+    Both the required set and the opt-in additions parse this one text, so a glob copy is
+    expanded identically on either path.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+            Root of a BlueprintX checkout.
+
+    Returns
+    -------
+    str
+            The normalised lib source.
+    """
+    str_lib = (path_blueprintx_root / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
+    return _expand_glob_cps(
+        _RE_LINE_CONTINUATION.sub(" ", str_lib),
+        path_blueprintx_root,
+        _template_roots(path_blueprintx_root),
+    )
+
+
 def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     """Derive every python-common-sourced path a scaffold copies UNCONDITIONALLY.
 
@@ -273,15 +316,8 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
     if not path_lib.exists():
         return set()
-    path_templates = {
-        "COMMON": path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
-        "SHARED": path_blueprintx_root / "templates/common",
-    }
-    str_lib = _expand_glob_cps(
-        _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8")),
-        path_blueprintx_root,
-        path_templates,
-    )
+    path_templates = _template_roots(path_blueprintx_root)
+    str_lib = _scaffold_lib_text(path_blueprintx_root)
     set_removed = set(_RE_RM.findall(str_lib))
 
     set_conditional = conditional_relpaths(str_lib)
@@ -487,10 +523,7 @@ def main(list_argv: list) -> int:
 
     if review_bot_roster_enabled(path_root):
         set_required |= conditional_relpaths(
-            _RE_LINE_CONTINUATION.sub(
-                " ", (path_blueprintx / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
-            ),
-            "INCLUDE_REVIEW_BOT_ROSTER",
+            _scaffold_lib_text(path_blueprintx), "INCLUDE_REVIEW_BOT_ROSTER"
         )
 
     list_missing = missing_relpaths(path_root, set_required)

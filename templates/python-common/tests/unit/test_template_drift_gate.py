@@ -449,3 +449,24 @@ def test_an_untracked_glob_match_is_not_required(tmp_path: Path) -> None:
     (path_root / gate._COMMON_TEMPLATE_RELPATH / "draft.md").touch()
 
     assert gate.required_relpaths(path_root) == {"a.md"}
+
+
+def test_an_opted_in_roster_glob_copy_is_restored(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A roster-guarded glob copy is excluded as conditional and must return on opt-in."""
+    str_lib = (
+        'f() {\n\tcp "$COMMON_TEMPLATE_ROOT/keep.txt" "$str_project_path/keep.txt"\n'
+        '\tif [[ "${INCLUDE_REVIEW_BOT_ROSTER}" == "true" ]]; then\n'
+        '\t\tcp "$COMMON_TEMPLATE_ROOT"/*.md "$str_project_path"/\n\tfi\n}\n'
+    )
+    path_root = _checkout(tmp_path, str_lib, ["a.md", "keep.txt"])
+    path_project = tmp_path / "proj"
+    path_project.mkdir()
+    (path_project / gate._PROVENANCE_FILENAME).write_text(
+        "tier: mvc-service-native-db\nreview_bot_roster: true\n", encoding="utf-8"
+    )
+
+    gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
+
+    assert "➖ a.md" in capsys.readouterr().out
