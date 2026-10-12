@@ -200,8 +200,15 @@ scaffold_create_github_repo() {
 	[ "$str_vis_choice" = "2" ] && str_vis_flag="--private"
 	[ -n "$SCAFFOLD_REPO_HOMEPAGE" ] && list_homepage=(--homepage "$SCAFFOLD_REPO_HOMEPAGE")
 
-	if (cd "$str_project_path" && gh repo create "$str_slug" --source . --remote origin --push \
-		"${list_homepage[@]}" --description "$PROJECT_DESCRIPTION" "$str_vis_flag"); then
+	if gh repo create "$str_slug" "${list_homepage[@]}" \
+		--description "$PROJECT_DESCRIPTION" "$str_vis_flag"; then
+		scaffold_set_secret_scan_key
+		if ! git -C "$str_project_path" push -u origin HEAD:main; then
+			print_status "warning" \
+				"Repo ${str_slug} created but the push failed - incomplete; skipped: default branch, kanban."
+			print_status "info" "Fix the error above, then run: git push -u origin HEAD:main"
+			return 0
+		fi
 		gh repo edit "$str_slug" --default-branch main "${list_homepage[@]}" >/dev/null 2>&1 || true
 		print_status "success" "Repository created and pushed via gh."
 		scaffold_kanban_setup
@@ -336,9 +343,10 @@ scaffold_prompt_git_remote_setup() {
 	# shellcheck disable=SC2034
 	SCAFFOLD_REMOTE_VERIFIED=1
 	if ! scaffold_create_github_repo "$str_project_path"; then
+		scaffold_set_secret_scan_key
 		scaffold_push_initial_commit "$str_project_path"
 	fi
 	scaffold_set_review_trigger_secret
-	scaffold_set_secret_scan_key
+	git -C "$str_project_path" rev-parse '@{u}' >/dev/null 2>&1 || return 1
 	print_status "success" "Git repo initialized."
 }
