@@ -7,7 +7,7 @@ The file carries keys only; this page holds the explanation.
 ## The one active key
 
 `reviews.auto_review.auto_incremental_review: false` stops CodeRabbit from re-reviewing the
-changes added since the last review on every push. It does not re-review the whole PR when `true`.
+changes added since the last review on every push. When `true`, it re-reviews only those changes, not the whole PR.
 
 ## It may be a no-op
 
