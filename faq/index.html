@@ -2304,11 +2304,9 @@ answered. The workflow needs the <code>issue_comment</code> trigger to re-run on
 (<code>templates/ts-common/.github/.review-bots.yaml</code>, workflow <code>review-threads.yml</code>) both ship the row and the trigger. See
 blueprintx#593.</p>
 <h2 id="how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered">How does a scaffolded repo close the issue a merged PR delivered?<a class="headerlink" href="#how-does-a-scaffolded-repo-close-the-issue-a-merged-pr-delivered" title="Permanent link">&para;</a></h2>
-<p>BlueprintX carries <code>close-linked-issues.yml</code> and its <code>bin/close_linked_issues.sh</code> under
-<code>templates/common/</code> (blueprintx#604), but generated projects do not receive them yet: the scaffold
-scripts do not copy them until the wiring step tracked in
-<a href="https://github.com/guilhermegor/blueprintx/issues/604">#604</a> lands. Once wired, it behaves as
-follows.</p>
+<p>Every generated project with a GitHub remote receives <code>close-linked-issues.yml</code> and its
+<code>bin/close_linked_issues.sh</code> (blueprintx#604). Offline scaffolds get neither: their only consumers
+are the removed workflows.</p>
 <p>GitHub's own <code>Closes #N</code> linking can come back empty (a <code>Closes: #N</code> with a colon, or a merge
 that did not link), which leaves the issue open and keeps a Projects "Item closed" -&gt; Done
 automation from firing. On a merged same-repo PR <strong>into the default branch</strong> the workflow closes,
