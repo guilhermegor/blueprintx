@@ -822,6 +822,9 @@ jobs:
       - name: Codespell ignore-list sync (root vs template)
         run: bash bin/ci/check_codespell_sync.sh
 
+      - name: CLAUDE.md bridge gate (blueprintx#754)
+        run: bash bin/ci/check_agents_md_bridge.sh && bash tests/test_check_agents_md_bridge.sh
+
   makefile-pairing:
     name: Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)
     runs-on: ubuntu-latest
