@@ -346,8 +346,8 @@ scaffold_prompt_git_remote_setup() {
 	SCAFFOLD_REMOTE_VERIFIED=1
 	# On success the create step already set the scan key before its push.
 	if ! scaffold_create_github_repo "$str_project_path"; then
-		scaffold_push_initial_commit "$str_project_path"
 		scaffold_set_secret_scan_key
+		scaffold_push_initial_commit "$str_project_path"
 	fi
 	scaffold_set_review_trigger_secret
 	print_status "success" "Git repo initialized."

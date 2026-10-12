@@ -72,6 +72,42 @@ test_failed_push_is_reported_incomplete() {
     fi
 }
 
+# Existing-remote fallback: `gh repo create` fails, so the prompt pushes itself - key first.
+test_fallback_sets_secret_before_the_push() {
+    local dir="$WORK_DIR/proj-fb" bare="$WORK_DIR/fb.git" log="$WORK_DIR/fb.log" out
+    mkdir -p "$dir"
+    git -C "$dir" init -q -b main
+    git -C "$dir" -c user.email=t@example.com -c user.name=T commit -q --allow-empty -m "chore: seed"
+    git init -q --bare "$bare"
+    : >"$log"
+    printf 'y\ny\n1\n' | GITGUARDIAN_API_KEY=k bash -c '
+        source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
+        PROJECT_PATH="$2"; BARE="$3"; LOG="$4"
+        GITHUB_USERNAME=o; PROJECT_NAME=r; PROJECT_DESCRIPTION=d
+        scaffold_kanban_setup() { :; }
+        scaffold_set_review_trigger_secret() { :; }
+        scaffold_add_git_remote() { git -C "$PROJECT_PATH" remote add origin "$BARE"; }
+        gh() {
+            case "$1 $2" in
+            "repo create") return 1 ;;
+            "secret set")
+                cat >/dev/null
+                echo "secret pushed=$(git -C "$BARE" rev-parse --verify -q refs/heads/main >/dev/null && echo yes || echo no)" >>"$LOG" ;;
+            esac
+        }
+        scaffold_prompt_git_remote_setup "$2"
+    ' _ "$REPO_ROOT" "$dir" "$bare" "$log" >"$WORK_DIR/fb.out" 2>&1
+    out="$(cat "$log")"
+    if grep -q '^secret pushed=no' <<<"$out" \
+        && git -C "$bare" rev-parse --verify -q refs/heads/main >/dev/null; then
+        echo "ok: the fallback sets the secret before its push"
+    else
+        echo "FAIL (fallback order): $(tr '\n' '|' <<<"$out")"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 test_secret_is_set_before_the_push
+test_fallback_sets_secret_before_the_push
 test_failed_push_is_reported_incomplete
 exit "$int_failures"
