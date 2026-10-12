@@ -1,11 +1,8 @@
 #!/bin/bash
-#
 # lib/common.sh
-#
 # Shared shell utilities for the BlueprintX repo tooling. Sourced by sibling
 # scripts (bin/*.sh, bin/scaffold/*.sh) so each one shares a single
 # print_status implementation and color set.
-#
 # Sourcing contract:
 #   - Idempotent (guarded with _BX_COMMON_LOADED so re-sourcing is a no-op).
 #   - Optional: scripts may set LOG_FILE before sourcing; print_status will tee
@@ -32,7 +29,6 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-#
 # The six colours above are already each bound to one print_status level
 # (RED=error, GREEN=success, YELLOW=warning, BLUE=info, CYAN=config,
 # MAGENTA=debug/section). Reusing any of them for "this is a top-level
@@ -58,7 +54,6 @@ NC='\033[0m'
 # something a generated project's scripts ask about. Shipping it there would
 # be a scaffolder-only concept leaking into every user's repo.
 #
-# Usage:
 #   read -r -p "$(prompt_main "Question? [y/N]: ")" answer
 #   read -r -p "$(prompt_sub  "Follow-up? [a/b]: ")" sub_answer
 #   printf "  ${CANCEL}%d) Cancel${NC}\n" "$idx"
@@ -78,15 +73,10 @@ prompt_sub() {
     printf "    ${PROMPT_SUB}└${NC} %s" "$1"
 }
 
-# prompt_can_read: true when stdin may answer a prompt. That is a terminal, or a harness that
-# feeds answers on purpose by exporting BLUEPRINTX_STDIN_ANSWERS=1 (the bin/lib/spec.sh
-# pipes). A stray piped line without that opt-in is never an answer (blueprintx#539).
 prompt_can_read() {
     [ -t 0 ] || [ "${BLUEPRINTX_STDIN_ANSWERS:-}" = "1" ]
 }
 
-# prompt_warn_default <rendered_prompt> [default_label]: one stderr line saying a prompt fell
-# back to its default because stdin is not a terminal. Stdout and exit status are untouched.
 prompt_warn_default() {
     local str_question
     str_question="$(printf '%s' "$1" | sed -E $'s/\x1b\\[[0-9;]*m//g; s/[[:space:]]*(\\[[^]]*\\])?:?[[:space:]]*$//')"
@@ -94,9 +84,6 @@ prompt_warn_default() {
         "${2:-its default}" "$str_question" >&2
 }
 
-# prompt_read <var_name> <rendered_prompt> [default_label]: `read -r -p` that leaves <var_name>
-# empty (so the caller's own default applies) when prompt_can_read is false or stdin is at EOF.
-# Without a readable stdin it also warns on stderr (prompt_warn_default).
 prompt_read() {
     local _prompt_read_value=""
     if prompt_can_read; then
@@ -106,29 +93,6 @@ prompt_read() {
     fi
     printf -v "$1" '%s' "$_prompt_read_value"
 }
-
-#
-# Usage:
-#   prompt_yes_no <var_name> "$(prompt_main "Question? [y/N]: ")" [default: y|n]
-#
-# Shared guard for every interactive y/n scaffold prompt (blueprintx#539). `read` happily
-# consumes a non-terminal stdin, so a non-interactive run (CI, --dev, a stray piped line
-# left on stdin) would silently answer a question nobody asked — for an opt-in like OTEL
-# that means dependencies installed and files rewritten with no one agreeing to it. With
-# no terminal on stdin, <var_name> is set to the DEFAULT without ever calling `read`, so a
-# leftover "y\n" on the pipe can never flip an unattended run's answer.
-#
-# `default` is "y" or "n" (default: "n") — chosen PER PROMPT by the caller (issue #539
-# item 3): an opt-in defaults "n" (installing deps / sending telemetry must never happen
-# silently), but a prompt whose safe unattended answer is "yes" (e.g. "wait for the first
-# deploy to finish?") passes default="y". Hardcoding one default for every prompt would
-# just trade one silent wrong answer for another.
-#
-# Sets <var_name> to the literal string "true" or "false" — the convention every INCLUDE_*
-# / USE_* flag in this repo already uses (INCLUDE_OTEL, INCLUDE_STORAGE, ...). The second
-# argument is the FULLY RENDERED prompt text (already wrapped in prompt_main or prompt_sub
-# by the caller, exactly as passed to `read -r -p` today) so this helper stays agnostic to
-# which styling a call site wants.
 
 prompt_yes_no() {
     local var_name="$1"
@@ -356,9 +320,6 @@ resolve_default_branch() {
 #   apply_env_wise_config "$PROJECT_PATH"  # splits them into dev/prd if chosen
 
 prompt_env_wise_config() {
-    # default "n": env-wise config only, silently, changes the on-disk shape of the
-    # generated project's config directory — an unattended run must get the single-file
-    # layout it would get by pressing Enter interactively.
     prompt_yes_no INCLUDE_ENV_WISE \
         "$(prompt_main "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: ")"
     if [ "$INCLUDE_ENV_WISE" = "true" ]; then
@@ -557,9 +518,6 @@ copy_repo_rules_provisioner() {
     chmod +x "$project_path/bin/enable_repo_rules.sh"
 }
 
-# Ship the repo-level PR/issue policy workflows and the scripts they run (blueprintx#604).
-# The scripts are copied into the project, never fetched at run time (blueprintx#175).
-# GitHub-only: an offline scaffold removes `.github/`, so call it next to the PR template.
 copy_repo_policy_workflows() {
     local project_path="$1"
     local common_root
@@ -573,4 +531,9 @@ copy_repo_policy_workflows() {
     cp "$common_root/bin/close_linked_issues.sh" "$common_root/bin/check_pr_policy.sh" \
         "$project_path/bin/"
     chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
+}
+
+remove_repo_policy_scripts() {
+    local project_path="$1"
+    rm -f "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
 }

@@ -33,6 +33,10 @@ reviewers:
       isResolved cannot be the signal — measured on blueprintx#170, all 14 threads read
       resolved while 11 held no author reply.
 
+  - login: greptile-apps[bot]
+    posts: threads
+    note: Posts inline review threads with a severity badge; reviews only when asked, autoReview is empty.
+
   - login: github-actions[bot]
     posts: status
     note: Workflow output, never a review finding.
@@ -50,6 +54,10 @@ reviewers:
 
   - kind: comment-marker
     marker: "Fallback review — runtime:"
+    posters:
+      - guilhermegor-review-ladder[bot]
     note: >-
-      The reviewer ladder's attribution line. Counts as a review only in a comment by an
-      OWNER, MEMBER or COLLABORATOR posted after the head commit (docs/faq.md).
+      The reviewer ladder's attribution line. Counts as a review only in a comment authored by
+      a login in `posters:` and posted after the head commit (docs/faq.md). The author
+      association is never consulted, so the PR author cannot forge it (blueprintx#761).
+      Empty means no marker is accepted; list the ladder App's login here.

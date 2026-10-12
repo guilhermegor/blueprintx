@@ -48,23 +48,6 @@
 # `strict_required_status_checks_policy` / `required_status_checks.strict` is true, on whichever
 # mechanism (ruleset or classic branch protection) the repo actually has. Unlike every other path
 # in this file, `verify` DOES fail loud (non-zero exit) — see verify_strict_required_checks.
-#
-# blueprintx#164 self-audit (2026-09-04, read-only `gh api` reads + `verify`, full numbers in
-# docs/backlog/repo_rules_self_audit_164_20260904_062813.md): this script's PROVISIONING path
-# had never been run against BlueprintX itself (its read-only `verify` was, by that audit). Found and left unfixed (needs a maintainer with repo-admin —
-# no writes were made by the audit): `strict` is FALSE on blueprintx's own `main` (confirmed by
-# `verify` above, exit 1) and the `do-not-merge` label is absent (404). Found and NOT a defect —
-# written here so the next audit doesn't reopen it as one: blueprintx has ZERO rulesets and uses
-# CLASSIC branch protection instead of the `pr-quality-gate` ruleset this script provisions (has
-# done so since blueprintx#99, predates this script); its classic protection requires 15 status
-# checks, which is THIS repo's own multi-tier scaffold CI, not a generated project's — the two
-# lists were never meant to match. `copilot_code_review` could not be assessed independently
-# (no ruleset exists here at all) and is plan-gated per the header note above regardless.
-# `verify` only asserts the strict-checks flag — the audit had to read the other 8 items above
-# by hand; there is still no single dry-run command that reports the full diff.
-#
-# `enable_security.sh`'s territory (Dependabot alerts, security updates, private vulnerability
-# reporting) had NO divergence — all three toggles already match on blueprintx.
 
 set -euo pipefail
 

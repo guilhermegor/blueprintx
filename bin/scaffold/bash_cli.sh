@@ -120,6 +120,8 @@ copy_common_templates() {
 
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/bash-cli/.greptile/"* "$project_path/.greptile/"
     # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
     # file, language-agnostic; bash-cli was added after #540 was scoped, included here
     # for consistency with the other seven skeleton roots.
@@ -217,6 +219,7 @@ apply_offline_mode() {
     # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
     # without a GitHub remote; remove them and ship the offline git-diff workflow.
     rm -rf "$project_path/.github"
+    remove_repo_policy_scripts "$project_path"
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"

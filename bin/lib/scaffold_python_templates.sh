@@ -166,7 +166,6 @@ scaffold_copy_shared_test_gates() {
 	# contract registry and therefore no drift driver.
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_drift.py" \
 		"$str_project_path/tests/unit/test_contract_drift.py"
-	# Should-fail witness for bin/check_template_drift.py (blueprintx#109).
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
 		"$str_project_path/tests/unit/test_template_drift_gate.py"
 
@@ -232,7 +231,6 @@ scaffold_copy_executables_and_vscode() {
 	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
 	# commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
 	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
-	# The work ledger the check-backlog-ledger gate reads; .gitkeep keeps it in git while empty.
 	mkdir -p "$str_project_path/.specs/backlog"
 	touch "$str_project_path/.specs/backlog/.gitkeep"
 	# The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
@@ -258,19 +256,11 @@ scaffold_copy_executables_and_vscode() {
 }
 
 scaffold_stamp_provenance() {
-	# Records WHICH tier and WHICH BlueprintX commit a project was scaffolded from
-	# (blueprintx#109). Without this, a drift check has no baseline: it cannot tell
-	# "this project was scaffolded before the fix landed" from "this project removed the
-	# file on purpose". Version falls back to the BLUEPRINTX_VERSION literal in
-	# bin/blueprintx.sh for packaged installs with no .git. Read by
-	# templates/python-common/bin/check_template_drift.py.
 	local str_tier="$1"
 	local str_project_path="$2"
 
 	local str_version=""
 	local str_commit=unknown
-	# Only trust git when BLUEPRINTX_ROOT is itself a checkout: git -C walks UP, so a packaged
-	# install under an unrelated repo (e.g. Homebrew's) would stamp that repo's tag.
 	if [[ -e "$BLUEPRINTX_ROOT/.git" ]]; then
 		str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || true)"
 		str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
@@ -280,15 +270,7 @@ scaffold_stamp_provenance() {
 	local str_scaffolded_at
 	str_scaffolded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-	# Literal filename, kept in sync by eye with `_PROVENANCE_FILENAME` in
-	# templates/python-common/bin/check_template_drift.py — the two live in different
-	# languages/repos-of-truth (this file ships bin/lib/ itself; the reader ships in every
-	# scaffolded project), so a shared constant isn't reachable from here.
 	cat >"$str_project_path/.blueprintx-provenance.yaml" <<-EOF
-	# Written by BlueprintX at scaffold time — do not edit by hand.
-	# Read by bin/check_template_drift.py (blueprintx#109) to know which template
-	# tier and BlueprintX version this project was generated from, so a later
-	# drift check knows what to compare against.
 	tier: ${str_tier}
 	review_bot_roster: $([[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] && echo true || echo false)
 	blueprintx_version: ${str_version#v}
