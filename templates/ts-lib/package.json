@@ -48,7 +48,7 @@
   "license": "${PROJECT_LICENSE}",
   "dependencies": {},
   "devDependencies": {
-    "@babel/core": "^7.29.0",
+    "@babel/core": "^8.0.7",
     "@babel/preset-env": "^7.29.3",
     "@babel/preset-typescript": "^7.28.5",
     "@docusaurus/core": "^3.6.0",
