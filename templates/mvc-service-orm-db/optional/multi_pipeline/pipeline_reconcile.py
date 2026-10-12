@@ -36,23 +36,23 @@ class ReconcilePipeline(metaclass=TypeChecker):
     Parameters
     ----------
     cls_logger : logging.Logger | None
-            The run logger (``None`` prints).
+        The run logger (``None`` prints).
     fn_build_engine : Callable[[], Engine]
-            Zero-arg callable building the SQLAlchemy engine. Unused by this illustrative read; a
-            production reconcile uses it to read the persisted values store (see the module note).
+        Zero-arg callable building the SQLAlchemy engine. Unused by this illustrative read; a
+        production reconcile uses it to read the persisted values store (see the module note).
     fn_output_path : Callable[[str], pathlib.Path]
-            Resolver from an ``outputs.yaml`` key to an output path.
+        Resolver from an ``outputs.yaml`` key to an output path.
     path_json : pathlib.Path
-            Path of the prior run's JSON summary, read here as the reconciliation baseline.
+        Path of the prior run's JSON summary, read here as the reconciliation baseline.
     dict_context : dict
-            Run-context values logged so every log file is self-describing.
+        Run-context values logged so every log file is self-describing.
     cls_email_handler : EmailHandler | None
-            Optional e-mail handler (the ``EmailHandler`` port), injected by ``main.py``.
+        Optional e-mail handler (the ``EmailHandler`` port), injected by ``main.py``.
     cls_webhook : WebhookNotifier | None
-            Optional webhook notifier (the ``WebhookNotifier`` port); when wired, the final phase
-            sends ``str_webhook_message``.
+        Optional webhook notifier (the ``WebhookNotifier`` port); when wired, the final phase
+        sends ``str_webhook_message``.
     str_webhook_message : str
-            The run-summary message sent through ``cls_webhook``; ignored when it is ``None``.
+        The run-summary message sent through ``cls_webhook``; ignored when it is ``None``.
     """
 
     def __init__(
@@ -81,7 +81,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
         Returns
         -------
         dict
-                Reconciliation summary (intent, whether a baseline was found, baseline rows).
+            Reconciliation summary (intent, whether a baseline was found, baseline rows).
         """
         float_start = time()
         pipeline_common.log_context(
@@ -104,9 +104,9 @@ class ReconcilePipeline(metaclass=TypeChecker):
         Returns
         -------
         dict
-                The prior summary, or an empty dict when no prior output exists. A production
-                reconcile reads a values store DB-first and falls back to a bounded backfill
-                (fail loud on nothing within the cap) rather than returning empty.
+            The prior summary, or an empty dict when no prior output exists. A production
+            reconcile reads a values store DB-first and falls back to a bounded backfill
+            (fail loud on nothing within the cap) rather than returning empty.
         """
         log_message(self.cls_logger, "Reading prior-run baseline for reconciliation")
         if not self.path_json.exists():

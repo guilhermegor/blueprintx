@@ -1,0 +1,3 @@
+- Keep controller, model and view separate; ORM sessions are opened and closed in the model layer only.
+- One class per file; never mix layers in one file.
+- Every DataFrame or SQL load declares its dtypes through apply_dtypes.

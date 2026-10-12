@@ -205,6 +205,18 @@ copy_shared_ts_source() {
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src"
 }
 
+refresh_lockfile_for_otel() {
+    local project_path="$1"
+    local -a list_bound=()
+    command -v timeout >/dev/null 2>&1 && list_bound=(timeout 120)
+    print_status "info" "Refreshing package-lock.json for the OTLP dependencies (up to 120s)..."
+    if (cd "$project_path" && ${list_bound[@]+"${list_bound[@]}"} npm install --package-lock-only --silent >/dev/null 2>&1); then
+        return
+    fi
+    rm -f "$project_path/package-lock.json"
+    print_status "warning" "lockfile refresh failed (npm missing, offline or timed out): package-lock.json omitted — run 'npm install' before the first push"
+}
+
 # OTLP log export (opt-in, blueprintx#438): the emitter (imports @opentelemetry/* — the ONLY
 # place it is imported), its unit test, the pinned package.json dependencies (declared only
 # here, so an opt-out never installs them), a local-dev collector compose fragment, and the
@@ -228,6 +240,7 @@ conditional_copy_otel() {
         '@opentelemetry/sdk-logs=0.222.0' \
         '@opentelemetry/exporter-logs-otlp-http=0.222.0' \
         '@opentelemetry/resources=2.11.0'
+    refresh_lockfile_for_otel "$project_path"
     cat >> "$project_path/src/index.ts" <<'TSBLOCK'
 
 // OTLP log export (opt-in, blueprintx#438) — an additional LogEmitter implementation a
@@ -246,6 +259,8 @@ copy_shared_github_overlay() {
 
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/ts-lib/.greptile/"* "$project_path/.greptile/"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
@@ -300,6 +315,7 @@ copy_static_ts_lib_files() {
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.nvmrc" "$project_path/.nvmrc"
+    cp "$SKELETON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     mkdir -p "$project_path/.husky"
     cp -r "$COMMON_TEMPLATE_ROOT/.husky/." "$project_path/.husky"
@@ -425,6 +441,7 @@ apply_offline_mode() {
     # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
     # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
+    remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"

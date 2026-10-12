@@ -14,6 +14,7 @@ the second test while the first stays green.
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -673,3 +674,649 @@ def test_a_clean_tree_reports_the_file_count_on_success(
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
     gate.main([])
     assert "✅ comment budget OK (1 file" in capsys.readouterr().out
+
+
+_PATH_REPO = Path(__file__).resolve().parents[4]
+
+
+@pytest.fixture(autouse=True)
+def _restore_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Undo ``--root``'s change to the module-level ``PATH_ROOT`` after each test.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Records the original value and restores it at teardown.
+    """
+    monkeypatch.setattr(gate, "PATH_ROOT", gate.PATH_ROOT)
+
+
+def _run(path_root: Path, capsys: pytest.CaptureFixture, *list_args: str) -> tuple:
+    """Run the gate over ``path_root`` and return ``(exit_code, stdout)``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The tree to audit.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    *list_args : str
+        Extra flags after ``--root``.
+
+    Returns
+    -------
+    tuple
+        The exit code and everything printed.
+    """
+    int_code = gate.main(["--root", str(path_root), *list_args])
+    return int_code, capsys.readouterr().out
+
+
+def _tree(path_root: Path, str_text: str, str_baseline: str = "") -> None:
+    """Write ``a.py`` and a baseline file under ``path_root``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Tree root.
+    str_text : str
+        Content of ``a.py``.
+    str_baseline : str, optional
+        Baseline file text; an empty string still creates the file (ratchet on).
+    """
+    (path_root / "a.py").write_text(str_text, encoding="utf-8")
+    (path_root / gate.STR_BASELINE_NAME).write_text(str_baseline, encoding="utf-8")
+
+
+def test_a_new_file_with_one_prose_comment_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: a file absent from the baseline has a baseline of 0.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# why this exists\nX = 1\n")
+    int_code, str_out = _run(tmp_path, capsys)
+    assert (int_code, "a.py: 1 comment line(s), baseline 0" in str_out) == (1, True)
+
+
+def test_a_file_above_its_baseline_fails(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Should-fail witness: one comment more than the recorded count is a finding.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\n# two\nX = 1\n", "1 a.py\n")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_a_file_below_its_baseline_is_a_stale_baseline(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: removing a comment without lowering the baseline fails.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "3 a.py\n")
+    int_code, str_out = _run(tmp_path, capsys)
+    assert (int_code, "stale baseline" in str_out) == (1, True)
+
+
+def test_a_vanished_file_with_a_baseline_row_is_stale(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A deleted file's row must be removed, or the ratchet would never reach zero.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "X = 1\n", "2 gone.py\n")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_a_file_at_its_baseline_passes(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Exactly the recorded count is clean.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "1 a.py\n")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_without_a_baseline_file_the_ratchet_is_off(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A generated project ships no baseline, so a short comment is not a finding yet.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "a.py").write_text("# one\nX = 1\n", encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_write_baseline_records_counts_and_then_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """``--write-baseline`` regenerates the file and the next run is green.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "b.py").write_text("X = 1\n", encoding="utf-8")
+    _tree(tmp_path, "# one\n# two\nX = 1\n")
+    (tmp_path / gate.STR_BASELINE_NAME).unlink()
+    _run(tmp_path, capsys, "--write-baseline")
+    str_written = (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")
+    assert (str_written, _run(tmp_path, capsys)[0]) == ("2 a.py\n", 0)
+
+
+def test_docstrings_are_not_counted(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """A docstring is documentation, so a new file may carry one.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, '"""Module doc."""\n\n\ndef f() -> None:\n\t"""Doc."""\n')
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_a_required_baseline_that_is_missing_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: the root hook must not pass because the baseline was deleted.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "a.py").write_text("# one\nX = 1\n", encoding="utf-8")
+    assert _run(tmp_path, capsys, "--require-baseline")[0] == 1
+
+
+def test_a_scoped_write_baseline_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Should-fail witness: naming a file would overwrite every other baseline row.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "1 a.py\n")
+    int_code = gate.main(["--root", str(tmp_path), "--write-baseline", str(tmp_path / "a.py")])
+    assert (int_code, (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")) == (
+        1,
+        "1 a.py\n",
+    )
+
+
+def test_write_baseline_refuses_to_raise_an_existing_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: regenerating must not accept a file that gained comments.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\n# two\nX = 1\n", "1 a.py\n")
+    int_code = _run(tmp_path, capsys, "--write-baseline")[0]
+    assert (int_code, (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")) == (
+        1,
+        "1 a.py\n",
+    )
+
+
+def test_write_baseline_lowers_an_existing_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Regenerating after a sweep records the lower count.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "3 a.py\n")
+    _run(tmp_path, capsys, "--write-baseline")
+    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
+
+
+def _git(path_root: Path, *list_args: str) -> None:
+    """Run git quietly inside ``path_root`` with a throwaway identity.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The repository.
+    *list_args : str
+        Git arguments.
+    """
+    subprocess.run(  # noqa: S603 -- fixed git argv, no shell
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *list_args],  # noqa: S607
+        cwd=path_root,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_a_git_detected_rename_regenerates(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Should-fail witness: ``git mv`` of a file with comments needs no hand edit.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _git(tmp_path, "init", "-q")
+    (tmp_path / "old.py").write_text("# one\nX = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "old.py")
+    _git(tmp_path, "commit", "-qm", "x")
+    _git(tmp_path, "mv", "old.py", "a.py")
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("1 old.py\n", encoding="utf-8")
+    _run(tmp_path, capsys, "--write-baseline")
+    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
+
+
+def test_freed_budget_does_not_transfer_to_a_new_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: a comment deleted in one file cannot be spent in a new one.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "X = 1\n", "1 old.py\n")
+    (tmp_path / "old.py").write_text("X = 1\n", encoding="utf-8")
+    (tmp_path / "new.py").write_text("# fresh\nX = 1\n", encoding="utf-8")
+    assert _run(tmp_path, capsys, "--write-baseline")[0] == 1
+
+
+def test_prose_that_merely_names_a_directive_is_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: the allowlist matches directive syntax, not a mention.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# Avoid noqa in this file\nX = 1\n")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_a_hand_raised_baseline_fails_the_comparison(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: editing the baseline upward is caught against the base copy.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\n# two\nX = 1\n", "2 a.py\n")
+    path_ref = tmp_path / "ref.txt"
+    path_ref.write_text("1 a.py\n", encoding="utf-8")
+    assert _run(tmp_path, capsys, "--compare-baseline", str(path_ref))[0] == 1
+
+
+def test_an_unchanged_baseline_passes_the_comparison(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The baseline equal to the base copy is clean.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", "1 a.py\n")
+    path_ref = tmp_path / "ref.txt"
+    path_ref.write_text("1 a.py\n", encoding="utf-8")
+    assert _run(tmp_path, capsys, "--compare-baseline", str(path_ref))[0] == 0
+
+
+def test_a_malformed_baseline_row_is_a_finding_not_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: a row without a count reports and exits 1.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "X = 1\n", "garbage\n")
+    int_code, str_out = _run(tmp_path, capsys)
+    assert (int_code, "malformed baseline row" in str_out) == (1, True)
+
+
+def test_prose_that_merely_mentions_a_linter_is_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: the allowlist matches directives, not any mention of a tool.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# hadolint auto-discovers its config from the cwd\nX = 1\n")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_a_trailing_comment_in_yaml_is_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: ``key: 1  # why`` is a comment.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    (tmp_path / "a.yaml").write_text("key: 1  # why\n", encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_a_hash_inside_a_yaml_string_is_not_a_comment(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A ``#`` inside quotes is data.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    (tmp_path / "a.yaml").write_text('key: "a # b"\n', encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_a_jsdoc_block_and_trailing_slash_comment_are_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: ``/** */`` and ``x; // y`` in TypeScript count per line.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    (tmp_path / "a.ts").write_text("/**\n * Doc.\n */\nconst x = 1; // y\n", encoding="utf-8")
+    int_code, str_out = _run(tmp_path, capsys)
+    assert (int_code, "a.ts: 4 comment line(s)" in str_out) == (1, True)
+
+
+def test_a_url_inside_a_ts_string_is_not_a_comment(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """``"http://x"`` holds no ``//`` comment.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    (tmp_path / "a.ts").write_text('const u = "http://x";\n', encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_a_banner_word_outside_the_file_head_is_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: ``~`` entries only exempt a generated-file banner near the top.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    str_source = "X = 1\n" * 20 + "# this is not @generated at all\n"
+    (tmp_path / "a.py").write_text(str_source, encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_an_empty_allowlist_pattern_is_rejected(
+    tmp_path: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Should-fail witness: a lone ``~`` would exempt everything, so it is an error.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    monkeypatch : pytest.MonkeyPatch
+        Points the gate at a bad allowlist.
+    """
+    (tmp_path / "a.py").write_text("# prose\nX = 1\n", encoding="utf-8")
+    path_list = tmp_path / "allow.txt"
+    path_list.write_text("~\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "PATH_ALLOWLIST", path_list)
+    assert _run(tmp_path, capsys)[0] == 1
+
+
+def test_compare_baseline_without_a_value_is_a_finding(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: no traceback for a missing flag value.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "X = 1\n")
+    assert gate.main(["--root", str(tmp_path), "--compare-baseline"]) == 1
+
+
+def test_compare_baseline_with_a_missing_file_is_a_finding(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: no traceback for an unreadable reference.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "X = 1\n")
+    assert _run(tmp_path, capsys, "--compare-baseline", str(tmp_path / "nope.txt"))[0] == 1
+
+
+def test_a_committed_rename_is_still_detected(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: rename detection uses the merge-base, not just ``HEAD``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _git(tmp_path, "init", "-q", "-b", "main")
+    (tmp_path / "old.py").write_text("# one\nX = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "old.py")
+    _git(tmp_path, "commit", "-qm", "x")
+    _git(tmp_path, "update-ref", "refs/remotes/origin/main", "HEAD")
+    _git(tmp_path, "mv", "old.py", "a.py")
+    _git(tmp_path, "commit", "-qm", "mv")
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("1 old.py\n", encoding="utf-8")
+    _run(tmp_path, capsys, "--write-baseline")
+    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
+
+
+_DICT_ALLOWED = {
+    "noqa": "X = 1  # noqa: E501\n",
+    "type_ignore": "X = 1  # type: ignore[assignment]\n",
+    "pragma": "X = 1  # pragma: no cover\n",
+    "pyright": "# pyright: basic\nX = 1\n",
+    "mypy": "# mypy: ignore-errors\nX = 1\n",
+    "ok_marker": "# complexity-ok: parser branches\nX = 1\n",
+    "one_assert_ok": "# one-assert-ok: table-driven\nX = 1\n",
+    "pairing": "# pairing:internal\nX = 1\n",
+    "pipeline_mode": "# pipeline-mode: single\nX = 1\n",
+    "shellcheck_disable": "# shellcheck disable=SC2086\nX=1\n",
+    "shellcheck_source": "# shellcheck source=lib/common.sh\nX=1\n",
+    "shellcheck_shell": "# shellcheck shell=bash\nX=1\n",
+    "codespell": "# codespell:ignore teh\nX=1\n",
+    "markdownlint": "# markdownlint-disable MD013\nX=1\n",
+    "eslint": "// eslint-disable-next-line no-console\nconst x = 1;\n",
+    "stylelint": "// stylelint-disable\nconst x = 1;\n",
+    "prettier": "// prettier-ignore\nconst x = 1;\n",
+    "ts_expect": "// @ts-expect-error legacy\nconst x = 1;\n",
+    "ts_ignore": "// @ts-ignore\nconst x = 1;\n",
+    "hadolint": "# hadolint ignore=DL3008\nX=1\n",
+    "shebang": "#!/usr/bin/env bash\nX=1\n",
+    "syntax": "# syntax=docker/dockerfile:1\nX=1\n",
+    "coding": "# -*- coding: utf-8 -*-\nX = 1\n",
+    "sha_pin_version": "uses: actions/checkout@" + "a" * 40 + " # v7.0.1\n",
+    "provenance": "# Written by BlueprintX at scaffold time - do not edit by hand.\nX: 1\n",
+}
+_DICT_SUFFIX = {
+    "eslint": ".ts",
+    "stylelint": ".ts",
+    "prettier": ".ts",
+    "ts_expect": ".ts",
+    "ts_ignore": ".ts",
+    "sha_pin_version": ".yaml",
+    "provenance": ".yaml",
+    "shellcheck_disable": ".sh",
+    "shellcheck_source": ".sh",
+    "shellcheck_shell": ".sh",
+    "hadolint": ".sh",
+    "shebang": ".sh",
+    "syntax": ".sh",
+    "markdownlint": ".sh",
+    "codespell": ".sh",
+    "pairing": ".mk",
+}
+
+
+@pytest.mark.parametrize("str_form", sorted(_DICT_ALLOWED))
+def test_each_allowlisted_form_is_not_counted(
+    str_form: str, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Every agreed keep-list form passes in a new file against an empty baseline.
+
+    Parameters
+    ----------
+    str_form : str
+        Key into ``_DICT_ALLOWED``.
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    str_name = "probe" + _DICT_SUFFIX.get(str_form, ".py")
+    _tree(tmp_path, "")
+    (tmp_path / str_name).write_text(_DICT_ALLOWED[str_form], encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+@pytest.mark.skipif(
+    not (_PATH_REPO / gate.STR_BASELINE_NAME).is_file(), reason="not the BlueprintX root"
+)
+def test_the_current_tree_passes_against_the_committed_baseline(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """The committed baseline matches the tree it was generated from.
+
+    Parameters
+    ----------
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    assert _run(_PATH_REPO, capsys)[0] == 0
+
+
+def test_sha_pin_exemption_survives_a_vertical_tab_earlier_in_the_file() -> None:
+    """A vertical tab breaks ``str.splitlines``; the counter must index by newline only."""
+    str_source = "a\x0bb\nuses: actions/checkout@" + "a" * 40 + " # v7.0.1\n"
+    assert gate.counted_comments(str_source, "#") == []
