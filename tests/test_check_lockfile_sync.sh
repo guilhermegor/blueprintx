@@ -39,7 +39,22 @@ run_case "dependency absent from lock fails naming it" '{"a":"^1.0.0","b":"^2.0.
     '{"a":"^1.0.0"}' "a" fail "'b'"
 run_case "spec drift fails naming the package" '{"a":"^2.0.0"}' '{"a":"^1.0.0"}' "a" fail "'a'"
 run_case "declared but unresolved fails" '{"a":"^1.0.0"}' '{"a":"^1.0.0"}' "x" fail "no resolved"
+run_case "dependency removed from package.json but kept in lock fails" '{"a":"^1.0.0"}' \
+    '{"a":"^1.0.0","gone":"^1.0.0"}' "a gone" fail "'gone'"
 run_case "tier without lockfile is skipped" '{"a":"^1.0.0"}' '{}' "-" pass
+
+# An optional peer need not be installed: declared in the lock root, no node_modules entry.
+path_root="$path_tmp/optional-peer"
+mkdir -p "$path_root/templates/t"
+echo '{"name":"t","peerDependencies":{"p":"^1.0.0"},"peerDependenciesMeta":{"p":{"optional":true}}}' \
+    >"$path_root/templates/t/package.json"
+echo '{"packages":{"":{"peerDependencies":{"p":"^1.0.0"}}}}' >"$path_root/templates/t/package-lock.json"
+if bash "$GATE" --root "$path_root" >/dev/null 2>&1; then
+    echo "ok: optional peer without an installed entry passes"
+else
+    echo "FAIL: optional peer without an installed entry must pass"
+    int_failures=$((int_failures + 1))
+fi
 
 [ "$int_failures" -eq 0 ] || exit 1
 echo "all lockfile-sync cases passed"

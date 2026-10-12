@@ -29,11 +29,15 @@ for path_pkg in sorted(root.glob("templates/*/package.json")):
     pkg = json.loads(path_pkg.read_text())
     packages = json.loads(path_lock.read_text()).get("packages", {})
     top = packages.get("", {})
+    optional_peers = {n for n, m in pkg.get("peerDependenciesMeta", {}).items() if m.get("optional")}
     for section in sections:
-        for name, spec in pkg.get(section, {}).items():
-            if top.get(section, {}).get(name) != spec:
+        declared, locked = pkg.get(section, {}), top.get(section, {})
+        for name in sorted(set(locked) - set(declared)):
+            errors.append(f"{tier}: {section} '{name}' is in package-lock.json but not package.json")
+        for name, spec in declared.items():
+            if locked.get(name) != spec:
                 errors.append(f"{tier}: {section} '{name}' ({spec}) is not in package-lock.json")
-            elif f"node_modules/{name}" not in packages:
+            elif f"node_modules/{name}" not in packages and name not in optional_peers:
                 errors.append(f"{tier}: '{name}' has no resolved entry in package-lock.json")
 
 if errors:
