@@ -53,7 +53,7 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     GITHUB_USERNAME="${input:-$DEFAULT_GITHUB_USERNAME}"
     print_status "config" "GitHub username (prompt): $GITHUB_USERNAME"
 }
@@ -120,6 +120,7 @@ copy_common_templates() {
 
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/bash-cli/.greptile/"* "$project_path/.greptile/"
     # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
     # file, language-agnostic; bash-cli was added after #540 was scoped, included here
     # for consistency with the other seven skeleton roots.
@@ -150,7 +151,8 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
+    protect_ans=""
+    prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y | Y)
             local reviews_json='"required_pull_request_reviews": null,'

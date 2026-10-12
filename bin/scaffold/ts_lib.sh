@@ -50,7 +50,7 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -61,7 +61,7 @@ resolve_github_username() {
 
 prompt_otel() {
     local answer
-    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
     case "$answer" in
         y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
         *) INCLUDE_OTEL=false ;;
@@ -205,6 +205,18 @@ copy_shared_ts_source() {
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src"
 }
 
+refresh_lockfile_for_otel() {
+    local project_path="$1"
+    local -a list_bound=()
+    command -v timeout >/dev/null 2>&1 && list_bound=(timeout 120)
+    print_status "info" "Refreshing package-lock.json for the OTLP dependencies (up to 120s)..."
+    if (cd "$project_path" && ${list_bound[@]+"${list_bound[@]}"} npm install --package-lock-only --silent >/dev/null 2>&1); then
+        return
+    fi
+    rm -f "$project_path/package-lock.json"
+    print_status "warning" "lockfile refresh failed (npm missing, offline or timed out): package-lock.json omitted — run 'npm install' before the first push"
+}
+
 # OTLP log export (opt-in, blueprintx#438): the emitter (imports @opentelemetry/* — the ONLY
 # place it is imported), its unit test, the pinned package.json dependencies (declared only
 # here, so an opt-out never installs them), a local-dev collector compose fragment, and the
@@ -228,6 +240,7 @@ conditional_copy_otel() {
         '@opentelemetry/sdk-logs=0.222.0' \
         '@opentelemetry/exporter-logs-otlp-http=0.222.0' \
         '@opentelemetry/resources=2.11.0'
+    refresh_lockfile_for_otel "$project_path"
     cat >> "$project_path/src/index.ts" <<'TSBLOCK'
 
 // OTLP log export (opt-in, blueprintx#438) — an additional LogEmitter implementation a
@@ -246,6 +259,7 @@ copy_shared_github_overlay() {
 
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/ts-lib/.greptile/"* "$project_path/.greptile/"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
@@ -300,6 +314,7 @@ copy_static_ts_lib_files() {
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.nvmrc" "$project_path/.nvmrc"
+    cp "$SKELETON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     mkdir -p "$project_path/.husky"
     cp -r "$COMMON_TEMPLATE_ROOT/.husky/." "$project_path/.husky"
@@ -344,13 +359,15 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
+    protect_ans=""
+    prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review rule — GitHub
             # forbids self-approval, so the first PR's merge would be permanently blocked.
             local reviews_json
-            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
+            reviews_ans=""
+            prompt_read reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'

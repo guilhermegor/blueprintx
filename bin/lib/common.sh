@@ -1,11 +1,8 @@
 #!/bin/bash
-#
 # lib/common.sh
-#
 # Shared shell utilities for the BlueprintX repo tooling. Sourced by sibling
 # scripts (bin/*.sh, bin/scaffold/*.sh) so each one shares a single
 # print_status implementation and color set.
-#
 # Sourcing contract:
 #   - Idempotent (guarded with _BX_COMMON_LOADED so re-sourcing is a no-op).
 #   - Optional: scripts may set LOG_FILE before sourcing; print_status will tee
@@ -32,7 +29,6 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-#
 # The six colours above are already each bound to one print_status level
 # (RED=error, GREEN=success, YELLOW=warning, BLUE=info, CYAN=config,
 # MAGENTA=debug/section). Reusing any of them for "this is a top-level
@@ -58,7 +54,6 @@ NC='\033[0m'
 # something a generated project's scripts ask about. Shipping it there would
 # be a scaffolder-only concept leaking into every user's repo.
 #
-# Usage:
 #   read -r -p "$(prompt_main "Question? [y/N]: ")" answer
 #   read -r -p "$(prompt_sub  "Follow-up? [a/b]: ")" sub_answer
 #   printf "  ${CANCEL}%d) Cancel${NC}\n" "$idx"
@@ -76,6 +71,48 @@ prompt_main() {
 
 prompt_sub() {
     printf "    ${PROMPT_SUB}└${NC} %s" "$1"
+}
+
+prompt_can_read() {
+    [ -t 0 ] || [ "${BLUEPRINTX_STDIN_ANSWERS:-}" = "1" ]
+}
+
+prompt_warn_default() {
+    local str_question
+    str_question="$(printf '%s' "$1" | sed -E $'s/\x1b\\[[0-9;]*m//g; s/[[:space:]]*(\\[[^]]*\\])?:?[[:space:]]*$//')"
+    printf 'stdin is not a terminal; using %s for "%s" (set BLUEPRINTX_STDIN_ANSWERS=1 to answer from stdin)\n' \
+        "${2:-its default}" "$str_question" >&2
+}
+
+prompt_read() {
+    local _prompt_read_value=""
+    if prompt_can_read; then
+        read -r -p "$2" _prompt_read_value || true
+    else
+        prompt_warn_default "$2" "${3:-}"
+    fi
+    printf -v "$1" '%s' "$_prompt_read_value"
+}
+
+prompt_yes_no() {
+    local var_name="$1"
+    local rendered_prompt="$2"
+    local default="${3:-n}"
+    local answer=""
+
+    prompt_read answer "$rendered_prompt" "'$default'"
+
+    case "$answer" in
+        y | Y | yes | YES) printf -v "$var_name" 'true' ;;
+        n | N | no | NO) printf -v "$var_name" 'false' ;;
+        *)
+            if [ "$default" = "y" ]; then
+                printf -v "$var_name" 'true'
+            else
+                printf -v "$var_name" 'false'
+            fi
+            ;;
+    esac
 }
 
 # BRAND COLOURS — logo/tagline accent (blueprintx#256)
@@ -283,18 +320,13 @@ resolve_default_branch() {
 #   apply_env_wise_config "$PROJECT_PATH"  # splits them into dev/prd if chosen
 
 prompt_env_wise_config() {
-    local answer
-    read -r -p "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: " answer || true
-    case "${answer:-}" in
-        y | Y | yes | YES)
-            INCLUDE_ENV_WISE=true
-            print_status "config" "Env-wise config: inputs_dev/prd.yaml + outputs_dev/prd.yaml (ENV selects)"
-            ;;
-        *)
-            INCLUDE_ENV_WISE=false
-            print_status "config" "Config: single inputs.yaml + outputs.yaml (default)"
-            ;;
-    esac
+    prompt_yes_no INCLUDE_ENV_WISE \
+        "$(prompt_main "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: ")"
+    if [ "$INCLUDE_ENV_WISE" = "true" ]; then
+        print_status "config" "Env-wise config: inputs_dev/prd.yaml + outputs_dev/prd.yaml (ENV selects)"
+    else
+        print_status "config" "Config: single inputs.yaml + outputs.yaml (default)"
+    fi
 }
 
 #
@@ -486,9 +518,6 @@ copy_repo_rules_provisioner() {
     chmod +x "$project_path/bin/enable_repo_rules.sh"
 }
 
-# Ship the repo-level PR/issue policy workflows and the scripts they run (blueprintx#604).
-# The scripts are copied into the project, never fetched at run time (blueprintx#175).
-# GitHub-only: an offline scaffold removes `.github/`, so call it next to the PR template.
 copy_repo_policy_workflows() {
     local project_path="$1"
     local common_root
