@@ -91,8 +91,9 @@ copy_skeleton_files() {
         > "$project_path/Makefile"
 
     envsubst '${PROJECT_NAME}' \
-        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
-        > "$project_path/CLAUDE.md"
+        < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" \
+        > "$project_path/AGENTS.md"
+    cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
 
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
