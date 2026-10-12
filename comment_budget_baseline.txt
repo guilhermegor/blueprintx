@@ -46,7 +46,7 @@
 60 bin/ci/scaffold_lint_test_all.sh
 9 bin/ci/smoke_test.sh
 12 bin/ci/validate_meta.sh
-214 bin/lib/common.sh
+209 bin/lib/common.sh
 131 bin/lib/scaffold_git_remote.sh
 23 bin/lib/scaffold_kanban.sh
 15 bin/lib/scaffold_package_json.sh

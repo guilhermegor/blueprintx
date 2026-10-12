@@ -94,12 +94,6 @@ prompt_read() {
     printf -v "$1" '%s' "$_prompt_read_value"
 }
 
-#
-# Usage:
-#
-#
-#
-
 prompt_yes_no() {
     local var_name="$1"
     local rendered_prompt="$2"

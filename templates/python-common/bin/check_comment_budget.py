@@ -636,7 +636,7 @@ def counted_comments(str_source: str, str_marker: str) -> list:
         ``uses:`` is exempt: Dependabot rewrites it and it is the only readable version.
     """
     tuple_allowlist = load_allowlist()
-    list_lines = str_source.splitlines()
+    list_lines = str_source.split("\n")
     return [
         (int_line, str_text)
         for int_line, str_text in scan_comments(str_source, str_marker)

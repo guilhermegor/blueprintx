@@ -1314,3 +1314,9 @@ def test_the_current_tree_passes_against_the_committed_baseline(
         Captures the gate's report.
     """
     assert _run(_PATH_REPO, capsys)[0] == 0
+
+
+def test_sha_pin_exemption_survives_a_vertical_tab_earlier_in_the_file() -> None:
+    """``str.splitlines`` also breaks on ``\\x0b``; the counter must index by ``\\n`` only."""
+    str_source = "a\x0bb\nuses: actions/checkout@" + "a" * 40 + " # v7.0.1\n"
+    assert gate.counted_comments(str_source, "#") == []
