@@ -210,7 +210,7 @@ refresh_lockfile_for_otel() {
     local -a list_bound=()
     command -v timeout >/dev/null 2>&1 && list_bound=(timeout 120)
     print_status "info" "Refreshing package-lock.json for the OTLP dependencies (up to 120s)..."
-    if (cd "$project_path" && "${list_bound[@]}" npm install --package-lock-only --silent >/dev/null 2>&1); then
+    if (cd "$project_path" && ${list_bound[@]+"${list_bound[@]}"} npm install --package-lock-only --silent >/dev/null 2>&1); then
         return
     fi
     rm -f "$project_path/package-lock.json"
