@@ -30,9 +30,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 STR_ROOT="."
+BOOL_STAGED=0
 
 parse_args() {
-	# Only --root is accepted, so BlueprintX can run THIS file over its own tree instead of
+	# Only --root and --staged are accepted, so BlueprintX can run THIS file over its own tree instead of
 	# keeping a second copy (the treatment blueprintx#189 gave the function-length gate).
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -40,18 +41,32 @@ parse_args() {
 			STR_ROOT="${2:-.}"
 			shift 2
 			;;
+		--staged)
+			BOOL_STAGED=1
+			shift
+			;;
 		*)
-			print_status "error" "Unknown argument: $1 (only --root <dir> is accepted)"
+			print_status "error" "Unknown argument: $1 (only --root <dir> and --staged are accepted)"
 			exit 2
 			;;
 		esac
 	done
 }
 
+scan_gitleaks() {
+	if [[ "$BOOL_STAGED" != "1" ]]; then
+		gitleaks git "$STR_ROOT" --no-banner --redact -v
+	elif gitleaks git --help 2>&1 | grep -q -- '--staged'; then
+		gitleaks git --staged "$STR_ROOT" --no-banner --redact -v
+	else
+		gitleaks protect --staged --source "$STR_ROOT" --no-banner --redact -v
+	fi
+}
+
 run_gitleaks() {
 	# gitleaks exits 0 (clean) or 1 (leaks found) — both are DATA, so let it drive our exit.
 	print_status "section" "Secret scan (gitleaks)"
-	if gitleaks git "$STR_ROOT" --no-banner --redact -v; then
+	if scan_gitleaks; then
 		print_status "success" "gitleaks: no leaks found"
 		return 0
 	fi

@@ -1111,6 +1111,51 @@ def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
     )
 
 
+def _row_posters(posters: object) -> frozenset[str]:
+    """Return one row's normalised ``posters:`` logins, or none when the value is malformed.
+
+    Only a list of non-empty strings is valid. A scalar (``posters: foo``) would otherwise be
+    iterated into single characters, so anything else is reported on stderr and trusts nobody.
+    """
+    if posters is None:
+        return frozenset()
+    if not isinstance(posters, list) or not all(isinstance(x, str) and x.strip() for x in posters):
+        print(
+            "check_review_threads: ignoring a comment-marker `posters:` that is not a list of "
+            "non-empty strings; no marker will be accepted from that row",
+            file=sys.stderr,
+        )
+        return frozenset()
+    return frozenset(normalise_login(x) for x in posters)
+
+
+def load_marker_posters(path_root: pathlib.Path) -> frozenset[str]:
+    """Return the normalised logins the roster's ``comment-marker`` rows allow to post a marker.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Repository root holding ``.review-bots.yaml``.
+
+    Returns
+    -------
+    frozenset of str
+        Logins from every ``posters:`` list, normalised like the roster logins. Empty when
+        absent, which makes every marker unacceptable: authority is an explicit allowlist,
+        never an author-association guess (blueprintx#761).
+    """
+    path_roster = path_root / _ROSTER_FILE
+    if yaml is None or not path_roster.is_file():
+        return frozenset()
+    dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
+    return frozenset(
+        str_login
+        for d in (dict_yaml.get("reviewers") or [])
+        if isinstance(d, dict) and d.get("kind") == _KIND_COMMENT_MARKER
+        for str_login in _row_posters(d.get("posters"))
+    )
+
+
 _RE_FINDINGS_LINE = re.compile(r"(\d+) finding\(s\) across (\d+) reviewed file\(s\)\.")
 
 
@@ -1135,13 +1180,28 @@ def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
     return list_counts == ["0"] and len(list_zero) == 1 and int(list_zero[0].group(2)) > 0
 
 
+def _is_allowlisted_bot(dict_notice: dict, set_posters: frozenset[str]) -> bool:
+    """Return whether a comment's author is a GitHub ``Bot`` actor whose login is allowlisted.
+
+    The login alone is not identity: normalising strips ``[bot]``, so a human who registers the
+    bare App name would match. GraphQL ``__typename`` separates the two, and a missing one
+    fails closed.
+    """
+    dict_author = dict_notice.get("author") or {}
+    return (
+        dict_author.get("__typename") == "Bot"
+        and normalise_login(dict_author.get("login") or "") in set_posters
+    )
+
+
 def ladder_marker_declared(
     list_notices: list[dict],
     tuple_markers: tuple[str, ...],
     str_head_date: str = "",
     str_head_oid: str = "",
+    set_posters: frozenset[str] = frozenset(),
 ) -> bool:
-    """Return whether a trusted commenter posted a roster marker after the head commit.
+    """Return whether an allowlisted poster declared a roster marker after the head commit.
 
     Parameters
     ----------
@@ -1155,11 +1215,16 @@ def ladder_marker_declared(
     str_head_oid : str, optional
         The head commit SHA. The ladder writes ``Reviewed head: <sha>`` on the second line
             of its comment, which must name this SHA; empty fails closed.
+    set_posters : frozenset of str, optional
+        Normalised logins from :func:`load_marker_posters`; the author must also be a ``Bot``
+        actor (``__typename``), so a user with the bare name does not match. The association is NOT
+        consulted: the PR author is usually the repo OWNER, so trusting it would let the
+        author self-approve by typing the marker (blueprintx#761). Empty fails closed.
 
     Returns
     -------
     bool
-        ``True`` only for an OWNER/MEMBER/COLLABORATOR comment carrying a marker and
+        ``True`` only for a comment by an allowlisted poster carrying a marker and
             postdating the head, whose LATEST such comment names the head SHA on its second
             line and reports zero findings (a later ladder run, even a malformed one,
             supersedes an earlier clean one), so an outside commenter cannot forge it and a
@@ -1171,14 +1236,12 @@ def ladder_marker_declared(
     list_trusted = [
         d
         for d in list_notices
-        if d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
+        if _is_allowlisted_bot(d, set_posters)
         and (d.get("createdAt") or "") >= str_head_date
         and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
     ]
     if not list_trusted:
         return False
-    # The latest trusted marker decides BEFORE the head line is checked: a later marker with a
-    # missing or garbled `Reviewed head:` line must fail closed, not fall back to an earlier one.
     dict_latest = max(list_trusted, key=lambda d: d.get("createdAt") or "")
     str_body = (dict_latest.get("body") or "").strip()
     list_lines = str_body.splitlines()
@@ -1249,6 +1312,26 @@ def _notice_quote(list_notices: list[dict], set_roster: set[str]) -> str:
 # ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
 # #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
 # ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
+def _notice_declares_review(
+    list_notices: list[dict],
+    set_roster: set[str],
+    tuple_marker_rule: tuple[tuple[str, ...], frozenset[str]],
+    str_head_date: str,
+    str_head_oid: str,
+) -> bool:
+    """Return whether an issue comment declares the head reviewed: a completion or a marker.
+
+    A CLEAN review is not a missing one — see the COMPLETION block above this function.
+    ``tuple_marker_rule`` is ``(markers, posters)`` as :func:`ladder_marker_declared` takes them.
+    """
+    tuple_markers, set_posters = tuple_marker_rule
+    return reviewer_declared_completion(
+        list_notices, set_roster, str_head_date
+    ) or ladder_marker_declared(
+        list_notices, tuple_markers, str_head_date, str_head_oid, set_posters
+    )
+
+
 def check_missing_review(  # noqa: PLR0913
     list_reviews: list[dict],
     set_reviewers: set[str],
@@ -1259,6 +1342,7 @@ def check_missing_review(  # noqa: PLR0913
     str_head_date: str = "",
     tuple_markers: tuple[str, ...] = (),
     fn_fingerprint: Callable[[str], str] | None = None,
+    set_posters: frozenset[str] = frozenset(),
 ) -> tuple[str | None, str]:
     """Return ``(problem, carried_from)`` for a PR no declared reviewer reported on at HEAD.
 
@@ -1284,6 +1368,8 @@ def check_missing_review(  # noqa: PLR0913
         The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
     tuple_markers : tuple of str, optional
         Roster ``comment-marker`` strings; see :func:`ladder_marker_declared`.
+    set_posters : frozenset of str, optional
+        Roster ``posters:`` logins allowed to post a marker; see :func:`load_marker_posters`.
     fn_fingerprint : Callable[[str], str], optional
         Maps a commit oid to its patch fingerprint. When given, a review at an earlier
             commit covers HEAD if the PR's own patch is unchanged (see
@@ -1312,10 +1398,8 @@ def check_missing_review(  # noqa: PLR0913
     if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
         return None, ""
 
-    if (
-        reviewer_declared_completion(list_notices or [], set_roster, str_head_date)
-        # A CLEAN review is not a missing one — see the COMPLETION block above the function.
-        or ladder_marker_declared(list_notices or [], tuple_markers, str_head_date, str_head_oid)
+    if _notice_declares_review(
+        list_notices or [], set_roster, (tuple_markers, set_posters), str_head_date, str_head_oid
     ):
         return None, ""
 
@@ -1356,6 +1440,7 @@ def find_missing_review_problem(  # noqa: PLR0913
     str_head_date: str = "",
     tuple_markers: tuple[str, ...] = (),
     fn_fingerprint: Callable[[str], str] | None = None,
+    set_posters: frozenset[str] = frozenset(),
 ) -> str | None:
     """Return only the problem half of :func:`check_missing_review` (same parameters)."""
     return check_missing_review(
@@ -1367,6 +1452,7 @@ def find_missing_review_problem(  # noqa: PLR0913
         str_head_date=str_head_date,
         tuple_markers=tuple_markers,
         fn_fingerprint=fn_fingerprint,
+        set_posters=set_posters,
     )[0]
 
 
@@ -2054,6 +2140,7 @@ def _missing_review(
         list_notices=dict_pr.get("comments", {}).get("nodes", []),
         str_head_date=_head_committed_date(dict_pr),
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
+        set_posters=load_marker_posters(pathlib.Path.cwd()),
         fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full),
     )
 
