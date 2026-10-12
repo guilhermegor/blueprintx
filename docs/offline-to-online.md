@@ -51,12 +51,13 @@ The 5 service tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service
 `contract_drift`/`release`, plus `docs.yaml` from its own `templates/lib-minimal/.github/workflows/`,
 plus `release-pypi.yaml` / `release-test-pypi.yaml` gated by `--publish`.
 
-`react-spa-webpack` (from `ts_react_app.sh`) ships only `.github/CLAUDE.md`, `.github/CODEOWNERS`
+`react-spa-webpack` (from `ts_react_app.sh`) ships the `templates/ts-common/.github/workflows/`
+set (build, lint, test, type-check, secret-scan, review-threads) plus `.github/CLAUDE.md`, `.github/CODEOWNERS`
 (envsubst `GITHUB_USERNAME`), `.github/PULL_REQUEST_TEMPLATE.md`, and — gated by `--deploy-target` —
 either `deploy-spa.yml` or `deploy-vercel.yml` + `vercel.json`. No `SECURITY.md` or
 `dependabot.yml`: `templates/ts-common/` ships neither.
 
-`ts-lib` (from `ts_lib.sh`) ships `.github/workflows/{docs,docs-deploy,pack-smoke,release-npm}.yml`
+`ts-lib` (from `ts_lib.sh`) ships the same ts-common workflows plus `.github/workflows/{docs,docs-deploy,pack-smoke,release-npm}.yml`
 (`release-npm.yml` rendered with `PROJECT_NAME`) plus the shared `CLAUDE.md`, `CODEOWNERS` and PR
 template. `bash-cli` (from `bash_cli.sh`) ships `ci.yml` and `release.yml` (rendered with
 `PROJECT_NAME`) plus the same three shared files. Neither ships `SECURITY.md`, `dependabot.yml` or

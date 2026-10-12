@@ -39,7 +39,8 @@ Required:
   <project_path>           Path to the offline-scaffolded project to promote.
   --tier <tier>             ddd-service-native-db | ddd-service-orm-db |
                              mvc-service-native-db | mvc-service-orm-db |
-                             api-service-native-db | lib-minimal | react-spa-webpack | ts-lib | bash-cli
+                             api-service-native-db | lib-minimal | react-spa-webpack |
+                             ts-lib | bash-cli
 
 Options:
   --github-user <user>      GitHub owner for the new repo (default: `gh api user`).
@@ -329,7 +330,7 @@ copy_shared_github_overlay() {
 
 # secret_scan.yaml is opt-in: the scaffolds ship it only when GITGUARDIAN_API_KEY is exported,
 # because ggshield fails every non-bot scan in a repo that has no such secret. Same rule here;
-# set_secret_scan_key then gives the new repo the key. react-spa-webpack never shipped it.
+# set_secret_scan_key then gives the new repo the key. The TS and bash tiers never shipped it.
 copy_secret_scan_if_keyed() {
     case "$TIER" in react-spa-webpack | ts-lib | bash-cli) return 0 ;; esac
     [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0

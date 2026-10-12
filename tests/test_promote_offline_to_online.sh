@@ -201,11 +201,22 @@ test_copy_manifests_match_templates() {
     for tier in ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db api-service-native-db lib-minimal react-spa-webpack ts-lib bash-cli; do
         dir="$WORK_DIR/manifest-$tier"
         mkdir -p "$dir"
-        if bash -c 'source "$1"; PROJECT_PATH="$2"; TIER="$3"; GITHUB_USERNAME=octo; PROJECT_DISPLAY_NAME=Demo; REPOSITORY=octo/demo; export GITHUB_USERNAME PROJECT_DISPLAY_NAME REPOSITORY; copy_online_assets' _ "$PROMOTE_SCRIPT" "$dir" "$tier" >/dev/null 2>&1 \
+        if bash -c 'source "$1"; PROJECT_PATH="$2"; TIER="$3"; GITHUB_USERNAME=octo; PROJECT_NAME=demo; PROJECT_DISPLAY_NAME=Demo; REPOSITORY=octo/demo; export PROJECT_NAME GITHUB_USERNAME PROJECT_DISPLAY_NAME REPOSITORY; copy_online_assets' _ "$PROMOTE_SCRIPT" "$dir" "$tier" >/dev/null 2>&1 \
             && grep -q '@octo' "$dir/.github/CODEOWNERS" && ! grep -q '\${' "$dir/.github/CODEOWNERS"; then
             echo "ok: $tier copy manifest resolves against templates/ and renders CODEOWNERS"
         else
             echo "FAIL ($tier): copy manifest failed against templates/ or CODEOWNERS kept a placeholder"
+            int_failures=$((int_failures + 1))
+        fi
+    done
+    for tier in ts-lib bash-cli; do
+        local wf=release.yml
+        [ "$tier" = ts-lib ] && wf=release-npm.yml
+        if grep -q 'demo' "$WORK_DIR/manifest-$tier/.github/workflows/$wf" \
+            && ! grep -q '\${PROJECT_NAME}' "$WORK_DIR/manifest-$tier/.github/workflows/$wf"; then
+            echo "ok: $tier release workflow rendered with PROJECT_NAME"
+        else
+            echo "FAIL ($tier): $wf not rendered with PROJECT_NAME"
             int_failures=$((int_failures + 1))
         fi
     done
