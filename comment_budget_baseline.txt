@@ -88,7 +88,7 @@
 8 templates/bash-cli/Makefile
 8 templates/bash-cli/bin/cli.sh
 6 templates/common/.github/workflows/close-linked-issues.yml
-322 templates/common/bin/check_review_threads.py
+321 templates/common/bin/check_review_threads.py
 24 templates/common/bin/close_linked_issues.sh
 15 templates/common/bin/commit.sh
 20 templates/common/bin/export_repo_content.sh
