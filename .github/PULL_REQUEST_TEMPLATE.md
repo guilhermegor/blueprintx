@@ -60,7 +60,7 @@
     - `validate-meta`: skeleton.meta integrity — Status: `OK/NOK`
     - `docs-build`: MkDocs strict build — Status: `OK/NOK`
     - `dry-run-smoke`: all skeletons — Status: `OK/NOK`
-    - `typecheck-ts`: tsc --noEmit — Status: `OK/NOK`
+    - `typecheck-ts`: tsc, build, stylelint, eslint — Status: `OK/NOK`
     - `spell-check`: codespell — Status: `OK/NOK`
 
 **Not Applicable**:

@@ -254,6 +254,13 @@ repos:
         pass_filenames: false
         files: ^(templates/common/bin/close_linked_issues\.sh|templates/common/\.github/workflows/close-linked-issues\.yml|tests/test_close_linked_issues\.sh)$
 
+      - id: check-pr-policy-tests
+        name: check_pr_policy.sh should-fail regression tests (blueprintx#604)
+        entry: bash tests/test_check_pr_policy.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/common/bin/check_pr_policy\.sh|templates/common/\.github/(workflows/.*|PULL_REQUEST_TEMPLATE)\.(yml|md)|tests/test_check_pr_policy\.sh)$
+
       - id: docs-locale-prompt-tests
         name: docs-locale prompt should-fail regression tests (blueprintx#247)
         entry: bash tests/test_docs_locale_prompt.sh
@@ -295,6 +302,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/ci/check_specs_structure\.sh|tests/test_check_specs_structure\.sh|bin/lib/common\.sh)$
+
+      - id: promote-offline-to-online-tests
+        name: promote_offline_to_online.sh refusal-path tests (blueprintx#382)
+        entry: bash tests/test_promote_offline_to_online.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/promote_offline_to_online\.sh|tests/test_promote_offline_to_online\.sh|bin/lib/common\.sh|templates/(common|python-common|lib-minimal|react-spa-webpack)/(\.github/|SECURITY\.md|optional/deploy/|docs_version/))
 
       - id: docs-boundary
         name: docs/ boundary guard (working material stays out of docs/, blueprintx#536)
@@ -339,6 +353,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(Makefile|tasks\.sh|bin/help\.sh|bin/check_makefile_pairing\.sh)$
+
+      - id: review-config-shipped
+        name: every skeleton ships the hosted-reviewer config (blueprintx#740)
+        entry: bash bin/ci/check_review_config_shipped.sh --static
+        language: system
+        pass_filenames: false
+        files: ^(bin/scaffold/.*\.sh|bin/lib/.*\.sh|templates/common/.*|templates/[^/]+/skeleton\.meta|bin/ci/check_review_config_shipped\.sh)$
 
       - id: precommit-ci-parity
         name: pre-commit and CI run the same checks, both directions (blueprintx#384)

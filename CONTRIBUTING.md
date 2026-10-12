@@ -232,6 +232,22 @@ its first cell, so one fresh row never implies the other rows were re-measured w
 Update the date in this heading when the WHOLE table is re-measured, so the next reader knows whether the gap
 narrowed or widened.
 
+### TypeScript build + lint gate
+
+The `typecheck-ts` CI job (`.github/workflows/scaffold_checks.yml`) scaffolds `react-spa-webpack`
+and `ts-lib` for real, then runs `type-check`, `build`, `lint:css` and `lint` in the generated
+project (#726). It replaced a hand-assembled workspace that ran only `tsc --noEmit`: that copy
+drifted from the scaffold (#436) and could not see webpack, stylelint or eslint, so a
+`ts-common` dependency bump that broke the build merged green.
+
+- **Stdin is `/dev/null`.** Every scaffold prompt reads with `|| true` and falls back to its
+  default (no remote, no opt-ins), measured byte-identical to answering `n`; a prompt with no
+  default fails fast on EOF instead of looping until the job timeout.
+- **Install is `npm ci`** where the skeleton ships a lockfile (`react-spa-webpack`); `ts-lib`
+  has none yet and floats on `npm install` (#735).
+- **No required check.** Only `Review threads answered` is required by the `pr-quality-gate`
+  ruleset, so the job's display name can change without orphaning a branch rule.
+
 ### Rules scoped to BlueprintX, not inherited by scaffolds
 
 Parity is the default, and it is about **languages**, not about the BlueprintX/generated-project
@@ -497,6 +513,22 @@ Measured 2026-09-16: 4 `catch (err)` sites across both tiers' `src/`
 (`react-spa-webpack`'s `use-cases.ts` + `use-cases.zustand.ts`, 2 each), no
 `.catch(cb)` callbacks and no non-`Error` `throw` — both rules cost zero
 findings today, same as the Python side.
+
+## Migrating a generated project from `docs/backlog/` to `.specs/backlog/`
+
+Scaffolds are generated once and never re-synced, so this applies only to a project that
+hand-copies the updated template files. Before adopting the new `mkdocs.yml` and
+`check_backlog_ledger.py`:
+
+1. Move `docs/backlog/*.md` to `.specs/backlog/` (names are unchanged). Until then the old
+   ledgers are not recognized by the gate, and with `backlog/` gone from `exclude_docs` they
+   would be published. The tier `mkdocs.yml` files set `validation.nav.omitted_files: warn`, so
+   a forgotten legacy page raises a warning that names the file. It fails only a build run
+   with `mkdocs build --strict`, which no generated-project step does today.
+2. Change any uppercase `[X]` marker to `[x]`, and give every `[~]` a `<type>/<branch>`; the
+   ledger gate now shares the grammar of `check_specs_structure.sh`.
+3. A branch already in flight with an old-path ledger needs it moved too; there is no
+   transitional acceptance.
 
 ## Best Practices
 
