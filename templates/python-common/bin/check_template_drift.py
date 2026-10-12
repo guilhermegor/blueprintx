@@ -48,6 +48,7 @@ would risk false positives on conditional tier files it cannot see.
 import argparse
 import os
 import pathlib
+import posixpath
 import re
 import subprocess
 import sys
@@ -63,6 +64,11 @@ _RE_CP = re.compile(
     r'"\$\{?str_project_path\}?/([^"]+)"'
 )
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
+_RE_GLOB_CP = re.compile(
+    r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?"/([^\s"]*[*?\[][^\s"]*)\s+'
+    r'"\$\{?str_project_path\}?(/[^"]*)?"(/[^\s;&|]*)?'
+)
+_RE_RM = re.compile(r'(?m)^[^#\n]*?\brm\s+(?:-[A-Za-z]+\s+)*"\$\{?str_project_path\}?/([^"]+)"')
 _RE_CHAINED_CP = re.compile(r"(?:&&|\|\|)\s*cp\b")
 _RE_ONE_LINE_ESAC = re.compile(r"\besac\b(?:\s*#.*)?$")
 
@@ -91,6 +97,43 @@ def read_tier(path_root: pathlib.Path) -> str | None:
 
 
 _RE_ONE_LINE_FI = re.compile(r";\s*fi\b(?:\s*(?:;|\|\||#).*)?$")
+
+
+def _expand_glob_cps(
+    str_lib: str, path_blueprintx_root: pathlib.Path, dict_templates: dict[str, pathlib.Path]
+) -> str:
+    """Rewrite each unquoted-glob ``cp`` into one quoted ``cp`` per matching template file.
+
+    Parameters
+    ----------
+    str_lib : str
+            The shared scaffold lib source, line-continuations already spliced.
+    path_blueprintx_root : pathlib.Path
+            Root of the BlueprintX checkout, for the tracked-file policy.
+    dict_templates : dict of str to pathlib.Path
+            ``COMMON``/``SHARED`` mapped to their template directories.
+
+    Returns
+    -------
+    str
+            The source with every glob that matches a tracked template file spelled out; a
+            glob that matches nothing is left untouched.
+    """
+
+    def _spell_out(cls_match: re.Match) -> str:
+        str_root, str_glob, str_dst_a, str_dst_b = cls_match.groups()
+        path_root = dict_templates[str_root]
+        set_tracked = set(_template_files(path_blueprintx_root, path_root))
+        str_dir = ((str_dst_a or "") + (str_dst_b or "")).strip("/")
+        list_cps = [
+            f'cp "${str_root}_TEMPLATE_ROOT/{path_f.relative_to(path_root).as_posix()}" '
+            f'"$str_project_path/{str_dir + "/" if str_dir else ""}{path_f.name}"'
+            for path_f in sorted(path_root.glob(str_glob))
+            if path_f.relative_to(path_root).as_posix() in set_tracked
+        ]
+        return "; ".join(list_cps) or cls_match.group(0)
+
+    return _RE_GLOB_CP.sub(_spell_out, str_lib)
 
 
 def _cp_destinations(str_line: str) -> set[str]:
@@ -140,9 +183,11 @@ def conditional_relpaths(str_lib: str, str_flag: str | None = None) -> set[str]:
         bool_match = str_flag is None or str_flag in str_stripped
         if str_kind == "open":
             list_guards.append(bool_match)
+        elif str_kind == "branch" and list_guards:
+            list_guards[-1] = bool_match if str_stripped.startswith("elif") else str_flag is None
         elif str_kind == "close" and list_guards:
             list_guards.pop()
-        bool_guarded = (str_kind in ("open", "oneline", "chain") and bool_match) or (
+        bool_guarded = (str_kind in ("open", "oneline", "chain", "branch") and bool_match) or (
             str_kind == "plain" and any(list_guards)
         )
         if bool_guarded:
@@ -163,13 +208,16 @@ def _line_kind(str_stripped: str) -> str:
     str
             ``open`` (``if``/``case`` block start), ``oneline`` (a self-closing ``if``/``case``;
             counting it as open would mark every later ``cp`` conditional, a false green),
-            ``close`` (``fi``/``esac``), ``chain`` (``&& cp`` / ``|| cp``) or ``plain``.
+            ``branch`` (``else``/``elif``), ``close`` (``fi``/``esac``),
+            ``chain`` (``&& cp`` / ``|| cp``) or ``plain``.
     """
     if str_stripped.startswith(("if ", "if[", "case ")) or str_stripped == "if":
         bool_closed = _RE_ONE_LINE_FI.search(str_stripped) or _RE_ONE_LINE_ESAC.search(
             str_stripped
         )
         return "oneline" if bool_closed else "open"
+    if str_stripped == "else" or str_stripped.startswith(("else ", "elif ")):
+        return "branch"
     if str_stripped == "fi" or str_stripped.startswith(("fi ", "esac")):
         return "close"
     return "chain" if _RE_CHAINED_CP.search(str_stripped) else "plain"
@@ -202,6 +250,49 @@ def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
     return None
 
 
+def _template_roots(path_blueprintx_root: pathlib.Path) -> dict[str, pathlib.Path]:
+    """Map the scaffold lib's ``COMMON``/``SHARED`` roots to their template directories.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+            Root of a BlueprintX checkout.
+
+    Returns
+    -------
+    dict of str to pathlib.Path
+            ``COMMON`` and ``SHARED`` mapped to their directories.
+    """
+    return {
+        "COMMON": path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
+        "SHARED": path_blueprintx_root / "templates/common",
+    }
+
+
+def _scaffold_lib_text(path_blueprintx_root: pathlib.Path) -> str:
+    """Read the shared scaffold lib with continuations spliced and globs expanded.
+
+    Both the required set and the opt-in additions parse this one text, so a glob copy is
+    expanded identically on either path.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+            Root of a BlueprintX checkout.
+
+    Returns
+    -------
+    str
+            The normalised lib source.
+    """
+    str_lib = (path_blueprintx_root / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
+    return _expand_glob_cps(
+        _RE_LINE_CONTINUATION.sub(" ", str_lib),
+        path_blueprintx_root,
+        _template_roots(path_blueprintx_root),
+    )
+
+
 def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     """Derive every python-common-sourced path a scaffold copies UNCONDITIONALLY.
 
@@ -225,11 +316,9 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
     if not path_lib.exists():
         return set()
-    str_lib = _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8"))
-    path_templates = {
-        "COMMON": path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
-        "SHARED": path_blueprintx_root / "templates/common",
-    }
+    path_templates = _template_roots(path_blueprintx_root)
+    str_lib = _scaffold_lib_text(path_blueprintx_root)
+    set_removed = set(_RE_RM.findall(str_lib))
 
     set_conditional = conditional_relpaths(str_lib)
     set_required: set[str] = set()
@@ -242,7 +331,29 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
                 set_required.add(f"{str_dst}/{str_rel}")
         else:
             set_required.add(str_dst)
-    return set_required
+    return {str_rel for str_rel in set_required if not _is_removed(str_rel, set_removed)}
+
+
+def _is_removed(str_rel: str, set_removed: set[str]) -> bool:
+    """Return whether the scaffold ``rm``s this destination, or a directory above it.
+
+    Parameters
+    ----------
+    str_rel : str
+            A project-relative destination.
+    set_removed : set of str
+            Project-relative paths the scaffold deletes after copying.
+
+    Returns
+    -------
+    bool
+            ``True`` when ``str_rel`` never survives a scaffold.
+    """
+    str_rel = posixpath.normpath(str_rel)
+    return any(
+        str_rel == str_rm or str_rel.startswith(f"{str_rm}/")
+        for str_rm in map(posixpath.normpath, set_removed)
+    )
 
 
 def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) -> list[str]:
@@ -412,10 +523,7 @@ def main(list_argv: list) -> int:
 
     if review_bot_roster_enabled(path_root):
         set_required |= conditional_relpaths(
-            _RE_LINE_CONTINUATION.sub(
-                " ", (path_blueprintx / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
-            ),
-            "INCLUDE_REVIEW_BOT_ROSTER",
+            _scaffold_lib_text(path_blueprintx), "INCLUDE_REVIEW_BOT_ROSTER"
         )
 
     list_missing = missing_relpaths(path_root, set_required)
