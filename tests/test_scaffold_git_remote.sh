@@ -1,11 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/lib/scaffold_git_remote.sh (blueprintx#732).
-#
-# The first push must land AFTER the GitGuardian key is set, or the first secret_scan run on
-# `main` of every new repo goes red. A logging `gh` stub plus a local bare remote make the order
-# observable: the stub records whether `main` already exists on the remote when the secret is set.
-#
-# Usage: bash tests/test_scaffold_git_remote.sh
 
 set -uo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
@@ -15,8 +8,6 @@ WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 int_failures=0
 
-# Runs scaffold_create_github_repo against a throwaway repo; $1 = "ok" or "fail" (push outcome).
-# Prints the stub's log, then the function's exit status.
 run_create() {
     local str_mode="$1" dir="$WORK_DIR/proj-$1" bare="$WORK_DIR/$1.git" log="$WORK_DIR/$1.log"
     mkdir -p "$dir"
@@ -34,7 +25,6 @@ run_create() {
             case "$1 $2" in
             "repo create")
                 echo "create $*" >>"$LOG"
-                # Real gh adds the remote itself under --source/--remote and fails if it exists.
                 case "$*" in *--source*|*--remote*) return 1 ;; esac
                 case "$*" in *--push*) git -C "$PROJECT_PATH" push -q -u origin main ;; esac ;;
             "secret set")
@@ -74,7 +64,6 @@ test_failed_push_is_reported_incomplete() {
     fi
 }
 
-# Existing-remote fallback: `gh repo create` fails, so the prompt pushes itself - key first.
 test_fallback_sets_secret_before_the_push() {
     local dir="$WORK_DIR/proj-fb" bare="$WORK_DIR/fb.git" log="$WORK_DIR/fb.log" out
     mkdir -p "$dir"
@@ -109,7 +98,6 @@ test_fallback_sets_secret_before_the_push() {
     fi
 }
 
-# Create succeeds, push fails: the prompt must return non-zero so callers skip branch protection.
 test_prompt_fails_when_first_push_fails() {
     local dir="$WORK_DIR/proj-pf" bare="$WORK_DIR/pf.git" rc
     mkdir -p "$dir"

@@ -147,10 +147,10 @@ repos:
         files: \.(py|sh)$
 
       - id: check-comment-budget
-        name: comment budget (long runs + decorative banners, blueprintx#303)
+        name: comment budget (zero tolerance ratchet, blueprintx#304)
         # Same ONE-implementation treatment as function-length above: run over this repo
         # via --root rather than keeping a second copy.
-        entry: python3 templates/python-common/bin/check_comment_budget.py --root .
+        entry: python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline
         language: system
         pass_filenames: false
 

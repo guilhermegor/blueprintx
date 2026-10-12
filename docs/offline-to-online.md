@@ -146,3 +146,21 @@ marker or a data-file abstraction (`.review-bots.yaml`-shaped) for a single cons
 protection here is inline `gh api`, independent of blueprintx#129's `bin/enable_repo_rules.sh`
 (a separate script) — if that is adopted, this script's `apply_branch_protection`
 is a natural place to delegate to it instead.
+
+## Remote creation order at scaffold time
+
+blueprintx#732. `scaffold_create_github_repo` (`bin/lib/scaffold_git_remote.sh`) must not push in
+the same `gh repo create` call. The GitGuardian key has to exist before the first push, or the
+first `secret_scan` run on `main` of every new repo goes red, so the order is create, set the key,
+then push.
+
+- `gh repo create` is called without `--push`, and without `--source`/`--remote` either: `origin`
+  is already added, and `gh` fails on an existing remote.
+- When create fails because the repo already exists, the function returns 0 so the caller's
+  create-failed fallback does not run again. That fallback pushes itself, key first.
+- On success the create step has already set the scan key before its push.
+- A failed first push leaves no upstream, so the prompt returns non-zero and callers skip branch
+  protection rather than protect a branch that is not there.
+- `tests/test_scaffold_git_remote.sh` makes the order observable with a logging `gh` stub and a
+  local bare remote: the stub records whether `main` already exists on the remote when the secret
+  is set. It covers the ok path, the existing-remote fallback and the failed-push path.

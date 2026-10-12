@@ -122,7 +122,20 @@ jobs:
       # --root rather than kept as a second copy, and stdlib-only ast/re so there is no
       # setup step and no graceful-skip path for CI to have to override.
       - name: Check the comment budget across bin/ and templates/
-        run: python3 templates/python-common/bin/check_comment_budget.py --root .
+        run: python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline
+
+      - name: The baseline must not exceed the base branch's
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --depth=1 origin "$BASE_REF"
+          if [ -n "$(git ls-tree --name-only FETCH_HEAD -- comment_budget_baseline.txt)" ]; then
+            git show FETCH_HEAD:comment_budget_baseline.txt > "$RUNNER_TEMP/base_baseline.txt"
+            python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline --compare-baseline "$RUNNER_TEMP/base_baseline.txt"
+          else
+            echo "base branch has no baseline yet; nothing to compare"
+          fi
 
   complexity:
     name: Cyclomatic complexity — tests 1, src 2, bin 8

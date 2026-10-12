@@ -74,8 +74,6 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    # No terminal on stdin: skip the read entirely rather than let a stray pipe line
-    # answer as a username — falls straight to DEFAULT_GITHUB_USERNAME below (#539).
     prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
@@ -245,8 +243,6 @@ apply_branch_protection() {
     fi
 
     local do_protect reviews_ans reviews_json
-    # default "n": protecting the branch is a GitHub API mutation (enforce_admins, required
-    # checks) — an unattended run must not silently lock down a repo nobody confirmed (#539).
     prompt_yes_no do_protect "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     if [ "$do_protect" != "true" ]; then
         print_status "info" "Skipped branch protection"
@@ -257,7 +253,6 @@ apply_branch_protection() {
     # rule — GitHub forbids self-approval, so the first PR's merge
     # would be permanently blocked. Ask whether human reviewers will
     # gate merges, and build the protection payload accordingly.
-    # default "n": matches the pre-existing fallback (solo maintainer, no required reviews).
     prompt_yes_no reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
     if [ "$reviews_ans" = "true" ]; then
         reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -287,7 +282,6 @@ EOF
 
 prompt_docker_compose() {
     local db_ans
-    # default "n": ships a whole database Compose stack nobody asked for (#539).
     prompt_yes_no INCLUDE_DOCKER_COMPOSE "$(prompt_main "Include Docker Compose for database infrastructure? [y/N] ")"
     if [ "$INCLUDE_DOCKER_COMPOSE" = "true" ]; then
         prompt_read db_ans "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")"
@@ -309,12 +303,10 @@ conditional_copy_docker_compose() {
 
 prompt_data_dir() {
     local base_ans
-    # default "n": changing the on-disk output layout must never happen silently (#539).
     prompt_yes_no INCLUDE_DATA_DIR "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")"
     if [ "$INCLUDE_DATA_DIR" = "true" ]; then
         prompt_read base_ans "$(prompt_sub "Output base directory [logs]: ")"
         DATA_DIR_BASE="${base_ans:-logs}"
-        # default "n": matches the pre-existing fallback (flat, non-date-organised output).
         prompt_yes_no DATA_DIR_DATED "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")"
         print_status "config" "Output dir: $DATA_DIR_BASE (date-organised: $DATA_DIR_DATED)"
     fi
@@ -322,8 +314,6 @@ prompt_data_dir() {
 
 prompt_webhook() {
     local platform_ans
-    # default "n": adds outbound webhook notification code — must not silently enable
-    # network calls to a platform nobody named (#539).
     prompt_yes_no INCLUDE_WEBHOOK "$(prompt_main "Include outbound webhook notifications? [y/N]: ")"
     if [ "$INCLUDE_WEBHOOK" = "true" ]; then
         prompt_read platform_ans "$(prompt_sub "Which platform? [teams/slack] (default: teams): ")"
@@ -336,8 +326,6 @@ prompt_webhook() {
 }
 
 prompt_otel() {
-    # default "n": an opt-in that installs telemetry deps and sends data to a collector
-    # must never be answered by leftover pipe input (#539).
     prompt_yes_no INCLUDE_OTEL "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
     if [ "$INCLUDE_OTEL" = "true" ]; then
         print_status "config" "OTLP log export: enabled"
@@ -346,8 +334,6 @@ prompt_otel() {
 
 prompt_email() {
     local backend_ans
-    # default "n": adds an outbound e-mail sending capability — same reasoning as webhooks,
-    # must not silently enable it (#539).
     prompt_yes_no INCLUDE_EMAIL "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")"
     if [ "$INCLUDE_EMAIL" = "true" ]; then
         prompt_read backend_ans "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")"
@@ -369,9 +355,6 @@ prompt_pipeline_intent() {
         print_status "config" "Pipeline mode: multi-intent (PIPELINE_INTENT dispatch) [env override]"
         return
     fi
-    # default "n": opt-in, default No per YAGNI — generates a whole dispatch trio nobody
-    # asked for (#539). MULTI_PIPELINE_OPTIN=true above is the sanctioned non-interactive
-    # override; a stray piped "y" must not do the same thing by accident.
     prompt_yes_no INCLUDE_MULTI_PIPELINE "$(prompt_main "Does this process have multiple run intents (e.g. send/reconcile/notify)? [y/N]: ")"
     if [ "$INCLUDE_MULTI_PIPELINE" = "true" ]; then
         print_status "config" "Pipeline mode: multi-intent (PIPELINE_INTENT dispatch)"

@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Fail when a templates/*/package.json declares a dependency its package-lock.json does not
-# carry, the drift that makes `npm ci` refuse to install (blueprintx#588, regression of #464).
-# Pure JSON comparison (python3), so it runs offline in pre-commit. A tier with no lockfile is
-# skipped, not failed: not every tier ships one.
-#
-# Usage: bash bin/ci/check_lockfile_sync.sh [--root <dir>]   (default: repo root)
 
 set -euo pipefail
 

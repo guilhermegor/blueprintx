@@ -169,6 +169,18 @@ only an explicit clean statement or a stated `0` clears a review. Issue comments
 threads are all paginated, so a PR with 140 comments is read in full; a page that fails to load
 fails the check instead of shortening the list.
 
+### When the gate runs, and which marker wins
+
+A clean review and a ladder fallback review arrive only as issue comments, so the workflow also
+listens to `issue_comment`, and `deleted` re-runs the gate when such a comment is removed. Those
+runs report on the default branch's head; the pull request's own required check is refreshed by
+the stale-run step. `issue_comment` also fires for plain issues, where there is no pull request to
+audit.
+
+When several trusted review markers exist, the latest one decides before the `Reviewed head:` line
+is checked. A later marker with a missing or garbled head line fails closed instead of falling back
+to an earlier marker.
+
 ### How the gate classifies an answer
 
 An answer comes from outside the reviewer roster, is a user account (not a bot, app, organization or deleted ghost),

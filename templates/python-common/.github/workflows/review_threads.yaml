@@ -68,9 +68,6 @@ on:
   pull_request:
   pull_request_review:
   pull_request_review_comment:
-  # A clean review and a ladder fallback review arrive only as issue comments. `deleted` re-runs
-  # the gate when such a comment is removed. These runs report on the default branch's head; the
-  # PR's own required check is refreshed by the stale-run step below.
   issue_comment:
     types: [created, edited, deleted]
 
@@ -108,7 +105,6 @@ jobs:
     name: Review threads answered
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # `issue_comment` also fires for plain issues, where there is no PR to audit.
     if: >-
       github.event_name != 'issue_comment' ||
       github.event.issue.pull_request != null

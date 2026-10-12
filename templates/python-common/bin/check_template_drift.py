@@ -58,15 +58,10 @@ _SCAFFOLD_LIB_RELPATH = pathlib.Path("bin/lib/scaffold_python_templates.sh")
 _COMMON_TEMPLATE_RELPATH = pathlib.Path("templates/python-common")
 _TIERS_OUTSIDE_SHARED_LIB = frozenset({"lib-minimal"})
 
-# One regex for every `cp [flags] SRC DST` the scaffold lib uses. SRC is rooted at
-# `$COMMON_TEMPLATE_ROOT` / `$SHARED_TEMPLATE_ROOT` (braced or not), DST at `$str_project_path`.
-# A SRC ending in `/.` is the wholesale directory-contents form.
 _RE_CP = re.compile(
     r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?/([^"]+)"\s+'
     r'"\$\{?str_project_path\}?/([^"]+)"'
 )
-# A backslash-newline is shell line-splicing: one logical command. Spliced out before the
-# cp patterns run, so a wrapped `cp` parses exactly like an unwrapped one.
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
 _RE_CHAINED_CP = re.compile(r"(?:&&|\|\|)\s*cp\b")
 _RE_ONE_LINE_ESAC = re.compile(r"\besac\b(?:\s*#.*)?$")
@@ -230,10 +225,6 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
     if not path_lib.exists():
         return set()
-    # Splice shell line-continuations BEFORE matching. A `cp "$SRC/x" \\<newline> "$DST/x"`
-    # is one command to the shell, but the old file regex stopped at the backslash and skipped
-    # it — measured on this branch: 23 destinations found, 52 actually copied, so the
-    # drift doctor was blind to 29 of the files it exists to police (blueprintx#109).
     str_lib = _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8"))
     path_templates = {
         "COMMON": path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
@@ -419,12 +410,6 @@ def main(list_argv: list) -> int:
         )
         return 0
 
-    # Add back the conditional copies this project actually opted into. Only when the
-    # provenance stamp SAYS so: `None` (a project scaffolded before the stamp recorded the
-    # choice) stays excluded, because reporting a file as missing on a project that
-    # legitimately declined it is the false positive this whole branch exists to avoid.
-    # After the empty-set SKIPPED above on purpose: that is the only case where the lib is
-    # absent, and reading it here unguarded raised FileNotFoundError.
     if review_bot_roster_enabled(path_root):
         set_required |= conditional_relpaths(
             _RE_LINE_CONTINUATION.sub(

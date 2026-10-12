@@ -1242,8 +1242,6 @@ def ladder_marker_declared(
     ]
     if not list_trusted:
         return False
-    # The latest trusted marker decides BEFORE the head line is checked: a later marker with a
-    # missing or garbled `Reviewed head:` line must fail closed, not fall back to an earlier one.
     dict_latest = max(list_trusted, key=lambda d: d.get("createdAt") or "")
     str_body = (dict_latest.get("body") or "").strip()
     list_lines = str_body.splitlines()

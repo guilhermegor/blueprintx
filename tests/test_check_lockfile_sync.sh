@@ -1,9 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/ci/check_lockfile_sync.sh (blueprintx#588).
-# Both directions: a dependency missing from the lock must fail NAMING the package, a synced
-# pair and a lockfile-less tier must pass.
-#
-# Usage: bash tests/test_check_lockfile_sync.sh
 
 set -euo pipefail
 
@@ -13,8 +8,6 @@ path_tmp="$(mktemp -d)"
 trap 'rm -rf "$path_tmp"' EXIT
 int_failures=0
 
-# $1 = description, $2 = package.json deps, $3 = lock root deps, $4 = lock node_modules keys
-# (space separated, "-" for a tier without a lockfile), $5 = pass|fail, $6 = needle on fail.
 run_case() {
     local path_root="$path_tmp/$RANDOM" str_got="pass" str_out
     mkdir -p "$path_root/templates/t"
@@ -43,7 +36,6 @@ run_case "dependency removed from package.json but kept in lock fails" '{"a":"^1
     '{"a":"^1.0.0","gone":"^1.0.0"}' "a gone" fail "'gone'"
 run_case "tier without lockfile is skipped" '{"a":"^1.0.0"}' '{}' "-" pass
 
-# An optional peer need not be installed: declared in the lock root, no node_modules entry.
 path_root="$path_tmp/optional-peer"
 mkdir -p "$path_root/templates/t"
 echo '{"name":"t","peerDependencies":{"p":"^1.0.0"},"peerDependenciesMeta":{"p":{"optional":true}}}' \

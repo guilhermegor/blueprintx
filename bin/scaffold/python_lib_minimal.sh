@@ -596,7 +596,6 @@ lib_minimal_copy_project_scaffolding() {
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
     # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
-    # The work ledger the check-backlog-ledger gate reads; .gitkeep keeps it in git while empty.
     mkdir -p "$project_path/.specs/backlog"
     touch "$project_path/.specs/backlog/.gitkeep"
     # The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
@@ -628,8 +627,6 @@ lib_minimal_stamp_provenance() {
 
     local str_version=""
     local str_commit=unknown
-    # Only trust git when BLUEPRINTX_ROOT is itself a checkout: git -C walks UP, so a packaged
-    # install under an unrelated repo (e.g. Homebrew's) would stamp that repo's tag.
     if [[ -e "$BLUEPRINTX_ROOT/.git" ]]; then
         str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || true)"
         str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
