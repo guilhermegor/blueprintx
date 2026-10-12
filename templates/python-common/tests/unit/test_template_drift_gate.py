@@ -321,3 +321,72 @@ def test_a_tier_outside_the_shared_lib_is_skipped_loudly(
     gate.main(["--root", str(tmp_path), "--blueprintx-root", str(tmp_path)])
 
     assert "SKIPPED" in capsys.readouterr().out
+
+
+_LIB_BRANCHES = """f() {
+	if [[ "${INCLUDE_REVIEW_BOT_ROSTER}" == "true" ]]; then
+		cp "$COMMON_TEMPLATE_ROOT/on.yaml" "$str_project_path/on.yaml"
+	else
+		cp "$COMMON_TEMPLATE_ROOT/off.yaml" "$str_project_path/off.yaml"
+	fi
+}
+"""
+
+_LIB_GLOB_RM = """f() {
+	cp "$COMMON_TEMPLATE_ROOT"/*.md "$str_project_path"/
+	cp -r "$COMMON_TEMPLATE_ROOT/d/." "$str_project_path/d"
+	rm -f "$str_project_path/d/.keep"
+}
+"""
+
+
+def _checkout(path_tmp: Path, str_lib: str, list_files: list) -> Path:
+    """Write a synthetic checkout: the shared lib plus empty template files.
+
+    Parameters
+    ----------
+    path_tmp : pathlib.Path
+            A temporary directory to build under.
+    str_lib : str
+            Contents of the shared scaffold lib.
+    list_files : list of str
+            Paths under ``templates/python-common/`` to create empty.
+
+    Returns
+    -------
+    pathlib.Path
+            The synthetic root.
+    """
+    path_lib = path_tmp / gate._SCAFFOLD_LIB_RELPATH
+    path_lib.parent.mkdir(parents=True, exist_ok=True)
+    path_lib.write_text(str_lib, encoding="utf-8")
+    list_paths = [path_tmp / gate._COMMON_TEMPLATE_RELPATH / str_f for str_f in list_files]
+    list(map(lambda path_f: path_f.parent.mkdir(parents=True, exist_ok=True), list_paths))
+    list(map(Path.touch, list_paths))
+    return path_tmp
+
+
+def test_the_else_branch_of_a_roster_guard_is_not_the_opt_in_copy() -> None:
+    """A copy in `else` runs when the roster is DECLINED, so opting in must not demand it."""
+    set_found = gate.conditional_relpaths(_LIB_BRANCHES, "INCLUDE_REVIEW_BOT_ROSTER")
+
+    assert set_found == {"on.yaml"}
+
+
+def test_the_else_branch_is_still_conditional_without_a_flag() -> None:
+    """Both arms are guarded; neither is unconditionally required."""
+    assert gate.conditional_relpaths(_LIB_BRANCHES) == {"on.yaml", "off.yaml"}
+
+
+def test_an_unquoted_glob_cp_is_required_per_matching_file(tmp_path: Path) -> None:
+    """`cp "$ROOT"/*.md dst/` expands in the shell; the reader used to see nothing."""
+    path_root = _checkout(tmp_path, _LIB_GLOB_RM, ["a.md", "b.md", "skip.txt"])
+
+    assert gate.required_relpaths(path_root) == {"a.md", "b.md"}
+
+
+def test_a_destination_the_scaffold_removes_is_not_required(tmp_path: Path) -> None:
+    """`rm -f dst/.keep` after a directory copy: the project never has it, so not drift."""
+    path_root = _checkout(tmp_path, _LIB_GLOB_RM, ["d/.keep", "d/real.py"])
+
+    assert gate.required_relpaths(path_root) == {"d/real.py"}

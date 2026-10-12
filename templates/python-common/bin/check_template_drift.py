@@ -68,6 +68,11 @@ _RE_CP = re.compile(
 # A backslash-newline is shell line-splicing: one logical command. Spliced out before the
 # cp patterns run, so a wrapped `cp` parses exactly like an unwrapped one.
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
+_RE_GLOB_CP = re.compile(
+    r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?"/([^\s"]*[*?\[][^\s"]*)\s+'
+    r'"\$\{?str_project_path\}?(/[^"]*)?"(/\S*)?'
+)
+_RE_RM = re.compile(r'rm\s+(?:-[A-Za-z]+\s+)*"\$\{?str_project_path\}?/([^"]+)"')
 _RE_CHAINED_CP = re.compile(r"(?:&&|\|\|)\s*cp\b")
 _RE_ONE_LINE_ESAC = re.compile(r"\besac\b(?:\s*#.*)?$")
 
@@ -96,6 +101,38 @@ def read_tier(path_root: pathlib.Path) -> str | None:
 
 
 _RE_ONE_LINE_FI = re.compile(r";\s*fi\b(?:\s*(?:;|\|\||#).*)?$")
+
+
+def _expand_glob_cps(str_lib: str, dict_templates: dict) -> str:
+    """Rewrite each unquoted-glob ``cp`` into one quoted ``cp`` per matching template file.
+
+    Parameters
+    ----------
+    str_lib : str
+            The shared scaffold lib source, line-continuations already spliced.
+    dict_templates : dict
+            ``COMMON``/``SHARED`` mapped to their template directories.
+
+    Returns
+    -------
+    str
+            The source with every glob that matches something spelled out; a glob that
+            matches nothing is left untouched.
+    """
+
+    def _spell_out(cls_match: re.Match) -> str:
+        str_root, str_glob, str_dst_a, str_dst_b = cls_match.groups()
+        path_root = dict_templates[str_root]
+        str_dir = ((str_dst_a or "") + (str_dst_b or "")).strip("/")
+        list_cps = [
+            f'cp "${str_root}_TEMPLATE_ROOT/{path_f.relative_to(path_root).as_posix()}" '
+            f'"$str_project_path/{str_dir + "/" if str_dir else ""}{path_f.name}"'
+            for path_f in sorted(path_root.glob(str_glob))
+            if path_f.is_file()
+        ]
+        return "; ".join(list_cps) or cls_match.group(0)
+
+    return _RE_GLOB_CP.sub(_spell_out, str_lib)
 
 
 def _cp_destinations(str_line: str) -> set[str]:
@@ -145,6 +182,8 @@ def conditional_relpaths(str_lib: str, str_flag: str | None = None) -> set[str]:
         bool_match = str_flag is None or str_flag in str_stripped
         if str_kind == "open":
             list_guards.append(bool_match)
+        elif str_kind == "branch" and list_guards:
+            list_guards[-1] = bool_match if str_stripped.startswith("elif") else str_flag is None
         elif str_kind == "close" and list_guards:
             list_guards.pop()
         bool_guarded = (str_kind in ("open", "oneline", "chain") and bool_match) or (
@@ -168,13 +207,15 @@ def _line_kind(str_stripped: str) -> str:
     str
             ``open`` (``if``/``case`` block start), ``oneline`` (a self-closing ``if``/``case``;
             counting it as open would mark every later ``cp`` conditional, a false green),
-            ``close`` (``fi``/``esac``), ``chain`` (``&& cp`` / ``|| cp``) or ``plain``.
+            ``branch`` (``else``/``elif``), ``close`` (``fi``/``esac``), ``chain`` (``&& cp`` / ``|| cp``) or ``plain``.
     """
     if str_stripped.startswith(("if ", "if[", "case ")) or str_stripped == "if":
         bool_closed = _RE_ONE_LINE_FI.search(str_stripped) or _RE_ONE_LINE_ESAC.search(
             str_stripped
         )
         return "oneline" if bool_closed else "open"
+    if str_stripped == "else" or str_stripped.startswith(("else ", "elif ")):
+        return "branch"
     if str_stripped == "fi" or str_stripped.startswith(("fi ", "esac")):
         return "close"
     return "chain" if _RE_CHAINED_CP.search(str_stripped) else "plain"
@@ -230,15 +271,14 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
     if not path_lib.exists():
         return set()
-    # Splice shell line-continuations BEFORE matching. A `cp "$SRC/x" \\<newline> "$DST/x"`
-    # is one command to the shell, but the old file regex stopped at the backslash and skipped
-    # it — measured on this branch: 23 destinations found, 52 actually copied, so the
-    # drift doctor was blind to 29 of the files it exists to police (blueprintx#109).
-    str_lib = _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8"))
     path_templates = {
         "COMMON": path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
         "SHARED": path_blueprintx_root / "templates/common",
     }
+    str_lib = _expand_glob_cps(
+        _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8")), path_templates
+    )
+    set_removed = set(_RE_RM.findall(str_lib))
 
     set_conditional = conditional_relpaths(str_lib)
     set_required: set[str] = set()
@@ -251,7 +291,25 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
                 set_required.add(f"{str_dst}/{str_rel}")
         else:
             set_required.add(str_dst)
-    return set_required
+    return {str_rel for str_rel in set_required if not _is_removed(str_rel, set_removed)}
+
+
+def _is_removed(str_rel: str, set_removed: set) -> bool:
+    """Return whether the scaffold ``rm``s this destination, or a directory above it.
+
+    Parameters
+    ----------
+    str_rel : str
+            A project-relative destination.
+    set_removed : set of str
+            Project-relative paths the scaffold deletes after copying.
+
+    Returns
+    -------
+    bool
+            ``True`` when ``str_rel`` never survives a scaffold.
+    """
+    return any(str_rel == str_rm or str_rel.startswith(f"{str_rm.rstrip('/')}/") for str_rm in set_removed)
 
 
 def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) -> list[str]:
@@ -419,12 +477,7 @@ def main(list_argv: list) -> int:
         )
         return 0
 
-    # Add back the conditional copies this project actually opted into. Only when the
-    # provenance stamp SAYS so: `None` (a project scaffolded before the stamp recorded the
-    # choice) stays excluded, because reporting a file as missing on a project that
-    # legitimately declined it is the false positive this whole branch exists to avoid.
-    # After the empty-set SKIPPED above on purpose: that is the only case where the lib is
-    # absent, and reading it here unguarded raised FileNotFoundError.
+    # Only a stamped opt-in re-adds the conditional copies; `None` stays excluded.
     if review_bot_roster_enabled(path_root):
         set_required |= conditional_relpaths(
             _RE_LINE_CONTINUATION.sub(
