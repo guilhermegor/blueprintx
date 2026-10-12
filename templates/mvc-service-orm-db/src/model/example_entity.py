@@ -51,8 +51,8 @@ class ExampleEntity(metaclass=TypeChecker):
     Parameters
     ----------
     cls_engine : sqlalchemy.Engine
-            Engine bound to the target database (see
-            :func:`config.connection_db.build_engine`).
+        Engine bound to the target database (see
+        :func:`config.connection_db.build_engine`).
     """
 
     def __init__(self, cls_engine: Engine) -> None:
@@ -69,7 +69,7 @@ class ExampleEntity(metaclass=TypeChecker):
         Parameters
         ----------
         str_title : str
-                Value for the ``title`` column.
+            Value for the ``title`` column.
         """
         cls_session = self._session_factory()
         try:
@@ -89,7 +89,7 @@ class ExampleEntity(metaclass=TypeChecker):
         Returns
         -------
         pd.DataFrame
-                One row per record, every declared column typed.
+            One row per record, every declared column typed.
         """
         cls_session = self._session_factory()
         try:

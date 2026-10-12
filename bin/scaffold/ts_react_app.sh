@@ -52,7 +52,7 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -67,7 +67,7 @@ prompt_state_management() {
     echo "  1) React Context  (zero deps, default)"
     echo "  2) Zustand        (lightweight store)"
     echo "  3) Redux Toolkit  (enterprise, RTK Query)"
-    read -r -p "$(prompt_main "Choice [1]: ")" sm_choice || true
+    prompt_read sm_choice "$(prompt_main "Choice [1]: ")"
     STATE_MGMT_CHOICE="${sm_choice:-1}"
     case "$STATE_MGMT_CHOICE" in
         1) print_status "config" "State management: React Context" ;;
@@ -87,7 +87,7 @@ prompt_deploy_target() {
     echo "  1) GitHub Pages  (no extra secrets; served under /<repo-name>/)"
     echo "  2) Vercel        (needs VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID)"
     echo "  3) None          (no deploy workflow)"
-    read -r -p "$(prompt_main "Choice [1]: ")" deploy_choice || true
+    prompt_read deploy_choice "$(prompt_main "Choice [1]: ")"
     DEPLOY_TARGET_CHOICE="${deploy_choice:-1}"
     case "$DEPLOY_TARGET_CHOICE" in
         1) print_status "config" "Deploy target: GitHub Pages" ;;
@@ -104,52 +104,40 @@ prompt_deploy_target() {
 
 prompt_module_federation() {
     echo ""
-    read -r -p "$(prompt_main "Enable Webpack Module Federation? [y/N]: ")" mf_answer || true
-    case "$mf_answer" in
-        y|Y) USE_MODULE_FEDERATION=1
-             print_status "config" "Module Federation: enabled" ;;
-        *)   USE_MODULE_FEDERATION=0
-             print_status "config" "Module Federation: disabled" ;;
-    esac
+    prompt_yes_no USE_MODULE_FEDERATION "$(prompt_main "Enable Webpack Module Federation? [y/N]: ")"
+    if [ "$USE_MODULE_FEDERATION" = "true" ]; then
+        print_status "config" "Module Federation: enabled"
+    else
+        print_status "config" "Module Federation: disabled"
+    fi
 }
 
 prompt_docker() {
     echo ""
-    read -r -p "$(prompt_main "Add a Docker setup (multi-stage build → nginx)? [y/N]: ")" docker_answer || true
-    case "$docker_answer" in
-        y|Y) USE_DOCKER=1
-             print_status "config" "Docker: enabled (Dockerfile + nginx.conf + .dockerignore)" ;;
-        *)   USE_DOCKER=0
-             print_status "config" "Docker: disabled" ;;
-    esac
+    prompt_yes_no USE_DOCKER "$(prompt_main "Add a Docker setup (multi-stage build → nginx)? [y/N]: ")"
+    if [ "$USE_DOCKER" = "true" ]; then
+        print_status "config" "Docker: enabled (Dockerfile + nginx.conf + .dockerignore)"
+    else
+        print_status "config" "Docker: disabled"
+    fi
 }
 
 prompt_js_copy_delivery() {
     echo ""
-    read -r -p "$(prompt_main "Ship a plain-JavaScript delivery copy script (js-copy)? [y/N]: ")" js_copy_answer || true
-    case "$js_copy_answer" in
-        y|Y) USE_JS_COPY_DELIVERY=1
-             print_status "config" "JS-copy delivery: enabled (npm run js-copy:build / js-copy:verify)" ;;
-        *)   USE_JS_COPY_DELIVERY=0
-             print_status "config" "JS-copy delivery: disabled" ;;
-    esac
+    prompt_yes_no USE_JS_COPY_DELIVERY "$(prompt_main "Ship a plain-JavaScript delivery copy script (js-copy)? [y/N]: ")"
+    if [ "$USE_JS_COPY_DELIVERY" = "true" ]; then
+        print_status "config" "JS-copy delivery: enabled (npm run js-copy:build / js-copy:verify)"
+    else
+        print_status "config" "JS-copy delivery: disabled"
+    fi
 }
 
 prompt_otel() {
-    # `read` happily consumes piped stdin, so a non-interactive run whose input still holds
-    # a `y` line would silently turn OTEL on -- adding dependencies, env vars and a
-    # composition-root edit nobody asked for. An opt-in must never be answered by leftover
-    # input, so with no terminal the answer is the default, not whatever is on the pipe.
-    if [ ! -t 0 ]; then
-        INCLUDE_OTEL=false
-        return
-    fi
     echo ""
-    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
-    case "$answer" in
-        y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
-        *) INCLUDE_OTEL=false ;;
-    esac
+    prompt_yes_no INCLUDE_OTEL "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
+    if [ "$INCLUDE_OTEL" = "true" ]; then
+        print_status "config" "OTLP log export: enabled"
+    fi
 }
 
 create_directory_structure() {
@@ -195,7 +183,7 @@ copy_skeleton_files() {
 apply_docker_files() {
     local project_path="$1"
 
-    if [ "${USE_DOCKER:-0}" -ne 1 ]; then
+    if [ "${USE_DOCKER:-false}" != "true" ]; then
         return
     fi
 
@@ -218,7 +206,7 @@ apply_js_copy_delivery() {
     local project_path="$1"
     local js_copy_root="$SKELETON_TEMPLATE_ROOT/optional/js-copy"
 
-    if [ "${USE_JS_COPY_DELIVERY:-0}" -ne 1 ]; then
+    if [ "${USE_JS_COPY_DELIVERY:-false}" != "true" ]; then
         return
     fi
 
@@ -291,7 +279,7 @@ apply_file_variants() {
             ;;
     esac
 
-    if [ "$USE_MODULE_FEDERATION" -eq 1 ]; then
+    if [ "$USE_MODULE_FEDERATION" = "true" ]; then
         print_status "info" "Applying Module Federation webpack config..."
         cp "$SKELETON_TEMPLATE_ROOT/webpack.mf.config.js" "$project_path/webpack.config.js"
         sed_inplace "s/__APP_NAME__/$PROJECT_NAME/g" "$project_path/webpack.config.js"
@@ -428,6 +416,8 @@ copy_static_ts_common_files() {
     cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/react-spa-webpack/.greptile/"* "$project_path/.greptile/"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
@@ -537,28 +527,28 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
-    case "$protect_ans" in
-        y|Y)
-            # A solo maintainer cannot satisfy a required-approving-review
-            # rule — GitHub forbids self-approval, so the first PR's merge
-            # would be permanently blocked. Ask whether human reviewers will
-            # gate merges, and build the protection payload accordingly.
-            local reviews_json
-            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
-            case "$reviews_ans" in
-                y|Y)
-                    reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
-                    ;;
-                *)
-                    # Solo: keep status checks + linear history, drop required reviews.
-                    reviews_json='"required_pull_request_reviews": null,'
-                    ;;
-            esac
-            if gh api --method PUT \
-                -H "Accept: application/vnd.github+json" \
-                "/repos/$repo/branches/$branch/protection" \
-                --input - <<EOF
+    local do_protect reviews_ans reviews_json
+    prompt_yes_no do_protect "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
+    if [ "$do_protect" != "true" ]; then
+        print_status "info" "Skipped branch protection"
+        return
+    fi
+
+    # A solo maintainer cannot satisfy a required-approving-review
+    # rule — GitHub forbids self-approval, so the first PR's merge
+    # would be permanently blocked. Ask whether human reviewers will
+    # gate merges, and build the protection payload accordingly.
+    prompt_yes_no reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
+    if [ "$reviews_ans" = "true" ]; then
+        reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
+    else
+        # Solo: keep status checks + linear history, drop required reviews.
+        reviews_json='"required_pull_request_reviews": null,'
+    fi
+    if gh api --method PUT \
+        -H "Accept: application/vnd.github+json" \
+        "/repos/$repo/branches/$branch/protection" \
+        --input - <<EOF
 {
   "required_status_checks": { "strict": true, "contexts": [] },
   "enforce_admins": true,
@@ -569,14 +559,11 @@ apply_branch_protection() {
   "required_linear_history": true
 }
 EOF
-            then
-                print_status "success" "Branch '$branch' protected on GitHub."
-            else
-                print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
-            fi
-            ;;
-        *) print_status "info" "Skipped branch protection" ;;
-    esac
+    then
+        print_status "success" "Branch '$branch' protected on GitHub."
+    else
+        print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
+    fi
 }
 
 pages_prerequisites_met() {
@@ -601,14 +588,12 @@ wait_for_gh_pages_branch() {
     gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1 && return 0
 
     print_status "info" "The 'gh-pages' branch doesn't exist yet — the first deploy creates it (~1-3 min)."
-    read -r -p "$(prompt_main "Wait for the first deploy and enable Pages automatically? [Y/n]: ")" wait_ans || true
-    case "$wait_ans" in
-    n | N)
+    prompt_yes_no wait_ans "$(prompt_main "Wait for the first deploy and enable Pages automatically? [Y/n]: ")" y
+    if [ "$wait_ans" != "true" ]; then
         print_status "info" "After the first deploy finishes, enable Pages with:"
         print_status "info" "  $manual_cmd"
         return 1
-        ;;
-    esac
+    fi
 
     while [ "$attempts" -lt "$max_attempts" ]; do
         sleep 15
@@ -650,14 +635,11 @@ prompt_pages_setup() {
     pages_prerequisites_met "$repo" || return
 
     print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
-    read -r -p "$(prompt_main "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: ")" pages_ans || true
-    case "$pages_ans" in
-    y | Y) ;;
-    *)
+    prompt_yes_no pages_ans "$(prompt_main "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: ")"
+    if [ "$pages_ans" != "true" ]; then
         print_status "info" "Skipped GitHub Pages setup"
         return
-        ;;
-    esac
+    fi
 
     wait_for_gh_pages_branch "$repo" "$manual_cmd" || return
     enable_gh_pages "$repo" "$owner" "$manual_cmd"
@@ -707,6 +689,7 @@ apply_offline_mode() {
     # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
     # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
+    remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
     # vercel.json lives at the project ROOT, so the .github sweep above does not reach it —
     # and a Vercel config with no workflow to read it is dead configuration pointing at a

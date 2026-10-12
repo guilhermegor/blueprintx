@@ -76,7 +76,7 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -346,6 +346,8 @@ copy_templates() {
     cp "$COMMON_TEMPLATE_ROOT/.python-version" "$project_path/.python-version"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/lib-minimal/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
     # Ship an initial coverage.svg so the README ![Test Coverage](./coverage.svg) badge
@@ -504,6 +506,7 @@ lib_minimal_copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_policy_workflows "$project_path"
 }
 
 # The tests that cover the gates themselves. Split out of the copy function when it crossed
@@ -596,7 +599,6 @@ lib_minimal_copy_project_scaffolding() {
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
     # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
-    # The work ledger the check-backlog-ledger gate reads; .gitkeep keeps it in git while empty.
     mkdir -p "$project_path/.specs/backlog"
     touch "$project_path/.specs/backlog/.gitkeep"
     # The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
@@ -628,8 +630,6 @@ lib_minimal_stamp_provenance() {
 
     local str_version=""
     local str_commit=unknown
-    # Only trust git when BLUEPRINTX_ROOT is itself a checkout: git -C walks UP, so a packaged
-    # install under an unrelated repo (e.g. Homebrew's) would stamp that repo's tag.
     if [[ -e "$BLUEPRINTX_ROOT/.git" ]]; then
         str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || true)"
         str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
@@ -725,7 +725,8 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
+    protect_ans=""
+    prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review
@@ -733,7 +734,8 @@ apply_branch_protection() {
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
             local reviews_json
-            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
+            reviews_ans=""
+            prompt_read reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -809,6 +811,7 @@ apply_offline_mode() {
     # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
     # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
+    remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
@@ -1011,7 +1014,7 @@ PY
 #   - initiate_logging(logger, path_log)              — attach handlers / a log file
 prompt_logs() {
     local answer
-    read -r -p "$(prompt_main "Include the in-repo logging helper (utils/logs.py)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include the in-repo logging helper (utils/logs.py)? [y/N]: ")"
     case "$answer" in
         y|Y) INCLUDE_LOGS=true; print_status "config" "logs.py: included" ;;
         *)   INCLUDE_LOGS=false ;;
@@ -1024,7 +1027,7 @@ prompt_logs() {
 # it never auto-runs on import.
 prompt_otel() {
     local answer
-    read -r -p "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
     case "$answer" in
         y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
         *)   INCLUDE_OTEL=false ;;
@@ -1060,16 +1063,16 @@ prompt_publish_targets() {
     # Two orthogonal axes, banner-separated so Q3 doesn't read as a fork of Q1/Q2:
     # publishing = where THIS library ships to; consuming = where its own deps come from.
     print_status "section" "Publishing — where this library ships to"
-    read -r -p "$(prompt_main "Publish to the official public registry (PyPI)? [Y/n]: ")" answer || true
+    prompt_read answer "$(prompt_main "Publish to the official public registry (PyPI)? [Y/n]: ")"
     case "$answer" in n | N) PUBLISH_PYPI=false ;; *) PUBLISH_PYPI=true ;; esac
     print_status "config" "Publish target PyPI: $PUBLISH_PYPI"
 
-    read -r -p "$(prompt_main "Add a staging/sandbox registry (Test PyPI) first? [Y/n]: ")" answer || true
+    prompt_read answer "$(prompt_main "Add a staging/sandbox registry (Test PyPI) first? [Y/n]: ")"
     case "$answer" in n | N) PUBLISH_TEST_PYPI=false ;; *) PUBLISH_TEST_PYPI=true ;; esac
     print_status "config" "Staging registry Test PyPI: $PUBLISH_TEST_PYPI"
 
     print_status "section" "Consuming — where this library's own dependencies come from"
-    read -r -p "$(prompt_main "Consume this library from a non-official source (private index / git)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Consume this library from a non-official source (private index / git)? [y/N]: ")"
     case "$answer" in y | Y) CONSUME_PRIVATE=true ;; *) CONSUME_PRIVATE=false ;; esac
     print_status "config" "Private consumer source: $CONSUME_PRIVATE"
 }
@@ -1102,11 +1105,11 @@ EOF
 # needs it, but the seam is offered for libs whose integration tests spin up a real DB.
 prompt_docker_compose() {
     local answer db_ans
-    read -r -p "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")"
     case "$answer" in
         y|Y)
             INCLUDE_DOCKER_COMPOSE=true
-            read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans || true
+            prompt_read db_ans "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")"
             case "${db_ans:-postgresql}" in
                 mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
                 *) DB_COMPOSE_BACKEND="postgresql" ;;

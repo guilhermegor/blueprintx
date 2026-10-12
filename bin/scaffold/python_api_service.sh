@@ -76,7 +76,7 @@ resolve_github_username() {
 
     # 3) Fallback prompt
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
     else
@@ -154,6 +154,8 @@ copy_templates() {
     cp "$BLUEPRINTX_ROOT/templates/api-service-native-db/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/api-service-native-db/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" GITHUB_USERNAME="$GITHUB_USERNAME" \
         envsubst '${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME}' \
@@ -239,7 +241,8 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
+    protect_ans=""
+    prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y|Y)
             # A solo maintainer cannot satisfy a required-approving-review
@@ -247,7 +250,8 @@ apply_branch_protection() {
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
             local reviews_json
-            read -r -p "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")" reviews_ans || true
+            reviews_ans=""
+            prompt_read reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
             case "$reviews_ans" in
                 y|Y)
                     reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -316,11 +320,11 @@ prompt_git_remote_setup() {
 
 prompt_docker_compose() {
     local answer db_ans
-    read -r -p "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")"
     case "$answer" in
         y|Y)
             INCLUDE_DOCKER_COMPOSE=true
-            read -r -p "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")" db_ans || true
+            prompt_read db_ans "$(prompt_sub "Which database backend? [postgresql/mariadb/mysql] (default: postgresql): ")"
             case "${db_ans:-postgresql}" in
                 mariadb|mysql) DB_COMPOSE_BACKEND="$db_ans" ;;
                 *) DB_COMPOSE_BACKEND="postgresql" ;;
@@ -335,7 +339,7 @@ prompt_docker_compose() {
 
 prompt_storage() {
     local answer
-    read -r -p "$(prompt_main "Include schema-less file storage (JSON/CSV/joblib)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include schema-less file storage (JSON/CSV/joblib)? [y/N]: ")"
     case "$answer" in
         y|Y) INCLUDE_STORAGE=true; print_status "config" "Schema-less storage: enabled" ;;
         *) INCLUDE_STORAGE=false ;;
@@ -344,13 +348,13 @@ prompt_storage() {
 
 prompt_data_dir() {
     local answer base_ans dated_ans
-    read -r -p "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Customise the output directory (logs/artifacts root)? [y/N]: ")"
     case "$answer" in
         y|Y)
             INCLUDE_DATA_DIR=true
-            read -r -p "$(prompt_sub "Output base directory [logs]: ")" base_ans || true
+            prompt_read base_ans "$(prompt_sub "Output base directory [logs]: ")"
             DATA_DIR_BASE="${base_ans:-logs}"
-            read -r -p "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")" dated_ans || true
+            prompt_read dated_ans "$(prompt_sub "Organise output into date-named subdirectories (<base>/YYYY-MM-DD)? [y/N]: ")"
             case "$dated_ans" in
                 y|Y) DATA_DIR_DATED=true ;;
                 *) DATA_DIR_DATED=false ;;
@@ -365,11 +369,11 @@ prompt_data_dir() {
 
 prompt_webhook() {
     local answer platform_ans
-    read -r -p "$(prompt_main "Include outbound webhook notifications? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include outbound webhook notifications? [y/N]: ")"
     case "$answer" in
         y|Y)
             INCLUDE_WEBHOOK=true
-            read -r -p "$(prompt_sub "Which platform? [teams/slack/custom] (default: teams): ")" platform_ans || true
+            prompt_read platform_ans "$(prompt_sub "Which platform? [teams/slack/custom] (default: teams): ")"
             case "${platform_ans:-teams}" in
                 slack|custom) WEBHOOK_PLATFORM="$platform_ans" ;;
                 *) WEBHOOK_PLATFORM="teams" ;;
@@ -703,7 +707,7 @@ conditional_copy_webhooks_yaml() {
 
 prompt_otel() {
     local answer
-    read -r -p "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: " answer || true
+    prompt_read answer "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: "
     case "$answer" in
         y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
         *) INCLUDE_OTEL=false ;;
@@ -712,11 +716,11 @@ prompt_otel() {
 
 prompt_email() {
     local answer backend_ans
-    read -r -p "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")" answer || true
+    prompt_read answer "$(prompt_main "Include an outbound e-mail handler (Outlook/SMTP)? [y/N]: ")"
     case "$answer" in
         y | Y)
             INCLUDE_EMAIL=true
-            read -r -p "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")" backend_ans || true
+            prompt_read backend_ans "$(prompt_sub "Which backend? [outlook/smtp] (default: outlook): ")"
             case "${backend_ans:-outlook}" in
                 smtp) EMAIL_BACKEND="smtp" ;;
                 *) EMAIL_BACKEND="outlook" ;;

@@ -22,9 +22,9 @@ def test_render_writes_file_to_disk(df_sample: pd.DataFrame, tmp_path: Path) -> 
     Parameters
     ----------
     df_sample : pd.DataFrame
-            Sample data to render.
+        Sample data to render.
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------
@@ -41,9 +41,9 @@ def test_render_returns_written_path(df_sample: pd.DataFrame, tmp_path: Path) ->
     Parameters
     ----------
     df_sample : pd.DataFrame
-            Sample data to render.
+        Sample data to render.
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------
@@ -60,9 +60,9 @@ def test_render_missing_parent_dir_creates_it(df_sample: pd.DataFrame, tmp_path:
     Parameters
     ----------
     df_sample : pd.DataFrame
-            Sample data to render.
+        Sample data to render.
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------
@@ -79,9 +79,9 @@ def test_render_roundtrip_preserves_data(df_sample: pd.DataFrame, tmp_path: Path
     Parameters
     ----------
     df_sample : pd.DataFrame
-            Sample data to render.
+        Sample data to render.
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------
@@ -106,11 +106,11 @@ def test_render_uses_configured_sheet_name(
     Parameters
     ----------
     df_sample : pd.DataFrame
-            Sample data to render.
+        Sample data to render.
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
@@ -133,11 +133,11 @@ def test_render_writes_the_workbook_once(
     Parameters
     ----------
     df_sample : pd.DataFrame
-            Sample data to render.
+        Sample data to render.
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------

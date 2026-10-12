@@ -92,3 +92,14 @@ so nothing but the changelog framing is lost by trimming it.
 
 **Not yet applied** to `.github/workflows/review_threads.yml` (root) — held by
 PRs #491/#492. Follow-up once those land.
+
+## `.greptile/` — Greptile reviews only when asked (#737)
+
+Every scaffold ships `.greptile/config.json` (from `templates/common/`) with
+`"autoReview": []`, plus a per-skeleton `rules.md` and a `files.json` pointing at the
+project's `AGENTS.md` or `CLAUDE.md`. The reference default is `["open"]`, which reviews
+every PR on open and spends the monthly credit allowance while another reviewer is up.
+An empty array means never automatic; the review ladder asks for one explicitly. Do not use
+the trigger-label route, which counts as an `open` event and would need `"open"` back.
+`greptile-apps[bot]` posts inline review threads, so it is listed in every
+`.review-bots.yaml` roster.

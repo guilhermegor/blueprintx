@@ -26,14 +26,14 @@ def _build_orchestrator(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory, used for the unused JSON summary path.
+        Pytest-provided temporary directory, used for the unused JSON summary path.
     cls_webhook : WebhookNotifier | None
-            The notifier to inject (``None`` to exercise the short-circuit gate).
+        The notifier to inject (``None`` to exercise the short-circuit gate).
 
     Returns
     -------
     PipelineOrchestrator
-            An orchestrator wired only with what ``_notify`` needs.
+        An orchestrator wired only with what ``_notify`` needs.
     """
     return PipelineOrchestrator(
         logger=None,
@@ -57,9 +57,9 @@ def test_notify_logs_payload_composition_when_gate_short_circuits(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
@@ -79,9 +79,9 @@ def test_notify_does_not_send_when_gate_short_circuits(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
@@ -101,9 +101,9 @@ def test_notify_measures_payload_before_sending_when_webhook_configured(
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
     mocker : MockerFixture
-            pytest-mock fixture for patching.
+        pytest-mock fixture for patching.
 
     Returns
     -------
@@ -122,7 +122,7 @@ def test_notify_sends_through_webhook_when_configured(tmp_path: Path) -> None:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Returns
     -------

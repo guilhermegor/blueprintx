@@ -295,8 +295,6 @@ copy_online_assets_react() {
     print_status "success" "GitHub assets copied (.github, deploy-target=$DEPLOY_TARGET)"
 }
 
-# Mirrors the .github copy in bin/scaffold/ts_lib.sh: ts-common workflows, the skeleton's own
-# (release-npm is rendered with PROJECT_NAME) plus the shared CLAUDE.md/CODEOWNERS/PR template.
 copy_online_assets_ts_lib() {
     local shared="$BLUEPRINTX_ROOT/templates/common" skeleton="$BLUEPRINTX_ROOT/templates/ts-lib"
     local dest="$PROJECT_PATH" wf
@@ -310,7 +308,6 @@ copy_online_assets_ts_lib() {
     print_status "success" "GitHub assets copied (.github)"
 }
 
-# Mirrors the .github copy in bin/scaffold/bash_cli.sh (release.yml rendered with PROJECT_NAME).
 copy_online_assets_bash_cli() {
     local skeleton="$BLUEPRINTX_ROOT/templates/bash-cli" dest="$PROJECT_PATH"
     mkdir -p "$dest/.github/workflows"
@@ -320,7 +317,6 @@ copy_online_assets_bash_cli() {
     print_status "success" "GitHub assets copied (.github)"
 }
 
-# The three files every non-service TS/bash scaffold copies from templates/common/.github.
 copy_shared_github_overlay() {
     local shared="$BLUEPRINTX_ROOT/templates/common" dest="$PROJECT_PATH"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
@@ -376,8 +372,7 @@ remove_offline_only_python() {
     remove_git_diffs_dir
 }
 
-# Mirrors the removal half of apply_offline_mode() in ts_react_app.sh, ts_lib.sh and bash_cli.sh
-# (bash-cli has no package.json; the strip is then a no-op): no
+# Mirrors the removal half of apply_offline_mode() in ts_react_app.sh, ts_lib.sh and bash_cli.sh: no
 # new_branch/git_merge_to_main/protect_branch or poe include there, so only the git-diff
 # trio + git_diffs/ + the package.json script entries come back off.
 remove_offline_only_react() {

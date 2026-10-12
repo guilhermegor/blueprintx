@@ -25,7 +25,7 @@ def init() -> float:
     Returns
     -------
     float
-            Monotonic start timestamp for elapsed-time tracking.
+        Monotonic start timestamp for elapsed-time tracking.
     """
     load_dotenv()
     warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -40,7 +40,7 @@ def teardown(start_time: float) -> None:
     Parameters
     ----------
     start_time : float
-            Timestamp returned by :func:`init`.
+        Timestamp returned by :func:`init`.
     """
     elapsed = time() - start_time
     hours, remainder = divmod(elapsed, 3600)
@@ -81,9 +81,9 @@ def notify(cls_webhook: WebhookNotifier | None, str_message: str) -> None:
     Parameters
     ----------
     cls_webhook : WebhookNotifier | None
-            The injected notifier (the ``WebhookNotifier`` port), or ``None`` to skip.
+        The injected notifier (the ``WebhookNotifier`` port), or ``None`` to skip.
     str_message : str
-            The run-summary message to send.
+        The run-summary message to send.
     """
     if cls_webhook is None:
         return
