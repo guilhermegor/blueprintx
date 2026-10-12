@@ -121,7 +121,7 @@ if [ -n "${SCAFFOLD_SPEC_FILE:-}" ] && { [ ! -f "$SCAFFOLD_SPEC_FILE" ] || [ ! -
 fi
 spec_validate_answers "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" || exit 1
 spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
-    | GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold_rel" \
+    | BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold_rel" \
         "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
 
