@@ -275,6 +275,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/common\.sh|bin/lib/scaffold_[^/]+\.sh|bin/scaffold/[^/]+\.sh|tests/test_prompt_tty_guard\.sh)$
 
+      - id: scaffold-lint-test-cleanup-tests
+        name: scaffold_lint_test.sh cleanup-trap should-fail tests (blueprintx#762)
+        entry: bash tests/test_scaffold_lint_test_cleanup.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/scaffold_lint_test\.sh|tests/test_scaffold_lint_test_cleanup\.sh)$
+
       - id: spec-answers-tests
         name: --spec regression tests (blueprintx#629)
         entry: bash tests/test_spec_answers.sh
