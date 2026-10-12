@@ -99,32 +99,37 @@ def read_tier(path_root: pathlib.Path) -> str | None:
 _RE_ONE_LINE_FI = re.compile(r";\s*fi\b(?:\s*(?:;|\|\||#).*)?$")
 
 
-def _expand_glob_cps(str_lib: str, dict_templates: dict[str, pathlib.Path]) -> str:
+def _expand_glob_cps(
+    str_lib: str, path_blueprintx_root: pathlib.Path, dict_templates: dict[str, pathlib.Path]
+) -> str:
     """Rewrite each unquoted-glob ``cp`` into one quoted ``cp`` per matching template file.
 
     Parameters
     ----------
     str_lib : str
             The shared scaffold lib source, line-continuations already spliced.
+    path_blueprintx_root : pathlib.Path
+            Root of the BlueprintX checkout, for the tracked-file policy.
     dict_templates : dict of str to pathlib.Path
             ``COMMON``/``SHARED`` mapped to their template directories.
 
     Returns
     -------
     str
-            The source with every glob that matches something spelled out; a glob that
-            matches nothing is left untouched.
+            The source with every glob that matches a tracked template file spelled out; a
+            glob that matches nothing is left untouched.
     """
 
     def _spell_out(cls_match: re.Match) -> str:
         str_root, str_glob, str_dst_a, str_dst_b = cls_match.groups()
         path_root = dict_templates[str_root]
+        set_tracked = set(_template_files(path_blueprintx_root, path_root))
         str_dir = ((str_dst_a or "") + (str_dst_b or "")).strip("/")
         list_cps = [
             f'cp "${str_root}_TEMPLATE_ROOT/{path_f.relative_to(path_root).as_posix()}" '
             f'"$str_project_path/{str_dir + "/" if str_dir else ""}{path_f.name}"'
             for path_f in sorted(path_root.glob(str_glob))
-            if path_f.is_file()
+            if path_f.relative_to(path_root).as_posix() in set_tracked
         ]
         return "; ".join(list_cps) or cls_match.group(0)
 
@@ -273,7 +278,9 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
         "SHARED": path_blueprintx_root / "templates/common",
     }
     str_lib = _expand_glob_cps(
-        _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8")), path_templates
+        _RE_LINE_CONTINUATION.sub(" ", path_lib.read_text(encoding="utf-8")),
+        path_blueprintx_root,
+        path_templates,
     )
     set_removed = set(_RE_RM.findall(str_lib))
 

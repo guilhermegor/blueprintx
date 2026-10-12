@@ -422,3 +422,30 @@ def test_a_commented_out_rm_does_not_remove_a_required_path(tmp_path: Path) -> N
     path_root = _checkout(tmp_path, str_lib, ["d/.keep", "d/real.py"])
 
     assert gate.required_relpaths(path_root) == {"d/.keep", "d/real.py"}
+
+
+def _git(path_root: Path, *tuple_args: str) -> None:
+    """Run one git command in ``path_root``, failing the test on a non-zero exit.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+            The repository directory.
+    *tuple_args : str
+            Arguments after ``git -C <path_root>``.
+
+    Returns
+    -------
+    None
+    """
+    subprocess.run(["git", "-C", str(path_root), *tuple_args], check=True)  # noqa: S603, S607
+
+
+def test_an_untracked_glob_match_is_not_required(tmp_path: Path) -> None:
+    """A draft that git does not track is not a template file (same policy as directories)."""
+    path_root = _checkout(tmp_path, _LIB_GLOB_RM, ["a.md"])
+    _git(path_root, "init", "-q")
+    _git(path_root, "add", "--", "templates")
+    (path_root / gate._COMMON_TEMPLATE_RELPATH / "draft.md").touch()
+
+    assert gate.required_relpaths(path_root) == {"a.md"}
