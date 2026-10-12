@@ -53,6 +53,12 @@ non-Python tiers deliberately ship **no** `.gitleaks.toml`: gitleaks falls
 back to its embedded default ruleset, and an allowlist is added only for a
 measured false positive, never preemptively.
 
+On the Python tiers the **pre-commit** hook runs `bin/check_secrets.sh
+--staged`, which scans only the index: a commit can add only staged content,
+and rescanning the whole history on every commit cost minutes on a mature
+repo (blueprintx#759). CI and `poe lint` run the same script without the
+flag and keep the full-history scan.
+
 ## Why GitGuardian is opt-in
 
 `secret_scan.yaml` reads `${{ secrets.GITGUARDIAN_API_KEY }}`, and GitHub

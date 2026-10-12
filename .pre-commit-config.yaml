@@ -220,7 +220,7 @@ repos:
         # --root rather than kept as a second copy. gitleaks resolves its own config from
         # <root>/.gitleaks.toml, so no --config flag is needed. Resolves gracefully when
         # gitleaks is absent locally; CI sets GITLEAKS_REQUIRED=1.
-        entry: bash templates/python-common/bin/check_secrets.sh --root .
+        entry: bash templates/python-common/bin/check_secrets.sh --root . --staged
         language: system
         pass_filenames: false
         always_run: true
@@ -252,6 +252,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
+
+      - id: check-secrets-tests
+        name: check_secrets.sh staged/full should-fail tests (blueprintx#759)
+        entry: bash tests/test_check_secrets.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/python-common/bin/check_secrets\.sh|tests/test_check_secrets\.sh)$
 
       - id: close-linked-issues-tests
         name: close_linked_issues.sh should-fail regression tests (blueprintx#604)
