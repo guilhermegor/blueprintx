@@ -2268,8 +2268,6 @@ def test_deps_gate_hard_fails_when_deptry_is_unresolvable_instead_of_skipping(
     assert "skip" not in str_all.lower()
 
 
-
-
 def _run_template_drift(list_args: list[str]) -> subprocess.CompletedProcess:
     """Run ``check_template_drift.py`` with explicit CLI args.
 
