@@ -406,3 +406,11 @@ def test_a_removal_with_a_doubled_separator_still_matches(tmp_path: Path) -> Non
     path_root = _checkout(tmp_path, str_lib, ["d/.keep", "d/real.py"])
 
     assert gate.required_relpaths(path_root) == {"d/real.py"}
+
+
+def test_a_glob_destination_stops_at_a_shell_separator(tmp_path: Path) -> None:
+    """`dst/; echo done` must not smuggle the `;` into the generated destination."""
+    str_lib = 'f() {\n\tcp "$COMMON_TEMPLATE_ROOT"/*.md "$str_project_path"/; echo done\n}\n'
+    path_root = _checkout(tmp_path, str_lib, ["a.md"])
+
+    assert gate.required_relpaths(path_root) == {"a.md"}

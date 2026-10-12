@@ -66,7 +66,7 @@ _RE_CP = re.compile(
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
 _RE_GLOB_CP = re.compile(
     r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?"/([^\s"]*[*?\[][^\s"]*)\s+'
-    r'"\$\{?str_project_path\}?(/[^"]*)?"(/\S*)?'
+    r'"\$\{?str_project_path\}?(/[^"]*)?"(/[^\s;&|]*)?'
 )
 _RE_RM = re.compile(r'rm\s+(?:-[A-Za-z]+\s+)*"\$\{?str_project_path\}?/([^"]+)"')
 _RE_CHAINED_CP = re.compile(r"(?:&&|\|\|)\s*cp\b")
