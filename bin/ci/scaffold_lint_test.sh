@@ -148,6 +148,8 @@ for str_online_only in coderabbit_trigger.yaml review_threads.yaml review_retry.
 done
 echo "No GitHub-only workflows in the offline project."
 
+bash "$REPO_ROOT/bin/ci/check_review_config_shipped.sh" --project "$PROJECT_PATH"
+
 # The .specs/ gate ships into every Python project (blueprintx#583). Run the PROJECT'S copy on
 # the shipped skeleton (must pass) and on a copy with a stray top-level note (must fail): a gate
 # that only ever passes would also satisfy the first half.
