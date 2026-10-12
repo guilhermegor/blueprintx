@@ -121,7 +121,7 @@ class NoteStatus(Enum):
 ```python
 # entities.py — persistence model (maps to a DB row)
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from .enums import NoteStatus
 
@@ -129,9 +129,11 @@ from .enums import NoteStatus
 class Note:
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     title: str = ""
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     status: NoteStatus = NoteStatus.DRAFT
 ```
+
+`created_at` is a timezone-aware UTC timestamp (`datetime.now(tz=timezone.utc)`, stdlib, so it needs no tz database on Windows); `datetime.utcnow` is deprecated since Python 3.12 and returns a naive value.
 
 ```python
 # dto.py — network model (what goes over the wire)
@@ -171,14 +173,14 @@ class NoteRepository(Protocol, metaclass=ProtocolTypeCheckerMeta):
 
 ```python
 # use_cases.py
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from ..domain.dto import NoteCreateDTO, NoteResponseDTO
 from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
 def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
-    cls_note = Note(id=uuid.uuid4().hex, title=cls_dto.title, created_at=datetime.utcnow())
+    cls_note = Note(id=uuid.uuid4().hex, title=cls_dto.title, created_at=datetime.now(tz=timezone.utc))
     cls_stored = cls_repo.add(cls_note)
     return NoteResponseDTO(
         id=cls_stored.id,
@@ -278,7 +280,7 @@ cls_storage = build_storage_handler()
 
 Supported schema-less backends: `json`, `csv`, `joblib`.
 
-**`JoblibHandler`** stores immutable binary artifacts. Each artifact is named `name_YYYYMMDD_HHMMSS_{sha256_prefix8}.joblib`. Three-factor integrity on load: SHA256 prefix match, `_saved_at` metadata check, optional HMAC sidecar (set `JOBLIB_SECRET_KEY` in `.env`). `update()` raises `NotImplementedError` — always create a new artifact with `create()`.
+**`JoblibHandler`** stores immutable binary artifacts. Each artifact is named `name_YYYYMMDD_HHMMSS_{sha256_prefix8}.joblib`. Three-factor integrity on load: SHA256 prefix match, `_saved_at` metadata check, optional HMAC sidecar (set `JOBLIB_SECRET_KEY` in `.env`). `update()` raises `NotImplementedError` — always create a new artifact with `create()`. A `record_id` must be exactly that shape. `create()` turns each `_` in `_name` into `-` and then checks the result: only lowercase letters, digits and `-` are accepted (`my_model` becomes `my-model`), and anything else (uppercase letters, a path separator, `..`) raises `ValueError`, so no call can leave the store directory.
 
 **`SanityCheck`** (`chassis/db_wschema/infrastructure/sanity_check.py`) — post-load semantic validator:
 

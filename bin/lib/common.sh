@@ -498,3 +498,52 @@ is_valid_project_name() {
     local str_name="$1"
     [[ "$str_name" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
 }
+
+# Ship the branch-protection provisioner into a NON-Python skeleton (blueprintx#564).
+#
+# The Python tiers already get `enable_repo_rules.sh` for free — they copy
+# `templates/python-common/bin/` wholesale — so before this the TypeScript and Bash
+# skeletons had no provisioning at all: not one required check, zero, with every
+# qualifying name they emit required by nothing.
+#
+# ⚠️ The script is language-agnostic and its home SHOULD be `templates/common/bin/`,
+# the same move `check_review_threads.py` made in blueprintx#175. It is read from
+# `templates/python-common/bin/` instead because `.github/workflows/verify_branch_protection.yml`
+# hardcodes that path to run the script's read-only `verify` mode against BlueprintX
+# itself, and moving the file without that workflow would turn `main` red. One
+# implementation either way — only the path is pending. Tracked as a follow-up.
+#
+# The per-tier check list travels as DATA ($2), because a shared script cannot require
+# a name only one tier emits — see each `required-checks.txt` for what qualified and why.
+copy_repo_rules_provisioner() {
+    local project_path="$1"
+    local required_checks_src="$2"
+    local blueprintx_root
+    blueprintx_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    mkdir -p "$project_path/bin/lib"
+    # lib/common.sh is the script's ONE dependency (print_status) — copied here rather
+    # than assumed, so a caller that never materialised bin/lib/ still gets a runnable script.
+    cp "$blueprintx_root/templates/common/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
+    cp "$blueprintx_root/templates/python-common/bin/enable_repo_rules.sh" \
+        "$project_path/bin/enable_repo_rules.sh"
+    cp "$required_checks_src" "$project_path/bin/required-checks.txt"
+    chmod +x "$project_path/bin/enable_repo_rules.sh"
+}
+
+# Ship the repo-level PR/issue policy workflows and the scripts they run (blueprintx#604).
+# The scripts are copied into the project, never fetched at run time (blueprintx#175).
+# GitHub-only: an offline scaffold removes `.github/`, so call it next to the PR template.
+copy_repo_policy_workflows() {
+    local project_path="$1"
+    local common_root
+    common_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/templates/common"
+    mkdir -p "$project_path/.github/workflows" "$project_path/bin"
+    local str_wf
+    for str_wf in close-linked-issues branch-has-issue pr-title-conventional \
+        pr-body-template pr-self-assign; do
+        cp "$common_root/.github/workflows/$str_wf.yml" "$project_path/.github/workflows/"
+    done
+    cp "$common_root/bin/close_linked_issues.sh" "$common_root/bin/check_pr_policy.sh" \
+        "$project_path/bin/"
+    chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
+}

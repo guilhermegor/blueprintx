@@ -130,3 +130,10 @@ complementary to (not a replacement for) pushing so the full matrix runs on GitH
   may lack wheels: `act --matrix os:ubuntu-latest --matrix python-version:3.14 -j test`.
 - **Docker Desktop on Linux** puts its socket at `~/.docker/desktop/docker.sock` — export
   `DOCKER_HOST=unix://$HOME/.docker/desktop/docker.sock` or `act` reports the daemon is down.
+
+## Kanban board and labels
+
+If you accepted the scaffolder's offer, the repo has a `<repo> kanban` GitHub Project and the
+house labels (`type:*`, `hitl`, `afk`, `oracle:*`, `do-not-merge`). `Estimate`, `Size` and
+`Priority` are project fields, not labels. The board's views and workflows have no public API:
+enable auto-add and "item closed -> Done" in the project's Workflows page.

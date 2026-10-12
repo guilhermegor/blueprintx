@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -61,12 +61,46 @@ jobs:
       - name: Verify an existing origin pointing elsewhere is refused
         run: bash bin/ci/check_git_remote_guard.sh
 
+  review-bot-roster-optout:
+    name: Review-bot roster opt-out — "no" must omit .review-bots.yaml
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No setup step, same as git-remote-guard above: the check sources the scaffold libs
+      # and drives them against throwaway temp dirs. Nothing to install means no skip path
+      # to inherit, so there is no *_REQUIRED flag here — a missing tool cannot make this
+      # gate report its own blindness as OK.
+      - name: Verify INCLUDE_REVIEW_BOT_ROSTER=false omits the roster on all three scaffold shapes
+        run: bash bin/ci/check_review_bot_roster_optout.sh
+
+  docs-gap:
+    name: Docs gap — published pages registered in nav and index
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Same shape as function-length below (ONE implementation, run over this repo via
+      # --root, blueprintx#340), except the gate imports pathspec to honour mkdocs'
+      # exclude_docs exactly as mkdocs does, so it must be installed first.
+      - name: Install pathspec and pyyaml
+        run: python3 -m pip install pathspec pyyaml
+
+      - name: Check every published docs page reaches mkdocs nav and the docs/CLAUDE.md index
+        run: python3 templates/python-common/bin/check_docs_gap.py --root .
+
   function-length:
     name: Function length — 60 lines, docstring excluded
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -75,12 +109,27 @@ jobs:
       - name: Check function length across bin/ and templates/
         run: python3 templates/python-common/bin/check_function_length.py --root .
 
+  comment-budget:
+    name: Comment budget — long runs + decorative banners (blueprintx#303)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Same shape as function-length above: ONE implementation, run over this repo via
+      # --root rather than kept as a second copy, and stdlib-only ast/re so there is no
+      # setup step and no graceful-skip path for CI to have to override.
+      - name: Check the comment budget across bin/ and templates/
+        run: python3 templates/python-common/bin/check_comment_budget.py --root .
+
   complexity:
     name: Cyclomatic complexity — tests 1, src 2, bin 8
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -98,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -122,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # Merge-base resolution needs full history — a shallow clone has no common ancestor.
@@ -133,12 +182,26 @@ jobs:
       - name: Check for an unjustified gate weakening since main
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
 
+  pr-file-count:
+    name: PR file-count ceiling — 90 files (blueprintx#551)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Merge-base resolution needs full history — a shallow clone has no common ancestor.
+          fetch-depth: 0
+
+      - name: Check the branch's cumulative diff against the file-count ceiling
+        run: python3 bin/ci/check_pr_file_count.py
+
   docs-code-refs:
     name: Docs code references — symbols + import paths (blueprintx#159)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -147,16 +210,30 @@ jobs:
       - name: Check docs-cited symbols and import paths across docs/
         run: python3 templates/python-common/bin/check_docs_code_refs.py --root .
 
+  quality-rules:
+    name: quality-rules.yaml validation (blueprintx#432)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No dependency and no setup-python step: stdlib-only re/pathlib, same as the other
+      # ONE-implementation gates above.
+      - name: Validate the quality-rules registry against the templates it describes
+        run: python3 templates/python-common/bin/check_quality_rules.py --root .
+
   test-copy-lists:
     name: Shared test copy lists — scaffolds vs python-common
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -172,7 +249,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -196,6 +273,9 @@ jobs:
         env:
           LINT_ACTIONS_REQUIRED: "1"
         run: bash bin/ci/check_actions.sh
+
+      - name: Should-fail regression tests for check_action_pins
+        run: bash tests/test_check_actions_pins.sh
 
   secret-scan:
     name: GitGuardian — secret scan
@@ -227,7 +307,7 @@ jobs:
     # *triggered* this run and would un-exempt itself the moment a human re-runs or updates
     # the bot's PR. A human PR with a genuinely missing/bad key still fails loud, unchanged.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # ggshield needs the full range to diff, not just the tip.
@@ -311,7 +391,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -326,7 +406,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -339,24 +419,105 @@ jobs:
       - name: Should-fail regression tests for validate_meta.sh
         run: bash tests/test_validate_meta.sh
 
+      - name: Should-fail regression tests for the docs-locale prompt
+        run: bash tests/test_docs_locale_prompt.sh
+
+      - name: Should-fail regression tests for close_linked_issues.sh
+        run: bash tests/test_close_linked_issues.sh
+
+      - name: Should-fail regression tests for check_pr_policy.sh
+        run: bash tests/test_check_pr_policy.sh
+
+  promote-offline-to-online:
+    name: promote_offline_to_online.sh refusal-path tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Refusal-path tests (blueprintx#382)
+        run: bash tests/test_promote_offline_to_online.sh
+
+  spec-answers:
+    name: --spec regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run the --spec should-fail suite (blueprintx#629)
+        run: bash tests/test_spec_answers.sh
+
+  scaffold-kanban:
+    name: scaffold kanban board and labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run the kanban should-fail suite (blueprintx#592)
+        run: bash tests/test_scaffold_kanban.sh
+
+      - name: Run the scaffold git-remote should-fail suite (blueprintx#732)
+        run: bash tests/test_scaffold_git_remote.sh
+
   specs-structure:
     name: .specs/ structure guard
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Check .specs/ layout (blueprintx#447)
-        run: bash bin/ci/check_specs_structure.sh
+        run: bash bin/ci/check_specs_structure.sh --root .
+
+      - name: Run the .specs/ structure should-fail suite (blueprintx#583)
+        run: bash tests/test_check_specs_structure.sh
+
+  docs-boundary:
+    name: docs/ boundary guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check docs/ holds only published documentation (blueprintx#536)
+        run: bash bin/ci/check_docs_boundary.sh
+
+      - name: Should-fail regression tests for the boundary gate
+        run: bash tests/test_check_docs_boundary.sh
+
+  review-config-shipped:
+    name: Every skeleton ships the hosted-reviewer config
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scaffold every skeleton and assert the review config is in the tree (blueprintx#740)
+        run: bash bin/ci/check_review_config_shipped.sh --generated
+
+      - name: Should-fail regression tests for the review-config guard
+        run: bash tests/test_check_review_config_shipped.sh
 
   version-sync:
     name: Version sync — pyproject vs CLI
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -368,16 +529,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pip
           key: pip-mkdocs-${{ hashFiles('pyproject.toml') }}
@@ -408,8 +569,9 @@ jobs:
           - mvc-service-orm-db
           - lib-minimal
           - react-spa-webpack
+          - bash-cli
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -436,16 +598,16 @@ jobs:
           - mvc-service-orm-db
           - lib-minimal
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pip
           key: pip-poetry-${{ hashFiles('templates/*/pyproject.toml') }}
@@ -481,16 +643,16 @@ jobs:
           - mvc-service-native-db
           - mvc-service-orm-db
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pip
           key: pip-poetry-${{ hashFiles('templates/*/pyproject.toml') }}
@@ -509,59 +671,111 @@ jobs:
           MULTI_PIPELINE_OPTIN: "true"
         run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
 
-  typecheck-ts:
-    name: TypeScript typecheck — react-spa-webpack template
+  scaffold-lint-test-storage:
+    name: Scaffold + lint + test (storage opt-in) — ${{ matrix.skeleton }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # `scaffold-lint-test` above scaffolds with NO opt-ins, so a file that ships only on an
+        # opt-in was never linted, type-checked or complexity-checked (blueprintx#650: the
+        # storage opt-in failed mypy and nine complexity checks with every job green). This
+        # answers that one prompt "yes" via the named-key spec, on every tier that offers it.
+        # api-service-native-db shares the DDD prompt order, so its key map is the DDD one
+        # (blueprintx#668).
+        skeleton:
+          - ddd-service-native-db
+          - ddd-service-orm-db
+          - api-service-native-db
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pip
+          key: pip-poetry-${{ hashFiles('templates/*/pyproject.toml') }}
+          restore-keys: pip-poetry-
+
+      - name: Install scaffold tooling (envsubst)
+        run: command -v envsubst >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext-base; }
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Real scaffold with the storage opt-in, then lint + tests
+        env:
+          GITHUB_USERNAME: ci-bot
+          SKELETON: ${{ matrix.skeleton }}
+          SCAFFOLD_SPEC_FILE: bin/ci/optin_specs/storage.answers
+        run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
+
+  typecheck-ts:
+    name: TypeScript build + lint — ${{ matrix.skeleton }} template
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        skeleton:
+          - react-spa-webpack
+          - ts-lib
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: templates/ts-common/package-lock.json
 
-      - name: Assemble typecheck workspace
+      - name: Real scaffold (offline, no opt-ins)
+        env:
+          GITHUB_USERNAME: ci-bot
+          SKELETON: ${{ matrix.skeleton }}
         run: |
-          mkdir -p /tmp/ts-typecheck/src/shared/utils
-          export PROJECT_NAME="ci-typecheck"
-          export PROJECT_DESCRIPTION="CI typecheck workspace"
-          envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
-            < templates/ts-common/package.json \
-            > /tmp/ts-typecheck/package.json
-          # package-lock.json's root "name"/"version" don't need to match the
-          # envsubst-rendered package.json above -- npm ci only validates the
-          # dependency trees (verified locally, blueprintx#464).
-          cp templates/ts-common/package-lock.json /tmp/ts-typecheck/package-lock.json
-          cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
-          cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
-          # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
-          # the real scaffold copies ts-common/src/ into the project's src/shared/, which is
-          # where `@/shared/utils/log-emitter` resolves. This workspace is a hand-assembled
-          # stand-in for that scaffold and drifted from it when #436 added the shared source.
-          cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared
+          git config --global user.email "ci-bot@example.com"
+          git config --global user.name "ci-bot"
+          scaffold="$(grep '^scaffold=' "templates/$SKELETON/skeleton.meta" | cut -d= -f2-)"
+          bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" </dev/null
 
-      - name: Install npm dependencies (npm ci enforces the committed lockfile, #464)
-        working-directory: /tmp/ts-typecheck
-        run: npm ci
+      - name: Install npm dependencies (npm ci where a lockfile ships, #464)
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-      - name: Run tsc --noEmit (type errors only, no output files)
-        working-directory: /tmp/ts-typecheck
-        run: npx tsc --noEmit
+      - name: Type-check (tsc --noEmit)
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: npm run type-check
+
+      - name: Build
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: npm run build
+
+      - name: Lint CSS (stylelint)
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: npm run lint:css
+
+      - name: Lint (eslint)
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: npm run lint
 
   spell-check:
     name: Spell check — docs/ and templates/
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -582,7 +796,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -596,7 +810,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -608,16 +822,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Install pymarkdownlnt
-        run: pip install pymarkdownlnt
+        # PINNED on purpose. `.pymarkdown.json` enumerates rules one by one, so any rule a
+        # NEW pymarkdownlnt release adds is enabled by default and silently joins the gate —
+        # measured 2026-09-18: 0.9.40 added MD049/MD050/MD051 and turned 9 open PRs red for
+        # rules the gate's own message says are not part of the measured set. Bump this
+        # deliberately, re-measuring the rule set (blueprintx#383), never implicitly.
+        run: pip install pymarkdownlnt==0.9.40
 
       # Resolve, don't install, is the wrapper's own contract; here we DO install it, so
       # the skip path is unreachable and the REQUIRED flag only guards against pymarkdown

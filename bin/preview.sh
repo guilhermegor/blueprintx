@@ -12,6 +12,7 @@ show_languages() {
     print_status "info" "1) python"
     print_status "config" "Status: supported"
     print_status "config" "Skeletons:"
+    print_status "config" "  * api-service-native-db (HTTP API, FastAPI transport, native DB libraries)"
     print_status "config" "  * ddd-service-native-db (native DB libraries)"
     print_status "config" "  * ddd-service-orm-db (SQLAlchemy ORM)"
     print_status "config" "  * mvc-service-native-db (layered MVC, native DB libraries)"
@@ -25,6 +26,60 @@ show_languages() {
     echo
     print_status "info" "2) cancel"
     print_status "config" "Exit without creating a project"
+}
+
+show_api_service() {
+    echo
+    print_section "api-service-native-db skeleton"
+
+    print_status "info" "Description:"
+    print_status "config" "Same chassis/capabilities hexagonal structure as ddd-service-native-db,"
+    print_status "config" "plus a transport/ layer (FastAPI APIRouter) and app/api.py — an HTTP"
+    print_status "config" "API service. Named for the role, not the framework."
+    echo
+    print_status "info" "Example structure:"
+    cat << 'EOF'
+  project/
+    src/
+      app/
+        bootstrap.py
+        container.py
+        api.py             # create_app() — mounts every capability's router
+      chassis/
+        db_schema/
+          domain/
+          infrastructure/
+          application/
+      capabilities/
+        example_feature/
+          domain/
+          application/
+          infrastructure/
+          transport/       # routers.py — inbound HTTP adapter
+      utils/
+      config/
+      main.py              # bootstrap -> wire (create_app) -> serve (uvicorn) -> teardown
+    tests/
+      integration/
+      performance/
+      unit/
+    container/
+    bin/
+    assets/
+    docs/
+    .github/
+      workflows/
+        tests.yaml
+      CODEOWNERS
+      PULL_REQUEST_TEMPLATE.md
+    .env
+    .gitignore
+    .pre-commit-config.yaml
+    .vscode/
+    README.md
+    requirements.txt
+    pyproject.toml
+EOF
 }
 
 show_hex_service() {
@@ -223,6 +278,7 @@ EOF
 
 main() {
     show_languages
+    show_api_service
     show_hex_service
     show_orm_service
     show_mvc_native

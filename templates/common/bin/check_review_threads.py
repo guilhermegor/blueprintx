@@ -63,6 +63,8 @@ reviewed".
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
+import hashlib
 import json
 import os
 import pathlib
@@ -72,9 +74,9 @@ import sys
 
 
 try:
-	import yaml
+    import yaml
 except ModuleNotFoundError:  # pragma: no cover - the gate self-skips without its parser
-	yaml = None  # type: ignore[assignment]
+    yaml = None  # type: ignore[assignment]
 
 
 _ROSTER_FILE = ".review-bots.yaml"
@@ -107,20 +109,20 @@ _BOT_SUFFIX = "[bot]"
 
 
 def normalise_login(str_login: str) -> str:
-	"""Return a login comparable across GitHub's REST and GraphQL spellings.
+    """Return a login comparable across GitHub's REST and GraphQL spellings.
 
-	Parameters
-	----------
-	str_login : str
-		A login as either API reports it, e.g. ``coderabbitai[bot]`` or ``coderabbitai``.
+    Parameters
+    ----------
+    str_login : str
+            A login as either API reports it, e.g. ``coderabbitai[bot]`` or ``coderabbitai``.
 
-	Returns
-	-------
-	str
-		The login without a trailing ``[bot]`` suffix, so the two spellings compare equal.
-	"""
-	str_clean = (str_login or "").strip()
-	return str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
+    Returns
+    -------
+    str
+            The login without a trailing ``[bot]`` suffix, so the two spellings compare equal.
+    """
+    str_clean = (str_login or "").strip()
+    return str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
 
 
 # Floor for a "substantive" reply. Measured, not invented: the replies on the PR that motivated
@@ -190,22 +192,30 @@ _RE_MARKUP = re.compile(r"<!--.*?-->|<[^>]+>", re.DOTALL)
 #
 # A reviewer that declines to work posts an ISSUE comment, never a review thread — verified on
 # #257. That stream is the only place the difference between "nobody looked at this" and "these
-# commits were already reviewed" is written down (#259). It is fetched `last:` rather than
-# `first:` on purpose: `last` returns the NEWEST, so truncation can only drop OLD notices, and
-# an old notice is the one that must not grant a pass anyway.
+# commits were already reviewed" is written down (#259). It is paginated like reviews and
+# threads: a PR past 100 comments (#282 and #319 have 140) must not drop either a review comment
+# or the answer to it.
 _QUERY = """
-query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
+query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
       author { login }
       headRefOid
-      comments(last:100) { nodes { author { login } body createdAt } }
+      baseRefOid
+      timelineItems(
+        first:1,
+        itemTypes:[BASE_REF_CHANGED_EVENT, AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT]
+      ) { nodes { __typename } }
+      comments(first:100, after:$cc) {
+        pageInfo { hasNextPage endCursor }
+        nodes { author { login __typename } body createdAt }
+      }
       reviews(
         first:100, after:$rc,
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login } commit { oid } }
+        nodes { author { login } commit { oid } state body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
       reviewThreads(first:100, after:$tc) {
@@ -224,280 +234,554 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String) {
 
 
 def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
-	"""Return whether the roster file is present on the repository's default branch.
+    """Return whether the roster file is present on the repository's default branch.
 
-	Returns
-	-------
-	bool
-		``True`` only when git can prove the file exists there. Any failure (no git, shallow
-		clone, no remote) returns ``False``, so an unresolvable state never invents a violation.
-	"""
-	for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
-		# S607 (partial path) is resolution BY DESIGN: use the `git` on PATH, the one the
-		# developer's shell and CI already use, not a path hardcoded here.
-		cls_run = subprocess.run(  # noqa: S603
-			["git", "-C", str(path_root), "cat-file", "-e", f"{str_ref}:{_ROSTER_FILE}"],  # noqa: S607
-			capture_output=True,
-			check=False,
-		)
-		if cls_run.returncode == 0:
-			return True
-	return False
+    Returns
+    -------
+    bool
+            ``True`` only when git can prove the file exists there. Any failure (no git, shallow
+            clone, no remote) returns ``False``, so an unresolvable state never
+            invents a violation.
+    """
+    for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
+        # S607 (partial path) is resolution BY DESIGN: use the `git` on PATH, the one the
+        # developer's shell and CI already use, not a path hardcoded here.
+        cls_run = subprocess.run(  # noqa: S603
+            ["git", "-C", str(path_root), "cat-file", "-e", f"{str_ref}:{_ROSTER_FILE}"],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+        if cls_run.returncode == 0:
+            return True
+    return False
 
 
 def posts_of(dict_row: dict) -> str:
-	"""Return the ``posts:`` classification declared by one roster row.
+    """Return the ``posts:`` classification declared by one roster row.
 
-	Parameters
-	----------
-	dict_row : dict
-		One entry of the roster's ``reviewers:`` list.
+    Parameters
+    ----------
+    dict_row : dict
+            One entry of the roster's ``reviewers:`` list.
 
-	Returns
-	-------
-	str
-		One of :data:`_POSTS_VALID` — ``"threads"`` or ``"status"``.
+    Returns
+    -------
+    str
+            One of :data:`_POSTS_VALID` — ``"threads"`` or ``"status"``.
 
-	Raises
-	------
-	RuntimeError
-		When ``posts:`` is missing or is not one of :data:`_POSTS_VALID`. Defaulting is not
-		available here in either direction: silently reading a forgotten field as ``status``
-		makes the gate unsatisfiable (and unsatisfiable gates get bypassed with ``--admin``,
-		taking the real blocks with them), while reading it as ``threads`` re-opens the exact
-		hole this field exists to close. So the roster must say, and a row that does not is a
-		configuration error the message has to name.
-	"""
-	str_login = str(dict_row.get("login") or "").strip()
-	str_posts = str(dict_row.get("posts") or "").strip()
-	if str_posts not in _POSTS_VALID:
-		# Name the row AND the value it declared. A roster error that reports only "invalid
-		# posts" sends the reader back through the file to work out which of N rows it meant.
-		raise RuntimeError(
-			f"{_ROSTER_FILE}: reviewer {str_login or '<no login>'} declares "
-			f"posts: {str_posts or '<missing>'} — expected one of "
-			f"{', '.join(sorted(_POSTS_VALID))}. This field decides who can satisfy the "
-			f"missing-review gate, and neither default is safe, so it cannot be omitted."
-		)
-	return str_posts
+    Raises
+    ------
+    RuntimeError
+            When ``posts:`` is missing or is not one of :data:`_POSTS_VALID`. Defaulting is not
+            available here in either direction: silently reading a forgotten field as ``status``
+            makes the gate unsatisfiable (and unsatisfiable gates get bypassed with ``--admin``,
+            taking the real blocks with them), while reading it as ``threads`` re-opens the exact
+            hole this field exists to close. So the roster must say, and a row that does not is a
+            configuration error the message has to name.
+    """
+    str_login = str(dict_row.get("login") or "").strip()
+    str_posts = str(dict_row.get("posts") or "").strip()
+    if str_posts not in _POSTS_VALID:
+        # Name the row AND the value it declared. A roster error that reports only "invalid
+        # posts" sends the reader back through the file to work out which of N rows it meant.
+        raise RuntimeError(
+            f"{_ROSTER_FILE}: reviewer {str_login or '<no login>'} declares "
+            f"posts: {str_posts or '<missing>'} — expected one of "
+            f"{', '.join(sorted(_POSTS_VALID))}. This field decides who can satisfy the "
+            f"missing-review gate, and neither default is safe, so it cannot be omitted."
+        )
+    return str_posts
 
 
 def load_roster(path_root: pathlib.Path) -> dict[str, str]:
-	"""Read the declared review-bot roster.
+    """Read the declared review-bot roster.
 
-	Parameters
-	----------
-	path_root : pathlib.Path
-		Repository root holding ``.review-bots.yaml``.
+    Parameters
+    ----------
+    path_root : pathlib.Path
+            Repository root holding ``.review-bots.yaml``.
 
-	Returns
-	-------
-	dict of str to str
-		Normalised login mapped to its ``posts:`` classification. Every member counts as a
-		reviewer rather than as an answer for the THREAD half; only the ``threads`` members
-		can satisfy the MISSING-REVIEW half — see :func:`reviewer_logins`. Empty when the
-		file was NEVER there, which makes the gate a no-op rather than a source of false
-		failures.
+    Returns
+    -------
+    dict of str to str
+            Normalised login mapped to its ``posts:`` classification. Every member counts as a
+            reviewer rather than as an answer for the THREAD half; only the ``threads`` members
+            can satisfy the MISSING-REVIEW half — see :func:`reviewer_logins`. Empty when the
+            file was NEVER there, which makes the gate a no-op rather than a source of false
+            failures.
 
-	Raises
-	------
-	RuntimeError
-		When the roster is absent HERE but present on the default branch — that is a
-		deletion, and since an empty roster makes this gate a no-op, it would switch the
-		gate off inside the very PR it is meant to police. Also propagated from
-		:func:`posts_of` for a row that does not declare a usable ``posts:``.
-	"""
-	path_roster = path_root / _ROSTER_FILE
-	if yaml is None:
-		return {}
-	if not path_roster.is_file():
-		# ⚠️ ABSENT is only "not adopted here" when it was never there. If the DEFAULT branch
-		# carries the roster and this branch does not, the file was DELETED — and since an
-		# empty roster makes the gate a no-op, deleting it is a one-line way to switch the
-		# gate off inside the very PR it is meant to police. Fail loudly instead.
-		if _roster_exists_on_default_branch(path_root):
-			raise RuntimeError(
-				f"{_ROSTER_FILE} exists on the default branch but not here — deleting it "
-				f"disables this gate. Restore it, or remove it on the default branch first."
-			)
-		return {}
-	dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
-	dict_roster = {
-		normalise_login(str(d.get("login", ""))): posts_of(d)
-		for d in (dict_yaml.get("reviewers") or [])
-		if d.get("login")
-	}
-	if not dict_roster:
-		# ⚠️ EMPTYING THE LIST IS THE SAME ONE-LINE SWITCH-OFF AS DELETING THE FILE.
-		#
-		# The guard above rejects a roster deleted inside the PR it polices; `reviewers: []`
-		# walks through the same door with different keystrokes — the file is present, so the
-		# deletion guard never fires, and `main()` reads the empty result as "not adopted here"
-		# and exits 0. Opting out is documented as DELETING the file, which self-skips with a
-		# message; a roster that exists and declares nobody is a disabled gate, not an absent
-		# one. Raised by review on #262.
-		raise RuntimeError(
-			f"{_ROSTER_FILE} exists but declares no reviewers — an empty roster makes this "
-			f"gate a no-op, which is the same as deleting it. Declare a reviewer, or delete "
-			f"the file to opt out (that path self-skips with a message)."
-		)
-	return dict_roster
+    Raises
+    ------
+    RuntimeError
+            When the roster is absent HERE but present on the default branch — that is a
+            deletion, and since an empty roster makes this gate a no-op, it would switch the
+            gate off inside the very PR it is meant to police. Also propagated from
+            :func:`posts_of` for a row that does not declare a usable ``posts:``.
+    """
+    path_roster = path_root / _ROSTER_FILE
+    if yaml is None:
+        return {}
+    if not path_roster.is_file():
+        # ⚠️ ABSENT is only "not adopted here" when it was never there. If the DEFAULT branch
+        # carries the roster and this branch does not, the file was DELETED — and since an
+        # empty roster makes the gate a no-op, deleting it is a one-line way to switch the
+        # gate off inside the very PR it is meant to police. Fail loudly instead.
+        if _roster_exists_on_default_branch(path_root):
+            raise RuntimeError(
+                f"{_ROSTER_FILE} exists on the default branch but not here — deleting it "
+                f"disables this gate. Restore it, or remove it on the default branch first."
+            )
+        return {}
+    dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
+    dict_roster = {
+        normalise_login(str(d.get("login", ""))): posts_of(d)
+        for d in (dict_yaml.get("reviewers") or [])
+        if d.get("login")
+    }
+    if not dict_roster:
+        # ⚠️ EMPTYING THE LIST IS THE SAME ONE-LINE SWITCH-OFF AS DELETING THE FILE.
+        #
+        # The guard above rejects a roster deleted inside the PR it polices; `reviewers: []`
+        # walks through the same door with different keystrokes — the file is present, so the
+        # deletion guard never fires, and `main()` reads the empty result as "not adopted here"
+        # and exits 0. Opting out is documented as DELETING the file, which self-skips with a
+        # message; a roster that exists and declares nobody is a disabled gate, not an absent
+        # one. Raised by review on #262.
+        raise RuntimeError(
+            f"{_ROSTER_FILE} exists but declares no reviewers — an empty roster makes this "
+            f"gate a no-op, which is the same as deleting it. Declare a reviewer, or delete "
+            f"the file to opt out (that path self-skips with a message)."
+        )
+    return dict_roster
 
 
 def reviewer_logins(dict_roster: dict[str, str]) -> set[str]:
-	"""Return the roster logins that can actually submit a review.
+    """Return the roster logins that can actually submit a review.
 
-	Parameters
-	----------
-	dict_roster : dict of str to str
-		Roster as returned by :func:`load_roster`.
+    Parameters
+    ----------
+    dict_roster : dict of str to str
+            Roster as returned by :func:`load_roster`.
 
-	Returns
-	-------
-	set of str
-		The ``posts: threads`` members. A ``posts: status`` member is deliberately absent:
-		it can neither be expected to review nor accepted as having reviewed.
+    Returns
+    -------
+    set of str
+            The ``posts: threads`` members. A ``posts: status`` member is deliberately absent:
+            it can neither be expected to review nor accepted as having reviewed.
 
-	Raises
-	------
-	RuntimeError
-		When a non-empty roster declares no member that can review. That roster makes the
-		missing-review check unsatisfiable on every PR, and a permanently red required check
-		is the fastest way to teach people that red means nothing.
-	"""
-	set_reviewers = {s for s, p in dict_roster.items() if _POSTS_CAN_REVIEW[p]}
-	if dict_roster and not set_reviewers:
-		raise RuntimeError(
-			f"{_ROSTER_FILE} declares no member with posts: {_POSTS_THREADS}, so no PR can "
-			f"ever satisfy the missing-review check. Declare a reviewer, or delete the "
-			f"roster to opt out of this gate entirely."
-		)
-	return set_reviewers
+    Raises
+    ------
+    RuntimeError
+            When a non-empty roster declares no member that can review. That roster makes the
+            missing-review check unsatisfiable on every PR, and a permanently red required check
+            is the fastest way to teach people that red means nothing.
+    """
+    set_reviewers = {s for s, p in dict_roster.items() if _POSTS_CAN_REVIEW[p]}
+    if dict_roster and not set_reviewers:
+        raise RuntimeError(
+            f"{_ROSTER_FILE} declares no member with posts: {_POSTS_THREADS}, so no PR can "
+            f"ever satisfy the missing-review check. Declare a reviewer, or delete the "
+            f"roster to opt out of this gate entirely."
+        )
+    return set_reviewers
 
 
 def _fetch_page(
-	str_owner: str,
-	str_repo: str,
-	int_number: int,
-	str_review_cursor: str | None,
-	str_thread_cursor: str | None,
+    str_owner: str,
+    str_repo: str,
+    int_number: int,
+    str_review_cursor: str | None,
+    str_thread_cursor: str | None,
+    str_comment_cursor: str | None = None,
 ) -> dict:
-	"""Run one page of the query.
+    """Run one page of the query.
 
-	Returns
-	-------
-	dict
-		The ``pullRequest`` node for this page.
+    Returns
+    -------
+    dict
+            The ``pullRequest`` node for this page.
 
-	Raises
-	------
-	RuntimeError
-		If the API call fails, so an unreachable API is never mistaken for a clean PR.
-	"""
-	list_cmd = [
-		"gh",
-		"api",
-		"graphql",
-		"-f",
-		f"query={_QUERY}",
-		"-F",
-		f"owner={str_owner}",
-		"-F",
-		f"repo={str_repo}",
-		"-F",
-		f"number={int_number}",
-		"-F",
-		f"rc={str_review_cursor}" if str_review_cursor else "rc=",
-		"-F",
-		f"tc={str_thread_cursor}" if str_thread_cursor else "tc=",
-	]
-	# Constant argv built from CI-provided identifiers; no shell is involved.
-	cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
-	if cls_run.returncode != 0:
-		raise RuntimeError(f"GraphQL query failed: {cls_run.stderr.strip()[:400]}")
-	dict_out = json.loads(cls_run.stdout)
-	if "errors" in dict_out:
-		raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
-	return dict_out["data"]["repository"]["pullRequest"]
+    Raises
+    ------
+    RuntimeError
+            If the API call fails, so an unreachable API is never mistaken for a clean PR.
+    """
+    list_cmd = [
+        "gh",
+        "api",
+        "graphql",
+        "-f",
+        f"query={_QUERY}",
+        "-F",
+        f"owner={str_owner}",
+        "-F",
+        f"repo={str_repo}",
+        "-F",
+        f"number={int_number}",
+        "-F",
+        f"rc={str_review_cursor}" if str_review_cursor else "rc=",
+        "-F",
+        f"tc={str_thread_cursor}" if str_thread_cursor else "tc=",
+        "-F",
+        f"cc={str_comment_cursor}" if str_comment_cursor else "cc=",
+    ]
+    # Constant argv built from CI-provided identifiers; no shell is involved.
+    cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
+    if cls_run.returncode != 0:
+        raise RuntimeError(f"GraphQL query failed: {cls_run.stderr.strip()[:400]}")
+    dict_out = json.loads(cls_run.stdout)
+    if "errors" in dict_out:
+        raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
+    return dict_out["data"]["repository"]["pullRequest"]
+
+
+_TUPLE_PAGED = ("reviews", "reviewThreads", "comments")
+
+
+def _next_cursor(dict_side: dict | None) -> str | None:
+    """Return the cursor to resume a connection from, or ``None`` when it has no next page."""
+    if not dict_side or not dict_side["pageInfo"]["hasNextPage"]:
+        return None
+    return dict_side["pageInfo"]["endCursor"]
 
 
 def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
-	"""Fetch the PR's author, submitted reviews and review threads in one GraphQL call.
+    """Fetch the PR's author, submitted reviews and review threads in one GraphQL call.
 
-	Parameters
-	----------
-	str_owner : str
-		Repository owner.
-	str_repo : str
-		Repository name.
-	int_number : int
-		Pull-request number.
+    Parameters
+    ----------
+    str_owner : str
+            Repository owner.
+    str_repo : str
+            Repository name.
+    int_number : int
+            Pull-request number.
 
-	Returns
-	-------
-	dict
-		The ``pullRequest`` node, carrying ``author``, ``reviews`` and ``reviewThreads``.
+    Returns
+    -------
+    dict
+            The ``pullRequest`` node, carrying ``author``, ``reviews`` and ``reviewThreads``.
 
-	Raises
-	------
-	RuntimeError
-		If the API call fails, so an unreachable API is never mistaken for a clean PR.
-	"""
-	dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None)
-	dict_reviews = dict_pr["reviews"]
-	dict_threads = dict_pr["reviewThreads"]
+    Raises
+    ------
+    RuntimeError
+            If the API call fails, so an unreachable API is never mistaken for a clean PR.
+    """
+    dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None, None)
+    list_sides = [(dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr]
 
-	# Follow both cursors until neither has a next page. Independent cursors, one request each
-	# round: passing a cursor for a connection that is already exhausted just re-returns its
-	# last (empty) page, so the loop terminates on the slower of the two.
-	while dict_reviews["pageInfo"]["hasNextPage"] or dict_threads["pageInfo"]["hasNextPage"]:
-		dict_next = _fetch_page(
-			str_owner,
-			str_repo,
-			int_number,
-			dict_reviews["pageInfo"]["endCursor"]
-			if dict_reviews["pageInfo"]["hasNextPage"]
-			else None,
-			dict_threads["pageInfo"]["endCursor"]
-			if dict_threads["pageInfo"]["hasNextPage"]
-			else None,
-		)
-		for dict_side, str_key in ((dict_reviews, "reviews"), (dict_threads, "reviewThreads")):
-			if not dict_side["pageInfo"]["hasNextPage"]:
-				continue
-			dict_side["nodes"].extend(dict_next[str_key]["nodes"])
-			dict_side["pageInfo"] = dict_next[str_key]["pageInfo"]
-	return dict_pr
+    # Follow every cursor until none has a next page. Independent cursors, one request each
+    # round: passing a cursor for a connection that is already exhausted just re-returns its
+    # last (empty) page, so the loop terminates on the slowest of them. A failed page raises
+    # in `_fetch_page`, so the loop can only stop early by finishing, never by an error.
+    while any(dict_side["pageInfo"]["hasNextPage"] for dict_side, _ in list_sides):
+        dict_next = _fetch_page(
+            str_owner,
+            str_repo,
+            int_number,
+            *(_next_cursor(dict_pr.get(str_key)) for str_key in _TUPLE_PAGED),
+        )
+        for dict_side, str_key in list_sides:
+            if not dict_side["pageInfo"]["hasNextPage"]:
+                continue
+            dict_side["nodes"].extend(dict_next[str_key]["nodes"])
+            dict_side["pageInfo"] = dict_next[str_key]["pageInfo"]
+    return dict_pr
 
 
 def reviewers_who_reported(
-	list_reviews: list[dict],
-	set_roster: set[str],
-	str_commit_oid: str = "",
+    list_reviews: list[dict],
+    set_roster: set[str],
+    str_commit_oid: str = "",
 ) -> set[str]:
-	"""Return the roster logins that submitted a review, optionally pinned to one commit.
+    """Return the roster logins that submitted a review, optionally pinned to one commit.
 
-	Parameters
-	----------
-	list_reviews : list of dict
-		Submitted reviews, each with an ``author`` node and a ``commit`` node.
-	set_roster : set of str
-		Already-normalised logins that can submit a review.
-	str_commit_oid : str, optional
-		When given, only a review written against exactly this commit counts. When empty,
-		every review counts regardless of commit — used to tell "reviewed OLDER code" apart
-		from "never reviewed", which must not print the same sentence.
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews, each with an ``author`` node and a ``commit`` node.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
+    str_commit_oid : str, optional
+            When given, only a review written against exactly this commit counts. When empty,
+            every review counts regardless of commit — used to tell "reviewed OLDER code" apart
+            from "never reviewed", which must not print the same sentence.
 
-	Returns
-	-------
-	set of str
-		The subset of ``set_roster`` that reported under the requested pinning.
-	"""
-	return {
-		normalise_login((d.get("author") or {}).get("login") or "")
-		for d in list_reviews
-		if not str_commit_oid or ((d.get("commit") or {}).get("oid") or "") == str_commit_oid
-	} & set_roster
+    Returns
+    -------
+    set of str
+            The subset of ``set_roster`` that reported under the requested pinning.
+    """
+    return {
+        normalise_login((d.get("author") or {}).get("login") or "")
+        for d in list_reviews
+        if not str_commit_oid or ((d.get("commit") or {}).get("oid") or "") == str_commit_oid
+    } & set_roster
+
+
+def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str]:
+    """Return the distinct commits a roster member reviewed, newest review first.
+
+    Newest first because, after an ``update-branch``, the most recent reviewed commit is the
+    likeliest match, so the caller's cap spends its calls where they pay.
+
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews, oldest first, each with an ``author`` node and a ``commit`` node.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
+
+    Returns
+    -------
+    list of str
+            Commit oids, deduplicated, empty oids dropped.
+    """
+    # Every review, not each reviewer's latest: an equal fingerprint means identical PR code, so
+    # an older identical review is a true carry-forward. `reviewers_who_reported` filters by
+    # neither recency nor state at HEAD; DISMISSED is excluded HERE, stricter on purpose, since
+    # a dismissal retracts the review and a stale one should not be revived by a merge.
+    list_oids = [
+        (d.get("commit") or {}).get("oid") or ""
+        for d in list_reviews
+        if normalise_login((d.get("author") or {}).get("login") or "") in set_roster
+        and d.get("state") != "DISMISSED"
+    ]
+    return list(dict.fromkeys(str_oid for str_oid in reversed(list_oids) if str_oid))
+
+
+# The compare API lists at most this many files, whatever `per_page` says (it pages COMMITS,
+# not files; measured). A full list may be cut off, so it fails closed.
+_INT_COMPARE_FILES = 300
+
+# One compare call may not stall the job: a hang would end as `cancelled` at the job timeout,
+# which reads like a human cancelling (#192).
+_INT_COMPARE_TIMEOUT_S = 20
+
+# At most this many reviewed commits are compared with the head: (1 head + 5) calls x 20 s stays
+# well inside the job's `timeout-minutes` (pinned by a test); a PR with more is re-reviewed.
+_INT_MAX_REVIEWED_COMMITS = 5
+
+# Everything that means "the patch could not be computed": an API or `gh` failure, a timeout, a
+# missing `gh`, an unusable response. Malformed response PARTS are turned into a ValueError at
+# the parsing site (`patch_fingerprint`), so a programming bug elsewhere is NOT swallowed here.
+_TUPLE_FINGERPRINT_ERRORS = (
+    RuntimeError,
+    ValueError,
+    OSError,
+    subprocess.TimeoutExpired,
+)
+
+
+def _is_pure_rename(dict_file: dict) -> bool:
+    """Return whether a file entry is a rename with no patch text AND a blob ``sha`` to hash.
+
+    The API reports ``changes == 0`` for a binary file too, so the blob ``sha`` is what proves
+    the content; without it the entry is not trusted.
+    """
+    return (
+        dict_file.get("status") == "renamed"
+        and dict_file.get("changes") == 0
+        and bool(dict_file.get("sha"))
+    )
+
+
+def patch_fingerprint(list_files: list[dict]) -> str:
+    """Hash the PR's own patch as the compare API reports it.
+
+    Parameters
+    ----------
+    list_files : list of dict
+            The ``files`` array of ``compare/<base>...<oid>`` (merge-base to oid).
+
+    Returns
+    -------
+    str
+            A digest that ignores hunk line numbers but keeps each hunk header's function
+            context, so the same edit moved to another function does not match.
+
+    Raises
+    ------
+    ValueError
+            If the list is malformed, empty, possibly truncated, or a file carries no patch text
+            (a pure rename has none and is hashed by its names).
+    """
+    if not isinstance(list_files, list) or not all(isinstance(d, dict) for d in list_files):
+        raise ValueError("patch unavailable: the file list is malformed")
+    if not list_files or len(list_files) >= _INT_COMPARE_FILES:
+        raise ValueError(f"patch unavailable: {len(list_files)} file(s) in the comparison")
+    if any(d.get("patch") is None and not _is_pure_rename(d) for d in list_files):
+        raise ValueError("patch unavailable: a file has no patch text (binary or too large)")
+    try:
+        list_parts = [
+            [
+                d["filename"],
+                d.get("status", ""),
+                d.get("previous_filename", ""),
+                d.get("sha", "") if d.get("patch") is None else "",
+                [
+                    re.sub(r"^@@ -\S+ \+\S+ @@", "@@", s)
+                    for s in (d.get("patch") or "").splitlines()
+                ],
+            ]
+            for d in sorted(list_files, key=lambda d: d["filename"])
+        ]
+    except (KeyError, TypeError, AttributeError) as cls_error:
+        raise ValueError(f"patch unavailable: malformed file entry ({cls_error!r})") from cls_error
+    # JSON is unambiguous: no filename or patch line can collide with a field separator.
+    return hashlib.sha256(json.dumps(list_parts).encode()).hexdigest()
+
+
+def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oid: str) -> str:
+    """Return the PR's own patch fingerprint at ``str_oid`` via the compare API.
+
+    The CI checkout is shallow (``actions/checkout`` defaults to ``fetch-depth: 1``), so
+    ``git merge-base`` has no history to read. The three-dot compare computes the merge base
+    server side, which is the same diff ``git diff $(git merge-base base oid) oid`` yields.
+
+    Parameters
+    ----------
+    str_owner : str
+            Repository owner.
+    str_repo : str
+            Repository name.
+    str_base : str
+            The base commit SHA, read once with the PR. ⚠️ Never the branch name: two compares
+            would resolve it at two moments, and a retarget or push in between would measure
+            both patches against different bases.
+    str_oid : str
+            The commit whose patch is wanted.
+
+    Returns
+    -------
+    str
+            See :func:`patch_fingerprint`.
+
+    Raises
+    ------
+    RuntimeError
+            If the API call fails.
+    ValueError
+            If the base SHA is empty, or the response is unusable, see
+            :func:`patch_fingerprint`.
+    """
+    if not str_base:
+        raise ValueError("patch unavailable: the PR's base commit is unknown")
+    list_cmd = [
+        "gh",
+        "api",
+        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1",
+    ]
+    # Constant argv built from CI-provided identifiers; no shell is involved.
+    cls_run = subprocess.run(  # noqa: S603
+        list_cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=_INT_COMPARE_TIMEOUT_S,
+    )
+    if cls_run.returncode != 0:
+        raise RuntimeError(f"compare failed: {cls_run.stderr.strip()[:400]}")
+    dict_compare = json.loads(cls_run.stdout)
+    if not isinstance(dict_compare, dict):
+        raise ValueError("patch unavailable: the compare response is not an object")
+    return patch_fingerprint(dict_compare.get("files"))
+
+
+def review_covers_head(
+    fn_fingerprint: Callable[[str], str],
+    str_review_oid: str,
+    str_head_oid: str,
+    str_head_digest: str,
+) -> bool:
+    """Return whether a review at an earlier commit still covers the head.
+
+    It does when the PR's own patch is unchanged, so the head only merged the base in. A
+    conflict resolution, a new commit or a force-push changes the patch and stays superseded.
+    ⚠️ Fails CLOSED: any error computing the review's patch (API failure, a malformed file
+    entry) means "not covered", never "covered".
+
+    Parameters
+    ----------
+    fn_fingerprint : Callable[[str], str]
+            Maps a commit oid to its patch fingerprint; raises on an unavailable patch.
+    str_review_oid : str
+            The commit the review was written against.
+    str_head_oid : str
+            The PR's head commit, for the diagnostic only.
+    str_head_digest : str
+            The head's fingerprint, computed once by the caller and passed in, so the
+            at-most-once guarantee never depends on the callable caching.
+
+    Returns
+    -------
+    bool
+            ``True`` only when both fingerprints were computed and are equal.
+    """
+    try:
+        bool_same = fn_fingerprint(str_review_oid) == str_head_digest
+    except _TUPLE_FINGERPRINT_ERRORS as cls_error:
+        _note(f"carry-forward from {str_review_oid[:7]} unavailable: {cls_error}")
+        return False
+    if bool_same:
+        _note(
+            f"review at {str_review_oid[:7]} still covers {str_head_oid[:7]}: the head only "
+            "merges the base, the PR's own patch is unchanged"
+        )
+    return bool_same
+
+
+def _note(str_message: str) -> None:
+    """Print a diagnostic on stderr, so ``--json`` keeps stdout to the one verdict document.
+
+    Parameters
+    ----------
+    str_message : str
+            The line to print.
+    """
+    print(str_message, file=sys.stderr)
+
+
+def review_carried_forward(
+    fn_fingerprint: Callable[[str], str] | None,
+    list_reviews: list[dict],
+    set_roster: set[str],
+    str_head_oid: str,
+) -> str:
+    """Return the commit of an earlier roster review that still covers the head, or ``""``.
+
+    The head is fingerprinted once, up front: if that fails, every comparison would fail the
+    same way, so the loop is skipped instead of repeating the failing call per reviewed commit.
+    Only the newest ``_INT_MAX_REVIEWED_COMMITS`` reviewed commits are tried.
+
+    Parameters
+    ----------
+    fn_fingerprint : Callable[[str], str] or None
+            Maps a commit oid to its patch fingerprint; ``None`` disables carry-forward.
+    list_reviews : list of dict
+            Submitted reviews.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
+    str_head_oid : str
+            The PR's head commit.
+
+    Returns
+    -------
+    str
+            The covering review's commit, or ``""`` when none has an equal fingerprint.
+    """
+    list_oids = reviewed_commits(list_reviews, set_roster) if fn_fingerprint else []
+    if not list_oids:
+        return ""
+    try:
+        str_head_digest = fn_fingerprint(str_head_oid)
+    except _TUPLE_FINGERPRINT_ERRORS as cls_error:
+        _note(f"carry-forward unavailable, the head patch cannot be read: {cls_error}")
+        return ""
+    for str_oid in list_oids[:_INT_MAX_REVIEWED_COMMITS]:
+        if review_covers_head(fn_fingerprint, str_oid, str_head_oid, str_head_digest):
+            return str_oid
+    return ""
 
 
 # Display budget for a quoted notice. ⚠️ It bounds what a HUMAN reads, never what a matcher
@@ -506,85 +790,85 @@ _INT_NOTICE_DISPLAY_CHARS = 200
 
 
 def newest_roster_notice(list_notices: list[dict], set_roster: set[str]) -> str:
-	"""Return the roster's most recent notice, flattened and COMPLETE.
+    """Return the roster's most recent notice, flattened and COMPLETE.
 
-	Parameters
-	----------
-	list_notices : list of dict
-		The PR's issue comments, oldest first — the stream a declining reviewer posts to.
-	set_roster : set of str
-		Already-normalised logins that can submit a review.
+    Parameters
+    ----------
+    list_notices : list of dict
+            The PR's issue comments, oldest first — the stream a declining reviewer posts to.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
 
-	Returns
-	-------
-	str
-		The newest roster comment with markup stripped, untruncated, or ``""`` when the roster
-		has said nothing.
+    Returns
+    -------
+    str
+            The newest roster comment with markup stripped, untruncated, or ``""`` when the roster
+            has said nothing.
 
-	Notes
-	-----
-	Every matcher reads THIS, never the truncated display form. A phrase the reviewer buries
-	past the display budget is still a phrase it said, and a cut string turns "found" into
-	"absent" — silent in both directions. Measured over 112 real notices in this repo
-	(blueprintx#372). Four classified ``UNKNOWN`` on the full body and ``OK`` on the first
-	200 chars, with the phrase at offsets 394, 583, 583 and 2700 — an unrecognised rate
-	limit reported as no rate limit, the third state collapsing into the wrong one. Four
-	carried a completion phrase past the budget, so the gate would claim no review completed
-	on a PR whose reviewer had written "Review finished".
-	"""
-	# Only the NEWEST roster notice. An older one is a sentence the reviewer has since
-	# superseded, so quoting it would describe a state that no longer holds.
-	for dict_comment in reversed(list_notices):
-		if (
-			normalise_login((dict_comment.get("author") or {}).get("login") or "")
-			not in set_roster
-		):
-			continue
-		return " ".join(_RE_MARKUP.sub(" ", dict_comment.get("body") or "").split())
-	return ""
+    Notes
+    -----
+    Every matcher reads THIS, never the truncated display form. A phrase the reviewer buries
+    past the display budget is still a phrase it said, and a cut string turns "found" into
+    "absent" — silent in both directions. Measured over 112 real notices in this repo
+    (blueprintx#372). Four classified ``UNKNOWN`` on the full body and ``OK`` on the first
+    200 chars, with the phrase at offsets 394, 583, 583 and 2700 — an unrecognised rate
+    limit reported as no rate limit, the third state collapsing into the wrong one. Four
+    carried a completion phrase past the budget, so the gate would claim no review completed
+    on a PR whose reviewer had written "Review finished".
+    """
+    # Only the NEWEST roster notice. An older one is a sentence the reviewer has since
+    # superseded, so quoting it would describe a state that no longer holds.
+    for dict_comment in reversed(list_notices):
+        if (
+            normalise_login((dict_comment.get("author") or {}).get("login") or "")
+            not in set_roster
+        ):
+            continue
+        return " ".join(_RE_MARKUP.sub(" ", dict_comment.get("body") or "").split())
+    return ""
 
 
 def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) -> str:
-	"""Return the roster's most recent notice, truncated, to quote in a failure message.
+    """Return the roster's most recent notice, truncated, to quote in a failure message.
 
-	Parameters
-	----------
-	list_notices : list of dict
-		The PR's issue comments, oldest first — the stream a declining reviewer posts to.
-	set_roster : set of str
-		Already-normalised logins that can submit a review.
+    Parameters
+    ----------
+    list_notices : list of dict
+            The PR's issue comments, oldest first — the stream a declining reviewer posts to.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
 
-	Returns
-	-------
-	str
-		:func:`newest_roster_notice` cut to :data:`_INT_NOTICE_DISPLAY_CHARS`, or ``""`` when
-		the roster has said nothing. ⚠️ DISPLAY ONLY, never a verdict — see the notice block
-		above: every outcome carries the same "already reviewed" footnote, so the text cannot
-		discriminate between them. Match on :func:`newest_roster_notice` instead.
-	"""
-	return newest_roster_notice(list_notices, set_roster)[:_INT_NOTICE_DISPLAY_CHARS]
+    Returns
+    -------
+    str
+            :func:`newest_roster_notice` cut to :data:`_INT_NOTICE_DISPLAY_CHARS`, or ``""`` when
+            the roster has said nothing. ⚠️ DISPLAY ONLY, never a verdict — see the notice block
+            above: every outcome carries the same "already reviewed" footnote, so the text cannot
+            discriminate between them. Match on :func:`newest_roster_notice` instead.
+    """
+    return newest_roster_notice(list_notices, set_roster)[:_INT_NOTICE_DISPLAY_CHARS]
 
 
 def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) -> str:
-	"""Return the ``createdAt`` of the newest roster-authored notice.
+    """Return the ``createdAt`` of the newest roster-authored notice.
 
-	Parameters
-	----------
-	list_notices : list of dict
-		The PR's issue comments, oldest first.
-	set_roster : set of str
-		Already-normalised logins that can submit a review.
+    Parameters
+    ----------
+    list_notices : list of dict
+            The PR's issue comments, oldest first.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
 
-	Returns
-	-------
-	str
-		ISO-8601 timestamp, or ``""`` when the roster has said nothing. Pairs with
-		:func:`summarise_reviewer_notice`, which walks the same stream for the same comment.
-	"""
-	for dict_comment in reversed(list_notices):
-		if normalise_login((dict_comment.get("author") or {}).get("login") or "") in set_roster:
-			return dict_comment.get("createdAt") or ""
-	return ""
+    Returns
+    -------
+    str
+            ISO-8601 timestamp, or ``""`` when the roster has said nothing. Pairs with
+            :func:`summarise_reviewer_notice`, which walks the same stream for the same comment.
+    """
+    for dict_comment in reversed(list_notices):
+        if normalise_login((dict_comment.get("author") or {}).get("login") or "") in set_roster:
+            return dict_comment.get("createdAt") or ""
+    return ""
 
 
 # ⚠️ TWO QUOTAS WEAR THE SAME WORDS "RATE LIMIT", AND THEY WANT OPPOSITE BEHAVIOUR (blueprintx#364).
@@ -605,7 +889,7 @@ def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) ->
 # still NOT an all-clear — collapsing it into `NOTICE_OK` is how a caller re-derives the very
 # conflation this function exists to remove.
 _RE_CHAT_LIMIT = re.compile(
-	r"exceeded\s+the\s+limit\s+for\s+the\s+number\s+of\s+chat\s+messages", re.IGNORECASE
+    r"exceeded\s+the\s+limit\s+for\s+the\s+number\s+of\s+chat\s+messages", re.IGNORECASE
 )
 _RE_REVIEW_LIMIT = re.compile(r"review\s+rate\s+limited", re.IGNORECASE)
 _RE_ANY_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
@@ -638,7 +922,8 @@ _RE_ANY_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 # so require the vendor's period or end-of-string right after it rather than trusting `\s` to
 # already be there.
 _RE_FILE_CAP = re.compile(
-	r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+(?:\.|$)", re.IGNORECASE
+    r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+(?:\.|$)",
+    re.IGNORECASE,
 )
 
 NOTICE_REVIEW_LIMITED = "REVIEW_LIMITED"
@@ -649,30 +934,30 @@ NOTICE_UNKNOWN = "UNKNOWN"
 
 
 def classify_reviewer_notice(str_notice: str) -> str:
-	"""Classify a reviewer's notice by which quota or refusal (if any) it reports.
+    """Classify a reviewer's notice by which quota or refusal (if any) it reports.
 
-	Parameters
-	----------
-	str_notice : str
-		A reviewer comment body, or ``""`` when the roster has said nothing.
+    Parameters
+    ----------
+    str_notice : str
+        A reviewer comment body, or ``""`` when the roster has said nothing.
 
-	Returns
-	-------
-	str
-		One of :data:`NOTICE_FILE_CAP_EXCEEDED` (a stated file-count refusal — see the block
-		above), :data:`NOTICE_CHAT_LIMITED`, :data:`NOTICE_REVIEW_LIMITED`, :data:`NOTICE_OK`
-		(no rate-limit or cap wording at all — including an empty notice), or
-		:data:`NOTICE_UNKNOWN` (mentions a rate limit in neither recognised shape).
-	"""
-	if _RE_FILE_CAP.search(str_notice):
-		return NOTICE_FILE_CAP_EXCEEDED
-	if _RE_CHAT_LIMIT.search(str_notice):
-		return NOTICE_CHAT_LIMITED
-	if _RE_REVIEW_LIMIT.search(str_notice):
-		return NOTICE_REVIEW_LIMITED
-	if _RE_ANY_RATE_LIMIT.search(str_notice):
-		return NOTICE_UNKNOWN
-	return NOTICE_OK
+    Returns
+    -------
+    str
+        One of :data:`NOTICE_FILE_CAP_EXCEEDED` (a stated file-count refusal — see the block
+        above), :data:`NOTICE_CHAT_LIMITED`, :data:`NOTICE_REVIEW_LIMITED`, :data:`NOTICE_OK`
+        (no rate-limit or cap wording at all — including an empty notice), or
+        :data:`NOTICE_UNKNOWN` (mentions a rate limit in neither recognised shape).
+    """
+    if _RE_FILE_CAP.search(str_notice):
+        return NOTICE_FILE_CAP_EXCEEDED
+    if _RE_CHAT_LIMIT.search(str_notice):
+        return NOTICE_CHAT_LIMITED
+    if _RE_REVIEW_LIMIT.search(str_notice):
+        return NOTICE_REVIEW_LIMITED
+    if _RE_ANY_RATE_LIMIT.search(str_notice):
+        return NOTICE_UNKNOWN
+    return NOTICE_OK
 
 
 # 🔴 THE REVIEWER DECLARES ITS OWN WAIT — READ IT INSTEAD OF GUESSING.
@@ -685,40 +970,42 @@ def classify_reviewer_notice(str_notice: str) -> str:
 # whole-minute unit would truncate the 37 seconds that made the #364 window wrong), while the
 # review quota declares whole minutes only. Seconds is the one unit that loses nothing either way.
 _RE_CHAT_WAIT = re.compile(
-	r"wait\s+\*{0,2}(\d+)\s+minutes?(?:\s+and\s+(\d+)\s+seconds?)?\*{0,2}", re.IGNORECASE
+    r"wait\s+\*{0,2}(\d+)\s+minutes?(?:\s+and\s+(\d+)\s+seconds?)?\*{0,2}",
+    re.IGNORECASE,
 )
 _RE_REVIEW_WAIT = re.compile(
-	r"next\s+included\s+review\s+will\s+be\s+available\s+in\s+(\d+)\s+minutes?", re.IGNORECASE
+    r"next\s+included\s+review\s+will\s+be\s+available\s+in\s+(\d+)\s+minutes?",
+    re.IGNORECASE,
 )
 
 
 def parse_declared_wait(str_notice: str) -> int | None:
-	"""Return the wait in SECONDS the reviewer declared, or ``None`` when it declared none.
+    """Return the wait in SECONDS the reviewer declared, or ``None`` when it declared none.
 
-	Parameters
-	----------
-	str_notice : str
-		The reviewer's refusal body.
+    Parameters
+    ----------
+    str_notice : str
+            The reviewer's refusal body.
 
-	Returns
-	-------
-	int or None
-		Seconds to wait, or ``None`` when the notice states no parseable wait.
-	"""
-	cls_chat = _RE_CHAT_WAIT.search(str_notice)
-	if cls_chat is not None:
-		try:
-			return int(cls_chat.group(1)) * 60 + int(cls_chat.group(2) or 0)
-		except ValueError:
-			# Untrusted external digits — mirrors the guard in the sibling parser's own file.
-			return None
-	cls_review = _RE_REVIEW_WAIT.search(str_notice)
-	if cls_review is not None:
-		try:
-			return int(cls_review.group(1)) * 60
-		except ValueError:
-			return None
-	return None
+    Returns
+    -------
+    int or None
+            Seconds to wait, or ``None`` when the notice states no parseable wait.
+    """
+    cls_chat = _RE_CHAT_WAIT.search(str_notice)
+    if cls_chat is not None:
+        try:
+            return int(cls_chat.group(1)) * 60 + int(cls_chat.group(2) or 0)
+        except ValueError:
+            # Untrusted external digits — mirrors the guard in the sibling parser's own file.
+            return None
+    cls_review = _RE_REVIEW_WAIT.search(str_notice)
+    if cls_review is not None:
+        try:
+            return int(cls_review.group(1)) * 60
+        except ValueError:
+            return None
+    return None
 
 
 # ⚠️ COMPLETION — THE ONE NOTICE THAT IS EVIDENCE, AND WHY IT IS NOT A REVERSAL.
@@ -752,45 +1039,45 @@ def parse_declared_wait(str_notice: str) -> int | None:
 # turned away, which is the same as never running, and the gate must keep failing it — that
 # is the difference between waiting for a review and skipping one.
 _TUPLE_COMPLETION_PHRASES = (
-	"review finished",
-	"no actionable comments were generated",
+    "review finished",
+    "no actionable comments were generated",
 )
 
 
 def reviewer_declared_completion(
-	list_notices: list[dict],
-	set_roster: set[str],
-	str_head_date: str = "",
+    list_notices: list[dict],
+    set_roster: set[str],
+    str_head_date: str = "",
 ) -> bool:
-	"""Return whether a roster member's own notice says it reviewed THIS PR's head.
+    """Return whether a roster member's own notice says it reviewed THIS PR's head.
 
-	Parameters
-	----------
-	list_notices : list of dict
-		The PR's issue comments, oldest first — the stream the reviewer reports completion to.
-	set_roster : set of str
-		Already-normalised logins that can submit a review.
-	str_head_date : str, optional
-		ISO-8601 ``committedDate`` of the head commit. A notice created BEFORE it describes
-		superseded code and is not evidence. Empty means unknown, and unknown fails closed.
+    Parameters
+    ----------
+    list_notices : list of dict
+            The PR's issue comments, oldest first — the stream the reviewer reports completion to.
+    set_roster : set of str
+            Already-normalised logins that can submit a review.
+    str_head_date : str, optional
+            ISO-8601 ``committedDate`` of the head commit. A notice created BEFORE it describes
+            superseded code and is not evidence. Empty means unknown, and unknown fails closed.
 
-	Returns
-	-------
-	bool
-		``True`` when a roster-authored comment carries a completion phrase AND postdates the
-		head commit. ⚠️ Evidence that a review HAPPENED and never that a thread was answered —
-		see the COMPLETION block above.
-	"""
-	if not str_head_date:
-		return False
-	# The complete notice rather than the display summary — four of 112 real notices buried
-	# their completion phrase past the display budget (blueprintx#372).
-	str_newest = newest_roster_notice(list_notices, set_roster).casefold()
-	if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
-		return False
-	str_when = newest_roster_notice_date(list_notices, set_roster)
-	# ISO-8601 UTC from GitHub sorts lexicographically, so no parsing is needed.
-	return bool(str_when) and str_when >= str_head_date
+    Returns
+    -------
+    bool
+            ``True`` when a roster-authored comment carries a completion phrase AND postdates the
+            head commit. ⚠️ Evidence that a review HAPPENED and never that a thread was answered —
+            see the COMPLETION block above.
+    """
+    if not str_head_date:
+        return False
+    # The complete notice rather than the display summary — four of 112 real notices buried
+    # their completion phrase past the display budget (blueprintx#372).
+    str_newest = newest_roster_notice(list_notices, set_roster).casefold()
+    if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
+        return False
+    str_when = newest_roster_notice_date(list_notices, set_roster)
+    # ISO-8601 UTC from GitHub sorts lexicographically, so no parsing is needed.
+    return bool(str_when) and str_when >= str_head_date
 
 
 # ⚠️ THE FILE-CAP MESSAGE IS A THIRD SENTENCE, NOT A THIRD VERDICT (blueprintx#433).
@@ -807,128 +1094,162 @@ def reviewer_declared_completion(
 # would let any collaborator silently satisfy this gate on a PR that only LOOKS capped, which
 # is a differently-shaped version of the exact hole #213 closed.
 def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: list[dict]) -> str:
-	"""Return the message for a PR with zero reviews submitted by the roster.
+    """Return the message for a PR with zero reviews submitted by the roster.
 
-	Parameters
-	----------
-	str_quote : str
-		The "reviewer's most recent notice" suffix the caller already built, or ``""``.
-	set_roster : set of str
-		Already-normalised logins that can submit a review, named in the generic message.
-	list_notices : list of dict
-		The PR's issue comments, oldest first — read again to classify the SAME notice
-		``str_quote`` already quotes, so the sentence and the quote never disagree.
+    Parameters
+    ----------
+    str_quote : str
+            The "reviewer's most recent notice" suffix the caller already built, or ``""``.
+    set_roster : set of str
+            Already-normalised logins that can submit a review, named in the generic message.
+    list_notices : list of dict
+            The PR's issue comments, oldest first — read again to classify the SAME notice
+            ``str_quote`` already quotes, so the sentence and the quote never disagree.
 
-	Returns
-	-------
-	str
-		The file-cap sentence when the reviewer's newest notice states that structural reason;
-		the generic "never ran" sentence otherwise. Both are failures — never a pass.
-	"""
-	str_notice = newest_roster_notice(list_notices, set_roster)
-	if classify_reviewer_notice(str_notice) == NOTICE_FILE_CAP_EXCEEDED:
-		return (
-			"a declared reviewer DECLINED this PR for a STRUCTURAL reason it stated: the diff "
-			"exceeds the reviewer's file-count cap. This is NOT 'no reviewer ever ran' — "
-			"retrying or waiting will not change the file count.\n"
-			"Split this PR into smaller PRs, each under the cap, so each part can actually be "
-			"reviewed and merged." + str_quote
-		)
-	return (
-		f"no declared reviewer ever reported on this PR — expected one of "
-		f"{', '.join(sorted(set_roster))} to submit a review, and none did. "
-		"This is NOT 'the reviewer found nothing': a reviewer that ran and found nothing "
-		"still submits a review, so zero threads would be fine. Zero REVIEWS means the "
-		"reviewer never ran, and nothing on this PR has been looked at.\n"
-		"Trigger it with '@coderabbitai full review' from a user account. ⚠️ Prefer FULL over "
-		"a plain 'review': an incremental reviewer answers 'already reviewed' on commits it has "
-		"seen on another PR (a reopen, a rebase, a re-PR), and a full review does not." + str_quote
-	)
+    Returns
+    -------
+    str
+            The file-cap sentence when the reviewer's newest notice states that structural reason;
+            the generic "never ran" sentence otherwise. Both are failures — never a pass.
+    """
+    str_notice = newest_roster_notice(list_notices, set_roster)
+    if classify_reviewer_notice(str_notice) == NOTICE_FILE_CAP_EXCEEDED:
+        return (
+            "a declared reviewer DECLINED this PR for a STRUCTURAL reason it stated: the diff "
+            "exceeds the reviewer's file-count cap. This is NOT 'no reviewer ever ran' — "
+            "retrying or waiting will not change the file count.\n"
+            "Split this PR into smaller PRs, each under the cap, so each part can actually be "
+            "reviewed and merged." + str_quote
+        )
+    return (
+        f"no declared reviewer ever reported on this PR — expected one of "
+        f"{', '.join(sorted(set_roster))} to submit a review, and none did. "
+        "This is NOT 'the reviewer found nothing': a reviewer that ran and found nothing "
+        "still submits a review, so zero threads would be fine. Zero REVIEWS means the "
+        "reviewer never ran, and nothing on this PR has been looked at.\n"
+        "Trigger it with '@coderabbitai full review' from a user account. ⚠️ Prefer FULL over "
+        "a plain 'review': an incremental reviewer answers 'already reviewed' on commits it has "
+        "seen on another PR (a reopen, a rebase, a re-PR), and a full review does not." + str_quote
+    )
 
 
 # ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
 # #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
 # ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
+def check_missing_review(
+    list_reviews: list[dict],
+    set_reviewers: set[str],
+    str_pr_author: str = "",
+    *,
+    str_head_oid: str,
+    list_notices: list[dict] | None = None,
+    str_head_date: str = "",
+    fn_fingerprint: Callable[[str], str] | None = None,
+) -> tuple[str | None, str]:
+    """Return ``(problem, carried_from)`` for a PR no declared reviewer reported on at HEAD.
+
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews, each with an ``author`` node and a ``commit`` node.
+    set_reviewers : set of str
+            Logins that can actually submit a review — :func:`reviewer_logins`, NOT the whole
+            roster. ⚠️ Handing this the full roster is the defect it was fixed for: a
+            ``posts: status`` member both gets NAMED as expected and SATISFIES the check, and
+            ``github-actions[bot]`` can submit a review with the ambient token.
+    str_pr_author : str, optional
+            Login of the PR author; a roster member's own PR is exempt.
+    str_head_date : str, optional
+            ISO-8601 ``committedDate`` of the head commit, so a completion notice can be pinned to
+            the code it described. ⚠️ Empty fails CLOSED: unknown is not evidence.
+    str_head_oid : str, keyword-only
+            The PR's ``headRefOid``. ⚠️ Deliberately has NO default, like ``posts:`` on a roster
+            row: an empty value silently counts every review whatever code it was written
+            against, which is the vacuous pass this parameter exists to remove.
+    list_notices : list of dict, optional
+            The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
+    fn_fingerprint : Callable[[str], str], optional
+            Maps a commit oid to its patch fingerprint. When given, a review at an earlier
+            commit covers HEAD if the PR's own patch is unchanged (see
+            :func:`review_covers_head`). ``None`` keeps the strict pin to HEAD.
+
+    Returns
+    -------
+    tuple of (str or None, str)
+            A human-readable problem, or ``None`` when a reviewer reported on the head commit
+            (or declared those commits already reviewed); and the commit of the carried-forward
+            review that satisfied the check, ``""`` when none did, so the caller can show it.
+    """
+    set_roster = {normalise_login(s) for s in set_reviewers}
+    if normalise_login(str_pr_author) in set_roster:
+        # A reviewer's own PR (a bot's dependency bump). Requiring it to review itself is a
+        # gate nobody can satisfy, and those get bypassed with --admin, taking the real
+        # blocks with them.
+        #
+        # ⚠️ The exemption narrowed with the parameter, ON PURPOSE. It used to cover every
+        # roster member, so a PR opened by a `posts: status` member (github-actions[bot],
+        # which opens workflow PRs) skipped the check entirely — yet that author cannot
+        # review, so a real reviewer CAN look at its PR and there is nothing unsatisfiable
+        # about asking. The exemption is "do not ask X to review X", not "bots are exempt".
+        return None, ""
+
+    if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
+        return None, ""
+
+    if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
+        # A CLEAN review is not a missing one — see the COMPLETION block above the function.
+        return None, ""
+
+    # After the notice check, so a PR that already passes makes no compare call at all.
+    str_carried = review_carried_forward(fn_fingerprint, list_reviews, set_roster, str_head_oid)
+    if str_carried:
+        return None, str_carried
+
+    # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
+    # is (never ran / refused / rate-limited). Display only — see the notice block above.
+    str_seen = summarise_reviewer_notice(list_notices or [], set_roster)
+    str_quote = (
+        f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
+    )
+
+    # TWO FAILURES, TWO SENTENCES — see the block above the function.
+    if reviewers_who_reported(list_reviews, set_roster):
+        str_problem = (
+            f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "
+            f"is attributed to the head commit {str_head_oid[:7] or '?'}. A review is pinned to "
+            "the commit it was written against and nothing re-pins it when the branch moves, so "
+            "the code that would merge has not been looked at. This is NOT 'no review "
+            "happened'.\n"
+            "Push-triggered re-review is automatic; if it did not fire, ask for a FULL re-review "
+            "(a comment such as '@coderabbitai full review' from a user account, which unlike a "
+            "plain 'review' disregards what was already reviewed) and re-run this check."
+            + str_quote
+        )
+        return str_problem, ""
+
+    return _zero_review_message(str_quote, set_roster, list_notices or []), ""
+
+
 def find_missing_review_problem(
-	list_reviews: list[dict],
-	set_reviewers: set[str],
-	str_pr_author: str = "",
-	*,
-	str_head_oid: str,
-	list_notices: list[dict] | None = None,
-	str_head_date: str = "",
+    list_reviews: list[dict],
+    set_reviewers: set[str],
+    str_pr_author: str = "",
+    *,
+    str_head_oid: str,
+    list_notices: list[dict] | None = None,
+    str_head_date: str = "",
+    fn_fingerprint: Callable[[str], str] | None = None,
 ) -> str | None:
-	"""Return a problem when no declared reviewer ever reported on this PR's HEAD.
-
-	Parameters
-	----------
-	list_reviews : list of dict
-		Submitted reviews, each with an ``author`` node and a ``commit`` node.
-	set_reviewers : set of str
-		Logins that can actually submit a review — :func:`reviewer_logins`, NOT the whole
-		roster. ⚠️ Handing this the full roster is the defect it was fixed for: a
-		``posts: status`` member both gets NAMED as expected and SATISFIES the check, and
-		``github-actions[bot]`` can submit a review with the ambient token.
-	str_pr_author : str, optional
-		Login of the PR author; a roster member's own PR is exempt.
-	str_head_date : str, optional
-		ISO-8601 ``committedDate`` of the head commit, so a completion notice can be pinned to
-		the code it described. ⚠️ Empty fails CLOSED: unknown is not evidence.
-	str_head_oid : str, keyword-only
-		The PR's ``headRefOid``. ⚠️ Deliberately has NO default, like ``posts:`` on a roster
-		row: an empty value silently counts every review whatever code it was written
-		against, which is the vacuous pass this parameter exists to remove.
-	list_notices : list of dict, optional
-		The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
-
-	Returns
-	-------
-	str or None
-		A human-readable problem, or ``None`` when a reviewer reported on the head commit
-		(or declared those commits already reviewed).
-	"""
-	set_roster = {normalise_login(s) for s in set_reviewers}
-	if normalise_login(str_pr_author) in set_roster:
-		# A reviewer's own PR (a bot's dependency bump). Requiring it to review itself is a
-		# gate nobody can satisfy, and those get bypassed with --admin, taking the real
-		# blocks with them.
-		#
-		# ⚠️ The exemption narrowed with the parameter, ON PURPOSE. It used to cover every
-		# roster member, so a PR opened by a `posts: status` member (github-actions[bot],
-		# which opens workflow PRs) skipped the check entirely — yet that author cannot
-		# review, so a real reviewer CAN look at its PR and there is nothing unsatisfiable
-		# about asking. The exemption is "do not ask X to review X", not "bots are exempt".
-		return None
-
-	if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
-		return None
-
-	if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
-		# A CLEAN review is not a missing one — see the COMPLETION block above the function.
-		return None
-
-	# The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
-	# is (never ran / refused / rate-limited). Display only — see the notice block above.
-	str_seen = summarise_reviewer_notice(list_notices or [], set_roster)
-	str_quote = (
-		f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
-	)
-
-	# TWO FAILURES, TWO SENTENCES — see the block above the function.
-	if reviewers_who_reported(list_reviews, set_roster):
-		return (
-			f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "
-			f"is attributed to the head commit {str_head_oid[:7] or '?'}. A review is pinned to "
-			"the commit it was written against and nothing re-pins it when the branch moves, so "
-			"the code that would merge has not been looked at. This is NOT 'no review "
-			"happened'.\n"
-			"Push-triggered re-review is automatic; if it did not fire, ask for a FULL re-review "
-			"(a comment such as '@coderabbitai full review' from a user account, which unlike a "
-			"plain 'review' disregards what was already reviewed) and re-run this check."
-			+ str_quote
-		)
-
-	return _zero_review_message(str_quote, set_roster, list_notices or [])
+    """Return only the problem half of :func:`check_missing_review` (same parameters)."""
+    return check_missing_review(
+        list_reviews,
+        set_reviewers,
+        str_pr_author,
+        str_head_oid=str_head_oid,
+        list_notices=list_notices,
+        str_head_date=str_head_date,
+        fn_fingerprint=fn_fingerprint,
+    )[0]
 
 
 #
@@ -940,124 +1261,431 @@ def find_missing_review_problem(
 # merge. This gate is the only layer that can assert it, which is why the message NAMES the flag
 # instead of failing silently on it (#196).
 def find_thread_problems(
-	list_threads: list[dict],
-	set_roster: set[str],
-	int_min_chars: int = _MIN_REPLY_CHARS,
-	*,
-	bool_require_resolved: bool = True,
+    list_threads: list[dict],
+    set_roster: set[str],
+    int_min_chars: int = _MIN_REPLY_CHARS,
+    *,
+    bool_require_resolved: bool = True,
 ) -> list[str]:
-	"""Return one problem per thread that nobody outside the roster answered.
+    """Return one problem per thread that nobody outside the roster answered.
 
-	Parameters
-	----------
-	list_threads : list of dict
-		Review threads as returned by :func:`fetch_pull_request` (its ``reviewThreads``).
-	set_roster : set of str
-		Logins that count as reviewers rather than as answers.
-	int_min_chars : int, optional
-		Minimum length for a reply to count as substantive.
-	bool_require_resolved : bool, keyword-only, optional
-		Whether an answered-but-open thread is a problem. ⚠️ CI passes ``True`` — it used to
-		pass ``False`` on the reasoning that a job must not assert what it cannot re-evaluate,
-		which delegated the resolve half to a native setting that DROPS an outdated thread.
-		See the SUPERSEDED block above ``main`` for the measurement and the accepted cost.
+    Parameters
+    ----------
+    list_threads : list of dict
+            Review threads as returned by :func:`fetch_pull_request` (its ``reviewThreads``).
+    set_roster : set of str
+            Logins that count as reviewers rather than as answers.
+    int_min_chars : int, optional
+            Minimum length for a reply to count as substantive.
+    bool_require_resolved : bool, keyword-only, optional
+            Whether an answered-but-open thread is a problem. ⚠️ CI passes ``True`` — it used to
+            pass ``False`` on the reasoning that a job must not assert what it cannot re-evaluate,
+            which delegated the resolve half to a native setting that DROPS an outdated thread.
+            See the SUPERSEDED block above ``main`` for the measurement and the accepted cost.
 
-	Returns
-	-------
-	list of str
-		Human-readable problems; empty when every thread carries an answer — and, when
-		``bool_require_resolved`` is set, is resolved as well. Both halves are the contract:
-		the reply records the reasoning, the resolution records that the exchange is over.
-	"""
-	# Normalise the roster here too, so the predicate is correct however the caller built the
-	# set — `load_roster` already normalises, but a hand-built set (a test, another caller)
-	# would otherwise silently never match, which is the exact defect this function had.
-	set_roster = {normalise_login(s) for s in set_roster}
+    Returns
+    -------
+    list of str
+            Human-readable problems; empty when every thread carries an answer — and, when
+            ``bool_require_resolved`` is set, is resolved as well. Both halves are the contract:
+            the reply records the reasoning, the resolution records that the exchange is over.
+    """
+    # Normalise the roster here too, so the predicate is correct however the caller built the
+    # set — `load_roster` already normalises, but a hand-built set (a test, another caller)
+    # would otherwise silently never match, which is the exact defect this function had.
+    set_roster = {normalise_login(s) for s in set_roster}
 
-	list_problems: list[str] = []
-	for dict_thread in list_threads:
-		list_comments = dict_thread["comments"]["nodes"]
-		if not list_comments:
-			continue
-		list_answers = [
-			c
-			for c in list_comments
-			if normalise_login((c.get("author") or {}).get("login") or "") not in set_roster
-			and len((c.get("body") or "").strip()) >= int_min_chars
-		]
-		str_first = (list_comments[0].get("body") or "").strip().splitlines()
-		str_title = next(
-			(s for s in str_first if s.startswith("**")),
-			str_first[0] if str_first else "",
-		).strip("* ")[:90]
-		str_path = dict_thread.get("path", "?")
+    list_problems: list[str] = []
+    for dict_thread in list_threads:
+        list_comments = dict_thread["comments"]["nodes"]
+        if not list_comments:
+            continue
+        list_answers = [
+            c
+            for c in list_comments
+            if normalise_login((c.get("author") or {}).get("login") or "") not in set_roster
+            and len((c.get("body") or "").strip()) >= int_min_chars
+        ]
+        str_first = (list_comments[0].get("body") or "").strip().splitlines()
+        str_title = next(
+            (s for s in str_first if s.startswith("**")),
+            str_first[0] if str_first else "",
+        ).strip("* ")[:90]
+        str_path = dict_thread.get("path", "?")
 
-		if not list_answers:
-			str_state = "resolved" if dict_thread.get("isResolved") else "open"
-			list_problems.append(
-				f"{str_path}: thread is {str_state} but nobody outside the "
-				f"reviewer roster answered it — {str_title}"
-			)
-			continue
+        if not list_answers:
+            str_state = "resolved" if dict_thread.get("isResolved") else "open"
+            list_problems.append(
+                f"{str_path}: thread is {str_state} but nobody outside the "
+                f"reviewer roster answered it — {str_title}"
+            )
+            continue
 
-		# ANSWERED but still OPEN — see the OUTDATED block above the function.
-		if bool_require_resolved and not dict_thread.get("isResolved"):
-			str_why = (
-				" — this thread is OUTDATED, so the merge button will NOT block on it and "
-				"this check is the only thing asserting it"
-				if dict_thread.get("isOutdated")
-				else ""
-			)
-			list_problems.append(
-				f"{str_path}: thread is answered but NOT resolved — resolve the conversation "
-				f"once the reply is posted{str_why} — {str_title}"
-			)
-	return list_problems
+        # ANSWERED but still OPEN — see the OUTDATED block above the function.
+        if bool_require_resolved and not dict_thread.get("isResolved"):
+            str_why = (
+                " — this thread is OUTDATED, so the merge button will NOT block on it and "
+                "this check is the only thing asserting it"
+                if dict_thread.get("isOutdated")
+                else ""
+            )
+            list_problems.append(
+                f"{str_path}: thread is answered but NOT resolved — resolve the conversation "
+                f"once the reply is posted{str_why} — {str_title}"
+            )
+    return list_problems
+
+
+# A review BODY carries findings the thread count cannot see (blueprintx#630, docs/faq.md).
+_STR_SEVERITY = r"critical|major|minor|blocker"
+# Nitpick and Trivial are deliberately absent: optional by definition, so they need no reply.
+# A marker counts only at the START of a line (after a list marker), as bold or a bracket, so
+# "a *minor* cleanup" and "(minor nits only)" in prose are not findings.
+_RE_BODY_SEVERITY = re.compile(
+    rf"🔴|🟠|🟡|\bseverity\s*:\s*\w"
+    rf"|^[^\w\n]*(?:\d+[.)]\s*)?(?:\*\*|\[)\s*(?:{_STR_SEVERITY})\b"
+    rf"|^\W*(?:{_STR_SEVERITY})\b\s*[:—-]",
+    re.IGNORECASE | re.MULTILINE,
+)
+# A count counts only as a statement of what the review found, not "Addressed 2 findings".
+_RE_BODY_COUNT = re.compile(
+    r"^[^\w\n]*(?:(?:found|posted|reported|with|has|have)\s+)?[1-9]\d*\s+findings?\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
+# A review declares itself by structure (docs/faq.md, "How the gate classifies"): a heading, a
+# bullet or a bold label that starts with "Review" or "Finding(s)". Ambiguity counts as a review.
+_RE_BODY_REVIEW_LINE = re.compile(
+    r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b"
+    r"(?!\s+(?:ladder|skipped|profile|details|status|in progress|completed))",
+    re.IGNORECASE | re.MULTILINE,
+)
+# Printed counts are authoritative, but each speaks for what it counts. CodeRabbit's header counts
+# INLINE comments, which are threads the thread gate already holds; only its body sections
+# (outside the diff, duplicates) live where no thread can see them. The ladder posts no threads,
+# so its count is the body's. The two counts that can CLEAR a body are anchored to a line start so
+# a quotation cannot fire them; a section marker can only ADD a finding, so it stays unanchored
+# (CodeRabbit nests it inside a `<summary>` tag).
+_RE_BODY_SECTION = re.compile(
+    r"\b(?:outside diff range|duplicate) comments(?:\s*\((\d+)\))?", re.IGNORECASE
+)
+_RE_ACTIONABLE = re.compile(
+    r"^[ \t*_#-]*actionable comments posted:?[\s*]*\d+", re.IGNORECASE | re.MULTILINE
+)
+_RE_LADDER_COUNT = re.compile(
+    r"^[ \t*_#-]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
+)
+_RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
+_RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
+_STR_CLEAN_LINE = (
+    r"^[^\w\n]*(?:(?:review|findings?|summary|result)\s*[:—–-]\s*)?"
+    r"(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
+    rf"|none(?:\s+found)?"
+    rf"|(?:{_STR_SEVERITY}|nitpick|severity)[^\w\n]*(?:none|n/?a|no)"
+    r"(?:\s+(?:found|issues?|findings?))?)[^\w\n]*$"
+)
+# A clean line must BE the line ("No major issues."), never a phrase inside a longer one
+# ("parse() has no known bugs on ASCII but crashes"), or it would mask a real finding.
+_RE_BODY_CLEAN_LINE = re.compile(_STR_CLEAN_LINE, re.I | re.M)
+_RE_BODY_CLEAN_SECTION = re.compile(
+    r"^#{1,6}\s*(?:findings|issues|problems|review)\b[^\n]*\n(?:[^\S\n]*\n)*" + _STR_CLEAN_LINE,
+    re.I | re.M,
+)
+_RES_BODY_FINDING = (
+    _RE_BODY_SEVERITY,
+    _RE_BODY_COUNT,
+    _RE_BODY_HEADING,
+    _RE_BODY_REVIEW_LINE,
+)
+
+
+# Quoted material is never the review's own structure: a fenced block or a "> " line can hold
+# another reviewer's header verbatim, and counting it would let one body clear its own findings.
+_RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*", re.M | re.S)
+
+
+# Count authority belongs to the AUTHOR, never to the body's shape: any body can print any header.
+# The roster carries no per-format data, so the two authors whose counts this gate trusts are
+# named here (docs/faq.md). Any other author's counts are ignored and its body is read by
+# structure alone, which fails closed.
+_SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
+_SET_LADDER_AUTHORS = frozenset({"guilhermegor-review-ladder"})
+
+
+def _declared_findings(str_body: str, str_login: str = "") -> list[str] | None:
+    """Return the findings a body's own printed counts declare, or ``None`` if it prints none.
+
+    A non-zero body section (outside the diff, duplicates) always counts: it can only add a
+    finding. The counts that can CLEAR a body speak only for their author: the ``Actionable``
+    header for CodeRabbit (its N findings are inline threads, which the thread check holds), the
+    ``N finding(s) across`` count for the ladder app and only with the attribution line. Both are
+    read with quoted lines and fenced blocks removed. Any other author gets no count authority.
+    """
+    list_sections = [
+        cls_section.group(0)
+        for cls_section in _RE_BODY_SECTION.finditer(str_body)
+        if cls_section.group(1) != "0"
+    ]
+    if list_sections:
+        return list_sections
+    str_author = normalise_login(str_login)
+    str_own = _RE_QUOTED.sub("", str_body)
+    if str_author in _SET_HEADER_AUTHORS and _RE_ACTIONABLE.search(str_own):
+        return []
+    cls_count = _RE_LADDER_COUNT.search(str_own)
+    is_ladder = str_author in _SET_LADDER_AUTHORS and _RE_LADDER_HEAD.search(str_body)
+    if cls_count is None or not is_ladder:
+        return None
+    return [cls_count.group(0).strip("* \t")] if int(cls_count.group(1)) else []
+
+
+def _ladder_prose_line(str_text: str) -> list[str]:
+    """Return the first prose line of an uncounted ladder review, which counts as a review."""
+    list_prose = [
+        str_line.strip()
+        for str_line in _RE_LADDER_META.sub("", str_text).splitlines()
+        if str_line.strip()
+    ]
+    return list_prose[:1]
+
+
+def _ladder_empty_findings(str_body: str) -> list[str]:
+    """Return a finding for a ladder review with no prose, unless it says it is clean.
+
+    An attribution line with nothing after it is a truncated or failed review, not a clean one,
+    so it fails closed; only an explicit clean line ("No findings.") clears it.
+    """
+    if _RE_BODY_CLEAN_LINE.search(str_body):
+        return []
+    return ["ladder review with no findings count and no clean statement"]
+
+
+def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list[str]:
+    """Return the lines of a review body that list findings; empty means a clean body.
+
+    Parameters
+    ----------
+    str_body : str or None
+            The submitted review's body.
+    str_login : str, optional
+            The author's login. Printed counts clear a body only for the author they speak
+            for (CodeRabbit's header, the ladder app's count); any other author is read by
+            structure alone.
+
+    Returns
+    -------
+    list of str
+            Each line carrying a severity marker, a non-zero finding count or a findings
+            heading. A line that only reports there are none ("No findings.", "Minor: none")
+            and a findings heading directly followed by one are dropped first.
+    """
+    list_declared = _declared_findings(str_body or "", str_login)
+    if list_declared is not None:
+        return list_declared
+    str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
+    list_lines = [
+        str_line.strip()
+        for str_line in str_text.splitlines()
+        if any(re_.search(str_line) for re_ in _RES_BODY_FINDING)
+    ]
+    if _RE_LADDER_HEAD.search(str_body or ""):
+        return list_lines or _ladder_prose_line(str_text) or _ladder_empty_findings(str_body or "")
+    return list_lines
+
+
+def review_body_has_findings(str_body: str | None) -> bool:
+    """Return whether a review body lists findings rather than reporting none.
+
+    Parameters
+    ----------
+    str_body : str or None
+            The submitted review's body.
+
+    Returns
+    -------
+    bool
+            ``True`` when :func:`review_body_finding_lines` finds at least one line.
+    """
+    return bool(review_body_finding_lines(str_body))
+
+
+def _answered_after(
+    list_notices: list[dict], set_roster: set[str], str_when: str, int_min_chars: int
+) -> bool:
+    """Return whether a human comment of at least ``int_min_chars`` postdates ``str_when``.
+
+    Bots never answer: GraphQL reports ``__typename`` ``Bot`` (and REST a ``[bot]`` suffix) for
+    GitGuardian, ``github-actions`` and the like, and one of those clearing findings unread is
+    the #630 failure again. A null author (a deleted "ghost" account) is not a known human
+    either, so it fails closed like a missing ``submittedAt``.
+    """
+    return bool(str_when) and any(
+        _is_human_answer(dict_notice, set_roster, int_min_chars)
+        and (dict_notice.get("createdAt") or "") > str_when
+        for dict_notice in list_notices
+    )
+
+
+# An answer declares itself by structure too: a LINE THAT OPENS with "Reply to review", "Answers
+# to the ladder review", "Re: review", "Verdicts/Judgment on ... review"; a "review <id>"
+# citation; "Addressed/Fixed in <sha>"; "Finding 1: ..."; or a "> quoted finding" followed by a
+# response. Any of these counts at any length. Anchored: "re-review" and "Not answered yet" are
+# not answers.
+_STR_REVIEW_NOUN = (
+    r"(?:the\s+|our\s+|my\s+)?(?:(?:ladder|fallback|claude|coderabbit|cli|rung)\s+)*review\b"
+)
+_RE_ANSWER_SHAPE = re.compile(
+    r"^[\s*_#-]*(?:re\s*:|(?:repl(?:y|ies)|answers?|responses?|verdicts?|judg(?:e)?ments?)"
+    rf"(?:\s+(?:to|on))?\s*:?)\s*{_STR_REVIEW_NOUN}"
+    r"|\b(?:addressed|fixed|resolved)\s+in\s+`?[0-9a-f]{7,40}\b"
+    r"|^[^\w\n]*finding\s+\d+\b"
+    r"|\breview\s+\d{6,}\b"
+    r"|^>[^\n]*\n(?:[^\S\n]*\n)*[^>\s]",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _is_human_answer(dict_notice: dict, set_roster: set[str], int_min_chars: int) -> bool:
+    """Return whether one comment is by a known human outside the roster and reads as an answer."""
+    dict_author = dict_notice.get("author") or {}
+    str_login = dict_author.get("login") or ""
+    str_body = (dict_notice.get("body") or "").strip()
+    return (
+        bool(str_login)
+        and normalise_login(str_login) not in set_roster
+        and dict_author.get("__typename", "User") == "User"
+        and not str_login.endswith(_BOT_SUFFIX)
+        and (len(str_body) >= int_min_chars or bool(_RE_ANSWER_SHAPE.search(str_body)))
+    )
+
+
+def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[dict]:
+    """Return the roster's own issue comments in review shape.
+
+    Some ladder rungs post their review as an issue comment, not a PR review. Only a comment that
+    declares itself one counts (the ladder attribution line or a CodeRabbit header): status and
+    failure notices ("Review ladder: all rungs failed"), walkthroughs and command replies are
+    not reviews, whatever their first word is.
+    """
+    return [
+        {
+            "author": dict_notice.get("author"),
+            "state": "COMMENTED",
+            "body": dict_notice.get("body"),
+            "submittedAt": dict_notice.get("createdAt"),
+        }
+        for dict_notice in list_notices
+        if normalise_login((dict_notice.get("author") or {}).get("login") or "") in set_roster
+        and any(
+            re_.search(dict_notice.get("body") or "")
+            for re_ in (_RE_LADDER_HEAD, _RE_ACTIONABLE, _RE_BODY_SECTION)
+        )
+    ]
+
+
+def find_review_body_problems(
+    list_reviews: list[dict],
+    list_notices: list[dict],
+    set_roster: set[str],
+    int_min_chars: int = _MIN_REPLY_CHARS,
+) -> list[str]:
+    """Return one problem per roster review whose body lists findings nobody answered.
+
+    Every submitted review counts, not only the head's: inline threads persist across pushes,
+    so a body must too, or a trivial push plus a clean re-review would clear it. One reply
+    posted after the latest findings body therefore answers all earlier ones; a reply must
+    postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
+    maintainer's explicit answer. A roster issue comment that is shaped like a review counts as
+    one, since some ladder rungs post that way (docs/faq.md, "How the gate classifies").
+
+    Parameters
+    ----------
+    list_reviews : list of dict
+            Submitted reviews with ``author``, ``state``, ``body`` and ``submittedAt``.
+    list_notices : list of dict
+            The PR's issue comments, where the author's reply to a review body lands.
+    set_roster : set of str
+            Logins that count as reviewers rather than as answers.
+    int_min_chars : int, optional
+            Minimum length for a reply to count, the same bar a thread reply meets.
+
+    Returns
+    -------
+    list of str
+            Human-readable problems; empty when every findings body was answered after it was
+            submitted. A missing ``submittedAt`` fails closed.
+    """
+    set_roster = {normalise_login(str_login) for str_login in set_roster}
+    list_hits = [
+        (
+            dict_review,
+            review_body_finding_lines(
+                dict_review.get("body"),
+                (dict_review.get("author") or {}).get("login") or "",
+            ),
+        )
+        for dict_review in list_reviews + _notices_as_reviews(list_notices, set_roster)
+        if normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+        and dict_review.get("state") != "DISMISSED"
+    ]
+    return [
+        f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
+        f"and nobody outside the reviewer roster (and no bot) replied after it — "
+        f"{list_lines[0][:90]}"
+        for dict_review, list_lines in list_hits
+        if list_lines
+        and not _answered_after(
+            list_notices,
+            set_roster,
+            dict_review.get("submittedAt") or "",
+            int_min_chars,
+        )
+    ]
 
 
 def report_verdict(
-	list_problems: list[str],
-	int_threads: int,
-	bool_require_resolved: bool,
+    list_problems: list[str],
+    int_threads: int,
+    bool_require_resolved: bool,
 ) -> int:
-	"""Print the verdict and return the exit code.
+    """Print the verdict and return the exit code.
 
-	Parameters
-	----------
-	list_problems : list of str
-		Problems from :func:`find_thread_problems`.
-	int_threads : int
-		How many review threads were examined.
-	bool_require_resolved : bool
-		Whether the resolve half was asserted, so the wording matches what was checked.
+    Parameters
+    ----------
+    list_problems : list of str
+            Problems from :func:`find_thread_problems`.
+    int_threads : int
+            How many review threads were examined.
+    bool_require_resolved : bool
+            Whether the resolve half was asserted, so the wording matches what was checked.
 
-	Returns
-	-------
-	int
-		``1`` when there are problems, ``0`` otherwise.
-	"""
-	for str_problem in list_problems:
-		print(f"❌ {str_problem}")
-	if list_problems:
-		print(
-			f"\n{len(list_problems)} of {int_threads} review thread(s) are not finished.\n"
-			"A finding takes BOTH halves: REPLY with what changed and why, then RESOLVE the "
-			"conversation.\n"
-			"- Resolving without replying is not answering: a reviewer bot closes its own threads "
-			"when it sees the fix, so the resolved flag records ITS satisfaction, never your "
-			"reasoning — and that reasoning is what the next session reads.\n"
-			"- Replying without resolving leaves the thread live, so nothing distinguishes a "
-			"finished exchange from one still in progress, and the PR can merge with it open."
-		)
-		return 1
-	if not int_threads:
-		# Reached only once a reviewer HAS reported — find_missing_review_problem owns the
-		# other case, and the two must never print the same sentence again.
-		print("A declared reviewer reported and raised no findings (0 review threads).")
-		return 0
-	str_scope = "answered and resolved" if bool_require_resolved else "answered"
-	print(f"All {int_threads} review thread(s) {str_scope}.")
-	return 0
+    Returns
+    -------
+    int
+            ``1`` when there are problems, ``0`` otherwise.
+    """
+    for str_problem in list_problems:
+        print(f"❌ {str_problem}")
+    if list_problems:
+        print(
+            f"\n{len(list_problems)} of {int_threads} review thread(s) are not finished.\n"
+            "A finding takes BOTH halves: REPLY with what changed and why, then RESOLVE the "
+            "conversation.\n"
+            "- Resolving without replying is not answering: a reviewer bot closes its own threads "
+            "when it sees the fix, so the resolved flag records ITS satisfaction, never your "
+            "reasoning — and that reasoning is what the next session reads.\n"
+            "- Replying without resolving leaves the thread live, so nothing distinguishes a "
+            "finished exchange from one still in progress, and the PR can merge with it open."
+        )
+        return 1
+    if not int_threads:
+        # Reached only once a reviewer HAS reported — find_missing_review_problem owns the
+        # other case, and the two must never print the same sentence again.
+        print("A declared reviewer reported and raised no findings (0 review threads).")
+        return 0
+    str_scope = "answered and resolved" if bool_require_resolved else "answered"
+    print(f"All {int_threads} review thread(s) {str_scope}.")
+    return 0
 
 
 # ⚠️ SUPERSEDED 2026-08-24 (#196). CI NOW ASSERTS BOTH HALVES, AND THE COST IS ACCEPTED.
@@ -1076,27 +1704,27 @@ def report_verdict(
 # than cosmetic — the re-run is the ONLY way a finished PR goes green, so #263 must land for that
 # re-run to actually clear the block.
 def parse_args(list_argv: list[str] | None = None) -> argparse.Namespace:
-	"""Parse this gate's CLI arguments.
+    """Parse this gate's CLI arguments.
 
-	Parameters
-	----------
-	list_argv : list of str, optional
-		Arguments to parse; ``None`` (the default) makes argparse read ``sys.argv[1:]``, so
-		``sys.exit(main())`` at the bottom of this file is unaffected.
+    Parameters
+    ----------
+    list_argv : list of str, optional
+            Arguments to parse; ``None`` (the default) makes argparse read ``sys.argv[1:]``, so
+            ``sys.exit(main())`` at the bottom of this file is unaffected.
 
-	Returns
-	-------
-	argparse.Namespace
-		A ``json`` boolean. Every other input stays environment-only (``GITHUB_REPOSITORY``,
-		``PR_NUMBER``, ``REVIEW_THREADS_REQUIRE_RESOLVED``) — unchanged by this addition.
-	"""
-	cls_parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-	cls_parser.add_argument(
-		"--json",
-		action="store_true",
-		help="Emit a machine-readable JSON verdict on stdout instead of prose (default: prose).",
-	)
-	return cls_parser.parse_args(list_argv)
+    Returns
+    -------
+    argparse.Namespace
+            A ``json`` boolean. Every other input stays environment-only (``GITHUB_REPOSITORY``,
+            ``PR_NUMBER``, ``REVIEW_THREADS_REQUIRE_RESOLVED``) — unchanged by this addition.
+    """
+    cls_parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    cls_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable JSON verdict on stdout instead of prose (default: prose).",
+    )
+    return cls_parser.parse_args(list_argv)
 
 
 # blueprintx#364 — the gate's only interface was English prose, so every caller grepped
@@ -1104,133 +1732,235 @@ def parse_args(list_argv: list[str] | None = None) -> argparse.Namespace:
 # no-reviewer message via `grep 'thread'` and misreported 27 PRs. `--json` is additive: the
 # default (prose) path below is untouched line for line, so existing callers see no change.
 def _print_skip(bool_json: bool, str_reason: str) -> int:
-	"""Print a self-skip in the requested representation and return ``0``."""
-	print(json.dumps({"status": "skipped", "reason": str_reason}) if bool_json else str_reason)
-	return 0
+    """Print a self-skip in the requested representation and return ``0``."""
+    print(json.dumps({"status": "skipped", "reason": str_reason}) if bool_json else str_reason)
+    return 0
 
 
 def _print_missing_review(
-	bool_json: bool, str_missing: str, list_notices: list[dict], set_reviewers: set[str]
+    bool_json: bool, str_missing: str, list_notices: list[dict], set_reviewers: set[str]
 ) -> int:
-	"""Print the missing-review failure in the requested representation and return ``1``."""
-	if bool_json:
-		# Classify the complete notice — the display summary can hide the phrase (blueprintx#372).
-		str_notice = newest_roster_notice(list_notices, set_reviewers)
-		print(
-			json.dumps(
-				{
-					"status": "fail",
-					"reason": "missing_review",
-					"detail": str_missing,
-					"notice_classification": classify_reviewer_notice(str_notice),
-				}
-			)
-		)
-	else:
-		print(f"❌ {str_missing}")
-	return 1
+    """Print the missing-review failure in the requested representation and return ``1``."""
+    if bool_json:
+        # Classify the complete notice — the display summary can hide the phrase (blueprintx#372).
+        str_notice = newest_roster_notice(list_notices, set_reviewers)
+        print(
+            json.dumps(
+                {
+                    "status": "fail",
+                    "reason": "missing_review",
+                    "detail": str_missing,
+                    "notice_classification": classify_reviewer_notice(str_notice),
+                }
+            )
+        )
+    else:
+        print(f"❌ {str_missing}")
+    return 1
+
+
+def _print_review_body_problems(
+    bool_json: bool,
+    list_problems: list[str],
+    list_thread_problems: list[str] | None = None,
+) -> int:
+    """Print the unanswered-review-body failure, with any thread failures too; return ``1``."""
+    list_thread_problems = list_thread_problems or []
+    if bool_json:
+        print(
+            json.dumps(
+                {
+                    "status": "fail",
+                    "reason": "unanswered_review_body",
+                    "problems": list_problems,
+                    "thread_problems": list_thread_problems,
+                }
+            )
+        )
+        return 1
+    for str_problem in list_problems + list_thread_problems:
+        print(f"❌ {str_problem}")
+    print(
+        f"\nReply (at least {_MIN_REPLY_CHARS} characters) on the PR after the review, saying "
+        "what changed and why, then re-run this check. A review body has no thread to resolve, "
+        "so the reply is the whole answer (blueprintx#630)."
+    )
+    return 1
 
 
 def _print_thread_verdict(
-	bool_json: bool, list_problems: list[str], int_threads: int, bool_require_resolved: bool
+    bool_json: bool,
+    list_problems: list[str],
+    int_threads: int,
+    bool_require_resolved: bool,
+    str_carried: str = "",
 ) -> int:
-	"""Print the thread verdict in the requested representation and return the exit code."""
-	if bool_json:
-		print(
-			json.dumps(
-				{
-					"status": "fail" if list_problems else "pass",
-					"threads_examined": int_threads,
-					"require_resolved": bool_require_resolved,
-					"problems": list_problems,
-				}
-			)
-		)
-		return 1 if list_problems else 0
-	return report_verdict(list_problems, int_threads, bool_require_resolved)
+    """Print the thread verdict in the requested representation and return the exit code.
+
+    A carried-forward review is shown in the verdict itself: a ``carried_forward_from`` field
+    under ``--json`` (stdout stays one document), one extra line otherwise.
+    """
+    if bool_json:
+        dict_verdict = {
+            "status": "fail" if list_problems else "pass",
+            "threads_examined": int_threads,
+            "require_resolved": bool_require_resolved,
+            "problems": list_problems,
+        }
+        if str_carried:
+            dict_verdict["carried_forward_from"] = str_carried
+        print(json.dumps(dict_verdict))
+        return 1 if list_problems else 0
+    if str_carried:
+        print(f"Review carried forward from {str_carried[:7]} (the PR's own patch is unchanged).")
+    return report_verdict(list_problems, int_threads, bool_require_resolved)
+
+
+def _head_committed_date(dict_pr: dict) -> str:
+    """Return the head commit's ``committedDate``, or ``""`` when the query did not carry it."""
+    dict_commit = ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit")) or {}
+    return dict_commit.get("committedDate") or ""
+
+
+def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[str]) -> list[str]:
+    """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
+    return find_review_body_problems(
+        dict_pr.get("reviews", {}).get("nodes", []),
+        list_notices,
+        set_roster,
+    )
+
+
+def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], str]:
+    """Bind the compare-API fingerprint to this PR's repository and base branch.
+
+    A retargeted PR gets no fingerprint at all: the compare is measured against today's base,
+    which is not the base the review was written against.
+
+    Parameters
+    ----------
+    dict_pr : dict
+            The ``pullRequest`` node, read for ``baseRefOid`` (pinned in the same query as
+            ``headRefOid``) and ``timelineItems.nodes``, the base-change events.
+    str_repo_full : str
+            ``owner/name``.
+
+    Returns
+    -------
+    Callable[[str], str]
+            Maps a commit oid to its patch fingerprint; raises ``ValueError`` when the base was
+            changed or the events are missing (unknown is not "never retargeted").
+    """
+    str_owner, _, str_repo = str_repo_full.partition("/")
+    str_base = dict_pr.get("baseRefOid") or ""
+    # ⚠️ `nodes`, never `totalCount`: the count ignores `itemTypes` and counts the whole timeline.
+    list_changes = (dict_pr.get("timelineItems") or {}).get("nodes")
+
+    def fn_fingerprint(str_oid: str) -> str:
+        if not isinstance(list_changes, list):
+            raise ValueError("the PR's retarget state is unknown: a review is not carried across")
+        if list_changes:
+            raise ValueError("the PR's base branch was changed: a review is not carried across")
+        return fetch_patch_fingerprint(str_owner, str_repo, str_base, str_oid)
+
+    return fn_fingerprint
+
+
+def _missing_review(
+    dict_pr: dict,
+    str_repo_full: str,
+    set_reviewers: set[str],
+) -> tuple[str | None, str]:
+    """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
+    return check_missing_review(
+        dict_pr.get("reviews", {}).get("nodes", []),
+        set_reviewers,
+        (dict_pr.get("author") or {}).get("login") or "",
+        str_head_oid=dict_pr.get("headRefOid") or "",
+        list_notices=dict_pr.get("comments", {}).get("nodes", []),
+        str_head_date=_head_committed_date(dict_pr),
+        fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full),
+    )
 
 
 def main(list_argv: list[str] | None = None) -> int:
-	"""Check the current PR's review threads.
+    """Check the current PR's review threads.
 
-	Parameters
-	----------
-	list_argv : list of str, optional
-		CLI arguments; ``None`` defaults to ``sys.argv[1:]`` — see :func:`parse_args`.
+    Parameters
+    ----------
+    list_argv : list of str, optional
+            CLI arguments; ``None`` defaults to ``sys.argv[1:]`` — see :func:`parse_args`.
 
-	Returns
-	-------
-	int
-		``0`` when every thread is answered (or the repo declares no roster), ``1`` otherwise.
-	"""
-	bool_json = parse_args(list_argv).json
+    Returns
+    -------
+    int
+            ``0`` when every thread is answered (or the repo declares no roster), ``1`` otherwise.
+    """
+    bool_json = parse_args(list_argv).json
 
-	str_repo_full = os.environ.get("GITHUB_REPOSITORY", "")
-	str_number = os.environ.get("PR_NUMBER", "")
-	if not str_repo_full or not str_number.isdigit():
-		return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
+    str_repo_full = os.environ.get("GITHUB_REPOSITORY", "")
+    str_number = os.environ.get("PR_NUMBER", "")
+    if not str_repo_full or not str_number.isdigit():
+        return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
 
-	path_root = pathlib.Path.cwd()
-	dict_roster = load_roster(path_root)
-	if not dict_roster:
-		return _print_skip(
-			bool_json, f"No {_ROSTER_FILE} — the review-thread gate is not adopted here"
-		)
+    dict_roster = load_roster(pathlib.Path.cwd())
+    if not dict_roster:
+        return _print_skip(
+            bool_json, f"No {_ROSTER_FILE} — the review-thread gate is not adopted here"
+        )
 
-	# TWO sets from one roster, and they are not the same set. The thread half subtracts every
-	# member (a status member posts no answers either); the missing-review half considers only
-	# the members that can submit a review.
-	set_roster = set(dict_roster)
-	set_reviewers = reviewer_logins(dict_roster)
+    # TWO sets from one roster, and they are not the same set. The thread half subtracts every
+    # member (a status member posts no answers either); the missing-review half considers only
+    # the members that can submit a review.
+    set_roster = set(dict_roster)
+    set_reviewers = reviewer_logins(dict_roster)
 
-	str_owner, _, str_repo = str_repo_full.partition("/")
-	dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
-	list_threads = dict_pr["reviewThreads"]["nodes"]
-	list_notices = dict_pr.get("comments", {}).get("nodes", [])
+    str_owner, _, str_repo = str_repo_full.partition("/")
+    dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
+    list_threads = dict_pr["reviewThreads"]["nodes"]
+    list_notices = dict_pr.get("comments", {}).get("nodes", [])
 
-	# ⚠️ THE EMPTY SET IS THE CASE THIS GATE MOST NEEDS TO CATCH, AND IT USED TO PASS IT.
-	#
-	# With zero threads the loop below finds zero problems and the gate printed
-	# "All 0 review thread(s) answered." — green. So the check that exists to stop a PR
-	# merging with unfinished review conversations could not stop one merging with NO REVIEW
-	# AT ALL, the only case where nothing else is watching. Measured on #204: 29 of 30 checks
-	# passed and it merged with the reviewer having posted only its refusal notice.
-	str_missing = find_missing_review_problem(
-		dict_pr.get("reviews", {}).get("nodes", []),
-		set_reviewers,
-		(dict_pr.get("author") or {}).get("login") or "",
-		str_head_oid=dict_pr.get("headRefOid") or "",
-		list_notices=list_notices,
-		str_head_date=(
-			((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit") or {}).get(
-				"committedDate"
-			)
-			or ""
-		),
-	)
-	if str_missing:
-		return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
+    # ⚠️ THE EMPTY SET IS THE CASE THIS GATE MOST NEEDS TO CATCH, AND IT USED TO PASS IT.
+    #
+    # With zero threads the loop below finds zero problems and the gate printed
+    # "All 0 review thread(s) answered." — green. So the check that exists to stop a PR
+    # merging with unfinished review conversations could not stop one merging with NO REVIEW
+    # AT ALL, the only case where nothing else is watching. Measured on #204: 29 of 30 checks
+    # passed and it merged with the reviewer having posted only its refusal notice.
+    str_missing, str_carried = _missing_review(dict_pr, str_repo_full, set_reviewers)
+    if str_missing:
+        return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
 
-	# Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
-	# See the SUPERSEDED block above `main` for why CI stopped passing 0.
-	bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
-	list_problems = find_thread_problems(
-		list_threads, set_roster, bool_require_resolved=bool_require_resolved
-	)
+    list_body_problems = _unanswered_bodies(dict_pr, list_notices, set_roster)
 
-	return _print_thread_verdict(
-		bool_json, list_problems, len(list_threads), bool_require_resolved
-	)
+    # Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
+    # See the SUPERSEDED block above `main` for why CI stopped passing 0.
+    bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
+    list_problems = find_thread_problems(
+        list_threads, set_roster, bool_require_resolved=bool_require_resolved
+    )
+    # Both failures at once: fixing the body reply only to meet the open threads next run is a
+    # second round trip the first run could have saved.
+    if list_body_problems:
+        return _print_review_body_problems(bool_json, list_body_problems, list_problems)
+
+    return _print_thread_verdict(
+        bool_json,
+        list_problems,
+        len(list_threads),
+        bool_require_resolved,
+        str_carried,
+    )
 
 
 if __name__ == "__main__":
-	# Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-	# script prints: it would die with UnicodeEncodeError before reporting anything. And
-	# because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-	# a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-	# the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
-	for cls_stream in (sys.stdout, sys.stderr):
-		if hasattr(cls_stream, "reconfigure"):
-			cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
+    # script prints: it would die with UnicodeEncodeError before reporting anything. And
+    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
+    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
+    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
-	sys.exit(main())
+    sys.exit(main())

@@ -1,5 +1,7 @@
 [run]
 source = src/
+# Branch coverage and the floor's measurement: docs/coverage-floor.md (blueprintx#427).
+branch = True
 # Guarded by bin/check_coverage_floor.py: a pattern here must never widen past
 # infrastructure/ (or a whole capability named outright, like example_feature below) into
 # a capability's domain/ or application/ layer — that would silently drop real logic out of

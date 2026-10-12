@@ -468,6 +468,6 @@ rtk git commit -m "docs: document service tag-driven changelog/release model"
 
 ## Post-implementation
 
-- Create the `docs/backlog/service-tag-changelog_YYYYMMDD_HHMMSS.md` tracker at execution start (repo discipline) and tick tasks as they complete; delete it when all boxes are `[x]`.
+- Create the `.specs/backlog/service-tag-changelog_YYYYMMDD_HHMMSS.md` tracker at execution start (repo discipline) and tick tasks as they complete; keep it as the permanent record when all boxes are `[x]`.
 - Capture any generalizable lesson (e.g. "service tiers get tag-driven changelog via `cz bump` offline / release workflow online") in `docs/blueprintx-lessons.md` + the global lessons store.
 - Do not push; hand back for the user to open the PR.

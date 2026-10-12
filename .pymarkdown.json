@@ -41,6 +41,9 @@
 		"md045": { "enabled": false },
 		"md046": { "enabled": false },
 		"md047": { "enabled": true },
-		"md048": { "enabled": false }
+		"md048": { "enabled": false },
+		"md049": { "enabled": false },
+		"md050": { "enabled": false },
+		"md051": { "enabled": false }
 	}
 }

@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (must match package.json "version")'
+        description: 'Version to release, semver (must match package.json "version"), e.g. 1.2.3 or 1.2.3-rc.1'
         required: true
         type: string
 
@@ -29,6 +29,18 @@ jobs:
     outputs:
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # The input is free text and is interpolated into the tag name below and later
+      # compared against package.json. Reject a malformed value up front rather than
+      # let it drift into a tag or a confusing mismatch error downstream.
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$ ]]; then
+            echo "::error::Invalid version '$VERSION' — expected SemVer MAJOR.MINOR.PATCH with no leading zeroes, optionally followed by a hyphen and dot-separated non-empty prerelease identifiers (e.g. 1.2.3, 1.2.3-rc.1). Rejected: 1.2.3.rc, 1.2.3-rc., 1.2.3-rc..1, 01.2.3, 1.2.3-rc.01." >&2
+            exit 1
+          fi
+
       - name: Extract Tag Name
         id: release
         env:
@@ -58,8 +70,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -89,10 +101,10 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # No package-manager cache in a release build — never publish from a cache hit.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: false
@@ -117,7 +129,7 @@ jobs:
         run: npm pack
 
       - name: Upload tarball artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: npm-tarball
           path: '*.tgz'
@@ -133,12 +145,12 @@ jobs:
       TAG_NAME: ${{ needs.details.outputs.tag_name }}
     steps:
       - name: Download tarball artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: npm-tarball
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ env.TAG_NAME }}
           # Name the artifact explicitly, never a glob over an empty dir — a 0-byte or

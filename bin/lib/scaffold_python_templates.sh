@@ -95,6 +95,9 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$str_project_path/poetry.toml"
 	cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$str_project_path/.gitlint"
 	cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$str_project_path/.coveragerc"
+	# SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
+	# file, language-agnostic, so it lives in templates/common not python-common.
+	cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$str_project_path/PRINCIPLES.md"
 	# Commitizen config, out of pyproject.toml since blueprintx#233. Losing this copy does
 	# NOT error — cz falls back to defaults and exits 0 — so scaffold_lint_test.sh asserts it.
 	cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$str_project_path/.cz.toml"
@@ -163,6 +166,9 @@ scaffold_copy_shared_test_gates() {
 	# contract registry and therefore no drift driver.
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_drift.py" \
 		"$str_project_path/tests/unit/test_contract_drift.py"
+	# Should-fail witness for bin/check_template_drift.py (blueprintx#109).
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
+		"$str_project_path/tests/unit/test_template_drift_gate.py"
 
 	mkdir -p "$str_project_path/tests/fixtures"
 	cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \
@@ -179,6 +185,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_function_length_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
 		"$str_project_path/tests/unit/test_comment_budget_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_wheelhouse_select.py" \
+		"$str_project_path/tests/unit/test_wheelhouse_select.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_gate_integrity_gate.py" \
 		"$str_project_path/tests/unit/test_gate_integrity_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_review_threads_gate.py" \
@@ -195,6 +203,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_sql_guards_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_identifier_masking_gate.py" \
 		"$str_project_path/tests/unit/test_identifier_masking_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_orm_model_guards_gate.py" \
+		"$str_project_path/tests/unit/test_orm_model_guards_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
 		"$str_project_path/tests/unit/test_ruff_ret_rule.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
@@ -219,6 +229,17 @@ scaffold_copy_executables_and_vscode() {
 	# `python bin/check_review_threads.py` needs no change.
 	cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" \
 		"$str_project_path/bin/check_review_threads.py"
+	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+	# commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
+	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
+	# The work ledger the check-backlog-ledger gate reads; .gitkeep keeps it in git while empty.
+	mkdir -p "$str_project_path/.specs/backlog"
+	touch "$str_project_path/.specs/backlog/.gitkeep"
+	# The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
+	# implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
+	cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" \
+		"$str_project_path/bin/check_specs_structure.sh"
+	chmod +x "$str_project_path/bin/check_specs_structure.sh"
 
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"
@@ -236,6 +257,82 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/.vscode/tasks.json"
 }
 
+scaffold_stamp_provenance() {
+	# Records WHICH tier and WHICH BlueprintX commit a project was scaffolded from
+	# (blueprintx#109). Without this, a drift check has no baseline: it cannot tell
+	# "this project was scaffolded before the fix landed" from "this project removed the
+	# file on purpose". Version falls back to the BLUEPRINTX_VERSION literal in
+	# bin/blueprintx.sh for packaged installs with no .git. Read by
+	# templates/python-common/bin/check_template_drift.py.
+	local str_tier="$1"
+	local str_project_path="$2"
+
+	local str_version=""
+	local str_commit=unknown
+	# Only trust git when BLUEPRINTX_ROOT is itself a checkout: git -C walks UP, so a packaged
+	# install under an unrelated repo (e.g. Homebrew's) would stamp that repo's tag.
+	if [[ -e "$BLUEPRINTX_ROOT/.git" ]]; then
+		str_version="$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null || true)"
+		str_commit="$(git -C "$BLUEPRINTX_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+	fi
+	[[ -n "$str_version" ]] || str_version="$(sed -n 's/^BLUEPRINTX_VERSION="\(.*\)"$/\1/p' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" 2>/dev/null || true)"
+	[[ -n "$str_version" ]] || str_version=unknown
+	local str_scaffolded_at
+	str_scaffolded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+	# Literal filename, kept in sync by eye with `_PROVENANCE_FILENAME` in
+	# templates/python-common/bin/check_template_drift.py — the two live in different
+	# languages/repos-of-truth (this file ships bin/lib/ itself; the reader ships in every
+	# scaffolded project), so a shared constant isn't reachable from here.
+	cat >"$str_project_path/.blueprintx-provenance.yaml" <<-EOF
+	# Written by BlueprintX at scaffold time — do not edit by hand.
+	# Read by bin/check_template_drift.py (blueprintx#109) to know which template
+	# tier and BlueprintX version this project was generated from, so a later
+	# drift check knows what to compare against.
+	tier: ${str_tier}
+	review_bot_roster: $([[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] && echo true || echo false)
+	blueprintx_version: ${str_version#v}
+	blueprintx_commit: ${str_commit}
+	scaffolded_at: ${str_scaffolded_at}
+	EOF
+}
+
+scaffold_copy_docs_extras() {
+	local str_project_path="$1"
+
+	# Incident-record page (blueprintx#240) — shared source so all reachable tiers stay in
+	# sync, same reasoning as the usage/examples/faq/contributing/changelog loop in each
+	# tier's own copy_mkdocs_templates. Copied here (not there) because docs/ already
+	# exists by the time this runs, and this file is not touched by any in-flight PR.
+	cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" "$str_project_path/docs/incidents.md"
+}
+
+# The per-directory leaf CLAUDE.md docs. They are the asset class the copy lists kept
+# forgetting: nothing imports a doc, no test fails without it, and the generated project is
+# green precisely because the file is not there — so a doc written in python-common could sit
+# unshipped indefinitely (blueprintx#325). bin/ci/check_test_copy_lists.py now scans this
+# copy list as a third asset class, next to shared tests and shared workflows.
+#
+# src/config/CLAUDE.md is NOT here: each tier copies it in its own copy_global_config, next to
+# the config payload it documents. Moving it would be a behaviour change in five scaffolds for
+# no gain — the gate accepts either home.
+scaffold_copy_leaf_docs() {
+	local str_project_path="$1"
+
+	mkdir -p "$str_project_path/src/config/contracts" "$str_project_path/src/utils"
+	cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/CLAUDE.md" \
+		"$str_project_path/src/config/contracts/CLAUDE.md"
+	cp "$COMMON_TEMPLATE_ROOT/src/utils/CLAUDE.md" "$str_project_path/src/utils/CLAUDE.md"
+}
+
+# The tier scaffold already copied the CLAUDE.md @import bridge; this ships its target.
+scaffold_copy_agents_md() {
+	local str_tier="$1"
+	local str_project_path="$2"
+
+	cp "$BLUEPRINTX_ROOT/templates/$str_tier/AGENTS.md" "$str_project_path/AGENTS.md"
+}
+
 scaffold_copy_common_templates() {
 	local str_tier="$1"
 	local str_project_path="$2"
@@ -246,5 +343,14 @@ scaffold_copy_common_templates() {
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
+	scaffold_stamp_provenance "$str_tier" "$str_project_path"
+	scaffold_copy_docs_extras "$str_project_path"
+	scaffold_copy_leaf_docs "$str_project_path"
+	scaffold_copy_agents_md "$str_tier" "$str_project_path"
+	# Every skeleton's root CLAUDE.md points readers at `.claude/CLAUDE.md` for the
+	# conventions shared across all skeletons (blueprintx#549) — copy the single
+	# source so that pointer resolves instead of dangling.
+	mkdir -p "$str_project_path/.claude"
+	cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$str_project_path/.claude/CLAUDE.md"
 	print_status "success" "Common templates applied"
 }

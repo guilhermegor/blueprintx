@@ -118,7 +118,7 @@ backup() {
 
 	docker compose exec -T \
 		-e PGPASSWORD="$str_db_password" \
-		postgresql pg_dump -U "$str_db_user" -Fc "$str_db_name" >"$str_dump_file"
+		postgresql pg_dump -U "$str_db_user" -Fc -- "$str_db_name" >"$str_dump_file"
 
 	print_status "success" "Backup written to $str_dump_file"
 }

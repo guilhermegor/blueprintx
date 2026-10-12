@@ -21,6 +21,9 @@ source "$REPO_ROOT/bin/lib/scaffold_python_templates.sh"
 # Read by scaffold_copy_tooling_configs (a different file), which shellcheck cannot follow.
 # shellcheck disable=SC2034
 COMMON_TEMPLATE_ROOT="$REPO_ROOT/templates/python-common"
+# scaffold_copy_tooling_configs also reads this now (blueprintx#540, PRINCIPLES.md).
+# shellcheck disable=SC2034
+SHARED_TEMPLATE_ROOT="$REPO_ROOT/templates/common"
 int_failures=0
 
 expect_python_roster() {

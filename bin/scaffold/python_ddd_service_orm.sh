@@ -185,7 +185,9 @@ copy_mkdocs_templates() {
 
     print_status "info" "Copying MkDocs templates..."
 
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
+    # Falls back to en when a scaffold script is run directly, without the menu.
+    export DOCS_LOCALE="${DOCS_LOCALE:-en}"
+    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \
@@ -214,12 +216,9 @@ copy_mkdocs_templates() {
     # Adds architecture.md to the gate's required-pages set (blueprintx#130) — the
     # page ships in this tier but was previously enforced by nothing.
     cp "$COMMON_TEMPLATE_ROOT/docs/.docs-skeleton.yaml" "$project_path/docs/.docs-skeleton.yaml"
-    # Non-published docs/ authoring guide + the excluded backlog folder.
+    # Non-published docs/ authoring guide.
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
-    mkdir -p "$project_path/docs/backlog"
-    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/docs/backlog/.keep" \
-        "$project_path/docs/backlog/.keep"
 
 
     print_status "success" "MkDocs templates copied"
@@ -385,6 +384,9 @@ copy_global_config() {
     fi
     # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" "$project_path/tests/unit/test_quality_rules_gate.py"
+    # Companion test for check_one_assert.py (#544) — applies to every tier, no exclusion.
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
@@ -474,6 +476,8 @@ conditional_copy_storage() {
     if [[ "$INCLUDE_STORAGE" != "true" ]]; then return; fi
     cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db" "$project_path/src/chassis/db"
     cp -r "$COMMON_TEMPLATE_ROOT/optional/chassis/db_wschema" "$project_path/src/chassis/db_wschema"
+    cp "$COMMON_TEMPLATE_ROOT/optional/test_joblib_handler.py" "$project_path/tests/unit/test_joblib_handler.py"
+    cp "$COMMON_TEMPLATE_ROOT/optional/test_db_wschema_row_ops.py" "$project_path/tests/unit/test_db_wschema_row_ops.py"
     cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env.example"
     print_status "success" "Schema-less storage (chassis/db + db_wschema) added"
@@ -562,6 +566,7 @@ copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_policy_workflows "$project_path"
     print_status "success" "GitHub assets copied (.github)"
 }
 

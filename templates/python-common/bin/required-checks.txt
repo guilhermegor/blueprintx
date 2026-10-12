@@ -1,0 +1,17 @@
+# Status-check names bin/enable_repo_rules.sh makes merge-blocking on the default branch.
+# One name per line, verbatim as GitHub reports it; blank lines and `#` comments ignored.
+#
+# Add a name only after confirming a real PR emits it:
+#   gh api repos/:owner/:repo/commits/<pr-head-sha>/check-runs --jq '.check_runs[].name' | sort -u
+#
+# A name nothing emits blocks every PR forever — GitHub cannot tell "has not reported yet"
+# from "will never report". Deleting a line is always safe; adding an unverified one is not.
+
+# review_threads.yaml — `on: pull_request` with no filter, so it reports from the moment a PR
+# opens. Fails when a review thread is unanswered AND when no reviewer ran at all.
+Review threads answered
+
+# pr-gate.yaml — `on: pull_request: types: [opened, synchronize, reopened, labeled, unlabeled]`;
+# its job-level `if: github.event_name == 'pull_request'` is true for every one of those.
+# Without this line the gate classifies and fails while nothing stops the merge (blueprintx#564).
+Classify and gate this PR

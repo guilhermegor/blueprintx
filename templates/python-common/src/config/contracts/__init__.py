@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from config.contracts.example_source import EXAMPLE_SOURCE
 from utils.tabular_reader import (
-	ContractError,
-	FileContract,
-	find_file_problems,
+    ContractError,
+    FileContract,
+    find_file_problems,
 )
 
 

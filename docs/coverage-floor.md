@@ -81,6 +81,43 @@ It refuses to report success, however, when `.coveragerc` is missing, its `omit`
 empty, or `src/` has zero `.py` files — those are "discovery is broken," never "nothing to
 check."
 
+## Branch coverage and the floor's measurement (#427)
+
+`.coveragerc` sets `branch = True`: statement coverage marks an `if` fully covered the moment
+either arm runs once, so the untaken arm is invisible. The floor was measured, not assumed.
+Each tier was scaffolded and measured with `bin/ci/scaffold_lint_test.sh`-style generated
+projects (not the template root, which pins different tool versions), statement-only first and
+then with `--cov-branch` on the same suite:
+
+| Tier | Statement-only | `--cov-branch` | Note |
+|---|---|---|---|
+| `ddd-service-native-db` | 100% | 100% | measured set is empty: all capability code outside `example_feature` is in `omit` |
+| `ddd-service-orm-db` | 100% | 100% | same, so these two tiers give no evidence either way |
+| `mvc-service-native-db` | 80% | 81% | branch coverage can rise: missed lines can be straight-line code with no branch of their own; 86% once `ExampleEntity` is exercised (#667, same unbound `pd` as #617) |
+| `mvc-service-orm-db` | 76% | 76% | already below the floor before `branch = True`; closed in #617, now 95% (see below) |
+| `lib-minimal` | 100% | 100% | two-file skeleton, nothing to branch on |
+
+**The floor stays at 80.** #427 forbids lowering it to accommodate `branch = True`, and the
+floor is shared by every tier that copies this file, so setting it to the worst tier (76)
+would silently loosen it for `mvc-service-native-db` (81%) and for the DDD tiers' first real
+capability code. Turning branch coverage on dropped no tier below its statement-only figure.
+
+The one finding was a **pre-existing gap**: `mvc-service-orm-db` measured 76.10% against an 80
+floor, with the misses in `model/example_entity.py` (57%) and `controller/_pipeline.py` (75%)
+(blueprintx#617). They were not neglected branches. `ExampleEntity` imported `pandas` under
+`TYPE_CHECKING` while carrying the runtime `TypeChecker`, so beartype could not resolve
+`-> pd.DataFrame` and `fetch_all` raised on every call: the shipped `run()` never worked, and
+nothing exercised the read, render or summary phases. The fix imports `pandas` for real
+(annotation-only per the layer policy) and adds tests for the model and every orchestrator
+phase. The same scaffold now measures **95.12%** with `branch = True`, 1058 unit tests passing.
+`src/controller/main.py` (10 statements) stays at 0%: it is a script-style entry point that
+defines no functions, so covering it would mean running the whole pipeline at import time.
+Note that `poe unit_tests` does not pass `--cov`; the floor is compared only by the pre-commit
+`coverage-check` hook and the CI coverage gate.
+
+`lib-minimal` ships its own `.coveragerc` and sets `branch = True` there too, so the metric
+means the same thing in every tier. It declares no `fail_under`, which this change leaves as is.
+
 ## Wired on both sides
 
 Pre-commit hook `coverage-floor` and the CI step "Run Coverage Floor Gate" in

@@ -1,11 +1,59 @@
-# Secret scanning (GitGuardian) in scaffolded projects
+# Secret scanning in scaffolded projects
 
-Every Python skeleton ships a GitGuardian (`ggshield`) secret-scan workflow
-(`.github/workflows/secret_scan.yaml`) — but only when you ask for it. This
-page explains the opt-in, why it exists, and what to do if you scaffolded
-without it and want it later.
+Two scanners, with different defaults:
 
-## Why opt-in
+| Scanner | Needs an API key | Default | Where |
+|---|---|---|---|
+| **gitleaks** | no | **on** | every tier |
+| **GitGuardian** (`ggshield`) | yes | opt-in | Python tiers |
+
+`gitleaks` is the default because it is the only one that can be. A freshly
+scaffolded project has no GitGuardian account and no key, and `ggshield`
+with no key exits 3 having scanned nothing — so an unconditional GitGuardian
+job is a project red on its first PR, not a project that is protected.
+
+## What GitGuardian adds over gitleaks — measured
+
+Measured on this tree (2026-09-20), not quoted from a vendor page:
+
+| | gitleaks 8.30.1 | ggshield 1.54.0 |
+|---|---|---|
+| Scan of the BlueprintX tree (4.76 MB) | 0 findings, exit 0, 1.52 s | **could not run** — exit 3, no key |
+| Planted synthetic credentials (GitHub PAT, Slack bot token, AWS secret shapes) | **3 findings, exit 1** | could not run |
+| API key required | none | yes, and BlueprintX's own key fails auth (`Invalid GitGuardian API key`) |
+
+**GitGuardian's measurable delta over the installed gitleaks is currently
+zero**, because it cannot be made to run here at all. Its documented
+advantages — a hosted dashboard, incident history, a larger proprietary
+detector set, and validity checking that confirms a found credential is
+*live* — are real product features, but none of them are observable from
+this repository without a working paid key. So gitleaks carries the default
+and GitGuardian stays an opt-in for anyone who has an account.
+
+One finding from that measurement is worth keeping: the first should-fail
+probe used AWS's own documented example access key — the `AKIA…EXAMPLE`
+value printed throughout the AWS docs — and gitleaks reported **no leaks**.
+It allowlists that value by design, precisely because it appears in so much
+documentation. A should-fail test built on a documented example key proves
+nothing; the fixture has to be a shape a real detector fires on, generated
+at test time rather than checked in.
+
+## Which tiers scan, and with what
+
+- **Python tiers** — `gitleaks` via `bin/check_secrets.sh`, wired as both a
+  pre-commit hook and a CI job, plus the opt-in GitGuardian workflow below.
+- **TypeScript tiers** (`react-spa-webpack`, `ts-lib`) —
+  `.github/workflows/secret-scan.yml`, `gitleaks` on every push and PR.
+- **bash-cli** — the `secret-scan` job in `.github/workflows/ci.yml`, same
+  scanner.
+
+All three use the same pinned, checksum-verified gitleaks install and
+`fetch-depth: 0`, so history is scanned and not just the tip. The
+non-Python tiers deliberately ship **no** `.gitleaks.toml`: gitleaks falls
+back to its embedded default ruleset, and an allowlist is added only for a
+measured false positive, never preemptively.
+
+## Why GitGuardian is opt-in
 
 `secret_scan.yaml` reads `${{ secrets.GITGUARDIAN_API_KEY }}`, and GitHub
 resolves that secret **in the repository where the workflow runs**. A key

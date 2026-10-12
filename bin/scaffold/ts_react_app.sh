@@ -26,6 +26,12 @@ validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
         exit_error "Usage: $0 <project_root_dir> <project_name>"
     fi
+    # The prompt validates too, but the scaffolds are also callable DIRECTLY
+    # (bin/ci/scaffold_lint_test.sh does exactly that), so a guard living only in
+    # prompt_project_name protects one of the two entry points. blueprintx#113.
+    if ! is_valid_project_name "$PROJECT_NAME"; then
+        exit_error "Invalid project name '$PROJECT_NAME'. Use a letter or underscore first, then letters, digits, '-' or '_'."
+    fi
     print_status "success" "Input validation passed"
 }
 
@@ -430,8 +436,12 @@ copy_static_ts_common_files() {
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
-    cp "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" "$project_path/.github/CODEOWNERS"
+    GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_policy_workflows "$project_path"
+    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
+    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
+    cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 }
 
 # Refresh the lockfile after apply_package_variants (blueprintx#468 review).
@@ -477,8 +487,12 @@ copy_common_templates() {
         > "$project_path/package.json"
     cp "$COMMON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
     envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
-        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
-        > "$project_path/CLAUDE.md"
+        < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" \
+        > "$project_path/AGENTS.md"
+    cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
+    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
+    # file, language-agnostic, so it lives in templates/common not ts-common.
+    cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
         > "$project_path/README.md"
@@ -504,6 +518,7 @@ copy_common_templates() {
     # answered-review-thread predicate (blueprintx#175), same file the Python tiers ship, so
     # the CI job above never fetches or vendors a copy of its own.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+    copy_repo_rules_provisioner "$project_path" "$COMMON_TEMPLATE_ROOT/bin/required-checks.txt"
 
     copy_shared_ts_source "$project_path"
 

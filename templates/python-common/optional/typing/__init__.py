@@ -22,9 +22,9 @@ from chassis.typing.validate import validate_type
 
 
 __all__ = [
-	"ABCTypeCheckerMeta",
-	"ProtocolTypeCheckerMeta",
-	"TypeChecker",
-	"type_checker",
-	"validate_type",
+    "ABCTypeCheckerMeta",
+    "ProtocolTypeCheckerMeta",
+    "TypeChecker",
+    "type_checker",
+    "validate_type",
 ]

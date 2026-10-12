@@ -84,7 +84,7 @@ def test_main(capsys: pytest.CaptureFixture[str]) -> None:
 
 | Tool | Role | Config file |
 |------|------|------------|
-| **Ruff** | Linter + formatter | `ruff.toml` — line-length 99, tab indent, double quotes, NumPy docstrings |
+| **Ruff** | Linter + formatter | `ruff.toml` — line-length 99, 4-space indent, double quotes, NumPy docstrings |
 | **pre-commit** | Git hooks | `.pre-commit-config.yaml` — ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge |
 | **pytest** | Test runner | `pytest.ini` — `poe unit_tests` runs `pytest tests/unit/`; tests are pytest-style functions with fixtures |
 | **GitHub Actions** | CI | `.github/workflows/tests.yaml` — runs linting and tests on every push |
