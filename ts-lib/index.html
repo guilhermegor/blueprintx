@@ -1934,36 +1934,37 @@ verbatim at scaffold time, the same as <code>react-spa-webpack</code>.</p>
 <hr />
 <h2 id="expected-layout-after-scaffold">🗂️ Expected layout (after scaffold)<a class="headerlink" href="#expected-layout-after-scaffold" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>project/
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>src/
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>index.ts<span class="w">               </span><span class="c1"># public barrel — only what this file re-exports is public API</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>example.ts<span class="w">             </span><span class="c1"># starting-point module; rename or split as the library grows</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>example.test.ts
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>utils/
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span>log-emitter.ts<span class="w">        </span><span class="c1"># shared TS source (templates/ts-common) — injectable logging port</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>bin/
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span>write_esm_package_json.sh<span class="w">  </span><span class="c1"># postbuild:esm — stamps dist/esm's own package.json</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span>smoke_pack.sh<span class="w">              </span><span class="c1"># npm pack smoke test (unpacks the tarball, checks it resolves)</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>docs/<span class="w">                    </span><span class="c1"># Docusaurus site source</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>index.md<span class="w"> </span>·<span class="w"> </span>usage.md<span class="w"> </span>·<span class="w"> </span>examples.md<span class="w"> </span>·<span class="w"> </span>faq.md<span class="w"> </span>·<span class="w"> </span>contributing.md
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>.github/workflows/
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span>docs.yml<span class="w">               </span><span class="c1"># build the Docusaurus site on push</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span>docs-deploy.yml<span class="w">        </span><span class="c1"># deploy the built site (GitHub Pages)</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span>pack-smoke.yml<span class="w">         </span><span class="c1"># npm pack + install smoke test on every push</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span>release-npm.yml<span class="w">        </span><span class="c1"># npm OIDC trusted-publishing release</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>tsconfig.json<span class="w">             </span><span class="c1"># base config (type-check, IDE)</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>tsconfig.esm.json<span class="w">          </span><span class="c1"># ESM build target</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>tsconfig.cjs.json<span class="w">          </span><span class="c1"># CJS build target</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span>tsconfig.types.json<span class="w">        </span><span class="c1"># .d.ts-only build target</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">  </span>eslint.config.mjs<span class="w">         </span><span class="c1"># vendor allowlist + function-length + catch-safety rules</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">  </span>jest.config.cjs
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span>babel.config.test.cjs
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">  </span>docusaurus.config.js
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">  </span>sidebars.js
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span>package.json
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span>.gitignore
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span>.vscode/
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">  </span>CONTRIBUTING.md
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">  </span>LICENSE
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>package-lock.json<span class="w">        </span><span class="c1"># committed lockfile; CI installs with `npm ci`</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>src/
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>index.ts<span class="w">               </span><span class="c1"># public barrel — only what this file re-exports is public API</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>example.ts<span class="w">             </span><span class="c1"># starting-point module; rename or split as the library grows</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>example.test.ts
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>utils/
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span>log-emitter.ts<span class="w">        </span><span class="c1"># shared TS source (templates/ts-common) — injectable logging port</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span>bin/
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span>write_esm_package_json.sh<span class="w">  </span><span class="c1"># postbuild:esm — stamps dist/esm's own package.json</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span>smoke_pack.sh<span class="w">              </span><span class="c1"># npm pack smoke test (unpacks the tarball, checks it resolves)</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>docs/<span class="w">                    </span><span class="c1"># Docusaurus site source</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span>index.md<span class="w"> </span>·<span class="w"> </span>usage.md<span class="w"> </span>·<span class="w"> </span>examples.md<span class="w"> </span>·<span class="w"> </span>faq.md<span class="w"> </span>·<span class="w"> </span>contributing.md
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>.github/workflows/
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span>docs.yml<span class="w">               </span><span class="c1"># build the Docusaurus site on push</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span>docs-deploy.yml<span class="w">        </span><span class="c1"># deploy the built site (GitHub Pages)</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span>pack-smoke.yml<span class="w">         </span><span class="c1"># npm pack + install smoke test on every push</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">    </span>release-npm.yml<span class="w">        </span><span class="c1"># npm OIDC trusted-publishing release</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>tsconfig.json<span class="w">             </span><span class="c1"># base config (type-check, IDE)</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>tsconfig.esm.json<span class="w">          </span><span class="c1"># ESM build target</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span>tsconfig.cjs.json<span class="w">          </span><span class="c1"># CJS build target</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">  </span>tsconfig.types.json<span class="w">        </span><span class="c1"># .d.ts-only build target</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">  </span>eslint.config.mjs<span class="w">         </span><span class="c1"># vendor allowlist + function-length + catch-safety rules</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span>jest.config.cjs
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">  </span>babel.config.test.cjs
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">  </span>docusaurus.config.js
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span>sidebars.js
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span>package.json
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span>.gitignore
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">  </span>.vscode/
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">  </span>CONTRIBUTING.md
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">  </span>LICENSE
 </span></code></pre></div>
 <hr />
 <h2 id="folder-descriptions">📁 Folder Descriptions<a class="headerlink" href="#folder-descriptions" title="Permanent link">&para;</a></h2>
