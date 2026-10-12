@@ -13,7 +13,7 @@ fail() {
 }
 
 manifest_paths() {
-    grep -vE '^[[:space:]]*$' "$MANIFEST" || true
+    sed -E 's/[[:space:]]+$//; s#/+$##; /^[[:space:]]*(#|$)/d' "$MANIFEST"
 }
 
 skeleton_meta_files() {

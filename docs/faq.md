@@ -240,10 +240,10 @@ off. The gate asks for `per_page=1` to keep the commit list, which it does not u
 
 ## Why does every scaffold have to ship the hosted-reviewer config?
 
-Every generated project ships the configuration for the hosted reviewers (CodeRabbit,
-Greptile and Graphite). Left as a copy list maintained by hand in nine scaffold scripts, that
+Every generated project must ship the configuration for the hosted reviewers (CodeRabbit,
+Greptile and Graphite); today only Graphite's is listed. Left as a copy list maintained by hand in nine scaffold scripts, that
 drifts: MVC once silently lacked shared files (`poetry.toml`, `.coveragerc`). The required
-paths are listed once, one per line, in `templates/common/review-config.manifest`, and
+paths are listed once, one bare path per line (blank and `#` lines are ignored), in `templates/common/review-config.manifest`, and
 `bin/ci/check_review_config_shipped.sh` checks them in three modes:
 
 - `--static` (pre-commit hook `review-config-shipped`): every manifest path exists under

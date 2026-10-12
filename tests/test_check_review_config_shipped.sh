@@ -70,6 +70,13 @@ test_static_rejects_wrong_copies() {
         'for f in .gitattributes; do cp "$SHARED_TEMPLATE_ROOT/$f" "$project_path/$f"; done'
 }
 
+test_manifest_comment_and_slash_ignored() {
+    local str_root
+    str_root="$(make_copy)"
+    printf '# note\n.gitattributes/\n' >>"$str_root/templates/common/review-config.manifest"
+    expect_gate "comment line and trailing slash in manifest" "$str_root" pass "" --static
+}
+
 test_static_accepts_real_copies() {
     local str_dst='"$project_path/.gitattributes"'
     expect_ts_lib_flagged "plain copy" clean "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst"
@@ -196,6 +203,7 @@ test_empty_manifest_fails
 test_unknown_skeleton_fails
 test_unshipped_entry_fails_both_modes
 test_static_rejects_wrong_copies
+test_manifest_comment_and_slash_ignored
 test_static_accepts_real_copies
 test_static_sourced_helper_counts
 test_static_nested_path_needs_its_own_parent
