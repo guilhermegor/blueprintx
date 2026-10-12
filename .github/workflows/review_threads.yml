@@ -102,7 +102,7 @@ on:
   # RECOGNISE a clean review; without this trigger it is never re-run at the moment that
   # recognition becomes possible — half a fix, and the half that is invisible.
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
 
 permissions:
   contents: read

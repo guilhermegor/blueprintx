@@ -36,3 +36,9 @@ reviewers:
   - login: github-actions[bot]
     posts: status
     note: Workflow output, never a review finding.
+
+  - kind: comment-marker
+    marker: "Fallback review — runtime:"
+    note: >-
+      The reviewer ladder's attribution line. Counts as a review only in a comment by an
+      OWNER, MEMBER or COLLABORATOR posted after the head commit (docs/faq.md).
