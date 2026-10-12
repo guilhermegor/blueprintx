@@ -268,6 +268,13 @@ repos:
         pass_filenames: false
         files: ^(bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
 
+      - id: prompt-tty-guard-tests
+        name: scaffold prompt tty-guard should-fail tests (blueprintx#539)
+        entry: bash tests/test_prompt_tty_guard.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/common\.sh|bin/lib/scaffold_[^/]+\.sh|bin/scaffold/[^/]+\.sh|tests/test_prompt_tty_guard\.sh)$
+
       - id: spec-answers-tests
         name: --spec regression tests (blueprintx#629)
         entry: bash tests/test_spec_answers.sh

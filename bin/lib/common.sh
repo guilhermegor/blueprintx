@@ -78,6 +78,79 @@ prompt_sub() {
     printf "    ${PROMPT_SUB}└${NC} %s" "$1"
 }
 
+# prompt_can_read: true when stdin may answer a prompt. That is a terminal, or a harness that
+# feeds answers on purpose by exporting BLUEPRINTX_STDIN_ANSWERS=1 (the bin/lib/spec.sh
+# pipes). A stray piped line without that opt-in is never an answer (blueprintx#539).
+prompt_can_read() {
+    [ -t 0 ] || [ "${BLUEPRINTX_STDIN_ANSWERS:-}" = "1" ]
+}
+
+# prompt_warn_default <rendered_prompt> [default_label]: one stderr line saying a prompt fell
+# back to its default because stdin is not a terminal. Stdout and exit status are untouched.
+prompt_warn_default() {
+    local str_question
+    str_question="$(printf '%s' "$1" | sed -E $'s/\x1b\\[[0-9;]*m//g; s/[[:space:]]*(\\[[^]]*\\])?:?[[:space:]]*$//')"
+    printf 'stdin is not a terminal; using %s for "%s" (set BLUEPRINTX_STDIN_ANSWERS=1 to answer from stdin)\n' \
+        "${2:-its default}" "$str_question" >&2
+}
+
+# prompt_read <var_name> <rendered_prompt> [default_label]: `read -r -p` that leaves <var_name>
+# empty (so the caller's own default applies) when prompt_can_read is false or stdin is at EOF.
+# Without a readable stdin it also warns on stderr (prompt_warn_default).
+prompt_read() {
+    local _prompt_read_value=""
+    if prompt_can_read; then
+        read -r -p "$2" _prompt_read_value || true
+    else
+        prompt_warn_default "$2" "${3:-}"
+    fi
+    printf -v "$1" '%s' "$_prompt_read_value"
+}
+
+#
+# Usage:
+#   prompt_yes_no <var_name> "$(prompt_main "Question? [y/N]: ")" [default: y|n]
+#
+# Shared guard for every interactive y/n scaffold prompt (blueprintx#539). `read` happily
+# consumes a non-terminal stdin, so a non-interactive run (CI, --dev, a stray piped line
+# left on stdin) would silently answer a question nobody asked — for an opt-in like OTEL
+# that means dependencies installed and files rewritten with no one agreeing to it. With
+# no terminal on stdin, <var_name> is set to the DEFAULT without ever calling `read`, so a
+# leftover "y\n" on the pipe can never flip an unattended run's answer.
+#
+# `default` is "y" or "n" (default: "n") — chosen PER PROMPT by the caller (issue #539
+# item 3): an opt-in defaults "n" (installing deps / sending telemetry must never happen
+# silently), but a prompt whose safe unattended answer is "yes" (e.g. "wait for the first
+# deploy to finish?") passes default="y". Hardcoding one default for every prompt would
+# just trade one silent wrong answer for another.
+#
+# Sets <var_name> to the literal string "true" or "false" — the convention every INCLUDE_*
+# / USE_* flag in this repo already uses (INCLUDE_OTEL, INCLUDE_STORAGE, ...). The second
+# argument is the FULLY RENDERED prompt text (already wrapped in prompt_main or prompt_sub
+# by the caller, exactly as passed to `read -r -p` today) so this helper stays agnostic to
+# which styling a call site wants.
+
+prompt_yes_no() {
+    local var_name="$1"
+    local rendered_prompt="$2"
+    local default="${3:-n}"
+    local answer=""
+
+    prompt_read answer "$rendered_prompt" "'$default'"
+
+    case "$answer" in
+        y | Y | yes | YES) printf -v "$var_name" 'true' ;;
+        n | N | no | NO) printf -v "$var_name" 'false' ;;
+        *)
+            if [ "$default" = "y" ]; then
+                printf -v "$var_name" 'true'
+            else
+                printf -v "$var_name" 'false'
+            fi
+            ;;
+    esac
+}
+
 # BRAND COLOURS — logo/tagline accent (blueprintx#256)
 #
 # assets/logo.png is two-tone (teal BLUEPRINT + pink X), but the banner in
@@ -283,18 +356,16 @@ resolve_default_branch() {
 #   apply_env_wise_config "$PROJECT_PATH"  # splits them into dev/prd if chosen
 
 prompt_env_wise_config() {
-    local answer
-    read -r -p "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: " answer || true
-    case "${answer:-}" in
-        y | Y | yes | YES)
-            INCLUDE_ENV_WISE=true
-            print_status "config" "Env-wise config: inputs_dev/prd.yaml + outputs_dev/prd.yaml (ENV selects)"
-            ;;
-        *)
-            INCLUDE_ENV_WISE=false
-            print_status "config" "Config: single inputs.yaml + outputs.yaml (default)"
-            ;;
-    esac
+    # default "n": env-wise config only, silently, changes the on-disk shape of the
+    # generated project's config directory — an unattended run must get the single-file
+    # layout it would get by pressing Enter interactively.
+    prompt_yes_no INCLUDE_ENV_WISE \
+        "$(prompt_main "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: ")"
+    if [ "$INCLUDE_ENV_WISE" = "true" ]; then
+        print_status "config" "Env-wise config: inputs_dev/prd.yaml + outputs_dev/prd.yaml (ENV selects)"
+    else
+        print_status "config" "Config: single inputs.yaml + outputs.yaml (default)"
+    fi
 }
 
 #

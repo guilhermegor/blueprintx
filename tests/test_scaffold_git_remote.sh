@@ -25,7 +25,7 @@ run_create() {
     git init -q --bare "$bare"
     git -C "$dir" remote add origin "$bare"
     : >"$log"
-    printf 'y\n1\n' | GITGUARDIAN_API_KEY=k bash -c '
+    printf 'y\n1\n' | BLUEPRINTX_STDIN_ANSWERS=1 GITGUARDIAN_API_KEY=k bash -c '
         source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
         PROJECT_PATH="$2"; BARE="$3"; LOG="$4"; MODE="$5"
         GITHUB_USERNAME=o; PROJECT_NAME=r; PROJECT_DESCRIPTION=d
@@ -82,7 +82,7 @@ test_fallback_sets_secret_before_the_push() {
     git -C "$dir" -c user.email=t@example.com -c user.name=T commit -q --allow-empty -m "chore: seed"
     git init -q --bare "$bare"
     : >"$log"
-    printf 'y\ny\n1\n' | GITGUARDIAN_API_KEY=k bash -c '
+    printf 'y\ny\n1\n' | BLUEPRINTX_STDIN_ANSWERS=1 GITGUARDIAN_API_KEY=k bash -c '
         source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
         PROJECT_PATH="$2"; BARE="$3"; LOG="$4"
         GITHUB_USERNAME=o; PROJECT_NAME=r; PROJECT_DESCRIPTION=d
@@ -117,7 +117,7 @@ test_prompt_fails_when_first_push_fails() {
     git -C "$dir" -c user.email=t@example.com -c user.name=T commit -q --allow-empty -m "chore: seed"
     git init -q --bare "$bare"
     git -C "$dir" remote add origin "$bare"
-    printf 'y\ny\n1\n' | bash -c '
+    printf 'y\ny\n1\n' | BLUEPRINTX_STDIN_ANSWERS=1 bash -c '
         source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
         PROJECT_PATH="$2"; BARE="$3"
         GITHUB_USERNAME=o; PROJECT_NAME=r; PROJECT_DESCRIPTION=d
