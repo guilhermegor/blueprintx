@@ -219,12 +219,9 @@ copy_mkdocs_templates() {
     # Adds architecture.md to the gate's required-pages set (blueprintx#130) — the
     # page ships in this tier but was previously enforced by nothing.
     cp "$COMMON_TEMPLATE_ROOT/docs/.docs-skeleton.yaml" "$project_path/docs/.docs-skeleton.yaml"
-    # Non-published docs/ authoring guide + the excluded backlog folder.
+    # Non-published docs/ authoring guide.
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
-    mkdir -p "$project_path/docs/backlog"
-    cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/backlog/.keep" \
-        "$project_path/docs/backlog/.keep"
 
 
     print_status "success" "MkDocs templates copied"
@@ -766,6 +763,7 @@ copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_policy_workflows "$project_path"
     print_status "success" "GitHub assets copied (.github)"
 }
 

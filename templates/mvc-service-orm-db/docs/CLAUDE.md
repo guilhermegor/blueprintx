@@ -9,20 +9,16 @@ MkDocs **builds every `.md` under `docs/` into the site**, even files absent fro
 internal note dropped at the `docs/` root *will* ship to readers and can mislead
 them.
 
-Keep such working documents under a folder that is excluded from the build via
-`exclude_docs` in `mkdocs.yml`:
+Keep working documents outside `docs/`, in `.specs/`. A few legacy files and
+folders still sit inside `docs/` but are excluded from the build; `exclude_docs` in
+`mkdocs.yml` is the authoritative list.
 
-```yaml
-exclude_docs: |
-  backlog/        # work-to-do backlogs, follow-up notes — never published
-```
-
-- `docs/backlog/` — work-to-do backlogs and follow-up notes. **Not** added to
-  `nav:`, **not** part of the published site. For any non-trivial branch, keep a
-  **per-branch work ledger** here at `docs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md`
+- `.specs/backlog/` — work-to-do backlogs and follow-up notes (outside `docs/`, so
+  never published). For any non-trivial branch, keep a
+  **per-branch work ledger** here at `.specs/backlog/<kebab-topic>_YYYYMMDD_HHMMSS.md`
   (timestamped filename, set at creation, never renamed) recording **what was done**
   and **what remains / is open**, updated as the work proceeds. Tracked in git but
-  excluded from the site, so knowledge survives across sessions. Distinct from
+  outside the site source, so knowledge survives across sessions. Distinct from
   generalizable lessons: the ledger is *this branch's* state. When every item is done,
   tick the last box and add a "Completed — kept as a record" note — do **not** delete it;
   a finished ledger is the team-reviewable record of what was done and why.
