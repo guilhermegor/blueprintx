@@ -16,7 +16,7 @@
 6 .github/workflows/secret_scan.yml
 24 .github/workflows/verify_branch_protection.yml
 31 .gitleaks.toml
-80 .pre-commit-config.yaml
+79 .pre-commit-config.yaml
 26 .review-bots.yaml
 22 Makefile
 44 bin/blueprintx.sh

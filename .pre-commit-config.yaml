@@ -43,11 +43,10 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
       - id: check-added-large-files
-        # 700: templates/ts-common/package-lock.json (~596 KB, ~1160 resolved
-        # packages) is a real committed lockfile, not an accidental binary --
-        # the default 500 KB cap rejected it outright (#464).
+        # 1000: the committed lockfiles are real, not accidental binaries -- ts-common's is ~596 KB
+        # (#464), ts-lib's ~908 KB (#735). The default 500 KB cap rejected the first outright.
         args:
-          - --maxkb=700
+          - --maxkb=1000
       - id: no-commit-to-branch  # protects main, matches CONTRIBUTING.md
 
   # Layer 2 — Conventional Commits enforcement (commit-msg stage).
@@ -337,6 +336,20 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/ci/check_pr_template\.sh|tests/test_check_pr_template\.sh|\.github/PULL_REQUEST_TEMPLATE\.md)$
+
+      - id: lockfile-sync
+        name: lockfile sync (template package.json vs package-lock.json, blueprintx#588)
+        entry: bash bin/ci/check_lockfile_sync.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/[^/]+/package(-lock)?\.json|bin/ci/check_lockfile_sync\.sh)$
+
+      - id: lockfile-sync-tests
+        name: check_lockfile_sync.sh should-fail regression tests (blueprintx#588)
+        entry: bash tests/test_check_lockfile_sync.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_lockfile_sync\.sh|tests/test_check_lockfile_sync\.sh)$
 
       - id: version-sync
         name: version sync (pyproject vs CLI)
