@@ -340,7 +340,7 @@ _LIB_GLOB_RM = """f() {
 """
 
 
-def _checkout(path_tmp: Path, str_lib: str, list_files: list) -> Path:
+def _checkout(path_tmp: Path, str_lib: str, list_files: list[str]) -> Path:
     """Write a synthetic checkout: the shared lib plus empty template files.
 
     Parameters

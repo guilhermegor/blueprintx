@@ -104,14 +104,14 @@ def read_tier(path_root: pathlib.Path) -> str | None:
 _RE_ONE_LINE_FI = re.compile(r";\s*fi\b(?:\s*(?:;|\|\||#).*)?$")
 
 
-def _expand_glob_cps(str_lib: str, dict_templates: dict) -> str:
+def _expand_glob_cps(str_lib: str, dict_templates: dict[str, pathlib.Path]) -> str:
     """Rewrite each unquoted-glob ``cp`` into one quoted ``cp`` per matching template file.
 
     Parameters
     ----------
     str_lib : str
             The shared scaffold lib source, line-continuations already spliced.
-    dict_templates : dict
+    dict_templates : dict of str to pathlib.Path
             ``COMMON``/``SHARED`` mapped to their template directories.
 
     Returns
@@ -296,7 +296,7 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     return {str_rel for str_rel in set_required if not _is_removed(str_rel, set_removed)}
 
 
-def _is_removed(str_rel: str, set_removed: set) -> bool:
+def _is_removed(str_rel: str, set_removed: set[str]) -> bool:
     """Return whether the scaffold ``rm``s this destination, or a directory above it.
 
     Parameters
