@@ -20,6 +20,11 @@
 # templates/python-common/ (copied to every generated project's root as `.gitleaks.toml`,
 # exactly like ruff.toml/mypy.ini), so no `--config` flag is needed here.
 #
+# TWO MODES, ONE SCRIPT (blueprintx#759): the default scans the WHOLE history — what CI runs,
+# so nothing reaching main is scanned less. `--staged` scans only the index, which is all a
+# commit can add; pre-commit uses it because history was already scanned when it was
+# committed, and re-scanning all of it on every commit costs minutes and grows with the repo.
+#
 # Resolve, don't install: a missing gitleaks is a graceful skip on a contributor's box, and a
 # hard failure only when GITLEAKS_REQUIRED=1 (CI sets it) — a skip in CI is a gate reporting
 # its own blindness as OK.
@@ -30,9 +35,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 STR_ROOT="."
+BOOL_STAGED=0
 
 parse_args() {
-	# Only --root is accepted, so BlueprintX can run THIS file over its own tree instead of
+	# Only --root and --staged are accepted, so BlueprintX can run THIS file over its own tree instead of
 	# keeping a second copy (the treatment blueprintx#189 gave the function-length gate).
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -40,18 +46,34 @@ parse_args() {
 			STR_ROOT="${2:-.}"
 			shift 2
 			;;
+		--staged)
+			BOOL_STAGED=1
+			shift
+			;;
 		*)
-			print_status "error" "Unknown argument: $1 (only --root <dir> is accepted)"
+			print_status "error" "Unknown argument: $1 (only --root <dir> and --staged are accepted)"
 			exit 2
 			;;
 		esac
 	done
 }
 
+scan_gitleaks() {
+	# Newer gitleaks spells the index scan `git --staged`; older releases only have
+	# `protect --staged`, so probe the help text rather than parse a version.
+	if [[ "$BOOL_STAGED" != "1" ]]; then
+		gitleaks git "$STR_ROOT" --no-banner --redact -v
+	elif gitleaks git --help 2>&1 | grep -q -- '--staged'; then
+		gitleaks git --staged "$STR_ROOT" --no-banner --redact -v
+	else
+		gitleaks protect --staged --source "$STR_ROOT" --no-banner --redact -v
+	fi
+}
+
 run_gitleaks() {
 	# gitleaks exits 0 (clean) or 1 (leaks found) — both are DATA, so let it drive our exit.
 	print_status "section" "Secret scan (gitleaks)"
-	if gitleaks git "$STR_ROOT" --no-banner --redact -v; then
+	if scan_gitleaks; then
 		print_status "success" "gitleaks: no leaks found"
 		return 0
 	fi
