@@ -2649,6 +2649,19 @@ def test_load_marker_posters_normalises_the_bot_suffix(tmp_path: Path) -> None:
     assert _load_gate().load_marker_posters(tmp_path) == frozenset({"x", "y"})
 
 
+@pytest.mark.parametrize(
+    "str_posters",
+    ["    posters: foo\n", "    posters:\n      - 7\n", '    posters:\n      - ""\n'],
+)
+def test_load_marker_posters_rejects_a_malformed_value(tmp_path: Path, str_posters: str) -> None:
+    """A scalar or non-string entry trusts nobody instead of becoming single characters."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n    marker: m\n" + str_posters,
+        encoding="utf-8",
+    )
+    assert _load_gate().load_marker_posters(tmp_path) == frozenset()
+
+
 def test_load_marker_posters_is_empty_without_the_field(path_marker_root: Path) -> None:
     """A marker row with no `posters:` allows nobody."""
     assert _load_gate().load_marker_posters(path_marker_root) == frozenset()

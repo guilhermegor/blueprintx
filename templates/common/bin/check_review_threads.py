@@ -1111,6 +1111,24 @@ def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
     )
 
 
+def _row_posters(posters: object) -> frozenset[str]:
+    """Return one row's normalised ``posters:`` logins, or none when the value is malformed.
+
+    Only a list of non-empty strings is valid. A scalar (``posters: foo``) would otherwise be
+    iterated into single characters, so anything else is reported on stderr and trusts nobody.
+    """
+    if posters is None:
+        return frozenset()
+    if not isinstance(posters, list) or not all(isinstance(x, str) and x.strip() for x in posters):
+        print(
+            "check_review_threads: ignoring a comment-marker `posters:` that is not a list of "
+            "non-empty strings; no marker will be accepted from that row",
+            file=sys.stderr,
+        )
+        return frozenset()
+    return frozenset(normalise_login(x) for x in posters)
+
+
 def load_marker_posters(path_root: pathlib.Path) -> frozenset[str]:
     """Return the normalised logins the roster's ``comment-marker`` rows allow to post a marker.
 
@@ -1131,10 +1149,10 @@ def load_marker_posters(path_root: pathlib.Path) -> frozenset[str]:
         return frozenset()
     dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
     return frozenset(
-        normalise_login(str(str_login))
+        str_login
         for d in (dict_yaml.get("reviewers") or [])
         if isinstance(d, dict) and d.get("kind") == _KIND_COMMENT_MARKER
-        for str_login in (d.get("posters") or [])
+        for str_login in _row_posters(d.get("posters"))
     )
 
 

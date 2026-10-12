@@ -205,6 +205,18 @@ copy_shared_ts_source() {
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src"
 }
 
+refresh_lockfile_for_otel() {
+    local project_path="$1"
+    local -a list_bound=()
+    command -v timeout >/dev/null 2>&1 && list_bound=(timeout 120)
+    print_status "info" "Refreshing package-lock.json for the OTLP dependencies (up to 120s)..."
+    if (cd "$project_path" && ${list_bound[@]+"${list_bound[@]}"} npm install --package-lock-only --silent >/dev/null 2>&1); then
+        return
+    fi
+    rm -f "$project_path/package-lock.json"
+    print_status "warning" "lockfile refresh failed (npm missing, offline or timed out): package-lock.json omitted — run 'npm install' before the first push"
+}
+
 # OTLP log export (opt-in, blueprintx#438): the emitter (imports @opentelemetry/* — the ONLY
 # place it is imported), its unit test, the pinned package.json dependencies (declared only
 # here, so an opt-out never installs them), a local-dev collector compose fragment, and the
@@ -228,6 +240,7 @@ conditional_copy_otel() {
         '@opentelemetry/sdk-logs=0.222.0' \
         '@opentelemetry/exporter-logs-otlp-http=0.222.0' \
         '@opentelemetry/resources=2.11.0'
+    refresh_lockfile_for_otel "$project_path"
     cat >> "$project_path/src/index.ts" <<'TSBLOCK'
 
 // OTLP log export (opt-in, blueprintx#438) — an additional LogEmitter implementation a
@@ -300,6 +313,7 @@ copy_static_ts_lib_files() {
 
     cp "$COMMON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
     cp "$COMMON_TEMPLATE_ROOT/.nvmrc" "$project_path/.nvmrc"
+    cp "$SKELETON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     mkdir -p "$project_path/.husky"
     cp -r "$COMMON_TEMPLATE_ROOT/.husky/." "$project_path/.husky"
