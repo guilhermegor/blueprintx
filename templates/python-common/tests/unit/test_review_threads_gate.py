@@ -2389,9 +2389,11 @@ _LADDER_APP = "guilhermegor-review-ladder[bot]"
 _SET_POSTERS = frozenset({"guilhermegor-review-ladder"})
 
 
-def _marker_comment(str_association: str, str_login: str = _LADDER_APP) -> dict:
+def _marker_comment(
+    str_association: str, str_login: str = _LADDER_APP, str_typename: str = "Bot"
+) -> dict:
     return {
-        "author": {"login": str_login},
+        "author": {"login": str_login, "__typename": str_typename},
         "authorAssociation": str_association,
         "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).",
         "createdAt": "2099-01-01T00:00:00Z",
@@ -2420,6 +2422,18 @@ def test_ladder_marker_from_the_pr_author_owner_is_rejected() -> None:
 def test_ladder_marker_from_the_ladder_app_is_accepted() -> None:
     """The ladder App posts as a Bot with association NONE; its login is what is trusted."""
     assert _missing_with([_marker_comment("NONE")], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_from_a_user_with_the_bare_app_login_is_rejected() -> None:
+    """A human registering `guilhermegor-review-ladder` is a User, not the App's Bot actor."""
+    dict_forged = _marker_comment("NONE", "guilhermegor-review-ladder", "User")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_without_an_author_type_is_rejected() -> None:
+    """An author with no `__typename` fails closed."""
+    dict_untyped = {**_marker_comment("NONE"), "author": {"login": _LADDER_APP}}
+    assert _missing_with([dict_untyped], _TUPLE_MARKERS) is not None
 
 
 def test_ladder_marker_from_a_non_roster_collaborator_is_rejected() -> None:

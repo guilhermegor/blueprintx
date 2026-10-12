@@ -1162,6 +1162,20 @@ def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
     return list_counts == ["0"] and len(list_zero) == 1 and int(list_zero[0].group(2)) > 0
 
 
+def _is_allowlisted_bot(dict_notice: dict, set_posters: frozenset[str]) -> bool:
+    """Return whether a comment's author is a GitHub ``Bot`` actor whose login is allowlisted.
+
+    The login alone is not identity: normalising strips ``[bot]``, so a human who registers the
+    bare App name would match. GraphQL ``__typename`` separates the two, and a missing one
+    fails closed.
+    """
+    dict_author = dict_notice.get("author") or {}
+    return (
+        dict_author.get("__typename") == "Bot"
+        and normalise_login(dict_author.get("login") or "") in set_posters
+    )
+
+
 def ladder_marker_declared(
     list_notices: list[dict],
     tuple_markers: tuple[str, ...],
@@ -1184,7 +1198,8 @@ def ladder_marker_declared(
         The head commit SHA. The ladder writes ``Reviewed head: <sha>`` on the second line
             of its comment, which must name this SHA; empty fails closed.
     set_posters : frozenset of str, optional
-        Normalised logins from :func:`load_marker_posters`. The author association is NOT
+        Normalised logins from :func:`load_marker_posters`; the author must also be a ``Bot``
+        actor (``__typename``), so a user with the bare name does not match. The association is NOT
         consulted: the PR author is usually the repo OWNER, so trusting it would let the
         author self-approve by typing the marker (blueprintx#761). Empty fails closed.
 
@@ -1203,7 +1218,7 @@ def ladder_marker_declared(
     list_trusted = [
         d
         for d in list_notices
-        if normalise_login((d.get("author") or {}).get("login") or "") in set_posters
+        if _is_allowlisted_bot(d, set_posters)
         and (d.get("createdAt") or "") >= str_head_date
         and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
     ]

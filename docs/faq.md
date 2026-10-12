@@ -51,7 +51,8 @@ A roster row with `kind: comment-marker` and a `marker:` string (here `Fallback 
 lets a plain issue comment count as a review. The comment must start with the marker, name the head SHA on its
 second line (`Reviewed head: <sha>`), be posted
 after the head commit, and be authored by a login listed in the row's `posters:` (the ladder
-App, e.g. `guilhermegor-review-ladder[bot]`; `[bot]` is normalised like roster logins). GitHub's
+App, e.g. `guilhermegor-review-ladder[bot]`; `[bot]` is normalised like roster logins, and the
+author must also be a GitHub `Bot` actor, so a user registering the bare name does not match). GitHub's
 `authorAssociation` is deliberately NOT consulted: the PR author is usually the repo `OWNER`, so
 trusting the association let the author self-approve by typing the marker (blueprintx#761). An
 empty or missing `posters:` accepts no marker. The row has no `login:` and is
