@@ -59,15 +59,10 @@ _SCAFFOLD_LIB_RELPATH = pathlib.Path("bin/lib/scaffold_python_templates.sh")
 _COMMON_TEMPLATE_RELPATH = pathlib.Path("templates/python-common")
 _TIERS_OUTSIDE_SHARED_LIB = frozenset({"lib-minimal"})
 
-# One regex for every `cp [flags] SRC DST` the scaffold lib uses. SRC is rooted at
-# `$COMMON_TEMPLATE_ROOT` / `$SHARED_TEMPLATE_ROOT` (braced or not), DST at `$str_project_path`.
-# A SRC ending in `/.` is the wholesale directory-contents form.
 _RE_CP = re.compile(
     r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?/([^"]+)"\s+'
     r'"\$\{?str_project_path\}?/([^"]+)"'
 )
-# A backslash-newline is shell line-splicing: one logical command. Spliced out before the
-# cp patterns run, so a wrapped `cp` parses exactly like an unwrapped one.
 _RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
 _RE_GLOB_CP = re.compile(
     r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?"/([^\s"]*[*?\[][^\s"]*)\s+'
@@ -483,7 +478,6 @@ def main(list_argv: list) -> int:
         )
         return 0
 
-    # Only a stamped opt-in re-adds the conditional copies; `None` stays excluded.
     if review_bot_roster_enabled(path_root):
         set_required |= conditional_relpaths(
             _RE_LINE_CONTINUATION.sub(

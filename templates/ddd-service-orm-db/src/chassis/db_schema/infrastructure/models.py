@@ -19,13 +19,13 @@ class RecordModel(Base):
     Attributes
     ----------
     id : str
-            Primary key, auto-generated UUID.
+        Primary key, auto-generated UUID.
     data : str
-            JSON-serialized payload or text content.
+        JSON-serialized payload or text content.
     created_at : datetime
-            Timestamp when the record was created.
+        Timestamp when the record was created.
     updated_at : datetime
-            Timestamp when the record was last updated.
+        Timestamp when the record was last updated.
     """
 
     __tablename__ = "records"
@@ -49,7 +49,7 @@ class RecordModel(Base):
         Returns
         -------
         dict
-                Dictionary with all model fields.
+            Dictionary with all model fields.
         """
         return {
             "id": self.id,

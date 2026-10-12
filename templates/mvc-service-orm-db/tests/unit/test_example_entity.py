@@ -25,12 +25,12 @@ def cls_engine(tmp_path: Path) -> Iterator[Engine]:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided temporary directory.
+        Pytest-provided temporary directory.
 
     Yields
     ------
     sqlalchemy.Engine
-            Engine for ``tmp_path / "example.db"``, disposed after the test.
+        Engine for ``tmp_path / "example.db"``, disposed after the test.
     """
     cls_built = create_engine(f"sqlite:///{tmp_path / 'example.db'}")
     yield cls_built
@@ -44,12 +44,12 @@ def cls_entity(cls_engine: Engine) -> ExampleEntity:
     Parameters
     ----------
     cls_engine : sqlalchemy.Engine
-            Engine bound to the throwaway database.
+        Engine bound to the throwaway database.
 
     Returns
     -------
     ExampleEntity
-            Entity with ``ensure_table()`` already applied.
+        Entity with ``ensure_table()`` already applied.
     """
     cls_built = ExampleEntity(cls_engine)
     cls_built.ensure_table()

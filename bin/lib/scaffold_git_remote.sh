@@ -53,7 +53,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/scaffold_kanban.sh"
 # self-skip (report success) instead of demanding a reviewer that will never exist.
 scaffold_prompt_review_bot_roster() {
 	local str_answer
-	read -r -p "$(prompt_main "Do you have (or will you install) a PR review bot such as CodeRabbit on this repo? [Y/n]: ")" str_answer || true
+	prompt_read str_answer "$(prompt_main "Do you have (or will you install) a PR review bot such as CodeRabbit on this repo? [Y/n]: ")"
 	case "$str_answer" in
 	n | N)
 		# Read by each scaffold's copy step (a different file), which shellcheck cannot follow.
@@ -186,7 +186,8 @@ scaffold_create_github_repo() {
 		return 1
 	fi
 
-	read -r -p "Create GitHub repo ${str_slug} and push now? [y/N]: " str_create_ans || true
+	str_create_ans=""
+	prompt_read str_create_ans "Create GitHub repo ${str_slug} and push now? [y/N]: "
 	case "$str_create_ans" in
 	y | Y) ;;
 	*)
@@ -195,18 +196,15 @@ scaffold_create_github_repo() {
 		;;
 	esac
 
-	read -r -p "Visibility [1] Public (default)  [2] Private: " str_vis_choice || true
+	prompt_read str_vis_choice "Visibility [1] Public (default)  [2] Private: "
 	str_vis_flag="--public"
 	[ "$str_vis_choice" = "2" ] && str_vis_flag="--private"
 	[ -n "$SCAFFOLD_REPO_HOMEPAGE" ] && list_homepage=(--homepage "$SCAFFOLD_REPO_HOMEPAGE")
 
-	# No --push: the key must exist before the first push, or the first secret_scan run goes red.
-	# No --source/--remote either: origin is already added, and gh fails on an existing remote.
 	if gh repo create "$str_slug" "${list_homepage[@]}" \
 		--description "$PROJECT_DESCRIPTION" "$str_vis_flag"; then
 		scaffold_set_secret_scan_key
 		if ! git -C "$str_project_path" push -u origin HEAD:main; then
-			# Return 0: the repo exists, so the caller's create-failed fallback must not re-run.
 			print_status "warning" \
 				"Repo ${str_slug} created but the push failed - incomplete; skipped: default branch, kanban."
 			print_status "info" "Fix the error above, then run: git push -u origin HEAD:main"
@@ -331,7 +329,7 @@ scaffold_prompt_git_remote_setup() {
 
 	print_status "info" \
 		"Optional: add a remote origin / create a GitHub repo (the local repo is already initialized)"
-	read -r -p "Add remote origin and (optionally) create the GitHub repo now? [y/N]: " str_answer || true
+	prompt_read str_answer "Add remote origin and (optionally) create the GitHub repo now? [y/N]: "
 
 	case "$str_answer" in
 	y | Y) ;;
@@ -345,13 +343,11 @@ scaffold_prompt_git_remote_setup() {
 	# Read by each scaffold's `main` (a different file), which shellcheck cannot follow.
 	# shellcheck disable=SC2034
 	SCAFFOLD_REMOTE_VERIFIED=1
-	# On success the create step already set the scan key before its push.
 	if ! scaffold_create_github_repo "$str_project_path"; then
 		scaffold_set_secret_scan_key
 		scaffold_push_initial_commit "$str_project_path"
 	fi
 	scaffold_set_review_trigger_secret
-	# A failed first push leaves no upstream; callers must not protect a branch that is not there.
 	git -C "$str_project_path" rev-parse '@{u}' >/dev/null 2>&1 || return 1
 	print_status "success" "Git repo initialized."
 }

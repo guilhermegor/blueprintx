@@ -111,7 +111,7 @@ scaffold_skeleton() {
     local str_name="$1" str_scaffold="$2" str_work="$3"
     if spec_skeleton_supported "$str_name"; then
         spec_stdin_for_skeleton "$str_name" "" \
-            | GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold" \
+            | BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold" \
                 "$str_work" ci-scaffold "CI review-config check" "0.0.1" >/dev/null
     else
         GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold" \

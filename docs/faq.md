@@ -50,9 +50,12 @@ a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 A roster row with `kind: comment-marker` and a `marker:` string (here `Fallback review — runtime:`)
 lets a plain issue comment count as a review. The comment must start with the marker, name the head SHA on its
 second line (`Reviewed head: <sha>`), be posted
-after the head commit, and come from an `OWNER`, `MEMBER` or `COLLABORATOR` (GitHub's
-`authorAssociation`), so an outside commenter cannot forge it. A comment posted by a GitHub App reports `NONE` and
-is rejected, so post the marker with the owner's own token. The row has no `login:` and is
+after the head commit, and be authored by a login listed in the row's `posters:` (the ladder
+App, e.g. `guilhermegor-review-ladder[bot]`; `[bot]` is normalised like roster logins, and the
+author must also be a GitHub `Bot` actor, so a user registering the bare name does not match). GitHub's
+`authorAssociation` is deliberately NOT consulted: the PR author is usually the repo `OWNER`, so
+trusting the association let the author self-approve by typing the marker (blueprintx#761). An
+empty or missing `posters:` accepts no marker. The row has no `login:` and is
 ignored when absent. The comment must also contain the line `0 finding(s) across N reviewed file(s).`; a count above zero, or no such line, fails closed, so a ladder review with findings never satisfies the gate on its own (blueprintx#630). Like a clean-review notice, it proves a review ran, never that a thread was
 answered. The workflow needs the `issue_comment` trigger to re-run on that comment (created, edited or deleted). A run triggered by a comment reports on the default branch's head, not the PR's, so a red "Review threads answered" on `main`'s tip after such a comment is that run's own verdict, not a broken `main`; the PR's check is refreshed by the stale-run step. The Python roster
 (`templates/python-common/.review-bots.yaml`) and the TypeScript one
@@ -165,6 +168,18 @@ attribution with nothing after it, and a review comment with no timestamp all co
 only an explicit clean statement or a stated `0` clears a review. Issue comments, reviews and
 threads are all paginated, so a PR with 140 comments is read in full; a page that fails to load
 fails the check instead of shortening the list.
+
+### When the gate runs, and which marker wins
+
+A clean review and a ladder fallback review arrive only as issue comments, so the workflow also
+listens to `issue_comment`, and `deleted` re-runs the gate when such a comment is removed. Those
+runs report on the default branch's head; the pull request's own required check is refreshed by
+the stale-run step. `issue_comment` also fires for plain issues, where there is no pull request to
+audit.
+
+When several trusted review markers exist, the latest one decides before the `Reviewed head:` line
+is checked. A later marker with a missing or garbled head line fails closed instead of falling back
+to an earlier marker.
 
 ### How the gate classifies an answer
 
