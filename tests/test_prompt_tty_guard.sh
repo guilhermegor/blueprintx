@@ -49,6 +49,31 @@ str_text="$(printf 'stray\n' | BLUEPRINTX_STDIN_ANSWERS="" bash -c '
     echo "[$ANSWER]"' _ "$REPO_ROOT")"
 expect "prompt_read leaves a piped line unread" "[]" "$str_text"
 
+# Warning leg: piped without the opt-in, the fallback is announced on stderr only; with the
+# opt-in nothing is printed there. (A tty cannot be simulated here, so that leg is covered by
+# the opted-in assertion, which takes the same read path.)
+# $1 = BLUEPRINTX_STDIN_ANSWERS value. Prints "stdout|stderr".
+run_streams() {
+    local str_err_file
+    str_err_file="$(mktemp)"
+    local str_out
+    str_out="$(printf 'y\n' | BLUEPRINTX_STDIN_ANSWERS="$1" bash -c '
+        source "$1/bin/lib/common.sh"
+        prompt_yes_no ANSWER "$(prompt_main "Create GitHub repo? [y/N]: ")" n
+        echo "$ANSWER"' _ "$REPO_ROOT" 2>"$str_err_file")"
+    printf '%s|%s' "$str_out" "$(cat "$str_err_file")"
+    rm -f "$str_err_file"
+}
+
+str_unset="$(run_streams "")"
+expect "no opt-in: stdout carries only the answer" "false" "${str_unset%%|*}"
+expect "no opt-in: warning names the prompt and the default on stderr" \
+    "stdin is not a terminal; using 'n' for \"[?] Create GitHub repo?\" (set BLUEPRINTX_STDIN_ANSWERS=1 to answer from stdin)" \
+    "${str_unset#*|}"
+str_set="$(run_streams 1)"
+expect "opted-in: stdout carries the piped answer" "true" "${str_set%%|*}"
+expect "opted-in: no warning on stderr" "" "${str_set#*|}"
+
 # Static leg: any bare `read` prompt in a scaffold or its libs must sit directly under a
 # prompt_can_read guard. `while ... read` loops over files are not prompts.
 str_bare="$(

@@ -160,6 +160,8 @@ scaffold_kanban_setup() {
 	str_answer=n
 	if prompt_can_read; then
 		read -r -p "$(prompt_main "Create a '${str_title}' GitHub Project linked to this repo? [Y/n]: ")" str_answer || str_answer=n
+	else
+		prompt_warn_default "$(prompt_main "Create a '${str_title}' GitHub Project linked to this repo? [Y/n]: ")" "'n'"
 	fi
 	case "$str_answer" in
 	n | N)

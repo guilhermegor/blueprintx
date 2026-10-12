@@ -85,12 +85,24 @@ prompt_can_read() {
     [ -t 0 ] || [ "${BLUEPRINTX_STDIN_ANSWERS:-}" = "1" ]
 }
 
-# prompt_read <var_name> <rendered_prompt>: `read -r -p` that leaves <var_name> empty (so the
-# caller's own default applies) when prompt_can_read is false or stdin is at EOF.
+# prompt_warn_default <rendered_prompt> [default_label]: one stderr line saying a prompt fell
+# back to its default because stdin is not a terminal. Stdout and exit status are untouched.
+prompt_warn_default() {
+    local str_question
+    str_question="$(printf '%s' "$1" | sed -E $'s/\x1b\\[[0-9;]*m//g; s/[[:space:]]*(\\[[^]]*\\])?:?[[:space:]]*$//')"
+    printf 'stdin is not a terminal; using %s for "%s" (set BLUEPRINTX_STDIN_ANSWERS=1 to answer from stdin)\n' \
+        "${2:-its default}" "$str_question" >&2
+}
+
+# prompt_read <var_name> <rendered_prompt> [default_label]: `read -r -p` that leaves <var_name>
+# empty (so the caller's own default applies) when prompt_can_read is false or stdin is at EOF.
+# Without a readable stdin it also warns on stderr (prompt_warn_default).
 prompt_read() {
     local _prompt_read_value=""
     if prompt_can_read; then
         read -r -p "$2" _prompt_read_value || true
+    else
+        prompt_warn_default "$2" "${3:-}"
     fi
     printf -v "$1" '%s' "$_prompt_read_value"
 }
@@ -124,7 +136,7 @@ prompt_yes_no() {
     local default="${3:-n}"
     local answer=""
 
-    prompt_read answer "$rendered_prompt"
+    prompt_read answer "$rendered_prompt" "'$default'"
 
     case "$answer" in
         y | Y | yes | YES) printf -v "$var_name" 'true' ;;
