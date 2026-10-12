@@ -53,7 +53,7 @@ resolve_github_username() {
     fi
 
     local input
-    read -r -p "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")" input || true
+    prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     GITHUB_USERNAME="${input:-$DEFAULT_GITHUB_USERNAME}"
     print_status "config" "GitHub username (prompt): $GITHUB_USERNAME"
 }
@@ -91,8 +91,9 @@ copy_skeleton_files() {
         > "$project_path/Makefile"
 
     envsubst '${PROJECT_NAME}' \
-        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
-        > "$project_path/CLAUDE.md"
+        < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" \
+        > "$project_path/AGENTS.md"
+    cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
 
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
@@ -126,6 +127,7 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_policy_workflows "$project_path"
     copy_repo_rules_provisioner "$project_path" "$SKELETON_TEMPLATE_ROOT/bin/required-checks.txt"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
     # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
@@ -148,7 +150,8 @@ apply_branch_protection() {
         return
     fi
 
-    read -r -p "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")" protect_ans || true
+    protect_ans=""
+    prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y | Y)
             local reviews_json='"required_pull_request_reviews": null,'

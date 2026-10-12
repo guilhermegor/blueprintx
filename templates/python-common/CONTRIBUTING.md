@@ -51,24 +51,26 @@ server-side branch protection on GitHub). All changes land via a branch → Pull
 
 ### Branch Naming Convention
 
-All branches must follow the pattern: `<purpose>/<branch-task>`
+All branches must follow the pattern: `<purpose>/<issue-number>-<branch-task>`
+(for example `feat/42-user-authentication`). The `branch-has-issue` workflow rejects a
+branch without the issue number, except `release/`, `dependabot/` and `renovate/`
 
 **Available purposes:**
 
 | Purpose         | Format                      | When to Use |
 |-----------------|-----------------------------|-------------|
-| Feature         | `feature/<name>` or `feat/<name>` | New functionality |
-| Bugfix          | `bugfix/<description>` or `fix/<description>` | Bug resolution |
-| Hotfix          | `hotfix/<description>` | Critical production fixes |
+| Feature         | `feature/<N>-<name>` or `feat/<N>-<name>` | New functionality |
+| Bugfix          | `bugfix/<N>-<description>` or `fix/<N>-<description>` | Bug resolution |
+| Hotfix          | `hotfix/<N>-<description>` | Critical production fixes |
 | Release         | `release/<version>` | Version preparation |
-| Documentation   | `docs/<description>` | Documentation updates |
-| Refactor        | `refactor/<description>` | Code improvements |
-| Chore           | `chore/<description>` | Project maintenance tasks |
+| Documentation   | `docs/<N>-<description>` | Documentation updates |
+| Refactor        | `refactor/<N>-<description>` | Code improvements |
+| Chore           | `chore/<N>-<description>` | Project maintenance tasks |
 
 **Examples:**
-- `feat/user-authentication`
-- `fix/login-validation-issue`
-- `docs/update-api-reference`
+- `feat/42-user-authentication`
+- `fix/57-login-validation-issue`
+- `docs/63-update-api-reference`
 
 ## Commit Message Standards
 

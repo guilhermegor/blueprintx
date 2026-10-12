@@ -89,6 +89,8 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 
 5. **GitGuardian exceptions**: a false positive in the secret scan is silenced in the root `.gitguardian.yaml` (`secret.ignored_matches`), never by editing history. Every entry needs a `name` stating why the match is not a credential.
 
+6. **Template lockfiles**: a dependency change to any `templates/*/package.json` regenerates that tier's `package-lock.json` in the same commit (`npm install --package-lock-only` in a rendered copy of the tier). `bin/ci/check_lockfile_sync.sh` fails the commit and the `lockfile-sync` job otherwise; an out-of-sync lock makes `npm ci` refuse to install and turns every open PR red (#588).
+
 ## Repository Secrets (Actions)
 
 This repo's own Actions secrets (`gh secret list`) are set by hand and reproducible from
@@ -243,8 +245,7 @@ drifted from the scaffold (#436) and could not see webpack, stylelint or eslint,
 - **Stdin is `/dev/null`.** Every scaffold prompt reads with `|| true` and falls back to its
   default (no remote, no opt-ins), measured byte-identical to answering `n`; a prompt with no
   default fails fast on EOF instead of looping until the job timeout.
-- **Install is `npm ci`** where the skeleton ships a lockfile (`react-spa-webpack`); `ts-lib`
-  has none yet and floats on `npm install` (#735).
+- **Install is `npm ci`** for both skeletons, from the lockfile each ships (`ts-lib`'s since #735).
 - **No required check.** Only `Review threads answered` is required by the `pr-quality-gate`
   ruleset, so the job's display name can change without orphaning a branch rule.
 
@@ -514,6 +515,22 @@ Measured 2026-09-16: 4 `catch (err)` sites across both tiers' `src/`
 `.catch(cb)` callbacks and no non-`Error` `throw` — both rules cost zero
 findings today, same as the Python side.
 
+## Migrating a generated project from `docs/backlog/` to `.specs/backlog/`
+
+Scaffolds are generated once and never re-synced, so this applies only to a project that
+hand-copies the updated template files. Before adopting the new `mkdocs.yml` and
+`check_backlog_ledger.py`:
+
+1. Move `docs/backlog/*.md` to `.specs/backlog/` (names are unchanged). Until then the old
+   ledgers are not recognized by the gate, and with `backlog/` gone from `exclude_docs` they
+   would be published. The tier `mkdocs.yml` files set `validation.nav.omitted_files: warn`, so
+   a forgotten legacy page raises a warning that names the file. It fails only a build run
+   with `mkdocs build --strict`, which no generated-project step does today.
+2. Change any uppercase `[X]` marker to `[x]`, and give every `[~]` a `<type>/<branch>`; the
+   ledger gate now shares the grammar of `check_specs_structure.sh`.
+3. A branch already in flight with an old-path ledger needs it moved too; there is no
+   transitional acceptance.
+
 ## Best Practices
 
 - **Keep branches focused** - one feature/bugfix per branch
@@ -522,5 +539,6 @@ findings today, same as the Python side.
 - **Update documentation** - when adding new features
 - **Follow existing patterns** - maintain consistency
 - **Communicate early** - if you're stuck or need clarification
+- **Prompt through the `bin/lib/common.sh` helpers, never a bare `read`** - `prompt_yes_no <var> "$(prompt_main "...")" [y|n]` for y/n questions, `prompt_read <var> "..."` for choices and text. A piped stdin is not an answer: with no terminal both leave the variable at its default, so a stray line on a pipe cannot enable an opt-in. Pick the non-interactive default per prompt (`n` for an opt-in, `y` only when "yes" is the safe unattended answer). When a prompt falls back to its default because stdin is not a terminal, the helper prints one line to stderr naming the prompt and the default (stdout and the exit status are unchanged). A harness that feeds answers on purpose exports `BLUEPRINTX_STDIN_ANSWERS=1`; `bin/lib/spec.sh` (named-key answers, `--spec`) is the supported non-interactive path and sets up that feed, so prefer it over hand-built pipes. `bin/blueprintx.sh` menus are exempt: they have no safe default. `tests/test_prompt_tty_guard.sh` fails on an unguarded `read` in `bin/scaffold/` or `bin/lib/scaffold_*.sh`.
 
 We appreciate your contributions and look forward to collaborating with you!

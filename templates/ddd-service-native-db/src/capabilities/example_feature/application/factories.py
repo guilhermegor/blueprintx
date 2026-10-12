@@ -21,12 +21,12 @@ def note_from_create_dto(cls_dto: NoteCreateDTO) -> Note:
     Parameters
     ----------
     cls_dto : NoteCreateDTO
-            Inbound network payload.
+        Inbound network payload.
 
     Returns
     -------
     Note
-            Domain entity with system-assigned id, created_at, and status defaults.
+        Domain entity with system-assigned id, created_at, and status defaults.
     """
     return Note(title=cls_dto.title)
 
@@ -37,12 +37,12 @@ def note_to_response_dto(cls_note: Note) -> NoteResponseDTO:
     Parameters
     ----------
     cls_note : Note
-            Persisted domain entity.
+        Persisted domain entity.
 
     Returns
     -------
     NoteResponseDTO
-            Network-safe response shape.
+        Network-safe response shape.
     """
     return NoteResponseDTO(
         id=cls_note.id,
@@ -61,14 +61,14 @@ def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteRespons
     Parameters
     ----------
     cls_dto : NoteCreateDTO
-            Inbound create payload.
+        Inbound create payload.
     cls_repo : NoteRepository
-            Repository port implementation (injected by the caller).
+        Repository port implementation (injected by the caller).
 
     Returns
     -------
     NoteResponseDTO
-            Response payload for the newly created note.
+        Response payload for the newly created note.
     """
     cls_note = note_from_create_dto(cls_dto)
     cls_saved = CreateNote(cls_repo).execute(cls_note)
@@ -81,12 +81,12 @@ def list_notes(cls_repo: NoteRepository) -> list[NoteResponseDTO]:
     Parameters
     ----------
     cls_repo : NoteRepository
-            Repository port implementation (injected by the caller).
+        Repository port implementation (injected by the caller).
 
     Returns
     -------
     list[NoteResponseDTO]
-            All stored notes as response payloads.
+        All stored notes as response payloads.
     """
     list_items = ListNotes(cls_repo).execute()
     return [note_to_response_dto(cls_n) for cls_n in list_items]

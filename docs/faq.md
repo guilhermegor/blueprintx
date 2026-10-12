@@ -45,6 +45,20 @@ by language: for Python copy `templates/python-common/.review-bots.yaml` to the 
 TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
 a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
+### How does a fallback (ladder) review satisfy the gate?
+
+A roster row with `kind: comment-marker` and a `marker:` string (here `Fallback review — runtime:`)
+lets a plain issue comment count as a review. The comment must start with the marker, name the head SHA on its
+second line (`Reviewed head: <sha>`), be posted
+after the head commit, and come from an `OWNER`, `MEMBER` or `COLLABORATOR` (GitHub's
+`authorAssociation`), so an outside commenter cannot forge it. A comment posted by a GitHub App reports `NONE` and
+is rejected, so post the marker with the owner's own token. The row has no `login:` and is
+ignored when absent. The comment must also contain the line `0 finding(s) across N reviewed file(s).`; a count above zero, or no such line, fails closed, so a ladder review with findings never satisfies the gate on its own (blueprintx#630). Like a clean-review notice, it proves a review ran, never that a thread was
+answered. The workflow needs the `issue_comment` trigger to re-run on that comment (created, edited or deleted). A run triggered by a comment reports on the default branch's head, not the PR's, so a red "Review threads answered" on `main`'s tip after such a comment is that run's own verdict, not a broken `main`; the PR's check is refreshed by the stale-run step. The Python roster
+(`templates/python-common/.review-bots.yaml`) and the TypeScript one
+(`templates/ts-common/.github/.review-bots.yaml`, workflow `review-threads.yml`) both ship the row and the trigger. See
+blueprintx#593.
+
 ## How does a scaffolded repo close the issue a merged PR delivered?
 
 BlueprintX carries `close-linked-issues.yml` and its `bin/close_linked_issues.sh` under
@@ -237,6 +251,49 @@ forward. The `sha` is required: a binary file also reports zero changes, and onl
 proves the content. The compare API returns at most
 300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
+
+## Why does every scaffold have to ship the hosted-reviewer config?
+
+Every generated project must ship the configuration for the hosted reviewers (CodeRabbit,
+Greptile and Graphite); today only Graphite's is listed. Left as a copy list maintained by hand in nine scaffold scripts, that
+drifts: MVC once silently lacked shared files (`poetry.toml`, `.coveragerc`). The required
+paths are listed once, one bare path per line (blank and `#` lines are ignored), in `templates/common/review-config.manifest`, and
+`bin/ci/check_review_config_shipped.sh` checks them in three modes:
+
+- `--static` (pre-commit hook `review-config-shipped`): every manifest path exists under
+  `templates/common/`, and every skeleton script discovered from `templates/*/skeleton.meta`
+  has a `cp` that copies it (a loop or an unusual copy is a documented limit; `--generated`
+  covers it).
+- `--generated` (CI job `review-config-shipped`): scaffolds each discovered skeleton with its
+  default answers and asserts every manifest path is in the generated tree. This is the real
+  oracle: a `cp` line that sits behind a branch the default answers never take passes
+  `--static` and fails here. `--skeleton <name>` narrows it to one.
+- `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
+  assertion over one already-generated project.
+
+Today the manifest lists only `.gitattributes` (the Graphite `linguist-generated` marker).
+`.coderabbit.yaml` and `.greptile/` are added by the PRs that ship them, so the guard does
+not yet protect those. Both are repo-root files, not GitHub-only assets, so the offline
+scaffold keeps them: `apply_offline_mode` drops only `.github/`.
+
+`--static` is a fast heuristic over direct `cp` commands. It reads the scaffold script plus the
+`bin/lib/*.sh` helpers it sources, resolves the `*_TEMPLATE_ROOT` variables, and accepts a
+path only when a `cp` takes exactly `templates/common/<path>` into a destination ending in
+`<path>`, or a recursive copy (`-r`, `-R`, `-a`, `--recursive`) of `templates/common` or one of
+its parent directories. Comments, backup files, another template root and unrelated parent
+directories do not count. It cannot follow a copy whose source is built at run time (a `for`
+loop over a variable, say), so such a script fails `--static` even when it ships the file.
+That is the safe direction: write the copy out directly, or rely on `--generated`.
+
+Every project ships the config, offline ones included, because an offline project can later be
+promoted to GitHub. `scaffold_lint_test.sh` only forbids four GitHub-only workflow files in an
+offline project, none of which is reviewer config.
+
+The manifest only grows: the change that ships a reviewer config file adds that file's path
+to the manifest in the same pull request. `check_content` in the script is the hook point for
+content checks, such as keeping Greptile queue-only. `tests/test_check_review_config_shipped.sh`
+removes a `cp` line, a manifest file and an unshipped entry from a copy of the tree and shows
+the gate going red in both modes.
 
 ## Which install methods are supported?
 
