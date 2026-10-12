@@ -63,4 +63,15 @@ rm "$str_fx/templates/lib-minimal/CLAUDE.md"
 expect_gate "zero bridges fails" fail "checked nothing" "$str_fx"
 rm -rf "$str_fx"
 
+str_fx="$(make_fixture)"
+sed_inplace 's#"\$project_path/PRINCIPLES.md"#"$project_path/.claude/PRINCIPLES.md"#' "$str_fx/bin/scaffold/python_lib_minimal.sh"
+expect_gate "import copied to a different destination fails" fail "never copies" "$str_fx"
+rm -rf "$str_fx"
+
+str_fx="$(make_fixture)"
+mkdir -p "$str_fx/templates/orphan"
+cp "$str_fx/templates/lib-minimal/skeleton.meta" "$str_fx/templates/orphan/skeleton.meta"
+expect_gate "skeleton without a bridge fails" fail "missing CLAUDE.md bridge" "$str_fx"
+rm -rf "$str_fx"
+
 [ "$int_failures" -eq 0 ]

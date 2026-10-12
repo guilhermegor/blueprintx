@@ -87,7 +87,7 @@ repos:
         entry: bash -c 'bash bin/ci/check_agents_md_bridge.sh && bash tests/test_check_agents_md_bridge.sh'
         language: system
         pass_filenames: false
-        files: ^(templates/[^/]+/(CLAUDE\.md|skeleton\.meta)|templates/common/.*|bin/(scaffold|lib)/.*\.sh|bin/ci/check_agents_md_bridge\.sh|tests/test_check_agents_md_bridge\.sh)$
+        files: ^(templates/[^/]+/[^/]+\.(md|meta)|templates/common/.*|bin/(scaffold|lib)/.*\.sh|bin/ci/check_agents_md_bridge\.sh|tests/test_check_agents_md_bridge\.sh)$
 
       - id: shellcheck
         name: shellcheck (bin/**/*.sh)

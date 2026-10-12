@@ -50,7 +50,7 @@ check_bridge() {
 			if ! source_exists "$str_dir" "$str_target"; then
 				echo "$str_name: CLAUDE.md imports @$str_target but no such source file exists" >&2
 				int_fail=1
-			elif ! grep -qF "/$str_target\"" <<<"$str_text"; then
+			elif ! grep -qE "project_path\}?/$str_target\"" <<<"$str_text"; then
 				echo "$str_name: CLAUDE.md imports @$str_target but its scaffold never copies it" >&2
 				int_fail=1
 			fi
@@ -66,7 +66,11 @@ main() {
 	local str_meta str_dir int_fail=0 int_count=0
 	for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
 		str_dir="$(dirname "$str_meta")"
-		[ -f "$str_dir/CLAUDE.md" ] || continue
+		if [ ! -f "$str_dir/CLAUDE.md" ]; then
+			echo "$(basename "$str_dir"): missing CLAUDE.md bridge" >&2
+			int_fail=1
+			continue
+		fi
 		int_count=$((int_count + 1))
 		check_bridge "$str_dir" || int_fail=1
 	done
