@@ -208,7 +208,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       ) { nodes { __typename } }
       comments(first:100, after:$cc) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login __typename } body createdAt }
+        nodes { author { login __typename } authorAssociation body createdAt }
       }
       reviews(
         first:100, after:$rc,
@@ -1080,6 +1080,113 @@ def reviewer_declared_completion(
     return bool(str_when) and str_when >= str_head_date
 
 
+_KIND_COMMENT_MARKER = "comment-marker"
+_SET_TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+
+
+def load_comment_markers(path_root: pathlib.Path) -> tuple[str, ...]:
+    """Return the ``kind: comment-marker`` strings declared by the roster.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+            Repository root holding ``.review-bots.yaml``.
+
+    Returns
+    -------
+    tuple of str
+            Lower-cased marker strings; empty when the file, the key or the row is absent, so a
+            roster without the row behaves exactly as before.
+    """
+    path_roster = path_root / _ROSTER_FILE
+    if yaml is None or not path_roster.is_file():
+        return ()
+    dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
+    return tuple(
+        str(d["marker"]).strip().casefold()
+        for d in (dict_yaml.get("reviewers") or [])
+        if isinstance(d, dict)
+        and d.get("kind") == _KIND_COMMENT_MARKER
+        and str(d.get("marker") or "").strip()
+    )
+
+
+_RE_FINDINGS_LINE = re.compile(r"(\d+) finding\(s\) across (\d+) reviewed file\(s\)\.")
+
+
+def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
+    """Return whether a ladder comment's findings line reads zero, failing closed.
+
+    Parameters
+    ----------
+    list_lines : list of str
+            The comment body split into lines.
+
+    Returns
+    -------
+    bool
+            ``True`` only when exactly one line is ``0 finding(s) across N reviewed file(s).``
+            and no line reports a non-zero count. A missing or unparseable line is "has
+            findings", so a prose review never satisfies the gate (blueprintx#630).
+    """
+    list_stripped = [str_line.strip() for str_line in list_lines]
+    list_counts = [m.group(1) for m in map(_RE_FINDINGS_LINE.search, list_stripped) if m]
+    list_zero = [m for m in map(_RE_FINDINGS_LINE.fullmatch, list_stripped) if m]
+    return list_counts == ["0"] and len(list_zero) == 1 and int(list_zero[0].group(2)) > 0
+
+
+def ladder_marker_declared(
+    list_notices: list[dict],
+    tuple_markers: tuple[str, ...],
+    str_head_date: str = "",
+    str_head_oid: str = "",
+) -> bool:
+    """Return whether a trusted commenter posted a roster marker after the head commit.
+
+    Parameters
+    ----------
+    list_notices : list of dict
+            The PR's issue comments, each with ``authorAssociation``, ``body``, ``createdAt``.
+    tuple_markers : tuple of str
+            Lower-cased markers from :func:`load_comment_markers`; matched at the start of the body
+            only, so a quotation on a later line is not a review.
+    str_head_date : str, optional
+            ISO-8601 ``committedDate`` of the head commit; empty fails closed.
+    str_head_oid : str, optional
+            The head commit SHA. The ladder writes ``Reviewed head: <sha>`` on the second line
+            of its comment, which must name this SHA; empty fails closed.
+
+    Returns
+    -------
+    bool
+            ``True`` only for an OWNER/MEMBER/COLLABORATOR comment carrying a marker and
+            postdating the head, whose LATEST such comment names the head SHA on its second
+            line and reports zero findings (a later ladder run, even a malformed one,
+            supersedes an earlier clean one), so an outside commenter cannot forge it and a
+            review of an older head cannot be reused.
+    """
+    if not str_head_date or not str_head_oid:
+        return False
+    str_reviewed = f"reviewed head: {str_head_oid}".casefold()
+    list_trusted = [
+        d
+        for d in list_notices
+        if d.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
+        and (d.get("createdAt") or "") >= str_head_date
+        and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
+    ]
+    if not list_trusted:
+        return False
+    # The latest trusted marker decides BEFORE the head line is checked: a later marker with a
+    # missing or garbled `Reviewed head:` line must fail closed, not fall back to an earlier one.
+    dict_latest = max(list_trusted, key=lambda d: d.get("createdAt") or "")
+    str_body = (dict_latest.get("body") or "").strip()
+    list_lines = str_body.splitlines()
+    if [s.strip().casefold() for s in list_lines[1:2]] != [str_reviewed]:
+        return False
+    return ladder_reports_zero_findings(list_lines)
+
+
 # ⚠️ THE FILE-CAP MESSAGE IS A THIRD SENTENCE, NOT A THIRD VERDICT (blueprintx#433).
 #
 # Both branches below are FAILURES — a file-cap decline must never read as a pass, or the
@@ -1133,10 +1240,16 @@ def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: lis
     )
 
 
+def _notice_quote(list_notices: list[dict], set_roster: set[str]) -> str:
+    """Return the reviewer's newest notice as a message suffix, or ``""`` when there is none."""
+    str_seen = summarise_reviewer_notice(list_notices, set_roster)
+    return f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
+
+
 # ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
 # #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
 # ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
-def check_missing_review(
+def check_missing_review(  # noqa: PLR0913
     list_reviews: list[dict],
     set_reviewers: set[str],
     str_pr_author: str = "",
@@ -1144,6 +1257,7 @@ def check_missing_review(
     str_head_oid: str,
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
+    tuple_markers: tuple[str, ...] = (),
     fn_fingerprint: Callable[[str], str] | None = None,
 ) -> tuple[str | None, str]:
     """Return ``(problem, carried_from)`` for a PR no declared reviewer reported on at HEAD.
@@ -1168,6 +1282,8 @@ def check_missing_review(
             against, which is the vacuous pass this parameter exists to remove.
     list_notices : list of dict, optional
             The PR's issue comments, oldest first. Consulted only when nothing reviewed HEAD.
+    tuple_markers : tuple of str, optional
+            Roster ``comment-marker`` strings; see :func:`ladder_marker_declared`.
     fn_fingerprint : Callable[[str], str], optional
             Maps a commit oid to its patch fingerprint. When given, a review at an earlier
             commit covers HEAD if the PR's own patch is unchanged (see
@@ -1196,8 +1312,11 @@ def check_missing_review(
     if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
         return None, ""
 
-    if reviewer_declared_completion(list_notices or [], set_roster, str_head_date):
+    if (
+        reviewer_declared_completion(list_notices or [], set_roster, str_head_date)
         # A CLEAN review is not a missing one — see the COMPLETION block above the function.
+        or ladder_marker_declared(list_notices or [], tuple_markers, str_head_date, str_head_oid)
+    ):
         return None, ""
 
     # After the notice check, so a PR that already passes makes no compare call at all.
@@ -1207,10 +1326,7 @@ def check_missing_review(
 
     # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
     # is (never ran / refused / rate-limited). Display only — see the notice block above.
-    str_seen = summarise_reviewer_notice(list_notices or [], set_roster)
-    str_quote = (
-        f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
-    )
+    str_quote = _notice_quote(list_notices or [], set_roster)
 
     # TWO FAILURES, TWO SENTENCES — see the block above the function.
     if reviewers_who_reported(list_reviews, set_roster):
@@ -1230,7 +1346,7 @@ def check_missing_review(
     return _zero_review_message(str_quote, set_roster, list_notices or []), ""
 
 
-def find_missing_review_problem(
+def find_missing_review_problem(  # noqa: PLR0913
     list_reviews: list[dict],
     set_reviewers: set[str],
     str_pr_author: str = "",
@@ -1238,6 +1354,7 @@ def find_missing_review_problem(
     str_head_oid: str,
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
+    tuple_markers: tuple[str, ...] = (),
     fn_fingerprint: Callable[[str], str] | None = None,
 ) -> str | None:
     """Return only the problem half of :func:`check_missing_review` (same parameters)."""
@@ -1248,6 +1365,7 @@ def find_missing_review_problem(
         str_head_oid=str_head_oid,
         list_notices=list_notices,
         str_head_date=str_head_date,
+        tuple_markers=tuple_markers,
         fn_fingerprint=fn_fingerprint,
     )[0]
 
@@ -1336,7 +1454,7 @@ def find_thread_problems(
     return list_problems
 
 
-# A review BODY carries findings the thread count cannot see (blueprintx#630, docs/faq.md).
+# A review BODY carries findings the thread count cannot see (blueprintx#630).
 _STR_SEVERITY = r"critical|major|minor|blocker"
 # Nitpick and Trivial are deliberately absent: optional by definition, so they need no reply.
 # A marker counts only at the START of a line (after a list marker), as bold or a bracket, so
@@ -1353,7 +1471,7 @@ _RE_BODY_COUNT = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 _RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
-# A review declares itself by structure (docs/faq.md, "How the gate classifies"): a heading, a
+# A review declares itself by structure: a heading, a
 # bullet or a bold label that starts with "Review" or "Finding(s)". Ambiguity counts as a review.
 _RE_BODY_REVIEW_LINE = re.compile(
     r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b"
@@ -1406,7 +1524,7 @@ _RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*
 
 # Count authority belongs to the AUTHOR, never to the body's shape: any body can print any header.
 # The roster carries no per-format data, so the two authors whose counts this gate trusts are
-# named here (docs/faq.md). Any other author's counts are ignored and its body is read by
+# named here. Any other author's counts are ignored and its body is read by
 # structure alone, which fails closed.
 _SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
 _SET_LADDER_AUTHORS = frozenset({"guilhermegor-review-ladder"})
@@ -1509,8 +1627,19 @@ def review_body_has_findings(str_body: str | None) -> bool:
     return bool(review_body_finding_lines(str_body))
 
 
+def _is_marker_comment(dict_notice: dict, tuple_markers: tuple[str, ...]) -> bool:
+    """Return whether a comment opens with a roster ``comment-marker`` string."""
+    return bool(tuple_markers) and (
+        (dict_notice.get("body") or "").lstrip().casefold().startswith(tuple_markers)
+    )
+
+
 def _answered_after(
-    list_notices: list[dict], set_roster: set[str], str_when: str, int_min_chars: int
+    list_notices: list[dict],
+    set_roster: set[str],
+    str_when: str,
+    int_min_chars: int,
+    tuple_markers: tuple[str, ...] = (),
 ) -> bool:
     """Return whether a human comment of at least ``int_min_chars`` postdates ``str_when``.
 
@@ -1521,6 +1650,7 @@ def _answered_after(
     """
     return bool(str_when) and any(
         _is_human_answer(dict_notice, set_roster, int_min_chars)
+        and not _is_marker_comment(dict_notice, tuple_markers)
         and (dict_notice.get("createdAt") or "") > str_when
         for dict_notice in list_notices
     )
@@ -1583,11 +1713,45 @@ def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[
     ]
 
 
+def _marker_notices_as_reviews(
+    list_notices: list[dict], tuple_markers: tuple[str, ...], set_roster: set[str]
+) -> list[dict]:
+    """Return trusted ladder-marker comments in review shape, authored by their poster.
+
+    A roster author's marker comment is already returned by :func:`_notices_as_reviews`, so it is
+    left out here; counting it twice would report one body as two problems.
+    """
+    return [
+        {
+            "author": dict_notice.get("author"),
+            "state": "COMMENTED",
+            "body": dict_notice.get("body"),
+            "submittedAt": dict_notice.get("createdAt"),
+        }
+        for dict_notice in list_notices
+        if dict_notice.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
+        and _is_marker_comment(dict_notice, tuple_markers)
+        and normalise_login((dict_notice.get("author") or {}).get("login") or "") not in set_roster
+    ]
+
+
+def _count_authority(dict_review: dict, tuple_markers: tuple[str, ...]) -> str:
+    """Return the login whose printed findings count speaks for this review body.
+
+    A trusted marker comment is posted by a person on the ladder's behalf, so its count is read
+    with the ladder app's authority; every other review speaks as its own author.
+    """
+    if _is_marker_comment(dict_review, tuple_markers):
+        return next(iter(_SET_LADDER_AUTHORS))
+    return (dict_review.get("author") or {}).get("login") or ""
+
+
 def find_review_body_problems(
     list_reviews: list[dict],
     list_notices: list[dict],
     set_roster: set[str],
     int_min_chars: int = _MIN_REPLY_CHARS,
+    tuple_markers: tuple[str, ...] = (),
 ) -> list[str]:
     """Return one problem per roster review whose body lists findings nobody answered.
 
@@ -1596,7 +1760,7 @@ def find_review_body_problems(
     posted after the latest findings body therefore answers all earlier ones; a reply must
     postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
     maintainer's explicit answer. A roster issue comment that is shaped like a review counts as
-    one, since some ladder rungs post that way (docs/faq.md, "How the gate classifies").
+    one, since some ladder rungs post that way.
 
     Parameters
     ----------
@@ -1608,6 +1772,9 @@ def find_review_body_problems(
             Logins that count as reviewers rather than as answers.
     int_min_chars : int, optional
             Minimum length for a reply to count, the same bar a thread reply meets.
+    tuple_markers : tuple of str, optional
+            Roster ``comment-marker`` strings. A trusted comment opening with one is read as a
+            review (its findings need an answer) and never counts as an answer itself.
 
     Returns
     -------
@@ -1621,12 +1788,17 @@ def find_review_body_problems(
             dict_review,
             review_body_finding_lines(
                 dict_review.get("body"),
-                (dict_review.get("author") or {}).get("login") or "",
+                _count_authority(dict_review, tuple_markers),
             ),
         )
-        for dict_review in list_reviews + _notices_as_reviews(list_notices, set_roster)
-        if normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
-        and dict_review.get("state") != "DISMISSED"
+        for dict_review in list_reviews
+        + _notices_as_reviews(list_notices, set_roster)
+        + _marker_notices_as_reviews(list_notices, tuple_markers, set_roster)
+        if dict_review.get("state") != "DISMISSED"
+        and (
+            normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+            or _is_marker_comment(dict_review, tuple_markers)
+        )
     ]
     return [
         f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
@@ -1639,6 +1811,7 @@ def find_review_body_problems(
             set_roster,
             dict_review.get("submittedAt") or "",
             int_min_chars,
+            tuple_markers,
         )
     ]
 
@@ -1828,6 +2001,7 @@ def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[
         dict_pr.get("reviews", {}).get("nodes", []),
         list_notices,
         set_roster,
+        tuple_markers=load_comment_markers(pathlib.Path.cwd()),
     )
 
 
@@ -1879,6 +2053,7 @@ def _missing_review(
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=dict_pr.get("comments", {}).get("nodes", []),
         str_head_date=_head_committed_date(dict_pr),
+        tuple_markers=load_comment_markers(pathlib.Path.cwd()),
         fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full),
     )
 
