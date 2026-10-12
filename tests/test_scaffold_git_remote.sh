@@ -107,7 +107,34 @@ test_fallback_sets_secret_before_the_push() {
     fi
 }
 
+# Create succeeds, push fails: the prompt must return non-zero so callers skip branch protection.
+test_prompt_fails_when_first_push_fails() {
+    local dir="$WORK_DIR/proj-pf" bare="$WORK_DIR/pf.git" rc
+    mkdir -p "$dir"
+    git -C "$dir" init -q -b main
+    git -C "$dir" -c user.email=t@example.com -c user.name=T commit -q --allow-empty -m "chore: seed"
+    git init -q --bare "$bare"
+    printf 'y\ny\n1\n' | bash -c '
+        source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
+        PROJECT_PATH="$2"; BARE="$3"
+        GITHUB_USERNAME=o; PROJECT_NAME=r; PROJECT_DESCRIPTION=d
+        scaffold_set_review_trigger_secret() { :; }
+        scaffold_add_git_remote() { :; }
+        gh() { [ "$1 $2" = "repo create" ] && git -C "$PROJECT_PATH" remote add origin "$BARE"; return 0; }
+        git() { [ "$3" = push ] && return 1; command git "$@"; }
+        scaffold_prompt_git_remote_setup "$2"
+    ' _ "$REPO_ROOT" "$dir" "$bare" >"$WORK_DIR/pf.out" 2>&1
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "ok: the prompt returns non-zero when the first push failed"
+    else
+        echo "FAIL (prompt rc after failed push): rc=$rc"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 test_secret_is_set_before_the_push
+test_prompt_fails_when_first_push_fails
 test_fallback_sets_secret_before_the_push
 test_failed_push_is_reported_incomplete
 exit "$int_failures"

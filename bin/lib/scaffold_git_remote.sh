@@ -350,5 +350,7 @@ scaffold_prompt_git_remote_setup() {
 		scaffold_push_initial_commit "$str_project_path"
 	fi
 	scaffold_set_review_trigger_secret
+	# A failed first push leaves no upstream; callers must not protect a branch that is not there.
+	git -C "$str_project_path" rev-parse '@{u}' >/dev/null 2>&1 || return 1
 	print_status "success" "Git repo initialized."
 }
