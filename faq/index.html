@@ -2162,9 +2162,12 @@ a fix) and blueprintx#262 (why an empty roster is not the opt-out).</p>
 <p>A roster row with <code>kind: comment-marker</code> and a <code>marker:</code> string (here <code>Fallback review — runtime:</code>)
 lets a plain issue comment count as a review. The comment must start with the marker, name the head SHA on its
 second line (<code>Reviewed head: &lt;sha&gt;</code>), be posted
-after the head commit, and come from an <code>OWNER</code>, <code>MEMBER</code> or <code>COLLABORATOR</code> (GitHub's
-<code>authorAssociation</code>), so an outside commenter cannot forge it. A comment posted by a GitHub App reports <code>NONE</code> and
-is rejected, so post the marker with the owner's own token. The row has no <code>login:</code> and is
+after the head commit, and be authored by a login listed in the row's <code>posters:</code> (the ladder
+App, e.g. <code>guilhermegor-review-ladder[bot]</code>; <code>[bot]</code> is normalised like roster logins, and the
+author must also be a GitHub <code>Bot</code> actor, so a user registering the bare name does not match). GitHub's
+<code>authorAssociation</code> is deliberately NOT consulted: the PR author is usually the repo <code>OWNER</code>, so
+trusting the association let the author self-approve by typing the marker (blueprintx#761). An
+empty or missing <code>posters:</code> accepts no marker. The row has no <code>login:</code> and is
 ignored when absent. The comment must also contain the line <code>0 finding(s) across N reviewed file(s).</code>; a count above zero, or no such line, fails closed, so a ladder review with findings never satisfies the gate on its own (blueprintx#630). Like a clean-review notice, it proves a review ran, never that a thread was
 answered. The workflow needs the <code>issue_comment</code> trigger to re-run on that comment (created, edited or deleted). A run triggered by a comment reports on the default branch's head, not the PR's, so a red "Review threads answered" on <code>main</code>'s tip after such a comment is that run's own verdict, not a broken <code>main</code>; the PR's check is refreshed by the stale-run step. The Python roster
 (<code>templates/python-common/.review-bots.yaml</code>) and the TypeScript one
