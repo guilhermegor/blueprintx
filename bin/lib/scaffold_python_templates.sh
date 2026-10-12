@@ -229,6 +229,9 @@ scaffold_copy_executables_and_vscode() {
 	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
 	# commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
 	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
+	# The work ledger the check-backlog-ledger gate reads; .gitkeep keeps it in git while empty.
+	mkdir -p "$str_project_path/.specs/backlog"
+	touch "$str_project_path/.specs/backlog/.gitkeep"
 	# The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
 	# implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
 	cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" \

@@ -479,8 +479,9 @@ copy_common_templates() {
         > "$project_path/package.json"
     cp "$COMMON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
     envsubst '${PROJECT_NAME} ${STATE_MANAGEMENT_VARIANT} ${STATE_MANAGEMENT_DESC} ${STATE_MANAGEMENT_ANTIPATTERN}' \
-        < "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" \
-        > "$project_path/CLAUDE.md"
+        < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" \
+        > "$project_path/AGENTS.md"
+    cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
     # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
     # file, language-agnostic, so it lives in templates/common not ts-common.
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
