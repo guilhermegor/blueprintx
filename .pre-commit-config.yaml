@@ -83,6 +83,13 @@ repos:
         pass_filenames: false
         files: \.codespellrc$
 
+      - id: agents-md-bridge
+        name: CLAUDE.md bridge gate (blueprintx#754)
+        entry: bash -c 'bash bin/ci/check_agents_md_bridge.sh && bash tests/test_check_agents_md_bridge.sh'
+        language: system
+        pass_filenames: false
+        files: ^(templates/[^/]+/CLAUDE\.md|bin/(scaffold|lib)/.*\.sh|bin/ci/check_agents_md_bridge\.sh|tests/test_check_agents_md_bridge\.sh)$
+
       - id: shellcheck
         name: shellcheck (bin/**/*.sh)
         entry: bash bin/ci/check_shell.sh
