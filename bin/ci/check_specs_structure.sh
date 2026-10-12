@@ -162,6 +162,7 @@ if [ -d "$SPECS_DIR/backlog" ]; then
 	for entry in "$SPECS_DIR/backlog"/*; do
 		[ -e "$entry" ] || continue
 		name="$(basename "$entry")"
+		[ "$name" = ".gitkeep" ] && [ -f "$entry" ] && continue
 		if [ ! -f "$entry" ]; then
 			echo "ERROR: .specs/backlog/$name is not a file — .specs/backlog/ is flat" >&2
 			errors=$((errors + 1))

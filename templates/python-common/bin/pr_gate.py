@@ -58,7 +58,15 @@ RISK_PATHS = {
     "tests": ("tests/",),
     "ci": (".github/", "bin/", "Makefile", "tasks.sh", ".pre-commit-config.yaml"),
     "deps": ("pyproject.toml", LOCKFILE, "requirements.txt"),
-    "docs": ("docs/", "mkdocs.yml", "README.md", "CHANGELOG.md", "SECURITY.md", "CONTRIBUTING.md"),
+    "docs": (
+        "docs/",
+        ".specs/backlog/",
+        "mkdocs.yml",
+        "README.md",
+        "CHANGELOG.md",
+        "SECURITY.md",
+        "CONTRIBUTING.md",
+    ),
 }
 
 # Classes that may auto-merge. `src`/`tests` never do (they define what "passing" means), and

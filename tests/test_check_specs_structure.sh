@@ -142,6 +142,18 @@ test_gitkeep_in_features_is_tolerated() {
     expect ".gitkeep keeping an empty features/" "$str_root" pass
 }
 
+test_gitkeep_in_backlog_is_tolerated() {
+    local str_root
+    str_root="$(make_tree)"
+    mkdir -p "$str_root/.specs/backlog"
+    touch "$str_root/.specs/backlog/.gitkeep"
+    expect ".gitkeep keeping an empty backlog/" "$str_root" pass
+    str_root="$(make_tree)"
+    mkdir -p "$str_root/.specs/backlog"
+    touch "$str_root/.specs/backlog/.keep"
+    expect ".keep is not the placeholder" "$str_root" fail "does not match"
+}
+
 test_bad_task_markers_fail() {
     local str_line str_root
     for str_line in '- [?] unknown' '- [X] upper' '- [] empty' '- [~]' '- [~] ' '* [done] word' \
@@ -256,6 +268,66 @@ test_default_root_from_inside_bin_ci() {
     rm -rf "$str_root"
 }
 
+test_ledger_grammar_parity() {
+    local str_line str_root str_shell str_py
+    local -a list_lines=("- [ ] a" "- [x] a" "- [~] feat/a" "1. [x] a" "2) [ ] a" "+ [ ] a"
+        "* [x] a" "- [X] a" "- [] a" "- [?] a" "- [~]" "- [~] doing" "- [~] Feat/a" "- [~] a")
+    for str_line in "${list_lines[@]}"; do
+        str_root="$(make_tree)"
+        feature "$str_root" "one-thing" design.md
+        printf '%s\n' "$str_line" >"$str_root/.specs/features/one-thing/tasks.md"
+        str_shell=0
+        bash "$GATE" --root "$str_root" >/dev/null 2>&1 && str_shell=1
+        rm -rf "$str_root"
+        str_py="$(python3 -I -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("l", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+print(int(bool(mod.CHECKBOX_RE.search(sys.argv[2]))))' \
+            "$REPO_ROOT/templates/python-common/bin/check_backlog_ledger.py" "$str_line")"
+        if [ "$str_shell" != "$str_py" ]; then
+            print_status "error" "marker '$str_line': specs gate pass=$str_shell, ledger gate match=$str_py"
+            int_failures=$((int_failures + 1))
+        fi
+    done
+}
+
+test_fence_grammar_parity() {
+    local str_open str_close str_want_pass str_want_count str_root str_shell str_count
+    while IFS='|' read -r str_open str_close str_want_pass str_want_count; do
+        str_root="$(make_tree)"
+        feature "$str_root" "one-thing" design.md
+        printf '%s\n- [?] x\n%s\n' "$str_open" "$str_close" \
+            >"$str_root/.specs/features/one-thing/tasks.md"
+        str_shell=0
+        bash "$GATE" --root "$str_root" >/dev/null 2>&1 && str_shell=1
+        rm -rf "$str_root"
+        str_count="$(python3 -I -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("l", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+text = sys.argv[2] + "\n- [ ] x\n" + sys.argv[3] + "\n"
+print(int(bool(mod.CHECKBOX_RE.search(mod.FENCE_RE.sub("", text)))))' \
+            "$REPO_ROOT/templates/python-common/bin/check_backlog_ledger.py" \
+            "$str_open" "$str_close")"
+        if [ "$str_shell" != "$str_want_pass" ] || [ "$str_count" != "$str_want_count" ]; then
+            print_status "error" "fence '$str_open'..'$str_close': specs pass=$str_shell (want $str_want_pass), ledger counted=$str_count (want $str_want_count)"
+            int_failures=$((int_failures + 1))
+        fi
+    done <<'CASES'
+```|```|1|0
+```|````|1|0
+~~~|~~~~|1|0
+    ```|```|1|0
+```|~~~|0|0
+```||0|0
+```x```|```|1|0
+```x```||0|0
+CASES
+}
+
 main() {
     test_default_root_from_inside_bin_ci
     test_shipped_skeleton_passes
@@ -272,11 +344,14 @@ main() {
     test_malformed_pr_name_fails
     test_non_directory_feature_entry_fails
     test_gitkeep_in_features_is_tolerated
+    test_gitkeep_in_backlog_is_tolerated
     test_bad_task_markers_fail
     test_good_task_markers_pass
     test_fence_tracking
     test_pr_directory_is_not_a_body
     test_backlog_rules
+    test_ledger_grammar_parity
+    test_fence_grammar_parity
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
         exit 1

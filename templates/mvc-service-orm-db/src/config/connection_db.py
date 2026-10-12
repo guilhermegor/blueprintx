@@ -35,12 +35,12 @@ def _normalize_odbc_bool(str_value: str) -> str:  # complexity-ok: DSN option ma
     Parameters
     ----------
     str_value : str
-            The raw value read from the environment.
+        The raw value read from the environment.
 
     Returns
     -------
     str
-            ``"yes"`` / ``"no"`` for a recognised boolean, else the stripped original.
+        ``"yes"`` / ``"no"`` for a recognised boolean, else the stripped original.
     """
     str_norm = str_value.strip().casefold()
     if str_norm in {"true", "1", "yes", "y", "on", "t"}:
@@ -57,12 +57,12 @@ def _compose_url(str_backend: str) -> str:  # complexity-ok: DSN assembly per ba
     Parameters
     ----------
     str_backend : str
-            Backend key (``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``).
+        Backend key (``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``).
 
     Returns
     -------
     str
-            A SQLAlchemy-compatible connection URL composed from ``DB_*`` env vars.
+        A SQLAlchemy-compatible connection URL composed from ``DB_*`` env vars.
     """
     str_user = os.getenv("DB_USER", "user")
     str_password = os.getenv("DB_PASSWORD", "password")
@@ -119,12 +119,12 @@ def build_database_url() -> str:
     Returns
     -------
     str
-            SQLAlchemy-compatible database URL.
+        SQLAlchemy-compatible database URL.
 
     Raises
     ------
     ValueError
-            If ``DB_BACKEND`` does not match a supported backend.
+        If ``DB_BACKEND`` does not match a supported backend.
 
     Notes
     -----
@@ -157,8 +157,8 @@ def build_engine() -> Engine:
     Returns
     -------
     sqlalchemy.Engine
-            Engine bound to the configured backend. Reads ``SQL_ECHO`` (default
-            ``false``) to toggle SQL statement logging.
+        Engine bound to the configured backend. Reads ``SQL_ECHO`` (default
+        ``false``) to toggle SQL statement logging.
     """
     bool_echo = os.getenv("SQL_ECHO", "false").lower() == "true"
     return create_engine(build_database_url(), echo=bool_echo)
@@ -171,12 +171,12 @@ def build_session_factory(cls_engine: Engine | None = None) -> Callable[[], Sess
     Parameters
     ----------
     cls_engine : sqlalchemy.Engine, optional
-            Engine to bind. If ``None``, one is built from the environment.
+        Engine to bind. If ``None``, one is built from the environment.
 
     Returns
     -------
     Callable[[], Session]
-            A factory that returns new ``Session`` instances.
+        A factory that returns new ``Session`` instances.
     """
     cls_engine = cls_engine or build_engine()
     return sessionmaker(bind=cls_engine, expire_on_commit=False)

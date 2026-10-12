@@ -195,6 +195,10 @@ help = "Bound comment volume (long runs + decorative banners), QA pragmas exempt
 cmd = "bash bin/check_secrets.sh"
 help = "Secret scan via gitleaks — no API key, no account (blueprintx#305)"
 
+[tool.poe.tasks.template_drift]
+cmd = "python bin/check_template_drift.py"
+help = "Report template files this project never received (needs --blueprintx-root or BLUEPRINTX_TEMPLATE_ROOT)"
+
 # Pre-flight a commit message BEFORE `git commit -F <file>`.
 #
 # commitizen and gitlint reject at the commit-msg stage — AFTER every pre-commit gate has

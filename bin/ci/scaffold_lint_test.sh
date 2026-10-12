@@ -121,7 +121,7 @@ if [ -n "${SCAFFOLD_SPEC_FILE:-}" ] && { [ ! -f "$SCAFFOLD_SPEC_FILE" ] || [ ! -
 fi
 spec_validate_answers "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" || exit 1
 spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
-    | GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold_rel" \
+    | BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold_rel" \
         "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
 
@@ -147,6 +147,8 @@ for str_online_only in coderabbit_trigger.yaml review_threads.yaml review_retry.
     fi
 done
 echo "No GitHub-only workflows in the offline project."
+
+bash "$REPO_ROOT/bin/ci/check_review_config_shipped.sh" --project "$PROJECT_PATH"
 
 # The .specs/ gate ships into every Python project (blueprintx#583). Run the PROJECT'S copy on
 # the shipped skeleton (must pass) and on a copy with a stray top-level note (must fail): a gate
