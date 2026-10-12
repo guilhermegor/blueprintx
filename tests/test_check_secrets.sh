@@ -11,6 +11,7 @@ unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX
 
 int_failures=0
 LIST_TMP=()
+STR_REPO=""
 trap 'rm -rf "${LIST_TMP[@]}"' EXIT
 
 fake_secret() {
@@ -20,6 +21,7 @@ fake_secret() {
 make_repo() {
 	local str_repo
 	str_repo="$(mktemp -d)"
+	STR_REPO="$str_repo"
 	LIST_TMP+=("$str_repo")
 	git -C "$str_repo" init --quiet --initial-branch=main
 	git -C "$str_repo" config user.email "test@example.com"
@@ -27,7 +29,6 @@ make_repo() {
 	echo "seed" >"$str_repo/seed.txt"
 	git -C "$str_repo" add seed.txt
 	git -C "$str_repo" commit --quiet -m "seed"
-	printf '%s' "$str_repo"
 }
 
 expect_gate() {
@@ -74,7 +75,8 @@ test_absent_gitleaks() {
 
 test_staged_secret_is_caught() {
 	local str_repo
-	str_repo="$(make_repo)"
+	make_repo
+	str_repo="$STR_REPO"
 	fake_secret >"$str_repo/config.txt"
 	git -C "$str_repo" add config.txt
 	expect_gate "staged secret, staged mode" "fail" "$str_repo" --staged
@@ -82,7 +84,8 @@ test_staged_secret_is_caught() {
 
 test_clean_staged_change_passes() {
 	local str_repo
-	str_repo="$(make_repo)"
+	make_repo
+	str_repo="$STR_REPO"
 	echo "harmless" >"$str_repo/notes.txt"
 	git -C "$str_repo" add notes.txt
 	expect_gate "clean staged change, staged mode" "pass" "$str_repo" --staged
@@ -90,7 +93,8 @@ test_clean_staged_change_passes() {
 
 test_old_history_secret_full_mode_only() {
 	local str_repo
-	str_repo="$(make_repo)"
+	make_repo
+	str_repo="$STR_REPO"
 	fake_secret >"$str_repo/leak.txt"
 	git -C "$str_repo" add leak.txt
 	git -C "$str_repo" commit --quiet -m "oops"
@@ -110,6 +114,10 @@ main() {
 		test_staged_secret_is_caught
 		test_clean_staged_change_passes
 		test_old_history_secret_full_mode_only
+		if [ "${#LIST_TMP[@]}" -ne 3 ]; then
+			print_status "error" "temp repos must be tracked for cleanup, got ${#LIST_TMP[@]} of 3"
+			int_failures=$((int_failures + 1))
+		fi
 	fi
 
 	if [ "$int_failures" -ne 0 ]; then
