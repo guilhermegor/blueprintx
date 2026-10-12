@@ -2385,9 +2385,13 @@ _MARKER = "Fallback review — runtime: codex"
 _TUPLE_MARKERS = ("fallback review — runtime:",)
 
 
-def _marker_comment(str_association: str) -> dict:
+_LADDER_APP = "guilhermegor-review-ladder[bot]"
+_SET_POSTERS = frozenset({"guilhermegor-review-ladder"})
+
+
+def _marker_comment(str_association: str, str_login: str = _LADDER_APP) -> dict:
     return {
-        "author": {"login": "someone"},
+        "author": {"login": str_login},
         "authorAssociation": str_association,
         "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).",
         "createdAt": "2099-01-01T00:00:00Z",
@@ -2403,17 +2407,39 @@ def _missing_with(list_notices: list[dict], tuple_markers: tuple[str, ...]) -> s
         list_notices=list_notices,
         str_head_date=_HEAD_DATE,
         tuple_markers=tuple_markers,
+        set_posters=_SET_POSTERS,
     )
 
 
-def test_ladder_marker_from_a_collaborator_is_accepted() -> None:
-    """A trusted commenter's marker proves a fallback review ran."""
-    assert _missing_with([_marker_comment("COLLABORATOR")], _TUPLE_MARKERS) is None
+def test_ladder_marker_from_the_pr_author_owner_is_rejected() -> None:
+    """The PR author is the repo OWNER: typing the marker must not self-approve (#761)."""
+    dict_forged = _marker_comment("OWNER", "someone-else")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
 
 
-def test_ladder_marker_from_an_outsider_is_rejected() -> None:
-    """An outside commenter cannot forge the marker."""
-    assert _missing_with([_marker_comment("NONE")], _TUPLE_MARKERS) is not None
+def test_ladder_marker_from_the_ladder_app_is_accepted() -> None:
+    """The ladder App posts as a Bot with association NONE; its login is what is trusted."""
+    assert _missing_with([_marker_comment("NONE")], _TUPLE_MARKERS) is None
+
+
+def test_ladder_marker_from_a_non_roster_collaborator_is_rejected() -> None:
+    """A COLLABORATOR outside the posters allowlist cannot forge the marker."""
+    dict_forged = _marker_comment("COLLABORATOR", "a-collaborator")
+    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+
+
+def test_ladder_marker_without_any_posters_is_rejected() -> None:
+    """An empty allowlist fails closed, even for the ladder App's login."""
+    cls_gate = _load_gate()
+    assert not cls_gate.ladder_marker_declared(
+        [_marker_comment("NONE")], _TUPLE_MARKERS, _HEAD_DATE, _HEAD
+    )
+
+
+def test_later_marker_from_a_non_poster_does_not_supersede_a_clean_one() -> None:
+    """A forged later marker is ignored, so it can neither approve nor block."""
+    dict_forged = {**_marker_comment("OWNER", "someone-else"), "createdAt": "2099-02-01T00:00:00Z"}
+    assert _missing_with([_marker_comment("NONE"), dict_forged], _TUPLE_MARKERS) is None
 
 
 def test_ladder_marker_without_the_roster_row_changes_nothing() -> None:
@@ -2597,6 +2623,21 @@ def test_load_comment_markers_ignores_a_scalar_reviewer_row(tmp_path: Path) -> N
         encoding="utf-8",
     )
     assert _load_gate().load_comment_markers(tmp_path) == ("m",)
+
+
+def test_load_marker_posters_normalises_the_bot_suffix(tmp_path: Path) -> None:
+    """`posters:` is read in the REST spelling and compared in the GraphQL one."""
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - kind: comment-marker\n    marker: m\n"
+        "    posters:\n      - x[bot]\n      - y\n",
+        encoding="utf-8",
+    )
+    assert _load_gate().load_marker_posters(tmp_path) == frozenset({"x", "y"})
+
+
+def test_load_marker_posters_is_empty_without_the_field(path_marker_root: Path) -> None:
+    """A marker row with no `posters:` allows nobody."""
+    assert _load_gate().load_marker_posters(path_marker_root) == frozenset()
 
 
 def test_load_roster_ignores_the_marker_row(path_marker_root: Path) -> None:
