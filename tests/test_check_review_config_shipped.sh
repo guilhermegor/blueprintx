@@ -126,6 +126,14 @@ test_static_nested_path_needs_its_own_parent() {
     fi
 }
 
+test_dropped_greptile_copy_fails_static() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '/\.greptile/d' "$str_root/bin/scaffold/bash_cli.sh"
+    expect_gate "dropped .greptile copy, static" "$str_root" fail \
+        "bash_cli.sh never copies '.greptile/config.json'" --static
+}
+
 test_bad_arguments_are_rejected() {
     expect_gate "unknown flag" "$(make_copy)" fail "usage:" --generated --skeletn bash-cli
     expect_gate "trailing argument" "$(make_copy)" fail "usage:" --static extra
@@ -208,6 +216,7 @@ test_static_accepts_real_copies
 test_static_sourced_helper_counts
 test_static_nested_path_needs_its_own_parent
 test_bad_arguments_are_rejected
+test_dropped_greptile_copy_fails_static
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed" >&2; exit 1; }
 echo "OK: review-config guard is red when it should be, green otherwise."
