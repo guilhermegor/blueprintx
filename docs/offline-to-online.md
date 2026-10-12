@@ -29,7 +29,7 @@ bin/promote_offline_to_online.sh <project_path> --tier <tier> [options]
 | Flag | Required | Meaning |
 |---|---|---|
 | `<project_path>` | yes | Path to the offline-scaffolded project. |
-| `--tier` | yes | One of the 6 tiers below. No inference — a wrong guess silently promotes the wrong inventory, so the caller must say which one. `ts-lib`, `bash-cli` and `api-service-native-db` have no promotion manifest yet and are refused as unknown tiers. |
+| `--tier` | yes | One of the tiers below. No inference — a wrong guess silently promotes the wrong inventory, so the caller must say which one. |
 | `--github-user` | no | GitHub owner for the new repo. Default: `gh api user`. |
 | `--visibility public\|private` | no | Default `private`. |
 | `--deploy-target none\|pages\|vercel` | no | `react-spa-webpack` only. Default `none` (see caveat below). |
@@ -38,9 +38,9 @@ bin/promote_offline_to_online.sh <project_path> --tier <tier> [options]
 
 ## What gets added, per tier
 
-The 4 service tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service-native-db`,
-`mvc-service-orm-db`) share one manifest — transcribed from `copy_github_assets()`, identical
-across all four:
+The 5 service tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service-native-db`,
+`mvc-service-orm-db`, `api-service-native-db`) share one manifest — transcribed from
+`copy_github_assets()`, identical across all five:
 
 - `.github/workflows/{tests,review_threads,coderabbit_trigger,review_retry,pr-gate,pr-reconcile,contract_drift,release,docs}.yaml`
 - `.github/workflows/secret_scan.yaml` only when `GITGUARDIAN_API_KEY` is exported (opt-in, as at scaffold time); the key is set as a repo secret after `gh repo create` and before the first push, so the first scan has its key. Setting it is best-effort like branch protection: if it fails the repo is already created and pushed, so the script warns with the exact `gh secret set` command rather than aborting, and a re-run does nothing
@@ -51,10 +51,18 @@ across all four:
 `contract_drift`/`release`, plus `docs.yaml` from its own `templates/lib-minimal/.github/workflows/`,
 plus `release-pypi.yaml` / `release-test-pypi.yaml` gated by `--publish`.
 
-`react-spa-webpack` (from `ts_react_app.sh`) ships only `.github/CLAUDE.md`, `.github/CODEOWNERS`
+`react-spa-webpack` (from `ts_react_app.sh`) ships the `templates/ts-common/.github/workflows/`
+set (build, lint, test, type-check, secret-scan, review-threads) plus `.github/CLAUDE.md`, `.github/CODEOWNERS`
 (envsubst `GITHUB_USERNAME`), `.github/PULL_REQUEST_TEMPLATE.md`, and — gated by `--deploy-target` —
 either `deploy-spa.yml` or `deploy-vercel.yml` + `vercel.json`. No `SECURITY.md` or
 `dependabot.yml`: `templates/ts-common/` ships neither.
+
+`ts-lib` (from `ts_lib.sh`) ships the same ts-common workflows plus `.github/workflows/{docs,docs-deploy,pack-smoke,release-npm}.yml`
+(`release-npm.yml` rendered with `PROJECT_NAME`) plus the shared `CLAUDE.md`, `CODEOWNERS` and PR
+template. `bash-cli` (from `bash_cli.sh`) ships `ci.yml` and `release.yml` (rendered with
+`PROJECT_NAME`) plus the same three shared files. Neither ships `SECURITY.md`, `dependabot.yml` or
+`secret_scan.yaml`. Offline removal is the react one: git-diff trio, `git_diffs/` and, where a
+`package.json` exists, its `git:diff:*` scripts.
 
 ## The two "which one was it" gaps
 
@@ -80,7 +88,7 @@ list `apply_offline_mode` ships, and other tooling may still use it.
 
 ## Preconditions — refuse loudly, never half-promote
 
-Checked before any file is touched, in this order: the `--tier` is one of the 6 known tiers **and**
+Checked before any file is touched, in this order: the `--tier` is one of the known tiers **and**
 `templates/<tier>/skeleton.meta` still exists in this BlueprintX checkout (an unknown or
 since-removed tier fails loudly rather than copying nothing and reporting success); the
 tier-specific options are valid; the target is a git repository; not already fully online (an
