@@ -2025,7 +2025,7 @@ finds nothing); branch protection is applied inline via <code>gh api</code>.</p>
 <tr>
 <td><code>--tier</code></td>
 <td>yes</td>
-<td>One of the 6 tiers below. No inference — a wrong guess silently promotes the wrong inventory, so the caller must say which one. <code>ts-lib</code>, <code>bash-cli</code> and <code>api-service-native-db</code> have no promotion manifest yet and are refused as unknown tiers.</td>
+<td>One of the tiers below. No inference — a wrong guess silently promotes the wrong inventory, so the caller must say which one.</td>
 </tr>
 <tr>
 <td><code>--github-user</code></td>
@@ -2055,9 +2055,9 @@ finds nothing); branch protection is applied inline via <code>gh api</code>.</p>
 </tbody>
 </table>
 <h2 id="what-gets-added-per-tier">What gets added, per tier<a class="headerlink" href="#what-gets-added-per-tier" title="Permanent link">&para;</a></h2>
-<p>The 4 service tiers (<code>ddd-service-native-db</code>, <code>ddd-service-orm-db</code>, <code>mvc-service-native-db</code>,
-<code>mvc-service-orm-db</code>) share one manifest — transcribed from <code>copy_github_assets()</code>, identical
-across all four:</p>
+<p>The 5 service tiers (<code>ddd-service-native-db</code>, <code>ddd-service-orm-db</code>, <code>mvc-service-native-db</code>,
+<code>mvc-service-orm-db</code>, <code>api-service-native-db</code>) share one manifest — transcribed from
+<code>copy_github_assets()</code>, identical across all five:</p>
 <ul>
 <li><code>.github/workflows/{tests,review_threads,coderabbit_trigger,review_retry,pr-gate,pr-reconcile,contract_drift,release,docs}.yaml</code></li>
 <li><code>.github/workflows/secret_scan.yaml</code> only when <code>GITGUARDIAN_API_KEY</code> is exported (opt-in, as at scaffold time); the key is set as a repo secret after <code>gh repo create</code> and before the first push, so the first scan has its key. Setting it is best-effort like branch protection: if it fails the repo is already created and pushed, so the script warns with the exact <code>gh secret set</code> command rather than aborting, and a re-run does nothing</li>
@@ -2067,10 +2067,17 @@ across all four:</p>
 <p><code>lib-minimal</code> (from <code>lib_minimal_copy_github_assets()</code>) is the same shape minus
 <code>contract_drift</code>/<code>release</code>, plus <code>docs.yaml</code> from its own <code>templates/lib-minimal/.github/workflows/</code>,
 plus <code>release-pypi.yaml</code> / <code>release-test-pypi.yaml</code> gated by <code>--publish</code>.</p>
-<p><code>react-spa-webpack</code> (from <code>ts_react_app.sh</code>) ships only <code>.github/CLAUDE.md</code>, <code>.github/CODEOWNERS</code>
+<p><code>react-spa-webpack</code> (from <code>ts_react_app.sh</code>) ships the <code>templates/ts-common/.github/workflows/</code>
+set (build, lint, test, type-check, secret-scan, review-threads) plus <code>.github/CLAUDE.md</code>, <code>.github/CODEOWNERS</code>
 (envsubst <code>GITHUB_USERNAME</code>), <code>.github/PULL_REQUEST_TEMPLATE.md</code>, and — gated by <code>--deploy-target</code> —
 either <code>deploy-spa.yml</code> or <code>deploy-vercel.yml</code> + <code>vercel.json</code>. No <code>SECURITY.md</code> or
 <code>dependabot.yml</code>: <code>templates/ts-common/</code> ships neither.</p>
+<p><code>ts-lib</code> (from <code>ts_lib.sh</code>) ships the same ts-common workflows plus <code>.github/workflows/{docs,docs-deploy,pack-smoke,release-npm}.yml</code>
+(<code>release-npm.yml</code> rendered with <code>PROJECT_NAME</code>) plus the shared <code>CLAUDE.md</code>, <code>CODEOWNERS</code> and PR
+template. <code>bash-cli</code> (from <code>bash_cli.sh</code>) ships <code>ci.yml</code> and <code>release.yml</code> (rendered with
+<code>PROJECT_NAME</code>) plus the same three shared files. Neither ships <code>SECURITY.md</code>, <code>dependabot.yml</code> or
+<code>secret_scan.yaml</code>. Offline removal is the react one: git-diff trio, <code>git_diffs/</code> and, where a
+<code>package.json</code> exists, its <code>git:diff:*</code> scripts.</p>
 <h2 id="the-two-which-one-was-it-gaps">The two "which one was it" gaps<a class="headerlink" href="#the-two-which-one-was-it-gaps" title="Permanent link">&para;</a></h2>
 <p>Neither the original deploy target (react tier) nor the original publish target (lib-minimal)
 survives into an offline project — <code>apply_offline_mode</code> removes <code>.github/</code> entirely for react,
@@ -2089,7 +2096,7 @@ created — real exported diffs a user actually placed there are left in place w
 silently deleted. <code>bin/lib/common.sh</code> is left alone in every tier: it is not in the offline-only
 list <code>apply_offline_mode</code> ships, and other tooling may still use it.</p>
 <h2 id="preconditions-refuse-loudly-never-half-promote">Preconditions — refuse loudly, never half-promote<a class="headerlink" href="#preconditions-refuse-loudly-never-half-promote" title="Permanent link">&para;</a></h2>
-<p>Checked before any file is touched, in this order: the <code>--tier</code> is one of the 6 known tiers <strong>and</strong>
+<p>Checked before any file is touched, in this order: the <code>--tier</code> is one of the known tiers <strong>and</strong>
 <code>templates/&lt;tier&gt;/skeleton.meta</code> still exists in this BlueprintX checkout (an unknown or
 since-removed tier fails loudly rather than copying nothing and reporting success); the
 tier-specific options are valid; the target is a git repository; not already fully online (an
