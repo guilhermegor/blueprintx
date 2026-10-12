@@ -425,6 +425,9 @@ jobs:
       - name: Should-fail regression tests for close_linked_issues.sh
         run: bash tests/test_close_linked_issues.sh
 
+      - name: Should-fail regression tests for check_pr_policy.sh
+        run: bash tests/test_check_pr_policy.sh
+
   promote-offline-to-online:
     name: promote_offline_to_online.sh refusal-path tests
     runs-on: ubuntu-latest
@@ -461,6 +464,9 @@ jobs:
       - name: Run the kanban should-fail suite (blueprintx#592)
         run: bash tests/test_scaffold_kanban.sh
 
+      - name: Run the scaffold git-remote should-fail suite (blueprintx#732)
+        run: bash tests/test_scaffold_git_remote.sh
+
   specs-structure:
     name: .specs/ structure guard
     runs-on: ubuntu-latest
@@ -490,6 +496,21 @@ jobs:
 
       - name: Should-fail regression tests for the boundary gate
         run: bash tests/test_check_docs_boundary.sh
+
+  review-config-shipped:
+    name: Every skeleton ships the hosted-reviewer config
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scaffold every skeleton and assert the review config is in the tree (blueprintx#740)
+        run: bash bin/ci/check_review_config_shipped.sh --generated
+
+      - name: Should-fail regression tests for the review-config guard
+        run: bash tests/test_check_review_config_shipped.sh
 
   version-sync:
     name: Version sync — pyproject vs CLI
@@ -697,9 +718,15 @@ jobs:
         run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
 
   typecheck-ts:
-    name: TypeScript typecheck — react-spa-webpack template
+    name: TypeScript build + lint — ${{ matrix.skeleton }} template
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        skeleton:
+          - react-spa-webpack
+          - ts-lib
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -708,36 +735,36 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: templates/ts-common/package-lock.json
 
-      - name: Assemble typecheck workspace
+      - name: Real scaffold (offline, no opt-ins)
+        env:
+          GITHUB_USERNAME: ci-bot
+          SKELETON: ${{ matrix.skeleton }}
         run: |
-          mkdir -p /tmp/ts-typecheck/src/shared/utils
-          export PROJECT_NAME="ci-typecheck"
-          export PROJECT_DESCRIPTION="CI typecheck workspace"
-          envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
-            < templates/ts-common/package.json \
-            > /tmp/ts-typecheck/package.json
-          # package-lock.json's root "name"/"version" don't need to match the
-          # envsubst-rendered package.json above -- npm ci only validates the
-          # dependency trees (verified locally, blueprintx#464).
-          cp templates/ts-common/package-lock.json /tmp/ts-typecheck/package-lock.json
-          cp templates/react-spa-webpack/tsconfig.json /tmp/ts-typecheck/tsconfig.json
-          cp -r templates/react-spa-webpack/src/. /tmp/ts-typecheck/src/
-          # Mirrors copy_shared_ts_source() in bin/scaffold/ts_react_app.sh (blueprintx#436):
-          # the real scaffold copies ts-common/src/ into the project's src/shared/, which is
-          # where `@/shared/utils/log-emitter` resolves. This workspace is a hand-assembled
-          # stand-in for that scaffold and drifted from it when #436 added the shared source.
-          cp -r templates/ts-common/src/. /tmp/ts-typecheck/src/shared
+          git config --global user.email "ci-bot@example.com"
+          git config --global user.name "ci-bot"
+          scaffold="$(grep '^scaffold=' "templates/$SKELETON/skeleton.meta" | cut -d= -f2-)"
+          bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" </dev/null
 
-      - name: Install npm dependencies (npm ci enforces the committed lockfile, #464)
-        working-directory: /tmp/ts-typecheck
-        run: npm ci
+      - name: Install npm dependencies (npm ci where a lockfile ships, #464)
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-      - name: Run tsc --noEmit (type errors only, no output files)
-        working-directory: /tmp/ts-typecheck
-        run: npx tsc --noEmit
+      - name: Type-check (tsc --noEmit)
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: npm run type-check
+
+      - name: Build
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: npm run build
+
+      - name: Lint CSS (stylelint)
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: npm run lint:css
+
+      - name: Lint (eslint)
+        working-directory: ${{ runner.temp }}/ci-scaffold
+        run: npm run lint
 
   spell-check:
     name: Spell check — docs/ and templates/

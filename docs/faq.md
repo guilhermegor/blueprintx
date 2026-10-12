@@ -204,14 +204,17 @@ retarget or a push to the base between the two reads cannot make them measure di
 The head is fingerprinted once, by the caller, and handed to each comparison, so the guarantee
 does not rest on the compare function caching anything: if the head cannot be read the
 comparison stops there. Reviewed commits are tried newest first and at most five of them
-(`_INT_MAX_REVIEWED_COMMITS`: five 60 second calls stay well inside the job timeout, and a PR
-reviewed at more commits than that is simply re-reviewed), so a PR makes at most six compare
-calls. A pass that rests on a carried-forward review is shown in the verdict: one line in the
+(`_INT_MAX_REVIEWED_COMMITS`: a PR reviewed at more commits than that is simply re-reviewed),
+so a PR makes at most six compare calls. The retarget check below reads the same GraphQL
+response as the reviews, so it adds no call of its own; a test pins the worst case, six calls
+at the timeout below, to half of the shortest job timeout (10 minutes). A pass that rests on a
+carried-forward review is shown in the verdict: one line in the
 normal output, and a `carried_forward_from` field (the reviewed commit) under `--json`, where
 stdout stays one document. The check runs
 after the completion-notice check, so a PR that already passes makes no compare call. Each call
-has a 60 second timeout, and a timeout, a missing `gh` or an API error all read as "not
-covered", with one line on stderr giving the reason (stdout stays the `--json` document). A
+has a 20 second timeout, and a timeout, a missing `gh` or an API error all read as "not
+covered", with one line on stderr per failing commit giving the reason (stdout stays the
+`--json` document). A
 `DISMISSED` review is never carried forward. Every review's findings, threads or body, are
 audited afterwards whatever the carry-forward decided.
 
@@ -228,17 +231,69 @@ compared fails closed like any other error.
 
 A PR whose base branch was ever changed gets no carry-forward at all. The compare measures the
 patch against today's base, which need not be the base the review was written against, so
-after a retarget the same fingerprint proves nothing. The gate reads the PR's REST timeline for
-a `base_ref_changed` event (an event is never removed, so the refusal is permanent for that
-PR), prints the reason on stderr, and treats an unreadable timeline as a failure rather than as
-"not retargeted".
+after a retarget the same fingerprint proves nothing. The gate looks for a `BASE_REF_CHANGED_EVENT` or
+`AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT`
+timeline item (the second is what GitHub records when it retargets a PR itself after its base
+branch is merged and deleted) in the same GraphQL query as the reviews. An event is never
+removed, so the refusal is permanent for that PR. The gate prints the reason on stderr, and a
+missing answer is a failure ("retarget state is unknown"), not "never retargeted". The gate reads
+the filtered `nodes`, never `totalCount`, which ignores the type filter and counts the whole
+timeline. This also applies to a stacked PR whose lower PR merged: its base was retargeted
+automatically, so it needs a fresh review.
 
 Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
-closed: a missing commit, an API error, a malformed response, a binary or oversized file with
-no patch text, or a full 300-file list is read as "not covered". The compare API returns at most
+closed: a missing commit, an API error, a malformed response (`files` not a list, an entry
+that is not an object, a non-JSON body), a binary or oversized file with no patch text, or a
+full 300-file list is read as "not covered". A pure rename (status `renamed`, zero changes) has
+no patch text by nature and is fingerprinted by its two names and its blob `sha`, so it carries
+forward. The `sha` is required: a binary file also reports zero changes, and only its blob
+proves the content. The compare API returns at most
 300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
+
+## Why does every scaffold have to ship the hosted-reviewer config?
+
+Every generated project must ship the configuration for the hosted reviewers (CodeRabbit,
+Greptile and Graphite); today only Graphite's is listed. Left as a copy list maintained by hand in nine scaffold scripts, that
+drifts: MVC once silently lacked shared files (`poetry.toml`, `.coveragerc`). The required
+paths are listed once, one bare path per line (blank and `#` lines are ignored), in `templates/common/review-config.manifest`, and
+`bin/ci/check_review_config_shipped.sh` checks them in three modes:
+
+- `--static` (pre-commit hook `review-config-shipped`): every manifest path exists under
+  `templates/common/`, and every skeleton script discovered from `templates/*/skeleton.meta`
+  has a `cp` that copies it (a loop or an unusual copy is a documented limit; `--generated`
+  covers it).
+- `--generated` (CI job `review-config-shipped`): scaffolds each discovered skeleton with its
+  default answers and asserts every manifest path is in the generated tree. This is the real
+  oracle: a `cp` line that sits behind a branch the default answers never take passes
+  `--static` and fails here. `--skeleton <name>` narrows it to one.
+- `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
+  assertion over one already-generated project.
+
+Today the manifest lists only `.gitattributes` (the Graphite `linguist-generated` marker).
+`.coderabbit.yaml` and `.greptile/` are added by the PRs that ship them, so the guard does
+not yet protect those. Both are repo-root files, not GitHub-only assets, so the offline
+scaffold keeps them: `apply_offline_mode` drops only `.github/`.
+
+`--static` is a fast heuristic over direct `cp` commands. It reads the scaffold script plus the
+`bin/lib/*.sh` helpers it sources, resolves the `*_TEMPLATE_ROOT` variables, and accepts a
+path only when a `cp` takes exactly `templates/common/<path>` into a destination ending in
+`<path>`, or a recursive copy (`-r`, `-R`, `-a`, `--recursive`) of `templates/common` or one of
+its parent directories. Comments, backup files, another template root and unrelated parent
+directories do not count. It cannot follow a copy whose source is built at run time (a `for`
+loop over a variable, say), so such a script fails `--static` even when it ships the file.
+That is the safe direction: write the copy out directly, or rely on `--generated`.
+
+Every project ships the config, offline ones included, because an offline project can later be
+promoted to GitHub. `scaffold_lint_test.sh` only forbids four GitHub-only workflow files in an
+offline project, none of which is reviewer config.
+
+The manifest only grows: the change that ships a reviewer config file adds that file's path
+to the manifest in the same pull request. `check_content` in the script is the hook point for
+content checks, such as keeping Greptile queue-only. `tests/test_check_review_config_shipped.sh`
+removes a `cp` line, a manifest file and an unshipped entry from a copy of the tree and shows
+the gate going red in both modes.
 
 ## Which install methods are supported?
 
