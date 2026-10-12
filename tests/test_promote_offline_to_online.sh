@@ -209,6 +209,14 @@ test_copy_manifests_match_templates() {
             int_failures=$((int_failures + 1))
         fi
     done
+    for tier in react-spa-webpack ts-lib; do
+        if [ -f "$WORK_DIR/manifest-$tier/.github/workflows/lint.yml" ]; then
+            echo "ok: $tier carries the ts-common workflows"
+        else
+            echo "FAIL ($tier): ts-common .github/workflows missing from the copy manifest"
+            int_failures=$((int_failures + 1))
+        fi
+    done
 }
 
 test_nested_repo_is_refused() {

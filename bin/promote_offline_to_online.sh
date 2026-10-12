@@ -278,6 +278,7 @@ copy_online_assets_react() {
     local shared="$BLUEPRINTX_ROOT/templates/common" dest="$PROJECT_PATH"
     local deploy_root="$BLUEPRINTX_ROOT/templates/react-spa-webpack/optional/deploy"
     mkdir -p "$dest/.github/workflows"
+    cp -r "$BLUEPRINTX_ROOT/templates/ts-common/.github/." "$dest/.github"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
@@ -293,12 +294,13 @@ copy_online_assets_react() {
     print_status "success" "GitHub assets copied (.github, deploy-target=$DEPLOY_TARGET)"
 }
 
-# Mirrors the .github copy in bin/scaffold/ts_lib.sh: the skeleton's own workflows (release-npm
-# is rendered with PROJECT_NAME) plus the shared CLAUDE.md/CODEOWNERS/PR template.
+# Mirrors the .github copy in bin/scaffold/ts_lib.sh: ts-common workflows, the skeleton's own
+# (release-npm is rendered with PROJECT_NAME) plus the shared CLAUDE.md/CODEOWNERS/PR template.
 copy_online_assets_ts_lib() {
     local shared="$BLUEPRINTX_ROOT/templates/common" skeleton="$BLUEPRINTX_ROOT/templates/ts-lib"
     local dest="$PROJECT_PATH" wf
     mkdir -p "$dest/.github/workflows"
+    cp -r "$BLUEPRINTX_ROOT/templates/ts-common/.github/." "$dest/.github"
     for wf in docs docs-deploy pack-smoke; do
         cp "$skeleton/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"
     done
