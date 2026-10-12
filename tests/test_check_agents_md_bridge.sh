@@ -49,8 +49,8 @@ expect_gate "bridge with an extra paragraph fails" fail "outside the allowlist" 
 rm -rf "$str_fx"
 
 str_fx="$(make_fixture)"
-sed -i 's#/PRINCIPLES.md"#/OTHER.md"#g' "$str_fx/bin/scaffold/python_lib_minimal.sh" "$str_fx"/bin/lib/*.sh
-expect_gate "import the scaffold never copies fails" fail "never copies" "$str_fx"
+sed_inplace 's#/PRINCIPLES.md"#/OTHER.md"#g' "$str_fx/bin/scaffold/python_lib_minimal.sh"
+expect_gate "import copied only by an unsourced helper fails" fail "never copies" "$str_fx"
 rm -rf "$str_fx"
 
 [ "$int_failures" -eq 0 ]

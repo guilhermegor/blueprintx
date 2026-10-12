@@ -10,9 +10,12 @@ readonly -a ARR_SHIMS=(
 )
 
 scaffold_text() {
-	local str_dir="$1" str_scaffold
-	str_scaffold="$(sed -n 's/^scaffold=//p' "$str_dir/skeleton.meta")"
-	cat "$REPO_ROOT/$str_scaffold" "$REPO_ROOT"/bin/lib/scaffold_*.sh
+	local str_dir="$1" str_scaffold str_helper
+	str_scaffold="$REPO_ROOT/$(sed -n 's/^scaffold=//p' "$str_dir/skeleton.meta")"
+	cat "$str_scaffold"
+	for str_helper in $(grep -E '^source ' "$str_scaffold" | grep -oE 'lib/scaffold_[a-z_]+\.sh' | sort -u); do
+		cat "$REPO_ROOT/bin/$str_helper"
+	done
 }
 
 source_exists() {
