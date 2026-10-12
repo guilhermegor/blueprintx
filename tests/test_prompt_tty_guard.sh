@@ -1,11 +1,4 @@
 #!/bin/bash
-# Should-fail tests for the non-terminal-stdin guard on scaffold prompts (blueprintx#539).
-#
-# `read` consumes a piped stdin happily, so a stray line left on a pipe answered a question
-# nobody asked. Two legs: the helpers behave (a piped "y" is not an answer unless the
-# harness opted in), and no scaffold script reads stdin without going through them.
-#
-# Usage: bash tests/test_prompt_tty_guard.sh
 
 set -euo pipefail
 
@@ -24,13 +17,10 @@ pass() {
     print_status "success" "PASS: $1"
 }
 
-# expect <label> <want> <got>
 expect() {
     if [ "$2" = "$3" ]; then pass "$1"; else fail "$1 (want '$2', got '$3')"; fi
 }
 
-# Runs prompt_yes_no under a piped stdin (never a terminal here) and prints the result.
-# $1 = stdin line, $2 = default, $3 = BLUEPRINTX_STDIN_ANSWERS value (may be empty).
 run_yes_no() {
     printf '%s\n' "$1" | BLUEPRINTX_STDIN_ANSWERS="$3" bash -c '
         source "$1/bin/lib/common.sh"
@@ -49,10 +39,6 @@ str_text="$(printf 'stray\n' | BLUEPRINTX_STDIN_ANSWERS="" bash -c '
     echo "[$ANSWER]"' _ "$REPO_ROOT")"
 expect "prompt_read leaves a piped line unread" "[]" "$str_text"
 
-# Warning leg: piped without the opt-in, the fallback is announced on stderr only; with the
-# opt-in nothing is printed there. (A tty cannot be simulated here, so that leg is covered by
-# the opted-in assertion, which takes the same read path.)
-# $1 = BLUEPRINTX_STDIN_ANSWERS value. Prints "stdout|stderr".
 run_streams() {
     local str_err_file
     str_err_file="$(mktemp)"
@@ -74,8 +60,6 @@ str_set="$(run_streams 1)"
 expect "opted-in: stdout carries the piped answer" "true" "${str_set%%|*}"
 expect "opted-in: no warning on stderr" "" "${str_set#*|}"
 
-# Static leg: any bare `read` prompt in a scaffold or its libs must sit directly under a
-# prompt_can_read guard. `while ... read` loops over files are not prompts.
 str_bare="$(
     cd "$REPO_ROOT"
     grep -nE '^[[:space:]]*read( -[a-zA-Z]+)* ' bin/scaffold/*.sh bin/lib/scaffold_*.sh \

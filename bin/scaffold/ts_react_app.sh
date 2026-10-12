@@ -52,8 +52,6 @@ resolve_github_username() {
     fi
 
     local input
-    # No terminal on stdin: skip the read entirely rather than let a stray pipe line
-    # answer as a username — falls straight to DEFAULT_GITHUB_USERNAME below (#539).
     prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
         GITHUB_USERNAME="$input"
@@ -69,8 +67,6 @@ prompt_state_management() {
     echo "  1) React Context  (zero deps, default)"
     echo "  2) Zustand        (lightweight store)"
     echo "  3) Redux Toolkit  (enterprise, RTK Query)"
-    # No terminal on stdin: skip the read so a stray pipe line can't pick a variant nobody
-    # chose — falls straight to the "1" default below (#539).
     prompt_read sm_choice "$(prompt_main "Choice [1]: ")"
     STATE_MGMT_CHOICE="${sm_choice:-1}"
     case "$STATE_MGMT_CHOICE" in
@@ -91,8 +87,6 @@ prompt_deploy_target() {
     echo "  1) GitHub Pages  (no extra secrets; served under /<repo-name>/)"
     echo "  2) Vercel        (needs VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID)"
     echo "  3) None          (no deploy workflow)"
-    # No terminal on stdin: skip the read so a stray pipe line can't pick a deploy target
-    # nobody chose — falls straight to the "1" default below (#539).
     prompt_read deploy_choice "$(prompt_main "Choice [1]: ")"
     DEPLOY_TARGET_CHOICE="${deploy_choice:-1}"
     case "$DEPLOY_TARGET_CHOICE" in
@@ -110,8 +104,6 @@ prompt_deploy_target() {
 
 prompt_module_federation() {
     echo ""
-    # default "n": Module Federation reshapes webpack.config.js (see apply_file_variants) —
-    # an unattended run must not silently pick a different build topology (#539).
     prompt_yes_no USE_MODULE_FEDERATION "$(prompt_main "Enable Webpack Module Federation? [y/N]: ")"
     if [ "$USE_MODULE_FEDERATION" = "true" ]; then
         print_status "config" "Module Federation: enabled"
@@ -122,7 +114,6 @@ prompt_module_federation() {
 
 prompt_docker() {
     echo ""
-    # default "n": adds a Dockerfile/nginx.conf nobody asked for (#539).
     prompt_yes_no USE_DOCKER "$(prompt_main "Add a Docker setup (multi-stage build → nginx)? [y/N]: ")"
     if [ "$USE_DOCKER" = "true" ]; then
         print_status "config" "Docker: enabled (Dockerfile + nginx.conf + .dockerignore)"
@@ -133,7 +124,6 @@ prompt_docker() {
 
 prompt_js_copy_delivery() {
     echo ""
-    # default "n": ships an extra delivery script + package.json entries (#539).
     prompt_yes_no USE_JS_COPY_DELIVERY "$(prompt_main "Ship a plain-JavaScript delivery copy script (js-copy)? [y/N]: ")"
     if [ "$USE_JS_COPY_DELIVERY" = "true" ]; then
         print_status "config" "JS-copy delivery: enabled (npm run js-copy:build / js-copy:verify)"
@@ -144,9 +134,6 @@ prompt_js_copy_delivery() {
 
 prompt_otel() {
     echo ""
-    # default "n": an opt-in that installs @opentelemetry/* deps, writes .env vars and
-    # rewrites the composition root must never be answered by leftover pipe input (#539,
-    # originally fixed inline in #519 — now folded into the shared helper).
     prompt_yes_no INCLUDE_OTEL "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
     if [ "$INCLUDE_OTEL" = "true" ]; then
         print_status "config" "OTLP log export: enabled"
@@ -429,6 +416,8 @@ copy_static_ts_common_files() {
     cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
+    cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/react-spa-webpack/.greptile/"* "$project_path/.greptile/"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
@@ -539,8 +528,6 @@ apply_branch_protection() {
     fi
 
     local do_protect reviews_ans reviews_json
-    # default "n": protecting the branch is a GitHub API mutation (enforce_admins, required
-    # checks) — an unattended run must not silently lock down a repo nobody confirmed (#539).
     prompt_yes_no do_protect "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     if [ "$do_protect" != "true" ]; then
         print_status "info" "Skipped branch protection"
@@ -551,7 +538,6 @@ apply_branch_protection() {
     # rule — GitHub forbids self-approval, so the first PR's merge
     # would be permanently blocked. Ask whether human reviewers will
     # gate merges, and build the protection payload accordingly.
-    # default "n": matches the pre-existing fallback (solo maintainer, no required reviews).
     prompt_yes_no reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
     if [ "$reviews_ans" = "true" ]; then
         reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
@@ -602,9 +588,6 @@ wait_for_gh_pages_branch() {
     gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1 && return 0
 
     print_status "info" "The 'gh-pages' branch doesn't exist yet — the first deploy creates it (~1-3 min)."
-    # default "y": the only prerequisite already met to reach this point is a confirmed
-    # GitHub Pages setup (prompt_pages_setup); waiting is a passive poll, not a mutation, so
-    # it is the safe unattended answer -- unlike every other prompt in this file (#539).
     prompt_yes_no wait_ans "$(prompt_main "Wait for the first deploy and enable Pages automatically? [Y/n]: ")" y
     if [ "$wait_ans" != "true" ]; then
         print_status "info" "After the first deploy finishes, enable Pages with:"
@@ -652,8 +635,6 @@ prompt_pages_setup() {
     pages_prerequisites_met "$repo" || return
 
     print_status "info" "GitHub Pages must be enabled once per repo (GitHub no longer auto-enables it on gh-pages pushes)."
-    # default "n": enabling Pages is a GitHub API mutation — an unattended run must not
-    # silently publish a site nobody confirmed (#539).
     prompt_yes_no pages_ans "$(prompt_main "Enable GitHub Pages (deploy from gh-pages branch) now? [y/N]: ")"
     if [ "$pages_ans" != "true" ]; then
         print_status "info" "Skipped GitHub Pages setup"
@@ -708,6 +689,7 @@ apply_offline_mode() {
     # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
     # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
+    remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
     # vercel.json lives at the project ROOT, so the .github sweep above does not reach it —
     # and a Vercel config with no workflow to read it is dead configuration pointing at a

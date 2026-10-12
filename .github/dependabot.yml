@@ -46,7 +46,7 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
-      eslint: # first match wins: @eslint/js moves in lockstep with eslint, majors included
+      eslint:
         patterns:
           - "eslint"
           - "@eslint/js"
@@ -64,7 +64,7 @@ updates:
       - dependency-name: "@eslint/js" # peers on eslint ^10
         versions: [">=10.0.0"]
 
-  - package-ecosystem: "npm" # templates/ts-lib — the lockfile every ts-lib scaffold copies (#735)
+  - package-ecosystem: "npm"
     directory: "/templates/ts-lib"
     schedule:
       interval: "monthly"
