@@ -1730,6 +1730,17 @@ def _marker_notices_as_reviews(
     ]
 
 
+def _count_authority(dict_review: dict, tuple_markers: tuple[str, ...]) -> str:
+    """Return the login whose printed findings count speaks for this review body.
+
+    A trusted marker comment is posted by a person on the ladder's behalf, so its count is read
+    with the ladder app's authority; every other review speaks as its own author.
+    """
+    if _is_marker_comment(dict_review, tuple_markers):
+        return next(iter(_SET_LADDER_AUTHORS))
+    return (dict_review.get("author") or {}).get("login") or ""
+
+
 def find_review_body_problems(
     list_reviews: list[dict],
     list_notices: list[dict],
@@ -1772,7 +1783,7 @@ def find_review_body_problems(
             dict_review,
             review_body_finding_lines(
                 dict_review.get("body"),
-                (dict_review.get("author") or {}).get("login") or "",
+                _count_authority(dict_review, tuple_markers),
             ),
         )
         for dict_review in list_reviews

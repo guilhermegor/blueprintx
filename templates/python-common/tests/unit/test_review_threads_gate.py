@@ -2531,6 +2531,14 @@ def test_marker_comment_with_findings_needs_an_answer() -> None:
     assert len(list_problems) == 1
 
 
+def test_clean_marker_comment_needs_no_answer() -> None:
+    """A trusted marker comment reporting zero findings is not a review body with findings."""
+    list_problems = _load_gate().find_review_body_problems(
+        [], [_marker_comment("OWNER")], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert list_problems == []
+
+
 def test_marker_comment_never_answers_another_reviews_findings() -> None:
     """A long marker comment by a human must not clear a roster review body unread."""
     dict_review = {
