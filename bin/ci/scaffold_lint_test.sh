@@ -41,9 +41,7 @@ str_scaffold_rel="$(grep '^scaffold=' "$META" | cut -d= -f2-)"
 git config --global user.email >/dev/null 2>&1 || git config --global user.email "ci-bot@example.com"
 git config --global user.name >/dev/null 2>&1 || git config --global user.name "ci-bot"
 
-# No background git writer may outlive a commit in the throwaway repo (blueprintx#762).
-export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=gc.auto GIT_CONFIG_VALUE_0=0
-export GIT_CONFIG_KEY_1=maintenance.auto GIT_CONFIG_VALUE_1=false
+source "$REPO_ROOT/bin/lib/no_background_git.sh"
 
 WORK_DIR="$(mktemp -d)"
 # HYPHENATED on purpose (blueprintx#113). This was `ci_scaffold` — already underscored,

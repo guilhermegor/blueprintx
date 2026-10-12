@@ -286,7 +286,7 @@ repos:
         entry: bash tests/test_scaffold_lint_test_cleanup.sh
         language: system
         pass_filenames: false
-        files: ^(bin/ci/scaffold_lint_test\.sh|tests/test_scaffold_lint_test_cleanup\.sh)$
+        files: ^(bin/ci/(scaffold_lint_test|check_review_config_shipped)\.sh|bin/lib/no_background_git\.sh|tests/test_scaffold_lint_test_cleanup\.sh)$
 
       - id: spec-answers-tests
         name: --spec regression tests (blueprintx#629)
