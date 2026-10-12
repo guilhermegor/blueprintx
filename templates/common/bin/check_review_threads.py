@@ -1714,9 +1714,13 @@ def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[
 
 
 def _marker_notices_as_reviews(
-    list_notices: list[dict], tuple_markers: tuple[str, ...]
+    list_notices: list[dict], tuple_markers: tuple[str, ...], set_roster: set[str]
 ) -> list[dict]:
-    """Return trusted ladder-marker comments in review shape, authored by their poster."""
+    """Return trusted ladder-marker comments in review shape, authored by their poster.
+
+    A roster author's marker comment is already returned by :func:`_notices_as_reviews`, so it is
+    left out here; counting it twice would report one body as two problems.
+    """
     return [
         {
             "author": dict_notice.get("author"),
@@ -1727,6 +1731,7 @@ def _marker_notices_as_reviews(
         for dict_notice in list_notices
         if dict_notice.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
         and _is_marker_comment(dict_notice, tuple_markers)
+        and normalise_login((dict_notice.get("author") or {}).get("login") or "") not in set_roster
     ]
 
 
@@ -1788,7 +1793,7 @@ def find_review_body_problems(
         )
         for dict_review in list_reviews
         + _notices_as_reviews(list_notices, set_roster)
-        + _marker_notices_as_reviews(list_notices, tuple_markers)
+        + _marker_notices_as_reviews(list_notices, tuple_markers, set_roster)
         if dict_review.get("state") != "DISMISSED"
         and (
             normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster

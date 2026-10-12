@@ -2531,6 +2531,15 @@ def test_marker_comment_with_findings_needs_an_answer() -> None:
     assert len(list_problems) == 1
 
 
+def test_roster_authored_marker_comment_is_one_problem_not_two() -> None:
+    """A marker comment from a roster login is read once, not as a notice AND as a marker."""
+    dict_roster_marker = {**_marker_findings_comment(), "author": {"login": "coderabbitai"}}
+    list_problems = _load_gate().find_review_body_problems(
+        [], [dict_roster_marker], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+    )
+    assert len(list_problems) == 1
+
+
 def test_clean_marker_comment_needs_no_answer() -> None:
     """A trusted marker comment reporting zero findings is not a review body with findings."""
     list_problems = _load_gate().find_review_body_problems(
