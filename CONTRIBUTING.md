@@ -89,6 +89,8 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 
 5. **GitGuardian exceptions**: a false positive in the secret scan is silenced in the root `.gitguardian.yaml` (`secret.ignored_matches`), never by editing history. Every entry needs a `name` stating why the match is not a credential.
 
+6. **Template lockfiles**: a dependency change to any `templates/*/package.json` regenerates that tier's `package-lock.json` in the same commit (`npm install --package-lock-only` in a rendered copy of the tier). `bin/ci/check_lockfile_sync.sh` fails the commit and the `lockfile-sync` job otherwise; an out-of-sync lock makes `npm ci` refuse to install and turns every open PR red (#588).
+
 ## Repository Secrets (Actions)
 
 This repo's own Actions secrets (`gh secret list`) are set by hand and reproducible from
