@@ -33,8 +33,7 @@ openpyxl = ">=3.1"
 pyodbc = ">=5.0"
 oracledb = ">=2.0"
 psycopg = ">=3.1"
-# 9.x requires system libmysqlclient; pin to 8.x for portable wheels
-mysql-connector-python = ">=8.3,<9.0"
+mysql-connector-python = ">=9.1"
 # BR ANBIMA business-day calendar (wrapped by utils/dates.py). Single-purpose package.
 wwdates = ">=1.0.0"
 # Hardened XML parsing at the ingestion trust boundary (utils/xml_reader.py), blueprintx#117.

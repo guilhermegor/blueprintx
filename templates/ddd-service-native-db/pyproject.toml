@@ -32,8 +32,7 @@ joblib = ">=1.3"
 pyodbc = ">=5.0"
 oracledb = ">=2.0"
 psycopg = ">=3.1"
-# 9.x requires system libmysqlclient; pin to 8.x for portable wheels
-mysql-connector-python = ">=8.3,<9.0"
+mysql-connector-python = ">=9.1"
 # The tabular vocabulary utils/{dtypes,frames,decimals,provenance,tabular_reader}.py speak.
 #
 # ⚠️ DECLARED BECAUSE IT IS IMPORTED — not because it was missing from the install. Until
