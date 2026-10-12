@@ -504,6 +504,7 @@ lib_minimal_copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    copy_repo_policy_workflows "$project_path"
 }
 
 # The tests that cover the gates themselves. Split out of the copy function when it crossed
@@ -801,6 +802,7 @@ apply_offline_mode() {
     # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
     # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
+    remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"

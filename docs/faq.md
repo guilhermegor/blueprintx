@@ -47,11 +47,9 @@ a fix) and blueprintx#262 (why an empty roster is not the opt-out).
 
 ## How does a scaffolded repo close the issue a merged PR delivered?
 
-BlueprintX carries `close-linked-issues.yml` and its `bin/close_linked_issues.sh` under
-`templates/common/` (blueprintx#604), but generated projects do not receive them yet: the scaffold
-scripts do not copy them until the wiring step tracked in
-[#604](https://github.com/guilhermegor/blueprintx/issues/604) lands. Once wired, it behaves as
-follows.
+Every generated project with a GitHub remote receives `close-linked-issues.yml` and its
+`bin/close_linked_issues.sh` (blueprintx#604). Offline scaffolds get neither: their only consumers
+are the removed workflows.
 
 GitHub's own `Closes #N` linking can come back empty (a `Closes: #N` with a colon, or a merge
 that did not link), which leaves the issue open and keeps a Projects "Item closed" -> Done
