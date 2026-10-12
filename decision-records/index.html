@@ -1999,6 +1999,15 @@ Closing this properly inside Actions needs a webhook receiver or GitHub App disp
 </blockquote>
 <p><strong>Not yet applied</strong> to <code>.github/workflows/review_threads.yml</code> (root) — held by
 PRs #491/#492. Follow-up once those land.</p>
+<h2 id="greptile-greptile-reviews-only-when-asked-737"><code>.greptile/</code> — Greptile reviews only when asked (#737)<a class="headerlink" href="#greptile-greptile-reviews-only-when-asked-737" title="Permanent link">&para;</a></h2>
+<p>Every scaffold ships <code>.greptile/config.json</code> (from <code>templates/common/</code>) with
+<code>"autoReview": []</code>, plus a per-skeleton <code>rules.md</code> and a <code>files.json</code> pointing at the
+project's <code>AGENTS.md</code> or <code>CLAUDE.md</code>. The reference default is <code>["open"]</code>, which reviews
+every PR on open and spends the monthly credit allowance while another reviewer is up.
+An empty array means never automatic; the review ladder asks for one explicitly. Do not use
+the trigger-label route, which counts as an <code>open</code> event and would need <code>"open"</code> back.
+<code>greptile-apps[bot]</code> posts inline review threads, so it is listed in every
+<code>.review-bots.yaml</code> roster.</p>
 
 
 
