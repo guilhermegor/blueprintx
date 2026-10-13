@@ -41,6 +41,8 @@ str_scaffold_rel="$(grep '^scaffold=' "$META" | cut -d= -f2-)"
 git config --global user.email >/dev/null 2>&1 || git config --global user.email "ci-bot@example.com"
 git config --global user.name >/dev/null 2>&1 || git config --global user.name "ci-bot"
 
+source "$REPO_ROOT/bin/lib/no_background_git.sh"
+
 WORK_DIR="$(mktemp -d)"
 # HYPHENATED on purpose (blueprintx#113). This was `ci_scaffold` — already underscored,
 # which is exactly why the tier that derives its import package from the project name
@@ -74,7 +76,9 @@ SEEDED_FILES=(
     "$REPO_ROOT/templates/python-common/src/utils/seeded_probe.pyo"
 )
 cleanup() {
-    rm -rf "$WORK_DIR" "${SEEDED_CACHES[@]}" "${SEEDED_FILES[@]}"
+    local int_rc=$?
+    rm -rf "$WORK_DIR" "${SEEDED_CACHES[@]}" "${SEEDED_FILES[@]}" || true
+    return "$int_rc"
 }
 trap cleanup EXIT
 

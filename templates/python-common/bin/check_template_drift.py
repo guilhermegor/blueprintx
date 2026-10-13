@@ -79,7 +79,7 @@ def read_tier(path_root: pathlib.Path) -> str | None:
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root to inspect.
+        The project root to inspect.
 
     Returns
     -------
@@ -107,11 +107,11 @@ def _expand_glob_cps(
     Parameters
     ----------
     str_lib : str
-            The shared scaffold lib source, line-continuations already spliced.
+        The shared scaffold lib source, line-continuations already spliced.
     path_blueprintx_root : pathlib.Path
-            Root of the BlueprintX checkout, for the tracked-file policy.
+        Root of the BlueprintX checkout, for the tracked-file policy.
     dict_templates : dict of str to pathlib.Path
-            ``COMMON``/``SHARED`` mapped to their template directories.
+        ``COMMON``/``SHARED`` mapped to their template directories.
 
     Returns
     -------
@@ -142,7 +142,7 @@ def _cp_destinations(str_line: str) -> set[str]:
     Parameters
     ----------
     str_line : str
-            One line of the shared scaffold lib.
+        One line of the shared scaffold lib.
 
     Returns
     -------
@@ -166,9 +166,9 @@ def conditional_relpaths(str_lib: str, str_flag: str | None = None) -> set[str]:
     Parameters
     ----------
     str_lib : str
-            The shared scaffold lib source, line-continuations already spliced.
+        The shared scaffold lib source, line-continuations already spliced.
     str_flag : str, optional
-            When given, keep only copies under a guard whose line mentions this name.
+        When given, keep only copies under a guard whose line mentions this name.
 
     Returns
     -------
@@ -201,7 +201,7 @@ def _line_kind(str_stripped: str) -> str:
     Parameters
     ----------
     str_stripped : str
-            One lib line, stripped.
+        One lib line, stripped.
 
     Returns
     -------
@@ -233,7 +233,7 @@ def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root to inspect.
+        The project root to inspect.
 
     Returns
     -------
@@ -256,7 +256,7 @@ def _template_roots(path_blueprintx_root: pathlib.Path) -> dict[str, pathlib.Pat
     Parameters
     ----------
     path_blueprintx_root : pathlib.Path
-            Root of a BlueprintX checkout.
+        Root of a BlueprintX checkout.
 
     Returns
     -------
@@ -278,7 +278,7 @@ def _scaffold_lib_text(path_blueprintx_root: pathlib.Path) -> str:
     Parameters
     ----------
     path_blueprintx_root : pathlib.Path
-            Root of a BlueprintX checkout.
+        Root of a BlueprintX checkout.
 
     Returns
     -------
@@ -304,7 +304,7 @@ def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
     Parameters
     ----------
     path_blueprintx_root : pathlib.Path
-            Root of a BlueprintX checkout.
+        Root of a BlueprintX checkout.
 
     Returns
     -------
@@ -340,9 +340,9 @@ def _is_removed(str_rel: str, set_removed: set[str]) -> bool:
     Parameters
     ----------
     str_rel : str
-            A project-relative destination.
+        A project-relative destination.
     set_removed : set of str
-            Project-relative paths the scaffold deletes after copying.
+        Project-relative paths the scaffold deletes after copying.
 
     Returns
     -------
@@ -366,9 +366,9 @@ def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) 
     Parameters
     ----------
     path_blueprintx_root : pathlib.Path
-            Root of the BlueprintX checkout.
+        Root of the BlueprintX checkout.
     path_dir : pathlib.Path
-            The template directory to list.
+        The template directory to list.
 
     Returns
     -------
@@ -403,9 +403,9 @@ def missing_relpaths(path_root: pathlib.Path, set_required: set[str]) -> list[st
     Parameters
     ----------
     path_root : pathlib.Path
-            The project root to check.
+        The project root to check.
     set_required : set of str
-            Project-relative paths the template ships.
+        Project-relative paths the template ships.
 
     Returns
     -------
@@ -421,7 +421,7 @@ def _parse_args(list_argv: list) -> tuple[pathlib.Path, pathlib.Path | None]:
     Parameters
     ----------
     list_argv : list of str
-            Raw CLI arguments (``sys.argv[1:]``).
+        Raw CLI arguments (``sys.argv[1:]``).
 
     Returns
     -------
@@ -448,11 +448,11 @@ def _report_missing(str_tier: str, list_missing: list, int_total: int) -> None:
     Parameters
     ----------
     str_tier : str
-            The project's stamped tier name.
+        The project's stamped tier name.
     list_missing : list of str
-            Sorted relative paths the template ships that the project lacks.
+        Sorted relative paths the template ships that the project lacks.
     int_total : int
-            How many paths were required in total (for the trailing summary line).
+        How many paths were required in total (for the trailing summary line).
 
     Returns
     -------
@@ -477,7 +477,7 @@ def main(list_argv: list) -> int:
     Parameters
     ----------
     list_argv : list of str
-            CLI arguments (``sys.argv[1:]``).
+        CLI arguments (``sys.argv[1:]``).
 
     Returns
     -------
