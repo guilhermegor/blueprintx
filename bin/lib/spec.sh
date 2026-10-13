@@ -166,11 +166,28 @@ _spec_answer_review_bot() {
 }
 
 _spec_answer_git_remote() {
-    # "n" here (no GitHub remote) is what every unattended/CI run wants:
-    # the scaffold falls back to the offline git workflow and skips branch
-    # protection entirely. A spec asking for "y" would need a real gh CLI
-    # session and is out of scope for this seam.
     spec_yn "$1" git_remote n
+}
+
+_spec_visibility_choice() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        public) echo 1 ;;
+        private) echo 2 ;;
+        *) return 1 ;;
+    esac
+}
+
+_spec_answer_create_repo() {
+    local file="$1" ans
+    [ "$(spec_yn "$file" git_remote n)" = y ] || return 0
+    ans="$(spec_yn "$file" create_repo n)"
+    echo "$ans"
+    [ "$ans" = y ] || return 0
+    _spec_visibility_choice "$(spec_get "$file" repo_visibility private)"
+    spec_yn "$file" kanban n
+    ans="$(spec_yn "$file" protect_branch n)"
+    echo "$ans"
+    [ "$ans" = y ] && spec_yn "$file" human_reviewers n || true
 }
 
 _spec_answer_logs() {
@@ -191,7 +208,7 @@ _spec_answer_publish_targets() {
 # support ships incrementally, tier by tier — see docs/spec-answers.md for
 # what is mapped and what remains a follow-up.
 
-_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db api-service-native-db mvc-service-native-db mvc-service-orm-db lib-minimal"
+_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db api-service-native-db mvc-service-native-db mvc-service-orm-db lib-minimal ts-lib"
 
 spec_skeleton_supported() {
     local str_name
@@ -252,6 +269,12 @@ spec_stdin_for_skeleton() {
             _spec_answer_review_bot "$file"
             _spec_answer_git_remote "$file"
             ;;
+        ts-lib)
+            _spec_answer_review_bot "$file"
+            _spec_answer_otel "$file"
+            _spec_answer_git_remote "$file"
+            _spec_answer_create_repo "$file"
+            ;;
         *)
             return 1
             ;;
@@ -283,6 +306,10 @@ _spec_key_map() {
                 publish_pypi:y publish_test_pypi:y consume_private:n \
                 review_bot_roster:n git_remote:n)
             ;;
+        ts-lib)
+            keys=(review_bot_roster:n otel:n git_remote:n create_repo:n \
+                repo_visibility:private kanban:n protect_branch:n human_reviewers:n)
+            ;;
         *)
             echo "no named-key prompt map for '$skeleton' yet" >&2
             return 1
@@ -310,7 +337,59 @@ spec_validate_answers() {
             y | n) spec_yn "$file" "$key" "$default" >/dev/null || int_bad=1 ;;
         esac
     done <<<"$map"
+    _spec_validate_remote "$skeleton" "$file" || int_bad=1
     return "$int_bad"
+}
+
+spec_creates_repo() {
+    grep -q '^create_repo:' <<<"$(_spec_key_map "$1" 2>/dev/null)" || return 1
+    [ "$(spec_yn "$2" git_remote n 2>/dev/null)" = y ] \
+        && [ "$(spec_yn "$2" create_repo n 2>/dev/null)" = y ]
+}
+
+_spec_validate_remote() {
+    local skeleton="$1" file="$2" str_vis int_bad=0
+    grep -q '^create_repo:' <<<"$(_spec_key_map "$skeleton")" || return 0
+    str_vis="$(spec_get "$file" repo_visibility private)"
+    if ! _spec_visibility_choice "$str_vis" >/dev/null; then
+        echo "spec: 'repo_visibility' must be public or private, got '$str_vis'" >&2
+        int_bad=1
+    fi
+    if [ "$(spec_yn "$file" create_repo n 2>/dev/null)" = y ] \
+        && [ "$(spec_yn "$file" git_remote n 2>/dev/null)" != y ]; then
+        echo "spec: 'create_repo' is y but 'git_remote' is not: set git_remote=y too" >&2
+        int_bad=1
+    fi
+    return "$int_bad"
+}
+
+spec_repo_slug() {
+    printf '%s/%s' "$(spec_get "$1" github_username "${GITHUB_USERNAME:-<gh-user>}")" "$2"
+}
+
+spec_preflight_create_repo() {
+    local skeleton="$1" file="$2" str_owner str_slug str_err
+    spec_creates_repo "$skeleton" "$file" || return 0
+    if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
+        echo "spec: create_repo=y needs an authenticated gh CLI (gh auth login)" >&2
+        return 1
+    fi
+    str_owner="$(spec_get "$file" github_username "${GITHUB_USERNAME:-}")"
+    [ -n "$str_owner" ] || str_owner="$(gh api user -q .login 2>/dev/null)" || true
+    if [ -z "$str_owner" ]; then
+        echo "spec: create_repo=y needs 'github_username' (gh could not tell who you are)" >&2
+        return 1
+    fi
+    str_slug="$str_owner/$3"
+    if str_err="$(gh repo view "$str_slug" 2>&1 >/dev/null)"; then
+        echo "spec: create_repo=y but GitHub repo '$str_slug' already exists" >&2
+        return 1
+    fi
+    if [[ "$str_err" != *"Could not resolve to a Repository"* ]]; then
+        echo "spec: could not check whether '$str_slug' exists (not a not-found error): $str_err" >&2
+        return 1
+    fi
+    GITHUB_USERNAME="$str_owner"
 }
 
 #

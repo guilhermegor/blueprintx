@@ -329,7 +329,187 @@ test_a_failed_answer_stream_stops_the_scaffold_flow() {
     fi
 }
 
+ts_lib_stream() {
+    local file
+    file="$(SPEC_LANGUAGE=typescript write_spec "stream-$RANDOM" ts-lib "$@")"
+    bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        spec_stdin_for_skeleton ts-lib "$2"' _ "$REPO_ROOT" "$file" | paste -sd, -
+}
+
+test_ts_lib_answer_stream_order() {
+    local str_def str_remote str_full str_priv
+    str_def="$(ts_lib_stream)"
+    str_remote="$(ts_lib_stream git_remote=y)"
+    str_priv="$(ts_lib_stream git_remote=y create_repo=y)"
+    str_full="$(ts_lib_stream review_bot_roster=y otel=n git_remote=y create_repo=y \
+        repo_visibility=public kanban=y protect_branch=y human_reviewers=y)"
+    if [ "$str_def" = "n,n,n" ] && [ "$str_remote" = "n,n,y,n" ] \
+        && [ "$str_priv" = "n,n,y,y,2,n,n" ] && [ "$str_full" = "y,n,y,y,1,y,y,y" ]; then
+        pass "ts-lib answer stream: roster, otel, git_remote, create_repo, visibility, kanban, protect, reviewers"
+    else
+        fail "ts-lib stream" "default=$str_def remote=$str_remote private=$str_priv full=$str_full"
+    fi
+}
+
+test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes() {
+    local str_got
+    str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/ts_lib.sh" \
+        | grep -E '^    (prompt_[a-z_]+|scaffold_prompt_review_bot_roster)( |$)' \
+        | awk '{print $1}' | paste -sd' ' -)"
+    if [ "$str_got" = "scaffold_prompt_review_bot_roster prompt_otel prompt_git_remote_setup" ]; then
+        pass "ts_lib.sh main() asks roster, otel, git remote in the order the stream is built for"
+    else
+        fail "ts-lib prompt order" "main() asks: $str_got"
+    fi
+}
+
+test_ts_lib_remote_keys_defaults() {
+    local file str_got
+    file="$(SPEC_LANGUAGE=typescript write_spec ts-defaults ts-lib)"
+    str_got="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        spec_describe_skeleton ts-lib "$2"' _ "$REPO_ROOT" "$file" | grep -E '^(git_remote|create_repo|repo_visibility|kanban|protect_branch|human_reviewers)=' | paste -sd' ' -)"
+    if [ "$str_got" = "git_remote=n create_repo=n repo_visibility=private kanban=n protect_branch=n human_reviewers=n" ]; then
+        pass "ts-lib remote keys default to no remote, private, no kanban, no protection"
+    else
+        fail "ts-lib remote defaults" "got: $str_got"
+    fi
+}
+
+make_gh_stub() {
+    mkdir -p "$WORK_DIR/stubbin"
+    echo '#!/bin/bash' >"$WORK_DIR/stubbin/gh"
+    cat >>"$WORK_DIR/stubbin/gh" <<'STUB'
+echo "$*" >>"$STUB_STATE/calls.log"
+case "$1 $2" in
+    "auth status") [ "${STUB_AUTH:-ok}" = ok ] || exit 1 ;;
+    "api user") echo ci-bot ;;
+    "repo view")
+        [ "${STUB_REPO_EXISTS:-0}" = 1 ] || [ -e "$STUB_STATE/created" ] && exit 0
+        [ "${STUB_VIEW_ERROR:-0}" = 1 ] && { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
+        echo "GraphQL: Could not resolve to a Repository with the name '$3'. (repository)" >&2
+        exit 1 ;;
+    "repo create") touch "$STUB_STATE/created" ;;
+    "api --method") cat >"$STUB_STATE/protection.json" ;;
+esac
+exit 0
+STUB
+    chmod +x "$WORK_DIR/stubbin/gh" || fail "gh stub" "could not make the stub executable"
+}
+
+run_ts_lib_with_gh_stub() {
+    local str_name="$1" file
+    shift
+    local -a list_env=()
+    while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do list_env+=("$1"); shift; done
+    shift
+    STUB_STATE="$WORK_DIR/$str_name-state"
+    mkdir -p "$STUB_STATE" "$WORK_DIR/$str_name-remote"
+    git init -q --bare "$WORK_DIR/$str_name-remote/spec-probe.git"
+    file="$(SPEC_LANGUAGE=typescript write_spec "$str_name" ts-lib "project_root=$WORK_DIR/$str_name-root" "$@")"
+    make_gh_stub
+    (cd "$WORK_DIR" && env TMPDIR="$WORK_DIR" PATH="$WORK_DIR/stubbin:$PATH" STUB_STATE="$STUB_STATE" \
+        GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="url.$WORK_DIR/$str_name-remote/.insteadOf" \
+        GIT_CONFIG_VALUE_0="git@github.com:ci-bot/" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t \
+        GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GH_PAT_REVIEW_TRIGGER= GITGUARDIAN_API_KEY= \
+        "${list_env[@]}" bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null) \
+        >"$WORK_DIR/$str_name.out"
+    INT_RUN_RC=$?
+}
+
+test_create_repo_runs_gh_with_the_chosen_visibility_and_protection() {
+    local str_calls str_prot int_rc=0
+    run_ts_lib_with_gh_stub e2e-priv -- git_remote=y create_repo=y repo_visibility=private \
+        protect_branch=y human_reviewers=y
+    int_rc=$((int_rc + INT_RUN_RC))
+    run_ts_lib_with_gh_stub e2e-pub -- git_remote=y create_repo=y repo_visibility=public \
+        protect_branch=y human_reviewers=n
+    int_rc=$((int_rc + INT_RUN_RC))
+    run_ts_lib_with_gh_stub e2e-nop -- git_remote=y create_repo=y protect_branch=n
+    int_rc=$((int_rc + INT_RUN_RC))
+    str_calls="$(grep '^repo create' "$WORK_DIR/e2e-priv-state/calls.log" "$WORK_DIR/e2e-pub-state/calls.log" \
+        "$WORK_DIR/e2e-nop-state/calls.log" | sed "s|$WORK_DIR/||" | paste -sd'|' -)"
+    str_prot="$(tr -d '\n ' <"$WORK_DIR/e2e-priv-state/protection.json" 2>/dev/null)"
+    if [[ "$str_calls" == *"e2e-priv-state/calls.log:repo create ci-bot/spec-probe"*"--private"* ]] \
+        && [[ "$str_calls" == *"e2e-pub-state/calls.log:repo create ci-bot/spec-probe"*"--public"* ]] \
+        && [[ "$str_calls" == *"e2e-nop-state/calls.log:repo create ci-bot/spec-probe"*"--private"* ]] \
+        && [[ "$str_prot" == *'"required_approving_review_count":1'* ]] \
+        && grep -q '"required_pull_request_reviews": null' "$WORK_DIR/e2e-pub-state/protection.json" \
+        && [ ! -e "$WORK_DIR/e2e-nop-state/protection.json" ] \
+        && [ "$int_rc" -eq 0 ] \
+        && [ -d "$WORK_DIR/e2e-priv-root/spec-probe" ] && [ -d "$WORK_DIR/e2e-pub-root/spec-probe" ] \
+        && [ -d "$WORK_DIR/e2e-nop-root/spec-probe" ]; then
+        pass "create_repo=y: stubbed gh creates --private/--public as asked; protection and reviewers follow the answers"
+    else
+        fail "create_repo e2e" "calls=$str_calls priv-protection=$str_prot out=$(tail -c 300 "$WORK_DIR/e2e-priv.out")"
+    fi
+}
+
+test_create_repo_n_never_calls_gh_repo_create() {
+    run_ts_lib_with_gh_stub e2e-nocreate -- git_remote=y create_repo=n
+    if [ "$INT_RUN_RC" -eq 0 ] && [ -d "$WORK_DIR/e2e-nocreate-root/spec-probe" ] \
+        && ! grep -q '^repo create' "$WORK_DIR/e2e-nocreate-state/calls.log" 2>/dev/null; then
+        pass "git_remote=y with create_repo=n adds origin but never asks gh to create a repo"
+    else
+        fail "create_repo=n" "out=$(tail -c 300 "$WORK_DIR/e2e-nocreate.out")"
+    fi
+}
+
+test_create_repo_preflight_stops_before_any_file_is_written() {
+    local str_cause
+    for str_cause in "STUB_AUTH=fail|gh CLI" "STUB_REPO_EXISTS=1|already exists" \
+        "STUB_VIEW_ERROR=1|not a not-found error"; do
+        run_ts_lib_with_gh_stub "pre-${str_cause%%=*}" "${str_cause%%|*}" -- git_remote=y create_repo=y
+        local str_name="pre-${str_cause%%=*}"
+        if [ "$INT_RUN_RC" -ne 0 ] && [ ! -e "$WORK_DIR/$str_name-root" ] && grep -q "${str_cause##*|}" "$WORK_DIR/$str_name.out" \
+            && ! grep -q '^repo create' "$WORK_DIR/$str_name-state/calls.log"; then
+            pass "preflight (${str_cause%%|*}) refuses naming the cause; nothing created, no repo create"
+        else
+            fail "preflight ${str_cause%%|*}" "out=$(tail -c 300 "$WORK_DIR/$str_name.out")"
+        fi
+    done
+}
+
+test_remote_key_validation_names_the_key() {
+    local file str_orphan str_vis
+    file="$(SPEC_LANGUAGE=typescript write_spec bad-vis ts-lib "project_root=$WORK_DIR/bad-vis-root" \
+        git_remote=y create_repo=y repo_visibility=internal)"
+    str_vis="$(run_blueprintx new --spec "$file")"
+    file="$(SPEC_LANGUAGE=typescript write_spec orphan ts-lib "project_root=$WORK_DIR/orphan-root" \
+        create_repo=y)"
+    str_orphan="$(run_blueprintx new --spec "$file")"
+    if [[ "$str_vis" == *"'repo_visibility' must be public or private, got 'internal'"* ]] \
+        && [[ "$str_orphan" == *"'create_repo' is y but 'git_remote' is not"* ]] \
+        && [ ! -e "$WORK_DIR/bad-vis-root" ] && [ ! -e "$WORK_DIR/orphan-root" ]; then
+        pass "bad repo_visibility and create_repo without git_remote stop the run naming the key"
+    else
+        fail "remote validation" "vis: ${str_vis: -200} orphan: ${str_orphan: -200}"
+    fi
+}
+
+test_dry_run_prints_the_remote_answers_and_creates_nothing() {
+    local file out
+    make_gh_stub
+    file="$(SPEC_LANGUAGE=typescript write_spec dry-remote ts-lib "project_root=$WORK_DIR/dry-root" \
+        git_remote=y create_repo=y repo_visibility=public protect_branch=y)"
+    out="$(STUB_STATE="$WORK_DIR" PATH="$WORK_DIR/stubbin:$PATH" run_blueprintx new --spec "$file" --dry-run)"
+    if [[ "$out" == *"repo_slug=ci-bot/spec-probe"* && "$out" == *"repo_visibility=public"* \
+        && "$out" == *"protect_branch=y"* ]] && [ ! -e "$WORK_DIR/dry-root" ] \
+        && [ ! -e "$WORK_DIR/calls.log" ]; then
+        pass "--dry-run prints slug, visibility and protection, creates nothing and never calls gh"
+    else
+        fail "dry-run remote" "got: ${out: -400}"
+    fi
+}
+
 main() {
+    test_ts_lib_answer_stream_order
+    test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes
+    test_ts_lib_remote_keys_defaults
+    test_create_repo_runs_gh_with_the_chosen_visibility_and_protection
+    test_create_repo_n_never_calls_gh_repo_create
+    test_create_repo_preflight_stops_before_any_file_is_written
+    test_remote_key_validation_names_the_key
+    test_dry_run_prints_the_remote_answers_and_creates_nothing
     test_spec_yn_accepts_the_documented_forms
     test_spec_yn_rejects_a_typo_naming_the_key
     test_validate_answers_reports_every_bad_key

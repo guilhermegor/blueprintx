@@ -50,7 +50,7 @@
 23 bin/lib/scaffold_kanban.sh
 15 bin/lib/scaffold_package_json.sh
 98 bin/lib/scaffold_python_templates.sh
-115 bin/lib/spec.sh
+111 bin/lib/spec.sh
 13 bin/preview.sh
 72 bin/promote_offline_to_online.sh
 26 bin/scaffold/bash_cli.sh

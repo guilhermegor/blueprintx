@@ -676,6 +676,8 @@ run_create_flow_from_spec() {
         if spec_skeleton_supported "$SKELETON_CHOICE"; then
             spec_describe_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" \
                 | while IFS= read -r line; do print_status "config" "$line"; done
+            ! spec_creates_repo "$SKELETON_CHOICE" "$SPEC_FILE" \
+                || print_status "config" "repo_slug=$(spec_repo_slug "$SPEC_FILE" "$PROJECT_NAME")"
         else
             print_status "warning" "No named-key prompt map for '$SKELETON_CHOICE' yet — its internal prompts would stay interactive."
         fi
@@ -687,6 +689,9 @@ run_create_flow_from_spec() {
     # scaffold with interactive prompts, hanging an unattended run.
     spec_skeleton_supported "$SKELETON_CHOICE" \
         || exit_error "--spec: '$SKELETON_CHOICE' has no named-key prompt map, so it cannot run unattended. Use the interactive flow, or one of: $(spec_supported_skeletons)."
+
+    spec_preflight_create_repo "$SKELETON_CHOICE" "$SPEC_FILE" "$PROJECT_NAME" \
+        || exit_error "--spec: GitHub preflight failed; nothing was created."
 
     if [ "$DEV_MODE" -eq 1 ]; then
         select_dev_project_root

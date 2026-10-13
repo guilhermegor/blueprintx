@@ -83,7 +83,7 @@ are not edited by this mechanism — so when one of them gains a new prompt, upd
 one function is what keeps every spec-driven caller correct, instead of every stored
 answer string everywhere.
 
-Named-key support ships per skeleton. Today: the six Python tiers. Call
+Named-key support ships per skeleton. Today: the six Python tiers and `ts-lib`. Call
 `spec_skeleton_supported <skeleton>` to check before relying on `spec_stdin_for_skeleton`.
 
 ### DDD and API tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `api-service-native-db`)
@@ -103,7 +103,7 @@ the stored answers.
 | `email` | `n` | `y` also reads `email_backend` (`outlook`\|`smtp`). |
 | `env_wise_config` | `n` | Split `inputs.yaml`/`outputs.yaml` into `_dev`/`_prd` pairs. |
 | `review_bot_roster` | `n` | `y` ships `.review-bots.yaml` (a PR review bot is expected). |
-| `git_remote` | `n` | `y` is out of scope for this seam — it needs a real `gh` session; leave `n` for unattended/CI runs. |
+| `git_remote` | `n` | `y` only adds `origin` here, answering the one remote prompt; creating the repo is mapped for `ts-lib` only (see below), so leave `n` for unattended/CI runs. |
 
 ### MVC tiers (`mvc-service-native-db`, `mvc-service-orm-db`)
 
@@ -126,6 +126,52 @@ Same as the DDD tiers, **minus `storage`** (MVC has no schema-less storage promp
 | `review_bot_roster` | `n` | Same as the service tiers. |
 | `git_remote` | `n` | Same as the service tiers. |
 
+### `ts-lib`
+
+`bin/scaffold/ts_lib.sh` reads, in this order: `review_bot_roster`, `otel`, then the git
+remote block. `tests/test_spec_answers.sh` pins that order two ways: it checks the prompts
+`main()` calls, and it runs the whole scaffold against a stubbed `gh`, where a misaligned
+answer shows up as the wrong visibility or the wrong protection payload.
+
+| Key | Default | Notes |
+|---|---|---|
+| `review_bot_roster` | `n` | Same as the service tiers. |
+| `otel` | `n` | Ships the OTLP log-export helper. |
+| `git_remote` | `n` | `y` adds `origin`. Alone it creates nothing on GitHub. |
+| `create_repo` | `n` | `y` creates the repo on GitHub and pushes. Needs `git_remote=y`. |
+| `repo_visibility` | `private` | `public` or `private`. Read only when `create_repo=y`. |
+| `kanban` | `n` | `y` also creates the linked GitHub Project. Read only when `create_repo=y`. |
+| `protect_branch` | `n` | `y` protects `main`. Read only when `create_repo=y`. |
+| `human_reviewers` | `n` | `y` requires one approving review. Read only when `protect_branch=y`. |
+
+**Protection can fail after the repo exists.** On a free GitHub plan, branch protection on a
+private repo is refused (HTTP 403, "Upgrade to GitHub Pro"). By then the repo is created and
+pushed. The scaffold prints "Failed to protect branch 'main'; adjust settings manually in
+GitHub." and carries on, so the run still finishes with an unprotected `main`. Use
+`repo_visibility=public` or a paid plan if you need `protect_branch=y` to take effect.
+
+The repo slug is never a key: it is `github_username/project_name`, exactly what the
+scaffold derives. Visibility defaults to `private`, not to the interactive menu's public,
+because a repo made public by omission cannot be taken back; say `public` to publish.
+`kanban` exists because the scaffold asks that question right after a successful push,
+before it asks about protection, so a hidden constant would shift every later answer.
+
+**Preflight (`create_repo=y` only).** Before any directory is made, the run needs `gh auth
+status` to succeed and `gh repo view <owner>/<project_name>` to fail with a not-found error (the repo must not
+exist). Any other lookup failure (network, token scope) is not read as "absent". Every
+failure stops the run, names the cause and creates nothing. A missing
+`github_username` is taken from `gh api user`. An unknown `repo_visibility`, or
+`create_repo=y` with `git_remote=n`, stops the run naming the key, like any other bad value.
+`--dry-run` prints every remote answer plus `repo_slug` and calls no `gh`.
+
+```
+git_remote=y
+create_repo=y
+repo_visibility=public
+protect_branch=y
+human_reviewers=n
+```
+
 ## Publish/registry keys are answer-only — they do not implement publishing
 
 `publish_pypi`, `publish_test_pypi`, and `consume_private` answer `lib-minimal`'s
@@ -139,10 +185,10 @@ here — scope note from blueprintx#481.
 
 ## Follow-up: TypeScript and future tiers
 
-`react-spa-webpack`, `ts-lib`, and any future non-Python skeleton have no entry in
+`react-spa-webpack` and any future skeleton not listed above have no entry in
 `spec_stdin_for_skeleton` yet. `--spec` still resolves their top-level answers (project
 name, language, skeleton, license, …); their scaffold-internal prompts stay interactive
-until a named-key map is added for them, the same way the six Python tiers were —
+until a named-key map is added for them, the same way the six Python tiers and `ts-lib` were —
 `spec_skeleton_supported` returns `false` for them today. `blueprintx new --spec` **refuses**
 such a skeleton before creating anything (a half-interactive run would hang an unattended
 caller); `--spec ... --dry-run` still reports the resolved top-level answers with a warning.
