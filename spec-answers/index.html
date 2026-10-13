@@ -1099,6 +1099,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ts-lib" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ts-lib
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2051,6 +2062,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ts-lib" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ts-lib
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2229,7 +2251,7 @@ themselves (<code>bin/scaffold/python_*.sh</code>) still read positional stdin a
 are not edited by this mechanism — so when one of them gains a new prompt, updating that
 one function is what keeps every spec-driven caller correct, instead of every stored
 answer string everywhere.</p>
-<p>Named-key support ships per skeleton. Today: the six Python tiers. Call
+<p>Named-key support ships per skeleton. Today: the six Python tiers and <code>ts-lib</code>. Call
 <code>spec_skeleton_supported &lt;skeleton&gt;</code> to check before relying on <code>spec_stdin_for_skeleton</code>.</p>
 <h3 id="ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db">DDD and API tiers (<code>ddd-service-native-db</code>, <code>ddd-service-orm-db</code>, <code>api-service-native-db</code>)<a class="headerlink" href="#ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db" title="Permanent link">&para;</a></h3>
 <p><code>api-service-native-db</code> asks the same prompts in the same order as the DDD tiers, so it shares
@@ -2288,7 +2310,7 @@ the stored answers.</p>
 <tr>
 <td><code>git_remote</code></td>
 <td><code>n</code></td>
-<td><code>y</code> is out of scope for this seam — it needs a real <code>gh</code> session; leave <code>n</code> for unattended/CI runs.</td>
+<td><code>y</code> only adds <code>origin</code> here, answering the one remote prompt; creating the repo is mapped for <code>ts-lib</code> only (see below), so leave <code>n</code> for unattended/CI runs.</td>
 </tr>
 </tbody>
 </table>
@@ -2362,6 +2384,85 @@ the stored answers.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="ts-lib"><code>ts-lib</code><a class="headerlink" href="#ts-lib" title="Permanent link">&para;</a></h3>
+<p><code>bin/scaffold/ts_lib.sh</code> reads, in this order: <code>review_bot_roster</code>, <code>otel</code>, then the git
+remote block. <code>tests/test_spec_answers.sh</code> pins that order two ways: it checks the prompts
+<code>main()</code> calls, and it runs the whole scaffold against a stubbed <code>gh</code>, where a misaligned
+answer shows up as the wrong visibility or the wrong protection payload.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>review_bot_roster</code></td>
+<td><code>n</code></td>
+<td>Same as the service tiers.</td>
+</tr>
+<tr>
+<td><code>otel</code></td>
+<td><code>n</code></td>
+<td>Ships the OTLP log-export helper.</td>
+</tr>
+<tr>
+<td><code>git_remote</code></td>
+<td><code>n</code></td>
+<td><code>y</code> adds <code>origin</code>. Alone it creates nothing on GitHub.</td>
+</tr>
+<tr>
+<td><code>create_repo</code></td>
+<td><code>n</code></td>
+<td><code>y</code> creates the repo on GitHub and pushes. Needs <code>git_remote=y</code>.</td>
+</tr>
+<tr>
+<td><code>repo_visibility</code></td>
+<td><code>private</code></td>
+<td><code>public</code> or <code>private</code>. Read only when <code>create_repo=y</code>.</td>
+</tr>
+<tr>
+<td><code>kanban</code></td>
+<td><code>n</code></td>
+<td><code>y</code> also creates the linked GitHub Project. Read only when <code>create_repo=y</code>.</td>
+</tr>
+<tr>
+<td><code>protect_branch</code></td>
+<td><code>n</code></td>
+<td><code>y</code> protects <code>main</code>. Read only when <code>create_repo=y</code>.</td>
+</tr>
+<tr>
+<td><code>human_reviewers</code></td>
+<td><code>n</code></td>
+<td><code>y</code> requires one approving review. Read only when <code>protect_branch=y</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Protection can fail after the repo exists.</strong> On a free GitHub plan, branch protection on a
+private repo is refused (HTTP 403, "Upgrade to GitHub Pro"). By then the repo is created and
+pushed. The scaffold prints "Failed to protect branch 'main'; adjust settings manually in
+GitHub." and carries on, so the run still finishes with an unprotected <code>main</code>. Use
+<code>repo_visibility=public</code> or a paid plan if you need <code>protect_branch=y</code> to take effect.</p>
+<p>The repo slug is never a key: it is <code>github_username/project_name</code>, exactly what the
+scaffold derives. Visibility defaults to <code>private</code>, not to the interactive menu's public,
+because a repo made public by omission cannot be taken back; say <code>public</code> to publish.
+<code>kanban</code> exists because the scaffold asks that question right after a successful push,
+before it asks about protection, so a hidden constant would shift every later answer.</p>
+<p><strong>Preflight (<code>create_repo=y</code> only).</strong> Before any directory is made, the run needs <code>gh auth
+status</code> to succeed and <code>gh repo view &lt;owner&gt;/&lt;project_name&gt;</code> to fail with a not-found error (the repo must not
+exist). Any other lookup failure (network, token scope) is not read as "absent". Every
+failure stops the run, names the cause and creates nothing. A missing
+<code>github_username</code> is taken from <code>gh api user</code>. An unknown <code>repo_visibility</code>, or
+<code>create_repo=y</code> with <code>git_remote=n</code>, stops the run naming the key, like any other bad value.
+<code>--dry-run</code> prints every remote answer plus <code>repo_slug</code> and calls no <code>gh</code>.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git_remote=y
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>create_repo=y
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>repo_visibility=public
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>protect_branch=y
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>human_reviewers=n
+</span></code></pre></div>
 <h2 id="publishregistry-keys-are-answer-only-they-do-not-implement-publishing">Publish/registry keys are answer-only — they do not implement publishing<a class="headerlink" href="#publishregistry-keys-are-answer-only-they-do-not-implement-publishing" title="Permanent link">&para;</a></h2>
 <p><code>publish_pypi</code>, <code>publish_test_pypi</code>, and <code>consume_private</code> answer <code>lib-minimal</code>'s
 <strong>existing</strong> yes/no gate for which release workflow file the scaffold ships — nothing in
@@ -2371,10 +2472,10 @@ this seam performs a real publish, credential check, or registry call.</p>
 <code>publishprobe</code> tool (greenfield#26) instead of reimplementing credentials or publishing
 here — scope note from blueprintx#481.</p>
 <h2 id="follow-up-typescript-and-future-tiers">Follow-up: TypeScript and future tiers<a class="headerlink" href="#follow-up-typescript-and-future-tiers" title="Permanent link">&para;</a></h2>
-<p><code>react-spa-webpack</code>, <code>ts-lib</code>, and any future non-Python skeleton have no entry in
+<p><code>react-spa-webpack</code> and any future skeleton not listed above have no entry in
 <code>spec_stdin_for_skeleton</code> yet. <code>--spec</code> still resolves their top-level answers (project
 name, language, skeleton, license, …); their scaffold-internal prompts stay interactive
-until a named-key map is added for them, the same way the six Python tiers were —
+until a named-key map is added for them, the same way the six Python tiers and <code>ts-lib</code> were —
 <code>spec_skeleton_supported</code> returns <code>false</code> for them today. <code>blueprintx new --spec</code> <strong>refuses</strong>
 such a skeleton before creating anything (a half-interactive run would hang an unattended
 caller); <code>--spec ... --dry-run</code> still reports the resolved top-level answers with a warning.
