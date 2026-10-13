@@ -144,6 +144,12 @@ answer shows up as the wrong visibility or the wrong protection payload.
 | `protect_branch` | `n` | `y` protects `main`. Read only when `create_repo=y`. |
 | `human_reviewers` | `n` | `y` requires one approving review. Read only when `protect_branch=y`. |
 
+**Protection can fail after the repo exists.** On a free GitHub plan, branch protection on a
+private repo is refused (HTTP 403, "Upgrade to GitHub Pro"). By then the repo is created and
+pushed. The scaffold prints "Failed to protect branch 'main'; adjust settings manually in
+GitHub." and carries on, so the run still finishes with an unprotected `main`. Use
+`repo_visibility=public` or a paid plan if you need `protect_branch=y` to take effect.
+
 The repo slug is never a key: it is `github_username/project_name`, exactly what the
 scaffold derives. Visibility defaults to `private`, not to the interactive menu's public,
 because a repo made public by omission cannot be taken back; say `public` to publish.

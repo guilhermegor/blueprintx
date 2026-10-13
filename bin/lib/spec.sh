@@ -342,14 +342,14 @@ spec_validate_answers() {
 }
 
 spec_creates_repo() {
-    _spec_key_map "$1" 2>/dev/null | grep -q '^create_repo:' || return 1
+    grep -q '^create_repo:' <<<"$(_spec_key_map "$1" 2>/dev/null)" || return 1
     [ "$(spec_yn "$2" git_remote n 2>/dev/null)" = y ] \
         && [ "$(spec_yn "$2" create_repo n 2>/dev/null)" = y ]
 }
 
 _spec_validate_remote() {
     local skeleton="$1" file="$2" str_vis int_bad=0
-    _spec_key_map "$skeleton" | grep -q '^create_repo:' || return 0
+    grep -q '^create_repo:' <<<"$(_spec_key_map "$skeleton")" || return 0
     str_vis="$(spec_get "$file" repo_visibility private)"
     if ! _spec_visibility_choice "$str_vis" >/dev/null; then
         echo "spec: 'repo_visibility' must be public or private, got '$str_vis'" >&2

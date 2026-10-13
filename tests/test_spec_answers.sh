@@ -470,7 +470,7 @@ test_create_repo_preflight_stops_before_any_file_is_written() {
 }
 
 test_remote_key_validation_names_the_key() {
-    local file out str_orphan str_vis
+    local file str_orphan str_vis
     file="$(SPEC_LANGUAGE=typescript write_spec bad-vis ts-lib "project_root=$WORK_DIR/bad-vis-root" \
         git_remote=y create_repo=y repo_visibility=internal)"
     str_vis="$(run_blueprintx new --spec "$file")"
