@@ -235,7 +235,7 @@ repos:
       # graceful skip locally, hard-fail only when GITLEAKS_REQUIRED=1 (set by CI).
       - id: check-secrets
         name: secret scan (gitleaks)
-        entry: bash bin/check_secrets.sh
+        entry: bash bin/check_secrets.sh --staged
         language: system
         pass_filenames: false
         always_run: true

@@ -438,6 +438,9 @@ jobs:
       - name: Should-fail regression tests for the prompt tty guard
         run: bash tests/test_prompt_tty_guard.sh
 
+      - name: Should-fail regression tests for the scaffold_lint_test.sh cleanup trap
+        run: bash tests/test_scaffold_lint_test_cleanup.sh
+
       - name: Should-fail regression tests for close_linked_issues.sh
         run: bash tests/test_close_linked_issues.sh
 
