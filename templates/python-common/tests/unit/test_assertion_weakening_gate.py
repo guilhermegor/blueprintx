@@ -518,9 +518,9 @@ def path_renamed_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     Parameters
     ----------
     tmp_path : pathlib.Path
-            Pytest-provided scratch directory.
+        Pytest-provided scratch directory.
     monkeypatch : pytest.MonkeyPatch
-            Used to run the gate inside the repo.
+        Used to run the gate inside the repo.
 
     Returns
     -------
@@ -548,9 +548,9 @@ def _rename_with(path_repo: Path, str_body: str) -> list[str]:
     Parameters
     ----------
     path_repo : pathlib.Path
-            The repository from ``path_renamed_repo``.
+        The repository from ``path_renamed_repo``.
     str_body : str
-            Content of the renamed file.
+        Content of the renamed file.
 
     Returns
     -------

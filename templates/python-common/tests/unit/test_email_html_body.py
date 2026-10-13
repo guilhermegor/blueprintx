@@ -102,7 +102,7 @@ def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
     Parameters
     ----------
     str_html : str
-            A body containing a real tag.
+        A body containing a real tag.
     """
     assert to_html_body(str_html) == str_html
 
@@ -163,9 +163,9 @@ def test_to_html_body_tag_lookalike_is_escaped_as_plain_text_literal(
     Parameters
     ----------
     str_text : str
-            Plain text that merely contains ``<br``, ``<p`` or a block-tag name.
+        Plain text that merely contains ``<br``, ``<p`` or a block-tag name.
     str_expected : str
-            The exact escaped output.
+        The exact escaped output.
     """
     assert to_html_body(str_text) == str_expected
 
@@ -184,7 +184,7 @@ def test_to_html_body_long_whitespace_input_completes_quickly(str_body: str) -> 
     Parameters
     ----------
     str_body : str
-            A pathological body that never closes its tag.
+        A pathological body that never closes its tag.
     """
     float_start = time.perf_counter()
     to_html_body(str_body)

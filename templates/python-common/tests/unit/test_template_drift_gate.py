@@ -25,7 +25,7 @@ def _load(str_name: str) -> ModuleType:
     Parameters
     ----------
     str_name : str
-            Module stem under ``bin/``.
+        Module stem under ``bin/``.
 
     Returns
     -------
@@ -59,7 +59,7 @@ def _blueprintx_root(path_tmp: Path) -> Path:
     Parameters
     ----------
     path_tmp : pathlib.Path
-            A temporary directory to build under.
+        A temporary directory to build under.
 
     Returns
     -------
@@ -346,11 +346,11 @@ def _checkout(path_tmp: Path, str_lib: str, list_files: list[str]) -> Path:
     Parameters
     ----------
     path_tmp : pathlib.Path
-            A temporary directory to build under.
+        A temporary directory to build under.
     str_lib : str
-            Contents of the shared scaffold lib.
+        Contents of the shared scaffold lib.
     list_files : list of str
-            Paths under ``templates/python-common/`` to create empty.
+        Paths under ``templates/python-common/`` to create empty.
 
     Returns
     -------
@@ -430,9 +430,9 @@ def _git(path_root: Path, *tuple_args: str) -> None:
     Parameters
     ----------
     path_root : pathlib.Path
-            The repository directory.
+        The repository directory.
     *tuple_args : str
-            Arguments after ``git -C <path_root>``.
+        Arguments after ``git -C <path_root>``.
 
     Returns
     -------
