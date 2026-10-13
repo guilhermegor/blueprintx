@@ -20,7 +20,7 @@
     "url": "git+https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git"
   },
   "engines": {
-    "node": ">=22.14.0",
+    "node": "^22.18.0 || >=24.11.0",
     "npm": ">=11.15.0"
   },
   "packageManager": "npm@11.15.0",
