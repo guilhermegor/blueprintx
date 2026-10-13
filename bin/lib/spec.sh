@@ -368,7 +368,7 @@ spec_repo_slug() {
 }
 
 spec_preflight_create_repo() {
-    local skeleton="$1" file="$2" str_owner str_slug
+    local skeleton="$1" file="$2" str_owner str_slug str_err
     spec_creates_repo "$skeleton" "$file" || return 0
     if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
         echo "spec: create_repo=y needs an authenticated gh CLI (gh auth login)" >&2
@@ -381,8 +381,12 @@ spec_preflight_create_repo() {
         return 1
     fi
     str_slug="$str_owner/$3"
-    if gh repo view "$str_slug" >/dev/null 2>&1; then
+    if str_err="$(gh repo view "$str_slug" 2>&1 >/dev/null)"; then
         echo "spec: create_repo=y but GitHub repo '$str_slug' already exists" >&2
+        return 1
+    fi
+    if [[ "$str_err" != *"Could not resolve to a Repository"* ]]; then
+        echo "spec: could not check whether '$str_slug' exists (not a not-found error): $str_err" >&2
         return 1
     fi
     GITHUB_USERNAME="$str_owner"

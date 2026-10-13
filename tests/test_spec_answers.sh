@@ -383,13 +383,17 @@ echo "$*" >>"$STUB_STATE/calls.log"
 case "$1 $2" in
     "auth status") [ "${STUB_AUTH:-ok}" = ok ] || exit 1 ;;
     "api user") echo ci-bot ;;
-    "repo view") [ "${STUB_REPO_EXISTS:-0}" = 1 ] || [ -e "$STUB_STATE/created" ] || exit 1 ;;
+    "repo view")
+        [ "${STUB_REPO_EXISTS:-0}" = 1 ] || [ -e "$STUB_STATE/created" ] && exit 0
+        [ "${STUB_VIEW_ERROR:-0}" = 1 ] && { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
+        echo "GraphQL: Could not resolve to a Repository with the name '$3'. (repository)" >&2
+        exit 1 ;;
     "repo create") touch "$STUB_STATE/created" ;;
     "api --method") cat >"$STUB_STATE/protection.json" ;;
 esac
 exit 0
 STUB
-    chmod +x "$WORK_DIR/stubbin/gh"
+    chmod +x "$WORK_DIR/stubbin/gh" || fail "gh stub" "could not make the stub executable"
 }
 
 run_ts_lib_with_gh_stub() {
@@ -409,16 +413,19 @@ run_ts_lib_with_gh_stub() {
         GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GH_PAT_REVIEW_TRIGGER= GITGUARDIAN_API_KEY= \
         "${list_env[@]}" bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null) \
         >"$WORK_DIR/$str_name.out"
-    return 0
+    INT_RUN_RC=$?
 }
 
 test_create_repo_runs_gh_with_the_chosen_visibility_and_protection() {
-    local str_calls str_prot
+    local str_calls str_prot int_rc=0
     run_ts_lib_with_gh_stub e2e-priv -- git_remote=y create_repo=y repo_visibility=private \
         protect_branch=y human_reviewers=y
+    int_rc=$((int_rc + INT_RUN_RC))
     run_ts_lib_with_gh_stub e2e-pub -- git_remote=y create_repo=y repo_visibility=public \
         protect_branch=y human_reviewers=n
+    int_rc=$((int_rc + INT_RUN_RC))
     run_ts_lib_with_gh_stub e2e-nop -- git_remote=y create_repo=y protect_branch=n
+    int_rc=$((int_rc + INT_RUN_RC))
     str_calls="$(grep '^repo create' "$WORK_DIR/e2e-priv-state/calls.log" "$WORK_DIR/e2e-pub-state/calls.log" \
         "$WORK_DIR/e2e-nop-state/calls.log" | sed "s|$WORK_DIR/||" | paste -sd'|' -)"
     str_prot="$(tr -d '\n ' <"$WORK_DIR/e2e-priv-state/protection.json" 2>/dev/null)"
@@ -428,7 +435,9 @@ test_create_repo_runs_gh_with_the_chosen_visibility_and_protection() {
         && [[ "$str_prot" == *'"required_approving_review_count":1'* ]] \
         && grep -q '"required_pull_request_reviews": null' "$WORK_DIR/e2e-pub-state/protection.json" \
         && [ ! -e "$WORK_DIR/e2e-nop-state/protection.json" ] \
-        && [ -d "$WORK_DIR/e2e-priv-root/spec-probe" ]; then
+        && [ "$int_rc" -eq 0 ] \
+        && [ -d "$WORK_DIR/e2e-priv-root/spec-probe" ] && [ -d "$WORK_DIR/e2e-pub-root/spec-probe" ] \
+        && [ -d "$WORK_DIR/e2e-nop-root/spec-probe" ]; then
         pass "create_repo=y: stubbed gh creates --private/--public as asked; protection and reviewers follow the answers"
     else
         fail "create_repo e2e" "calls=$str_calls priv-protection=$str_prot out=$(tail -c 300 "$WORK_DIR/e2e-priv.out")"
@@ -437,7 +446,7 @@ test_create_repo_runs_gh_with_the_chosen_visibility_and_protection() {
 
 test_create_repo_n_never_calls_gh_repo_create() {
     run_ts_lib_with_gh_stub e2e-nocreate -- git_remote=y create_repo=n
-    if [ -d "$WORK_DIR/e2e-nocreate-root/spec-probe" ] \
+    if [ "$INT_RUN_RC" -eq 0 ] && [ -d "$WORK_DIR/e2e-nocreate-root/spec-probe" ] \
         && ! grep -q '^repo create' "$WORK_DIR/e2e-nocreate-state/calls.log" 2>/dev/null; then
         pass "git_remote=y with create_repo=n adds origin but never asks gh to create a repo"
     else
@@ -447,10 +456,11 @@ test_create_repo_n_never_calls_gh_repo_create() {
 
 test_create_repo_preflight_stops_before_any_file_is_written() {
     local str_cause
-    for str_cause in "STUB_AUTH=fail|gh CLI" "STUB_REPO_EXISTS=1|already exists"; do
+    for str_cause in "STUB_AUTH=fail|gh CLI" "STUB_REPO_EXISTS=1|already exists" \
+        "STUB_VIEW_ERROR=1|not a not-found error"; do
         run_ts_lib_with_gh_stub "pre-${str_cause%%=*}" "${str_cause%%|*}" -- git_remote=y create_repo=y
         local str_name="pre-${str_cause%%=*}"
-        if [ ! -e "$WORK_DIR/$str_name-root" ] && grep -q "${str_cause##*|}" "$WORK_DIR/$str_name.out" \
+        if [ "$INT_RUN_RC" -ne 0 ] && [ ! -e "$WORK_DIR/$str_name-root" ] && grep -q "${str_cause##*|}" "$WORK_DIR/$str_name.out" \
             && ! grep -q '^repo create' "$WORK_DIR/$str_name-state/calls.log"; then
             pass "preflight (${str_cause%%|*}) refuses naming the cause; nothing created, no repo create"
         else
