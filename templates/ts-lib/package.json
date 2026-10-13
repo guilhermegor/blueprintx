@@ -50,7 +50,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@babel/preset-env": "^7.29.3",
-    "@babel/preset-typescript": "^7.28.5",
+    "@babel/preset-typescript": "^8.0.7",
     "@docusaurus/core": "^3.6.0",
     "@docusaurus/preset-classic": "^3.6.0",
     "@eslint/js": "^9.39.4",
