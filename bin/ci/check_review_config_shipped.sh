@@ -48,7 +48,7 @@ copy_commands() {
         str_text="$(sed -E "s#\\\$\{?${str_var}\}?#${str_dir}#g" <<<"$str_text")"
     done < <(sed -nE 's#^([A-Z_]+)="\$BLUEPRINTX_ROOT/(templates/[a-z-]+)"$#\1=\2#p' <<<"$str_text")
     { grep -oE '(^|[^[:alnum:]_./-])cp( +-[-A-Za-z]+)* +[^;&|]+' <<<"$str_text" || true; } \
-        | sed -E 's#^[^c]*cp#cp#; s#"##g'
+        | sed -E 's#^[^c]*cp#cp#; s#"##g; s# [0-9]*>+[^ ]*##g'
 }
 
 copy_matches() {
@@ -62,20 +62,22 @@ copy_matches() {
         esac
     done
     [ "${#list_arg[@]}" -ge 2 ] || return 1
-    str_dst="${list_arg[-1]}"
+    str_dst="${list_arg[${#list_arg[@]}-1]}"
     list_src=("${list_arg[@]:0:${#list_arg[@]}-1}")
     for str_src in "${list_src[@]}"; do
         str_src="${str_src%/.}"
         str_src="${str_src%/}"
         str_eff="${str_dst%/}"
-        [ "${#list_src[@]}" -eq 1 ] || str_eff="$str_eff/$(basename "$str_src")"
+        if [ "${#list_src[@]}" -gt 1 ] || [[ "$str_dst" == */ ]]; then
+            str_eff="$str_eff/$(basename "$str_src")"
+        fi
         if [ "$str_src" = "templates/common/$str_path" ] && [[ "$str_eff" == */"$str_path" ]]; then
             return 0
         fi
         [[ "$str_flag" =~ ^-[a-zA-Z]*[rRa] || "$str_flag" == *--recursive* || "$str_flag" == *--archive* ]] \
             || continue
         if [ "$str_src" = "templates/common" ]; then
-            [[ "$str_eff" =~ ^\$\{?[A-Za-z_]+\}?$ ]] && return 0
+            [[ "${str_dst%/}" =~ ^\$\{?(str_)?project_path\}?$ ]] && return 0
             continue
         fi
         str_dir="$str_path"
