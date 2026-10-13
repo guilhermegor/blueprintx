@@ -58,7 +58,7 @@ before a trusted publisher can be configured for it:
 
 ### Pitfalls worth knowing before you touch the workflow
 
-- npm CLI **≥ 11.15.0** and Node **≥ 22.14.0** are required — trusted publishing alone
+- npm CLI **≥ 11.15.0** and Node **`^22.18.0 || >=24.11.0`** are required — trusted publishing alone
   needs npm ≥ 11.5.1, but `npm stage publish` (staged publishing) raises the floor to
   11.15.0, and this workflow uses both. Pinned in `.nvmrc` and the workflow's
   `setup-node` step.
