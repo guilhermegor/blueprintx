@@ -47,31 +47,45 @@ copy_commands() {
     while IFS='=' read -r str_var str_dir; do
         str_text="$(sed -E "s#\\\$\{?${str_var}\}?#${str_dir}#g" <<<"$str_text")"
     done < <(sed -nE 's#^([A-Z_]+)="\$BLUEPRINTX_ROOT/(templates/[a-z-]+)"$#\1=\2#p' <<<"$str_text")
-    { grep -oE '(^|[^[:alnum:]_./-])cp( +-[-A-Za-z]+)* +[^ ]+ +[^ ]+' <<<"$str_text" || true; } \
-        | sed -E 's#^[^c]*cp#cp#; s#"##g'
+    str_text="$(sed -E 's#\$\{([A-Za-z_][A-Za-z0-9_]*)\}#$\1#g' <<<"$str_text")"
+    { grep -oE '(^|[^[:alnum:]_./-])cp( +-[-A-Za-z]+)* +[^;&|)}<]+' <<<"$str_text" || true; } \
+        | sed -E 's#^[^c]*cp#cp#; s#"##g; s| #.*||; s#[0-9]*>+ *[^ ]*##g'
 }
 
 copy_matches() {
-    local str_path="$2" str_dir="$2" str_src str_dst str_flag="" str_tok
-    local -a list_tok
+    local str_path="$2" str_dir="$2" str_src="" str_dst str_flag="" str_tok str_eff
+    local -a list_tok list_arg=() list_src
     read -ra list_tok <<<"$1"
     for str_tok in "${list_tok[@]:1}"; do
         case "$str_tok" in
-            -*) str_flag="$str_flag$str_tok" ;;
-            *) if [ -z "${str_src:-}" ]; then str_src="$str_tok"; else str_dst="$str_tok"; fi ;;
+            -*) str_flag="$str_flag $str_tok" ;;
+            *) list_arg+=("$str_tok") ;;
         esac
     done
-    str_src="${str_src%/.}"
-    str_src="${str_src%/}"
-    if [ "$str_src" = "templates/common/$str_path" ] && [[ "${str_dst%/}" == */"$str_path" ]]; then
-        return 0
-    fi
-    [[ "$str_flag" =~ ^-[a-zA-Z]*[rRa] || "$str_flag" == *--recursive* || "$str_flag" == *--archive* ]] \
-        || return 1
-    [ "$str_src" != "templates/common" ] || return 0
-    while [[ "$str_dir" == */* ]]; do
-        str_dir="${str_dir%/*}"
-        [ "$str_src" = "templates/common/$str_dir" ] && return 0
+    [ "${#list_arg[@]}" -ge 2 ] || return 1
+    str_dst="${list_arg[${#list_arg[@]}-1]}"
+    list_src=("${list_arg[@]:0:${#list_arg[@]}-1}")
+    for str_src in "${list_src[@]}"; do
+        str_src="${str_src%/.}"
+        str_src="${str_src%/}"
+        str_eff="${str_dst%/}"
+        if [ "${#list_src[@]}" -gt 1 ] || [[ "$str_dst" == */ ]]; then
+            str_eff="$str_eff/$(basename "$str_src")"
+        fi
+        if [ "$str_src" = "templates/common/$str_path" ] && [[ "$str_eff" == */"$str_path" ]]; then
+            return 0
+        fi
+        [[ "$str_flag" =~ \ -[a-zA-Z]*[rRa] || "$str_flag" == *--recursive* || "$str_flag" == *--archive* ]] \
+            || continue
+        if [ "$str_src" = "templates/common" ]; then
+            [[ "${str_dst%/}" =~ ^\$\{?(str_)?project_path\}?$ ]] && return 0
+            continue
+        fi
+        str_dir="$str_path"
+        while [[ "$str_dir" == */* ]]; do
+            str_dir="${str_dir%/*}"
+            [ "$str_src" = "templates/common/$str_dir" ] && [[ "$str_eff" == */"$str_dir" ]] && return 0
+        done
     done
     return 1
 }

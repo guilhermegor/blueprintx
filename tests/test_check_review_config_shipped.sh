@@ -66,6 +66,10 @@ test_static_rejects_wrong_copies() {
     expect_ts_lib_flagged "commented-out copy" flagged "# cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst"
     expect_ts_lib_flagged "recursive copy of another root" flagged \
         'cp -r "$COMMON_TEMPLATE_ROOT/." "$project_path"'
+    expect_ts_lib_flagged "recursive copy of the right root to an unrelated destination" flagged \
+        'cp -r "$SHARED_TEMPLATE_ROOT/." "/tmp/elsewhere"'
+    expect_ts_lib_flagged "recursive copy of the root to a non-project variable" flagged \
+        'cp -r "$SHARED_TEMPLATE_ROOT/." "$TMPDIR"'
     expect_ts_lib_flagged "loop copy (documented limit)" flagged \
         'for f in .gitattributes; do cp "$SHARED_TEMPLATE_ROOT/$f" "$project_path/$f"; done'
 }
@@ -85,6 +89,23 @@ test_static_accepts_real_copies() {
         'cp --recursive "$SHARED_TEMPLATE_ROOT/." "$project_path/"'
     expect_ts_lib_flagged "cp -r of the shared root" clean 'cp -r "$SHARED_TEMPLATE_ROOT/." "$project_path"'
     expect_ts_lib_flagged "mid-line cp" clean "[ -n \"\$x\" ] && cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst"
+    expect_ts_lib_flagged "multi-source copy" clean \
+        "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" \"\$SHARED_TEMPLATE_ROOT/.editorconfig\" \"\$project_path/\""
+    expect_ts_lib_flagged "mkdir -p and cp" clean \
+        "mkdir -p \"\$project_path\" && cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst"
+    expect_ts_lib_flagged "stderr redirect after the copy" clean \
+        "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst 2>/dev/null"
+    expect_ts_lib_flagged "trailing comment and spaced redirect" clean \
+        "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst > /dev/null # keep"
+    expect_ts_lib_flagged "braced variable in the destination" clean \
+        'cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "${project_path}/.gitattributes"'
+    expect_ts_lib_flagged "redirect without a leading space" clean \
+        "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" \"\$project_path/.gitattributes\">/dev/null"
+    expect_ts_lib_flagged "parameter expansion with a hash" clean \
+        "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" \"\$project_path/\${x##*/}\" ; cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst"
+    expect_ts_lib_flagged "separated flags -v -r" clean 'cp -v -r "$SHARED_TEMPLATE_ROOT/." "$project_path"'
+    expect_ts_lib_flagged "trailing-slash directory destination" clean \
+        'cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/"'
     expect_ts_lib_flagged "continuation lines" clean \
         "cp \\\\\\n    \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" \\\\\\n    $str_dst"
 }
@@ -124,6 +145,14 @@ test_static_nested_path_needs_its_own_parent() {
     else
         echo "ok: nested path accepts only its own parent"
     fi
+}
+
+test_dropped_greptile_copy_fails_static() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '/&& cp .*\.greptile/d' "$str_root/bin/scaffold/bash_cli.sh"
+    expect_gate "dropped .greptile copy, static" "$str_root" fail \
+        "bash_cli.sh never copies '.greptile/config.json'" --static
 }
 
 test_bad_arguments_are_rejected() {
@@ -208,6 +237,7 @@ test_static_accepts_real_copies
 test_static_sourced_helper_counts
 test_static_nested_path_needs_its_own_parent
 test_bad_arguments_are_rejected
+test_dropped_greptile_copy_fails_static
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed" >&2; exit 1; }
 echo "OK: review-config guard is red when it should be, green otherwise."
