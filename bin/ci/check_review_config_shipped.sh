@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$REPO_ROOT/bin/lib/spec.sh"
+source "$REPO_ROOT/bin/lib/no_background_git.sh"
 
 MANIFEST="$REPO_ROOT/templates/common/review-config.manifest"
 int_failures=0
