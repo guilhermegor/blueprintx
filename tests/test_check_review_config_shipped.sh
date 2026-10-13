@@ -95,6 +95,9 @@ test_static_accepts_real_copies() {
         "mkdir -p \"\$project_path\" && cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst"
     expect_ts_lib_flagged "stderr redirect after the copy" clean \
         "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst 2>/dev/null"
+    expect_ts_lib_flagged "trailing comment and spaced redirect" clean \
+        "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst > /dev/null # keep"
+    expect_ts_lib_flagged "separated flags -v -r" clean 'cp -v -r "$SHARED_TEMPLATE_ROOT/." "$project_path"'
     expect_ts_lib_flagged "trailing-slash directory destination" clean \
         'cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/"'
     expect_ts_lib_flagged "continuation lines" clean \
@@ -141,7 +144,7 @@ test_static_nested_path_needs_its_own_parent() {
 test_dropped_greptile_copy_fails_static() {
     local str_root
     str_root="$(make_copy)"
-    sed -i '/\.greptile/d' "$str_root/bin/scaffold/bash_cli.sh"
+    sed -i '/&& cp .*\.greptile/d' "$str_root/bin/scaffold/bash_cli.sh"
     expect_gate "dropped .greptile copy, static" "$str_root" fail \
         "bash_cli.sh never copies '.greptile/config.json'" --static
 }
