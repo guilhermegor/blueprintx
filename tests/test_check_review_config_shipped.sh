@@ -97,6 +97,12 @@ test_static_accepts_real_copies() {
         "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst 2>/dev/null"
     expect_ts_lib_flagged "trailing comment and spaced redirect" clean \
         "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst > /dev/null # keep"
+    expect_ts_lib_flagged "braced variable in the destination" clean \
+        'cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "${project_path}/.gitattributes"'
+    expect_ts_lib_flagged "redirect without a leading space" clean \
+        "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" \"\$project_path/.gitattributes\">/dev/null"
+    expect_ts_lib_flagged "parameter expansion with a hash" clean \
+        "cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" \"\$project_path/\${x##*/}\" ; cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst"
     expect_ts_lib_flagged "separated flags -v -r" clean 'cp -v -r "$SHARED_TEMPLATE_ROOT/." "$project_path"'
     expect_ts_lib_flagged "trailing-slash directory destination" clean \
         'cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/"'

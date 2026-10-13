@@ -47,8 +47,9 @@ copy_commands() {
     while IFS='=' read -r str_var str_dir; do
         str_text="$(sed -E "s#\\\$\{?${str_var}\}?#${str_dir}#g" <<<"$str_text")"
     done < <(sed -nE 's#^([A-Z_]+)="\$BLUEPRINTX_ROOT/(templates/[a-z-]+)"$#\1=\2#p' <<<"$str_text")
-    { grep -oE '(^|[^[:alnum:]_./-])cp( +-[-A-Za-z]+)* +[^;&|#)}<]+' <<<"$str_text" || true; } \
-        | sed -E 's#^[^c]*cp#cp#; s#"##g; s# [0-9]*>+ *[^ ]*##g'
+    str_text="$(sed -E 's#\$\{([A-Za-z_][A-Za-z0-9_]*)\}#$\1#g' <<<"$str_text")"
+    { grep -oE '(^|[^[:alnum:]_./-])cp( +-[-A-Za-z]+)* +[^;&|)}<]+' <<<"$str_text" || true; } \
+        | sed -E 's#^[^c]*cp#cp#; s#"##g; s| #.*||; s#[0-9]*>+ *[^ ]*##g'
 }
 
 copy_matches() {
