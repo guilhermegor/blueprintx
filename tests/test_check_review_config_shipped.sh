@@ -66,6 +66,8 @@ test_static_rejects_wrong_copies() {
     expect_ts_lib_flagged "commented-out copy" flagged "# cp \"\$SHARED_TEMPLATE_ROOT/.gitattributes\" $str_dst"
     expect_ts_lib_flagged "recursive copy of another root" flagged \
         'cp -r "$COMMON_TEMPLATE_ROOT/." "$project_path"'
+    expect_ts_lib_flagged "recursive copy of the right root to an unrelated destination" flagged \
+        'cp -r "$SHARED_TEMPLATE_ROOT/." "/tmp/elsewhere"'
     expect_ts_lib_flagged "loop copy (documented limit)" flagged \
         'for f in .gitattributes; do cp "$SHARED_TEMPLATE_ROOT/$f" "$project_path/$f"; done'
 }

@@ -73,11 +73,14 @@ copy_matches() {
         fi
         [[ "$str_flag" =~ ^-[a-zA-Z]*[rRa] || "$str_flag" == *--recursive* || "$str_flag" == *--archive* ]] \
             || continue
-        [ "$str_src" != "templates/common" ] || return 0
+        if [ "$str_src" = "templates/common" ]; then
+            [[ "$str_eff" =~ ^\$\{?[A-Za-z_]+\}?$ ]] && return 0
+            continue
+        fi
         str_dir="$str_path"
         while [[ "$str_dir" == */* ]]; do
             str_dir="${str_dir%/*}"
-            [ "$str_src" = "templates/common/$str_dir" ] && return 0
+            [ "$str_src" = "templates/common/$str_dir" ] && [[ "$str_eff" == */"$str_dir" ]] && return 0
         done
     done
     return 1
