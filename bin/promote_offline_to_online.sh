@@ -576,27 +576,12 @@ set_secret_scan_key() {
 apply_branch_protection() {
     [ "$SKIP_BRANCH_PROTECTION" = "true" ] && return 0
     PROTECTION_APPLIED=false
-    local payload
-    payload=$(
-        cat <<'JSON'
-{
-  "required_status_checks": null,
-  "enforce_admins": false,
-  "required_pull_request_reviews": null,
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false
-}
-JSON
-    )
-    local gh_err
-    if gh_err="$(gh api --method PUT "repos/$REPOSITORY/branches/main/protection" \
-        -H "Accept: application/vnd.github+json" --input - <<<"$payload" 2>&1 >/dev/null)"; then
+    if [ ! -x "$PROJECT_PATH/bin/enable_repo_rules.sh" ]; then
+        print_status "warning" "$PROJECT_PATH/bin/enable_repo_rules.sh is missing; configure the branch ruleset on GitHub manually."
+        return 0
+    fi
+    if (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh); then
         PROTECTION_APPLIED=true
-        print_status "success" "Applied baseline branch protection on main (force-push and deletion blocked; required reviews and status checks are NOT configured)"
-    else
-        print_status "warning" "Branch protection failed: ${gh_err:-no error text} — private repos on a free plan return 403."
-        print_status "warning" "Could not apply branch protection automatically; configure it on GitHub manually (re-running cannot retry it: the project now reads as online)."
     fi
 }
 

@@ -18,7 +18,23 @@ this script does not source or edit any of them — it transcribes their
 `copy_github_assets` / `apply_offline_mode` manifests instead (see the table below) and runs
 independently. It does not use `bin/enable_repo_rules.sh` or `bin/enable_security.sh` either —
 neither exists in this repo (measured: `grep -rln "enable_repo_rules\|enable_security" bin/`
-finds nothing); branch protection is applied inline via `gh api`.
+finds nothing); the branch ruleset is applied by running the project's own `bin/enable_repo_rules.sh`.
+
+## Branch protection: the `pr-quality-gate` ruleset
+
+Generated projects are protected by the `pr-quality-gate` repository **ruleset** on the default
+branch, never by classic `branches/<b>/protection`. Every scaffold (and this script, on
+promotion) runs the project's own `bin/enable_repo_rules.sh` once the remote exists, so the
+rules are in place from the first push instead of after someone remembers `poe enable_repo_rules`.
+Classic protection with `required_pull_request_reviews: null` used to be applied here, which left
+a direct push to `main` open.
+
+The ruleset requires a pull request, blocks force-push and deletion, and requires the contexts
+listed in `bin/required-checks.txt`. GitHub forbids self-approval, so the default is 0 required
+approvals; answering yes to "Will human reviewers gate merges?" at scaffold time sets
+`RULESET_APPROVALS=1`. The script is idempotent (it updates the ruleset found by name) and, when
+rulesets are unavailable (a private repo on a free plan returns 403), it warns loudly and the
+scaffold continues.
 
 ## Usage
 
