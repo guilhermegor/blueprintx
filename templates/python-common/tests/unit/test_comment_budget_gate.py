@@ -1580,3 +1580,111 @@ def test_a_long_css_comment_run_is_flagged(tmp_path: Path, capsys: pytest.Captur
     (tmp_path / "s.css").write_text("/* x */\n" * int_lines + "a {}\n", "utf-8")
     _tree(tmp_path, "X = 1\n", f"{int_lines} s.css\n")
     assert "comment block is" in _run(tmp_path, capsys)[1]
+
+
+def _count(tmp_path: Path, str_name: str, str_text: str) -> int:
+    """Return the counted comment lines of one scratch file.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Scratch directory.
+    str_name : str
+        File name, which picks the grammar.
+    str_text : str
+        File content.
+
+    Returns
+    -------
+    int
+        The gate's comment count for the file.
+    """
+    path_file = tmp_path / str_name
+    path_file.write_text(str_text, encoding="utf-8")
+    return gate.comment_line_count(path_file)
+
+
+@pytest.mark.parametrize(
+    "str_open",
+    ["cat > f << 'EOF'", 'cat > f <<"EOF"', "cat > f <<EOF", "cat > f << EOF"],
+)
+def test_heredoc_body_is_not_counted_as_comments(tmp_path: Path, str_open: str) -> None:
+    """Should-fail witness: a shebang and a ``# foo`` line inside a heredoc are output.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    str_open : str
+        The heredoc opener under test.
+    """
+    str_text = f"{str_open}\n#!/usr/bin/env bash\n# foo\nEOF\n"
+    assert _count(tmp_path, "s.sh", str_text) == 0
+
+
+def test_a_comment_right_after_the_terminator_is_counted(tmp_path: Path) -> None:
+    """The skip ends at the terminator, so the next real comment counts.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "s.sh", "cat <<EOF\n# data\nEOF\n# real\n") == 1
+
+
+def test_a_dash_heredoc_accepts_a_tab_indented_terminator(tmp_path: Path) -> None:
+    """``<<-`` strips leading tabs from the terminator line.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "s.sh", "cat <<-EOF\n\t# data\n\tEOF\n# real\n") == 1
+
+
+def test_a_plain_heredoc_needs_an_unindented_terminator(tmp_path: Path) -> None:
+    """Without ``-`` an indented ``EOF`` is body, so the body runs to the file end.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "s.sh", "cat <<EOF\n  EOF\n# still data\n") == 0
+
+
+def test_a_ruby_squiggly_heredoc_is_skipped(tmp_path: Path) -> None:
+    """Should-fail witness: the Formula's ``<<~EOS`` shebang is data.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    str_text = 'x.write <<~EOS\n  #!/usr/bin/env bash\n  exec "$@"\nEOS\n# real\n'
+    assert _count(tmp_path, "f.rb", str_text) == 1
+
+
+def test_a_yaml_run_block_heredoc_is_skipped(tmp_path: Path) -> None:
+    """Should-fail witness: the apt workflow's indented heredoc shebang is data.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    str_text = "run: |\n  cat > b << 'EOF'\n  #!/usr/bin/env bash\n  EOF\n  # real\n"
+    assert _count(tmp_path, "w.yml", str_text) == 1
+
+
+def test_a_here_string_and_a_comment_mentioning_a_heredoc_open_nothing(tmp_path: Path) -> None:
+    """``<<<`` and a ``# cat <<EOF`` comment must not swallow the lines below.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "s.sh", "x <<< y\n# cat <<EOF\n# real\n") == 2
