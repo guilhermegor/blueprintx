@@ -10,9 +10,9 @@ gate did not read until P0.
 
 ## Tasks
 
-- [~] chore/comment-gate-all-files-304 P0: gate reads every file type, `.env.example` keys-only with
+- [x] P0 (PR #785): gate reads every file type, `.env.example` keys-only with
   `docs/configuration.md` per tier and the key-sync gate
-- [ ] 1 root `.github/`, root `tests/`, root dotfiles, `Makefile`, `mkdocs.yml`, root `.env.example` (38 files, 1205 lines)
+- [~] chore/comment-strip-slice1-304 1 root `.github/`, root `tests/`, root dotfiles, `Makefile`, `mkdocs.yml`, root `.env.example` (38 files, 1205 lines)
 - [ ] 2 root `bin/` excluding `bin/scaffold/` (36 files, 1537 lines)
 - [ ] 3 `bin/scaffold/*.sh`, with a before/after scaffold diff of all tiers as the oracle (10 files, 1427 lines)
 - [ ] 4 TypeScript and Bash families: `ts-common`, `ts-lib`, `react-spa-webpack`, `bash-cli` (49 files, 891 lines)

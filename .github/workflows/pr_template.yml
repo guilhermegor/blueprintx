@@ -1,8 +1,5 @@
 name: PR Template
 
-# Its own workflow because the trigger set differs: `edited` re-runs the check when the
-# author fixes the PR body, which scaffold_checks.yml (default types) never sees, and adding
-# `edited` there would re-run every scaffold check on each body edit.
 on:
   pull_request:
     branches:
@@ -32,8 +29,6 @@ jobs:
       - name: Should-fail regression tests for the layout gate
         run: bash tests/test_check_pr_template.sh
 
-      # Read live from the API, not from github.event: a re-run replays the ORIGINAL event
-      # payload, so an author who fixed the body and re-ran would be judged on the stale one.
       - name: Check the PR body against the template layout
         env:
           GH_TOKEN: ${{ github.token }}

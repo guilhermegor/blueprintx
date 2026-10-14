@@ -1,17 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/ci/check_docs_boundary.sh (blueprintx#536).
-#
-# The dangerous direction is a FALSE PASS: docs/backlog/, a *lessons* file, a
-# .superpowers segment, or a stray design.md/plan.md under docs/ must never reach
-# "docs/ boundary is clean." A control that only proves the happy path would have
-# passed against the very defect this suite exists to catch (same shape as
-# bin/ci/check_git_remote_guard.sh / tests/test_validate_meta.sh).
-#
-# check_docs_boundary.sh derives REPO_ROOT from its own script path (two dirs up), so
-# each case runs it from an isolated sandbox root (its own bin/ci/check_docs_boundary.sh
-# copy + docs/) rather than touching the real docs/ tree.
-#
-# Usage: bash tests/test_check_docs_boundary.sh
 
 set -euo pipefail
 
@@ -21,15 +8,10 @@ source "$REPO_ROOT/bin/lib/common.sh"
 
 int_failures=0
 
-# Run from a pre-commit hook these point at the REAL repo, and the sandbox work trees below
-# would write into its index (a stray docs/x-lessons.md staged in the commit).
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
-# Keep a developer's global excludesFile out of the sandbox's ignore verdicts.
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 
 make_sandbox() {
-    # Prints the path of a fresh fake repo root: a copy of the real
-    # check_docs_boundary.sh under bin/ci/, no docs/ yet — the caller populates it.
     local str_root
     str_root="$(mktemp -d ${1:+-p "$1"})"
     mkdir -p "$str_root/bin/ci"
@@ -38,11 +20,6 @@ make_sandbox() {
 }
 
 expect_gate() {
-    # $1 = description, $2 = sandbox root (consumed + removed), $3 = expected pass|fail,
-    # $4 = OPTIONAL diagnostic that must appear in the gate's output when $3 is "fail".
-    #
-    # ⚠️ $4 is what makes a failing case mean anything — a non-zero exit alone does not
-    # prove the intended rule fired rather than some unrelated bug.
     local str_desc="$1" str_root="$2" str_want="$3" str_needle="${4:-}" str_got="pass" str_out
     str_out="$(bash "$str_root/bin/ci/check_docs_boundary.sh" 2>&1)" || str_got="fail"
     rm -rf "$str_root"
@@ -64,8 +41,6 @@ test_no_docs_dir_is_a_skip() {
 }
 
 test_clean_docs_passes() {
-    # Control case: without it, every failing case below would pass even against a gate
-    # that rejects everything.
     local str_root
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/docs/guide"
@@ -120,7 +95,6 @@ test_plan_md_fails() {
 }
 
 test_empty_docs_dir_fails() {
-    # A readable docs/ with zero entries is suspicious, not clean — never a silent pass.
     local str_root
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/docs"
@@ -129,8 +103,6 @@ test_empty_docs_dir_fails() {
 }
 
 test_unreadable_docs_dir_fails() {
-    # Skipped when running as root (e.g. some CI containers): chmod 000 does not block a
-    # root reader, so the case would silently prove nothing rather than fail for real.
     if [ "$(id -u)" -eq 0 ]; then
         print_status "warning" "skipping unreadable-docs/ case: running as root"
         return
@@ -152,10 +124,6 @@ test_nested_security_md_fails() {
 }
 
 test_every_rejection_names_a_destination() {
-    # The rule is REDIRECT, not merely reject: "this does not belong here" without
-    # "it belongs there" moves the problem to whoever reads the failure. This asserts the
-    # CONTRACT across every rule at once, so a rule added later without a destination
-    # fails here rather than shipping half-done.
     local str_root str_out int_errors int_directed
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/docs/backlog" "$str_root/docs/f" "$str_root/docs/.superpowers"
@@ -185,9 +153,6 @@ test_every_rejection_names_a_destination() {
 }
 
 test_directory_symlink_loop_does_not_re_enter_the_tree() {
-    # docs/a/b/loop -> docs. Pre-fix the walk re-entered through the longer path and
-    # reported "163 entries checked" on a 3-file tree, stopping only at the kernel's
-    # ELOOP limit; a denied file inside the loop would also be reported many times.
     local str_root str_out int_checked
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/docs/a/b"
@@ -206,9 +171,6 @@ test_directory_symlink_loop_does_not_re_enter_the_tree() {
 }
 
 test_unreadable_nested_directory_fails_not_passes() {
-    # docs/secret/ at mode 000, holding a REAL violation (docs/secret/backlog/). Pre-fix
-    # the glob yielded nothing, walk recorded no error, and the gate printed
-    # "boundary is clean" with rc=0 — success for having checked nothing.
     local str_root str_got="pass" str_out
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/docs/secret/backlog"
@@ -232,12 +194,6 @@ test_unreadable_nested_directory_fails_not_passes() {
 }
 
 test_templates_tree_is_deliberately_not_walked() {
-    # blueprintx#576: the scope decision, asserted rather than left to the header comment.
-    # The sandbox plants BOTH halves of the measured collision — a tier's shipped
-    # docs/backlog/ (a product surface with its own gate) and a violation that WOULD be
-    # rejected under the root tree — and requires the gate to pass, never naming templates/.
-    # A later "just point it at templates/ too" therefore turns this case red instead of
-    # silently condemning five shipped tiers.
     local str_root str_out str_got="pass" int_checked
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/docs" "$str_root/templates/ddd-service-native-db/docs/backlog"
@@ -259,7 +215,6 @@ test_templates_tree_is_deliberately_not_walked() {
         int_failures=$((int_failures + 1))
         return
     fi
-    # One entry: docs/index.md. Anything more means the walk left docs/.
     int_checked="$(printf '%s' "$str_out" | sed -n 's/.*(\([0-9]*\) entries checked).*/\1/p')"
     if [ "${int_checked:-0}" -ne 1 ]; then
         print_status "error" \
@@ -269,7 +224,6 @@ test_templates_tree_is_deliberately_not_walked() {
 }
 
 make_git_sandbox() {
-    # A sandbox that is a real work tree ignoring docs/x-lessons.md.
     local str_root
     str_root="$(make_sandbox)"
     git -C "$str_root" init -q
@@ -330,8 +284,6 @@ test_enclosing_repo_ignore_does_not_leak_in() {
 }
 
 test_inherited_git_dir_does_not_fake_an_own_repo() {
-    # GIT_DIR alone makes git treat the cwd as a work-tree top, so an unscrubbed probe
-    # would trust the sandbox's .gitignore although the sandbox is no repo.
     local str_root str_other
     str_other="$(mktemp -d)"
     git -C "$str_other" init -q
