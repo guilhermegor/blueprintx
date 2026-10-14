@@ -2297,8 +2297,9 @@ def _run_template_drift(list_args: list[str]) -> subprocess.CompletedProcess:
 def _seed_fake_blueprintx_checkout(path_root: Path) -> None:
     """Materialise a minimal fake BlueprintX checkout the drift script can parse.
 
-    Only what ``required_relpaths`` reads: the shared scaffold-lib file (one ``cp`` line plus
-    one wholesale ``cp -r`` directory line) and the two source paths it names.
+    Only what ``required_relpaths`` reads: a stand-in for the shared scaffold lib that speaks
+    its ``--list-copies`` contract (one file copy plus one wholesale directory copy), and the
+    two source paths it names.
 
     Parameters
     ----------
@@ -2311,8 +2312,8 @@ def _seed_fake_blueprintx_checkout(path_root: Path) -> None:
     """
     _write(
         path_root / "bin" / "lib" / "scaffold_python_templates.sh",
-        'cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$str_project_path/.codespellrc"\n'
-        'cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$str_project_path/bin"\n',
+        "printf 'COPY\\tfile\\ttemplates/python-common/.codespellrc\\t.codespellrc\\n'\n"
+        "printf 'COPY\\tdir\\ttemplates/python-common/bin\\tbin\\n'\n",
     )
     _write(path_root / "templates" / "python-common" / ".codespellrc", "ignore-words-list =\n")
     _write(

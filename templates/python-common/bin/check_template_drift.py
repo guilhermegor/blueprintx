@@ -29,27 +29,33 @@ What it needs to run: a BLUEPRINTX CHECKOUT (``--blueprintx-root``, or
 template tree. Absent one, it self-skips LOUDLY (prints why, never a silent pass) — the same
 contract ``check_actions.sh`` documents for its own missing tool. Absent a provenance stamp
 (``.blueprintx-provenance.yaml``, written at scaffold time by
-``bin/lib/scaffold_python_templates.sh::scaffold_stamp_provenance``) it also self-skips
+``bin/lib/scaffold_provenance.sh::scaffold_stamp_provenance``) it also self-skips
 loudly: that is the path BlueprintX's OWN tree always takes (not a scaffolded project, no
 tier — ``--root .`` here never falls through to a comparison), and the path any project
 scaffolded before this feature shipped takes too.
 
-The required-path set is DERIVED, not a hand-maintained second list: parsed straight out of
-``bin/lib/scaffold_python_templates.sh`` — the one shared step every service tier's scaffold
-calls to copy ``templates/python-common/`` in — rather than duplicated here, so this check
-cannot drift from what the scaffold actually copies. That is exactly the failure mode
-``check_codespell_sync.sh`` already exists in this repo to police, applied to a new pair.
-Deliberately scoped to ``templates/python-common/`` only, not the tier-specific
-``templates/<tier>/src/`` (each ``bin/scaffold/python_*.sh`` copies that with its own logic,
-currently in flight across several PRs) — a narrower, honest MVP over a wider check that
-would risk false positives on conditional tier files it cannot see.
+What the stamp is used for: ``tier`` and ``review_bot_roster`` are READ and select what to
+compare. ``blueprintx_version`` and ``blueprintx_commit`` are NOT read; they are provenance
+for a human. The comparison is always against the checkout's CURRENT template, never the
+stamped commit: comparing against the stamped commit would need that commit's history and
+would answer "what did this project start with", while this check asks what the template
+has gained since.
+
+The required-path set is DERIVED, not a hand-maintained second list: the checkout's
+``bin/lib/scaffold_python_templates.sh --list-copies`` dry-runs the one shared step every
+service tier's scaffold calls and prints the copies it would make, so this check reads the
+scaffold's own output instead of parsing its source, and cannot drift from what it copies.
+Deliberately scoped to ``templates/python-common/`` and ``templates/common/`` sources, not
+the tier-specific ``templates/<tier>/src/`` (each ``bin/scaffold/python_*.sh`` copies that
+with its own logic) — a narrower, honest MVP over a wider check that would risk false
+positives on conditional tier files it cannot see.
 """
 
 import argparse
 import os
 import pathlib
 import posixpath
-import re
+import shutil
 import subprocess
 import sys
 
@@ -58,19 +64,8 @@ _PROVENANCE_FILENAME = ".blueprintx-provenance.yaml"
 _SCAFFOLD_LIB_RELPATH = pathlib.Path("bin/lib/scaffold_python_templates.sh")
 _COMMON_TEMPLATE_RELPATH = pathlib.Path("templates/python-common")
 _TIERS_OUTSIDE_SHARED_LIB = frozenset({"lib-minimal"})
-
-_RE_CP = re.compile(
-    r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?/([^"]+)"\s+'
-    r'"\$\{?str_project_path\}?/([^"]+)"'
-)
-_RE_LINE_CONTINUATION = re.compile(r"\\\s*\n\s*")
-_RE_GLOB_CP = re.compile(
-    r'cp\s+(?:-[A-Za-z]+\s+)*"\$\{?(COMMON|SHARED)_TEMPLATE_ROOT\}?"/([^\s"]*[*?\[][^\s"]*)\s+'
-    r'"\$\{?str_project_path\}?(/[^"]*)?"(/[^\s;&|]*)?'
-)
-_RE_RM = re.compile(r'(?m)^[^#\n]*?\brm\s+(?:-[A-Za-z]+\s+)*"\$\{?str_project_path\}?/([^"]+)"')
-_RE_CHAINED_CP = re.compile(r"(?:&&|\|\|)\s*cp\b")
-_RE_ONE_LINE_ESAC = re.compile(r"\besac\b(?:\s*#.*)?$")
+_INT_COPY_FIELDS = 4
+_INT_RM_FIELDS = 2
 
 
 def read_tier(path_root: pathlib.Path) -> str | None:
@@ -94,133 +89,6 @@ def read_tier(path_root: pathlib.Path) -> str | None:
         if str_stripped.startswith("tier:"):
             return str_stripped.split(":", 1)[1].strip()
     return None
-
-
-_RE_ONE_LINE_FI = re.compile(r";\s*fi\b(?:\s*(?:;|\|\||#).*)?$")
-
-
-def _expand_glob_cps(
-    str_lib: str, path_blueprintx_root: pathlib.Path, dict_templates: dict[str, pathlib.Path]
-) -> str:
-    """Rewrite each unquoted-glob ``cp`` into one quoted ``cp`` per matching template file.
-
-    Parameters
-    ----------
-    str_lib : str
-        The shared scaffold lib source, line-continuations already spliced.
-    path_blueprintx_root : pathlib.Path
-        Root of the BlueprintX checkout, for the tracked-file policy.
-    dict_templates : dict of str to pathlib.Path
-        ``COMMON``/``SHARED`` mapped to their template directories.
-
-    Returns
-    -------
-    str
-            The source with every glob that matches a tracked template file spelled out; a
-            glob that matches nothing is left untouched.
-    """
-
-    def _spell_out(cls_match: re.Match) -> str:
-        str_root, str_glob, str_dst_a, str_dst_b = cls_match.groups()
-        path_root = dict_templates[str_root]
-        set_tracked = set(_template_files(path_blueprintx_root, path_root))
-        str_dir = ((str_dst_a or "") + (str_dst_b or "")).strip("/")
-        list_cps = [
-            f'cp "${str_root}_TEMPLATE_ROOT/{path_f.relative_to(path_root).as_posix()}" '
-            f'"$str_project_path/{str_dir + "/" if str_dir else ""}{path_f.name}"'
-            for path_f in sorted(path_root.glob(str_glob))
-            if path_f.relative_to(path_root).as_posix() in set_tracked
-        ]
-        return "; ".join(list_cps) or cls_match.group(0)
-
-    return _RE_GLOB_CP.sub(_spell_out, str_lib)
-
-
-def _cp_destinations(str_line: str) -> set[str]:
-    """Return the project-relative destinations of every ``cp`` found on one source line.
-
-    Parameters
-    ----------
-    str_line : str
-        One line of the shared scaffold lib.
-
-    Returns
-    -------
-    set of str
-            Destinations matched by the single-file ``cp`` pattern.
-    """
-    return {str_dst for _, _, str_dst in _RE_CP.findall(str_line)}
-
-
-def conditional_relpaths(str_lib: str, str_flag: str | None = None) -> set[str]:
-    """Return destinations copied under a guard, which are NOT unconditionally required.
-
-    ``.review-bots.yaml`` is copied only when ``INCLUDE_REVIEW_BOT_ROSTER`` is true
-    (blueprintx#374). Treating it as required made the drift check report a missing file on
-    every project that legitimately declined a reviewer bot.
-
-    Guards recognised: ``if``..``fi`` (any nesting, one-line form included), ``case``..``esac``
-    and ``cond && cp`` / ``cond || cp`` chains. The condition is never evaluated; that is
-    :func:`review_bot_roster_enabled`'s job, from the provenance stamp.
-
-    Parameters
-    ----------
-    str_lib : str
-        The shared scaffold lib source, line-continuations already spliced.
-    str_flag : str, optional
-        When given, keep only copies under a guard whose line mentions this name.
-
-    Returns
-    -------
-    set of str
-            Project-relative destinations whose ``cp`` sits under a (matching) guard.
-    """
-    set_conditional: set[str] = set()
-    list_guards: list[bool] = []
-    for str_line in str_lib.splitlines():
-        str_stripped = str_line.strip()
-        str_kind = _line_kind(str_stripped)
-        bool_match = str_flag is None or str_flag in str_stripped
-        if str_kind == "open":
-            list_guards.append(bool_match)
-        elif str_kind == "branch" and list_guards:
-            list_guards[-1] = bool_match if str_stripped.startswith("elif") else str_flag is None
-        elif str_kind == "close" and list_guards:
-            list_guards.pop()
-        bool_guarded = (str_kind in ("open", "oneline", "chain", "branch") and bool_match) or (
-            str_kind == "plain" and any(list_guards)
-        )
-        if bool_guarded:
-            set_conditional.update(_cp_destinations(str_line))
-    return set_conditional
-
-
-def _line_kind(str_stripped: str) -> str:
-    """Classify a stripped lib line by its effect on the guard stack.
-
-    Parameters
-    ----------
-    str_stripped : str
-        One lib line, stripped.
-
-    Returns
-    -------
-    str
-            ``open`` (``if``/``case`` block start), ``oneline`` (a self-closing ``if``/``case``;
-            counting it as open would mark every later ``cp`` conditional, a false green),
-            ``branch`` (``else``/``elif``), ``close`` (``fi``/``esac``),
-            ``chain`` (``&& cp`` / ``|| cp``) or ``plain``.
-    """
-    if str_stripped.startswith(("if ", "if[", "case ")) or str_stripped == "if":
-        bool_closed = _RE_ONE_LINE_FI.search(str_stripped) or _RE_ONE_LINE_ESAC.search(
-            str_stripped
-        )
-        return "oneline" if bool_closed else "open"
-    if str_stripped == "else" or str_stripped.startswith(("else ", "elif ")):
-        return "branch"
-    if str_stripped == "fi" or str_stripped.startswith(("fi ", "esac")):
-        return "close"
-    return "chain" if _RE_CHAINED_CP.search(str_stripped) else "plain"
 
 
 def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
@@ -250,8 +118,8 @@ def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
     return None
 
 
-def _template_roots(path_blueprintx_root: pathlib.Path) -> dict[str, pathlib.Path]:
-    """Map the scaffold lib's ``COMMON``/``SHARED`` roots to their template directories.
+def _template_roots(path_blueprintx_root: pathlib.Path) -> list[pathlib.Path]:
+    """Return the template directories whose copies the drift check polices.
 
     Parameters
     ----------
@@ -260,77 +128,158 @@ def _template_roots(path_blueprintx_root: pathlib.Path) -> dict[str, pathlib.Pat
 
     Returns
     -------
-    dict of str to pathlib.Path
-            ``COMMON`` and ``SHARED`` mapped to their directories.
+    list of pathlib.Path
+            ``templates/python-common`` and the language-agnostic ``templates/common``.
     """
-    return {
-        "COMMON": path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
-        "SHARED": path_blueprintx_root / "templates/common",
-    }
+    return [
+        path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
+        path_blueprintx_root / "templates/common",
+    ]
 
 
-def _scaffold_lib_text(path_blueprintx_root: pathlib.Path) -> str:
-    """Read the shared scaffold lib with continuations spliced and globs expanded.
-
-    Both the required set and the opt-in additions parse this one text, so a glob copy is
-    expanded identically on either path.
+def _dry_run_lines(
+    path_blueprintx_root: pathlib.Path, str_tier: str, bool_roster: bool
+) -> list[str] | None:
+    """Run the checkout's scaffold lib in ``--list-copies`` mode and return its stdout lines.
 
     Parameters
     ----------
     path_blueprintx_root : pathlib.Path
         Root of a BlueprintX checkout.
+    str_tier : str
+        The tier whose copy list to print.
+    bool_roster : bool
+        Whether the review-bot roster was opted into (it gates one copy).
 
     Returns
     -------
-    str
-            The normalised lib source.
+    list of str or None
+            The output lines, or ``None`` when the lib is missing, bash is missing, or the
+            dry run failed — the caller treats that as SKIPPED, never as "nothing required".
     """
-    str_lib = (path_blueprintx_root / _SCAFFOLD_LIB_RELPATH).read_text(encoding="utf-8")
-    return _expand_glob_cps(
-        _RE_LINE_CONTINUATION.sub(" ", str_lib),
-        path_blueprintx_root,
-        _template_roots(path_blueprintx_root),
+    path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
+    str_bash = shutil.which("bash")
+    if not path_lib.exists() or str_bash is None:
+        return None
+    dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    list_argv = [str_bash, str(path_lib), "--list-copies", "--tier", str_tier]
+    list_argv += ["--roster", "true" if bool_roster else "false"]
+    cls_run = subprocess.run(  # noqa: S603
+        list_argv,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        env=dict_env,
     )
+    return cls_run.stdout.splitlines() if cls_run.returncode == 0 else None
 
 
-def required_relpaths(path_blueprintx_root: pathlib.Path) -> set[str]:
-    """Derive every python-common-sourced path a scaffold copies UNCONDITIONALLY.
+def _parse_dry_run(list_lines: list[str]) -> tuple[list[tuple[str, str, str]], set[str]]:
+    """Split ``--list-copies`` output into copies and removals.
 
-    Parsed straight out of ``bin/lib/scaffold_python_templates.sh`` rather than hand-listed,
-    so this set cannot drift from what actually gets copied. Deliberately excludes anything
-    conditional (the docker-compose choice, webhook/storage opt-ins) — those live OUTSIDE the
-    shared step this parses, in each individual ``bin/scaffold/python_*.sh``.
+    Parameters
+    ----------
+    list_lines : list of str
+        Output lines: ``COPY<TAB>file|dir<TAB>src<TAB>dst`` and ``RM<TAB>dst``.
+
+    Returns
+    -------
+    tuple of (list of tuple of str, set of str)
+            ``(kind, source relative to the checkout, project-relative destination)`` per
+            copy, and the project-relative paths the scaffold deletes after copying.
+    """
+    list_copies: list[tuple[str, str, str]] = []
+    set_removed: set[str] = set()
+    for str_line in list_lines:
+        list_fields = str_line.split("\t")
+        if list_fields[0] == "COPY" and len(list_fields) == _INT_COPY_FIELDS:
+            list_copies.append((list_fields[1], list_fields[2], list_fields[3]))
+        elif list_fields[0] == "RM" and len(list_fields) == _INT_RM_FIELDS:
+            set_removed.add(list_fields[1])
+    return list_copies, set_removed
+
+
+def _copy_destinations(
+    path_blueprintx_root: pathlib.Path,
+    tuple_copy: tuple[str, str, str],
+    dict_tracked: dict[pathlib.Path, set[str]],
+) -> set[str]:
+    """Return the project-relative paths one dry-run copy delivers, or none if out of scope.
+
+    A directory source delivers every tracked file under it. A file source is dropped only
+    when it exists but git does not track it (a draft matched by a shell glob is not a
+    template file); with no git answer every existing file counts as tracked.
 
     Parameters
     ----------
     path_blueprintx_root : pathlib.Path
         Root of a BlueprintX checkout.
+    tuple_copy : tuple of str
+        ``(kind, source, destination)`` from the dry run.
+    dict_tracked : dict of pathlib.Path to set of str
+        Tracked files per policed template root, relative to that root.
 
     Returns
     -------
     set of str
-            Project-relative paths (POSIX separators) the shared scaffold step always copies.
-            Empty when the shared lib file cannot be found — the caller treats that as SKIPPED,
+            Project-relative destinations; empty when the source is outside the policed roots.
+    """
+    str_kind, str_src, str_dst = tuple_copy
+    path_src = path_blueprintx_root / str_src
+    for path_root, set_tracked in dict_tracked.items():
+        if not path_src.is_relative_to(path_root):
+            continue
+        if str_kind == "dir":
+            return {
+                posixpath.join(str_dst, str_rel)
+                for str_rel in _template_files(path_blueprintx_root, path_src)
+            }
+        bool_draft = (
+            path_src.exists() and path_src.relative_to(path_root).as_posix() not in set_tracked
+        )
+        return set() if bool_draft else {str_dst}
+    return set()
+
+
+def required_relpaths(
+    path_blueprintx_root: pathlib.Path, str_tier: str, bool_roster: bool = False
+) -> set[str]:
+    """Derive every python-common-sourced path a scaffold of ``str_tier`` copies.
+
+    Read from the lib's ``--list-copies`` dry run rather than hand-listed or parsed out of
+    shell source, so a copy written in any shell form is seen. Copies guarded by the
+    review-bot roster flag are present exactly when ``bool_roster`` is true, because the dry
+    run evaluates the guard with that value.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_tier : str
+        The project's stamped tier.
+    bool_roster : bool, default False
+        Whether the project opted into the review-bot roster.
+
+    Returns
+    -------
+    set of str
+            Project-relative paths (POSIX separators) the shared scaffold step copies.
+            Empty when the dry run could not be made — the caller treats that as SKIPPED,
             never as "nothing is required".
     """
-    path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
-    if not path_lib.exists():
+    list_lines = _dry_run_lines(path_blueprintx_root, str_tier, bool_roster)
+    if list_lines is None:
         return set()
-    path_templates = _template_roots(path_blueprintx_root)
-    str_lib = _scaffold_lib_text(path_blueprintx_root)
-    set_removed = set(_RE_RM.findall(str_lib))
-
-    set_conditional = conditional_relpaths(str_lib)
+    list_copies, set_removed = _parse_dry_run(list_lines)
+    dict_tracked = {
+        path_root: set(_template_files(path_blueprintx_root, path_root))
+        for path_root in _template_roots(path_blueprintx_root)
+        if path_root.is_dir()
+    }
     set_required: set[str] = set()
-    for str_root, str_src, str_dst in _RE_CP.findall(str_lib):
-        if str_dst in set_conditional:
-            continue
-        path_src = path_templates[str_root] / str_src.removesuffix("/.")
-        if str_src.endswith("/.") or path_src.is_dir():
-            for str_rel in _template_files(path_blueprintx_root, path_src):
-                set_required.add(f"{str_dst}/{str_rel}")
-        else:
-            set_required.add(str_dst)
+    for tuple_copy in list_copies:
+        set_required |= _copy_destinations(path_blueprintx_root, tuple_copy, dict_tracked)
     return {str_rel for str_rel in set_required if not _is_removed(str_rel, set_removed)}
 
 
@@ -512,19 +461,17 @@ def main(list_argv: list) -> int:
         )
         return 0
 
-    set_required = required_relpaths(path_blueprintx)
+    set_required = required_relpaths(
+        path_blueprintx, str_tier, bool(review_bot_roster_enabled(path_root))
+    )
     if not set_required:
         print(
             f"SKIPPED: found no required paths under {path_blueprintx} — "
-            f"{_SCAFFOLD_LIB_RELPATH} is missing or unparsable there. This run proves nothing "
-            f"about drift, and is NOT the same as a clean comparison."
+            f"{_SCAFFOLD_LIB_RELPATH} is missing there, or its --list-copies dry run failed or "
+            f"printed nothing (bash is also required). This run proves nothing about drift, "
+            f"and is NOT the same as a clean comparison."
         )
         return 0
-
-    if review_bot_roster_enabled(path_root):
-        set_required |= conditional_relpaths(
-            _scaffold_lib_text(path_blueprintx), "INCLUDE_REVIEW_BOT_ROSTER"
-        )
 
     list_missing = missing_relpaths(path_root, set_required)
     if not list_missing:

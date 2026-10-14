@@ -315,3 +315,81 @@ scaffold_copy_common_templates() {
 	cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$str_project_path/.claude/CLAUDE.md"
 	print_status "success" "Common templates applied"
 }
+
+scaffold_dry_cp() {
+	local str_project_path="$1"
+	shift
+	while [[ "${1:-}" == -* ]]; do shift; done
+	local str_dst="${!#}" str_src str_kind str_rel_dst
+	for str_src in "${@:1:$#-1}"; do
+		str_rel_dst="${str_dst#"$str_project_path"}"
+		if [[ $# -gt 2 || "$str_dst" == */ ]]; then
+			str_rel_dst="${str_rel_dst%/}/${str_src##*/}"
+		fi
+		str_kind="file"
+		[[ -d "$str_src" ]] && str_kind=dir
+		str_src="${str_src%/.}"
+		printf 'COPY\t%s\t%s\t%s\n' "$str_kind" "${str_src#"$BLUEPRINTX_ROOT"/}" "${str_rel_dst#/}"
+	done
+}
+
+scaffold_dry_rm() {
+	local str_project_path="$1" str_arg
+	shift
+	for str_arg in "$@"; do
+		[[ "$str_arg" == -* ]] && continue
+		printf 'RM\t%s\n' "${str_arg#"$str_project_path"/}"
+	done
+}
+
+scaffold_list_copies() {
+	local str_tier="$1" str_roster="$2" str_project_path
+	str_project_path="$(mktemp -d)"
+	(
+		print_status() { :; }
+		envsubst() { :; }
+		mkdir() { :; }
+		touch() { :; }
+		chmod() { :; }
+		cp() { scaffold_dry_cp "$str_project_path" "$@"; }
+		rm() { scaffold_dry_rm "$str_project_path" "$@"; }
+		INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_copy_common_templates "$str_tier" "$str_project_path"
+	)
+	rm -rf "$str_project_path"
+}
+
+scaffold_list_copies_main() {
+	local str_tier="" str_roster=true
+	if [[ "${1:-}" != "--list-copies" ]]; then
+		print_status "error" "meant to be sourced; run directly only as: --list-copies --tier <tier> [--roster true|false]"
+		return 1
+	fi
+	shift
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--tier) str_tier="${2:?--tier needs a value}" ;;
+		--roster) str_roster="${2:?--roster needs a value}" ;;
+		*)
+			print_status "error" "unknown argument: $1"
+			return 2
+			;;
+		esac
+		shift 2
+	done
+	if [[ -z "$str_tier" ]]; then
+		print_status "error" "--tier is required"
+		return 2
+	fi
+	BLUEPRINTX_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+	COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/python-common"
+	SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
+	LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
+	LICENSE_CHOICE=MIT
+	scaffold_list_copies "$str_tier" "$str_roster"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+	scaffold_list_copies_main "$@"
+	exit $?
+fi
