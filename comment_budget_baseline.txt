@@ -1,4 +1,6 @@
 scope 2
+1 .github/workflows/release_apt.yml
+1 Formula/blueprintx.rb
 44 bin/blueprintx.sh
 26 bin/check_makefile_pairing.sh
 26 bin/check_orphan_pr_bodies.sh

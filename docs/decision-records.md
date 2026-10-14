@@ -189,6 +189,11 @@ repository. They were moved out of the workflow files, which now carry no prose.
   of later passes (5 on #264, 7 on #265). The `Clear stale failed runs` step re-runs those
   failures. `if: success()` is the loop guard. On `issue_comment` the head SHA must be fetched
   because the event has no `pull_request` object, and an unresolved head fails loudly (#350).
+- **Closing the ceiling properly** would need a webhook receiver or a GitHub App dispatching
+  `repository_dispatch` on `resolved`. That was rejected as not worth an always-on listener
+  for this repository.
+- **Its own workflow.** It is kept out of `scaffold_checks.yml` so a review comment does not
+  re-run the 29-job scaffold matrix: one job, a few seconds, as often as needed.
 - **A finding takes both halves:** reply with what changed and why, then resolve. A bot
   resolves its own threads on seeing the fix, so `isResolved` records the reviewer's
   satisfaction, never the author's reasoning.
@@ -256,7 +261,10 @@ repository. They were moved out of the workflow files, which now carry no prose.
   empty string and `ggshield` exits 3 (#457, PR #400). The job is skipped on the PR author
   (`github.event.pull_request.user.login`, never `github.actor`) when that author is
   Dependabot. This is not a silent pass: `gitleaks` scans the same range unconditionally. The
-  fix is `gh secret set GITGUARDIAN_API_KEY --app dependabot --repo <owner>/<repo>`.
+  fix is `gh secret set GITGUARDIAN_API_KEY --app dependabot --repo <owner>/<repo>`. The
+  probe is `gh api repos/<o>/<r>/dependabot/secrets --jq .total_count`, which returned 0, and
+  until that secret exists a Dependabot PR trips the job on every run (the log shows
+  `GITGUARDIAN_API_KEY:` blank and `Error: Invalid GitGuardian API key.`).
 - **ggshield push range.** In ggshield 1.54.0 the previous-commit variable is
   `GITHUB_PUSH_BASE_SHA`, which must carry `github.event.before`; `GITHUB_PUSH_BEFORE_SHA`
   and `GITHUB_PULL_BASE_SHA` appear nowhere in its source, so setting them protects nothing.
@@ -264,6 +272,14 @@ repository. They were moved out of the workflow files, which now carry no prose.
   five-commit push, with exit 0. A branch-creating push (before is forty zeroes) and a manual
   dispatch run a separate full-repository scan in a separately named step, which is the
   correct range for a freshly scaffolded project's first push.
+  `GITHUB_DEFAULT_BRANCH` is deliberately left unset, so do not re-add it as protection:
+  with a real previous commit its fallback is unreachable, and on a branch-creating push
+  its fallback is a bare ref (`main..<sha>`, no `origin/` prefix, because the remote prefix
+  is applied only on the pull_request path). A detached checkout has no local `main`, so
+  that resolves to nothing and lands back on `GITHUB_SHA~1`. Prefixing it with `origin/`
+  does not help either: on the push that creates the branch `origin/main` already equals
+  `HEAD`, so the range is empty. The pull_request path needs no variable, because ggshield
+  reads `GITHUB_BASE_REF`, which Actions already sets.
 - **Scaffold matrix.** `dry-run-smoke` and `scaffold-lint-test` are CI-only (#384): a
   `skeleton.meta` change would trigger one hook, never all six skeletons. `envsubst` is
   installed only when missing, because the unguarded `apt-get` hung two jobs for 6 hours
