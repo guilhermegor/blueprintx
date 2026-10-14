@@ -395,7 +395,7 @@ scope 2
 46 templates/ts-common/.github/workflows/review-threads.yml
 10 templates/ts-common/.github/workflows/secret-scan.yml
 11 templates/ts-common/.gitignore
-18 templates/ts-common/bin/required-checks.txt
+13 templates/ts-common/bin/required-checks.txt
 15 templates/ts-common/docker-compose.otel-collector.yml
 6 templates/ts-common/jest.config.cjs
 2 templates/ts-common/jest.setup.ts

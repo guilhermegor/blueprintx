@@ -350,6 +350,23 @@ def read_or_skip(args) -> tuple:
         return None, None, 0
 
 
+def check_required_list(args) -> int:
+    """Generated-project mode: every name in a plain list must be emitted unconditionally."""
+    if yaml is None:
+        print("::error::PyYAML is not installed", file=sys.stderr)
+        return 1
+    list_lines = pathlib.Path(args.required_list).read_text(encoding="utf-8").splitlines()
+    set_req = {s.strip() for s in list_lines if s.strip() and not s.lstrip().startswith("#")}
+    dict_jobs, list_problems = pr_jobs(pathlib.Path(args.workflows))
+    list_err = list_problems + compare(
+        set_req, dict_jobs, {"optional": {n: "" for n, f in dict_jobs.items() if f}, "external": {}}
+    )
+    for str_msg in list_err:
+        print(f"::error::{str_msg}", file=sys.stderr)
+    print(f"findings={len(list_err)}")
+    return 1 if list_err else 0
+
+
 def main() -> int:
     """Entry point."""
     parser = argparse.ArgumentParser()
@@ -359,7 +376,13 @@ def main() -> int:
     parser.add_argument(
         "--live", action="store_true", help="compare the JSON with the API"
     )
+    parser.add_argument(
+        "--required-list",
+        help="generated-project mode: bin/required-checks.txt; only direction 1 is checked",
+    )
     args = parser.parse_args()
+    if args.required_list:
+        return check_required_list(args)
     dict_exp, dict_live, int_rc = read_or_skip(args)
     if int_rc is not None:
         return int_rc

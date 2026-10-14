@@ -11,11 +11,12 @@
 # reports on every PR regardless of base branch.
 Review threads answered
 
-# ⚠️ NOT listed, and the reason is worth keeping (blueprintx#564): `webpack` (build.yml),
-# `eslint`/`stylelint` (lint.yml), `jest` (test.yml), `type-check` (type-check.yml) and, in the
-# ts-lib skeleton, `build` (docs.yml) plus `pack-smoke`/`verdaccio-rehearsal` (pack-smoke.yml)
-# all trigger on `pull_request: branches: [main]`. A base-branch filter means the check is simply
-# absent on a PR that targets anything else — a stacked PR onto a feature branch, for one — and
-# an absent required check reads as permanently pending, not as passed. Widen those triggers
-# first if you want them binding; requiring them as they stand is the deadlock this file warns
-# about.
+# build.yml, lint.yml, test.yml, type-check.yml, secret-scan.yml — `on: pull_request` with no
+# filter and no job-level `if:`, so each reports on every PR whatever its base branch.
+# bin/check_required_checks_sync.py refuses a name here that stops being unconditional.
+webpack
+eslint
+stylelint
+jest
+type-check
+gitleaks — repo history

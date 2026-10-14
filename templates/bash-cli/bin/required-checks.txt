@@ -7,10 +7,11 @@
 # A name nothing emits blocks every PR forever — GitHub cannot tell "has not reported yet"
 # from "will never report". Deleting a line is always safe; adding an unverified one is not.
 
-# ci.yml — `on: pull_request` with no filter; both jobs carry a literal `name:` and neither has
-# a job-level `if:`, so both report on every PR from the moment it opens.
+# ci.yml — `on: pull_request` with no filter; all three jobs carry a literal `name:` and neither has
+# a job-level `if:`, so each reports on every PR from the moment it opens.
 Lint — shellcheck + shfmt
 Test — bats
+Secret scan — gitleaks
 
 # ⚠️ `Review threads answered` is deliberately ABSENT here, unlike every other skeleton
 # (blueprintx#564). This tier ships no review-threads workflow: it is a single-file CLI with no
