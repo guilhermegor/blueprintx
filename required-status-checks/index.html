@@ -958,6 +958,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#keeping-blueprintxs-own-required-checks-in-sync-blueprintx535" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping BlueprintX's own required checks in sync (blueprintx#535)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2028,6 +2039,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#keeping-blueprintxs-own-required-checks-in-sync-blueprintx535" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping BlueprintX's own required checks in sync (blueprintx#535)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2265,6 +2287,37 @@ reached "keep one entry" for the Python tiers by reasoning about
 stronger disqualifier it did not have (the <code>branches:</code> filter, not just matrix
 drift) — but it did not look at <code>pr-gate.yaml</code>, and it did not look outside
 Python at all.</p>
+<h2 id="keeping-blueprintxs-own-required-checks-in-sync-blueprintx535">Keeping BlueprintX's own required checks in sync (blueprintx#535)<a class="headerlink" href="#keeping-blueprintxs-own-required-checks-in-sync-blueprintx535" title="Permanent link">&para;</a></h2>
+<p>The tiers above are about generated projects. For this repo, <code>main</code> is protected in two
+layers (classic branch protection and the <code>pr-quality-gate</code> ruleset), and a required
+check is matched by <strong>name</strong>. A renamed job, or a new job nobody required, is silently
+not enforced.</p>
+<p>The expected contexts per layer are committed in <code>.github/required-checks.json</code>.
+<code>bin/ci/check_required_checks_sync.py</code> compares that file with the jobs that run on every
+PR, with no token and no secret. "Every PR" means the workflow triggers on <code>pull_request</code>
+with no <code>branches:</code>/<code>paths:</code> filter and a <code>types:</code> covering opened, reopened and
+synchronize, and the job is unconditional: it has no <code>if:</code>, or its <code>if:</code> (a surrounding
+<code>${{ }}</code> is stripped) has a <code>||</code> alternative that is a bare <code>github.event_name ==
+'pull_request'</code> or <code>!= '&lt;other event&gt;'</code> test. Any other <code>if:</code> makes the job conditional,
+and so does a <code>needs:</code> on a conditional job. A job that only <code>uses:</code> a reusable workflow
+fails the gate loudly; list its emitted names in the policy file by hand. It fails when:</p>
+<ol>
+<li>a required context is emitted by no such job (every PR would wait forever); or</li>
+<li>such a job is neither required nor listed as <code>optional</code> in
+   <code>bin/ci/required_checks_policy.txt</code>, which also lists the <code>external</code> contexts (CodeQL,
+   GitGuardian) that have no job here. Every line carries a reason.</li>
+</ol>
+<p>The JSON itself is checked against the live settings by <code>--live</code>, which needs
+Administration access (the maintainer PAT). That runs only in
+<code>.github/workflows/verify_required_checks.yml</code>, on <code>push</code> to <code>main</code>, a daily schedule and
+<code>workflow_dispatch</code>, never on <code>pull_request</code>, so no PR-controlled code ever sees the
+secret. It fails closed (<code>REQUIRED_CHECKS_SYNC_REQUIRED=1</code>) when the API cannot be read,
+and fails on <code>main</code> when protection drifted from the JSON. Changing protection therefore
+means editing the JSON in the same change. <code>tests/test_check_required_checks_sync.sh</code>
+holds the should-fail cases.</p>
+<p><code>--live</code> also reads <code>actions/workflows</code> and fails when a workflow file that emits a required
+context is not <code>active</code> (disabled in the UI): the context would never report and every PR
+would deadlock.</p>
 
 
 
