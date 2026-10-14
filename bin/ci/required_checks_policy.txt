@@ -13,3 +13,4 @@ external|Analyze (python)|emitted by CodeQL default setup, which has no workflow
 external|Analyze (ruby)|emitted by CodeQL default setup, which has no workflow file here
 optional|PR files within declared issue scope|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
 optional|Required checks sync — expected contexts vs PR jobs (blueprintx#535)|new gate; require it once it has a green record on main
+optional|.env.example matches docs/configuration.md (blueprintx#304)|new job; require once it has a green record on main
