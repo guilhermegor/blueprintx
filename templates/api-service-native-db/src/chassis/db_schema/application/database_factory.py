@@ -135,7 +135,10 @@ def active_backend() -> str:
     str_backend = os.getenv("DB_BACKEND", _STR_DEFAULT_BACKEND).lower()
     if str_backend not in SET_BACKENDS:
         str_supported = ", ".join(sorted(SET_BACKENDS))
-        raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
+        raise ValueError(
+            f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}. "
+            f"See docs/configuration.md."
+        )
     return str_backend
 
 

@@ -81,7 +81,10 @@ def build_database_url() -> str:
 
     if str_backend not in dict_builders:
         str_supported = ", ".join(dict_builders)
-        raise ValueError(f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}")
+        raise ValueError(
+            f"Unsupported DB_BACKEND {str_backend!r}. Supported: {str_supported}. "
+            f"See docs/configuration.md."
+        )
 
     return dict_builders[str_backend]()
 

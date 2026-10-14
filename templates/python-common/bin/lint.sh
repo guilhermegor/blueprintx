@@ -61,6 +61,9 @@ $POETRY run python bin/check_comment_language.py
 print_status info "comment budget"
 $POETRY run python bin/check_comment_budget.py
 
+print_status info "env docs sync"
+$POETRY run python bin/check_env_docs_sync.py
+
 print_status info "function length"
 $POETRY run python bin/check_function_length.py
 

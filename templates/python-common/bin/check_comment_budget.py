@@ -35,6 +35,7 @@ rather than a census. Escape hatch for checks 2 and 3 only:
 Every rule is pinned by a named test in ``tests/unit/test_comment_budget_gate.py``.
 """
 
+import os
 import pathlib
 import re
 import subprocess
@@ -67,13 +68,49 @@ INT_BANNER_TRIPLE = 3
 # `Makefile` (no suffix) and `.mk` are matched by name in `audit_paths`/
 # `marker_for`, not here — the issue's own table missed Makefile for exactly
 # this reason.
-DICT_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
+TUPLE_SCOPE1_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
+TUPLE_SCOPE1_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+TUPLE_SCOPE1_NAMES = ("Makefile",)
+
+DICT_HASH_SUFFIXES = (
+    *TUPLE_SCOPE1_HASH_SUFFIXES,
+    ".conf",
+    ".cfg",
+    ".fragment",
+    ".bats",
+    ".rb",
+    ".ps1",
+    ".answers",
+    ".sqlfluffignore",
+)
+
+TUPLE_HASH_NAMES = (
+    "Makefile",
+    ".gitignore",
+    ".dockerignore",
+    ".gitattributes",
+    ".codespellrc",
+    ".editorconfig",
+    ".gitlint",
+    ".sqlfluff",
+    ".yamllint",
+    ".pydocstyle",
+    ".coveragerc",
+    ".shellcheckrc",
+    ".env.example",
+    "requirements.txt",
+    "required-checks.txt",
+    "precommit_ci_parity_exemptions.txt",
+    "comment_budget_allowlist.txt",
+)
+
+DICT_DASH_SUFFIXES = (".sql",)
 
 # `//`-comment file types. Block comments (`/* */`) are a known ceiling, not a
 # gap: every measured violation in the issue's table is a line-comment block,
 # and adding a second comment grammar for zero measured evidence is exactly the
 # unrequested generality this repo's own philosophy argues against.
-DICT_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+DICT_SLASH_SUFFIXES = (*TUPLE_SCOPE1_SLASH_SUFFIXES, ".css")
 
 # Directories that hold code we did not write or that is generated, mirroring
 # check_function_length.py's list (`.claude` matters for the same reason: this
@@ -95,6 +132,8 @@ TUPLE_SKIP_DIRS = (
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PATH_ALLOWLIST = pathlib.Path(__file__).resolve().parent / "comment_budget_allowlist.txt"
 STR_BASELINE_NAME = "comment_budget_baseline.txt"
+STR_SCOPE_ROW = "scope "
+INT_SCOPE = 2
 STR_WRITE_BASELINE = "--write-baseline"
 STR_ANYWHERE = "~"
 INT_BANNER_HEAD = 10
@@ -255,11 +294,14 @@ def marker_for(path_file: pathlib.Path) -> str:
     Returns
     -------
     str
-        ``"#"`` or ``"//"``; empty when nothing here budgets this file's type.
+        ``"#"``, ``"//"`` or ``"--"``; empty when nothing here budgets this file's type.
     """
-    bool_hash_file = path_file.name == "Makefile" or path_file.suffix in DICT_HASH_SUFFIXES
+    bool_hash_name = path_file.name in TUPLE_HASH_NAMES or path_file.name.startswith("Dockerfile")
+    bool_hash_file = bool_hash_name or path_file.suffix in DICT_HASH_SUFFIXES
     if bool_hash_file or path_file.suffix == ".py":
         return "#"
+    if path_file.suffix in DICT_DASH_SUFFIXES:
+        return "--"
     if path_file.suffix in DICT_SLASH_SUFFIXES:
         return "//"
     return ""
@@ -493,6 +535,57 @@ def banner_findings(
     return list_out
 
 
+def comment_blocks(str_source: str, str_marker: str) -> list:
+    """Group the counted comments of a file into runs of consecutive lines.
+
+    Parameters
+    ----------
+    str_source : str
+        The file's text.
+    str_marker : str
+        The comment marker.
+
+    Returns
+    -------
+    list of tuple
+        ``(int_start_line, list_of_content_lines)`` per run, including ``/* */`` blocks.
+    """
+    list_out: list = []
+    int_prev = 0
+    for int_line, str_text in counted_comments(str_source, str_marker):
+        if list_out and int_line == int_prev + 1:
+            list_out[-1][1].append(str_text)
+        else:
+            list_out.append((int_line, [str_text]))
+        int_prev = int_line
+    return list_out
+
+
+def blocks_for(path_file: pathlib.Path, str_source: str, str_marker: str) -> list:
+    """Return the comment runs of a file by the grammar its type needs.
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The file.
+    str_source : str
+        Its text.
+    str_marker : str
+        Its comment marker.
+
+    Returns
+    -------
+    list of tuple
+        Runs from ``tokenize`` for ``.py``, from the token scanner for CSS block comments,
+        and from line-start markers otherwise.
+    """
+    if path_file.suffix == ".py":
+        return python_blocks(str_source)
+    if path_file.suffix == ".css":
+        return comment_blocks(str_source, str_marker)
+    return marker_blocks(str_source, str_marker)
+
+
 def file_problems(path_file: pathlib.Path) -> list:
     """Return every finding for one file: long runs and decorative banners.
 
@@ -519,11 +612,7 @@ def file_problems(path_file: pathlib.Path) -> list:
     except ValueError:
         str_shown = str(path_file)
 
-    list_blocks = (
-        python_blocks(str_source)
-        if path_file.suffix == ".py"
-        else marker_blocks(str_source, str_marker)
-    )
+    list_blocks = blocks_for(path_file, str_source, str_marker)
 
     list_problems = []
     for int_start, list_lines in list_blocks:
@@ -550,6 +639,39 @@ def file_problems(path_file: pathlib.Path) -> list:
     return list_problems
 
 
+def tracked_files() -> list | None:
+    """List the files git tracks under the audit root.
+
+    Returns
+    -------
+    list of pathlib.Path or None
+        Tracked files that still exist, so an untracked local file never changes the
+        count. None when the root is not a git checkout (a scaffold before ``git init``).
+    """
+    if not (PATH_ROOT / ".git").exists():
+        return None
+    str_listing = git_out("ls-files", "-z")
+    if not str_listing:
+        return None
+    list_found = [PATH_ROOT / str_name for str_name in str_listing.split("\0") if str_name]
+    return [path_file for path_file in list_found if path_file.is_file()]
+
+
+def walked_files() -> list:
+    """List every file under the audit root, pruning the skipped directories.
+
+    Returns
+    -------
+    list of pathlib.Path
+        The fallback when git cannot say what is tracked.
+    """
+    list_found = []
+    for str_dir, list_dirs, list_names in os.walk(PATH_ROOT):
+        list_dirs[:] = [str_part for str_part in list_dirs if str_part not in TUPLE_SKIP_DIRS]
+        list_found.extend(pathlib.Path(str_dir) / str_name for str_name in list_names)
+    return list_found
+
+
 def audit_paths() -> list:
     """Discover every checkable file under the repository root.
 
@@ -561,26 +683,24 @@ def audit_paths() -> list:
         RELATIVE TO ``PATH_ROOT`` — see ``check_function_length.py`` for why an
         ancestor-based match would self-defeat under a `.claude/worktrees/` copy.
     """
-    tuple_suffixes = (".py", *DICT_HASH_SUFFIXES, *DICT_SLASH_SUFFIXES)
-    list_paths = []
-    for str_suffix in tuple_suffixes:
-        for path_file in PATH_ROOT.rglob(f"*{str_suffix}"):
-            if not any(
-                str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
-            ):
-                list_paths.append(path_file)
-    for path_file in PATH_ROOT.rglob("Makefile"):
-        if not any(
+    list_candidates = tracked_files()
+    if list_candidates is None:
+        list_candidates = walked_files()
+    return sorted(
+        path_file
+        for path_file in set(list_candidates)
+        if marker_for(path_file)
+        and not any(
             str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
-        ):
-            list_paths.append(path_file)
-    return sorted(set(list_paths))
+        )
+    )
 
 
 RE_HASH_TOKEN = re.compile(r"""'[^'\n]*'|"(?:\\.|[^"\\\n])*"|(?<!\S)#[^\n]*""")
 RE_SLASH_TOKEN = re.compile(
     r"""'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`[^`]*`|//[^\n]*|/\*.*?\*/""", re.DOTALL
 )
+RE_DASH_TOKEN = re.compile(r"""'(?:[^']|'')*'|"[^"]*"|--[^\n]*""")
 RE_SHA_PIN = re.compile(r"@[0-9a-f]{40}\b")
 RE_VERSION_NOTE = re.compile(r"^\s*v?\d+(\.\d+)*\S*\s*$")
 
@@ -603,7 +723,7 @@ def scan_comments(str_source: str, str_marker: str) -> list:
     list of tuple
         ``(int_line, str_text)``, text with the marker (``#``, ``//``, ``/*``) removed.
     """
-    re_token = RE_HASH_TOKEN if str_marker == "#" else RE_SLASH_TOKEN
+    re_token = {"#": RE_HASH_TOKEN, "--": RE_DASH_TOKEN}.get(str_marker, RE_SLASH_TOKEN)
     list_out = []
     for cls_match in re_token.finditer(str_source):
         str_found = cls_match.group()
@@ -713,6 +833,41 @@ def parse_baseline_row(str_line: str) -> dict:
     return {str_path: int(str_count)}
 
 
+def parse_baseline_text(str_text: str) -> tuple:
+    """Parse baseline text into its scope version and its rows.
+
+    Parameters
+    ----------
+    str_text : str
+        The baseline file's content. A ``scope <n>`` row records which file types the
+        run that wrote it discovered; a file without one is scope 1.
+
+    Returns
+    -------
+    tuple
+        ``(int_scope, {path: count})``.
+    """
+    int_scope = 1
+    dict_out = {}
+    for str_line in str_text.splitlines():
+        if str_line.startswith(STR_SCOPE_ROW):
+            int_scope = int(str_line[len(STR_SCOPE_ROW) :])
+        elif str_line.strip():
+            dict_out.update(parse_baseline_row(str_line))
+    return int_scope, dict_out
+
+
+def baseline_scope() -> int:
+    """Return the discovery scope recorded in the committed baseline.
+
+    Returns
+    -------
+    int
+        The ``scope`` row's value, 1 when the baseline predates it.
+    """
+    return parse_baseline_text((PATH_ROOT / STR_BASELINE_NAME).read_text(encoding="utf-8"))[0]
+
+
 def load_baseline() -> dict | None:
     """Read ``comment_budget_baseline.txt`` from the audit root.
 
@@ -724,11 +879,7 @@ def load_baseline() -> dict | None:
     path_baseline = PATH_ROOT / STR_BASELINE_NAME
     if not path_baseline.is_file():
         return None
-    dict_out = {}
-    for str_line in path_baseline.read_text(encoding="utf-8").splitlines():
-        if str_line.strip():
-            dict_out.update(parse_baseline_row(str_line))
-    return dict_out
+    return parse_baseline_text(path_baseline.read_text(encoding="utf-8"))[1]
 
 
 def current_counts(list_paths: list) -> dict:
@@ -794,7 +945,9 @@ def write_baseline(dict_counts: dict) -> None:
     dict_counts : dict
         ``{relative_path: count}`` to record.
     """
-    str_rows = "".join(f"{int_n} {str_path}\n" for str_path, int_n in sorted(dict_counts.items()))
+    str_rows = f"{STR_SCOPE_ROW}{INT_SCOPE}\n" + "".join(
+        f"{int_n} {str_path}\n" for str_path, int_n in sorted(dict_counts.items())
+    )
     (PATH_ROOT / STR_BASELINE_NAME).write_text(str_rows, encoding="utf-8")
     print(f"wrote {len(dict_counts)} file(s), {sum(dict_counts.values())} comment line(s)")
 
@@ -864,7 +1017,28 @@ def rename_map(str_base: str) -> dict:
     return dict_out
 
 
-def raised_rows(dict_new: dict, dict_old: dict, dict_renames: dict) -> list:
+def scanned_at_scope_one(str_path: str) -> bool:
+    """Return whether the first discovery scope already read this path's file type.
+
+    Parameters
+    ----------
+    str_path : str
+        A baseline path.
+
+    Returns
+    -------
+    bool
+        True for Python, the scope-1 ``#`` and ``//`` suffixes and ``Makefile``: a row for
+        one of these is never the product of a widened scope, so it is always held.
+    """
+    path_file = pathlib.PurePosixPath(str_path)
+    tuple_suffixes = (".py", *TUPLE_SCOPE1_HASH_SUFFIXES, *TUPLE_SCOPE1_SLASH_SUFFIXES)
+    return path_file.suffix in tuple_suffixes or path_file.name in TUPLE_SCOPE1_NAMES
+
+
+def raised_rows(
+    dict_new: dict, dict_old: dict, dict_renames: dict, bool_widened: bool = False
+) -> list:
     """Return the reasons ``dict_new`` raises the ratchet over ``dict_old``.
 
     A path absent from ``dict_old`` has budget 0, except a git-detected rename, which
@@ -878,6 +1052,10 @@ def raised_rows(dict_new: dict, dict_old: dict, dict_renames: dict) -> list:
         Reference ``{path: count}``.
     dict_renames : dict
         ``{new_path: old_path}`` from ``rename_map``.
+    bool_widened : bool, optional
+        True when the reference was written under an older discovery scope: paths whose
+        file type that scope never read are exempt; every other path is held to its row,
+        and a new or renamed file of a scanned type starts from 0 or its source's row.
 
     Returns
     -------
@@ -889,7 +1067,8 @@ def raised_rows(dict_new: dict, dict_old: dict, dict_renames: dict) -> list:
         f"{dict_old.get(str_path, dict_old.get(dict_renames.get(str_path, ''), 0))} - "
         f"the ratchet never goes up"
         for str_path, int_n in sorted(dict_new.items())
-        if int_n > dict_old.get(str_path, dict_old.get(dict_renames.get(str_path, ""), 0))
+        if not (bool_widened and not scanned_at_scope_one(str_path))
+        and int_n > dict_old.get(str_path, dict_old.get(dict_renames.get(str_path, ""), 0))
     ]
 
 
@@ -913,8 +1092,11 @@ def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
         return 1
     dict_counts = current_counts(list_paths)
     dict_old = load_baseline()
+    bool_widened = dict_old is not None and baseline_scope() < INT_SCOPE
     list_raised = (
-        [] if dict_old is None else raised_rows(dict_counts, dict_old, rename_map(default_base()))
+        []
+        if dict_old is None
+        else raised_rows(dict_counts, dict_old, rename_map(default_base()), bool_widened)
     )
     for str_message in list_raised:
         print(str_message)
@@ -939,15 +1121,14 @@ def compare_problems(str_reference: str) -> list:
     list of str
         Findings; empty when the committed baseline did not go up.
     """
-    dict_ref = {}
     try:
         str_ref_text = pathlib.Path(str_reference).read_text(encoding="utf-8")
     except OSError as cls_error:
         raise ValueError(f"cannot read the reference baseline {str_reference}") from cls_error
-    for str_line in str_ref_text.splitlines():
-        if str_line.strip():
-            dict_ref.update(parse_baseline_row(str_line))
-    return raised_rows(load_baseline() or {}, dict_ref, rename_map("FETCH_HEAD"))
+    int_scope, dict_ref = parse_baseline_text(str_ref_text)
+    return raised_rows(
+        load_baseline() or {}, dict_ref, rename_map("FETCH_HEAD"), int_scope < INT_SCOPE
+    )
 
 
 def baseline_problems(list_paths: list, bool_audit: bool, bool_require: bool) -> list:

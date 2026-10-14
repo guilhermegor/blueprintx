@@ -161,6 +161,13 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: env-docs-sync
+        name: .env.example and docs/configuration.md list the same variables (blueprintx#304)
+        entry: python3 templates/python-common/bin/check_env_docs_sync.py --each-under templates
+        language: system
+        pass_filenames: false
+        files: (^|/)(\.env\.example|configuration\.md|check_env_docs_sync\.py)$
+
       - id: check-complexity
         name: cyclomatic complexity (tests 1, src 2, bin 8)
         # Same treatment as function-length above: ONE implementation, run over this repo via

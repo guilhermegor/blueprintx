@@ -174,6 +174,7 @@ copy_skeleton_files() {
     # template, so the project runs out of the box yet documents its vars.
     cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env"
     cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env.example"
+    cp "$SKELETON_TEMPLATE_ROOT/docs/configuration.md" "$project_path/docs/configuration.md"
 
     print_status "success" "Skeleton files copied"
 }
@@ -391,6 +392,7 @@ conditional_copy_otel() {
     # to reach process.env.<KEY> in the bundle.
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.config.md" >> "$project_path/docs/configuration.md"
     wire_otel_composition_root "$project_path"
     print_status "success" "OTLP log export (src/shared/utils/otel-log-emitter.ts) added"
     print_status "info" "Set OTEL_EXPORTER_OTLP_ENDPOINT (and optionally OTEL_SERVICE_NAME) in .env to enable export — leave OTEL_EXPORTER_OTLP_HEADERS blank (see the fragment's warning)"
