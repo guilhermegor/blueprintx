@@ -33,6 +33,7 @@ except ImportError:
 
 REPO = "guilhermegor/blueprintx"
 PR_TYPES = {"opened", "reopened", "synchronize"}
+PR_EVENTS = ("pull_request", "pull_request_target")
 FILTERS = ("branches", "branches-ignore", "paths", "paths-ignore")
 RE_EVENT_CLAUSE = re.compile(r"^github\.event_name\s*(==|!=)\s*'([a-z_]+)'$")
 
@@ -55,33 +56,80 @@ def if_always_true(str_if) -> bool:
     return any(event_clause_true(c) for c in str_expr.split("||"))
 
 
+class Unsupported(Exception):
+    """A workflow shape this gate cannot expand; reported per workflow, never fatal."""
+
+
+def pr_event_keys(dict_on) -> list:
+    """The pull_request / pull_request_target keys a workflow's `on:` carries."""
+    if isinstance(dict_on, str):
+        dict_on = {dict_on: None}
+    elif isinstance(dict_on, list):
+        dict_on = dict.fromkeys(dict_on)
+    if not isinstance(dict_on, dict):
+        return []
+    return [k for k in PR_EVENTS if k in dict_on]
+
+
 def pr_trigger_unfiltered(dict_on) -> bool:
-    """`pull_request` with no branch/path filter and a `types:` that covers new pushes."""
-    if not isinstance(dict_on, dict) or "pull_request" not in dict_on:
+    """`pull_request` has no filter and `types:` covering new pushes. A workflow that only
+    `pull_request_target` triggers is judged but conditional: its checks may not attach to
+    the PR head, so it is never classed as running on every PR."""
+    if isinstance(dict_on, str):
+        dict_on = {dict_on: None}
+    elif isinstance(dict_on, list):
+        dict_on = dict.fromkeys(dict_on)
+    return "pull_request" in dict_on and event_unfiltered(dict_on["pull_request"])
+
+
+def event_unfiltered(dict_event) -> bool:
+    """One event's config: no filter, and `types:` (a scalar counts as a list) complete."""
+    dict_event = dict_event or {}
+    if any(k in dict_event for k in FILTERS):
         return False
-    dict_pr = dict_on["pull_request"] or {}
-    if any(k in dict_pr for k in FILTERS):
-        return False
-    return "types" not in dict_pr or PR_TYPES <= set(dict_pr["types"])
+    list_types = dict_event.get("types")
+    if list_types is None:
+        return True
+    list_types = [list_types] if isinstance(list_types, str) else list_types
+    return PR_TYPES <= set(list_types)
+
+
+def matrix_text(value) -> str:
+    """A matrix value as GitHub renders it (booleans lowercase)."""
+    return str(value).lower() if isinstance(value, bool) else str(value)
 
 
 def expand_name(str_name: str, dict_job: dict) -> list:
-    """Interpolate `${{ matrix.<k> }}` over the job's matrix; fail on include/exclude."""
-    dict_matrix = (dict_job.get("strategy") or {}).get("matrix") or {}
-    if "${{" not in str_name:
+    """Job check names; interpolates `${{ matrix.k }}` or appends GitHub's `(v1, v2)`."""
+    dict_strategy = dict_job.get("strategy") or {}
+    dict_matrix = (
+        dict_strategy.get("matrix") if isinstance(dict_strategy, dict) else None
+    )
+    if dict_matrix is None:
         return [str_name]
-    if "include" in dict_matrix or "exclude" in dict_matrix:
-        sys.exit(
-            f"::error::matrix include/exclude in job '{str_name}' is not expandable"
+    if not isinstance(dict_matrix, dict):
+        raise Unsupported(
+            f"job '{str_name}': dynamic matrix (fromJSON) is not expandable"
         )
-    list_keys = [k for k, v in dict_matrix.items() if isinstance(v, list)]
+    if "include" in dict_matrix or "exclude" in dict_matrix:
+        raise Unsupported(f"job '{str_name}': matrix include/exclude is not expandable")
+    list_keys = list(dict_matrix)
+    if not all(isinstance(dict_matrix[k], list) for k in list_keys):
+        raise Unsupported(
+            f"job '{str_name}': a non-list matrix dimension is not expandable"
+        )
+    if "matrix." not in str_name:
+        return [
+            f"{str_name} ({', '.join(matrix_text(v) for v in t)})"
+            for t in itertools.product(*(dict_matrix[k] for k in list_keys))
+        ]
     list_names = []
     for tuple_vals in itertools.product(*(dict_matrix[k] for k in list_keys)):
         str_out = str_name
         for str_key, str_val in zip(list_keys, tuple_vals):
             str_out = re.sub(
                 r"\$\{\{\s*matrix\.%s\s*\}\}" % re.escape(str_key),
-                str(str_val),
+                matrix_text(str_val),
                 str_out,
             )
         list_names.append(str_out)
@@ -93,8 +141,8 @@ def job_flags(str_file: str, dict_job_map: dict, flag_wf: bool) -> dict:
     dict_flag = {}
     for str_id, dict_job in dict_job_map.items():
         if "uses" in dict_job:
-            sys.exit(
-                f"::error::{str_file}: reusable-workflow job '{str_id}' is unsupported; "
+            raise Unsupported(
+                f"reusable-workflow job '{str_id}' is unsupported; "
                 "add its emitted check names to the policy file by hand"
             )
         dict_flag[str_id] = flag_wf and if_always_true(dict_job.get("if"))
@@ -112,41 +160,54 @@ def job_flags(str_file: str, dict_job_map: dict, flag_wf: bool) -> dict:
     return dict_flag
 
 
-def pr_jobs(path_dir: pathlib.Path) -> dict:
-    """{emitted name: True if it runs unconditionally on every PR} over every workflow."""
-    dict_jobs = {}
+def load_workflow(path_file: pathlib.Path) -> dict:
+    """Parse one workflow file into a dict (empty for an empty file)."""
+    return yaml.safe_load(path_file.read_text(encoding="utf-8")) or {}
+
+
+def job_names(dict_job_map: dict, str_id: str) -> list:
+    """Check names one job emits."""
+    dict_job = dict_job_map[str_id]
+    return expand_name(str(dict_job.get("name", str_id)), dict_job)
+
+
+def pr_jobs(path_dir: pathlib.Path) -> tuple:
+    """({emitted name: unconditional on every PR}, [per-workflow problems])."""
+    dict_jobs, list_problems = {}, []
     for path_file in sorted(path_dir.glob("*.y*ml")):
-        dict_wf = yaml.safe_load(path_file.read_text(encoding="utf-8")) or {}
+        dict_wf = load_workflow(path_file)
         dict_on = dict_wf.get("on", dict_wf.get(True))
-        if isinstance(dict_on, str):
-            dict_on = {dict_on: None}
-        elif isinstance(dict_on, list):
-            dict_on = dict.fromkeys(dict_on)
-        if not isinstance(dict_on, dict) or "pull_request" not in dict_on:
+        if not pr_event_keys(dict_on):
             continue
         dict_job_map = dict_wf.get("jobs") or {}
-        dict_flag = job_flags(
-            path_file.name, dict_job_map, pr_trigger_unfiltered(dict_on)
-        )
-        for str_id, dict_job in dict_job_map.items():
-            for str_name in expand_name(str(dict_job.get("name", str_id)), dict_job):
-                dict_jobs[str_name] = (
-                    dict_jobs.get(str_name, False) or dict_flag[str_id]
-                )
-    return dict_jobs
+        try:
+            dict_flag = job_flags(
+                path_file.name, dict_job_map, pr_trigger_unfiltered(dict_on)
+            )
+            for str_id in dict_job_map:
+                for str_name in job_names(dict_job_map, str_id):
+                    dict_jobs[str_name] = (
+                        dict_jobs.get(str_name, False) or dict_flag[str_id]
+                    )
+        except Unsupported as exc:
+            list_problems.append(f"{path_file.name}: {exc}")
+    return dict_jobs, list_problems
 
 
-def emitting_files(path_dir: pathlib.Path) -> dict:
-    """{emitted name: {workflow file name}} over every workflow, whatever its trigger."""
-    dict_files = {}
+def emitting_files(path_dir: pathlib.Path) -> tuple:
+    """({emitted name: {file}}, [per-workflow problems]) over every workflow."""
+    dict_files, list_problems = {}, []
     for path_file in sorted(path_dir.glob("*.y*ml")):
-        dict_wf = yaml.safe_load(path_file.read_text(encoding="utf-8")) or {}
-        for str_id, dict_job in (dict_wf.get("jobs") or {}).items():
-            if "uses" in dict_job:
-                continue
-            for str_name in expand_name(str(dict_job.get("name", str_id)), dict_job):
-                dict_files.setdefault(str_name, set()).add(path_file.name)
-    return dict_files
+        dict_job_map = load_workflow(path_file).get("jobs") or {}
+        try:
+            for str_id, dict_job in dict_job_map.items():
+                if "uses" in dict_job:
+                    continue
+                for str_name in job_names(dict_job_map, str_id):
+                    dict_files.setdefault(str_name, set()).add(path_file.name)
+        except Unsupported as exc:
+            list_problems.append(f"{path_file.name}: {exc}")
+    return dict_files, list_problems
 
 
 def inactive_emitters(set_req: set, dict_files: dict, dict_states: dict) -> list:
@@ -178,6 +239,11 @@ def read_policy(path_file: pathlib.Path) -> dict:
         ):
             sys.exit(
                 f"::error file={path_file},line={int_no}::need `optional|external|name|reason`"
+            )
+        if any(list_parts[1] in dict_policy[k] for k in dict_policy):
+            sys.exit(
+                f"::error file={path_file},line={int_no}::duplicate or conflicting "
+                f"policy line for '{list_parts[1]}'"
             )
         dict_policy[list_parts[0]][list_parts[1]] = list_parts[2]
     return dict_policy
@@ -298,15 +364,21 @@ def main() -> int:
     if int_rc is not None:
         return int_rc
     if args.live:
-        list_err = compare_live(dict_exp, dict_live) + inactive_emitters(
-            dict_exp["classic"] | dict_exp["ruleset"],
-            emitting_files(pathlib.Path(args.workflows)),
-            dict_live["states"],
+        dict_files, list_problems = emitting_files(pathlib.Path(args.workflows))
+        list_err = (
+            compare_live(dict_exp, dict_live)
+            + inactive_emitters(
+                dict_exp["classic"] | dict_exp["ruleset"],
+                dict_files,
+                dict_live["states"],
+            )
+            + list_problems
         )
     else:
-        list_err = compare(
+        dict_jobs, list_problems = pr_jobs(pathlib.Path(args.workflows))
+        list_err = list_problems + compare(
             dict_exp["classic"] | dict_exp["ruleset"],
-            pr_jobs(pathlib.Path(args.workflows)),
+            dict_jobs,
             read_policy(pathlib.Path(args.policy)),
         )
     for str_msg in list_err:
