@@ -53,13 +53,17 @@ expect "major without review waits" wait-review "$major"
 expect "grouped with one major waits" wait-review "$grouped"
 expect "empty metadata waits (fail-closed)" wait-review ""
 expect "garbage metadata waits (fail-closed)" wait-review "not json"
-STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"state":"APPROVED"}]'
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"author_association":"MEMBER","state":"APPROVED"}]'
 expect "major with a review on head arms" arm "$major"
-STUB_REVIEWS='[{"commit_id":"old","user":{"login":"owner"},"state":"APPROVED"}]'
+STUB_REVIEWS='[{"commit_id":"old","user":{"login":"owner"},"author_association":"MEMBER","state":"APPROVED"}]'
 expect "major reviewed at an older head waits" wait-review "$major"
-STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"dependabot[bot]"},"state":"COMMENTED"}]'
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"stranger"},"author_association":"NONE","state":"APPROVED"},{"commit_id":"abc","user":{"login":"c"},"author_association":"CONTRIBUTOR","state":"APPROVED"}]'
+expect "major reviewed only by NONE/CONTRIBUTOR waits" wait-review "$major"
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"author_association":"OWNER","state":"CHANGES_REQUESTED"},{"commit_id":"abc","user":{"login":"m"},"author_association":"MEMBER","state":"APPROVED"}]'
+expect "major with a trusted CHANGES_REQUESTED waits" wait-review "$major"
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"dependabot[bot]"},"author_association":"NONE","state":"COMMENTED"}]'
 expect "major reviewed only by dependabot waits" wait-review "$major"
-STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"state":"PENDING"}]'
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"author_association":"MEMBER","state":"PENDING"}]'
 expect "major with a pending review waits" wait-review "$major"
 STUB_REVIEWS='[]'
 STUB_AUTHOR="mallory"
@@ -70,7 +74,7 @@ expect "human commit on a dependabot branch is skipped" skip "$minor"
 
 STUB_COMMIT_AUTHORS='"dependabot[bot]"'
 run_main "$patch"
-check "patch arms auto-merge" "pr merge 1 --auto --squash --repo o/r ;" "$STUB_CALLS"
+check "patch arms auto-merge" "pr merge 1 --auto --squash --match-head-commit abc --repo o/r ;" "$STUB_CALLS"
 run_main "$major"
 check "unreviewed major disarms" "pr merge 1 --disable-auto --repo o/r ;" "$STUB_CALLS"
 STUB_COMMIT_AUTHORS='"dependabot[bot]","human"'

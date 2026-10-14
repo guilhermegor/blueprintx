@@ -25,7 +25,9 @@ has_review_on_head() {
 	local str_pr="$1" str_head="$2" str_n
 	str_n=$(gh api "repos/$GH_REPO/pulls/$str_pr/reviews" --paginate |
 		jq -s --arg head "$str_head" --arg bot "$DEPENDABOT_LOGIN" \
-			'[.[][] | select(.commit_id == $head and .user.login != $bot and (.state | IN("APPROVED", "COMMENTED", "CHANGES_REQUESTED")))] | length') || return 1
+			'[.[][] | select(.commit_id == $head and .user.login != $bot and (.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")))] as $r
+			| if any($r[]; .state == "CHANGES_REQUESTED") then 0
+			  else [$r[] | select(.state | IN("APPROVED", "COMMENTED"))] | length end') || return 1
 	[[ "$str_n" =~ ^[0-9]+$ ]] && ((str_n > 0))
 }
 
@@ -49,7 +51,7 @@ main() {
 	local str_decision
 	str_decision=$(decide "$PR" "$HEAD_SHA" "${DEPS_JSON:-}") || return 1
 	case "$str_decision" in
-	arm) gh pr merge "$PR" --auto --squash --repo "$GH_REPO" ;;
+	arm) gh pr merge "$PR" --auto --squash --match-head-commit "$HEAD_SHA" --repo "$GH_REPO" ;;
 	wait-review)
 		disarm "$PR"
 		echo "::notice::major update: waiting for a review on $HEAD_SHA"

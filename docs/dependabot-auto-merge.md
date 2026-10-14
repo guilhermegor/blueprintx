@@ -47,6 +47,15 @@ The workflow uses `pull_request_target` because a Dependabot `pull_request` run 
 read-only token and cannot arm auto-merge. It never checks out PR code; the script comes from
 the default branch.
 
+## Who counts as a reviewer
+
+A public repo accepts reviews from any account, so only a review whose `author_association` is
+OWNER, MEMBER or COLLABORATOR, on the current head, in state APPROVED or COMMENTED, counts. A
+trusted CHANGES_REQUESTED on the head blocks. The job gates on the PR author, never the actor
+(on a review event the actor is the reviewer), and arms with `--match-head-commit` so GitHub
+refuses if the head moved after the check. The review-thread exemption never counts reviews,
+so it needs no such filter.
+
 ## Unverified until a real major is reviewed
 
 The review-triggered run is untested against a live Dependabot major. Whether the token of a
