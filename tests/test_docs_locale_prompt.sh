@@ -1,13 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for the documentation-locale scaffold choice (blueprintx#247).
-#
-# Three things can silently rot: the prompt's choice→value mapping, the `${DOCS_LOCALE}`
-# placeholder in a skeleton's mkdocs.yml, and the scaffold's envsubst list that renders it.
-# A placeholder present in the template but missing from the envsubst list ships a literal
-# `${DOCS_LOCALE}` into every generated project, with no red check anywhere — so each leg
-# is asserted here rather than trusted.
-#
-# Usage: bash tests/test_docs_locale_prompt.sh
 
 set -euo pipefail
 
@@ -26,12 +17,9 @@ pass() {
     print_status "success" "PASS: $1"
 }
 
-# Runs prompt_docs_locale with $1 on stdin and prints its stdout — the value the menu
-# hands to the scaffold. Sourced in a subshell so blueprintx.sh's main never runs.
 run_prompt() {
     local str_answer="$1"
     (
-        # The top-level option loop parses "$@" on source, so hand it nothing.
         set --
         # shellcheck source=bin/blueprintx.sh
         source "$REPO_ROOT/bin/blueprintx.sh"
@@ -40,9 +28,7 @@ run_prompt() {
 }
 
 expect_prompt() {
-    # $1 = stdin answer, $2 = expected value
     local str_got int_rc=0
-    # Under `set -e` a bare capture aborts the whole run with no FAIL line naming the case.
     str_got="$(run_prompt "$1")" || int_rc=$?
     if [ "$int_rc" -ne 0 ]; then
         fail "answer '$1' -> prompt exited $int_rc (expected '$2')"
@@ -57,7 +43,6 @@ test_prompt_mapping() {
     expect_prompt "" "en"
     expect_prompt "1" "en"
     expect_prompt "2" "pt-BR"
-    # An invalid answer re-prompts and reads the next line; "9" must never leak through.
     local str_got int_rc=0
     str_got="$(run_prompt $'9\n2')" || int_rc=$?
     if [ "$int_rc" -ne 0 ]; then
@@ -92,7 +77,6 @@ test_templates_and_scaffolds_wired() {
 }
 
 test_render_falls_back_to_en() {
-    # The exact command a scaffold runs, in a clean environment: no DOCS_LOCALE set.
     local str_out
     str_out="$(env -u DOCS_LOCALE bash -c '
         export DOCS_LOCALE="${DOCS_LOCALE:-en}"

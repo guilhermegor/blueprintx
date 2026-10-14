@@ -1,11 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/check_orphan_pr_bodies.sh (blueprintx#657).
-#
-# One witness per outcome (MATCHED, ORPHAN, UNKNOWN) plus the exit-code contract. `gh` is a
-# stub on PATH, so the suite needs no network: it prints the raw REST JSON in $STUB_GH_OUT (the
-# script's own parsing runs over it), or fails if STUB_GH_FAIL is set.
-#
-# Usage: bash tests/test_check_orphan_pr_bodies.sh
 
 set -euo pipefail
 
@@ -31,7 +24,6 @@ BODY_B="A completely different body that no pull request on the forge ever carri
 TEMPLATE="## Description What Why How --- ## Changes Made Added Updated Fixed --- ## Testing"
 CHECKLIST="Testing - [ ] CI checks pass and the orphan scan reports every unopened body found locally"
 
-# forge_json <file> <num> <body> [<num> <body> ...]: raw REST-shaped JSON, one page.
 forge_json() {
     local str_file="$1"
     shift
@@ -54,17 +46,12 @@ forge_json "$str_tmp/edited.json" 564 "${BODY_A/orphan/orfan}"
 printf '%s' '{"message":"Not Found"}' > "$str_tmp/shape.json"
 forge_json "$str_tmp/p1.json" 1 "unrelated"
 forge_json "$str_tmp/p2.json" 561 "$BODY_A"
-# --paginate concatenates one JSON array per page.
 cat "$str_tmp/p1.json" "$str_tmp/p2.json" > "$str_tmp/paged.json"
 
-# run_case <name> <want-exit> <want-substring> <body> [forge.json]
-# Caller-set env: STUB_GH_FAIL, RUN_CWD (default the tmp dir), RUN_DIR (the script argument,
-# default the fixture dir; empty means "no argument").
 run_case() {
     local str_name="$1" int_want="$2" str_want="$3" str_body="$4" str_forge="${5:-one.json}"
     local str_out int_rc=0 list_arg=()
     rm -f "$str_tmp"/gitdir/*.md
-    # Filename deliberately unrelated to the body: matching must read content.
     printf '%s\n' "$str_body" > "$str_tmp/gitdir/issue_rmw.md"
     [ -n "${RUN_DIR-$str_tmp/gitdir}" ] && list_arg=("${RUN_DIR-$str_tmp/gitdir}")
     str_out="$(cd "${RUN_CWD:-$str_tmp}" && PATH="$str_tmp/bin:$PATH" \
@@ -99,11 +86,9 @@ printf '%s\n' "$BODY_A" > "$str_tmp/worktree/README.md"
 RUN_DIR="$str_tmp/worktree" run_case "a worktree dir instead of a git-dir exits 2" 2 \
     "not a git directory" "$BODY_A"
 
-# A crash inside the python body must exit 2, never 1: a gh stub whose JSON nests too deeply.
 python3 -c "print('['*100000)" > "$str_tmp/deep.json"
 run_case "an uncaught python crash exits 2, never 1" 2 "RecursionError" "$BODY_A" deep.json
 
-# git's own exit codes (1, 128) must not leak into the contract: a repo with no origin, and no repo.
 git -C "$str_tmp/norepo" init -q
 printf '%s\n' "$BODY_A" > "$str_tmp/norepo/.git/pr.md"
 unset BLUEPRINTX_REPO
@@ -111,7 +96,6 @@ RUN_CWD="$str_tmp/norepo" RUN_DIR="" run_case "missing origin is UNKNOWN, exit 2
 GIT_CEILING_DIRECTORIES="$str_tmp" RUN_CWD="$str_tmp/plain" RUN_DIR="" run_case \
     "outside a repo exits 2" 2 "not inside a git repository" "$BODY_A"
 
-# The forge slug comes from the scanned git-dir's origin, never from the caller's cwd repo.
 git -C "$str_tmp/plain" init -q
 git -C "$str_tmp/plain" remote add origin https://github.com/other/cwd-repo.git
 git -C "$str_tmp/norepo" remote add origin https://github.com/scanned/repo.git
@@ -122,7 +106,6 @@ if ! grep -q 'repos/scanned/repo/' "$str_tmp/args"; then
     int_failures=$((int_failures + 1))
 fi
 
-# Unreadable local bodies are UNKNOWN (exit 2), never a traceback and never a false ORPHAN.
 check_bad_body() {
     local str_name="$1" int_rc=0 str_out
     str_out="$(cd "$str_tmp" && PATH="$str_tmp/bin:$PATH" STUB_GH_OUT="$str_tmp/one.json" \

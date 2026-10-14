@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Table-driven tests for templates/common/bin/close_linked_issues.sh (blueprintx#604).
-#
-# A wrong closure is worse than a missed one, so every row below is either a case that must
-# close exactly the named issues or a should-fail witness: a case that once misfired (or that
-# the PR #675 review showed would) and must close NOTHING. The last block drives the real
-# script against a stub `gh` to pin the error handling.
-#
-# Usage: bash tests/test_close_linked_issues.sh
 
 set -uo pipefail
 
@@ -17,7 +9,6 @@ source "$SCRIPT"
 
 int_failures=0
 
-# expect <description> <branch> <body> <expected numbers, space separated; empty = none>
 expect() {
 	local str_desc="$1" str_branch="$2" str_body="$3" str_want="$4" str_got
 	str_got=$(resolve_issues "$str_branch" "$str_body" | tr '\n' ' ' | sed 's/ $//')
@@ -29,7 +20,6 @@ expect() {
 	int_failures=$((int_failures + 1))
 }
 
-# Positives.
 expect "leading number" "feat/12-add-thing-3" "" "12"
 expect "bugfix/ spelling" "bugfix/7-typo" "" "7"
 expect "feature/ spelling" "feature/6-thing" "" "6"
@@ -39,7 +29,6 @@ expect "each Closes pair counts" "chore/cleanup" $'Closes #1\nFixes #2, closes #
 expect "branch and body dedupe" "fix/5-x" "Resolves #5" "5"
 expect "leading zeros normalised" "fix/007-x" "" "7"
 
-# Should-fail witnesses: each must close nothing.
 expect "hotfix #5 is not a keyword" "chore/x" "hotfix #5" ""
 expect "prefix #12 is not a keyword" "chore/x" "prefix #12" ""
 expect "not fix #12" "chore/x" "This does not fix #12 yet" ""
@@ -80,7 +69,6 @@ expect "renovate body quoting upstream closes" "renovate/foo" "closes #87" ""
 expect "release branch body" "release/1.2.3" "Closes #5" ""
 expect "no number at all" "feat/add-thing" "just prose" ""
 
-# Workflow wiring: a workflow that calls a file it never fetched fails on every run.
 str_wf="$REPO_ROOT/templates/common/.github/workflows/close-linked-issues.yml"
 str_called=$(sed -nE 's/^ *run: .*(bin\/[a-z_]+\.sh).*$/\1/p' "$str_wf")
 if [[ -f "$REPO_ROOT/templates/common/$str_called" ]] && grep -q 'uses: actions/checkout@' "$str_wf"; then
@@ -100,7 +88,6 @@ for str_guard in 'merged == true' 'head.repo.full_name == github.repository' \
 	fi
 done
 
-# Error handling, against a stub gh. STUB_API=<404|500|open>, STUB_CLOSE_FAIL=<number>.
 str_bin="$(mktemp -d)"
 trap 'rm -rf "$str_bin"' EXIT
 cat >"$str_bin/gh" <<'STUB'
@@ -120,7 +107,6 @@ exit 0
 STUB
 chmod +x "$str_bin/gh"
 
-# run_script <STUB_API> <STUB_CLOSE_FAIL> <body> -> sets int_status and str_log
 run_script() {
 	STUB_LOG="$str_bin/log"
 	: >"$STUB_LOG"
@@ -131,7 +117,6 @@ run_script() {
 }
 
 check() {
-	# check <description> <condition: 0 = holds>
 	if [[ "$2" -eq 0 ]]; then
 		echo "ok   - $1"
 		return 0

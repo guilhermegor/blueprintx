@@ -7,14 +7,8 @@ class Blueprintx < Formula
   version "0.2.0"
 
   def install
-    # Install bin/ and templates/ under libexec so SCRIPT_DIR-based path navigation works.
-    # Scaffold scripts compute BLUEPRINTX_ROOT = $(cd "$SCRIPT_DIR/../.." && pwd):
-    #   libexec/bin/scaffold/../../  →  libexec/  ✓
-    # All template references ($BLUEPRINTX_ROOT/templates/...) resolve correctly without patching.
     libexec.install "bin", "templates"
 
-    # Stamp the release version into the fallback literal, so `blueprintx --version` is correct
-    # when run from the Cellar (no .git there for `git describe` to derive the tag).
     inreplace libexec/"bin/blueprintx.sh",
               /^BLUEPRINTX_VERSION=".*"/, "BLUEPRINTX_VERSION=\"#{version}\""
 
@@ -22,10 +16,7 @@ class Blueprintx < Formula
       f.chmod(0755) if f.file? && f.extname == ".sh"
     end
 
-    # exec preserves ${BASH_SOURCE[0]} so SCRIPT_DIR inside blueprintx.sh resolves
-    # to libexec/bin rather than the wrapper's location.
     (bin/"blueprintx").write <<~EOS
-      #!/usr/bin/env bash
       exec "#{libexec}/bin/blueprintx.sh" "$@"
     EOS
   end

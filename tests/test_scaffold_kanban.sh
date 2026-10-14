@@ -1,11 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/lib/scaffold_kanban.sh (blueprintx#592).
-#
-# A stub `gh` on PATH logs every call and answers from environment switches, so the suite needs
-# no network and no token. Every refusal is asserted by what the lib said or did not call, and
-# every case has a control that does the work, so a lib that silently does nothing cannot pass.
-#
-# Usage: bash tests/test_scaffold_kanban.sh
 
 set -euo pipefail
 
@@ -18,7 +11,6 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 int_failures=0
 
 make_stub() {
-    # A `gh` that logs "$*" to $GH_LOG and answers the calls the lib makes.
     mkdir -p "$WORK_DIR/bin"
     cat >"$WORK_DIR/bin/gh" <<'STUB'
 #!/bin/bash
@@ -57,7 +49,6 @@ STUB
 }
 
 run_setup() {
-    # run_setup <stdin answers> [VAR=value...]: runs scaffold_kanban_setup, prints its output.
     local str_answers="$1"
     shift
     : >"$WORK_DIR/gh.log"
@@ -74,7 +65,6 @@ run_setup() {
 }
 
 expect_log() {
-    # $1 = description, $2 = fixed string, $3 = present|absent
     local str_hit="absent"
     grep -qF -- "$2" "$WORK_DIR/gh.log" "$WORK_DIR/gh.log.stdin" && str_hit="present"
     if [ "$str_hit" != "$3" ]; then
@@ -84,7 +74,6 @@ expect_log() {
 }
 
 expect_out() {
-    # $1 = description, $2 = output, $3 = fixed string it must contain
     if ! grep -qF -- "$3" <<<"$2"; then
         print_status "error" "$1: output never said '$3': ${2: -300}"
         int_failures=$((int_failures + 1))
@@ -183,7 +172,6 @@ test_empty_stdin_means_no_board() {
 
 main() {
     make_stub
-    # Every case must hit the stub: a real `gh` here would try the real GitHub API.
     [ "$(PATH="$WORK_DIR/bin:$PATH" command -v gh)" = "$WORK_DIR/bin/gh" ] || exit 2
     test_house_labels_are_created_idempotently
     test_declining_makes_no_board

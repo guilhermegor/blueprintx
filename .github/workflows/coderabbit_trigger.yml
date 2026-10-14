@@ -1,88 +1,13 @@
 name: CodeRabbit Trigger
 
-# Ask CodeRabbit for a review on every PR, because it will not ask itself here.
-#
-# ⚠️ WHY THIS FILE EXISTS AT ALL. CodeRabbit declines AUTOMATIC reviews on a repository with
-# fewer than 10 stars ("This repository does not receive automatic reviews because it has
-# fewer than 10 stars"). This repo has 0. That threshold is CodeRabbit's and is NOT
-# configurable from `.coderabbit.yaml` — there is no popularity key in the schema, and
-# `auto_review.enabled` already defaults to `true`, so editing config changes nothing. The
-# plan is not the problem either: the run config reports `Plan: Pro Plus`.
-#
-# The consequence was the real defect: PR #204 and #213 both MERGED having never been
-# reviewed, with every check green, because nothing was watching for the absence.
-#
-# ⚠️ WHY A PAT AND NOT `GITHUB_TOKEN` — THIS IS THE WHOLE DESIGN, MEASURED, DO NOT "SIMPLIFY".
-# CodeRabbit honours a manual `@coderabbitai review` regardless of auto-review config, but it
-# IGNORES bot-authored comments. A comment posted with `GITHUB_TOKEN` is authored by
-# `github-actions[bot]` (`user.type: Bot`) and was measured on #210: 5 minutes, no reply, no
-# refusal, silently dropped. A comment posted with a user PAT is authored by that user
-# (`user.type: User`, `author_association: OWNER`) and is indistinguishable from one typed in
-# the browser — measured on #215: replied in 9 seconds and produced 4 review threads.
-#
-# ⚠️ THE NAME MATTERS AND USED TO BE WRONG. This was `CODERABBIT_TRIGGER_PAT`, which reads as
-# "CodeRabbit's PAT" when it means "a GITHUB PAT that triggers CodeRabbit". Measured cost: the
-# first person to set it stored a CodeRabbit API key from app.coderabbit.ai/settings/api-keys —
-# a reasonable reading of the name — and got two rounds of `401 Bad credentials` for it. Both
-# products call their credential a token, so the variable name is the only disambiguator, and a
-# scaffolded project inherits whatever name is chosen here.
-#
-# ⚠️ And it cannot be `GITHUB_PAT_…`, however well that would read: Actions reserves the whole
-# prefix — `HTTP 422: Secret names must not start with GITHUB_`, verified against the API. `GH_`
-# is the closest legal spelling.
-#
-# SETUP (one manual step, and the workflow fails loudly until it is done):
-#   1. Create a **GitHub** PAT (github.com/settings/personal-access-tokens — NOT a CodeRabbit
-#      API key) on the account that should appear as the commenter. Fine-grained, this
-#      repository only, with `Pull requests: Read and write`. The value starts `github_pat_`.
-#   2. `gh secret set GH_PAT_REVIEW_TRIGGER --repo <owner>/<repo>`
-#
-# The paired gate is `review_threads.yml` → `templates/common/bin/check_review_threads.py`, which fails a PR
-# where no declared reviewer ever submitted a review. Without that gate this workflow is a
-# best-effort nicety; without this workflow that gate blocks every PR. They ship together.
-
 on:
   pull_request:
-    # `synchronize` was dropped in #454. It used to be the only thing that caught a real push
-    # after the first review — but that hole (PR #204 and #213 merging unreviewed, every check
-    # green) is now closed by a DIFFERENT mechanism: the required "Review threads answered"
-    # check fails a PR with no submitted review, built after those merges (#208, #259, #220).
-    # Measured 2026-09-11: 11 open PRs were simultaneously red on that check with zero
-    # unresolved threads — the gate refusing them purely for lack of a review. It demonstrably
-    # does the job `synchronize` was added to do.
-    #
-    # Measured cost of keeping it (71 PRs / 7 days, 773 post-open events,
-    # docs/backlog/coderabbit-incremental-review-362_20260830_172225.md): 5.4% produced a new
-    # finding, 69.6% were rate-limit notices. Net effect of dropping it: one automatic ask per
-    # PR at open; pushes afterwards are free, so agents can commit and push for durability
-    # without spending account quota. Re-review is now a deliberate `@coderabbitai full review`.
-    #
-    # `opened` was put to the same question in #567 — an open-time ask is a BLIND bid for the
-    # one account-level window, placed on the newest and therefore least starved PR, where the
-    # reviewer-slot tick and review_retry.yml place aimed ones. Measured over 656 comments and
-    # 244 asks, 2026-09-06 → 2026-09-20, paged to exhaustion
-    # (docs/backlog/coderabbit-open-trigger-567_20260920_171404.md): asks on open are 45% of
-    # everything spent but win only 26% of the reviews that happen (23 accepted / 81 refused,
-    # 22.1%), against 46.9% for the tick and 51.9% for the retry janitor.
-    #
-    # KEPT anyway, on the second number. A refused ask costs nothing, so those 81 refusals are
-    # not the leak; the open-time ask's real cost is its 23 wins. What it buys is ENROLMENT —
-    # it was the first ask on 78 of the 95 PRs asked in that window (82%), and
-    # retry_rate_limited_review.py only adopts a PR whose newest reviewer comment IS a
-    # rate-limit notice. A PR nobody ever asks about never produces one, so dropping `opened`
-    # would hide it from the janitor as well as from the tick, and the tick lives only as long
-    # as a Claude session. Nothing would merge unreviewed — the required "Review threads
-    # answered" check blocks that — a PR opened with no session running would simply STALL,
-    # red and unbounded, until a human noticed.
     types: [opened, reopened, ready_for_review]
 
 permissions:
   pull-requests: write
 
 concurrency:
-  # Several pushes in a row need one trigger, not one each. Cancelling is safe here: this
-  # workflow publishes no verdict anyone waits on — unlike review_threads.yml, whose
-  # cancel-in-progress must stay false because it IS a required check.
   group: coderabbit-trigger-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
@@ -90,25 +15,10 @@ jobs:
 
   trigger:
     name: Ask CodeRabbit for a review
-    # A draft is not ready to be reviewed; `ready_for_review` brings it back.
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # ⚠️ FAIL, NEVER SKIP, WHEN THE PAT IS ABSENT.
-      #
-      # A `continue-on-error` or an `if: secrets.X != ''` here would turn a missing secret into
-      # a silent no-op — and a silent no-op is precisely the state this whole file is fixing: no
-      # review happens, and nothing says so. A fork PR gets no secrets either, so it lands here
-      # too, correctly: a fork PR genuinely cannot self-trigger and a human must ask.
-      # ⚠️ THE SHAPE CHECK EARNS ITS KEEP: a bare `401 Bad credentials` from the API step below
-      # cannot tell "the token is wrong" from "the token was STORED wrong", and those have
-      # opposite fixes. Two rounds were lost to that ambiguity. `gh secret set … < file` keeps
-      # the file's trailing newline, and a token with `\n` 401s exactly like an expired one.
-      #
-      # ⚠️ This repository is PUBLIC and so are these logs. Report only CLASS and BOOLEANS —
-      # never the value, never a substring of it, never its exact length. Actions masks the
-      # secret, but a substring of a masked value is NOT masked.
       - name: The trigger PAT must exist and be well-formed
         env:
           GH_PAT_REVIEW_TRIGGER: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
@@ -129,7 +39,6 @@ jobs:
           *) echo "::warning::token class: UNRECOGNISED prefix — is this a token at all?" ;;
           esac
 
-          # The whitespace test is the one that catches a redirect-stored secret.
           if printf '%s' "$GH_PAT_REVIEW_TRIGGER" | grep -qE '[[:space:]]'; then
             echo "::error::the stored secret contains whitespace (very likely a trailing newline)." >&2
             echo "That 401s exactly like a bad token. Re-store it with --body, never a redirect:" >&2
@@ -138,18 +47,6 @@ jobs:
           fi
           echo "no whitespace in the stored value."
 
-      # A 401 here means the shape check above already passed but the token itself is bad — this
-      # is the case the comment used to (wrongly) claim as the ONLY failure mode.
-      #
-      # ⚠️ A 403 IS A DIFFERENT FAILURE AND NEEDS A DIFFERENT DIAGNOSIS. Measured on run
-      # 33421018798 (PR #380): `gh api user` failed with `API rate limit exceeded for user ID
-      # … (HTTP 403)` — the token was fine, but the old comment told the reader it was "expired,
-      # revoked, or scoped to the wrong resource owner", all three false. This is the GITHUB API
-      # rate limit for the PAT's user, NOT CodeRabbit's own review-quota rate limit (that one is
-      # handled by `review_retry.yml` on a schedule) — different limit, different window,
-      # different fix. It is transient and self-clearing, so it must not read the same as a bad
-      # token, and it must not leave a red check that stays red after the window has passed (the
-      # #380 run sat red for 2 days over a cause that cleared in minutes).
       - name: The PAT must authenticate as a user
         id: pat_check
         env:
@@ -168,13 +65,6 @@ jobs:
           echo "$RESPONSE" >&2
           str_http_status="$(printf '%s\n' "$RESPONSE" | head -n1 | grep -oE '[0-9]{3}' | head -n1)"
 
-          # ⚠️ Match on "rate limit" ALONE, never on "API rate limit exceeded". GitHub has TWO
-          # limits, with different wording, different headers and different status codes:
-          #   primary   "API rate limit exceeded for user ID …"        403, x-ratelimit-reset
-          #   secondary "You have exceeded a secondary rate limit …"   403 OR 429, retry-after
-          # The secondary message does not contain the primary's phrase, so the narrow matcher
-          # routed it to the branch below and printed the bad-token diagnosis this whole step
-          # exists to stop printing — the same defect it was written to fix, one wording over.
           if printf '%s\n' "$RESPONSE" | grep -qi 'rate limit'; then
             str_retry_after="$(printf '%s\n' "$RESPONSE" \
               | grep -i '^retry-after:' | tr -d '\r ' | cut -d: -f2)"

@@ -1,136 +1,16 @@
 name: Review Threads
 
-# ⚠️ THE TRIGGERS ARE THE WHOLE POINT OF THIS FILE.
-#
-# This check used to live inside `scaffold_checks.yml`, which runs on `pull_request` — an event
-# that fires on open/synchronize/reopen, i.e. WHEN YOU PUSH. It does NOT fire when a reviewer
-# posts a comment. So the verdict was computed at push time and went stale the moment a review
-# landed: the check stayed green, showing a conclusion drawn from a PR state that no longer
-# existed.
-#
-# Measured on PR #180: the gate ran, passed, and two review threads arrived AFTERWARDS. Nothing
-# re-evaluated, the PR merged with both open and unanswered, and every visible signal was green.
-# A stale check is indistinguishable from a passing one — which is why re-running on the events
-# that actually change the answer is not an optimisation, it is the correctness condition.
-#
-# `pull_request_review` fires when a review is submitted; `pull_request_review_comment` fires on
-# an individual inline comment. (`pull_request_review_thread` is a real WEBHOOK event but NOT a
-# workflow trigger — adding it makes GitHub reject this file wholesale, with no red check to say
-# so. See blueprintx#156. `bin/ci/check_actions.sh` catches that class now.)
-#
-# Kept out of `scaffold_checks.yml` on purpose: a review comment must not re-run the 29-job
-# scaffold matrix. One job, a few seconds, as often as needed.
-#
-# ⚠️ KNOWN CEILING — RESOLUTION DOES NOT RE-TRIGGER THIS.
-# `pull_request_review_comment` fires on a comment, never on a thread being RESOLVED. Resolution
-# is reported only as the `pull_request_review_thread` webhook, which is not a workflow trigger.
-# So the honest sequence is: you reply (this runs, and correctly FAILS — still unresolved), you
-# resolve, and nothing re-runs. The check sits stale-red on a PR that is actually finished.
-# Measured: after resolving, the job had to be re-run by hand before it went green.
-#
-# ⚠️ THE SECOND HALF OF THAT CEILING (#263, ADDRESSED 2026-08-24 — the same sentence with the
-# emphasis moved). The stale red does not merely SIT there: it PERSISTS IN THE ROLLUP even once
-# a re-trigger did happen and passed, because every trigger opens a NEW check run and branch
-# protection aggregates them. Measured on #262 — one push-time failure plus SEVEN later
-# successes at the same head still read `mergeStateStatus=BLOCKED statusCheckRollup=FAILURE` —
-# and the count SCALES (5 on #264, 7 on #265), because each reply re-fires the gate before the
-# last thread is resolved. This was the dominant cost of merging anything in this repo.
-# The `Clear stale failed runs` step below now re-runs exactly those stale failures, which is
-# the manual step that was measured to flip the PR to CLEAN. The hand re-run after a resolve is
-# still needed once — but it now cleans up all the others instead of being repeated per run.
-#
-# ⚠️ SUPERSEDED 2026-08-17 (#173, PR #185). This block used to conclude "that is why this must
-# NOT be a required check". That conclusion was WRONG, and it was load-bearing: while it stood,
-# `required_status_checks` was empty and a PR merged with 32 of 47 checks passed, objected to by
-# nothing.
-#
-# The reasoning was only half right. The ceiling above is real — resolution cannot re-trigger a
-# workflow — but this job did not ASSERT resolution: it ran with
-# `REVIEW_THREADS_REQUIRE_RESOLVED=0` and asserted only that every thread got a REPLY, and a reply
-# DOES re-trigger it via `pull_request_review_comment`. So it is safe to require, and it is
-# required now.
-#
-# ⚠️ SUPERSEDED 2026-08-24 (#196). `REVIEW_THREADS_REQUIRE_RESOLVED` IS NOW `1` HERE.
-#
-# The split below gave the RESOLVE half to `required_conversation_resolution` on the reasoning
-# that a merge-time setting cannot go stale. True, and it does not check what it was given:
-# GitHub DROPS AN OUTDATED THREAD from the blocking set. Measured on #193 — merge button enabled,
-# thread `resolved=False outdated=True`, 29 of 29 checks green, the setting confirmed `enabled`.
-# A thread outdates when the author's own commit rewrites the lines it points at, so the reachable
-# sequence is: reply thinly, rewrite those lines, merge. The half nobody could re-evaluate was
-# also the half nobody was checking.
-#
-# So this job now asserts BOTH halves and pays the ceiling above in full: after you resolve, this
-# check stays RED until the run is re-run by hand. That is a deliberate trade, not an oversight —
-# and it makes the stale-run accumulation in the merge rollup (#263) load-bearing, because the
-# re-run is the ONLY way a finished PR goes green.
-#
-# The split as it stood (kept for the reasoning, no longer the configuration):
-#   - THIS job (REQUIRED): catches a missing REPLY, live, because a comment re-triggers it.
-#   - `required_conversation_resolution` (native, `enforce_admins: true`): catches a missing
-#     RESOLVE at the merge button — for every thread EXCEPT an outdated one.
-#   - the local `pr_merge_threads_guard.sh` PreToolUse hook: both halves, queried live at the
-#     moment of `gh pr merge`.
-#
-# ⚠️ SUPERSEDED 2026-08-22 (#216). This block used to say `cancel-in-progress` must stay
-# **false** below because a cancelled run publishes a `cancelled` conclusion. There is no
-# concurrency block at all now, and the reason is worse than that: see the note above `jobs:`.
-# `false` does not stop a QUEUED run being cancelled by the next one, and a run cancelled before
-# it starts publishes NOTHING — leaving the required context `Expected — Waiting for status to
-# be reported`, which no re-run clears.
-# Closing this properly inside Actions needs a webhook receiver or GitHub App dispatching a
-# `repository_dispatch` on `resolved`; not worth a always-on listener for this repo.
 on:
   pull_request:
   pull_request_review:
   pull_request_review_comment:
-  # ⚠️ `issue_comment` IS LOAD-BEARING — a CLEAN review arrives here and nowhere else.
-  #
-  # CodeRabbit emits a formal review object only when it has line comments to attach. On the
-  # clean path it posts a plain ISSUE comment, which is neither `pull_request_review` nor
-  # `pull_request_review_comment`. So the three triggers above never fire for it, and the gate
-  # stays frozen on the verdict it computed at push time — before any review existed.
-  #
-  # Measured on #342 (2026-08-29), and the margin is the point:
-  #
-  #   21:46:50Z  gate ran      -> FAILED (correct: no review yet)
-  #   21:46:52Z  "@coderabbitai review"
-  #   21:46:54Z  "No actionable comments were generated in the recent review."
-  #   21:47:19Z  "✅ Action performed  Review finished."
-  #
-  # The gate was wrong 2 seconds later and nothing re-evaluated it. #336 taught the gate to
-  # RECOGNISE a clean review; without this trigger it is never re-run at the moment that
-  # recognition becomes possible — half a fix, and the half that is invisible.
   issue_comment:
     types: [created, edited, deleted]
 
 permissions:
   contents: read
   pull-requests: read
-  # `actions: write` is for the stale-run cleanup step below (#263) — re-running a run is an
-  # Actions write. Nothing else in this workflow needs it.
   actions: write
-
-# ⚠️ NO `concurrency:` BLOCK, DELIBERATELY — DO NOT "TIDY THIS UP".
-#
-# There was one, keyed on the PR with `cancel-in-progress: false`, on the reasoning that only the
-# latest verdict matters and that `false` made it safe for a required check. Both halves were
-# wrong, and the second is wrong in a way the old note understated.
-#
-# `cancel-in-progress: false` does NOT mean "nothing gets cancelled". It means a RUNNING job is
-# not cancelled — but only ONE run may sit PENDING per group, so each newly queued run cancels
-# the one already waiting. Answering three review threads in one burst produced **10 runs in 25
-# seconds** on #216: five `success`, five `cancelled`.
-#
-# And a run cancelled while still QUEUED never starts, so it publishes no check run at all. The
-# required context is then left `Expected — Waiting for status to be reported` — not red, which
-# you could re-run, but UNREPORTED, which nothing clears: resolving a thread emits no workflow
-# trigger, and re-running a sibling run does not satisfy the expectation. The PR sits BLOCKED
-# with every visible check green and no failure to point at. That is strictly worse than the
-# `cancelled` conclusion the old note predicted, because there is nothing to click.
-#
-# The job is a few seconds of one runner. Letting every event have its own run costs less than
-# one deadlock, and it is the only shape that cannot exhibit this at all.
 
 jobs:
 
@@ -138,8 +18,6 @@ jobs:
     name: Review threads answered
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # `issue_comment` fires for plain ISSUES too, where there is no PR to audit. Without this
-    # the job would run on every issue comment in the repo and fail resolving PR_NUMBER.
     if: >-
       github.event_name != 'issue_comment' ||
       github.event.issue.pull_request != null
@@ -154,43 +32,14 @@ jobs:
 
       - run: pip install --quiet pyyaml
 
-      # A finding takes BOTH halves: reply with what changed and why, then resolve the thread.
-      # Neither half is optional and neither implies the other — a reviewer bot resolves its own
-      # threads on seeing the fix, so `isResolved` records ITS satisfaction, never the author's
-      # reasoning; and a reply on a thread nobody closed leaves the exchange indistinguishable
-      # from one still in progress.
-      #
-      # The server-side ruleset (`required_conversation_resolution`) enforces only the resolve
-      # half, and only at the merge button. This is the half a setting cannot express.
       - name: Every review thread is answered and resolved
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          # ⚠️ The two events name it differently: `pull_request*` events carry
-          # `pull_request.number`, while `issue_comment` carries `issue.number` — a PR IS an
-          # issue to that event. Reading only the first yields an EMPTY PR_NUMBER on the very
-          # event this trigger was added for.
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-          # BOTH halves — see the KNOWN CEILING block at the top of the file for the trade.
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python3 templates/common/bin/check_review_threads.py
 
-      # ⚠️ #263 — THE PUSH-TIME FAILURE OUTLIVES ITS OWN VERDICT.
-      # Each trigger above creates a NEW check run; branch protection reads the AGGREGATE. So a
-      # run that failed correctly at push time keeps the PR BLOCKED behind any number of later
-      # passes. Re-running only the stale failures is what flips it to CLEAN — measured by hand
-      # three times (#262/#264/#265) before it was automated here.
-      #
-      # `if: success()` is the loop guard, not decoration: this may only ever run from a run
-      # that PASSED, or it would re-run itself forever. The script skips $GITHUB_RUN_ID too.
-      # ⚠️ `issue_comment` CARRIES NO `pull_request` OBJECT, SO THE HEAD SHA MUST BE FETCHED.
-      #
-      # `github.event.pull_request.head.sha` is empty on that event, and the script exits early
-      # on an empty HEAD_SHA — so the cleanup did nothing on exactly the event #347 added it
-      # for. The gate re-ran and went green while the stale failures it was meant to clear
-      # stayed in the rollup, which is the whole reason a hand `gh run rerun` was still needed.
-      # Half a fix, and the half nobody sees. Raised by review on #347 as an out-of-diff
-      # comment, i.e. one the review-thread gate itself cannot see (blueprintx#350).
       - name: Clear stale failed runs of this gate at the same head
         if: success()
         env:
@@ -204,8 +53,5 @@ jobs:
           if [ -z "$str_head" ]; then
             str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
           fi
-          # Fail loudly rather than skipping: an unresolved head means the cleanup would run
-          # over nothing while reporting success — the vacuous pass this gate family exists
-          # to remove.
           [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
           HEAD_SHA="$str_head" bash templates/python-common/bin/rerun_stale_gate_runs.sh

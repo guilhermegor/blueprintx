@@ -1,18 +1,6 @@
 #!/bin/bash
-# Should-fail regression tests for bin/promote_offline_to_online.sh (blueprintx#382).
-#
-# The dangerous direction is a FALSE PASS: a half-promoted project (assets copied, no repo
-# created; or a repo created against a dirty tree) reporting success. So the tests that matter
-# are the refusal paths — a suite that only proves the happy path would have passed against the
-# very defect this script exists to prevent (same shape as bin/ci/check_git_remote_guard.sh).
-#
-# Runs the real script as a subprocess against throwaway local git repos — no network, no real
-# `gh` auth required (a fake `gh` shim shadows the real one in every test).
-#
-# Usage: bash tests/test_promote_offline_to_online.sh
 
 set -uo pipefail
-# Run as a git hook, GIT_DIR points at the host repo and every `git -C <tmp>` below writes there.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,9 +22,6 @@ make_git_repo() {
     echo "$dir"
 }
 
-# A fake `gh` ahead of the real one on PATH for EVERY test: the real gh may be authenticated on a
-# developer machine, and a regression in an earlier check must refuse here, never reach
-# `gh repo create` with real credentials.
 fake_gh_bin_dir() {
     local dir="$WORK_DIR/fake-gh-bin"
     mkdir -p "$dir"
@@ -51,8 +36,6 @@ EOF
     echo "$dir"
 }
 
-# The refusal must come from the named check: a nonzero exit alone also describes "not a git
-# repo", which every other refusal test would otherwise hide behind.
 expect_refuses_with() {
     local desc="$1" needle="$2" out
     shift 2
@@ -162,8 +145,6 @@ test_flag_without_value() {
     expect_refuses_with "a value flag with no value is refused with usage" "requires a value" "$WORK_DIR/x" --tier
 }
 
-# react-spa-webpack with --deploy-target none writes no workflow, so "online" must key on a file
-# every tier writes (CODEOWNERS), or a promoted project reads as the ambiguous state forever.
 test_react_without_workflows_reads_as_online() {
     local dir
     dir="$(make_git_repo "react-online")"
@@ -176,8 +157,6 @@ test_react_without_workflows_reads_as_online() {
     expect_succeeds "react project promoted with no deploy workflow is a clean no-op" "$dir" --tier react-spa-webpack
 }
 
-# Dropping the whole [tool.poe] table is only safe when include was its only key; a sibling key
-# would otherwise be re-parented under the previous table with no error.
 test_poe_strip_keeps_sibling_keys() {
     local dir="$WORK_DIR/poe-siblings"
     mkdir -p "$dir"
@@ -193,8 +172,6 @@ test_poe_strip_keeps_sibling_keys() {
     fi
 }
 
-# Executes every tier's copy manifest against the real templates/ tree, so a renamed or deleted
-# template fails here instead of mid-copy on a user's project; CODEOWNERS must be rendered.
 test_copy_manifests_match_templates() {
     local tier dir
     for tier in ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db api-service-native-db lib-minimal react-spa-webpack ts-lib bash-cli; do
@@ -247,8 +224,6 @@ test_double_dash_takes_the_path() {
     fi
 }
 
-# Resume = GitHub assets, no origin. A dirty path OUTSIDE the allowlist is the user's work and
-# must be refused; this is the resume path's one safety property.
 test_resume_refuses_foreign_dirty_path() {
     local dir
     dir="$(make_git_repo "resume-foreign")"
@@ -258,8 +233,6 @@ test_resume_refuses_foreign_dirty_path() {
     expect_refuses_with "resume refuses a dirty path outside the promotion's own" "changes outside a previous promotion" "$dir" --tier lib-minimal
 }
 
-# The GitGuardian key must exist BEFORE the push that triggers secret_scan.yaml, or the first
-# run on main is red. A logging gh stub records whether main already sat on the remote at each call.
 test_secret_is_set_before_the_push() {
     local dir bare log
     dir="$(make_git_repo "secret-order")"
@@ -294,8 +267,6 @@ test_secret_is_set_before_the_push() {
     fi
 }
 
-# The restored no-commit-to-branch hook must not block the promotion commit on main, and no
-# OTHER hook may be skipped: the stub refuses unless SKIP is exactly that one hook id.
 test_promotion_commit_skips_only_no_commit_to_branch() {
     local dir
     dir="$(make_git_repo "commit-skip")"
@@ -311,10 +282,6 @@ test_promotion_commit_skips_only_no_commit_to_branch() {
     fi
 }
 
-# White-box: sources the script (guarded — see its trailing BASH_SOURCE check) to call its
-# mutation functions directly against a fixture, without a real `gh repo create`/network call.
-# Runs in its own `bash -c` subprocess: the sourced script's `set -euo pipefail` must not leak
-# into this harness's own shell.
 test_mutations_on_offline_fixture() {
     local dir="$WORK_DIR/mutation-fixture"
     mkdir -p "$dir/bin" "$dir/git_diffs"
