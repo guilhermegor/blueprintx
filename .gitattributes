@@ -1,0 +1,6 @@
+# Generated or bulk files: collapsed in the GitHub diff and skipped by AI
+# reviewers. See docs/graphite-config.md.
+poetry.lock linguist-generated=true
+package-lock.json linguist-generated=true
+comment_budget_baseline.txt linguist-generated=true
+coverage.svg linguist-generated=true
