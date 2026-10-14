@@ -27,6 +27,11 @@ Graphite reviews every new PR by default. The label filter in step 4 is the opt-
 `/dev-loop` ladder adds `review:graphite` when it is Graphite's turn and removes it once the
 review lands. A label left on lets every push trigger another review.
 
-Documented, not measured: the docs describe label filtering but no comment trigger, and do
-not say whether adding a label fires a review or the label is only checked on the next push.
-Settle that on a real PR once the App is installed.
+What the docs say: PR-level filtering by label applies to new and updated PRs. They describe
+no "label added" event and no comment trigger.
+
+Documented, not measured: whether adding the label alone fires a review. That stays unknown until Graphite
+is installed on a repo and the behavior is tested on a real PR. Until then the ladder may
+need to push a commit or post a comment after adding the label, and must not assume a
+Graphite turn has started just because the label was added. If adding the label fires
+nothing, a `/dev-loop` Graphite turn completes without a review.

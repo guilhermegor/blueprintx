@@ -15,4 +15,3 @@ poetry.lock linguist-generated=true
 package-lock.json linguist-generated=true
 requirements-lock.txt linguist-generated=true
 coverage.svg linguist-generated=true
-comment_budget_baseline.txt linguist-generated=true

@@ -177,6 +177,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
 | `quality-rules.md` | Quality-rule registry record | What the gate decides vs leaves to review, one section per rule id (the `docs:` anchors) |
 | `coderabbit-config.md` | Config explanation record | The one active key and what it does, why it may be a no-op (star threshold), and that the trigger workflow, not this file, drives review requests |
+| `graphite-config.md` | Config explanation record | What the repo versions (`.gitattributes` `linguist-generated`), the dashboard-only setup steps, and the label-gated never-auto-review rule with its unmeasured label trigger |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
