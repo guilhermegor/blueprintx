@@ -196,8 +196,7 @@ jobs:
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
 
   required-checks-sync:
-    name: Required checks sync — branch protection vs PR jobs (blueprintx#535)
-    if: github.actor != 'dependabot[bot]'
+    name: Required checks sync — expected contexts vs PR jobs (blueprintx#535)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -217,7 +216,6 @@ jobs:
 
       - name: Required contexts must match the jobs that run on every PR
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
           REQUIRED_CHECKS_SYNC_REQUIRED: "1"
         run: python3 bin/ci/check_required_checks_sync.py
 

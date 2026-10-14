@@ -121,16 +121,21 @@ layers (classic branch protection and the `pr-quality-gate` ruleset), and a requ
 check is matched by **name**. A renamed job, or a new job nobody required, is silently
 not enforced.
 
-`bin/ci/check_required_checks_sync.py` reads both layers through the API and compares
-them with the jobs that run on every PR (`pull_request`, no `branches:`/`paths:` filter,
-no job `if:`). It fails when:
+The expected contexts per layer are committed in `.github/required-checks.json`.
+`bin/ci/check_required_checks_sync.py` compares that file with the jobs that run on every
+PR (`pull_request`, no `branches:`/`paths:` filter, no job `if:`), with no token and no
+secret. It fails when:
 
 1. a required context is emitted by no such job (every PR would wait forever); or
 2. such a job is neither required nor listed as `optional` in
    `bin/ci/required_checks_policy.txt`, which also lists the `external` contexts (CodeQL,
    GitGuardian) that have no job here. Every line carries a reason.
 
-Reading protection needs Administration access. In CI the job uses the maintainer PAT
-and fails closed (`REQUIRED_CHECKS_SYNC_REQUIRED=1`); locally it skips loudly when
-`gh` cannot read it. Dependabot PRs get no secrets, so the job is skipped for them.
-`tests/test_check_required_checks_sync.sh` holds the should-fail cases.
+The JSON itself is checked against the live settings by `--live`, which needs
+Administration access (the maintainer PAT). That runs only in
+`.github/workflows/verify_required_checks.yml`, on `push` to `main` and
+`workflow_dispatch`, never on `pull_request`, so no PR-controlled code ever sees the
+secret. It fails closed (`REQUIRED_CHECKS_SYNC_REQUIRED=1`) when the API cannot be read,
+and fails on `main` when protection drifted from the JSON. Changing protection therefore
+means editing the JSON in the same change. `tests/test_check_required_checks_sync.sh`
+holds the should-fail cases.

@@ -1,0 +1,39 @@
+name: Verify Required Checks
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify_required_checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  required-checks-drift:
+    name: required checks drift guard (blueprintx#535)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: python3 -m pip install pyyaml==6.0.3
+
+      - name: Live protection and rulesets must match .github/required-checks.json
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
+          REQUIRED_CHECKS_SYNC_REQUIRED: "1"
+        run: python3 bin/ci/check_required_checks_sync.py --live

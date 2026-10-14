@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Fail when `main`'s required status checks and the PR jobs drift apart (blueprintx#535).
 
-Two directions, both read from live settings (classic branch protection + active rulesets):
+Default mode needs no token. It compares the committed expected contexts
+(.github/required-checks.json, per layer) with the workflow jobs, both directions:
 
 1. a REQUIRED context no unconditional PR job emits -> every PR waits forever;
 2. an unconditional PR job that is neither required nor listed in the policy file -> a
@@ -11,8 +12,9 @@ Policy data: bin/ci/required_checks_policy.txt, `kind|name|reason` per line, kin
 `optional` (deliberately not required) or `external` (required, emitted by an app or a
 dynamic workflow that has no file here). A line without a reason is rejected.
 
-Reading protection needs Administration access, so with no readable API: fail in CI
-(REQUIRED_CHECKS_SYNC_REQUIRED=1), skip loudly elsewhere. Explanation: docs/required-status-checks.md.
+`--live` compares the JSON with the live protection and ruleset API instead (needs admin
+access; runs only on main). Unreadable API: fail with REQUIRED_CHECKS_SYNC_REQUIRED=1,
+skip loudly otherwise. Explanation: docs/required-status-checks.md.
 """
 
 import argparse
@@ -133,21 +135,47 @@ def gh_json(str_path: str):
     return json.loads(str_out)
 
 
-def live_required() -> set:
-    """Contexts from classic protection plus every active ruleset on the default branch."""
-    set_ctx = set(
-        gh_json(f"repos/{REPO}/branches/main/protection")["required_status_checks"][
-            "contexts"
-        ]
-    )
+def live_required() -> dict:
+    """{"classic": set, "ruleset": set} read from the API (active rulesets only)."""
+    dict_live = {
+        "classic": set(
+            gh_json(f"repos/{REPO}/branches/main/protection")["required_status_checks"][
+                "contexts"
+            ]
+        ),
+        "ruleset": set(),
+    }
     for dict_rs in gh_json(f"repos/{REPO}/rulesets"):
         if dict_rs.get("enforcement") != "active":
             continue
         for dict_rule in gh_json(f"repos/{REPO}/rulesets/{dict_rs['id']}")["rules"]:
             if dict_rule["type"] == "required_status_checks":
                 list_chk = dict_rule["parameters"]["required_status_checks"]
-                set_ctx |= {c["context"] for c in list_chk}
-    return set_ctx
+                dict_live["ruleset"] |= {c["context"] for c in list_chk}
+    return dict_live
+
+
+def read_expected(path_file: pathlib.Path) -> dict:
+    """The committed {"classic": set, "ruleset": set}; any other shape aborts."""
+    dict_raw = json.loads(path_file.read_text(encoding="utf-8"))
+    if set(dict_raw) != {"classic", "ruleset"}:
+        sys.exit(f"::error file={path_file}::need exactly the keys classic and ruleset")
+    return {k: set(v) for k, v in dict_raw.items()}
+
+
+def compare_live(dict_exp: dict, dict_live: dict) -> list:
+    """Per layer, the contexts the JSON and the live settings disagree on."""
+    list_err = []
+    for str_layer in ("classic", "ruleset"):
+        for str_name in sorted(dict_exp[str_layer] - dict_live[str_layer]):
+            list_err.append(
+                f"{str_layer}: in required-checks.json, not live: {str_name}"
+            )
+        for str_name in sorted(dict_live[str_layer] - dict_exp[str_layer]):
+            list_err.append(
+                f"{str_layer}: live, not in required-checks.json: {str_name}"
+            )
+    return list_err
 
 
 def compare(set_req: set, dict_jobs: dict, dict_policy: dict) -> list:
@@ -169,43 +197,45 @@ def compare(set_req: set, dict_jobs: dict, dict_policy: dict) -> list:
     return list_err
 
 
+def read_or_skip(args) -> tuple:
+    """(expected, live-or-None, exit code or None); the API is read only under --live."""
+    try:
+        if yaml is None:
+            raise ValueError("PyYAML is not installed")
+        dict_exp = read_expected(pathlib.Path(args.expected))
+        return dict_exp, (live_required() if args.live else None), None
+    except (OSError, subprocess.CalledProcessError, KeyError, ValueError) as exc:
+        if os.environ.get("REQUIRED_CHECKS_SYNC_REQUIRED") == "1":
+            print(f"::error::cannot read ({exc}); failing closed", file=sys.stderr)
+            return None, None, 1
+        print(f"SKIPPED (loudly): cannot read ({exc}). Nothing was checked.")
+        return None, None, 0
+
+
 def main() -> int:
     """Entry point."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--workflows", default=".github/workflows")
     parser.add_argument("--policy", default="bin/ci/required_checks_policy.txt")
+    parser.add_argument("--expected", default=".github/required-checks.json")
     parser.add_argument(
-        "--required-file", help="JSON list of contexts; replaces the API read (tests)"
+        "--live", action="store_true", help="compare the JSON with the API"
     )
     args = parser.parse_args()
-    try:
-        if yaml is None:
-            raise ValueError("PyYAML is not installed")
-        if args.required_file:
-            set_req = set(
-                json.loads(pathlib.Path(args.required_file).read_text(encoding="utf-8"))
-            )
-        else:
-            set_req = live_required()
-    except (OSError, subprocess.CalledProcessError, KeyError, ValueError) as exc:
-        if os.environ.get("REQUIRED_CHECKS_SYNC_REQUIRED") == "1":
-            print(
-                f"::error::cannot read branch protection ({exc}); failing closed",
-                file=sys.stderr,
-            )
-            return 1
-        print(
-            f"SKIPPED (loudly): cannot read branch protection ({exc}). Nothing was checked."
+    dict_exp, dict_live, int_rc = read_or_skip(args)
+    if int_rc is not None:
+        return int_rc
+    if args.live:
+        list_err = compare_live(dict_exp, dict_live)
+    else:
+        list_err = compare(
+            dict_exp["classic"] | dict_exp["ruleset"],
+            pr_jobs(pathlib.Path(args.workflows)),
+            read_policy(pathlib.Path(args.policy)),
         )
-        return 0
-    list_err = compare(
-        set_req,
-        pr_jobs(pathlib.Path(args.workflows)),
-        read_policy(pathlib.Path(args.policy)),
-    )
     for str_msg in list_err:
         print(f"::error::{str_msg}", file=sys.stderr)
-    print(f"required={len(set_req)} findings={len(list_err)}")
+    print(f"findings={len(list_err)}")
     return 1 if list_err else 0
 
 

@@ -36,16 +36,28 @@ jobs:
     steps: [{run: "true"}]
 EOF
 	printf 'external|App check|emitted by an app\n' >"$str_tmp/policy.txt"
-	printf '["Lint gate", "App check"]' >"$str_tmp/req.json"
+	expected '"Lint gate", "App check"' ''
+}
+
+expected() {
+	printf '{"classic": [%s], "ruleset": [%s]}' "$1" "$2" >"$str_tmp/exp.json"
+}
+
+run_gate() {
+	python3 -I "$GATE" --workflows "$str_tmp/wf" --policy "$str_tmp/policy.txt" \
+		--expected "$str_tmp/exp.json" "$@" 2>&1
 }
 
 expect() {
 	local str_out int_rc=0
-	str_out="$(python3 -I "$GATE" --workflows "$str_tmp/wf" --policy "$str_tmp/policy.txt" \
-		--required-file "$str_tmp/req.json" 2>&1)" || int_rc=$?
-	if [ "$int_rc" -ne "$2" ] || ! grep -qF -- "$3" <<<"$str_out"; then
-		echo "FAIL: $1 (exit $int_rc, wanted $2, needle '$3')"
-		echo "$str_out"
+	str_out="$(run_gate)" || int_rc=$?
+	check "$1" "$int_rc" "$2" "$3" "$str_out"
+}
+
+check() {
+	if [ "$2" -ne "$3" ] || ! grep -qF -- "$4" <<<"$5"; then
+		echo "FAIL: $1 (exit $2, wanted $3, needle '$4')"
+		echo "$5"
 		int_failures=$((int_failures + 1))
 	else
 		echo "ok: $1"
@@ -55,16 +67,16 @@ expect() {
 fixture
 expect "in sync passes" 0 "findings=0"
 
-printf '["Lint gate", "App check", "Ghost job"]' >"$str_tmp/req.json"
+expected '"Lint gate", "App check", "Ghost job"' ''
 expect "required name no job emits fails" 1 "Ghost job"
 
-printf '["Lint gate", "App check", "Filtered gate"]' >"$str_tmp/req.json"
-expect "required name behind a branch filter fails" 1 "Filtered gate"
+expected '"Lint gate", "App check"' '"Filtered gate"'
+expect "ruleset name behind a branch filter fails" 1 "Filtered gate"
 
-printf '["Lint gate", "App check", "Draft only"]' >"$str_tmp/req.json"
+expected '"Lint gate", "App check", "Draft only"' ''
 expect "required name behind a job if: fails" 1 "Draft only"
 
-printf '["App check"]' >"$str_tmp/req.json"
+expected '"App check"' ''
 expect "unconditional job neither required nor allowlisted fails" 1 "Lint gate"
 
 printf 'optional|Lint gate|measured flaky\n' >>"$str_tmp/policy.txt"
@@ -77,14 +89,31 @@ fixture
 printf 'optional|Lint gate|\n' >>"$str_tmp/policy.txt"
 expect "policy line without a reason is rejected" 1 "need"
 
-mkdir -p "$str_tmp/bin" && printf '#!/bin/sh\nexit 1\n' >"$str_tmp/bin/gh" && chmod +x "$str_tmp/bin/gh"
+fixture
+printf '{"classic": []}' >"$str_tmp/exp.json"
+expect "malformed expected file is rejected" 1 "classic and ruleset"
+
+mkdir -p "$str_tmp/bin"
+printf '#!/bin/sh\nexit 1\n' >"$str_tmp/bin/gh"
+chmod +x "$str_tmp/bin/gh"
 fixture
 int_rc=0
-str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 python3 -I "$GATE" \
-	--workflows "$str_tmp/wf" --policy "$str_tmp/policy.txt" 2>&1)" || int_rc=$?
-if [ "$int_rc" -ne 1 ]; then echo "FAIL: unreadable API must fail closed in CI (exit $int_rc)"; int_failures=$((int_failures + 1)); else echo "ok: fails closed in CI"; fi
+str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
+check "live read error fails closed in CI" "$int_rc" 1 "failing closed" "$str_out"
 int_rc=0
-str_out="$(PATH="$str_tmp/bin:$PATH" python3 -I "$GATE" --workflows "$str_tmp/wf" --policy "$str_tmp/policy.txt" 2>&1)" || int_rc=$?
-if [ "$int_rc" -ne 0 ] || ! grep -q SKIPPED <<<"$str_out"; then echo "FAIL: local unreadable API must skip loudly"; int_failures=$((int_failures + 1)); else echo "ok: skips loudly locally"; fi
+str_out="$(PATH="$str_tmp/bin:$PATH" run_gate --live)" || int_rc=$?
+check "live read error skips loudly locally" "$int_rc" 0 "SKIPPED" "$str_out"
 
-[ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
+printf '%s\n' '#!/bin/sh' 'case "$2" in' \
+	'*branches/main/protection) echo "{\"required_status_checks\":{\"contexts\":[\"Lint gate\",\"Extra live\"]}}" ;;' \
+	'*rulesets) echo "[]" ;;' 'esac' >"$str_tmp/bin/gh"
+fixture
+int_rc=0
+str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
+check "live drift fails and names both sides" "$int_rc" 1 "not in required-checks.json: Extra live" "$str_out"
+check "live drift names the missing live context" "$int_rc" 1 "not live: App check" "$str_out"
+
+[ "$int_failures" -eq 0 ] || {
+	echo "$int_failures case(s) failed"
+	exit 1
+}

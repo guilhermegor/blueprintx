@@ -11,24 +11,5 @@ external|Analyze (actions)|emitted by CodeQL default setup, which has no workflo
 external|Analyze (javascript-typescript)|emitted by CodeQL default setup, which has no workflow file here
 external|Analyze (python)|emitted by CodeQL default setup, which has no workflow file here
 external|Analyze (ruby)|emitted by CodeQL default setup, which has no workflow file here
-optional|--spec regression tests|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|.specs/ structure guard|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Comment budget — long runs + decorative banners (blueprintx#303)|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Cyclomatic complexity — templates/python-common (tests 1, src 2, bin 8)|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Docs gap — published pages registered in nav and index|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Dry-run smoke — bash-cli|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Every skeleton ships the hosted-reviewer config|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Lockfile sync — templates/*/package.json vs package-lock.json|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|PR file-count ceiling — 90 files (blueprintx#551)|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
 optional|PR files within declared issue scope|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Pre-commit and CI run the same checks, both directions (blueprintx#384)|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Review-bot roster opt-out — "no" must omit .review-bots.yaml|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Scaffold + lint + test (storage opt-in) — api-service-native-db|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Scaffold + lint + test (storage opt-in) — ddd-service-native-db|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|Scaffold + lint + test (storage opt-in) — ddd-service-orm-db|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|docs/ boundary guard|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|markdownlint — measured rule set (blueprintx#383)|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|promote_offline_to_online.sh refusal-path tests|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|quality-rules.yaml validation (blueprintx#432)|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|scaffold kanban board and labels|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
-optional|sed portability — no bare sed -i (blueprintx#459)|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
+optional|Required checks sync — expected contexts vs PR jobs (blueprintx#535)|new gate; require it once it has a green record on main
