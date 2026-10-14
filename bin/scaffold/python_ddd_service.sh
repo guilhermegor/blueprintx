@@ -166,6 +166,7 @@ copy_templates() {
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.env.example" "$project_path/.env"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.env.example" "$project_path/.env.example"
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/docs/configuration.md" "$project_path/docs/configuration.md"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/CLAUDE.md" "$project_path/CLAUDE.md"
 
     print_status "success" "Templates copied and configured"
@@ -193,8 +194,6 @@ copy_mkdocs_templates() {
         > "$project_path/docs/index.md"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/docs/architecture.md" \
         "$project_path/docs/architecture.md"
-    cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/docs/configuration.md" \
-        "$project_path/docs/configuration.md"
     # API reference is a directory (index + one page) from day one, never a single
     # api.md — splitting it later rots published deep links (see docs/api/index.md).
     mkdir -p "$project_path/docs/api"
