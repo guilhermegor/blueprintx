@@ -133,6 +133,32 @@ def pr_jobs(path_dir: pathlib.Path) -> dict:
     return dict_jobs
 
 
+def emitting_files(path_dir: pathlib.Path) -> dict:
+    """{emitted name: {workflow file name}} over every workflow, whatever its trigger."""
+    dict_files = {}
+    for path_file in sorted(path_dir.glob("*.y*ml")):
+        dict_wf = yaml.safe_load(path_file.read_text(encoding="utf-8")) or {}
+        for str_id, dict_job in (dict_wf.get("jobs") or {}).items():
+            if "uses" in dict_job:
+                continue
+            for str_name in expand_name(str(dict_job.get("name", str_id)), dict_job):
+                dict_files.setdefault(str_name, set()).add(path_file.name)
+    return dict_files
+
+
+def inactive_emitters(set_req: set, dict_files: dict, dict_states: dict) -> list:
+    """Required contexts whose emitting workflow file is not `active` in the Actions UI."""
+    list_err = []
+    for str_name in sorted(set_req & set(dict_files)):
+        for str_file in sorted(dict_files[str_name]):
+            str_state = dict_states.get(str_file, "missing")
+            if str_state != "active":
+                list_err.append(
+                    f"required '{str_name}' is emitted by {str_file}, state {str_state}"
+                )
+    return list_err
+
+
 def read_policy(path_file: pathlib.Path) -> dict:
     """{kind: {name: reason}}; a malformed or reason-less line aborts."""
     dict_policy = {"optional": {}, "external": {}}
@@ -178,6 +204,14 @@ def live_required() -> dict:
     return dict_live
 
 
+def live_workflow_states() -> dict:
+    """{workflow file name: state} as the Actions API reports it."""
+    dict_raw = gh_json(f"repos/{REPO}/actions/workflows?per_page=100")
+    return {
+        pathlib.PurePosixPath(w["path"]).name: w["state"] for w in dict_raw["workflows"]
+    }
+
+
 def read_expected(path_file: pathlib.Path) -> dict:
     """The committed {"classic": set, "ruleset": set}; any other shape aborts."""
     dict_raw = json.loads(path_file.read_text(encoding="utf-8"))
@@ -220,13 +254,20 @@ def compare(set_req: set, dict_jobs: dict, dict_policy: dict) -> list:
     return list_err
 
 
+def live_read() -> dict:
+    """Live layers plus the workflow states, under one key each."""
+    dict_live = live_required()
+    dict_live["states"] = live_workflow_states()
+    return dict_live
+
+
 def read_or_skip(args) -> tuple:
     """(expected, live-or-None, exit code or None); the API is read only under --live."""
     try:
         if yaml is None:
             raise ValueError("PyYAML is not installed")
         dict_exp = read_expected(pathlib.Path(args.expected))
-        return dict_exp, (live_required() if args.live else None), None
+        return dict_exp, (live_read() if args.live else None), None
     except (OSError, subprocess.CalledProcessError, KeyError, ValueError) as exc:
         if os.environ.get("REQUIRED_CHECKS_SYNC_REQUIRED") == "1":
             print(f"::error::cannot read ({exc}); failing closed", file=sys.stderr)
@@ -249,7 +290,11 @@ def main() -> int:
     if int_rc is not None:
         return int_rc
     if args.live:
-        list_err = compare_live(dict_exp, dict_live)
+        list_err = compare_live(dict_exp, dict_live) + inactive_emitters(
+            dict_exp["classic"] | dict_exp["ruleset"],
+            emitting_files(pathlib.Path(args.workflows)),
+            dict_live["states"],
+        )
     else:
         list_err = compare(
             dict_exp["classic"] | dict_exp["ruleset"],

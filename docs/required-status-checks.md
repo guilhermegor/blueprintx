@@ -139,3 +139,7 @@ secret. It fails closed (`REQUIRED_CHECKS_SYNC_REQUIRED=1`) when the API cannot 
 and fails on `main` when protection drifted from the JSON. Changing protection therefore
 means editing the JSON in the same change. `tests/test_check_required_checks_sync.sh`
 holds the should-fail cases.
+
+`--live` also reads `actions/workflows` and fails when a workflow file that emits a required
+context is not `active` (disabled in the UI): the context would never report and every PR
+would deadlock.
