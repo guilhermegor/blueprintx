@@ -190,8 +190,11 @@ rewrite_internal_imports() {
 # the consumer's own process environment at call time, the pattern ts_lib.sh already uses.
 copy_internal_otel() {
     local internal_dir="$1"
+    local test_path="$2/tests/unit/test_otel_logging.py"
     if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
     cp "$COMMON_TEMPLATE_ROOT/optional/otel_logging.py" "$internal_dir/utils/otel_logging.py"
+    cp "$COMMON_TEMPLATE_ROOT/optional/test_otel_logging.py" "$test_path"
+    sed_inplace -E "s@^( +)from (utils|chassis)\.otel_logging@\1from ${PROJECT_PKG_NAME}._internal.utils.otel_logging@" "$test_path"
 }
 
 # The curated internal helper set for a distributable library — copied from python-common
@@ -234,7 +237,7 @@ copy_internal_utils() {
     done
     # Runtime type-checking engine — single source in python-common/optional/typing.
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$internal_dir/utils/typing"
-    copy_internal_otel "$internal_dir"
+    copy_internal_otel "$internal_dir" "$project_path"
     # Convention guide for the utils layer (logging → dependency injection). Kept out of the
     # wheel by the `exclude` in pyproject.toml.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
