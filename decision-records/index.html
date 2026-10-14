@@ -2062,6 +2062,215 @@ An empty array means never automatic; the review ladder asks for one explicitly.
 the trigger-label route, which counts as an <code>open</code> event and would need <code>"open"</code> back.
 <code>greptile-apps[bot]</code> posts inline review threads, so it is listed in every
 <code>.review-bots.yaml</code> roster.</p>
+<h2 id="root-workflows-why-each-is-shaped-as-it-is">Root workflows: why each is shaped as it is<a class="headerlink" href="#root-workflows-why-each-is-shaped-as-it-is" title="Permanent link">&para;</a></h2>
+<p>These records explain the GitHub Actions workflows under <code>.github/workflows/</code> in this
+repository. They were moved out of the workflow files, which now carry no prose.</p>
+<h3 id="coderabbit_triggeryml-a-user-pat-asks-for-the-review"><code>coderabbit_trigger.yml</code> — a user PAT asks for the review<a class="headerlink" href="#coderabbit_triggeryml-a-user-pat-asks-for-the-review" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Why the workflow exists.</strong> CodeRabbit declines automatic reviews on a repository with
+  fewer than 10 stars, and the threshold is not configurable from <code>.coderabbit.yaml</code>. The
+  consequence was PRs #204 and #213 merging with every check green and no review.</li>
+<li><strong>Why a PAT and not <code>GITHUB_TOKEN</code>.</strong> CodeRabbit ignores bot-authored comments. A comment
+  posted with <code>GITHUB_TOKEN</code> is authored by <code>github-actions[bot]</code> and was dropped silently
+  (measured on #210: no reply in 5 minutes). A comment from a user PAT replied in 9 seconds
+  (#215). Do not simplify this.</li>
+<li><strong>The secret is <code>GH_PAT_REVIEW_TRIGGER</code>.</strong> The earlier name <code>CODERABBIT_TRIGGER_PAT</code> read as a
+  CodeRabbit key and cost two rounds of <code>401 Bad credentials</code>. Actions reserves the
+  <code>GITHUB_</code> prefix (<code>HTTP 422</code>), so <code>GH_</code> is the closest legal spelling. Setup: a fine-grained
+  GitHub PAT for this repository with <code>Pull requests: Read and write</code>, then
+  <code>gh secret set GH_PAT_REVIEW_TRIGGER --repo &lt;owner&gt;/&lt;repo&gt;</code>.</li>
+<li><strong>Fail, never skip, when the PAT is absent.</strong> A skip would reproduce the original defect:
+  no review and nothing says so. A fork PR gets no secrets and lands in the same failure,
+  correctly.</li>
+<li><strong>The shape check.</strong> A bare <code>401</code> cannot tell a wrong token from a token stored wrong
+  (<code>gh secret set … &lt; file</code> keeps the trailing newline). The step reports only the token
+  class and booleans, never a value, a substring or its length, because the logs are public
+  and a substring of a masked secret is not masked.</li>
+<li><strong>A 403 is a different failure.</strong> It is GitHub's API rate limit for the PAT's user, not
+  CodeRabbit's review quota, and clears by itself; it must not read as a bad token. Match on
+  <code>rate limit</code> alone: the secondary limit's wording ("You have exceeded a secondary rate
+  limit", 403 or 429) does not contain the primary's phrase.</li>
+<li><strong>Triggers.</strong> <code>synchronize</code> was dropped in #454: only 5.4% of 773 post-open events produced
+  a finding and 69.6% were rate-limit notices, and the required "Review threads answered"
+  check already closes the unreviewed-merge hole. <code>opened</code> was kept in #567: asks on open are
+  45% of all spent but win 26% of reviews, yet they enrol the PR for
+  <code>retry_rate_limited_review.py</code>, which only adopts a PR whose newest reviewer comment is a
+  rate-limit notice. Dropping it would leave a PR opened with no session running stalled.
+  Drafts are skipped; <code>ready_for_review</code> brings them back.</li>
+<li><strong>Concurrency may cancel here.</strong> Several pushes need one trigger, and this workflow publishes
+  no verdict anyone waits on, unlike <code>review_threads.yml</code>.</li>
+</ul>
+<h3 id="review_retryyml-retry-a-rate-limited-review-on-a-timer"><code>review_retry.yml</code> — retry a rate-limited review on a timer<a class="headerlink" href="#review_retryyml-retry-a-rate-limited-review-on-a-timer" title="Permanent link">&para;</a></h3>
+<ul>
+<li>It does not relax the gate. Of 112 PRs, 19 hit a rate limit and 18 were reviewed in the end,
+  so a rate limit is a delay and the asking is automated. The 19th (#157) merged with no
+  review while a notice stood, which is the hole the gate exists to close.</li>
+<li>A schedule is the only shape that works: nothing fires while a PR waits. Measured windows
+  are 10 to 25 minutes, so <code>*/10</code> clears most on the first tick after the window.</li>
+<li>It needs the user PAT for the same reason as the trigger. The script reads back the
+  comment's author type and warns if it posted as a Bot.</li>
+<li>It asks at most one PR per run, oldest first (#280), which matches the shared account's
+  roughly one review per hour.</li>
+<li>It has no secret-shape preflight: with a missing PAT the gate still blocks the PR visibly,
+  and a job failing every 10 minutes would be noise.</li>
+<li>Its concurrency group has <code>cancel-in-progress: false</code> so a queued run waits and re-reads the
+  comments. That does not contradict the no-concurrency rule below: it is a janitor that
+  publishes no required check.</li>
+</ul>
+<h3 id="review_threadsyml-triggers-concurrency-and-the-stale-run-cleanup"><code>review_threads.yml</code> — triggers, concurrency and the stale-run cleanup<a class="headerlink" href="#review_threadsyml-triggers-concurrency-and-the-stale-run-cleanup" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Triggers are the point.</strong> Under <code>pull_request</code> the verdict was computed at push time and
+  went stale when a review landed (PR #180 merged with two unanswered threads).
+  <code>pull_request_review</code> and <code>pull_request_review_comment</code> re-run it. <code>pull_request_review_thread</code>
+  is a webhook event, not a workflow trigger; adding it makes GitHub reject the whole file
+  silently (#156), and <code>bin/ci/check_actions.sh</code> now catches that class.</li>
+<li><strong><code>issue_comment</code> is load-bearing.</strong> A clean CodeRabbit review is a plain issue comment, so
+  without this trigger the gate stays frozen on its push-time failure (measured on #342: the
+  gate was wrong two seconds after the review finished). The job skips plain issues, and reads
+  the PR number from <code>issue.number</code> on that event.</li>
+<li><strong>Resolution cannot re-trigger it.</strong> Resolving a thread emits no workflow trigger, so after
+  a resolve the run must be re-run once. The job asserts both halves (reply and resolve,
+  <code>REVIEW_THREADS_REQUIRE_RESOLVED=1</code>) since #196; the earlier split gave the resolve half to
+  <code>required_conversation_resolution</code>, which drops an outdated thread from the blocking set
+  (#193: merge enabled, thread unresolved and outdated, 29 of 29 checks green).</li>
+<li><strong>It is safe to require.</strong> The earlier note that it must not be a required check was wrong
+  and left <code>required_status_checks</code> empty, so a PR merged with 32 of 47 checks passing (#173 and
+  PR 185).</li>
+<li><strong>No <code>concurrency:</code> block, deliberately.</strong> With <code>cancel-in-progress: false</code> only one run
+  may sit pending, so each queued run cancels the waiting one (10 runs in 25 seconds on #216).
+  A run cancelled while queued publishes no check run, leaving the required context at
+  <code>Expected — Waiting for status to be reported</code>, which nothing clears.</li>
+<li><strong>The stale-run cleanup (#263).</strong> Each trigger opens a new check run and branch protection
+  reads the aggregate, so a correct push-time failure keeps the PR blocked behind any number
+  of later passes (5 on #264, 7 on #265). The <code>Clear stale failed runs</code> step re-runs those
+  failures. <code>if: success()</code> is the loop guard. On <code>issue_comment</code> the head SHA must be fetched
+  because the event has no <code>pull_request</code> object, and an unresolved head fails loudly (#350).</li>
+<li><strong>Closing the ceiling properly</strong> would need a webhook receiver or a GitHub App dispatching
+  <code>repository_dispatch</code> on <code>resolved</code>. That was rejected as not worth an always-on listener
+  for this repository.</li>
+<li><strong>Its own workflow.</strong> It is kept out of <code>scaffold_checks.yml</code> so a review comment does not
+  re-run the 29-job scaffold matrix: one job, a few seconds, as often as needed.</li>
+<li><strong>A finding takes both halves:</strong> reply with what changed and why, then resolve. A bot
+  resolves its own threads on seeing the fix, so <code>isResolved</code> records the reviewer's
+  satisfaction, never the author's reasoning.</li>
+</ul>
+<h3 id="other-workflows">Other workflows<a class="headerlink" href="#other-workflows" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>behind_base_gate_report.yml</code> (#368).</strong> A PR runs every gate from its own checkout, so a
+  branch behind <code>main</code> can fail or wrongly pass on an old gate. <code>gh pr update-branch</code> moves
+  the head commit and can supersede a clean review, so the workflow only reports. Its
+  schedule is coarse: a <code>*/10</code> schedule fired 6 times in 21 hours on this repository.</li>
+<li><strong><code>pr-reconcile.yaml</code> (#255).</strong> A PR merged by native auto-merge armed with <code>github.token</code>
+  leaves the linked issue open and the branch undeleted, while a manual merge of the same PR
+  closes it. The <code>pull_request: [closed]</code> path is an optimisation; the <code>schedule</code> path is the
+  backstop and the fix, because scheduled events are exempt from the "no new workflow runs"
+  suppression. It calls <code>templates/python-common/bin/pr_reconcile.sh</code>, the same script a
+  generated project calls at <code>bin/pr_reconcile.sh</code>.</li>
+<li><strong><code>issue_scope.yml</code>.</strong> Its own workflow so an issue edit re-runs one job instead of the
+  scaffold matrix. It listens to <code>issues</code> events because an edit changes the declaration the
+  gate judges against, and checks out the base commit, never the merge ref, so a PR cannot
+  rewrite <code>check_issue_scope.py</code> and judge itself. The only writing job posts a commit status
+  on each affected PR head, since an <code>issues</code>-triggered job belongs to no PR's check suite.</li>
+<li><strong><code>pr_template.yml</code>.</strong> Separate because <code>edited</code> must re-run it and would otherwise re-run
+  every scaffold check on a body edit. It reads the body live from the API, since a re-run
+  replays the original event payload.</li>
+<li><strong><code>release.yml</code>.</strong> The version input is free text and is validated before <code>git tag</code>, the
+  irreversible step, so a bad value is a no-op instead of a pushed tag with no artifacts.
+  <code>release_snap.yml</code> fails before its 30-minute build when the credential is absent, because
+  an <code>exit 0</code> there let v0.16.67 to v0.16.70 report green while nothing reached the store
+  (#669). Every package job stamps the release version into the fallback literal of
+  <code>blueprintx --version</code>, since packaged installs have no <code>.git</code>.</li>
+<li><strong><code>verify_branch_protection.yml</code> (#307).</strong> Guards the <code>strict</code> setting, which anyone with
+  admin rights can flip with no red check. <code>GITHUB_TOKEN</code> cannot read branch protection
+  (<code>administration</code> is not a grantable scope), so it reuses <code>GH_PAT_REVIEW_TRIGGER</code>. It runs
+  on push to main, weekly and on dispatch, not on <code>pull_request</code>, because it checks a
+  repository setting and is not a required check. It fails, never skips, without the PAT.</li>
+<li><strong><code>docs.yml</code>.</strong> Checks out full history so <code>cz changelog</code> sees the tags, and regenerates
+  <code>CHANGELOG.md</code> fresh on every docs build; it is never committed back.</li>
+<li><strong><code>secret_scan.yml</code>.</strong> Scans full history. A pinned version fixes what is asked for, never
+  what arrives, so the download is SHA-256 verified before extraction, as <code>lint-actions</code> does
+  for actionlint. A graceful skip is right on a contributor's machine and a placebo in CI, so
+  <code>GITLEAKS_REQUIRED=1</code> turns a missing install into a failure.</li>
+</ul>
+<h3 id="scaffold_checksyml-notes-per-job"><code>scaffold_checks.yml</code> — notes per job<a class="headerlink" href="#scaffold_checksyml-notes-per-job" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>No setup step</strong> for the stdlib-only gates (function length, complexity of <code>bin/</code>, comment
+  budget, test copy lists, sed portability, git remote guard, scaffold libs): a missing tool
+  cannot make a gate report its own blindness as OK, so there is no <code>*_REQUIRED</code> flag. The
+  complexity job on <code>templates/python-common</code> needs ruff, because C901 is the metric, and
+  hard-fails when it cannot be resolved.</li>
+<li><strong>Complexity needs a second invocation (#271)</strong>, scoped to <code>templates/python-common</code>, whose
+  <code>src/</code> and <code>tests/</code> the top-level directory lookup cannot see. Function length is not
+  duplicated: its discovery already walks the whole root (measured by planting a 66-line
+  function there).</li>
+<li><strong>Sed portability.</strong> GNU <code>sed -i</code> takes no argument and BSD requires one, so a bare
+  <code>sed -i</code> aborts a scaffold on macOS. <code>sed_inplace()</code> in <code>bin/lib/common.sh</code> is the
+  replacement.</li>
+<li><strong>Test copy lists.</strong> A shared test no scaffold copies is committed and never run in any
+  generated project. Its first run found <code>test_startup_fragility_order.py</code> absent from all
+  five tiers.</li>
+<li><strong>actionlint.</strong> yamllint asks whether the YAML is valid, actionlint whether GitHub will run
+  it, and a workflow GitHub refuses produces no red check. The template workflows are in
+  scope because they never execute here. Its tarball is SHA-256 checked for the reason above.</li>
+<li><strong>GitGuardian is not a required check (#155).</strong> Its population is unmeasured. GitHub gives a
+  Dependabot-triggered run a separate secret store holding none, so the key resolves to an
+  empty string and <code>ggshield</code> exits 3 (#457, PR #400). The job is skipped on the PR author
+  (<code>github.event.pull_request.user.login</code>, never <code>github.actor</code>) when that author is
+  Dependabot. This is not a silent pass: <code>gitleaks</code> scans the same range unconditionally. The
+  fix is <code>gh secret set GITGUARDIAN_API_KEY --app dependabot --repo &lt;owner&gt;/&lt;repo&gt;</code>. The
+  probe is <code>gh api repos/&lt;o&gt;/&lt;r&gt;/dependabot/secrets --jq .total_count</code>, which returned 0, and
+  until that secret exists a Dependabot PR trips the job on every run (the log shows
+  <code>GITGUARDIAN_API_KEY:</code> blank and <code>Error: Invalid GitGuardian API key.</code>).</li>
+<li><strong>ggshield push range.</strong> In ggshield 1.54.0 the previous-commit variable is
+  <code>GITHUB_PUSH_BASE_SHA</code>, which must carry <code>github.event.before</code>; <code>GITHUB_PUSH_BEFORE_SHA</code>
+  and <code>GITHUB_PULL_BASE_SHA</code> appear nowhere in its source, so setting them protects nothing.
+  Without a usable previous commit it scans only <code>GITHUB_SHA~1</code>, one commit of a
+  five-commit push, with exit 0. A branch-creating push (before is forty zeroes) and a manual
+  dispatch run a separate full-repository scan in a separately named step, which is the
+  correct range for a freshly scaffolded project's first push.
+  <code>GITHUB_DEFAULT_BRANCH</code> is deliberately left unset, so do not re-add it as protection:
+  with a real previous commit its fallback is unreachable, and on a branch-creating push
+  its fallback is a bare ref (<code>main..&lt;sha&gt;</code>, no <code>origin/</code> prefix, because the remote prefix
+  is applied only on the pull_request path). A detached checkout has no local <code>main</code>, so
+  that resolves to nothing and lands back on <code>GITHUB_SHA~1</code>. Prefixing it with <code>origin/</code>
+  does not help either: on the push that creates the branch <code>origin/main</code> already equals
+  <code>HEAD</code>, so the range is empty. The pull_request path needs no variable, because ggshield
+  reads <code>GITHUB_BASE_REF</code>, which Actions already sets.</li>
+<li><strong>Scaffold matrix.</strong> <code>dry-run-smoke</code> and <code>scaffold-lint-test</code> are CI-only (#384): a
+  <code>skeleton.meta</code> change would trigger one hook, never all six skeletons. <code>envsubst</code> is
+  installed only when missing, because the unguarded <code>apt-get</code> hung two jobs for 6 hours
+  (#192). <code>MULTI_PIPELINE_OPTIN=true</code> forces the MVC multi-intent prompt to yes. The
+  storage opt-in job answers that prompt through the named-key spec on every tier that
+  offers it (api-service-native-db uses the DDD key map, #668), because the plain scaffold
+  never linted files that ship only on an opt-in (#650).</li>
+<li><strong>Codespell sync.</strong> The vocabulary this repository learns must reach the copy that ships
+  into every scaffold; the two lists drifted in both directions and the stale side was the
+  template.</li>
+<li><strong>Pairing gate.</strong> <code>Makefile</code> and <code>tasks.sh</code> exist only at this repository's root, so the
+  script lives at <code>bin/</code>, not in a template.</li>
+<li><strong>pymarkdownlnt is pinned.</strong> <code>.pymarkdown.json</code> enumerates rules one by one, so a rule a new
+  release adds is enabled by default: 0.9.40 added MD049, MD050 and MD051 and turned 9 open
+  PRs red (2026-09-18). Bump it deliberately and re-measure the rule set (#383).</li>
+<li><strong>Validate-meta tests (#407).</strong> The gate blocks merge and had no tests for a missing key, an
+  empty value or a dead <code>scaffold=</code> path.</li>
+</ul>
+<h3 id="dependabot-471-484">Dependabot (#471, #484)<a class="headerlink" href="#dependabot-471-484" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Version updates for this repository are monthly, not weekly: the three ecosystems (docs
+  venv, <code>ts-common</code>'s toolchain, Actions runners) ship no runtime product code, grouping
+  already caps noise at one PR per ecosystem per interval, and security updates run
+  independently on their own toggle.</li>
+<li><code>increase-if-necessary</code>, not <code>lockfile-only</code>: both manifests use caret ranges, so every
+  major bump needs a manifest edit, and under <code>lockfile-only</code> no major PR would ever open.</li>
+<li>Groups are minor and patch only; a group without <code>update-types</code> would bundle majors with
+  routine bumps. There is no <code>labels:</code> key, because <code>bin/pr_gate.py</code> already labels by path
+  and Dependabot comments an error on every PR when a declared label does not exist.</li>
+<li>The <code>eslint</code>, <code>@eslint/js</code> and <code>typescript</code> majors are held because their peers
+  (typescript-eslint peers on <code>typescript</code> below 6.1.0; the react, import and jsx-a11y plugins
+  cap <code>eslint</code> at 9) exclude them; lift per #720. First match wins, so <code>@eslint/js</code> moves in
+  lockstep with <code>eslint</code>.</li>
+<li>Pinning actions by SHA (#369) does not self-update; the Actions ecosystem entry does.</li>
+</ul>
 
 
 
