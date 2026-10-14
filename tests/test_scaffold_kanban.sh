@@ -108,6 +108,7 @@ test_default_creates_the_full_board() {
     done
     expect_log "board status" '"name":"Blocked"' present
     expect_log "board status" '[{"name":"Blocked"' present
+    expect_log "board fields" "Internal,External,Decision" present
     expect_log "board status" '"name":"Backlog"' present
     expect_log "board status" '"name":"In progress"' present
     expect_log "board status" '"name":"In review"' present
@@ -172,6 +173,15 @@ test_empty_stdin_means_no_board() {
     expect_out "EOF" "$str_out" "Skipped the kanban board"
 }
 
+test_no_gnu_only_install_in_bin() {
+    local str_hits
+    str_hits="$(grep -rnE 'install +(-[a-zA-Z]+ +)*-[a-zA-Z]*D' "$REPO_ROOT/bin" || true)"
+    if [ -n "$str_hits" ]; then
+        print_status "error" "BSD/macOS install has no -D; use mkdir -p && cp: $str_hits"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 main() {
     make_stub
     [ "$(PATH="$WORK_DIR/bin:$PATH" command -v gh)" = "$WORK_DIR/bin/gh" ] || exit 2
@@ -185,6 +195,7 @@ main() {
     test_a_failed_project_list_still_prints_the_scope_fix
     test_stderr_noise_on_success_never_corrupts_values
     test_empty_stdin_means_no_board
+    test_no_gnu_only_install_in_bin
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
         exit 1
