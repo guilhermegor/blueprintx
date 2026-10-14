@@ -123,8 +123,13 @@ not enforced.
 
 The expected contexts per layer are committed in `.github/required-checks.json`.
 `bin/ci/check_required_checks_sync.py` compares that file with the jobs that run on every
-PR (`pull_request`, no `branches:`/`paths:` filter, no job `if:`), with no token and no
-secret. It fails when:
+PR, with no token and no secret. "Every PR" means the workflow triggers on `pull_request`
+with no `branches:`/`paths:` filter and a `types:` covering opened, reopened and
+synchronize, and the job is unconditional: it has no `if:`, or its `if:` (a surrounding
+`${{ }}` is stripped) has a `||` alternative that is a bare `github.event_name ==
+'pull_request'` or `!= '<other event>'` test. Any other `if:` makes the job conditional,
+and so does a `needs:` on a conditional job. A job that only `uses:` a reusable workflow
+fails the gate loudly; list its emitted names in the policy file by hand. It fails when:
 
 1. a required context is emitted by no such job (every PR would wait forever); or
 2. such a job is neither required nor listed as `optional` in

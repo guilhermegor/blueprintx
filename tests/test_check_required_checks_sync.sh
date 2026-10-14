@@ -115,7 +115,9 @@ check "live read error skips loudly locally" "$int_rc" 0 "SKIPPED" "$str_out"
 printf '%s\n' '#!/bin/sh' 'case "$2" in' \
 	'*branches/main/protection) echo "{\"required_status_checks\":{\"contexts\":[\"Lint gate\",\"Extra live\"]}}" ;;' \
 	'*rules/branches/main) echo "[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"Rule live\"}]}}]" ;;' \
-	'*actions/workflows*) echo "{\"workflows\":[{\"path\":\".github/workflows/a.yml\",\"state\":\"${FAKE_STATE:-active}\"}]}" ;;' \
+	'*actions/workflows*page=1) echo "{\"workflows\":[{\"path\":\".github/workflows/other.yml\",\"state\":\"active\"}]}" ;;' \
+	'*actions/workflows*page=2) echo "{\"workflows\":[{\"path\":\".github/workflows/a.yml\",\"state\":\"${FAKE_STATE:-active}\"}]}" ;;' \
+	'*actions/workflows*) echo "{\"workflows\":[]}" ;;' \
 	'*) exit 1 ;;' 'esac' >"$str_tmp/bin/gh"
 fixture
 int_rc=0
@@ -128,6 +130,11 @@ fixture
 int_rc=0
 str_out="$(FAKE_STATE=disabled_manually PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
 check "live disabled workflow emitting a required context fails" "$int_rc" 1 "emitted by a.yml, state disabled_manually" "$str_out"
+
+fixture
+printf 'name: c\non: pull_request\njobs:\n  t:\n    name: Wrapped true\n    if: ${{ github.event_name == '"'"'pull_request'"'"' }}\n    runs-on: x\n    steps: []\n  c:\n    name: Wrapped cond\n    if: ${{ github.event.pull_request.draft == false }}\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/c.yml"
+expected '"Lint gate", "App check", "Wrapped true"' ''
+expect "wrapped always-true if counts as unconditional, wrapped conditional does not" 0 "findings=0"
 
 fixture
 printf 'name: d\non: pull_request\njobs:\n  call:\n    uses: ./.github/workflows/x.yml\n' >"$str_tmp/wf/d.yml"

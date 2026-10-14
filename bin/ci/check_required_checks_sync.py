@@ -49,7 +49,10 @@ def if_always_true(str_if) -> bool:
     """A job `if:` is harmless only if some `||` alternative is a true event_name test."""
     if str_if is None:
         return True
-    return any(event_clause_true(c) for c in str(str_if).split("||"))
+    str_expr = re.sub(
+        r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", str(str_if).strip(), flags=re.S
+    )
+    return any(event_clause_true(c) for c in str_expr.split("||"))
 
 
 def pr_trigger_unfiltered(dict_on) -> bool:
@@ -205,11 +208,16 @@ def live_required() -> dict:
 
 
 def live_workflow_states() -> dict:
-    """{workflow file name: state} as the Actions API reports it."""
-    dict_raw = gh_json(f"repos/{REPO}/actions/workflows?per_page=100")
-    return {
-        pathlib.PurePosixPath(w["path"]).name: w["state"] for w in dict_raw["workflows"]
-    }
+    """{workflow file name: state} as the Actions API reports it, every page."""
+    dict_states = {}
+    int_page = 1
+    while list_wf := gh_json(
+        f"repos/{REPO}/actions/workflows?per_page=100&page={int_page}"
+    )["workflows"]:
+        for dict_wf in list_wf:
+            dict_states[pathlib.PurePosixPath(dict_wf["path"]).name] = dict_wf["state"]
+        int_page += 1
+    return dict_states
 
 
 def read_expected(path_file: pathlib.Path) -> dict:
