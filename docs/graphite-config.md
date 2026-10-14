@@ -5,8 +5,9 @@ versioned file or a dashboard step the repository owner performs by hand.
 
 ## What the repository versions
 
-- `.gitattributes` marks lockfiles, the coverage badge and the comment-budget baseline
-  `linguist-generated=true`. Per Graphite's docs, marked files are collapsed in the Graphite
+- `.gitattributes` marks lockfiles and the coverage badge `linguist-generated=true`. The
+  comment-budget baseline is deliberately not marked: it is a ratchet, and a reviewer must
+  see its count go up. Per Graphite's docs, marked files are collapsed in the Graphite
   and GitHub diff views, skipped by the AI review and excluded from its PR size check. They
   are collapsed for every reviewer and human too.
 - The review rules are the existing `.greptile/rules.md`. There is no `.graphite/` copy.
