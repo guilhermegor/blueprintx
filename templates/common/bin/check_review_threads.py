@@ -199,7 +199,7 @@ _QUERY = """
 query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
-      author { login }
+      author { login __typename }
       headRefOid
       baseRefOid
       timelineItems(
@@ -218,6 +218,10 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
         nodes { author { login } commit { oid } state body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
+      allCommits: commits(first:100) {
+        pageInfo { hasNextPage }
+        nodes { commit { message author { email } } }
+      }
       reviewThreads(first:100, after:$tc) {
         pageInfo { hasNextPage endCursor }
         nodes {
@@ -2126,12 +2130,60 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     return fn_fingerprint
 
 
+_RE_UPDATE_TYPE = re.compile(r"^\s*update-type:\s*version-update:semver-(\w+)\s*$", re.M)
+_SET_EXEMPT_UPDATES = frozenset({"patch", "minor"})
+_STR_DEPENDABOT_EMAIL = "+dependabot[bot]@users.noreply.github.com"
+
+
+def _is_dependabot_commit(dict_node: dict) -> bool:
+    """Return whether one commit node was authored by Dependabot."""
+    str_email = ((dict_node.get("commit") or {}).get("author") or {}).get("email") or ""
+    return str_email.endswith(_STR_DEPENDABOT_EMAIL)
+
+
+def _is_dependabot_bot(dict_author: dict) -> bool:
+    """Return whether a PR author node is the ``dependabot`` ``Bot`` actor."""
+    return (
+        dict_author.get("__typename") == "Bot"
+        and normalise_login(dict_author.get("login") or "") == "dependabot"
+    )
+
+
+def dependabot_review_exempt(dict_pr: dict) -> bool:
+    """Return whether a PR needs no review: a pure Dependabot patch/minor bump (fail-closed).
+
+    Parameters
+    ----------
+    dict_pr : dict
+        The fetched ``pullRequest`` node.
+
+    Returns
+    -------
+    bool
+        ``True`` only for a ``Bot`` author ``dependabot``, with every commit authored by
+        Dependabot and every ``update-type`` in the commit metadata a patch or minor.
+    """
+    if not _is_dependabot_bot(dict_pr.get("author") or {}):
+        return False
+    dict_all = dict_pr.get("allCommits") or {}
+    list_nodes = dict_all.get("nodes") or []
+    if not list_nodes or (dict_all.get("pageInfo") or {}).get("hasNextPage") is not False:
+        return False
+    if not all(_is_dependabot_commit(dict_node) for dict_node in list_nodes):
+        return False
+    str_messages = "\n".join(d["commit"].get("message") or "" for d in list_nodes)
+    list_types = _RE_UPDATE_TYPE.findall(str_messages)
+    return bool(list_types) and set(list_types) <= _SET_EXEMPT_UPDATES
+
+
 def _missing_review(
     dict_pr: dict,
     str_repo_full: str,
     set_reviewers: set[str],
 ) -> tuple[str | None, str]:
     """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
+    if dependabot_review_exempt(dict_pr):
+        return None, ""
     return check_missing_review(
         dict_pr.get("reviews", {}).get("nodes", []),
         set_reviewers,

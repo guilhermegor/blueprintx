@@ -3586,3 +3586,71 @@ def test_carry_forward_worst_case_fits_half_the_shortest_job_timeout() -> None:
     int_calls = 1 + cls_gate._INT_MAX_REVIEWED_COMMITS
     int_worst_s = int_calls * cls_gate._INT_COMPARE_TIMEOUT_S
     assert int_worst_s <= _INT_SHORTEST_JOB_MINUTES * 60 // 2
+
+
+_BOT_EMAIL = "49699333+dependabot[bot]@users.noreply.github.com"
+
+
+def _dep_commit(str_type: str = "minor", str_email: str = _BOT_EMAIL) -> dict:
+    """Build a commit node carrying Dependabot's ``update-type`` metadata."""
+    str_update = f"update-type: version-update:semver-{str_type}"
+    str_msg = f"Bump x\n\n---\nupdated-dependencies:\n- dependency-name: x\n  {str_update}\n..."
+    return {"commit": {"message": str_msg, "author": {"email": str_email}}}
+
+
+def _dep_pr(
+    list_commits: list[dict], str_login: str = "dependabot", str_type: str = "Bot"
+) -> dict:
+    """Build a ``pullRequest`` node for the exemption."""
+    return {
+        "author": {"login": str_login, "__typename": str_type},
+        "allCommits": {"pageInfo": {"hasNextPage": False}, "nodes": list_commits},
+    }
+
+
+@pytest.mark.parametrize("str_update", ["patch", "minor"])
+def test_dependabot_patch_and_minor_are_exempt(str_update: str) -> None:
+    """A pure patch or minor bump needs no review."""
+    assert _load_gate().dependabot_review_exempt(_dep_pr([_dep_commit(str_update)]))
+
+
+def test_dependabot_major_is_not_exempt() -> None:
+    """A major still needs a review."""
+    assert not _load_gate().dependabot_review_exempt(_dep_pr([_dep_commit("major")]))
+
+
+def test_dependabot_group_with_one_major_is_not_exempt() -> None:
+    """One major in a grouped PR makes the whole PR a major."""
+    list_commits = [_dep_commit("minor"), _dep_commit("major")]
+    assert not _load_gate().dependabot_review_exempt(_dep_pr(list_commits))
+
+
+def test_non_dependabot_author_is_not_exempt() -> None:
+    """Only the Dependabot bot is exempt."""
+    assert not _load_gate().dependabot_review_exempt(_dep_pr([_dep_commit()], "mallory", "User"))
+
+
+def test_user_named_dependabot_is_not_exempt() -> None:
+    """The author must be a ``Bot`` actor, not a user."""
+    assert not _load_gate().dependabot_review_exempt(
+        _dep_pr([_dep_commit()], "dependabot", "User")
+    )
+
+
+def test_human_commit_on_a_dependabot_branch_is_not_exempt() -> None:
+    """A human push voids the exemption."""
+    list_commits = [_dep_commit(), _dep_commit(str_email="human@example.com")]
+    assert not _load_gate().dependabot_review_exempt(_dep_pr(list_commits))
+
+
+def test_dependabot_without_update_metadata_is_not_exempt() -> None:
+    """No ``update-type`` in the commit means unknown, which is not exempt."""
+    dict_commit = {"commit": {"message": "Bump x", "author": {"email": _BOT_EMAIL}}}
+    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]))
+
+
+def test_dependabot_with_more_than_one_page_of_commits_is_not_exempt() -> None:
+    """A truncated commit list cannot prove every commit is Dependabot's."""
+    dict_pr = _dep_pr([_dep_commit()])
+    dict_pr["allCommits"]["pageInfo"]["hasNextPage"] = True
+    assert not _load_gate().dependabot_review_exempt(dict_pr)

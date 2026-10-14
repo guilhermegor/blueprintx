@@ -518,6 +518,15 @@ copy_repo_rules_provisioner() {
     chmod +x "$project_path/bin/enable_repo_rules.sh"
 }
 
+copy_dependabot_auto_merge() {
+    local project_path="$1" common_root
+    common_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/templates/common"
+    mkdir -p "$project_path/.github/workflows" "$project_path/bin"
+    cp "$common_root/.github/workflows/dependabot-auto-merge.yml" "$project_path/.github/workflows/"
+    cp "$common_root/bin/dependabot_auto_merge.sh" "$project_path/bin/"
+    chmod +x "$project_path/bin/dependabot_auto_merge.sh"
+}
+
 copy_repo_policy_workflows() {
     local project_path="$1"
     local common_root
@@ -531,9 +540,11 @@ copy_repo_policy_workflows() {
     cp "$common_root/bin/close_linked_issues.sh" "$common_root/bin/check_pr_policy.sh" \
         "$project_path/bin/"
     chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
+    copy_dependabot_auto_merge "$project_path"
 }
 
 remove_repo_policy_scripts() {
     local project_path="$1"
-    rm -f "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
+    rm -f "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh" \
+        "$project_path/bin/dependabot_auto_merge.sh"
 }

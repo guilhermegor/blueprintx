@@ -224,6 +224,13 @@ repos:
         pass_filenames: false
         files: ^(templates/common/bin/close_linked_issues\.sh|templates/common/\.github/workflows/close-linked-issues\.yml|tests/test_close_linked_issues\.sh)$
 
+      - id: dependabot-auto-merge-tests
+        name: dependabot_auto_merge.sh should-fail regression tests (blueprintx#800)
+        entry: bash tests/test_dependabot_auto_merge.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/common/bin/dependabot_auto_merge\.sh|templates/common/\.github/workflows/dependabot-auto-merge\.yml|tests/test_dependabot_auto_merge\.sh)$
+
       - id: check-pr-policy-tests
         name: check_pr_policy.sh should-fail regression tests (blueprintx#604)
         entry: bash tests/test_check_pr_policy.sh
