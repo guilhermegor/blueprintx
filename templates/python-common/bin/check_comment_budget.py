@@ -70,6 +70,9 @@ INT_BANNER_TRIPLE = 3
 # this reason.
 TUPLE_SCOPE1_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
 TUPLE_SCOPE1_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+TUPLE_YAML_SUFFIXES = (".yaml", ".yml")
+TUPLE_SHELL_SUFFIXES = (".sh", ".bats", ".mk")
+TUPLE_SHELL_NAMES = ("Makefile", "Dockerfile")
 TUPLE_SCOPE1_NAMES = ("Makefile",)
 
 DICT_HASH_SUFFIXES = (
@@ -307,7 +310,115 @@ def marker_for(path_file: pathlib.Path) -> str:
     return ""
 
 
-def marker_blocks(str_source: str, str_marker: str) -> list:
+def heredoc_openers(str_line: str) -> list:
+    """Return every heredoc opened on this line, in the order their bodies follow.
+
+    Parameters
+    ----------
+    str_line : str
+        One line of a shell, YAML run block or Ruby file.
+
+    Returns
+    -------
+    list of tuple
+        ``(terminator, mode)`` per opener, mode being ``""``, ``"-"`` or ``"~"``. A ``<<``
+        inside a quoted string, after an unquoted ``#``, inside ``$(( ))`` arithmetic, or in
+        a ``<<<`` here-string is not an opener.
+    """
+    list_out = []
+    for cls_match in RE_SHELL_TOKEN.finditer(str_line):
+        if cls_match.lastgroup == "comment":
+            break
+        if cls_match.group("opener"):
+            list_out.append((cls_match.group("name"), cls_match.group("mode") or ""))
+    return list_out
+
+
+def is_terminator(str_line: str, tuple_open: tuple, str_kind: str) -> bool:
+    """Return whether a body line ends the heredoc that ``tuple_open`` opened.
+
+    Parameters
+    ----------
+    str_line : str
+        The candidate line.
+    tuple_open : tuple
+        ``(terminator, mode)``.
+    str_kind : str
+        ``heredoc_kind`` of the file.
+
+    Returns
+    -------
+    bool
+        Shell: exact for ``<<``, leading tabs stripped for ``<<-``. YAML dedents the script
+        and Ruby allows an indented terminator, so both ignore surrounding whitespace.
+    """
+    str_name, str_mode = tuple_open
+    if str_kind in ("yaml", "ruby"):
+        return str_line.strip() == str_name
+    return str_line.lstrip("\t") == str_name if str_mode == "-" else str_line == str_name
+
+
+def heredoc_lines(str_source: str, str_kind: str = "shell") -> set:
+    """Return the 1-indexed lines that are heredoc body or terminator.
+
+    A heredoc body is data a script writes out, not a comment: a ``#!`` shebang or a
+    ``# foo`` line inside one is output. Only shell, YAML and Ruby sources are scanned; a
+    ``<<`` in Python or TOML is a shift or text, and a false opener there would hide the
+    rest of the file from the ratchet. An opener whose terminator never appears is not a
+    heredoc: its lines are counted, because a false skip hides debt and a false count is
+    only noise. Several openers on one line (``cat <<A <<B``) take their bodies in order.
+
+    Parameters
+    ----------
+    str_source : str
+        The file's text.
+    str_kind : str, optional
+        ``"shell"``, ``"yaml"`` or ``"ruby"``; see ``is_terminator``.
+
+    Returns
+    -------
+    set of int
+        Lines after the opening line through the terminator, inclusive.
+    """
+    set_out: set = set()
+    list_pending: list = []
+    list_queue: list = []
+    for int_line, str_line in enumerate(str_source.splitlines(), 1):
+        if not list_queue:
+            list_queue = heredoc_openers(str_line)
+            continue
+        list_pending.append(int_line)
+        if is_terminator(str_line, list_queue[0], str_kind):
+            set_out.update(list_pending)
+            list_pending = []
+            list_queue = list_queue[1:]
+    return set_out
+
+
+def heredoc_kind(path_file: pathlib.Path) -> str:
+    """Return how a file's heredocs are scanned: ``"shell"``, ``"yaml"`` or ``""`` for none.
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The file.
+
+    Returns
+    -------
+    str
+        ``""`` for every file that is not shell, YAML or Ruby; Ruby is ``"ruby"``.
+    """
+    if path_file.suffix in TUPLE_YAML_SUFFIXES:
+        return "yaml"
+    if path_file.suffix == ".rb":
+        return "ruby"
+    bool_shell = path_file.suffix in TUPLE_SHELL_SUFFIXES or path_file.name.startswith(
+        TUPLE_SHELL_NAMES
+    )
+    return "shell" if bool_shell else ""
+
+
+def marker_blocks(str_source: str, str_marker: str, str_heredoc: str = "") -> list:
     """Return consecutive comment-line runs, pragma and structural lines excluded.
 
     ⚠️ A pragma or structural line does not just fail to COUNT — it BREAKS the
@@ -322,6 +433,8 @@ def marker_blocks(str_source: str, str_marker: str) -> list:
         The file's text.
     str_marker : str
         ``"#"`` or ``"//"``.
+    str_heredoc : str, optional
+        ``heredoc_kind`` of the file; empty skips no heredoc.
 
     Returns
     -------
@@ -332,9 +445,10 @@ def marker_blocks(str_source: str, str_marker: str) -> list:
     list_out: list = []
     list_block: list = []
     int_start = 0
+    set_data = heredoc_lines(str_source, str_heredoc) if str_heredoc else set()
     for int_line, str_line in enumerate(str_source.splitlines(), 1):
         str_stripped = str_line.lstrip()
-        if not str_stripped.startswith(str_marker):
+        if int_line in set_data or not str_stripped.startswith(str_marker):
             list_block = _flush_block(list_out, int_start, list_block)
             continue
         str_content = str_stripped[len(str_marker) :]
@@ -583,7 +697,7 @@ def blocks_for(path_file: pathlib.Path, str_source: str, str_marker: str) -> lis
         return python_blocks(str_source)
     if path_file.suffix == ".css":
         return comment_blocks(str_source, str_marker)
-    return marker_blocks(str_source, str_marker)
+    return marker_blocks(str_source, str_marker, heredoc_kind(path_file))
 
 
 def file_problems(path_file: pathlib.Path) -> list:
@@ -701,6 +815,12 @@ RE_SLASH_TOKEN = re.compile(
     r"""'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`[^`]*`|//[^\n]*|/\*.*?\*/""", re.DOTALL
 )
 RE_DASH_TOKEN = re.compile(r"""'(?:[^']|'')*'|"[^"]*"|--[^\n]*""")
+RE_SHELL_TOKEN = re.compile(
+    r"""(?P<quoted>'[^']*'|"(?:\\.|[^"\\])*")"""
+    r"""|(?P<comment>(?<![^\s;&|()<>])\#.*)"""
+    r"""|(?P<arith>\$\(\(.*?\)\))"""
+    r"""|(?P<opener>(?<!<)<<(?!<)(?P<mode>-|~)?[ \t]*(?P<q>["']?)(?P<name>[A-Za-z_]\w*)(?P=q))"""
+)
 RE_SHA_PIN = re.compile(r"@[0-9a-f]{40}\b")
 RE_VERSION_NOTE = re.compile(r"^\s*v?\d+(\.\d+)*\S*\s*$")
 
@@ -739,7 +859,7 @@ def scan_comments(str_source: str, str_marker: str) -> list:
     return list_out
 
 
-def counted_comments(str_source: str, str_marker: str) -> list:
+def counted_comments(str_source: str, str_marker: str, str_heredoc: str = "") -> list:
     """Return the comment lines that count: every one outside the allowlist.
 
     Parameters
@@ -748,6 +868,8 @@ def counted_comments(str_source: str, str_marker: str) -> list:
         The file's text.
     str_marker : str
         ``"#"`` or ``"//"``.
+    str_heredoc : str, optional
+        ``heredoc_kind`` of the file; empty skips no heredoc.
 
     Returns
     -------
@@ -757,10 +879,12 @@ def counted_comments(str_source: str, str_marker: str) -> list:
     """
     tuple_allowlist = load_allowlist()
     list_lines = str_source.split("\n")
+    set_data = heredoc_lines(str_source, str_heredoc) if str_heredoc else set()
     return [
         (int_line, str_text)
         for int_line, str_text in scan_comments(str_source, str_marker)
-        if not line_breaks_run(int_line, str_marker + str_text, str_text, tuple_allowlist)
+        if int_line not in set_data
+        and not line_breaks_run(int_line, str_marker + str_text, str_text, tuple_allowlist)
         and not (RE_SHA_PIN.search(list_lines[int_line - 1]) and RE_VERSION_NOTE.match(str_text))
     ]
 
@@ -787,7 +911,7 @@ def comment_line_count(path_file: pathlib.Path) -> int:
         return 0
     if path_file.suffix == ".py":
         return sum(len(list_lines) for _, list_lines in python_blocks(str_source))
-    return len(counted_comments(str_source, str_marker))
+    return len(counted_comments(str_source, str_marker, heredoc_kind(path_file)))
 
 
 def shown_path(path_file: pathlib.Path) -> str:
