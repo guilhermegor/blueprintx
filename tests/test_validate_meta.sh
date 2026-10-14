@@ -1,18 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/ci/validate_meta.sh (blueprintx#407).
-#
-# validate_meta.sh runs in the `validate-meta` CI job, which blocks merge — and had zero
-# tests. The dangerous direction is a FALSE PASS: a skeleton.meta with a missing key, an
-# empty value, or a scaffold= path that does not exist must never reach
-# "all skeleton.meta files are valid." A control that only proves the happy path would
-# have passed against the very defect this suite exists to catch (same shape as
-# bin/ci/check_git_remote_guard.sh).
-#
-# validate_meta.sh derives REPO_ROOT from its own script path (two dirs up), so each case
-# runs it from an isolated sandbox root (its own bin/ci/validate_meta.sh copy + templates/)
-# rather than touching the real templates/ tree.
-#
-# Usage: bash tests/test_validate_meta.sh
 
 set -euo pipefail
 
@@ -33,13 +19,6 @@ base_value() {
 }
 
 make_sandbox() {
-    # Prints the path of a fresh fake repo root: a copy of the real validate_meta.sh under
-    # bin/ci/, an empty templates/ dir for the caller to drop a skeleton.meta into, and a
-    # root CLAUDE.md that already mentions "fake-skeleton" — every EXISTING test below
-    # writes its skeleton.meta under templates/fake-skeleton/, so without this the new
-    # blueprintx#478 documentation check would fail all of them for an unrelated reason.
-    # test_skeleton_not_documented_in_claude_md is the one test that overwrites this file
-    # with a CLAUDE.md that does NOT mention the skeleton, to prove that check fires.
     local str_root
     str_root="$(mktemp -d)"
     mkdir -p "$str_root/bin/ci" "$str_root/templates"
@@ -49,7 +28,6 @@ make_sandbox() {
 }
 
 write_meta() {
-    # $1 = sandbox root, $2.. = "key=value" lines to write verbatim into one skeleton.meta.
     local str_root="$1"
     shift
     mkdir -p "$str_root/templates/fake-skeleton"
@@ -57,14 +35,6 @@ write_meta() {
 }
 
 expect_gate() {
-    # $1 = description, $2 = sandbox root (consumed + removed), $3 = expected pass|fail,
-    # $4 = OPTIONAL diagnostic that must appear in the gate's output when $3 is "fail".
-    #
-    # ⚠️ $4 is what makes a failing case mean anything. A non-zero exit alone is NOT proof
-    # that the intended check ran: under `set -euo pipefail` a missing key used to kill the
-    # gate inside its own grep pipeline, exiting 1 with an EMPTY message, so every
-    # missing-key case reported "fail" against a gate whose required-field check had been
-    # skipped entirely — and would have kept reporting "fail" with that check deleted.
     local str_desc="$1" str_root="$2" str_want="$3" str_needle="${4:-}" str_got="pass" str_out
     str_out="$(bash "$str_root/bin/ci/validate_meta.sh" 2>&1)" || str_got="fail"
     rm -rf "$str_root"
@@ -80,8 +50,6 @@ expect_gate() {
 }
 
 test_valid_meta_passes() {
-    # Control case: without it, the three failing cases below would pass even against a
-    # gate that rejects everything.
     local str_root
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/bin/scaffold"
@@ -112,7 +80,6 @@ test_missing_key() {
 }
 
 test_empty_value() {
-    # ⚠️ Distinct from a missing key: the key line IS present, just with nothing after `=`.
     local str_field str_other str_root
     for str_field in "${REQUIRED_FIELDS[@]}"; do
         local -a list_lines=()
@@ -133,8 +100,6 @@ test_empty_value() {
 }
 
 test_missing_scaffold_path() {
-    # scaffold= resolves, but nothing exists at that path — deliberately do NOT seed
-    # bin/scaffold/ in this sandbox.
     local str_root
     str_root="$(make_sandbox)"
     write_meta "$str_root" \
@@ -147,8 +112,6 @@ test_missing_scaffold_path() {
 }
 
 test_skeleton_not_documented_in_claude_md() {
-    # blueprintx#478: a skeleton.meta valid on every other axis must still fail if its own
-    # directory name is absent from the root CLAUDE.md — the exact gap ts-lib shipped with.
     local str_root
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/bin/scaffold"
@@ -158,8 +121,6 @@ test_skeleton_not_documented_in_claude_md() {
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
         "scaffold=$(base_value scaffold)"
-    # Overwrite make_sandbox's default CLAUDE.md (which names "fake-skeleton") with one
-    # that documents something else entirely.
     printf '# CLAUDE.md\n\nNothing about this skeleton here.\n' > "$str_root/CLAUDE.md"
     expect_gate "skeleton undocumented in CLAUDE.md" "$str_root" "fail" \
         "skeleton 'fake-skeleton' is not mentioned in CLAUDE.md"

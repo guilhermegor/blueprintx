@@ -137,6 +137,14 @@ GitHub Actions cannot read it — it is only the source you `gh secret set` from
 4. Verify: `gh secret list --repo guilhermegor/blueprintx` shows an updated timestamp for
    `<NAME>`, and the workflow that consumes it succeeds on its next run.
 
+`.env.example` keeps placeholders only, never real values. Leave `APT_GPG_PASSPHRASE` empty
+when the key has no passphrase, and never leave placeholder text there. Wrap a real value in
+single quotes so `$` and backticks survive sourcing. `APT_GPG_PRIVATE_KEY` is a multi-line
+armored block: keep the single quotes and paste the whole block, header and footer included;
+it needs a bash-style `source`, not a strict dotenv parser. `SNAPCRAFT_STORE_CREDENTIALS` is
+the file written by `snapcraft export-login credentials.txt`; the publish step fails without
+it rather than exiting 0.
+
 ## Cross-Language Quality Parity
 
 BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality
@@ -551,6 +559,130 @@ hand-copies the updated template files. Before adopting the new `mkdocs.yml` and
    ledger gate now shares the grammar of `check_specs_structure.sh`.
 3. A branch already in flight with an old-path ledger needs it moved too; there is no
    transitional acceptance.
+
+## Repository tooling notes
+
+Configuration files in this repository carry no comments, so the reasoning lives here.
+
+- **`.cz.toml`.** Commitizen configuration moved out of `pyproject.toml` in #233: the root
+  manifest is docs-only, and the file name matches the one shipped to every generated Python
+  project. Losing it does not error: `cz` falls back to defaults and exits 0 (`cz version
+  --project` prints "No project information in this project."), so the symptom is an
+  unprefixed tag and a different changelog format, not a red check. `version_provider =
+  "poetry"` locates the manifest by project root, and that value is the `0.0.0` stub that
+  `bin/ci/check_version_sync.sh` pins; the real version is the git tag. Releases are cut by
+  tagging, and `cz changelog` (`make changelog`) groups commits by tag into the root
+  `CHANGELOG.md`, which the docs Changelog page includes. Never hand-edit that file.
+- **`pyproject.toml`** is a stub that exists to drive the docs site; do not hand-bump it.
+- **`.gitlint`.** Commitizen enforces the Conventional Commits format at `commit-msg`;
+  gitlint owns the length limits, written out so the contract is explicit.
+- **`.codespellrc`.** `*-lessons.md` is skipped because the capture workflow writes
+  git-ignored lessons mirrors under `.specs/_lessons/` and codespell scans the whole tree;
+  the glob matches the basename because a `docs/`-anchored pattern fails under
+  `codespell .`. Write every `ignore-words-list` entry in lowercase: codespell lowercases the
+  word before lookup, so a capitalised entry matches only itself. Each surviving entry was
+  measured (#197): remove it, run `codespell docs/ templates/ --config=.codespellrc`, and
+  keep it only if that produces a finding. The list must stay in sync with
+  `templates/python-common/.codespellrc` (`check_codespell_sync.sh`), because the two drifted
+  in both directions and the stale copy was the one that ships.
+- **`.gitleaks.toml`.** Scans this repository's own history, separate from the config shipped
+  to generated projects. It extends the default ruleset and adds only narrow allowlists for
+  measured false positives. The model-identifier allowlist uses `regexTarget = "match"` and
+  an anchored regex ending in `\W*`: the match carries the closing delimiter, which is a
+  double quote in Python but a backtick in the markdown ledgers, and an unanchored form also
+  silenced any longer finding containing the string (a high-entropy token wrapped around it
+  scored 1 finding without the allowlist and 0 with the unanchored one).
+- **`.gitignore`.** Generated from the toptal Python template, plus: template paths under
+  `templates/` must always be tracked even where they match general Python patterns;
+  `.claude/` runtime files are ignored except `release.conf`, which declares the shipped
+  paths for the release tooling, so the negation must follow the directory ignore; the
+  generated lessons mirror directory is ignored as a whole so a new store cannot arrive
+  untracked; the generated changelog is regenerated and never committed.
+- **`.pre-commit-config.yaml`.** A local mirror of Scaffold Checks CI, separate from the
+  pre-commit that ships to generated projects. Repo-local hooks call the same `bin/ci/*.sh`
+  scripts as CI, so there is no drift. `default_stages: [pre-commit]` is required: without it
+  a hook with no `stages:` also runs at `commit-msg`, doubling `mkdocs build --strict` and
+  the codespell scan on every commit (#158). The large-file cap is 1000 KB because the
+  committed lockfiles are real (`ts-common` about 596 KB, `ts-lib` about 908 KB). JSONC
+  files (`.vscode/`, `tsconfig*`) skip the strict JSON parser, and `--unsafe` on the YAML
+  check admits workflow `!reference` tags. Layers: generic hygiene, then Conventional Commits
+  at `commit-msg`, then the shared gates. Gates that run over this repo with `--root .`
+  follow the one-implementation rule; diff-scoped gates (`gate-integrity`, the PR file-count
+  ceiling) compare against `merge-base(HEAD, main)` because they check a delta. The
+  complexity gate runs twice, the second time scoped to `templates/python-common`, which
+  catches a template defect in about 3 seconds instead of in a five-tier CI matrix (measured on
+  the two issues 270 and 271). Function length is not duplicated, since its discovery already walks the whole root.
+- **`quality-rules.yaml`.** Machine-readable registry of the quality rules, validated by
+  `templates/python-common/bin/check_quality_rules.py`; the reasoning per rule is in
+  `docs/quality-rules.md`. YAML because it needs comments (#432). Each rule has `id` (a
+  stable slug, also the docs anchor), `intent` (the construct prohibited or required, never a
+  number, so a Python ceiling of 2 and a TypeScript ceiling of 3 satisfy one intent, #425),
+  `docs` (an anchor that must resolve to a real heading) and one block per language a
+  `skeleton.meta` declares. Omission is forbidden (#430): a language without an
+  implementation says `status: not-implemented`, or `overridden_by: <standard>`, both with a
+  `note`. Optional `file` and `pattern` make the gate grep a plain substring in the real tool
+  config, so drift is caught.
+- **`.review-bots.yaml`.** The reviewer roster `check_review_threads.py` reads; the gate's
+  logic names no tool, so swapping a reviewer is a row here. Reviewer shapes differ: some
+  post inline threads, some only a status check. `posts:` is required on every row and
+  decides more than authorship (#218): a `posts: status` member is excluded from the
+  missing-review gate too, otherwise a workflow submitting a review with `GITHUB_TOKEN` would
+  satisfy a gate meant to prove a real reviewer looked. A missing or misspelled `posts:`
+  fails loudly, at least one `threads` member is required, and zero threads is judged against
+  a submitted review, never silence (see Decision records). Delete the file to opt out.
+- **`Makefile` and `tasks.sh`.** `install` runs from a clone with no `.git` at the install
+  path, so it stamps the clone's `git describe` version into the installed script, matching
+  the package-manager jobs. The deprecated `dev-clean`, `dry-run` and `mkdocs_server` aliases
+  (#365) stay for one tagged release; the pairing gate normalises `-` and `_`, so they need no
+  `tasks.sh` or `help.sh` entry. `verify_tiers` is the real check for template work: it
+  scaffolds every Python tier and runs that project's lint and tests, in parallel, and
+  `make lint` does not cover it (#276). `tasks.sh` translates `JOBS` to `--jobs` so both
+  entry points honour it; it used to forward only positional arguments and ran at full
+  concurrency while `bin/help.sh` promised serial (#277). An explicit `--jobs` wins.
+- **`requirements.txt`.** The `poetry-plugin-shell` plugin restores `poetry shell`, which
+  Poetry 2.x dropped. It belongs in this bootstrap install, into the interpreter Poetry runs
+  from, because as a project dependency it would reach `.venv`, where no Poetry exists to
+  load it.
+- **`mkdocs.yml`.** `exclude_docs` keeps `superpowers/` (internal specs and plans) out of
+  the built site; the snippets extension enables the Changelog page's include of the root
+  file.
+- **Packaging.** `Formula/blueprintx.rb` installs `bin/` and `templates/` under `libexec` so
+  `SCRIPT_DIR`-based navigation resolves `BLUEPRINTX_ROOT` without patching, and its wrapper
+  uses `exec` so `BASH_SOURCE` resolves to `libexec/bin`. Each package stamps the release
+  version into the fallback literal, since none has a `.git`.
+
+## Shell test suites under `tests/`
+
+Each `tests/test_*.sh` is a should-fail regression suite for a gate or script. Shared
+conventions, which the suites no longer repeat in headers:
+
+- The dangerous direction is a **false pass**, so every refusal is asserted by the diagnostic
+  that names the cause, not by a bare non-zero exit, which a crash produces too. Every rule
+  also has a control case that passes: without it a gate that rejects everything satisfies
+  the suite.
+- A gate with a filesystem interface is run from an isolated sandbox root (a copy of the
+  script plus fixtures), because it derives `REPO_ROOT` from its own location. A gate whose
+  interface is `gh` runs against a stub `gh` first on `PATH`, driven by environment switches,
+  so no suite needs the network or a token. A gate whose interface is git runs against a real
+  throwaway repository rather than a mocked git.
+- Suites that run as a pre-commit hook scrub `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE`:
+  the hook points them at the host repository, and a sandbox `git commit` would otherwise
+  rewrite the branch being committed (measured on a scaffold started by that hook, #629).
+- Vacuous loops fail: a gate or suite that matched zero items must not pass.
+- Cases pinned by specific incidents: `check_pr_file_count` charges a mid-merge index only
+  for the branch's own files, including every `MERGE_HEAD` of an octopus merge (186 reported
+  versus 69 real) and still fails 91 own files (#560); `check_precommit_ci_parity` must not
+  count a workflow that mentions a script only in a comment, and validates its exemption file
+  even when no mismatch needs it; `check_docs_boundary` has symlink-loop and unreadable
+  directory cases that used to report a clean pass for having checked nothing, and asserts it
+  never descends into `templates/` (#576); `check_pr_template` runs against the real
+  template, so an edit the gate cannot follow fails there (#672 and #706 are its parser
+  cases); `check_specs_structure` runs the project-layout copy with no `--root` from an
+  unrelated cwd (#696); `test_spec_answers.sh` pins that `api-service-native-db` borrows the
+  DDD key map only while both scaffolds ask the same prompts in the same order (#668);
+  `promote_offline_to_online` keeps its fake `gh` ahead of the real one so a regression
+  can never reach `gh repo create` with real credentials, and requires the GitGuardian key to
+  exist before the push that triggers the secret scan.
 
 ## Best Practices
 

@@ -1,31 +1,4 @@
 [codespell]
-# *-lessons.md are the git-ignored scaffolding-lessons mirrors the capture workflow writes
-# (under .specs/_lessons/, e.g. blueprintx-lessons.md). codespell scans the whole tree, so
-# without this skip, writing a lesson flags the mirror and aborts an unrelated staged commit — a
-# file the workflow writes but git ignores must be skipped here.
-# ⚠️ BASENAME glob on purpose: a `docs/`-anchored pattern fails under `codespell .` (paths come
-# back as `./docs/…`). The basename form matches under every invocation style.
 skip = *.png,*.svg,*.ico,*.jpg,*.json,*.lock,*.po,*.pyc,*-lessons.md
 quiet-level = 3
-# ⚠️ WRITE EVERY ENTRY IN LOWERCASE. codespell lowercases the word it found before looking it
-# up, so a lowercase entry covers `classe`/`Classe`/`CLASSE`, while a CAPITALISED entry matches
-# only that exact casing. Measured the hard way: de-duplicating this list kept `Classe` and
-# dropped `classe`, and the lowercase word was immediately flagged again. The old `Classe,classe`
-# pairs were working around this — one lowercase entry replaces both.
-#
-# Kept in SYNC with templates/python-common/.codespellrc — the two drifted in BOTH directions
-# (30 words missing there, 25 missing here), and the copy that ships into new projects was the
-# stale one, so every scaffolded project inherited the older vocabulary. When a failed commit
-# teaches this repo a word, it must land in both files.
-#
-# Pruned in #197: each entry below was measured, not judged — remove it, run
-# `codespell docs/ templates/ --config=.codespellrc`, and keep it only if that produces a
-# finding. 67 pt-BR entries produced zero findings post-#195 (the repo prose they protected is
-# gone) and were dropped. These 27 survive because something IN THE TREE TODAY still needs
-# them: historical docs/backlog/*.md records quoting an older ignore-words-list or an old bug
-# verbatim (do not edit — CLAUDE.md forbids rewriting a closed backlog file), an ongoing
-# pt-BR-language backlog ledger, `templates/python-common/bin/check_comment_language.py`'s own
-# pt-BR detection dictionary (`ser`, `vai`), a Brazilian-locale UI string sample in
-# `templates/react-spa-webpack/.../ui.md` (`nome`), and `NotIn` (an ast operator name, not
-# locale) in `check_assertion_weakening.py`.
 ignore-words-list = nd,fpr,strat,enty,filetest,nome,zar,fro,hsi,wege,smll,classe,erro,serie,emiss,termo,indx,atual,nomes,caracteres,caractere,prefere,meu,ser,vai,sinal,notin,mis,falso,unparseable

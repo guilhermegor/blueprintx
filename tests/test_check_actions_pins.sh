@@ -1,13 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for check_action_pins in bin/ci/check_actions.sh (blueprintx#369).
-#
-# The gate's only interface is a workflow file, so each case writes a real one into a
-# throwaway directory and runs the function over it. A tag reference must fail NAMING the
-# file, line and reference (a crash also exits non-zero); a full-SHA reference with its
-# version comment must pass; a SHA without the comment must fail, because that is the
-# shape Dependabot cannot bump.
-#
-# Usage: bash tests/test_check_actions_pins.sh
 
 set -euo pipefail
 
@@ -18,8 +9,6 @@ GATE="$REPO_ROOT/bin/ci/check_actions.sh"
 
 int_failures=0
 
-# Loads the gate's functions without running main: everything after the `main "$@"` line is
-# dropped, and `set -e` inside the sourced text is neutralised by running in a subshell.
 run_pin_check() {
 	local str_file="$1"
 	(
@@ -46,7 +35,6 @@ EOF
 }
 
 expect_gate() {
-	# $1 = description, $2 = expected pass|fail, $3 = needle that must appear, $4 = uses: value.
 	local str_desc="$1" str_want="$2" str_needle="$3" str_file str_got="pass" str_out
 	str_file="$(write_workflow "$4")"
 	str_out="$(run_pin_check "$str_file")" || str_got="fail"

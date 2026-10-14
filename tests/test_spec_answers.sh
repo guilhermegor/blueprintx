@@ -1,22 +1,9 @@
 #!/bin/bash
-# Should-fail regression tests for the --spec flow (blueprintx#629, after #525/#481).
-#
-# Each case guards one defect that shipped in #525 and was found only after merge:
-#   - spec_yn turned any unrecognised value (a typo such as `yse`) into "n";
-#   - `--spec` returned before the --dev / --clean branch, so both flags were ignored;
-#   - a skeleton with no prompt map ran its scaffold with interactive prompts.
-# The dangerous direction is a FALSE PASS, so every refusal is asserted by the message that
-# names the cause, not by a bare nonzero exit (which also describes a crash).
-#
-# Usage: bash tests/test_spec_answers.sh
 
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# git exports GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE to a pre-commit hook. A scaffold runs
-# `git init` + `git commit`, which would then act on the CALLER'S repository: measured, a
-# scaffold started by this very hook rewrote the branch being committed. Clear every one.
 while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
 
 WORK_DIR="$(mktemp -d)"
@@ -30,8 +17,6 @@ fail() {
 }
 
 write_spec() {
-    # write_spec <name> <skeleton> [extra key=value lines...]; prints the file path.
-    # The language defaults to python; set SPEC_LANGUAGE for a non-Python skeleton.
     local name="$1" skeleton="$2"
     local file="$WORK_DIR/$name.spec"
     shift 2
@@ -44,12 +29,10 @@ write_spec() {
 }
 
 run_blueprintx() {
-    # run_blueprintx <args...>: stdin closed, run from the sandbox, temp roots confined to it.
     (cd "$WORK_DIR" && TMPDIR="$WORK_DIR" bash "$REPO_ROOT/bin/blueprintx.sh" "$@" 2>&1 </dev/null)
 }
 
 yn_in_subshell() {
-    # yn_in_subshell <file> <key> <default>: prints "<stdout>|<status>|<stderr>".
     bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
         out="$(spec_yn "$2" "$3" "$4" 2>"$5")"; echo "$out|$?|$(cat "$5")"' _ \
         "$REPO_ROOT" "$1" "$2" "$3" "$WORK_DIR/yn.err"
@@ -124,14 +107,10 @@ test_unmapped_skeleton_is_refused_before_creating_anything() {
 }
 
 prompt_sequence() {
-    # prompt_sequence <scaffold script>: the prompt calls main() makes, in order.
     grep -E '^    (prompt_[a-z_]+|scaffold_prompt_review_bot_roster)$' "$1" | tr -d ' '
 }
 
 test_api_service_asks_the_same_prompts_as_the_ddd_tiers() {
-    # api-service-native-db borrows the DDD key map (blueprintx#668). That is only correct
-    # while the two scaffolds ask the same prompts in the same order, so pin the claim: a
-    # prompt added to one script must fail here rather than misalign every stored answer.
     local str_api str_ddd
     str_api="$(prompt_sequence "$REPO_ROOT/bin/scaffold/python_api_service.sh")"
     str_ddd="$(prompt_sequence "$REPO_ROOT/bin/scaffold/python_ddd_service.sh")"
@@ -143,8 +122,6 @@ test_api_service_asks_the_same_prompts_as_the_ddd_tiers() {
 }
 
 test_api_service_storage_answer_reaches_the_storage_prompt() {
-    # The point of the map: storage=y must land on the SECOND line the scaffold reads
-    # (after docker_compose), exactly as for the DDD tiers.
     local file str_stream
     file="$(write_spec api-storage api-service-native-db "storage=y")"
     str_stream="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
@@ -200,9 +177,7 @@ test_bad_docs_locale_stops_before_anything_is_created() {
     fi
 }
 
-# Reads the generated mkdocs.yml: the placeholder only renders when DOCS_LOCALE reaches the scaffold.
 spec_docs_language() {
-    # spec_docs_language <name> [extra spec lines...]; prints the `language:` the project got.
     local name="$1" file out str_temp
     shift
     file="$(write_spec "$name" lib-minimal "$@")"
@@ -246,9 +221,6 @@ test_spec_values_are_trimmed_so_a_crlf_spec_works() {
 
 test_yn_keys_read_by_callers_match_the_key_map() {
     local str_called str_mapped str_unparsed
-    # A call site the sed below cannot read (a variable default, two calls on one line) would
-    # escape the comparison, so any such line fails the test. The validator's generic call is
-    # the one allowed exception.
     str_unparsed="$(grep -n 'spec_yn "\$' "$REPO_ROOT/bin/lib/spec.sh" \
         | grep -vE '^[0-9]+:[[:space:]]*#' \
         | grep -v '"\$key" "\$default"' \
@@ -258,9 +230,7 @@ test_yn_keys_read_by_callers_match_the_key_map() {
         fail "key map vs callers" "call site(s) the check cannot parse: $str_unparsed"
         return
     fi
-    # Every `spec_yn "$x" <key> <default>` call site in the answer emitters, as "key:default".
     str_called="$(sed -n '/^[[:space:]]*#/d; s/.*spec_yn "\$[a-z0-9]*" \([a-z_]*\) \([yn]\).*/\1:\2/p' "$REPO_ROOT/bin/lib/spec.sh" | sort -u)"
-    # Every y/n entry of the key map across all supported skeletons.
     str_mapped="$(bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
         for sk in $_SPEC_SUPPORTED_SKELETONS; do _spec_key_map "$sk"; done' _ "$REPO_ROOT" \
         | grep -E ':[yn]$' | sort -u)"
@@ -297,7 +267,6 @@ test_every_python_tier_has_a_prompt_map() {
             str_res+="$str_name (${str_err:-not in the supported list}) "
         fi
     done
-    # Zero matches would make the loop vacuous: a gate that checked nothing must not pass.
     if [ "$int_tiers" -eq 0 ]; then
         fail "no Python tier found" "templates/*/skeleton.meta matched no language=python"
     elif [ -z "${str_res:-}" ]; then

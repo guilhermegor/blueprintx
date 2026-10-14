@@ -1,16 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/ci/check_pr_template.sh (blueprintx#587).
-#
-# The dangerous direction is a FALSE PASS: a body missing a heading, holding an empty
-# section, naming a heading only in prose, or leaving the template's text in place must
-# never reach "matches the template layout". Each rule therefore has a violating case that
-# must fail NAMING the element, and a legitimate case that must pass — a gate that only
-# proves one direction is either noise or blind.
-#
-# The cases run against the REAL .github/PULL_REQUEST_TEMPLATE.md, so a template edit that
-# the gate cannot follow fails here rather than in somebody's PR.
-#
-# Usage: bash tests/test_check_pr_template.sh
 
 set -euo pipefail
 
@@ -21,7 +9,6 @@ source "$REPO_ROOT/bin/lib/common.sh"
 GATE="$REPO_ROOT/bin/ci/check_pr_template.sh"
 int_failures=0
 
-# A body that satisfies every mandatory element, with the conditional ones left out.
 good_body() {
     cat <<'EOF'
 ## Description
@@ -58,9 +45,6 @@ EOF
 }
 
 expect_gate() {
-    # $1 = description, $2 = body text, $3 = pass|fail, $4 = optional needle for fail,
-    # $5 = optional author. ⚠️ The needle is what makes a failing case mean anything: a
-    # non-zero exit alone does not prove the intended rule fired.
     local str_desc="$1" str_body="$2" str_want="$3" str_needle="${4:-}" str_author="${5:-}"
     local str_got="pass" str_out path_body
     path_body="$(mktemp)"
@@ -79,8 +63,6 @@ expect_gate() {
 }
 
 without() {
-    # Prints good_body minus every line from the one matching $1 up to (not including) the
-    # next line matching $2.
     good_body | awk -v from="$1" -v to="$2" '
         $0 ~ from { skipping = 1; next }
         skipping && $0 ~ to { skipping = 0 }
@@ -88,9 +70,6 @@ without() {
 }
 
 with_not_applicable() {
-    # stdin: a body. Adds **Not Applicable**: (+ optional $1 line) right after the Automated
-    # Testing content, where the template puts it: fields are keyed by section, so placement
-    # matters.
     awk -v txt="$1" '
         { print }
         /^- tests\/test_check_pr_template.sh/ {
@@ -199,8 +178,6 @@ test_optional_field_left_as_template_text_fails() {
 }
 
 test_automated_testing_left_as_template_text_fails() {
-    # blueprintx#672: the old parser credited **Not Applicable** text to the open ### too, so
-    # an Automated Testing left verbatim stopped matching the template and counted as filled.
     local str_body str_tpl
     str_tpl="$(awk '/^### Automated Testing/ { f = 1; next } /^\*\*Not Applicable/ { f = 0 } f' \
         "$REPO_ROOT/.github/PULL_REQUEST_TEMPLATE.md")"
@@ -211,8 +188,6 @@ test_automated_testing_left_as_template_text_fails() {
 }
 
 test_structural_label_kept_with_real_bullets_passes() {
-    # The template expects `- **CI (this PR)**:` to stay, followed by real content; a label
-    # line is structure, not filler, so keeping it verbatim must not read as a placeholder.
     local str_body
     str_body="$(good_body | sed 's/^- tests\/test_check_pr_template.sh\./- **CI (this PR)**:\n    - `pr-template`: passes on this body./')"
     expect_gate "Automated Testing keeps the CI (this PR) label above real bullets" "$str_body" pass
@@ -269,7 +244,6 @@ test_bold_label_variants_are_accepted() {
 }
 
 test_trailing_top_level_section_is_not_a_silent_exit() {
-    # The CodeRabbit summary shape: its last real line has no parent section (blueprintx#706).
     expect_gate "body ending in an extra top-level ## section" \
         "$(good_body)"$'\n\n## Summary by CodeRabbit\n* **Bug Fixes**\n  * A real line.' pass
 }

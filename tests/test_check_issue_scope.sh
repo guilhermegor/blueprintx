@@ -1,16 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/ci/check_issue_scope.py (blueprintx#314).
-#
-# The gate blocks a PR — it must never report a false PASS (a violation that slips through)
-# and never report a false UNKNOWN-as-pass (an unreadable API silently treated as "no
-# violation found"). Both directions are exercised here, not just the happy path.
-#
-# A fake `gh` binary is put first on PATH; it prints PR_JSON / ISSUE_JSON verbatim for
-# `gh pr view` / `gh api`, or fails when GH_FAIL_ON names the subcommand — the script under
-# test is otherwise fully env-driven (GITHUB_REPOSITORY, PR_NUMBER), so no sandbox checkout is
-# needed.
-#
-# Usage: bash tests/test_check_issue_scope.sh
 
 set -euo pipefail
 
@@ -52,7 +40,6 @@ FAKE_GH
 }
 
 expect_gate() {
-    # $1 = description, $2 = expected pass|fail, $3 = needle that must appear in the output.
     local str_desc="$1" str_want="$2" str_needle="$3" str_got="pass" str_out str_fake_bin
     str_fake_bin="$(make_fake_gh)"
     str_out="$(PATH="$str_fake_bin:$PATH" python3 "$REPO_ROOT/bin/ci/check_issue_scope.py" 2>&1)" \
@@ -119,8 +106,6 @@ test_empty_surface_block_is_undeclared_not_empty_declaration() {
 }
 
 test_comment_only_surface_block_is_undeclared() {
-    # The shape the ISSUE TEMPLATE ships. An active placeholder pattern here would put every
-    # real file outside the surface and fail every templated issue's PR.
     export GITHUB_REPOSITORY="o/r" PR_NUMBER="8"
     export PR_JSON='{"files":[{"path":"anything.py"}],"closingIssuesReferences":[{"number":314}],"commits":[{"messageBody":""}]}'
     export ISSUE_JSON='{"body":"```surface\n# path/to/file/or/dir/** — replace this line\n```"}'

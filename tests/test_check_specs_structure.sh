@@ -1,12 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/ci/check_specs_structure.sh (blueprintx#447, #583).
-#
-# The dangerous direction is a FALSE PASS, so every refusal is asserted by the diagnostic that
-# names the cause, not by a bare non-zero exit (a crash exits non-zero too), and every rule has
-# a control case that passes: without it a gate that rejects everything would satisfy the suite.
-# Each case runs the real script against an isolated fixture tree through `--root`.
-#
-# Usage: bash tests/test_check_specs_structure.sh
 
 set -euo pipefail
 
@@ -18,7 +10,6 @@ GATE="$REPO_ROOT/bin/ci/check_specs_structure.sh"
 int_failures=0
 
 make_tree() {
-    # Prints a fresh fake repo root holding a valid .specs/ (CLAUDE.md + features/).
     local str_root
     str_root="$(mktemp -d)"
     mkdir -p "$str_root/.specs/features"
@@ -27,7 +18,6 @@ make_tree() {
 }
 
 expect() {
-    # $1 = description, $2 = tree root (consumed), $3 = pass|fail, $4 = diagnostic a failure must say.
     local str_desc="$1" str_root="$2" str_want="$3" str_needle="${4:-}" str_got="pass" str_out
     str_out="$(bash "$GATE" --root "$str_root" 2>&1)" || str_got="fail"
     rm -rf "$str_root"
@@ -41,7 +31,6 @@ expect() {
 }
 
 feature() {
-    # feature <root> <name> [file...]: a features/<name>/ directory holding the named files.
     local str_root="$1" str_name="$2"
     shift 2
     mkdir -p "$str_root/.specs/features/$str_name"
@@ -213,7 +202,6 @@ test_backlog_rules() {
 }
 
 test_shipped_skeleton_passes() {
-    # The tree every scaffold copies (blueprintx#446): the gate must accept what BlueprintX ships.
     local str_root
     str_root="$(mktemp -d)"
     cp -r "$REPO_ROOT/templates/common/.specs" "$str_root/.specs"
@@ -225,8 +213,6 @@ test_shipped_skeleton_passes() {
 }
 
 run_default_root() {
-    # Runs the project-layout copy of the gate with no --root, from an unrelated cwd, so a
-    # cwd-derived default would pass where a script-location-derived one fails.
     (cd / && bash "$1/bin/check_specs_structure.sh" 2>&1)
 }
 
@@ -252,8 +238,6 @@ test_default_root_follows_the_script_location() {
 }
 
 test_default_root_from_inside_bin_ci() {
-    # `cd bin/ci && bash check_specs_structure.sh` makes $0's dirname "." — the root must still
-    # resolve to the repo, or the gate says "nothing to check" and passes (CodeRabbit, #696).
     local str_root str_out str_got="pass"
     str_root="$(mktemp -d)"
     mkdir -p "$str_root/bin/ci" "$str_root/.specs/features"

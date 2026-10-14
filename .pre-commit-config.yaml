@@ -1,30 +1,12 @@
-# Root pre-commit for the BlueprintX repo itself — a local mirror of the
-# Scaffold Checks CI (.github/workflows/scaffold_checks.yml) so the same
-# failures surface before commit/push.
-#
-# This is NOT the scaffolded-project pre-commit. That one lives at
-# templates/python-common/.pre-commit-config.yaml and ships into generated
-# projects; it is intentionally separate and untouched by this file.
-#
-# The repo-local hooks delegate to bin/ci/*.sh — the very scripts the CI jobs
-# call — so local and CI run identical logic with zero drift.
 
 default_install_hook_types:
   - pre-commit
   - commit-msg
 
-# pre-commit enlists a hook in EVERY installed hook type unless the hook declares a stage.
-# Without this line the Layer-3 hooks below — which carry `always_run: true` and no `stages:`
-# — run once on commit AND again on commit-msg: two full `mkdocs build --strict` runs, two
-# repo-wide codespell scans, per commit. The duplication is invisible in the config, because
-# the silence that correctly means "on commit" also means "on every other installed hook".
-# Same fix as templates/python-common/.pre-commit-config.yaml (#158); this config was missed.
-# Hooks that belong elsewhere still say so explicitly (`commit-msg` below).
 default_stages:
   - pre-commit
 
 repos:
-  # Layer 1 — generic hygiene (no custom logic).
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -34,22 +16,17 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
         args:
-          - --unsafe  # workflow files use custom tags (e.g. !reference)
+          - --unsafe
       - id: check-json
-        # JSONC files (comments allowed) must skip the strict JSON parser:
-        # any .vscode/ dir (incl. templates/**/.vscode/) and TypeScript tsconfig*.
         exclude: (^|/)\.vscode/|(^|/)tsconfig[^/]*\.json$
       - id: check-toml
       - id: check-merge-conflict
       - id: detect-private-key
       - id: check-added-large-files
-        # 1000: the committed lockfiles are real, not accidental binaries -- ts-common's is ~596 KB
-        # (#464), ts-lib's ~908 KB (#735). The default 500 KB cap rejected the first outright.
         args:
           - --maxkb=1000
-      - id: no-commit-to-branch  # protects main, matches CONTRIBUTING.md
+      - id: no-commit-to-branch
 
-  # Layer 2 — Conventional Commits enforcement (commit-msg stage).
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.8.3
     hooks:
@@ -64,8 +41,6 @@ repos:
         stages:
           - commit-msg
 
-  # Layer 3 — the shared bin/ci scripts the CI jobs also call. language: system
-  # + pass_filenames: false: each script runs its own full scan, matching CI.
   - repo: local
     hooks:
       - id: codespell
@@ -126,11 +101,6 @@ repos:
 
       - id: docs-gap
         name: docs gap (published pages registered in mkdocs nav + docs/CLAUDE.md index, blueprintx#340)
-        # Same ONE-implementation treatment as function-length: the shared gate in
-        # python-common, run over THIS repo via --root. always_run because removing or
-        # renaming a page is exactly the change a files: filter would never see.
-        # pathspec (mkdocs' exclude_docs matcher) and yaml are not stdlib: an isolated hook
-        # env carries them, so a contributor without them installed does not crash the commit.
         entry: python templates/python-common/bin/check_docs_gap.py --root .
         language: python
         additional_dependencies: [pathspec, pyyaml]
@@ -159,9 +129,6 @@ repos:
 
       - id: function-length
         name: function length (60 lines, docstring excluded)
-        # Runs templates/python-common/bin/check_function_length.py over THIS repo via
-        # --root, rather than keeping a second copy: bin/ci/check_codespell_sync.sh exists
-        # only because two copies of a shared asset drifted apart.
         entry: python3 templates/python-common/bin/check_function_length.py --root .
         language: system
         pass_filenames: false
@@ -169,8 +136,6 @@ repos:
 
       - id: check-comment-budget
         name: comment budget (zero tolerance ratchet, blueprintx#304)
-        # Same ONE-implementation treatment as function-length above: run over this repo
-        # via --root rather than keeping a second copy.
         entry: python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline
         language: system
         pass_filenames: false
@@ -184,11 +149,6 @@ repos:
 
       - id: check-complexity
         name: cyclomatic complexity (tests 1, src 2, bin 8)
-        # Same treatment as function-length above: ONE implementation, run over this repo via
-        # --root rather than kept as a second copy. ⚠️ BlueprintX's own tree has no src/ or
-        # tests/, so today this checks only bin/ (2 files) at the bin ceiling of 8 — the gate
-        # earns its keep here by travelling with the template it polices, not by the size of
-        # what it currently finds.
         entry: bash templates/python-common/bin/check_complexity.sh --root .
         language: system
         pass_filenames: false
@@ -196,19 +156,6 @@ repos:
 
       - id: check-complexity-templates
         name: cyclomatic complexity (templates/python-common — tests 1, src 2, bin 8)
-        # blueprintx#271: the invocation above only ever sees bin/ (2 files) because its tree
-        # discovery is a literal top-level dirname lookup (tests/, src/, bin/ under whatever
-        # --root cd's to) — BlueprintX's own root has only bin/. templates/python-common/ IS a
-        # src/ + tests/ tree, just not at the repo root, so a second invocation scoped there
-        # catches a template defect here in ~3s instead of by a 5-tier CI matrix minutes later
-        # (measured on blueprintx#270: an inner function in a test raised its complexity to 2
-        # against the tests/ ceiling of 1, invisible to `make lint`, then failed 8 CI checks).
-        # ⚠️ function-length is NOT duplicated the same way: its discovery already walks the
-        # WHOLE --root recursively (`PATH_ROOT.rglob`), so `--root .` already reaches
-        # templates/python-common/tests and .../src today — measured by planting a 66-line
-        # function there and confirming `--root .` alone reported it. A second function-length
-        # invocation would re-scan a subset of what the first already covers, for no new
-        # coverage.
         entry: bash templates/python-common/bin/check_complexity.sh --root templates/python-common
         language: system
         pass_filenames: false
@@ -216,9 +163,6 @@ repos:
 
       - id: gate-integrity
         name: gate integrity (a PR must not weaken a check without saying why)
-        # Diff-scoped against merge-base(HEAD, main) — the one gate in this family that is
-        # NOT a whole-tree audit, because what it checks is a delta (blueprintx#309). Same
-        # ONE-implementation treatment as function-length/check-complexity above.
         entry: python3 templates/python-common/bin/check_gate_integrity.py --root .
         language: system
         pass_filenames: false
@@ -226,10 +170,6 @@ repos:
 
       - id: pr-file-count
         name: PR file-count ceiling (90 files, blueprintx#551)
-        # Same diff-scoped shape as gate-integrity above: merge-base(HEAD, main), not a
-        # whole-tree audit. CodeRabbit hard-refuses to review a PR above 100 changed
-        # files, so this fails 10 files short of that at a calibrated 1%-of-100
-        # violation rate (see the script's own docstring for the full reasoning).
         entry: python3 bin/ci/check_pr_file_count.py
         language: system
         pass_filenames: false
@@ -237,10 +177,6 @@ repos:
 
       - id: check-secrets
         name: secret scan (gitleaks)
-        # Same treatment as check-complexity above: ONE implementation, run over this repo via
-        # --root rather than kept as a second copy. gitleaks resolves its own config from
-        # <root>/.gitleaks.toml, so no --config flag is needed. Resolves gracefully when
-        # gitleaks is absent locally; CI sets GITLEAKS_REQUIRED=1.
         entry: bash templates/python-common/bin/check_secrets.sh --root . --staged
         language: system
         pass_filenames: false
@@ -416,8 +352,6 @@ repos:
 
       - id: makefile-pairing
         name: Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)
-        # Root-repo-only: Makefile and tasks.sh exist ONLY here, not in templates/ or any
-        # generated project, so the script lives at bin/, not templates/python-common/bin/.
         entry: bash bin/check_makefile_pairing.sh
         language: system
         pass_filenames: false
@@ -438,11 +372,6 @@ repos:
         always_run: true
       - id: docs-code-refs
         name: docs code references (symbols + import paths, blueprintx#159)
-        # Same treatment as function-length/check-complexity above: ONE implementation, run
-        # over this repo via --root rather than kept as a second copy. BlueprintX's own root
-        # has no src/, so this always finds 0 in-scope candidates here (see the script's own
-        # module docstring) — it travels with the template it polices rather than earning its
-        # keep from what it finds on this side.
         entry: python3 templates/python-common/bin/check_docs_code_refs.py --root .
         language: system
         pass_filenames: false
@@ -450,12 +379,6 @@ repos:
 
       - id: quality-rules
         name: quality-rules.yaml validation (blueprintx#432)
-        # Same treatment as function-length/check-complexity/docs-code-refs above: ONE
-        # implementation, run over this repo via --root rather than kept as a second copy.
-        # always_run because the gate cross-references quality-rules.yaml against config
-        # files scattered across templates/ (ruff.toml, eslint.config.js, ...) plus every
-        # templates/*/skeleton.meta — narrower to a `files:` glob than that combination is
-        # worth staying correct for.
         entry: python3 templates/python-common/bin/check_quality_rules.py --root .
         language: system
         pass_filenames: false
