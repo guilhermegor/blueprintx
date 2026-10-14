@@ -124,17 +124,27 @@ not enforced.
 The expected contexts per layer are committed in `.github/required-checks.json`.
 `bin/ci/check_required_checks_sync.py` compares that file with the jobs that run on every
 PR, with no token and no secret. "Every PR" means the workflow triggers on `pull_request`
-with no `branches:`/`paths:` filter and a `types:` covering opened, reopened and
-synchronize, and the job is unconditional: it has no `if:`, or its `if:` (a surrounding
+or `pull_request_target` with no `branches:`/`paths:` filter and a `types:` (a scalar counts
+as a one-item list) covering opened, reopened and synchronize, and the job is unconditional: it has no `if:`, or its `if:` (a surrounding
 `${{ }}` is stripped) has a `||` alternative that is a bare `github.event_name ==
 'pull_request'` or `!= '<other event>'` test. Any other `if:` makes the job conditional,
 and so does a `needs:` on a conditional job. A job that only `uses:` a reusable workflow
-fails the gate loudly; list its emitted names in the policy file by hand. It fails when:
+fails the gate loudly; list its emitted names in the policy file by hand. A matrix job is
+expanded to the names GitHub reports: `${{ matrix.k }}` is interpolated, and a `name:` without
+one gets the ` (v1, v2)` suffix per combination. A matrix with `include`/`exclude` or a
+dynamic `fromJSON` one is reported as unsupported for that workflow. Duplicate or conflicting
+policy lines are rejected. It fails when:
 
-1. a required context is emitted by no such job (every PR would wait forever); or
+1. a required context is emitted by no such job; or
 2. such a job is neither required nor listed as `optional` in
    `bin/ci/required_checks_policy.txt`, which also lists the `external` contexts (CodeQL,
    GitGuardian) that have no job here. Every line carries a reason.
+
+Why the classification is conservative: only a workflow-level filter (`on.pull_request.paths`,
+`branches`, `types`) leaves a required check absent, which branch protection reads as pending
+forever. A job skipped by a job-level `if:` reports `skipped`, which counts as success. A
+conditional job is still treated as not running on every PR, because a gate that may skip is
+not one to require, and the allowlist keeps that choice visible.
 
 The JSON itself is checked against the live settings by `--live`, which needs
 Administration access (the maintainer PAT). That runs only in
@@ -145,6 +155,7 @@ and fails on `main` when protection drifted from the JSON. Changing protection t
 means editing the JSON in the same change. `tests/test_check_required_checks_sync.sh`
 holds the should-fail cases.
 
-`--live` also reads `actions/workflows` and fails when a workflow file that emits a required
+In `--live`, a workflow the gate cannot expand (an `include` matrix, `fromJSON`) is reported
+under its own file name and the other checks still run. `--live` also reads `actions/workflows` and fails when a workflow file that emits a required
 context is not `active` (disabled in the UI): the context would never report and every PR
 would deadlock.

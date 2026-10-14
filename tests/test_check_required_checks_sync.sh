@@ -140,6 +140,44 @@ fixture
 printf 'name: d\non: pull_request\njobs:\n  call:\n    uses: ./.github/workflows/x.yml\n' >"$str_tmp/wf/d.yml"
 expect "reusable-workflow job fails loudly" 1 "unsupported"
 
+fixture
+printf 'name: e\non: pull_request_target\njobs:\n  t:\n    name: Target gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/e.yml"
+expect "pull_request_target counts as a PR trigger" 1 "Target gate"
+
+fixture
+printf 'name: f\non: pull_request\njobs:\n  m:\n    name: Plain\n    runs-on: x\n    strategy:\n      matrix:\n        os: [a, b]\n    steps: []\n' >"$str_tmp/wf/f.yml"
+expected '"Lint gate", "App check", "Plain (a)", "Plain (b)"' ''
+expect "matrix name without an expression expands to one GitHub-style name (v1, v2) per combination" 0 "findings=0"
+
+fixture
+printf 'name: g\non: pull_request\njobs:\n  m:\n    name: Dyn\n    runs-on: x\n    strategy:\n      matrix: ${{ fromJSON(needs.x.outputs.m) }}\n    steps: []\n' >"$str_tmp/wf/g.yml"
+expect "dynamic fromJSON matrix fails with a clear message" 1 "dynamic matrix"
+
+fixture
+printf 'name: h\non:\n  pull_request:\n    types: opened\njobs:\n  s:\n    name: Scalar types\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/h.yml"
+expected '"Lint gate", "App check", "Scalar types"' ''
+expect "scalar types: is a list, and an incomplete one is conditional" 1 "required but no unconditional PR job emits it: Scalar types"
+
+fixture
+printf 'name: h\non:\n  pull_request:\n    types: [opened, reopened, synchronize]\njobs:\n  s:\n    name: Full types\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/h.yml"
+expected '"Lint gate", "App check", "Full types"' ''
+expect "a complete types: list stays unconditional" 0 "findings=0"
+
+fixture
+printf 'optional|Lint gate|one\noptional|Lint gate|two\n' >>"$str_tmp/policy.txt"
+expect "duplicate policy line is rejected" 1 "duplicate or conflicting"
+
+fixture
+printf 'optional|App check|clash\n' >>"$str_tmp/policy.txt"
+expect "optional/external conflict is rejected" 1 "duplicate or conflicting"
+
+fixture
+printf 'name: i\non: push\njobs:\n  m:\n    name: Other\n    runs-on: x\n    strategy:\n      matrix:\n        include: [{a: 1}]\n    steps: []\n' >"$str_tmp/wf/i.yml"
+int_rc=0
+str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
+check "live reports an unrelated include matrix per workflow" "$int_rc" 1 "i.yml: job 'Other'" "$str_out"
+check "live keeps checking everything else" "$int_rc" 1 "not live: App check" "$str_out"
+
 [ "$int_failures" -eq 0 ] || {
 	echo "$int_failures case(s) failed"
 	exit 1
