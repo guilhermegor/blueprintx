@@ -316,6 +316,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(scaffold_git_remote|common)\.sh|tests/test_scaffold_git_remote\.sh)$
 
+      - id: scaffold-python-templates-tests
+        name: scaffold provenance and copy-list tests (blueprintx#635)
+        entry: bash tests/test_scaffold_python_templates.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/scaffold_(python_templates|provenance)\.sh|bin/scaffold/python_lib_minimal\.sh|templates/python-common/bin/check_template_drift\.py|tests/test_scaffold_python_templates\.sh)$
+
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)
         entry: bash bin/ci/check_specs_structure.sh --root .

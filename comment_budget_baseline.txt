@@ -57,7 +57,7 @@
 170 bin/scaffold/python_api_service.sh
 171 bin/scaffold/python_ddd_service.sh
 178 bin/scaffold/python_ddd_service_orm.sh
-295 bin/scaffold/python_lib_minimal.sh
+281 bin/scaffold/python_lib_minimal.sh
 192 bin/scaffold/python_mvc_service.sh
 193 bin/scaffold/python_mvc_service_orm.sh
 81 bin/scaffold/ts_lib.sh
