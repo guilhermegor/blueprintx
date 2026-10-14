@@ -7,7 +7,7 @@ scope 2
 62 bin/check_precommit_ci_parity.sh
 56 bin/ci/check_actions.sh
 31 bin/ci/check_codespell_sync.sh
-81 bin/ci/check_docs_boundary.sh
+75 bin/ci/check_docs_boundary.sh
 5 bin/ci/check_docs_build.sh
 25 bin/ci/check_gate_staleness.sh
 34 bin/ci/check_git_remote_guard.sh

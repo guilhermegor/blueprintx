@@ -6,19 +6,12 @@
 # any other work related to lessons to other packages/repos/frameworks/ai handling/
 # superpowers — the boundary is to stay here, docs/ is solely for documentation."
 #
-# 🔴 ROOT-REPO-ONLY, DECIDED — NOT "not done yet" (blueprintx#576, the follow-up #536
-# promised). This gate walks BlueprintX's own docs/ and deliberately never walks
-# templates/*/docs/. A generated project's docs/ answers to its own authors, and the same
-# path means opposite things on the two sides: docs/backlog/ here is the violation the rule
-# names, while inside templates/<tier>/ it is a shipped product surface with its own gate
-# (templates/python-common/bin/check_backlog_ledger.py, wired into that tier's pre-commit +
-# CI) present in five tiers today. Same precedent as en-US prose (blueprintx#194): the rule
-# is this repo's, and check_comment_language.py is locale-agnostic precisely because a
-# generated project may legitimately differ. Reasoning in CONTRIBUTING.md → "Rules scoped
-# to BlueprintX, not inherited by scaffolds"; tests/test_check_docs_boundary.sh asserts the
-# scope rather than leaving it to this comment. There is therefore no --root flag: under
-# this decision there is only ever one tree to walk, and a knob nothing turns is an
-# invitation to widen the scope without re-deciding it.
+# Applies to BlueprintX's own tree AND to every generated Python project (blueprintx#576,
+# owner decision 2026-10-14): a project's docs/ is published documentation only, and
+# .specs/ holds trackers, specs and backlog (#446, #612). One implementation: scaffolds
+# copy this file to bin/check_docs_boundary.sh and run it with `--root .`. It still never
+# walks templates/*/docs/ from the BlueprintX root: that is a skeleton's content, gated by
+# the generated-project run (bin/ci/scaffold_lint_test.sh).
 #
 # 🔴 THE RULE IS THE PRINCIPLE, THE LIST IS ONLY WHAT WE HAVE MET SO FAR.
 # Everything under docs/ must be published documentation. Anything that is not does not
@@ -56,7 +49,24 @@ set -euo pipefail
 # from yielding the literal glob pattern as a filename.
 shopt -s dotglob nullglob
 
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+case "$(basename "$SCRIPT_DIR")" in
+    ci) REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)" ;;
+    *) REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)" ;;
+esac
+if [ "${1:-}" = "--root" ]; then
+    # A bad --root must fail: every later check would see "no docs/" and report success.
+    [ -n "${2:-}" ] && [ -d "$2" ] || {
+        echo "ERROR: --root needs an existing directory (got '${2:-}')" >&2
+        exit 2
+    }
+    REPO_ROOT="$(cd "$2" && pwd)"
+    shift 2
+fi
+[ "$#" -eq 0 ] || {
+    echo "ERROR: unexpected argument '$1' (usage: check_docs_boundary.sh [--root <dir>])" >&2
+    exit 2
+}
 DOCS_DIR="$REPO_ROOT/docs"
 errors=0
 checked=0
