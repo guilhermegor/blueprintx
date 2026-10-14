@@ -165,6 +165,7 @@ copy_templates() {
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/.env.example" "$project_path/.env"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/.env.example" "$project_path/.env.example"
+    cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/docs/configuration.md" "$project_path/docs/configuration.md"
     cp "$BLUEPRINTX_ROOT/templates/mvc-service-orm-db/CLAUDE.md" "$project_path/CLAUDE.md"
     # Per-layer import policy read by bin/check_layer_imports.py (pre-commit + CI). It is
     # per-tier, not shared: model/ may declare sqlalchemy in the ORM tier and nothing in the
@@ -489,9 +490,10 @@ conditional_apply_multi_pipeline() {
     rm -f "$controller_dir/_pipeline.py"
     sed_inplace 's|<!-- pipeline-mode: single -->|<!-- pipeline-mode: multi -->|' "$controller_dir/CLAUDE.md"
     local intent_env
-    intent_env=$'\n# Pipeline intent (multi-intent mode): which purpose to run.\n# Accepts send | reconcile (case/accent/spacing-insensitive); fails loud on a typo.\nPIPELINE_INTENT=send\n'
+    intent_env=$'\nPIPELINE_INTENT=send\n'
     printf '%s' "$intent_env" >> "$project_path/.env"
     printf '%s' "$intent_env" >> "$project_path/.env.example"
+    cat "$COMMON_TEMPLATE_ROOT/optional/pipeline-intent.config.md" >> "$project_path/docs/configuration.md"
     print_status "success" "Multi-intent pipeline dispatch wired (send/reconcile; PIPELINE_INTENT)"
 }
 
@@ -697,6 +699,7 @@ conditional_copy_otel() {
     cp "$COMMON_TEMPLATE_ROOT/optional/test_otel_logging.py" "$project_path/tests/unit/test_otel_logging.py"
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.config.md" >> "$project_path/docs/configuration.md"
     cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
     cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
     # EXACT pins, deliberately against this repo's own house style of ranges

@@ -137,6 +137,18 @@ jobs:
             echo "base branch has no baseline yet; nothing to compare"
           fi
 
+  env-docs-sync:
+    name: .env.example matches docs/configuration.md (blueprintx#304)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check every tier's .env.example against its configuration table
+        run: python3 templates/python-common/bin/check_env_docs_sync.py --each-under templates
+
   complexity:
     name: Cyclomatic complexity — tests 1, src 2, bin 8
     runs-on: ubuntu-latest

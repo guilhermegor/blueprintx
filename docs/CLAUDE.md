@@ -33,6 +33,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `quality-gate-blind-spots.md` | Utility page | Measured audit of what the quality gates cannot see (blueprintx#169) |
 | `required-status-checks.md` | Utility page | Which checks `REQUIRED_CHECKS` should seed per scaffolded tier (blueprintx#164) |
 | `coderabbit-config.md` | Utility page | Why every scaffold ships `.coderabbit.yaml` and what its one key does (blueprintx#739) |
+| `graphite-config.md` | Utility page | What Graphite config the repo versions (`.gitattributes` `linguist-generated`), the dashboard-only steps, and the label-gated never-auto-review rule (blueprintx#738) |
 | `skeletons.md` | Skeleton overview | API Service (Native DB) — hexagonal HTTP service with a transport layer |
 | `skeletons/bash-cli.md` | Skeleton overview | Standalone Bash CLI starter (`bash-cli`), git-tag versioned, bats + shellcheck |
 | `sonarqube-evaluation.md` | Utility page | Decision record — SonarQube audited against the gates already running here (ruff, `check_*` family, ESLint, gitleaks, Dependabot, CodeQL); recommendation and why |
@@ -176,6 +177,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
 | `quality-rules.md` | Quality-rule registry record | What the gate decides vs leaves to review, one section per rule id (the `docs:` anchors) |
 | `coderabbit-config.md` | Config explanation record | The one active key and what it does, why it may be a no-op (star threshold), and that the trigger workflow, not this file, drives review requests |
+| `graphite-config.md` | Config explanation record | What the repo versions (`.gitattributes` `linguist-generated`), the dashboard-only setup steps, and the label-gated never-auto-review rule with its unmeasured label trigger |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
