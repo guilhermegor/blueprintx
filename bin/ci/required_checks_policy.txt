@@ -1,0 +1,16 @@
+# Data read by bin/ci/check_required_checks_sync.py (blueprintx#535) — one entry per line:
+#   <kind>|<check name exactly as the check-run reports it>|<reason>
+# kind `optional` : an unconditional PR job that is deliberately NOT a required check.
+# kind `external` : a REQUIRED context emitted by an app or a generated workflow, so no job
+#                   in .github/workflows/ carries its name.
+# A line without a reason is rejected. Lines starting with "#" are comments.
+
+external|CodeQL|emitted by the CodeQL GitHub App, not a workflow file here
+external|GitGuardian Security Checks|emitted by the GitGuardian GitHub App, not a workflow file here
+external|Analyze (actions)|emitted by CodeQL default setup, which has no workflow file here
+external|Analyze (javascript-typescript)|emitted by CodeQL default setup, which has no workflow file here
+external|Analyze (python)|emitted by CodeQL default setup, which has no workflow file here
+external|Analyze (ruby)|emitted by CodeQL default setup, which has no workflow file here
+optional|PR files within declared issue scope|green on 10 of 10 recent merged PRs 2026-10-14; not yet required, owner decision pending (#507/#535)
+optional|Required checks sync — expected contexts vs PR jobs (blueprintx#535)|new gate; require it once it has a green record on main
+optional|.env.example matches docs/configuration.md (blueprintx#304)|new job; require once it has a green record on main

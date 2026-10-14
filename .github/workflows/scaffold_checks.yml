@@ -207,6 +207,30 @@ jobs:
       - name: Check for an unjustified gate weakening since main
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
 
+  required-checks-sync:
+    name: Required checks sync — expected contexts vs PR jobs (blueprintx#535)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: python3 -m pip install pyyaml==6.0.3
+
+      - name: Should-fail regression tests for the sync gate
+        run: bash tests/test_check_required_checks_sync.sh
+
+      - name: Required contexts must match the jobs that run on every PR
+        env:
+          REQUIRED_CHECKS_SYNC_REQUIRED: "1"
+        run: python3 bin/ci/check_required_checks_sync.py
+
   pr-file-count:
     name: PR file-count ceiling — 90 files (blueprintx#551)
     runs-on: ubuntu-latest

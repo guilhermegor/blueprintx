@@ -113,3 +113,38 @@ reached "keep one entry" for the Python tiers by reasoning about
 stronger disqualifier it did not have (the `branches:` filter, not just matrix
 drift) — but it did not look at `pr-gate.yaml`, and it did not look outside
 Python at all.
+
+## Keeping BlueprintX's own required checks in sync (blueprintx#535)
+
+The tiers above are about generated projects. For this repo, `main` is protected in two
+layers (classic branch protection and the `pr-quality-gate` ruleset), and a required
+check is matched by **name**. A renamed job, or a new job nobody required, is silently
+not enforced.
+
+The expected contexts per layer are committed in `.github/required-checks.json`.
+`bin/ci/check_required_checks_sync.py` compares that file with the jobs that run on every
+PR, with no token and no secret. "Every PR" means the workflow triggers on `pull_request`
+with no `branches:`/`paths:` filter and a `types:` covering opened, reopened and
+synchronize, and the job is unconditional: it has no `if:`, or its `if:` (a surrounding
+`${{ }}` is stripped) has a `||` alternative that is a bare `github.event_name ==
+'pull_request'` or `!= '<other event>'` test. Any other `if:` makes the job conditional,
+and so does a `needs:` on a conditional job. A job that only `uses:` a reusable workflow
+fails the gate loudly; list its emitted names in the policy file by hand. It fails when:
+
+1. a required context is emitted by no such job (every PR would wait forever); or
+2. such a job is neither required nor listed as `optional` in
+   `bin/ci/required_checks_policy.txt`, which also lists the `external` contexts (CodeQL,
+   GitGuardian) that have no job here. Every line carries a reason.
+
+The JSON itself is checked against the live settings by `--live`, which needs
+Administration access (the maintainer PAT). That runs only in
+`.github/workflows/verify_required_checks.yml`, on `push` to `main`, a daily schedule and
+`workflow_dispatch`, never on `pull_request`, so no PR-controlled code ever sees the
+secret. It fails closed (`REQUIRED_CHECKS_SYNC_REQUIRED=1`) when the API cannot be read,
+and fails on `main` when protection drifted from the JSON. Changing protection therefore
+means editing the JSON in the same change. `tests/test_check_required_checks_sync.sh`
+holds the should-fail cases.
+
+`--live` also reads `actions/workflows` and fails when a workflow file that emits a required
+context is not `active` (disabled in the UI): the context would never report and every PR
+would deadlock.
