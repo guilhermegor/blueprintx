@@ -106,6 +106,20 @@ repos:
         additional_dependencies: [pathspec, pyyaml]
         pass_filenames: false
         always_run: true
+      - id: required-checks-sync
+        name: required checks vs PR jobs in sync (blueprintx#535)
+        entry: python bin/ci/check_required_checks_sync.py
+        language: python
+        additional_dependencies: [pyyaml==6.0.3]
+        pass_filenames: false
+        files: ^(\.github/workflows/.*\.ya?ml|bin/ci/required_checks_policy\.txt|\.github/required-checks\.json|bin/ci/check_required_checks_sync\.py)$
+      - id: required-checks-sync-tests
+        name: check_required_checks_sync should-fail regression tests (blueprintx#535)
+        entry: bash tests/test_check_required_checks_sync.sh
+        language: python
+        additional_dependencies: [pyyaml==6.0.3]
+        pass_filenames: false
+        files: ^(bin/ci/check_required_checks_sync\.py|tests/test_check_required_checks_sync\.sh)$
       - id: action-pins-tests
         name: check_action_pins should-fail regression tests (blueprintx#369)
         entry: bash tests/test_check_actions_pins.sh
