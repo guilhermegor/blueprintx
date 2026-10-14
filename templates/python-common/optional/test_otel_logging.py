@@ -11,12 +11,14 @@ import pytest
 
 try:
     from utils.otel_logging import (
+        _is_cleartext_with_credentials,
         _reject_credential_forwarding_redirects,
         _signal_override,
         configure_otel_logging,
     )
 except ModuleNotFoundError:  # DDD ships the module as chassis.otel_logging
     from chassis.otel_logging import (
+        _is_cleartext_with_credentials,
         _reject_credential_forwarding_redirects,
         _signal_override,
         configure_otel_logging,
@@ -195,3 +197,26 @@ def test_unparseable_endpoint_with_credentials_is_refused_not_raised(
     configure_otel_logging(cls_logger)
 
     assert cls_logger.handlers == []
+
+
+@pytest.mark.parametrize(
+    ("str_endpoint", "bool_has_headers", "bool_expected"),
+    [
+        ("http://collector.example:4318", True, True),
+        ("http://localhost:4318", True, False),
+        ("http://127.0.0.1:4318", True, False),
+        ("http://[::1]:4318", True, False),
+        ("https://collector.example:4318", True, False),
+        ("http://collector.example:4318", False, False),
+        ("", True, False),
+        ("", False, False),
+        ("http://[", True, True),
+        ("https://[", True, True),
+        ("http://[", False, False),
+    ],
+)
+def test_is_cleartext_with_credentials_truth_table(
+    str_endpoint: str, bool_has_headers: bool, bool_expected: bool
+) -> None:
+    """Pin the predicate: off-host cleartext or unparseable endpoint, with headers, is refused."""
+    assert _is_cleartext_with_credentials(str_endpoint, bool_has_headers) is bool_expected

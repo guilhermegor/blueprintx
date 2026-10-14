@@ -114,6 +114,35 @@ def _effective_otlp_logs_config() -> tuple[str, bool]:
 
 
 @type_checker
+def _is_offhost_cleartext(str_endpoint: str) -> bool:
+    """Report whether a non-empty endpoint is unencrypted and not loopback (or unparseable).
+
+    Parameters
+    ----------
+    str_endpoint : str
+        The effective OTLP logs endpoint.
+
+    Returns
+    -------
+    bool
+        ``True`` for a non-HTTPS, non-loopback or unparseable endpoint.
+
+    Examples
+    --------
+    >>> _is_offhost_cleartext("http://collector.example:4318")
+    True
+    >>> _is_offhost_cleartext("https://collector.example:4318")
+    False
+    """
+    try:
+        str_hostname = urlsplit(str_endpoint).hostname
+    except ValueError:
+        # Unparseable endpoint + credentials: refuse. See docs/observability.md.
+        return True
+    return not str_endpoint.startswith("https://") and str_hostname not in _TUPLE_LOOPBACK_HOSTS
+
+
+@type_checker
 def _is_cleartext_with_credentials(str_endpoint: str, bool_has_headers: bool) -> bool:
     """Report whether credentials would be sent over an unencrypted, off-host connection.
 
@@ -138,14 +167,7 @@ def _is_cleartext_with_credentials(str_endpoint: str, bool_has_headers: bool) ->
     >>> _is_cleartext_with_credentials("http://collector.example:4318", False)
     False
     """
-    if not bool_has_headers or not str_endpoint:
-        return False
-    try:
-        str_hostname = urlsplit(str_endpoint).hostname
-    except ValueError:
-        # Unparseable endpoint + credentials: refuse. See docs/observability.md.
-        return True
-    return not str_endpoint.startswith("https://") and str_hostname not in _TUPLE_LOOPBACK_HOSTS
+    return bool_has_headers and bool(str_endpoint) and _is_offhost_cleartext(str_endpoint)
 
 
 @type_checker
