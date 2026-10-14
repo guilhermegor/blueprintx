@@ -486,6 +486,9 @@ jobs:
       - name: Run the scaffold git-remote should-fail suite (blueprintx#732)
         run: bash tests/test_scaffold_git_remote.sh
 
+      - name: Run the scaffold provenance and copy-list suite (blueprintx#635)
+        run: bash tests/test_scaffold_python_templates.sh
+
   specs-structure:
     name: .specs/ structure guard
     runs-on: ubuntu-latest
