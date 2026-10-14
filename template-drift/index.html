@@ -2014,43 +2014,67 @@
 scaffolded project should have received from BlueprintX but does not have. It is a reporter: it
 always exits 0, and a run that could not compare says <code>SKIPPED</code> rather than passing.</p>
 <h2 id="provenance-stamp">Provenance stamp<a class="headerlink" href="#provenance-stamp" title="Permanent link">&para;</a></h2>
-<p><code>scaffold_stamp_provenance</code> (<code>bin/lib/scaffold_python_templates.sh</code>) writes
-<code>.blueprintx-provenance.yaml</code> into every scaffolded project. It records which tier and which
-BlueprintX commit the project came from. Without it the doctor has no baseline: it cannot tell
-"scaffolded before the fix landed" from "removed the file on purpose".</p>
+<p><code>scaffold_stamp_provenance</code> (<code>bin/lib/scaffold_provenance.sh</code>) writes
+<code>.blueprintx-provenance.yaml</code> into every scaffolded project, service tiers and <code>lib-minimal</code>
+alike. It records the tier, the review-bot roster choice, the BlueprintX version and the commit.
+It is its own file because sourcing the service copy-list lib into <code>lib-minimal</code> made
+<code>check_agents_md_bridge.sh</code> credit <code>lib-minimal</code> with copies it never makes.</p>
 <ul>
 <li>The file is written by BlueprintX at scaffold time and read by <code>check_template_drift.py</code>; do not
   edit it by hand.</li>
-<li>The version comes from <code>git describe</code> only when <code>BLUEPRINTX_ROOT</code> is itself a checkout. <code>git -C</code>
-  walks up the directory tree, so a packaged install living under an unrelated repository
-  (Homebrew's, for example) would otherwise stamp that repository's tag. Without a checkout the
-  <code>BLUEPRINTX_VERSION</code> literal in <code>bin/blueprintx.sh</code> is used, then <code>unknown</code>.</li>
+<li><code>tier</code> and <code>review_bot_roster</code> are read and decide what is compared. <code>blueprintx_version</code> and
+  <code>blueprintx_commit</code> are provenance for a human and are not read.</li>
+<li>The comparison is always against the checkout's current template, not the stamped commit.
+  Comparing against the stamped commit would need that commit's history in the checkout, which a
+  generated project cannot assume, and would answer "what did this project start with" rather than
+  "what has the template gained since". The stamp therefore does not tell "scaffolded before the fix
+  landed" from "removed the file on purpose"; the report says so and leaves that to a human.</li>
+<li>The version comes from <code>git describe</code> and the commit from <code>git rev-parse</code> only when
+  <code>BLUEPRINTX_ROOT</code> has its own <code>.git</code>. <code>git -C</code> walks up the directory tree, so a packaged install
+  living under an unrelated repository (Homebrew's, for example) would otherwise stamp that
+  repository's tag. Without a checkout the <code>BLUEPRINTX_VERSION</code> literal in <code>bin/blueprintx.sh</code> is
+  used, then <code>unknown</code>; the commit is <code>unknown</code>, since the literal carries none.</li>
 <li>The filename is a literal in both the scaffold lib and the doctor's <code>_PROVENANCE_FILENAME</code>,
   kept in sync by hand: the writer ships with BlueprintX and the reader ships inside every
   scaffolded project, so no shared constant is reachable from either side.</li>
 </ul>
 <h2 id="reading-the-scaffold-lib">Reading the scaffold lib<a class="headerlink" href="#reading-the-scaffold-lib" title="Permanent link">&para;</a></h2>
-<p>The doctor derives "required files" by parsing the <code>cp</code> commands in the scaffold lib instead of
-keeping a second manifest.</p>
+<p>The doctor derives "required files" from the lib's own output instead of keeping a second manifest
+or parsing its shell source.</p>
 <ul>
-<li>One regex matches every <code>cp [flags] SRC DST</code>. SRC is rooted at <code>$COMMON_TEMPLATE_ROOT</code> or
-  <code>$SHARED_TEMPLATE_ROOT</code> (braced or not), DST at <code>$str_project_path</code>. A SRC ending in <code>/.</code> is the
-  wholesale directory-contents form.</li>
-<li>Backslash-newline is shell line-splicing, so it is spliced out before matching. Before this, a
-  wrapped <code>cp</code> was skipped: 23 destinations were found where 52 were actually copied, and the
-  doctor was blind to 29 of the files it exists to police.</li>
-<li>The splice runs once the lib has been found. A missing lib is the one case that yields an empty
-  set, reported as <code>SKIPPED</code>; reading it unguarded raised <code>FileNotFoundError</code>.</li>
+<li><code>bash bin/lib/scaffold_python_templates.sh --list-copies --tier &lt;tier&gt; [--roster true|false]</code>
+  runs <code>scaffold_copy_common_templates</code> with <code>cp</code> and <code>rm</code> replaced by printers and everything else
+  that writes made inert. Each line is tab-separated: <code>COPY file|dir &lt;source&gt; &lt;destination&gt;</code> with
+  the source relative to the checkout and the destination relative to the project, or
+  <code>RM &lt;destination&gt;</code> for a path the scaffold deletes after copying.</li>
+<li>Because the shell itself expands globs, loops and variables, a copy written in any form is seen.
+  The earlier regex reader missed any form it was not written for; the first version was blind to 29
+  of 52 copies behind a line continuation.</li>
+<li>The doctor keeps only sources under <code>templates/python-common/</code> and <code>templates/common/</code>. A directory
+  source delivers every tracked file under it, and a file that exists but is untracked (a draft a
+  glob matched) is dropped.</li>
+<li>A missing lib, a missing <code>bash</code>, a failing dry run and an empty one are all <code>SKIPPED</code>, never a
+  clean pass. The dry run runs under <code>set -e</code> and returns the subshell's status, so a failure
+  partway through exits non-zero instead of printing a truncated list.</li>
+<li><code>--list-copies</code> sources and executes shell from <code>--blueprintx-root</code>, so that checkout has the same
+  trust level as running the scaffolder itself.</li>
+<li><code>scaffold_dry_cp</code> has known limits: it does not handle <code>cp -t</code>, a trailing-slash directory
+  destination for a single source, or an unmatched glob (printed as a literal path).</li>
+<li>A new copy that depends on a new opt-in flag is only treated as conditional if the dry run is
+  taught that flag; today the only one is the review-bot roster.</li>
 </ul>
 <h2 id="conditional-copies">Conditional copies<a class="headerlink" href="#conditional-copies" title="Permanent link">&para;</a></h2>
-<p>A conditional copy (the review-bot roster) is added back to the required set only when the
-provenance stamp says the project opted in. <code>None</code>, a project scaffolded before the stamp recorded
-the choice, stays excluded: reporting a file as missing on a project that legitimately declined it
-is the false positive this design exists to avoid.</p>
+<p>The doctor makes one dry run per project, passing <code>--roster false</code> for a project that declined the
+roster or whose stamp is silent, and <code>--roster true</code> for one that opted in. <code>None</code>, a project
+scaffolded before the stamp recorded the choice, stays on the declined side: reporting a file as
+missing on a project that legitimately declined it is the false positive this design exists to
+avoid.</p>
 <h2 id="should-fail-witness">Should-fail witness<a class="headerlink" href="#should-fail-witness" title="Permanent link">&para;</a></h2>
 <p><code>tests/unit/test_template_drift_gate.py</code> is copied into every project so the doctor is itself
-exercised by the generated project's own suite. It is the check that fails if the doctor goes
-blind.</p>
+exercised by the generated project's own suite, against a stand-in lib that speaks the <code>--list-copies</code>
+contract. <code>tests/test_scaffold_python_templates.sh</code> (BlueprintX's own tree) runs the same doctor
+against the real lib and mutates it: dropping a copy stops it being required, and adding one in a
+loop form is flagged.</p>
 <h2 id="manual-task">Manual task<a class="headerlink" href="#manual-task" title="Permanent link">&para;</a></h2>
 <p><code>poe template_drift</code> is never part of <code>lint</code>. Like the contract-drift check it needs a resource the
 project does not vendor, here a BlueprintX checkout, and it always exits 0. It declares no
