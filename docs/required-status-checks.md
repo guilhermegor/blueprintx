@@ -113,3 +113,24 @@ reached "keep one entry" for the Python tiers by reasoning about
 stronger disqualifier it did not have (the `branches:` filter, not just matrix
 drift) — but it did not look at `pr-gate.yaml`, and it did not look outside
 Python at all.
+
+## Keeping BlueprintX's own required checks in sync (blueprintx#535)
+
+The tiers above are about generated projects. For this repo, `main` is protected in two
+layers (classic branch protection and the `pr-quality-gate` ruleset), and a required
+check is matched by **name**. A renamed job, or a new job nobody required, is silently
+not enforced.
+
+`bin/ci/check_required_checks_sync.py` reads both layers through the API and compares
+them with the jobs that run on every PR (`pull_request`, no `branches:`/`paths:` filter,
+no job `if:`). It fails when:
+
+1. a required context is emitted by no such job (every PR would wait forever); or
+2. such a job is neither required nor listed as `optional` in
+   `bin/ci/required_checks_policy.txt`, which also lists the `external` contexts (CodeQL,
+   GitGuardian) that have no job here. Every line carries a reason.
+
+Reading protection needs Administration access. In CI the job uses the maintainer PAT
+and fails closed (`REQUIRED_CHECKS_SYNC_REQUIRED=1`); locally it skips loudly when
+`gh` cannot read it. Dependabot PRs get no secrets, so the job is skipped for them.
+`tests/test_check_required_checks_sync.sh` holds the should-fail cases.

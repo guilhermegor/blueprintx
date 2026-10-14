@@ -353,6 +353,13 @@ cannot see (the web UI, Dependabot, API-created PRs).
 The job is **not yet a required check**. As with #507 and #535, it becomes one once the open-PR
 population is clean, because requiring a gate that most open PRs fail blocks them all at once.
 
+### Required checks and the allowlist of optional ones — blueprintx#535
+
+A required check is matched by name, so `bin/ci/check_required_checks_sync.py` fails when a
+required context has no job behind it, or when a job that runs on every PR is neither required
+nor listed in `bin/ci/required_checks_policy.txt` with a one-line reason. Adding a PR job means
+requiring it or allowlisting it in the same PR. Details: `docs/required-status-checks.md`.
+
 ### GitHub Actions are pinned by commit SHA — blueprintx#369
 
 Every remote action reference in a workflow — first-party `actions/*` included — is pinned to
