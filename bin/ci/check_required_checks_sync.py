@@ -72,13 +72,14 @@ def pr_event_keys(dict_on) -> list:
 
 
 def pr_trigger_unfiltered(dict_on) -> bool:
-    """Every PR event has no branch/path filter and `types:` covering new pushes."""
+    """`pull_request` has no filter and `types:` covering new pushes. A workflow that only
+    `pull_request_target` triggers is judged but conditional: its checks may not attach to
+    the PR head, so it is never classed as running on every PR."""
     if isinstance(dict_on, str):
         dict_on = {dict_on: None}
     elif isinstance(dict_on, list):
         dict_on = dict.fromkeys(dict_on)
-    list_keys = pr_event_keys(dict_on)
-    return bool(list_keys) and all(event_unfiltered(dict_on[k]) for k in list_keys)
+    return "pull_request" in dict_on and event_unfiltered(dict_on["pull_request"])
 
 
 def event_unfiltered(dict_event) -> bool:
@@ -91,6 +92,11 @@ def event_unfiltered(dict_event) -> bool:
         return True
     list_types = [list_types] if isinstance(list_types, str) else list_types
     return PR_TYPES <= set(list_types)
+
+
+def matrix_text(value) -> str:
+    """A matrix value as GitHub renders it (booleans lowercase)."""
+    return str(value).lower() if isinstance(value, bool) else str(value)
 
 
 def expand_name(str_name: str, dict_job: dict) -> list:
@@ -107,10 +113,14 @@ def expand_name(str_name: str, dict_job: dict) -> list:
         )
     if "include" in dict_matrix or "exclude" in dict_matrix:
         raise Unsupported(f"job '{str_name}': matrix include/exclude is not expandable")
-    list_keys = [k for k, v in dict_matrix.items() if isinstance(v, list)]
+    list_keys = list(dict_matrix)
+    if not all(isinstance(dict_matrix[k], list) for k in list_keys):
+        raise Unsupported(
+            f"job '{str_name}': a non-list matrix dimension is not expandable"
+        )
     if "matrix." not in str_name:
         return [
-            f"{str_name} ({', '.join(str(v) for v in t)})"
+            f"{str_name} ({', '.join(matrix_text(v) for v in t)})"
             for t in itertools.product(*(dict_matrix[k] for k in list_keys))
         ]
     list_names = []
@@ -119,7 +129,7 @@ def expand_name(str_name: str, dict_job: dict) -> list:
         for str_key, str_val in zip(list_keys, tuple_vals):
             str_out = re.sub(
                 r"\$\{\{\s*matrix\.%s\s*\}\}" % re.escape(str_key),
-                str(str_val),
+                matrix_text(str_val),
                 str_out,
             )
         list_names.append(str_out)

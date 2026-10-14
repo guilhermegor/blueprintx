@@ -124,7 +124,7 @@ not enforced.
 The expected contexts per layer are committed in `.github/required-checks.json`.
 `bin/ci/check_required_checks_sync.py` compares that file with the jobs that run on every
 PR, with no token and no secret. "Every PR" means the workflow triggers on `pull_request`
-or `pull_request_target` with no `branches:`/`paths:` filter and a `types:` (a scalar counts
+with no `branches:`/`paths:` filter and a `types:` (a scalar counts
 as a one-item list) covering opened, reopened and synchronize, and the job is unconditional: it has no `if:`, or its `if:` (a surrounding
 `${{ }}` is stripped) has a `||` alternative that is a bare `github.event_name ==
 'pull_request'` or `!= '<other event>'` test. Any other `if:` makes the job conditional,
@@ -139,6 +139,10 @@ policy lines are rejected. It fails when:
 2. such a job is neither required nor listed as `optional` in
    `bin/ci/required_checks_policy.txt`, which also lists the `external` contexts (CodeQL,
    GitGuardian) that have no job here. Every line carries a reason.
+
+A workflow triggered only by `pull_request_target` is still judged and listed, but its jobs
+are always conditional and so never required: those runs execute against the base branch, and
+there is no verified guarantee GitHub attaches their checks to the PR head.
 
 Why the classification is conservative: only a workflow-level filter (`on.pull_request.paths`,
 `branches`, `types`) leaves a required check absent, which branch protection reads as pending

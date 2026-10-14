@@ -142,12 +142,28 @@ expect "reusable-workflow job fails loudly" 1 "unsupported"
 
 fixture
 printf 'name: e\non: pull_request_target\njobs:\n  t:\n    name: Target gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/e.yml"
-expect "pull_request_target counts as a PR trigger" 1 "Target gate"
+expect "pull_request_target alone is judged but conditional, so not flagged" 0 "findings=0"
+
+expected '"Lint gate", "App check", "Target gate"' ''
+expect "a required name emitted only via pull_request_target fails" 1 "required but no unconditional PR job emits it: Target gate"
 
 fixture
 printf 'name: f\non: pull_request\njobs:\n  m:\n    name: Plain\n    runs-on: x\n    strategy:\n      matrix:\n        os: [a, b]\n    steps: []\n' >"$str_tmp/wf/f.yml"
 expected '"Lint gate", "App check", "Plain (a)", "Plain (b)"' ''
 expect "matrix name without an expression expands to one GitHub-style name (v1, v2) per combination" 0 "findings=0"
+
+fixture
+printf 'name: j\non: pull_request\njobs:\n  m:\n    name: Plain\n    runs-on: x\n    strategy:\n      matrix:\n        os: ${{ fromJSON(needs.x.outputs.m) }}\n    steps: []\n' >"$str_tmp/wf/j.yml"
+expect "a dynamic-only matrix dimension fails" 1 "non-list matrix dimension"
+
+fixture
+printf 'name: j\non: pull_request\njobs:\n  m:\n    name: Plain\n    runs-on: x\n    strategy:\n      matrix:\n        os: ${{ fromJSON(needs.x.outputs.m) }}\n        v: [1, 2]\n    steps: []\n' >"$str_tmp/wf/j.yml"
+expect "a dynamic axis next to a list axis fails" 1 "non-list matrix dimension"
+
+fixture
+printf 'name: j\non: pull_request\njobs:\n  m:\n    name: Flag\n    runs-on: x\n    strategy:\n      matrix:\n        on: [true, false]\n    steps: []\n' >"$str_tmp/wf/j.yml"
+expected '"Lint gate", "App check", "Flag (true)", "Flag (false)"' ''
+expect "boolean matrix values render lowercase" 0 "findings=0"
 
 fixture
 printf 'name: g\non: pull_request\njobs:\n  m:\n    name: Dyn\n    runs-on: x\n    strategy:\n      matrix: ${{ fromJSON(needs.x.outputs.m) }}\n    steps: []\n' >"$str_tmp/wf/g.yml"
