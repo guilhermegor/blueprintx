@@ -133,7 +133,7 @@ secret. It fails when:
 
 The JSON itself is checked against the live settings by `--live`, which needs
 Administration access (the maintainer PAT). That runs only in
-`.github/workflows/verify_required_checks.yml`, on `push` to `main` and
+`.github/workflows/verify_required_checks.yml`, on `push` to `main`, a daily schedule and
 `workflow_dispatch`, never on `pull_request`, so no PR-controlled code ever sees the
 secret. It fails closed (`REQUIRED_CHECKS_SYNC_REQUIRED=1`) when the API cannot be read,
 and fails on `main` when protection drifted from the JSON. Changing protection therefore

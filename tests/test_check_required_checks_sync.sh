@@ -23,6 +23,11 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps: [{run: "true"}]
+  dependent:
+    name: Dependent gate
+    needs: draft-only
+    runs-on: ubuntu-latest
+    steps: [{run: "true"}]
 EOF
 	cat >"$str_tmp/wf/b.yml" <<'EOF'
 name: b
@@ -76,6 +81,9 @@ expect "ruleset name behind a branch filter fails" 1 "Filtered gate"
 expected '"Lint gate", "App check", "Draft only"' ''
 expect "required name behind a job if: fails" 1 "Draft only"
 
+expected '"Lint gate", "App check", "Dependent gate"' ''
+expect "required name that needs a conditional job fails" 1 "Dependent gate"
+
 expected '"App check"' ''
 expect "unconditional job neither required nor allowlisted fails" 1 "Lint gate"
 
@@ -106,12 +114,18 @@ check "live read error skips loudly locally" "$int_rc" 0 "SKIPPED" "$str_out"
 
 printf '%s\n' '#!/bin/sh' 'case "$2" in' \
 	'*branches/main/protection) echo "{\"required_status_checks\":{\"contexts\":[\"Lint gate\",\"Extra live\"]}}" ;;' \
-	'*rulesets) echo "[]" ;;' 'esac' >"$str_tmp/bin/gh"
+	'*rules/branches/main) echo "[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"Rule live\"}]}}]" ;;' \
+	'*) exit 1 ;;' 'esac' >"$str_tmp/bin/gh"
 fixture
 int_rc=0
 str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
 check "live drift fails and names both sides" "$int_rc" 1 "not in required-checks.json: Extra live" "$str_out"
+check "live ruleset layer comes from the rules in effect on main" "$int_rc" 1 "ruleset: live, not in required-checks.json: Rule live" "$str_out"
 check "live drift names the missing live context" "$int_rc" 1 "not live: App check" "$str_out"
+
+fixture
+printf 'name: d\non: pull_request\njobs:\n  call:\n    uses: ./.github/workflows/x.yml\n' >"$str_tmp/wf/d.yml"
+expect "reusable-workflow job fails loudly" 1 "unsupported"
 
 [ "$int_failures" -eq 0 ] || {
 	echo "$int_failures case(s) failed"

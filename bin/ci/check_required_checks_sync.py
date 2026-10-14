@@ -85,6 +85,30 @@ def expand_name(str_name: str, dict_job: dict) -> list:
     return list_names
 
 
+def job_flags(str_file: str, dict_job_map: dict, flag_wf: bool) -> dict:
+    """{job id: unconditional}; a job that `needs` a conditional job is conditional too."""
+    dict_flag = {}
+    for str_id, dict_job in dict_job_map.items():
+        if "uses" in dict_job:
+            sys.exit(
+                f"::error::{str_file}: reusable-workflow job '{str_id}' is unsupported; "
+                "add its emitted check names to the policy file by hand"
+            )
+        dict_flag[str_id] = flag_wf and if_always_true(dict_job.get("if"))
+    flag_changed = True
+    while flag_changed:
+        flag_changed = False
+        for str_id, dict_job in dict_job_map.items():
+            list_needs = dict_job.get("needs") or []
+            list_needs = [list_needs] if isinstance(list_needs, str) else list_needs
+            if dict_flag[str_id] and not all(
+                dict_flag.get(n, False) for n in list_needs
+            ):
+                dict_flag[str_id] = False
+                flag_changed = True
+    return dict_flag
+
+
 def pr_jobs(path_dir: pathlib.Path) -> dict:
     """{emitted name: True if it runs unconditionally on every PR} over every workflow."""
     dict_jobs = {}
@@ -97,13 +121,15 @@ def pr_jobs(path_dir: pathlib.Path) -> dict:
             dict_on = dict.fromkeys(dict_on)
         if not isinstance(dict_on, dict) or "pull_request" not in dict_on:
             continue
-        flag_wf = pr_trigger_unfiltered(dict_on)
-        for str_id, dict_job in (dict_wf.get("jobs") or {}).items():
-            if "uses" in dict_job:
-                continue
-            flag = flag_wf and if_always_true(dict_job.get("if"))
+        dict_job_map = dict_wf.get("jobs") or {}
+        dict_flag = job_flags(
+            path_file.name, dict_job_map, pr_trigger_unfiltered(dict_on)
+        )
+        for str_id, dict_job in dict_job_map.items():
             for str_name in expand_name(str(dict_job.get("name", str_id)), dict_job):
-                dict_jobs[str_name] = dict_jobs.get(str_name, False) or flag
+                dict_jobs[str_name] = (
+                    dict_jobs.get(str_name, False) or dict_flag[str_id]
+                )
     return dict_jobs
 
 
@@ -136,7 +162,7 @@ def gh_json(str_path: str):
 
 
 def live_required() -> dict:
-    """{"classic": set, "ruleset": set} read from the API (active rulesets only)."""
+    """{"classic": set, "ruleset": set} read from the API (the rules in effect on main)."""
     dict_live = {
         "classic": set(
             gh_json(f"repos/{REPO}/branches/main/protection")["required_status_checks"][
@@ -145,13 +171,10 @@ def live_required() -> dict:
         ),
         "ruleset": set(),
     }
-    for dict_rs in gh_json(f"repos/{REPO}/rulesets"):
-        if dict_rs.get("enforcement") != "active":
-            continue
-        for dict_rule in gh_json(f"repos/{REPO}/rulesets/{dict_rs['id']}")["rules"]:
-            if dict_rule["type"] == "required_status_checks":
-                list_chk = dict_rule["parameters"]["required_status_checks"]
-                dict_live["ruleset"] |= {c["context"] for c in list_chk}
+    for dict_rule in gh_json(f"repos/{REPO}/rules/branches/main"):
+        if dict_rule["type"] == "required_status_checks":
+            list_chk = dict_rule["parameters"]["required_status_checks"]
+            dict_live["ruleset"] |= {c["context"] for c in list_chk}
     return dict_live
 
 
