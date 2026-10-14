@@ -1,28 +1,3 @@
-# quality-rules.yaml — machine-readable registry of BlueprintX's quality rules and how
-# each is implemented per scaffolded language. YAML rather than JSON because this file
-# needs comments (blueprintx#432), the same reason `.layer-policy.yaml` and
-# `.docs-skeleton.yaml` are YAML rather than JSON.
-#
-# Read and validated by templates/python-common/bin/check_quality_rules.py — see
-# docs/quality-rules.md for the reasoning behind each entry (the "why", not restated here).
-#
-# Schema, per rule:
-#   id:       stable slug, also the docs anchor and the check-config key
-#   intent:   the CONSTRUCT this rule prohibits/requires — never a specific number, so a
-#             Python ceiling of 2 and a TypeScript ceiling of 3 can both satisfy the same
-#             intent (blueprintx#425: "prohibits the same construct", never "same digit")
-#   docs:     docs/quality-rules.md#<anchor> — must resolve to a real heading
-#   <language>: one block per language templates/*/skeleton.meta declares. Every
-#     scaffolded language MUST have an entry — omission is what this file exists to
-#     forbid (blueprintx#430: TypeScript silently had 0 of 6 Python gates). A language
-#     with no real implementation says so EXPLICITLY via `status: not-implemented`
-#     (never a missing key), or documents why the house rule does not apply via
-#     `overridden_by: <standard>` — both require a `note` explaining why.
-#     `file` + `pattern` are optional: when present, the gate greps `pattern` (a plain
-#     substring, not a regex — decidable without a second parser) inside `file` and fails
-#     if it is not there, so a config drift between this table and the real tool config
-#     is caught rather than silently aging (the defect check_codespell_sync.sh polices
-#     for `.codespellrc`, applied here to the registry describing everything else).
 
 - id: complexity
   intent: "Cyclomatic complexity per function is capped, per tree, so branching stays reviewable in one read."

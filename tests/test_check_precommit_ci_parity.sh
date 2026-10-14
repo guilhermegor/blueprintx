@@ -1,17 +1,4 @@
 #!/bin/bash
-# Should-fail regression tests for bin/check_precommit_ci_parity.sh (blueprintx#384).
-#
-# The dangerous direction is a FALSE PASS: a script wired into only one side (pre-commit or
-# CI) must FAIL the check unless an exemption carries a written reason, and a reason-less
-# exemption line must be rejected outright rather than silently accepted. A control that only
-# proves the happy path would have passed against the very defects this suite exists to
-# catch (same shape as bin/ci/check_git_remote_guard.sh / tests/test_validate_meta.sh).
-#
-# check_precommit_ci_parity.sh derives REPO_ROOT from its own script path (two dirs up), so
-# each case runs it from an isolated sandbox root (its own bin/ copy + fake
-# .pre-commit-config.yaml + .github/workflows/ + bin/ci/) rather than touching the real tree.
-#
-# Usage: bash tests/test_check_precommit_ci_parity.sh
 
 set -euo pipefail
 
@@ -22,8 +9,6 @@ source "$REPO_ROOT/bin/lib/common.sh"
 int_failures=0
 
 make_sandbox() {
-	# Prints the path of a fresh fake repo root: a copy of the real checker under bin/, its
-	# bin/lib/common.sh dependency, an empty bin/ci/, and an empty .github/workflows/.
 	local str_root
 	str_root="$(mktemp -d)"
 	mkdir -p "$str_root/bin/lib" "$str_root/bin/ci" "$str_root/.github/workflows"
@@ -33,8 +18,6 @@ make_sandbox() {
 }
 
 write_precommit() {
-	# $1 = sandbox root, $2.. = "entry: ..." lines (verbatim, already indented) to write
-	# under a single local-hook block.
 	local str_root="$1"
 	shift
 	{
@@ -49,7 +32,6 @@ write_precommit() {
 }
 
 write_workflow() {
-	# $1 = sandbox root, $2 = filename (e.g. checks.yml), $3.. = "run: ..." lines.
 	local str_root="$1" str_name="$2"
 	shift 2
 	{
@@ -64,8 +46,6 @@ write_workflow() {
 }
 
 expect_gate() {
-	# $1 = description, $2 = sandbox root (consumed + removed), $3 = expected pass|fail,
-	# $4 = OPTIONAL diagnostic substring that must appear in the gate's output.
 	local str_desc="$1" str_root="$2" str_want="$3" str_needle="${4:-}" str_got="pass" str_out
 	str_out="$(bash "$str_root/bin/check_precommit_ci_parity.sh" 2>&1)" || str_got="fail"
 	rm -rf "$str_root"
@@ -81,8 +61,6 @@ expect_gate() {
 }
 
 test_matched_on_both_sides_passes() {
-	# Control case: without it, every failing case below would fail even against a checker
-	# that rejects everything.
 	local str_root
 	str_root="$(make_sandbox)"
 	: >"$str_root/bin/ci/check_foo.sh"
@@ -92,8 +70,6 @@ test_matched_on_both_sides_passes() {
 }
 
 test_precommit_only_fails() {
-	# check_foo.sh runs as a pre-commit hook but no workflow references it, and no
-	# exemption exists — must FAIL, naming the script.
 	local str_root
 	str_root="$(make_sandbox)"
 	: >"$str_root/bin/ci/check_foo.sh"
@@ -103,8 +79,6 @@ test_precommit_only_fails() {
 }
 
 test_ci_only_fails() {
-	# check_foo.sh is a bin/ci/ script a workflow calls, but no pre-commit hook does, and
-	# no exemption exists — must FAIL, naming the script.
 	local str_root
 	str_root="$(make_sandbox)"
 	: >"$str_root/bin/ci/check_foo.sh"
@@ -115,8 +89,6 @@ test_ci_only_fails() {
 }
 
 test_exempted_ci_only_passes() {
-	# Same divergence as test_ci_only_fails, but with a reasoned exemption line — must PASS.
-	# This is what makes the reason load-bearing rather than decorative.
 	local str_root
 	str_root="$(make_sandbox)"
 	: >"$str_root/bin/ci/check_foo.sh"
@@ -128,8 +100,6 @@ test_exempted_ci_only_passes() {
 }
 
 test_exemption_without_reason_rejected() {
-	# The exemption itself claims check_foo.sh, but with no reason after the last '|' —
-	# a bare marker must not exempt anything.
 	local str_root
 	str_root="$(make_sandbox)"
 	: >"$str_root/bin/ci/check_foo.sh"
@@ -141,8 +111,6 @@ test_exemption_without_reason_rejected() {
 }
 
 test_zero_discovery_fails() {
-	# No pre-commit hooks and no bin/ci/ scripts at all — the gate must refuse to report a
-	# silent, vacuous pass (same guard as check_provenance.py / lint_actions.sh).
 	local str_root
 	str_root="$(make_sandbox)"
 	write_precommit "$str_root"
@@ -151,9 +119,6 @@ test_zero_discovery_fails() {
 }
 
 test_secret_scan_style_cross_workflow_match_passes() {
-	# The false-positive this checker exists to avoid (blueprintx#384): a pre-commit script
-	# invoked from a SECOND workflow file, not the primary one, must still count as
-	# CI-present rather than reporting a gap that does not exist.
 	local str_root
 	str_root="$(make_sandbox)"
 	: >"$str_root/bin/ci/check_secrets_like.sh"
@@ -164,10 +129,6 @@ test_secret_scan_style_cross_workflow_match_passes() {
 }
 
 test_comment_mention_is_not_invocation() {
-	# The false-PASS this suite exists to catch, in its most likely form: the workflow
-	# MENTIONS check_foo.sh in a comment but never runs it. Matching the filename anywhere
-	# in the file read that as CI coverage and passed a script CI never invokes. This repo's
-	# workflows carry exactly that kind of prose — including a comment about parity itself.
 	local str_root
 	str_root="$(make_sandbox)"
 	: >"$str_root/bin/ci/check_foo.sh"
@@ -180,10 +141,6 @@ test_comment_mention_is_not_invocation() {
 }
 
 test_malformed_exemption_rejected_even_when_unused() {
-	# Both sides match, so no mismatch is evaluated and the exemption file is never
-	# consulted on the failure path. A stale entry with an invalid side must STILL be
-	# rejected: an exemption list validated only when it happens to be needed is not
-	# validated at all, and reads as deliberate policy while doing nothing.
 	local str_root
 	str_root="$(make_sandbox)"
 	: >"$str_root/bin/ci/check_foo.sh"

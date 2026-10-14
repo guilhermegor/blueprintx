@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
 
-
   lint-shell:
     name: ShellCheck — bin/**/*.sh
     runs-on: ubuntu-latest
@@ -40,10 +39,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # GNU sed's -i takes no argument; BSD/macOS sed's -i REQUIRES one, so a bare `sed -i`
-      # aborts a scaffold partway through on the platform the README advertises. This gate
-      # rejects the GNU-only form under bin/ and templates/**/bin/ — sed_inplace()
-      # (bin/lib/common.sh) is the portable replacement.
       - name: Reject a bare sed -i under bin/ and templates/**/bin/
         run: bash bin/ci/check_sed_portability.sh
 
@@ -56,8 +51,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # No setup step: the check sources the scaffold lib and drives it against throwaway
-      # local repos. It never reaches the network, and `gh` is never invoked.
       - name: Verify an existing origin pointing elsewhere is refused
         run: bash bin/ci/check_git_remote_guard.sh
 
@@ -70,10 +63,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # No setup step, same as git-remote-guard above: the check sources the scaffold libs
-      # and drives them against throwaway temp dirs. Nothing to install means no skip path
-      # to inherit, so there is no *_REQUIRED flag here — a missing tool cannot make this
-      # gate report its own blindness as OK.
       - name: Verify INCLUDE_REVIEW_BOT_ROSTER=false omits the roster on all three scaffold shapes
         run: bash bin/ci/check_review_bot_roster_optout.sh
 
@@ -86,9 +75,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # Same shape as function-length below (ONE implementation, run over this repo via
-      # --root, blueprintx#340), except the gate imports pathspec to honour mkdocs'
-      # exclude_docs exactly as mkdocs does, so it must be installed first.
       - name: Install pathspec and pyyaml
         run: python3 -m pip install pathspec pyyaml
 
@@ -104,8 +90,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # No dependency and no setup-python step: the gate is stdlib-only ast/re, which is
-      # the whole reason it is a hand-rolled script rather than another linter to install.
       - name: Check function length across bin/ and templates/
         run: python3 templates/python-common/bin/check_function_length.py --root .
 
@@ -118,9 +102,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # Same shape as function-length above: ONE implementation, run over this repo via
-      # --root rather than kept as a second copy, and stdlib-only ast/re so there is no
-      # setup step and no graceful-skip path for CI to have to override.
       - name: Check the comment budget across bin/ and templates/
         run: python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline
 
@@ -158,9 +139,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # ruff IS the metric here (C901), so unlike function-length this one needs it present.
-      # The gate hard-fails when ruff cannot be resolved rather than skipping: in CI a
-      # graceful skip is a gate reporting its own blindness as OK.
       - name: Install ruff
         run: pipx install ruff
 
@@ -179,15 +157,6 @@ jobs:
       - name: Install ruff
         run: pipx install ruff
 
-      # blueprintx#271: the job above only ever sees bin/ (2 files) because its tree
-      # discovery is a literal top-level dirname lookup (tests/, src/, bin/ under whatever
-      # --root cd's to) — BlueprintX's own root has only bin/. templates/python-common/ IS a
-      # src/ + tests/ tree, just not at the repo root. ⚠️ function-length is NOT duplicated
-      # the same way here: its discovery already walks the WHOLE --root recursively
-      # (rglob), so the job above already reaches templates/python-common/{src,tests} today
-      # — measured by planting a 66-line function there and confirming the existing job
-      # alone reported it. A second function-length job would re-scan a subset of what the
-      # first already covers, for no new coverage.
       - name: Check cyclomatic complexity across templates/python-common
         run: bash templates/python-common/bin/check_complexity.sh --root templates/python-common
 
@@ -199,11 +168,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # Merge-base resolution needs full history — a shallow clone has no common ancestor.
           fetch-depth: 0
 
-      # No dependency and no setup-python step: like function-length, this is a stdlib-only
-      # gate (ast/re/configparser), so it runs on whatever python3 the runner ships.
       - name: Check for an unjustified gate weakening since main
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
 
@@ -239,7 +205,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # Merge-base resolution needs full history — a shallow clone has no common ancestor.
           fetch-depth: 0
 
       - name: Check the branch's cumulative diff against the file-count ceiling
@@ -254,8 +219,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # No dependency and no setup-python step: the gate is stdlib-only ast/re, same as
-      # function-length above.
       - name: Check docs-cited symbols and import paths across docs/
         run: python3 templates/python-common/bin/check_docs_code_refs.py --root .
 
@@ -268,8 +231,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # No dependency and no setup-python step: stdlib-only re/pathlib, same as the other
-      # ONE-implementation gates above.
       - name: Validate the quality-rules registry against the templates it describes
         run: python3 templates/python-common/bin/check_quality_rules.py --root .
 
@@ -286,10 +247,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      # A shared test that no scaffold copies is written, committed, and never runs in any
-      # generated project — and the only tell is the test COUNT, which nobody reads. Its
-      # first run found test_startup_fragility_order.py, the guard on the very fix #160
-      # shipped, absent from all five tiers.
       - name: Every shared test is reachable from every scaffold
         run: python3 bin/ci/check_test_copy_lists.py
 
@@ -302,8 +259,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # ⚠️ Pinning the version pins what is ASKED FOR, never what ARRIVES — and what arrives
-      # is unpacked and EXECUTED on this runner. Hence the SHA-256 check before extracting.
       - name: Install actionlint (pinned + checksum-verified)
         env:
           ACTIONLINT_VERSION: "1.7.7"
@@ -314,10 +269,6 @@ jobs:
           echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tar.gz" | sha256sum -c -
           sudo tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint
 
-      # yamllint says "is this valid YAML?"; actionlint says "will GitHub run this?" — and a
-      # workflow GitHub refuses produces no red check at all, only a PR that looks like it is
-      # waiting. The templates are in scope because their workflows never execute here, so
-      # every defect in them was previously found by whoever scaffolded a project.
       - name: Lint workflows
         env:
           LINT_ACTIONS_REQUIRED: "1"
@@ -330,36 +281,10 @@ jobs:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # ⚠️ NOT wired into bin/enable_repo_rules.sh's REQUIRED_CHECKS (blueprintx#155). Per
-    # `measure-a-checks-population-before-requiring-it`, GitGuardian's population here is
-    # unmeasured. GITGUARDIAN_API_KEY **is** set as a repo secret on BlueprintX (since
-    # 2026-08-27) and resolves fine for a human-authored PR (measured: PR #455 SUCCESS) —
-    # but GitHub gives a Dependabot-triggered run a SEPARATE secret store, and this repo has
-    # none there (`gh api repos/<o>/<r>/dependabot/secrets --jq .total_count` == 0). So the
-    # env var below resolves to an EMPTY STRING on that run, not merely absent
-    # (blueprintx#457, measured on PR #400, job 103472359681: `GITGUARDIAN_API_KEY: ` blank
-    # in the log, `Error: Invalid GitGuardian API key.`, exit 3). Absent a usable key,
-    # `ggshield` fails loud on its own rather than silently no-op'ing — same contract as
-    # GH_PAT_REVIEW_TRIGGER in coderabbit_trigger.yml: a scanner that never ran must not
-    # print the same thing as a scanner that found nothing. The actual fix is a human action:
-    # `gh secret set GITGUARDIAN_API_KEY --app dependabot --repo <owner>/<repo>`.
-    #
-    # ⚠️ Until that lands, a Dependabot-authored PR trips this job on EVERY run, permanently —
-    # not a finding, the scan never running at all. Skipping on that signal is normally the
-    # wrong reflex (a gate reporting success for having checked nothing is worse than no gate),
-    # but it is not a silent pass here: `gitleaks` (`.github/workflows/secret_scan.yml`)
-    # already scans this exact push/PR range unconditionally, needs no key, and is unaffected
-    # by the Dependabot secret-store restriction — so the skip below removes a redundant,
-    # structurally-broken SECOND scanner, not the only one. It is keyed on the PR's AUTHOR
-    # from the event payload (`github.event.pull_request.user.login`), the same precedent as
-    # `bin/check_backlog_ledger.py`'s `is_bot_author` — never `github.actor`, which is whoever
-    # *triggered* this run and would un-exempt itself the moment a human re-runs or updates
-    # the bot's PR. A human PR with a genuinely missing/bad key still fails loud, unchanged.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # ggshield needs the full range to diff, not just the tip.
           fetch-depth: 0
 
       - name: Report and skip — bot-authored PR, no Dependabot secret store entry
@@ -384,33 +309,6 @@ jobs:
         run: pipx install ggshield
 
       - name: Scan the push/PR range for secrets
-        # ⚠️ EXACTLY this one variable, and its name is counter-intuitive. Verified
-        # against ggshield's own source (core/git_hooks/ci/commit_range.py, v1.54.0), not its
-        # docs:
-        #   CI_PREVIOUS_COMMIT_VAR[GITHUB] == "GITHUB_PUSH_BASE_SHA"
-        # So GITHUB_PUSH_BASE_SHA is the PREVIOUS-COMMIT variable and must carry
-        # `github.event.before`. `GITHUB_PUSH_BEFORE_SHA` — the name that reads correct — and
-        # `GITHUB_PULL_BASE_SHA` appear NOWHERE in ggshield: setting them protects nothing
-        # while looking like it does. `GITHUB_DEFAULT_BRANCH` is gone for the same reason:
-        # with the guard below, this step only ever runs with a real previous commit, so
-        # ggshield's fallback to it is unreachable — and an unreachable setting reads as
-        # protection too. The pull_request path needs nothing here at all, because
-        # ggshield reads GITHUB_BASE_REF, which Actions already sets.
-        #
-        # Without a usable previous commit, `ggshield secret scan ci` falls back to
-        # `GITHUB_SHA~1...` — the LAST COMMIT ONLY. A push of five commits gets one scanned
-        # and four skipped, exit 0 either way: the "looks exactly like scanned, found
-        # nothing" failure this file's header warns about, one level subtler.
-        #
-        # ⚠️ A branch-CREATING push is excluded here on purpose: `github.event.before` is
-        # forty zeroes, and there is no previous commit to diff against. ggshield would then
-        # fall back to GITHUB_DEFAULT_BRANCH, which it uses as a BARE ref (`main..<sha>`, no
-        # `origin/` prefix — the remote prefix is applied only on the pull_request path). The
-        # runner checks out detached with no local `main`, so that resolves to nothing and
-        # lands back on `GITHUB_SHA~1...`. Prefixing it with `origin/` does not save it
-        # either: on the push that CREATES the branch, `origin/main` already equals HEAD, so
-        # the range is empty. The whole repository IS the correct range there — which is
-        # exactly the first push of a freshly scaffolded project, the one carrying everything.
         if: >-
           (github.event_name == 'pull_request' &&
            !endsWith(github.event.pull_request.user.login, '[bot]')) ||
@@ -422,11 +320,6 @@ jobs:
         run: ggshield secret scan ci
 
       - name: Scan the whole repository for secrets
-        # Runs for a manual dispatch (no range to diff at all) AND for a branch-creating push
-        # (`before` is forty zeroes). Two named steps rather than one branching step, so the
-        # Actions log says WHICH scan ran — a range bug is invisible when both modes print the
-        # same name. workflow_call keeps the caller's event_name, so a called PR run takes the
-        # step above.
         if: >-
           github.event_name != 'pull_request' &&
           (github.event_name != 'push' ||
@@ -462,9 +355,6 @@ jobs:
       - name: Check required fields and scaffold paths
         run: bash bin/ci/validate_meta.sh
 
-      # Should-fail regression suite (blueprintx#407): validate_meta.sh blocks merge and had
-      # zero tests for a missing key, an empty value, or a dead scaffold= path. tests/ is the
-      # right home — this gate is root-only and never travels into a generated project.
       - name: Should-fail regression tests for validate_meta.sh
         run: bash tests/test_validate_meta.sh
 
@@ -623,11 +513,6 @@ jobs:
       - name: Build documentation (--strict catches broken refs)
         run: bash bin/ci/check_docs_build.sh
 
-  # blueprintx#384: deliberately CI-only, no pre-commit mirror. Every one of the six
-  # skeletons must be dry-run scaffolded on every push, and pre-commit only re-runs hooks
-  # whose `files:` pattern matches the staged diff — a skeleton.meta change would trigger
-  # just that one skeleton, not all six, so the hook could never give the same coverage
-  # this matrix does. `scaffold-lint-test` below has the same shape for the same reason.
   dry-run-smoke:
     name: Dry-run smoke — ${{ matrix.skeleton }}
     runs-on: ubuntu-latest
@@ -661,9 +546,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Python skeletons only — a real scaffold is generated, its deps are
-        # installed, then `make lint` (must change nothing) + `make unit_tests`
-        # run. Complements dry-run-smoke, which writes no files.
         skeleton:
           - ddd-service-native-db
           - ddd-service-orm-db
@@ -687,10 +569,6 @@ jobs:
           restore-keys: pip-poetry-
 
       - name: Install scaffold tooling (envsubst)
-        # The scaffold renders templates with envsubst (gettext). GitHub runners
-        # ship it preinstalled, so the guard makes this a no-op there and the
-        # install runs only where it is genuinely missing (e.g. under act).
-        # Unguarded, the apt-get round-trip hung two jobs for 6h (#192).
         run: command -v envsubst >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext-base; }
 
       - name: Install Poetry
@@ -709,9 +587,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The multi-intent pipeline opt-in is MVC-only. MULTI_PIPELINE_OPTIN=true forces the
-        # scaffold's pipeline-intent prompt to "yes" non-interactively (inherited by the scaffold
-        # subprocess), so the generated dispatch trio is linted + tested like any other scaffold.
         skeleton:
           - mvc-service-native-db
           - mvc-service-orm-db
@@ -751,12 +626,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `scaffold-lint-test` above scaffolds with NO opt-ins, so a file that ships only on an
-        # opt-in was never linted, type-checked or complexity-checked (blueprintx#650: the
-        # storage opt-in failed mypy and nine complexity checks with every job green). This
-        # answers that one prompt "yes" via the named-key spec, on every tier that offers it.
-        # api-service-native-db shares the DDD prompt order, so its key map is the DDD one
-        # (blueprintx#668).
         skeleton:
           - ddd-service-native-db
           - ddd-service-orm-db
@@ -819,7 +688,7 @@ jobs:
           scaffold="$(grep '^scaffold=' "templates/$SKELETON/skeleton.meta" | cut -d= -f2-)"
           bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" </dev/null
 
-      - name: Install npm dependencies (npm ci enforces the committed lockfile, #464, #735)
+      - name: Install npm dependencies (npm ci enforces the committed lockfile,
         working-directory: ${{ runner.temp }}/ci-scaffold
         run: npm ci
 
@@ -858,9 +727,6 @@ jobs:
       - name: Run codespell (skips binaries and lockfiles)
         run: bash bin/ci/check_spelling.sh
 
-      # The locale vocabulary this repo learns must reach the copy that ships into every
-      # scaffolded project — the two lists drifted in both directions before, and the stale
-      # side was the template, so only generated projects paid for it.
       - name: Codespell ignore-list sync (root vs template)
         run: bash bin/ci/check_codespell_sync.sh
 
@@ -876,8 +742,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # Root-repo-only: Makefile and tasks.sh exist ONLY here, not in templates/ or any
-      # generated project, so the script lives at bin/, not templates/python-common/bin/.
       - name: Every Makefile target has a tasks.sh case branch and a help.sh entry
         run: bash bin/check_makefile_pairing.sh
 
@@ -907,16 +771,8 @@ jobs:
           python-version: "3.12"
 
       - name: Install pymarkdownlnt
-        # PINNED on purpose. `.pymarkdown.json` enumerates rules one by one, so any rule a
-        # NEW pymarkdownlnt release adds is enabled by default and silently joins the gate —
-        # measured 2026-09-18: 0.9.40 added MD049/MD050/MD051 and turned 9 open PRs red for
-        # rules the gate's own message says are not part of the measured set. Bump this
-        # deliberately, re-measuring the rule set (blueprintx#383), never implicitly.
         run: pip install pymarkdownlnt==0.9.40
 
-      # Resolve, don't install, is the wrapper's own contract; here we DO install it, so
-      # the skip path is unreachable and the REQUIRED flag only guards against pymarkdown
-      # silently vanishing from PATH between the step above and this one.
       - name: Lint every tracked .md file (root + templates/) with the measured rule set
         env:
           MARKDOWNLINT_REQUIRED: "1"

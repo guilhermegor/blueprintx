@@ -19,10 +19,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # The input is free text. A malformed value (a stray `/`, a leading `v`, an
-      # injected `;`) would otherwise reach `git tag` — the irreversible half of this
-      # job — before any package-manager job has a chance to fail loudly. Reject it
-      # here so a bad input is a no-op, not a pushed tag with no matching artifacts.
       - name: Validate version
         env:
           VERSION: ${{ github.event.inputs.version }}

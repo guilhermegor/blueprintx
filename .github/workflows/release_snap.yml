@@ -19,8 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      # Fail before the 30-minute build: an absent credential used to `exit 0` here, so v0.16.67-70
-      # reported green while nothing reached the Snap Store (#669). See docs/contributing.md.
       - name: Require Snap Store credentials
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
@@ -55,8 +53,6 @@ jobs:
       - name: Copy snap manifest into build directory
         run: cp -r snap /tmp/bpx-src/snap
 
-      # Stamp the release version into the fallback literal in the extracted source, so the
-      # packaged `blueprintx --version` is correct (the snap has no .git for `git describe`).
       - name: Stamp version into blueprintx.sh
         env:
           VERSION: ${{ inputs.version }}
