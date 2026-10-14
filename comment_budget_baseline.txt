@@ -2,6 +2,7 @@ scope 2
 27 .codespellrc
 18 .cz.toml
 19 .env.example
+2 .gitattributes
 48 .github/dependabot.yml
 15 .github/workflows/behind_base_gate_report.yml
 109 .github/workflows/coderabbit_trigger.yml
@@ -104,7 +105,7 @@ scope 2
 15 templates/bash-cli/bin/required-checks.txt
 2 templates/bash-cli/tests/cli.bats
 20 templates/common/.editorconfig
-6 templates/common/.gitattributes
+8 templates/common/.gitattributes
 6 templates/common/.github/workflows/close-linked-issues.yml
 321 templates/common/bin/check_review_threads.py
 24 templates/common/bin/close_linked_issues.sh
