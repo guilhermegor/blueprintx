@@ -79,7 +79,6 @@ scope 2
 25 quality-rules.yaml
 3 requirements.txt
 17 tasks.sh
-35 templates/api-service-native-db/.env.example
 59 templates/api-service-native-db/.layer-policy.yaml
 15 templates/api-service-native-db/mkdocs.yml
 62 templates/api-service-native-db/pyproject.toml
@@ -121,7 +120,6 @@ scope 2
 29 templates/common/bin/ship.sh
 11 templates/common/docs_version/docs.yaml
 8 templates/common/poe_tasks.offline.toml
-35 templates/ddd-service-native-db/.env.example
 54 templates/ddd-service-native-db/.layer-policy.yaml
 15 templates/ddd-service-native-db/mkdocs.yml
 57 templates/ddd-service-native-db/pyproject.toml
@@ -138,7 +136,6 @@ scope 2
 2 templates/ddd-service-native-db/tests/unit/test_db_schema_atomic_update.py
 2 templates/ddd-service-native-db/tests/unit/test_db_schema_backup_argv_injection.py
 2 templates/ddd-service-native-db/tests/unit/test_db_schema_connection_lifecycle.py
-35 templates/ddd-service-orm-db/.env.example
 54 templates/ddd-service-orm-db/.layer-policy.yaml
 6 templates/ddd-service-orm-db/alembic.ini
 8 templates/ddd-service-orm-db/migrations/env.py
@@ -157,7 +154,6 @@ scope 2
 15 templates/lib-minimal/mkdocs.yml
 16 templates/lib-minimal/poe_tasks.library.toml
 48 templates/lib-minimal/pyproject.toml
-46 templates/mvc-service-native-db/.env.example
 31 templates/mvc-service-native-db/.layer-policy.yaml
 15 templates/mvc-service-native-db/mkdocs.yml
 7 templates/mvc-service-native-db/optional/multi_pipeline/main.py
@@ -180,7 +176,6 @@ scope 2
 15 templates/mvc-service-native-db/tests/unit/test_pipeline_phases.py
 19 templates/mvc-service-native-db/tests/unit/test_regime_reader.py
 3 templates/mvc-service-native-db/tests/unit/test_report_renderer.py
-45 templates/mvc-service-orm-db/.env.example
 30 templates/mvc-service-orm-db/.layer-policy.yaml
 6 templates/mvc-service-orm-db/alembic.ini
 12 templates/mvc-service-orm-db/migrations/env.py
@@ -409,7 +404,6 @@ scope 2
 1 templates/python-common/tests/unit/test_wheelhouse_select.py
 6 templates/python-common/tests/unit/test_xml_reader.py
 2 templates/react-spa-webpack/.dockerignore
-19 templates/react-spa-webpack/.env.example
 1 templates/react-spa-webpack/.prettierrc.js
 18 templates/react-spa-webpack/Dockerfile
 81 templates/react-spa-webpack/eslint.config.js

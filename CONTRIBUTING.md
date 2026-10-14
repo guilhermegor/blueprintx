@@ -153,6 +153,19 @@ happening silently:
    outside `comment_budget_allowlist.txt`, ratcheted down from `comment_budget_baseline.txt`
    (blueprintx#304).
 
+   The gate reads every file type that can carry a comment, not only code: dotfiles
+   (`.gitignore`, `.codespellrc`, `.editorconfig`, `.gitlint`), `Dockerfile*`, `.env.example`,
+   `.conf`/`.cfg`, SQL and CSS. The local `.env` is never read. The first baseline row,
+   `scope <n>`, records which file types the run that wrote it discovered: when a change
+   widens discovery, rows for the newly read types are not counted as a raise against a base
+   written under the older scope, while every listed row still cannot go up.
+
+   `.env.example` carries keys and example values only. Each tier documents its variables in
+   `docs/configuration.md`, one table row per variable, and
+   `templates/python-common/bin/check_env_docs_sync.py` fails when the file's keys and the
+   rows marked `yes` in the `In .env.example` column differ in either direction. A variable
+   left out of the file on purpose (`DB_PORT`) gets a `no` row.
+
 **The rules themselves live in `quality-rules.yaml` at the repo root** (blueprintx#432) — one
 entry per rule, with its per-language `tool`/`rule` (or an explicit `status: not-implemented` /
 `overridden_by:`), validated by `templates/python-common/bin/check_quality_rules.py` so the
