@@ -258,7 +258,7 @@ def required_relpaths(
         Root of a BlueprintX checkout.
     str_tier : str
         The project's stamped tier.
-    bool_roster : bool, default False
+    bool_roster : bool
         Whether the project opted into the review-bot roster.
 
     Returns

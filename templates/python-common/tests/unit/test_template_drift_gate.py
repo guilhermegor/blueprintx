@@ -53,7 +53,7 @@ def _copy(str_src: str, str_dst: str, str_kind: str = "file") -> str:
         Source path relative to the checkout.
     str_dst : str
         Destination path relative to the project.
-    str_kind : str, default "file"
+    str_kind : str
         ``file`` or ``dir``.
 
     Returns
@@ -78,7 +78,7 @@ def _checkout(
         A temporary directory to build under.
     list_off : list of str
         Output lines printed with ``--roster false``.
-    list_on : list of str, optional
+    list_on : list of str or None
         Output lines printed with ``--roster true``; defaults to ``list_off``.
     list_files : tuple of str
         Checkout-relative files to create empty.
