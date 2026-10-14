@@ -17,6 +17,7 @@ class Blueprintx < Formula
     end
 
     (bin/"blueprintx").write <<~EOS
+      #!/usr/bin/env bash
       exec "#{libexec}/bin/blueprintx.sh" "$@"
     EOS
   end

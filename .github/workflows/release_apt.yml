@@ -58,6 +58,7 @@ jobs:
             pkg/usr/share/blueprintx/bin/blueprintx.sh
 
           cat > pkg/usr/bin/blueprintx << 'EOF'
+          #!/usr/bin/env bash
           exec /usr/share/blueprintx/bin/blueprintx.sh "$@"
           EOF
           chmod 755 pkg/usr/bin/blueprintx
