@@ -1484,3 +1484,99 @@ def test_a_current_scope_base_blocks_a_new_row(
     """
     str_scope = f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n"
     assert _compare(tmp_path, capsys, f"{str_scope}1 a.py\n", f"{str_scope}1 a.py\n1 q.sql\n") == 1
+
+
+def test_a_new_python_file_is_held_under_a_widened_scope() -> None:
+    """Should-fail witness: row absence is not the exemption, the file type is."""
+    assert gate.raised_rows({"src/new_mod.py": 40}, {"a.py": 1}, {}, True) != []
+
+
+def test_a_rename_with_more_comments_than_its_source_is_held_under_a_widened_scope() -> None:
+    """Should-fail witness: a renamed Python file inherits its source's row, no more."""
+    assert gate.raised_rows({"b.py": 5}, {"a.py": 1}, {"b.py": "a.py"}, True) != []
+
+
+def test_a_new_file_of_a_newly_scanned_type_is_exempt_under_a_widened_scope() -> None:
+    """A ``.gitignore`` row cannot exist in a base that never read ``.gitignore``."""
+    assert gate.raised_rows({".gitignore": 9}, {"a.py": 1}, {}, True) == []
+
+
+def test_a_zero_comment_python_file_gaining_comments_fails_the_comparison(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: the end-to-end form of the new-file hole.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    str_head = f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 a.py\n1 q.sql\n"
+    assert _compare(tmp_path, capsys, "1 q.sql\n", str_head) == 1
+
+
+def test_an_untracked_file_is_not_counted(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Should-fail witness: a local file git does not track must not change the baseline.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 a.py\n")
+    (tmp_path / "local.sh").write_text("# mine\necho hi\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "a.py"], check=True)
+    assert _run(tmp_path, capsys, "--require-baseline")[0] == 0
+
+
+def test_a_sql_string_spanning_lines_hides_its_dashes(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-pass witness: ``--`` on a continuation line of a string is data.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "q.sql").write_text("SELECT 'one\n-- two\nthree';\n", encoding="utf-8")
+    _tree(tmp_path, "X = 1\n")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_a_css_banner_is_flagged(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Should-fail witness: ``/* */`` rule / title / rule is a decorative banner.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "s.css").write_text("/* ------ */\n/* Title */\n/* ------ */\na {}\n", "utf-8")
+    _tree(tmp_path, "X = 1\n", "3 s.css\n")
+    assert "decorative banner" in _run(tmp_path, capsys)[1]
+
+
+def test_a_long_css_comment_run_is_flagged(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Should-fail witness: a run over the ceiling is caught in CSS too.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    int_lines = gate.INT_MAX_RUN + 1
+    (tmp_path / "s.css").write_text("/* x */\n" * int_lines + "a {}\n", "utf-8")
+    _tree(tmp_path, "X = 1\n", f"{int_lines} s.css\n")
+    assert "comment block is" in _run(tmp_path, capsys)[1]

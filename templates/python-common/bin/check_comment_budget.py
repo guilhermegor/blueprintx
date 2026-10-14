@@ -68,13 +68,12 @@ INT_BANNER_TRIPLE = 3
 # `Makefile` (no suffix) and `.mk` are matched by name in `audit_paths`/
 # `marker_for`, not here — the issue's own table missed Makefile for exactly
 # this reason.
+TUPLE_SCOPE1_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
+TUPLE_SCOPE1_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+TUPLE_SCOPE1_NAMES = ("Makefile",)
+
 DICT_HASH_SUFFIXES = (
-    ".sh",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".ini",
-    ".mk",
+    *TUPLE_SCOPE1_HASH_SUFFIXES,
     ".conf",
     ".cfg",
     ".fragment",
@@ -111,7 +110,7 @@ DICT_DASH_SUFFIXES = (".sql",)
 # gap: every measured violation in the issue's table is a line-comment block,
 # and adding a second comment grammar for zero measured evidence is exactly the
 # unrequested generality this repo's own philosophy argues against.
-DICT_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".css")
+DICT_SLASH_SUFFIXES = (*TUPLE_SCOPE1_SLASH_SUFFIXES, ".css")
 
 # Directories that hold code we did not write or that is generated, mirroring
 # check_function_length.py's list (`.claude` matters for the same reason: this
@@ -536,6 +535,57 @@ def banner_findings(
     return list_out
 
 
+def comment_blocks(str_source: str, str_marker: str) -> list:
+    """Group the counted comments of a file into runs of consecutive lines.
+
+    Parameters
+    ----------
+    str_source : str
+        The file's text.
+    str_marker : str
+        The comment marker.
+
+    Returns
+    -------
+    list of tuple
+        ``(int_start_line, list_of_content_lines)`` per run, including ``/* */`` blocks.
+    """
+    list_out: list = []
+    int_prev = 0
+    for int_line, str_text in counted_comments(str_source, str_marker):
+        if list_out and int_line == int_prev + 1:
+            list_out[-1][1].append(str_text)
+        else:
+            list_out.append((int_line, [str_text]))
+        int_prev = int_line
+    return list_out
+
+
+def blocks_for(path_file: pathlib.Path, str_source: str, str_marker: str) -> list:
+    """Return the comment runs of a file by the grammar its type needs.
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The file.
+    str_source : str
+        Its text.
+    str_marker : str
+        Its comment marker.
+
+    Returns
+    -------
+    list of tuple
+        Runs from ``tokenize`` for ``.py``, from the token scanner for CSS block comments,
+        and from line-start markers otherwise.
+    """
+    if path_file.suffix == ".py":
+        return python_blocks(str_source)
+    if path_file.suffix == ".css":
+        return comment_blocks(str_source, str_marker)
+    return marker_blocks(str_source, str_marker)
+
+
 def file_problems(path_file: pathlib.Path) -> list:
     """Return every finding for one file: long runs and decorative banners.
 
@@ -562,11 +612,7 @@ def file_problems(path_file: pathlib.Path) -> list:
     except ValueError:
         str_shown = str(path_file)
 
-    list_blocks = (
-        python_blocks(str_source)
-        if path_file.suffix == ".py"
-        else marker_blocks(str_source, str_marker)
-    )
+    list_blocks = blocks_for(path_file, str_source, str_marker)
 
     list_problems = []
     for int_start, list_lines in list_blocks:
@@ -593,6 +639,39 @@ def file_problems(path_file: pathlib.Path) -> list:
     return list_problems
 
 
+def tracked_files() -> list | None:
+    """List the files git tracks under the audit root.
+
+    Returns
+    -------
+    list of pathlib.Path or None
+        Tracked files that still exist, so an untracked local file never changes the
+        count. None when the root is not a git checkout (a scaffold before ``git init``).
+    """
+    if not (PATH_ROOT / ".git").exists():
+        return None
+    str_listing = git_out("ls-files", "-z")
+    if not str_listing:
+        return None
+    list_found = [PATH_ROOT / str_name for str_name in str_listing.split("\0") if str_name]
+    return [path_file for path_file in list_found if path_file.is_file()]
+
+
+def walked_files() -> list:
+    """List every file under the audit root, pruning the skipped directories.
+
+    Returns
+    -------
+    list of pathlib.Path
+        The fallback when git cannot say what is tracked.
+    """
+    list_found = []
+    for str_dir, list_dirs, list_names in os.walk(PATH_ROOT):
+        list_dirs[:] = [str_part for str_part in list_dirs if str_part not in TUPLE_SKIP_DIRS]
+        list_found.extend(pathlib.Path(str_dir) / str_name for str_name in list_names)
+    return list_found
+
+
 def audit_paths() -> list:
     """Discover every checkable file under the repository root.
 
@@ -604,22 +683,24 @@ def audit_paths() -> list:
         RELATIVE TO ``PATH_ROOT`` — see ``check_function_length.py`` for why an
         ancestor-based match would self-defeat under a `.claude/worktrees/` copy.
     """
-    list_paths = []
-    for str_dir, list_dirs, list_names in os.walk(PATH_ROOT):
-        list_dirs[:] = [str_part for str_part in list_dirs if str_part not in TUPLE_SKIP_DIRS]
-        list_paths.extend(
-            path_file
-            for path_file in (pathlib.Path(str_dir) / str_name for str_name in list_names)
-            if marker_for(path_file)
+    list_candidates = tracked_files()
+    if list_candidates is None:
+        list_candidates = walked_files()
+    return sorted(
+        path_file
+        for path_file in set(list_candidates)
+        if marker_for(path_file)
+        and not any(
+            str_part in TUPLE_SKIP_DIRS for str_part in path_file.relative_to(PATH_ROOT).parts
         )
-    return sorted(set(list_paths))
+    )
 
 
 RE_HASH_TOKEN = re.compile(r"""'[^'\n]*'|"(?:\\.|[^"\\\n])*"|(?<!\S)#[^\n]*""")
 RE_SLASH_TOKEN = re.compile(
     r"""'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`[^`]*`|//[^\n]*|/\*.*?\*/""", re.DOTALL
 )
-RE_DASH_TOKEN = re.compile(r"""'[^'\n]*'|"(?:\\.|[^"\\\n])*"|--[^\n]*""")
+RE_DASH_TOKEN = re.compile(r"""'(?:[^']|'')*'|"[^"]*"|--[^\n]*""")
 RE_SHA_PIN = re.compile(r"@[0-9a-f]{40}\b")
 RE_VERSION_NOTE = re.compile(r"^\s*v?\d+(\.\d+)*\S*\s*$")
 
@@ -936,6 +1017,25 @@ def rename_map(str_base: str) -> dict:
     return dict_out
 
 
+def scanned_at_scope_one(str_path: str) -> bool:
+    """Return whether the first discovery scope already read this path's file type.
+
+    Parameters
+    ----------
+    str_path : str
+        A baseline path.
+
+    Returns
+    -------
+    bool
+        True for Python, the scope-1 ``#`` and ``//`` suffixes and ``Makefile``: a row for
+        one of these is never the product of a widened scope, so it is always held.
+    """
+    path_file = pathlib.PurePosixPath(str_path)
+    tuple_suffixes = (".py", *TUPLE_SCOPE1_HASH_SUFFIXES, *TUPLE_SCOPE1_SLASH_SUFFIXES)
+    return path_file.suffix in tuple_suffixes or path_file.name in TUPLE_SCOPE1_NAMES
+
+
 def raised_rows(
     dict_new: dict, dict_old: dict, dict_renames: dict, bool_widened: bool = False
 ) -> list:
@@ -953,8 +1053,9 @@ def raised_rows(
     dict_renames : dict
         ``{new_path: old_path}`` from ``rename_map``.
     bool_widened : bool, optional
-        True when the reference was written under an older discovery scope: paths
-        absent from it are file types it never scanned, so only listed rows are held.
+        True when the reference was written under an older discovery scope: paths whose
+        file type that scope never read are exempt; every other path is held to its row,
+        and a new or renamed file of a scanned type starts from 0 or its source's row.
 
     Returns
     -------
@@ -966,7 +1067,7 @@ def raised_rows(
         f"{dict_old.get(str_path, dict_old.get(dict_renames.get(str_path, ''), 0))} - "
         f"the ratchet never goes up"
         for str_path, int_n in sorted(dict_new.items())
-        if not (bool_widened and str_path not in dict_old)
+        if not (bool_widened and not scanned_at_scope_one(str_path))
         and int_n > dict_old.get(str_path, dict_old.get(dict_renames.get(str_path, ""), 0))
     ]
 

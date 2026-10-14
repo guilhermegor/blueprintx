@@ -293,9 +293,7 @@ scope 2
 4 templates/python-common/optional/browser_steps/step_handlers.py
 7 templates/python-common/optional/chassis/db_wschema/infrastructure/joblib_handler.py
 3 templates/python-common/optional/email/domain/ports.py
-18 templates/python-common/optional/otel.env.fragment
 28 templates/python-common/optional/otel_logging.py
-3 templates/python-common/optional/storage.env.fragment
 2 templates/python-common/optional/test_joblib_handler.py
 7 templates/python-common/optional/test_otel_logging.py
 4 templates/python-common/optional/typing/policy.py
@@ -434,7 +432,6 @@ scope 2
 2 templates/ts-common/jest.setup.ts
 33 templates/ts-common/optional/otel-log-emitter.test.ts
 140 templates/ts-common/optional/otel-log-emitter.ts
-29 templates/ts-common/optional/otel.env.fragment
 15 templates/ts-common/otel-collector-config.yaml
 8 templates/ts-common/playwright.config.ts
 3 templates/ts-common/src/utils/log-emitter.test.ts
