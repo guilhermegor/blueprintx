@@ -244,6 +244,7 @@ copy_online_assets_service_tier() {
     cp "$common/.github/dependabot.yml" "$dest/.github/dependabot.yml"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
+    install -D -m 644 "$shared/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$dest/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     print_status "success" "GitHub assets copied (.github, SECURITY.md)"
 }
 
@@ -269,6 +270,7 @@ copy_online_assets_lib_minimal() {
     cp "$common/.github/dependabot.yml" "$dest/.github/dependabot.yml"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
+    install -D -m 644 "$shared/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$dest/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     print_status "success" "GitHub assets copied (.github, SECURITY.md, publish=$PUBLISH_TARGET)"
 }
 
@@ -283,6 +285,7 @@ copy_online_assets_react() {
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
+    install -D -m 644 "$shared/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$dest/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     case "$DEPLOY_TARGET" in
         pages) cp "$deploy_root/pages/deploy-spa.yml" "$dest/.github/workflows/deploy-spa.yml" ;;
         vercel)
@@ -322,6 +325,7 @@ copy_shared_github_overlay() {
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
+    install -D -m 644 "$shared/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$dest/.github/ISSUE_TEMPLATE/feature_or_fix.md"
 }
 
 # secret_scan.yaml is opt-in: the scaffolds ship it only when GITGUARDIAN_API_KEY is exported,

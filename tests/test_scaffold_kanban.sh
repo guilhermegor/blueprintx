@@ -83,7 +83,7 @@ expect_out() {
 test_house_labels_are_created_idempotently() {
     local str_label str_out
     str_out="$(run_setup 'n\n')"
-    for str_label in type:task type:research type:grilling hitl afk oracle:strong oracle:weak do-not-merge; do
+    for str_label in type:task type:research type:grilling hitl afk oracle:strong oracle:weak do-not-merge state:blocked; do
         expect_log "house labels" "label create $str_label --repo octo/widget" present
     done
     expect_log "house labels" "--force" present
@@ -103,9 +103,11 @@ test_default_creates_the_full_board() {
     expect_log "board" "project create --owner octo --title widget kanban" present
     expect_log "board" "project edit 7 --owner octo --visibility PUBLIC" present
     expect_log "board" "project link 7 --owner octo --repo octo/widget" present
-    for str_field in Priority Size Estimate "Start date" "Target date" Points; do
+    for str_field in Priority Size Estimate "Start date" "Target date" Points Blocker; do
         expect_log "board fields" "project field-create 7 --owner octo --name $str_field" present
     done
+    expect_log "board status" '"name":"Blocked"' present
+    expect_log "board status" '[{"name":"Blocked"' present
     expect_log "board status" '"name":"Backlog"' present
     expect_log "board status" '"name":"In progress"' present
     expect_log "board status" '"name":"In review"' present
