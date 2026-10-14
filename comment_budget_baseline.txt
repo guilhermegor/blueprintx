@@ -1,4 +1,8 @@
+scope 2
+27 .codespellrc
 18 .cz.toml
+19 .env.example
+2 .gitattributes
 48 .github/dependabot.yml
 15 .github/workflows/behind_base_gate_report.yml
 109 .github/workflows/coderabbit_trigger.yml
@@ -14,9 +18,12 @@
 144 .github/workflows/scaffold_checks.yml
 6 .github/workflows/secret_scan.yml
 24 .github/workflows/verify_branch_protection.yml
+81 .gitignore
 31 .gitleaks.toml
+5 .gitlint
 79 .pre-commit-config.yaml
 26 .review-bots.yaml
+9 Formula/blueprintx.rb
 22 Makefile
 44 bin/blueprintx.sh
 26 bin/check_makefile_pairing.sh
@@ -40,6 +47,7 @@
 4 bin/ci/check_spelling.sh
 112 bin/ci/check_test_copy_lists.py
 6 bin/ci/check_version_sync.sh
+3 bin/ci/optin_specs/storage.answers
 12 bin/ci/reevaluate_issue_scope.sh
 81 bin/ci/scaffold_lint_test.sh
 60 bin/ci/scaffold_lint_test_all.sh
@@ -51,6 +59,7 @@
 15 bin/lib/scaffold_package_json.sh
 98 bin/lib/scaffold_python_templates.sh
 111 bin/lib/spec.sh
+8 bin/precommit_ci_parity_exemptions.txt
 13 bin/preview.sh
 72 bin/promote_offline_to_online.sh
 26 bin/scaffold/bash_cli.sh
@@ -64,9 +73,12 @@
 112 bin/scaffold/ts_react_app.sh
 23 bin/scaffold/ts_react_capability.sh
 6 bin/update_licenses.sh
+2 choco/tools/chocolateyInstall.ps1
+3 docs/stylesheets/extra.css
 3 mkdocs.yml
 2 pyproject.toml
 25 quality-rules.yaml
+3 requirements.txt
 17 tasks.sh
 59 templates/api-service-native-db/.layer-policy.yaml
 15 templates/api-service-native-db/mkdocs.yml
@@ -76,6 +88,10 @@
 20 templates/api-service-native-db/src/chassis/db_schema/application/database_factory.py
 8 templates/api-service-native-db/src/chassis/db_schema/infrastructure/postgres_handler.py
 3 templates/api-service-native-db/src/config/emails.yaml
+3 templates/api-service-native-db/src/config/queries/mssql/.sqlfluff
+12 templates/api-service-native-db/src/config/queries/mssql/example_entity__select_active.sql
+7 templates/api-service-native-db/src/config/queries/sqlite/.sqlfluff
+11 templates/api-service-native-db/src/config/queries/sqlite/example_entity__select_active.sql
 3 templates/api-service-native-db/src/config/query_loader.py
 4 templates/api-service-native-db/src/main.py
 2 templates/api-service-native-db/tests/unit/test_db_schema_atomic_update.py
@@ -86,6 +102,10 @@
 2 templates/bash-cli/.pre-commit-config.yaml
 8 templates/bash-cli/Makefile
 8 templates/bash-cli/bin/cli.sh
+15 templates/bash-cli/bin/required-checks.txt
+2 templates/bash-cli/tests/cli.bats
+20 templates/common/.editorconfig
+8 templates/common/.gitattributes
 6 templates/common/.github/workflows/close-linked-issues.yml
 321 templates/common/bin/check_review_threads.py
 24 templates/common/bin/close_linked_issues.sh
@@ -108,6 +128,10 @@
 6 templates/ddd-service-native-db/src/chassis/db_schema/application/database_factory.py
 8 templates/ddd-service-native-db/src/chassis/db_schema/infrastructure/postgres_handler.py
 3 templates/ddd-service-native-db/src/config/emails.yaml
+3 templates/ddd-service-native-db/src/config/queries/mssql/.sqlfluff
+12 templates/ddd-service-native-db/src/config/queries/mssql/example_entity__select_active.sql
+7 templates/ddd-service-native-db/src/config/queries/sqlite/.sqlfluff
+11 templates/ddd-service-native-db/src/config/queries/sqlite/example_entity__select_active.sql
 3 templates/ddd-service-native-db/src/config/query_loader.py
 4 templates/ddd-service-native-db/src/main.py
 2 templates/ddd-service-native-db/tests/unit/test_db_schema_atomic_update.py
@@ -122,6 +146,7 @@
 1 templates/ddd-service-orm-db/src/chassis/db_schema/infrastructure/repository.py
 3 templates/ddd-service-orm-db/src/config/emails.yaml
 4 templates/ddd-service-orm-db/src/main.py
+2 templates/lib-minimal/.coveragerc
 11 templates/lib-minimal/.github/workflows/docs.yaml
 46 templates/lib-minimal/.github/workflows/release-pypi.yaml
 28 templates/lib-minimal/.github/workflows/release-test-pypi.yaml
@@ -138,6 +163,10 @@
 50 templates/mvc-service-native-db/pyproject.toml
 11 templates/mvc-service-native-db/src/config/connection_db.py
 3 templates/mvc-service-native-db/src/config/emails.yaml
+3 templates/mvc-service-native-db/src/config/queries/mssql/.sqlfluff
+12 templates/mvc-service-native-db/src/config/queries/mssql/example_entity__select_active.sql
+7 templates/mvc-service-native-db/src/config/queries/sqlite/.sqlfluff
+11 templates/mvc-service-native-db/src/config/queries/sqlite/example_entity__select_active.sql
 3 templates/mvc-service-native-db/src/config/query_loader.py
 3 templates/mvc-service-native-db/src/controller/main.py
 8 templates/mvc-service-native-db/src/model/example_entity.py
@@ -166,6 +195,8 @@
 9 templates/mvc-service-orm-db/tests/unit/test_pipeline_enrichment.py
 15 templates/mvc-service-orm-db/tests/unit/test_pipeline_phases.py
 3 templates/mvc-service-orm-db/tests/unit/test_report_renderer.py
+40 templates/python-common/.codespellrc
+7 templates/python-common/.coveragerc
 24 templates/python-common/.cz.toml
 28 templates/python-common/.github/dependabot.yml
 83 templates/python-common/.github/workflows/coderabbit_trigger.yaml
@@ -177,11 +208,17 @@
 104 templates/python-common/.github/workflows/review_threads.yaml
 70 templates/python-common/.github/workflows/secret_scan.yaml
 154 templates/python-common/.github/workflows/tests.yaml
+27 templates/python-common/.gitignore
 14 templates/python-common/.gitleaks.toml
+8 templates/python-common/.gitlint
 13 templates/python-common/.hadolint.yaml
 31 templates/python-common/.layer-policy.yaml
 146 templates/python-common/.pre-commit-config.yaml
+7 templates/python-common/.pydocstyle
 26 templates/python-common/.review-bots.yaml
+5 templates/python-common/.shellcheckrc
+16 templates/python-common/.sqlfluff
+9 templates/python-common/.yamllint
 26 templates/python-common/bin/build_wheelhouse.sh
 8 templates/python-common/bin/check_all_exports.py
 20 templates/python-common/bin/check_assertion_weakening.py
@@ -214,6 +251,7 @@
 37 templates/python-common/bin/check_sql_guards.py
 13 templates/python-common/bin/check_typing.py
 27 templates/python-common/bin/check_unix_filenames.sh
+48 templates/python-common/bin/comment_budget_allowlist.txt
 5 templates/python-common/bin/db.sh
 28 templates/python-common/bin/enable_pages.sh
 190 templates/python-common/bin/enable_repo_rules.sh
@@ -242,6 +280,7 @@
 32 templates/python-common/bin/pr_gate.py
 35 templates/python-common/bin/pr_reconcile.sh
 42 templates/python-common/bin/precommit.sh
+13 templates/python-common/bin/required-checks.txt
 54 templates/python-common/bin/rerun_stale_gate_runs.sh
 171 templates/python-common/bin/retry_rate_limited_review.py
 14 templates/python-common/bin/run.sh
@@ -266,6 +305,7 @@
 12 templates/python-common/otel-collector-config.yaml
 109 templates/python-common/poe_tasks.toml
 13 templates/python-common/pytest.ini
+7 templates/python-common/requirements.txt
 258 templates/python-common/ruff.toml
 19 templates/python-common/src/config/contract_oracles.yaml
 1 templates/python-common/src/config/contracts/example_source.py
@@ -362,9 +402,12 @@
 10 templates/python-common/tests/unit/test_verify_venv_imports.py
 1 templates/python-common/tests/unit/test_wheelhouse_select.py
 6 templates/python-common/tests/unit/test_xml_reader.py
+2 templates/react-spa-webpack/.dockerignore
 1 templates/react-spa-webpack/.prettierrc.js
+18 templates/react-spa-webpack/Dockerfile
 81 templates/react-spa-webpack/eslint.config.js
 6 templates/react-spa-webpack/lint-staged.config.js
+7 templates/react-spa-webpack/nginx.conf
 18 templates/react-spa-webpack/optional/deploy/pages/deploy-spa.yml
 39 templates/react-spa-webpack/optional/deploy/vercel/deploy-vercel.yml
 28 templates/react-spa-webpack/optional/js-copy/emit-js-copy.mjs
@@ -382,6 +425,8 @@
 27 templates/ts-common/.github/.review-bots.yaml
 46 templates/ts-common/.github/workflows/review-threads.yml
 10 templates/ts-common/.github/workflows/secret-scan.yml
+11 templates/ts-common/.gitignore
+18 templates/ts-common/bin/required-checks.txt
 15 templates/ts-common/docker-compose.otel-collector.yml
 6 templates/ts-common/jest.config.cjs
 2 templates/ts-common/jest.setup.ts

@@ -4,6 +4,7 @@ repo_url: ${REPOSITORY}
 nav:
   - Home: index.md
   - Usage: usage.md
+  - Configuration: configuration.md
   - Examples: examples.md
   - Architecture: architecture.md
   - API Reference:

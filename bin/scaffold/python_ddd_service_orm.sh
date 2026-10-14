@@ -166,6 +166,7 @@ copy_templates() {
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/.env.example" "$project_path/.env"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/.env.example" "$project_path/.env.example"
+    cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/docs/configuration.md" "$project_path/docs/configuration.md"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-orm-db/CLAUDE.md" "$project_path/CLAUDE.md"
 
     print_status "success" "Templates copied and configured"
@@ -469,6 +470,7 @@ conditional_copy_storage() {
     cp "$COMMON_TEMPLATE_ROOT/optional/test_db_wschema_row_ops.py" "$project_path/tests/unit/test_db_wschema_row_ops.py"
     cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/storage.env.fragment" >> "$project_path/.env.example"
+    cat "$COMMON_TEMPLATE_ROOT/optional/storage.config.md" >> "$project_path/docs/configuration.md"
     print_status "success" "Schema-less storage (chassis/db + db_wschema) added"
 }
 
@@ -485,6 +487,7 @@ conditional_copy_otel() {
     cp "$COMMON_TEMPLATE_ROOT/optional/test_otel_logging.py" "$project_path/tests/unit/test_otel_logging.py"
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
+    cat "$COMMON_TEMPLATE_ROOT/optional/otel.config.md" >> "$project_path/docs/configuration.md"
     cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
     cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
     # EXACT pins, deliberately against this repo's own house style of ranges
