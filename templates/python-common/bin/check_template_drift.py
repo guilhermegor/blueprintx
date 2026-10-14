@@ -142,6 +142,9 @@ def _dry_run_lines(
 ) -> list[str] | None:
     """Run the checkout's scaffold lib in ``--list-copies`` mode and return its stdout lines.
 
+    This sources and executes shell from ``path_blueprintx_root``, so that checkout has the
+    same trust level as running the scaffolder itself.
+
     Parameters
     ----------
     path_blueprintx_root : pathlib.Path

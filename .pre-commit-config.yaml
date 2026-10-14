@@ -321,7 +321,7 @@ repos:
         entry: bash tests/test_scaffold_python_templates.sh
         language: system
         pass_filenames: false
-        files: ^(bin/lib/scaffold_(python_templates|provenance)\.sh|bin/scaffold/python_lib_minimal\.sh|templates/python-common/bin/check_template_drift\.py|tests/test_scaffold_python_templates\.sh)$
+        files: ^(bin/lib/(scaffold_(python_templates|provenance)|common)\.sh|templates/(python-)?common/.*|bin/scaffold/python_lib_minimal\.sh|templates/python-common/bin/check_template_drift\.py|tests/test_scaffold_python_templates\.sh)$
 
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)

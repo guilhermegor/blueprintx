@@ -343,9 +343,10 @@ scaffold_dry_rm() {
 }
 
 scaffold_list_copies() {
-	local str_tier="$1" str_roster="$2" str_project_path
+	local str_tier="$1" str_roster="$2" str_project_path int_status
 	str_project_path="$(mktemp -d)"
 	(
+		set -e
 		print_status() { :; }
 		envsubst() { :; }
 		mkdir() { :; }
@@ -355,7 +356,9 @@ scaffold_list_copies() {
 		rm() { scaffold_dry_rm "$str_project_path" "$@"; }
 		INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_copy_common_templates "$str_tier" "$str_project_path"
 	)
+	int_status=$?
 	rm -rf "$str_project_path"
+	return "$int_status"
 }
 
 scaffold_list_copies_main() {

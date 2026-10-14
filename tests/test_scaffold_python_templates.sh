@@ -155,7 +155,20 @@ test_a_copy_in_a_form_a_regex_cannot_read_is_still_required() {
 	expect_gate_output "a looped copy is flagged" "➖ copy-of-.gitlint" "$(run_gate "$WORK_DIR/p5" "$WORK_DIR/c4")"
 }
 
+test_a_dry_run_that_fails_midway_exits_nonzero_and_the_gate_says_so() {
+	make_checkout "$WORK_DIR/c5"
+	make_project "$WORK_DIR/c5" "$WORK_DIR/p6"
+	rm "$WORK_DIR/c5/templates/$TIER/pyproject.toml"
+	if copies "$WORK_DIR/c5" >/dev/null 2>&1; then
+		fail "failing dry run" "exited 0 with a truncated list"
+	else
+		pass "a dry run that fails midway exits non-zero"
+	fi
+	expect_gate_output "the gate reports the failed dry run" "dry run failed" "$(run_gate "$WORK_DIR/p6" "$WORK_DIR/c5")"
+}
+
 test_packaged_install_nested_in_a_foreign_repo_uses_the_literal
+test_a_dry_run_that_fails_midway_exits_nonzero_and_the_gate_says_so
 test_a_checkout_stamps_its_own_tag_and_commit
 test_lib_minimal_has_no_stamp_function_of_its_own
 test_the_roster_choice_decides_whether_its_file_is_listed

@@ -47,14 +47,19 @@ or parsing its shell source.
   source delivers every tracked file under it, and a file that exists but is untracked (a draft a
   glob matched) is dropped.
 - A missing lib, a missing `bash`, a failing dry run and an empty one are all `SKIPPED`, never a
-  clean pass.
+  clean pass. The dry run runs under `set -e` and returns the subshell's status, so a failure
+  partway through exits non-zero instead of printing a truncated list.
+- `--list-copies` sources and executes shell from `--blueprintx-root`, so that checkout has the same
+  trust level as running the scaffolder itself.
+- `scaffold_dry_cp` has known limits: it does not handle `cp -t`, a trailing-slash directory
+  destination for a single source, or an unmatched glob (printed as a literal path).
 - A new copy that depends on a new opt-in flag is only treated as conditional if the dry run is
   taught that flag; today the only one is the review-bot roster.
 
 ## Conditional copies
 
-The dry run is made twice in effect: with `--roster false` for a project that declined the roster
-or whose stamp is silent, and with `--roster true` for one that opted in. `None`, a project
+The doctor makes one dry run per project, passing `--roster false` for a project that declined the
+roster or whose stamp is silent, and `--roster true` for one that opted in. `None`, a project
 scaffolded before the stamp recorded the choice, stays on the declined side: reporting a file as
 missing on a project that legitimately declined it is the false positive this design exists to
 avoid.
