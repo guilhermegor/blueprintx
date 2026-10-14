@@ -1644,15 +1644,17 @@ def test_a_dash_heredoc_accepts_a_tab_indented_terminator(tmp_path: Path) -> Non
     assert _count(tmp_path, "s.sh", "cat <<-EOF\n\t# data\n\tEOF\n# real\n") == 1
 
 
-def test_a_plain_heredoc_needs_an_unindented_terminator(tmp_path: Path) -> None:
-    """Without ``-`` an indented ``EOF`` is body, so the body runs to the file end.
+def test_a_plain_shell_heredoc_with_only_an_indented_terminator_is_unterminated(
+    tmp_path: Path,
+) -> None:
+    """Without ``-`` an indented ``EOF`` does not end it, so nothing is skipped.
 
     Parameters
     ----------
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    assert _count(tmp_path, "s.sh", "cat <<EOF\n  EOF\n# still data\n") == 0
+    assert _count(tmp_path, "s.sh", "cat <<EOF\n  EOF\n# still data\n") == 1
 
 
 def test_a_ruby_squiggly_heredoc_is_skipped(tmp_path: Path) -> None:
@@ -1688,3 +1690,72 @@ def test_a_here_string_and_a_comment_mentioning_a_heredoc_open_nothing(tmp_path:
         A throwaway directory pytest provides per test.
     """
     assert _count(tmp_path, "s.sh", "x <<< y\n# cat <<EOF\n# real\n") == 2
+
+
+def test_a_docstring_mentioning_a_heredoc_hides_nothing_in_python(tmp_path: Path) -> None:
+    """Should-fail witness: a ``<<'EOF'`` in a docstring must not skip the real comment after it.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    str_text = '"""Run `python - <<\'EOF\'`."""\n# real\nX = 1\n'
+    assert _count(tmp_path, "m.py", str_text) == 1
+
+
+def test_a_python_shift_is_not_a_heredoc(tmp_path: Path) -> None:
+    """``x << n`` in Python opens nothing.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "m.py", "X = 1 << SHIFT\n# real\n") == 1
+
+
+def test_a_toml_string_with_a_heredoc_marker_hides_nothing(tmp_path: Path) -> None:
+    """Should-fail witness: no heredoc scan runs on TOML.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "c.toml", 'k = "a <<EOF"\n# real\nEOF\n# real2\n') == 2
+
+
+@pytest.mark.parametrize(
+    "str_line",
+    [
+        'echo "a <<EOF"',
+        "echo 'a <<EOF'",
+        "foo # see <<EOF",
+        "x=$(( y << n ))",
+        "grep x <<< y",
+    ],
+)
+def test_a_false_shell_opener_hides_nothing(tmp_path: Path, str_line: str) -> None:
+    """Should-fail witness: a quoted, commented, arithmetic or here-string ``<<`` is no heredoc.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    str_line : str
+        The line carrying the false opener.
+    """
+    str_text = f"{str_line}\n# real\nEOF\n# real2\n"
+    assert _count(tmp_path, "s.sh", str_text) >= 2
+
+
+def test_an_unterminated_opener_counts_its_lines(tmp_path: Path) -> None:
+    """Should-fail witness: no terminator means no heredoc, so the lines are counted.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "s.sh", "cat <<EOF\n# one\n# two\n") == 2

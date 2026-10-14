@@ -71,6 +71,8 @@ INT_BANNER_TRIPLE = 3
 TUPLE_SCOPE1_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
 TUPLE_SCOPE1_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 TUPLE_YAML_SUFFIXES = (".yaml", ".yml")
+TUPLE_SHELL_SUFFIXES = (".sh", ".bats", ".rb", ".mk")
+TUPLE_SHELL_NAMES = ("Makefile", "Dockerfile")
 TUPLE_SCOPE1_NAMES = ("Makefile",)
 
 DICT_HASH_SUFFIXES = (
@@ -308,21 +310,45 @@ def marker_for(path_file: pathlib.Path) -> str:
     return ""
 
 
-def heredoc_lines(str_source: str, bool_dedent: bool = False) -> set:
+def heredoc_opener(str_line: str) -> tuple | None:
+    """Return the terminator and indent mode of a heredoc opened on this line, if any.
+
+    Parameters
+    ----------
+    str_line : str
+        One line of a shell, YAML run block or Ruby file.
+
+    Returns
+    -------
+    tuple or None
+        ``(terminator, bool_indented)``. None when the ``<<`` sits inside a quoted string,
+        after an unquoted ``#``, inside ``$(( ))`` arithmetic, or is a ``<<<`` here-string.
+    """
+    for cls_match in RE_SHELL_TOKEN.finditer(str_line):
+        if cls_match.lastgroup == "comment":
+            return None
+        if cls_match.group("opener"):
+            return cls_match.group("name"), cls_match.group("mode") is not None
+    return None
+
+
+def heredoc_lines(str_source: str, str_kind: str = "shell") -> set:
     """Return the 1-indexed lines that are heredoc body or terminator.
 
     A heredoc body is data a script writes out, not a comment: a ``#!`` shebang or a
-    ``# foo`` line inside one is output. Covers shell ``<<EOF``, ``<<'EOF'``, ``<<"EOF"``,
-    ``<<-EOF`` and Ruby ``<<~EOS``; a here-string ``<<<`` and a YAML ``<<:`` merge key
-    are not heredocs.
+    ``# foo`` line inside one is output. Only shell, YAML and Ruby sources are scanned; a
+    ``<<`` in Python or TOML is a shift or text, and a false opener there would hide the
+    rest of the file from the ratchet. An opener whose terminator never appears is not a
+    heredoc: its lines are counted, because a false skip hides debt and a false count is
+    only noise.
 
     Parameters
     ----------
     str_source : str
         The file's text.
-    bool_dedent : bool, optional
-        True for YAML, where a block scalar dedents the script, so an indented terminator
-        ends a plain ``<<EOF`` heredoc too.
+    str_kind : str, optional
+        ``"yaml"`` when a block scalar dedents the script, so an indented terminator ends a
+        plain ``<<EOF`` heredoc too; ``"shell"`` otherwise.
 
     Returns
     -------
@@ -330,22 +356,42 @@ def heredoc_lines(str_source: str, bool_dedent: bool = False) -> set:
         Lines after the opening line through the terminator, inclusive.
     """
     set_out: set = set()
-    str_end = ""
-    bool_indented = False
+    list_pending: list = []
+    tuple_open = None
     for int_line, str_line in enumerate(str_source.splitlines(), 1):
-        if str_end:
-            set_out.add(int_line)
-            str_seen = str_line.strip() if bool_indented or bool_dedent else str_line.rstrip()
-            str_end = "" if str_seen == str_end else str_end
+        if tuple_open is None:
+            tuple_open = heredoc_opener(str_line)
             continue
-        cls_match = None if str_line.lstrip().startswith("#") else RE_HEREDOC.search(str_line)
-        if cls_match:
-            str_end = cls_match.group(3)
-            bool_indented = cls_match.group(1) is not None
+        list_pending.append(int_line)
+        str_seen = str_line.strip() if tuple_open[1] or str_kind == "yaml" else str_line.rstrip()
+        if str_seen == tuple_open[0]:
+            set_out.update(list_pending)
+            list_pending, tuple_open = [], None
     return set_out
 
 
-def marker_blocks(str_source: str, str_marker: str, bool_yaml: bool = False) -> list:
+def heredoc_kind(path_file: pathlib.Path) -> str:
+    """Return how a file's heredocs are scanned: ``"shell"``, ``"yaml"`` or ``""`` for none.
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The file.
+
+    Returns
+    -------
+    str
+        ``""`` for every file that is not shell, YAML or Ruby.
+    """
+    if path_file.suffix in TUPLE_YAML_SUFFIXES:
+        return "yaml"
+    bool_shell = path_file.suffix in TUPLE_SHELL_SUFFIXES or path_file.name.startswith(
+        TUPLE_SHELL_NAMES
+    )
+    return "shell" if bool_shell else ""
+
+
+def marker_blocks(str_source: str, str_marker: str, str_heredoc: str = "") -> list:
     """Return consecutive comment-line runs, pragma and structural lines excluded.
 
     ⚠️ A pragma or structural line does not just fail to COUNT — it BREAKS the
@@ -360,8 +406,8 @@ def marker_blocks(str_source: str, str_marker: str, bool_yaml: bool = False) -> 
         The file's text.
     str_marker : str
         ``"#"`` or ``"//"``.
-    bool_yaml : bool, optional
-        True for YAML, where heredoc terminators may be indented.
+    str_heredoc : str, optional
+        ``heredoc_kind`` of the file; empty skips no heredoc.
 
     Returns
     -------
@@ -372,7 +418,7 @@ def marker_blocks(str_source: str, str_marker: str, bool_yaml: bool = False) -> 
     list_out: list = []
     list_block: list = []
     int_start = 0
-    set_data = heredoc_lines(str_source, bool_yaml) if str_marker == "#" else set()
+    set_data = heredoc_lines(str_source, str_heredoc) if str_heredoc else set()
     for int_line, str_line in enumerate(str_source.splitlines(), 1):
         str_stripped = str_line.lstrip()
         if int_line in set_data or not str_stripped.startswith(str_marker):
@@ -624,7 +670,7 @@ def blocks_for(path_file: pathlib.Path, str_source: str, str_marker: str) -> lis
         return python_blocks(str_source)
     if path_file.suffix == ".css":
         return comment_blocks(str_source, str_marker)
-    return marker_blocks(str_source, str_marker, path_file.suffix in TUPLE_YAML_SUFFIXES)
+    return marker_blocks(str_source, str_marker, heredoc_kind(path_file))
 
 
 def file_problems(path_file: pathlib.Path) -> list:
@@ -742,7 +788,12 @@ RE_SLASH_TOKEN = re.compile(
     r"""'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`[^`]*`|//[^\n]*|/\*.*?\*/""", re.DOTALL
 )
 RE_DASH_TOKEN = re.compile(r"""'(?:[^']|'')*'|"[^"]*"|--[^\n]*""")
-RE_HEREDOC = re.compile(r"""(?<!<)<<(-|~)?[ \t]*(["']?)([A-Za-z_][A-Za-z0-9_]*)\2""")
+RE_SHELL_TOKEN = re.compile(
+    r"""(?P<quoted>'[^']*'|"(?:\\.|[^"\\])*")"""
+    r"""|(?P<comment>(?<!\S)\#.*)"""
+    r"""|(?P<arith>\$\(\(.*?\)\))"""
+    r"""|(?P<opener>(?<!<)<<(?!<)(?P<mode>-|~)?[ \t]*(?P<q>["']?)(?P<name>[A-Za-z_]\w*)(?P=q))"""
+)
 RE_SHA_PIN = re.compile(r"@[0-9a-f]{40}\b")
 RE_VERSION_NOTE = re.compile(r"^\s*v?\d+(\.\d+)*\S*\s*$")
 
@@ -781,7 +832,7 @@ def scan_comments(str_source: str, str_marker: str) -> list:
     return list_out
 
 
-def counted_comments(str_source: str, str_marker: str, bool_yaml: bool = False) -> list:
+def counted_comments(str_source: str, str_marker: str, str_heredoc: str = "") -> list:
     """Return the comment lines that count: every one outside the allowlist.
 
     Parameters
@@ -790,8 +841,8 @@ def counted_comments(str_source: str, str_marker: str, bool_yaml: bool = False) 
         The file's text.
     str_marker : str
         ``"#"`` or ``"//"``.
-    bool_yaml : bool, optional
-        True for YAML, where heredoc terminators may be indented.
+    str_heredoc : str, optional
+        ``heredoc_kind`` of the file; empty skips no heredoc.
 
     Returns
     -------
@@ -801,7 +852,7 @@ def counted_comments(str_source: str, str_marker: str, bool_yaml: bool = False) 
     """
     tuple_allowlist = load_allowlist()
     list_lines = str_source.split("\n")
-    set_data = heredoc_lines(str_source, bool_yaml) if str_marker == "#" else set()
+    set_data = heredoc_lines(str_source, str_heredoc) if str_heredoc else set()
     return [
         (int_line, str_text)
         for int_line, str_text in scan_comments(str_source, str_marker)
@@ -833,7 +884,7 @@ def comment_line_count(path_file: pathlib.Path) -> int:
         return 0
     if path_file.suffix == ".py":
         return sum(len(list_lines) for _, list_lines in python_blocks(str_source))
-    return len(counted_comments(str_source, str_marker, path_file.suffix in TUPLE_YAML_SUFFIXES))
+    return len(counted_comments(str_source, str_marker, heredoc_kind(path_file)))
 
 
 def shown_path(path_file: pathlib.Path) -> str:
