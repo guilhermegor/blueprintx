@@ -1529,8 +1529,8 @@ def test_an_untracked_file_is_not_counted(tmp_path: Path, capsys: pytest.Capture
     """
     _tree(tmp_path, "# one\nX = 1\n", f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 a.py\n")
     (tmp_path / "local.sh").write_text("# mine\necho hi\n", encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    subprocess.run(["git", "-C", str(tmp_path), "add", "a.py"], check=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+    subprocess.run(["git", "-C", str(tmp_path), "add", "a.py"], check=True)  # noqa: S603, S607
     assert _run(tmp_path, capsys, "--require-baseline")[0] == 0
 
 
