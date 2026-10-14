@@ -839,7 +839,10 @@ def test_write_baseline_records_counts_and_then_passes(
     (tmp_path / gate.STR_BASELINE_NAME).unlink()
     _run(tmp_path, capsys, "--write-baseline")
     str_written = (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")
-    assert (str_written, _run(tmp_path, capsys)[0]) == ("2 a.py\n", 0)
+    assert (str_written, _run(tmp_path, capsys)[0]) == (
+        f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n2 a.py\n",
+        0,
+    )
 
 
 def test_docstrings_are_not_counted(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
@@ -924,7 +927,9 @@ def test_write_baseline_lowers_an_existing_row(
     """
     _tree(tmp_path, "# one\nX = 1\n", "3 a.py\n")
     _run(tmp_path, capsys, "--write-baseline")
-    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
+    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(
+        encoding="utf-8"
+    ) == f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 a.py\n"
 
 
 def _git(path_root: Path, *list_args: str) -> None:
@@ -962,7 +967,9 @@ def test_a_git_detected_rename_regenerates(tmp_path: Path, capsys: pytest.Captur
     _git(tmp_path, "mv", "old.py", "a.py")
     (tmp_path / gate.STR_BASELINE_NAME).write_text("1 old.py\n", encoding="utf-8")
     _run(tmp_path, capsys, "--write-baseline")
-    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
+    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(
+        encoding="utf-8"
+    ) == f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 a.py\n"
 
 
 def test_freed_budget_does_not_transfer_to_a_new_file(
@@ -977,7 +984,7 @@ def test_freed_budget_does_not_transfer_to_a_new_file(
     capsys : pytest.CaptureFixture
         Captures the gate's report.
     """
-    _tree(tmp_path, "X = 1\n", "1 old.py\n")
+    _tree(tmp_path, "X = 1\n", f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 old.py\n")
     (tmp_path / "old.py").write_text("X = 1\n", encoding="utf-8")
     (tmp_path / "new.py").write_text("# fresh\nX = 1\n", encoding="utf-8")
     assert _run(tmp_path, capsys, "--write-baseline")[0] == 1
@@ -1229,7 +1236,9 @@ def test_a_committed_rename_is_still_detected(
     _git(tmp_path, "commit", "-qm", "mv")
     (tmp_path / gate.STR_BASELINE_NAME).write_text("1 old.py\n", encoding="utf-8")
     _run(tmp_path, capsys, "--write-baseline")
-    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8") == "1 a.py\n"
+    assert (tmp_path / gate.STR_BASELINE_NAME).read_text(
+        encoding="utf-8"
+    ) == f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 a.py\n"
 
 
 _DICT_ALLOWED = {
@@ -1320,3 +1329,158 @@ def test_sha_pin_exemption_survives_a_vertical_tab_earlier_in_the_file() -> None
     """A vertical tab breaks ``str.splitlines``; the counter must index by newline only."""
     str_source = "a\x0bb\nuses: actions/checkout@" + "a" * 40 + " # v7.0.1\n"
     assert gate.counted_comments(str_source, "#") == []
+
+
+LIST_NEWLY_SCANNED = [
+    (".env.example", "# note\nKEY=1\n"),
+    (".gitignore", "# note\n*.pyc\n"),
+    (".dockerignore", "# note\n.git\n"),
+    (".gitattributes", "# note\n* text=auto\n"),
+    (".codespellrc", "# note\n[codespell]\n"),
+    (".editorconfig", "# note\nroot = true\n"),
+    (".gitlint", "# note\n[general]\n"),
+    (".yamllint", "# note\nrules: {}\n"),
+    (".coveragerc", "# note\n[run]\n"),
+    ("Dockerfile", "# note\nFROM scratch\n"),
+    ("Dockerfile.dev", "# note\nFROM scratch\n"),
+    ("nginx.conf", "# note\nuser nginx;\n"),
+    ("setup.cfg", "# note\n[x]\n"),
+    ("otel.env.fragment", "# note\nA=1\n"),
+    ("t.bats", "# note\n@test x {\n}\n"),
+    ("required-checks.txt", "# note\nlint\n"),
+    ("requirements.txt", "# note\nrequests\n"),
+    (".sqlfluff", "# note\n[sqlfluff]\n"),
+    ("q.sql", "-- note\nSELECT 1;\n"),
+    ("s.css", "/* note */\na {}\n"),
+]
+
+
+@pytest.mark.parametrize(("str_name", "str_text"), LIST_NEWLY_SCANNED)
+def test_a_comment_in_every_newly_scanned_file_type_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture, str_name: str, str_text: str
+) -> None:
+    """Should-fail witness: no file type is left behind (blueprintx#304).
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    str_name : str
+        File name that must now be discovered.
+    str_text : str
+        Content carrying exactly one prose comment.
+    """
+    (tmp_path / str_name).write_text(str_text, encoding="utf-8")
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    int_code, str_out = _run(tmp_path, capsys)
+    assert (int_code, f"{str_name}: 1 comment line(s), baseline 0" in str_out) == (1, True)
+
+
+def test_the_local_dot_env_working_copy_is_not_scanned(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """``.env`` is the git-ignored working copy, never ours to budget.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / ".env").write_text("# my own note\nKEY=1\n", encoding="utf-8")
+    _tree(tmp_path, "X = 1\n")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def test_a_sql_dash_dash_inside_a_string_is_not_a_comment(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-pass witness: strings are skipped, as for ``#`` and ``//``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    (tmp_path / "q.sql").write_text("SELECT '-- not a comment';\n", encoding="utf-8")
+    (tmp_path / gate.STR_BASELINE_NAME).write_text("", encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] == 0
+
+
+def _compare(tmp_path: Path, capsys: pytest.CaptureFixture, str_ref: str, str_head: str) -> int:
+    """Run the base-branch comparison for a tree holding ``a.py`` and ``q.sql``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Tree root.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    str_ref : str
+        Reference (base branch) baseline text.
+    str_head : str
+        Committed baseline text.
+
+    Returns
+    -------
+    int
+        The gate's exit code.
+    """
+    _tree(tmp_path, "# one\nX = 1\n", str_head)
+    (tmp_path / "q.sql").write_text("-- one\nSELECT 1;\n", encoding="utf-8")
+    path_ref = tmp_path / "ref.txt"
+    path_ref.write_text(str_ref, encoding="utf-8")
+    return _run(tmp_path, capsys, "--compare-baseline", str(path_ref))[0]
+
+
+def test_a_widened_scope_admits_rows_for_file_types_the_base_never_scanned(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A base written under scope 1 cannot hold rows for ``.sql``; they are not a raise.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    str_head = f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 a.py\n1 q.sql\n"
+    assert _compare(tmp_path, capsys, "1 a.py\n", str_head) == 0
+
+
+def test_a_widened_scope_still_blocks_raising_an_existing_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: the exemption covers new paths only, never a listed row.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    str_head = f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n1 a.py\n1 q.sql\n"
+    assert _compare(tmp_path, capsys, "0 a.py\n", str_head) == 1
+
+
+def test_a_current_scope_base_blocks_a_new_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Should-fail witness: once the base is on the current scope, a new row is a raise.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    str_scope = f"{gate.STR_SCOPE_ROW}{gate.INT_SCOPE}\n"
+    assert _compare(tmp_path, capsys, f"{str_scope}1 a.py\n", f"{str_scope}1 a.py\n1 q.sql\n") == 1
