@@ -2295,18 +2295,30 @@ not enforced.</p>
 <p>The expected contexts per layer are committed in <code>.github/required-checks.json</code>.
 <code>bin/ci/check_required_checks_sync.py</code> compares that file with the jobs that run on every
 PR, with no token and no secret. "Every PR" means the workflow triggers on <code>pull_request</code>
-with no <code>branches:</code>/<code>paths:</code> filter and a <code>types:</code> covering opened, reopened and
-synchronize, and the job is unconditional: it has no <code>if:</code>, or its <code>if:</code> (a surrounding
+with no <code>branches:</code>/<code>paths:</code> filter and a <code>types:</code> (a scalar counts
+as a one-item list) covering opened, reopened and synchronize, and the job is unconditional: it has no <code>if:</code>, or its <code>if:</code> (a surrounding
 <code>${{ }}</code> is stripped) has a <code>||</code> alternative that is a bare <code>github.event_name ==
 'pull_request'</code> or <code>!= '&lt;other event&gt;'</code> test. Any other <code>if:</code> makes the job conditional,
 and so does a <code>needs:</code> on a conditional job. A job that only <code>uses:</code> a reusable workflow
-fails the gate loudly; list its emitted names in the policy file by hand. It fails when:</p>
+fails the gate loudly; list its emitted names in the policy file by hand. A matrix job is
+expanded to the names GitHub reports: <code>${{ matrix.k }}</code> is interpolated, and a <code>name:</code> without
+one gets the <code>(v1, v2)</code> suffix per combination. A matrix with <code>include</code>/<code>exclude</code> or a
+dynamic <code>fromJSON</code> one is reported as unsupported for that workflow. Duplicate or conflicting
+policy lines are rejected. It fails when:</p>
 <ol>
-<li>a required context is emitted by no such job (every PR would wait forever); or</li>
+<li>a required context is emitted by no such job; or</li>
 <li>such a job is neither required nor listed as <code>optional</code> in
    <code>bin/ci/required_checks_policy.txt</code>, which also lists the <code>external</code> contexts (CodeQL,
    GitGuardian) that have no job here. Every line carries a reason.</li>
 </ol>
+<p>A workflow triggered only by <code>pull_request_target</code> is still judged and listed, but its jobs
+are always conditional and so never required: those runs execute against the base branch, and
+there is no verified guarantee GitHub attaches their checks to the PR head.</p>
+<p>Why the classification is conservative: only a workflow-level filter (<code>on.pull_request.paths</code>,
+<code>branches</code>, <code>types</code>) leaves a required check absent, which branch protection reads as pending
+forever. A job skipped by a job-level <code>if:</code> reports <code>skipped</code>, which counts as success. A
+conditional job is still treated as not running on every PR, because a gate that may skip is
+not one to require, and the allowlist keeps that choice visible.</p>
 <p>The JSON itself is checked against the live settings by <code>--live</code>, which needs
 Administration access (the maintainer PAT). That runs only in
 <code>.github/workflows/verify_required_checks.yml</code>, on <code>push</code> to <code>main</code>, a daily schedule and
@@ -2315,7 +2327,8 @@ secret. It fails closed (<code>REQUIRED_CHECKS_SYNC_REQUIRED=1</code>) when the 
 and fails on <code>main</code> when protection drifted from the JSON. Changing protection therefore
 means editing the JSON in the same change. <code>tests/test_check_required_checks_sync.sh</code>
 holds the should-fail cases.</p>
-<p><code>--live</code> also reads <code>actions/workflows</code> and fails when a workflow file that emits a required
+<p>In <code>--live</code>, a workflow the gate cannot expand (an <code>include</code> matrix, <code>fromJSON</code>) is reported
+under its own file name and the other checks still run. <code>--live</code> also reads <code>actions/workflows</code> and fails when a workflow file that emits a required
 context is not <code>active</code> (disabled in the UI): the context would never report and every PR
 would deadlock.</p>
 
