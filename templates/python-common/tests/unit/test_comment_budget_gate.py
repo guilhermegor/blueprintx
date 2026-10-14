@@ -1727,16 +1727,18 @@ def test_a_toml_string_with_a_heredoc_marker_hides_nothing(tmp_path: Path) -> No
 
 
 @pytest.mark.parametrize(
-    "str_line",
+    ("str_line", "int_want"),
     [
-        'echo "a <<EOF"',
-        "echo 'a <<EOF'",
-        "foo # see <<EOF",
-        "x=$(( y << n ))",
-        "grep x <<< y",
+        ('echo "a <<EOF"', 2),
+        ("echo 'a <<EOF'", 2),
+        ("foo # see <<EOF", 3),
+        ("foo;# see <<EOF", 2),
+        ("foo ;# see <<EOF", 2),
+        ("x=$(( y << n ))", 2),
+        ("grep x <<< y", 2),
     ],
 )
-def test_a_false_shell_opener_hides_nothing(tmp_path: Path, str_line: str) -> None:
+def test_a_false_shell_opener_hides_nothing(tmp_path: Path, str_line: str, int_want: int) -> None:
     """Should-fail witness: a quoted, commented, arithmetic or here-string ``<<`` is no heredoc.
 
     Parameters
@@ -1745,9 +1747,45 @@ def test_a_false_shell_opener_hides_nothing(tmp_path: Path, str_line: str) -> No
         A throwaway directory pytest provides per test.
     str_line : str
         The line carrying the false opener.
+    int_want : int
+        The exact count: the two real comments below it, plus a trailing comment if the
+        line has one the scanner sees.
     """
     str_text = f"{str_line}\n# real\nEOF\n# real2\n"
-    assert _count(tmp_path, "s.sh", str_text) >= 2
+    assert _count(tmp_path, "s.sh", str_text) == int_want
+
+
+def test_a_plain_terminator_must_match_exactly(tmp_path: Path) -> None:
+    """Should-fail witness: ``EOF `` with a trailing space does not end a plain heredoc.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "s.sh", "cat <<EOF\n# a\nEOF \n# b\nEOF\n# real\n") == 1
+
+
+def test_a_dash_terminator_strips_only_tabs(tmp_path: Path) -> None:
+    """Should-fail witness: spaces before ``EOF`` do not end a ``<<-`` heredoc.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "s.sh", "cat <<-EOF\n  EOF\n# x\n") == 1
+
+
+def test_several_openers_on_one_line_take_their_bodies_in_order(tmp_path: Path) -> None:
+    """Should-fail witness: ``cat <<A <<B`` skips both bodies, not just the first.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    assert _count(tmp_path, "s.sh", "cat <<A <<B\n# a\nA\n# b\nB\n# real\n") == 1
 
 
 def test_an_unterminated_opener_counts_its_lines(tmp_path: Path) -> None:

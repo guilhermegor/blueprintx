@@ -71,7 +71,7 @@ INT_BANNER_TRIPLE = 3
 TUPLE_SCOPE1_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
 TUPLE_SCOPE1_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 TUPLE_YAML_SUFFIXES = (".yaml", ".yml")
-TUPLE_SHELL_SUFFIXES = (".sh", ".bats", ".rb", ".mk")
+TUPLE_SHELL_SUFFIXES = (".sh", ".bats", ".mk")
 TUPLE_SHELL_NAMES = ("Makefile", "Dockerfile")
 TUPLE_SCOPE1_NAMES = ("Makefile",)
 
@@ -310,8 +310,8 @@ def marker_for(path_file: pathlib.Path) -> str:
     return ""
 
 
-def heredoc_opener(str_line: str) -> tuple | None:
-    """Return the terminator and indent mode of a heredoc opened on this line, if any.
+def heredoc_openers(str_line: str) -> list:
+    """Return every heredoc opened on this line, in the order their bodies follow.
 
     Parameters
     ----------
@@ -320,16 +320,42 @@ def heredoc_opener(str_line: str) -> tuple | None:
 
     Returns
     -------
-    tuple or None
-        ``(terminator, bool_indented)``. None when the ``<<`` sits inside a quoted string,
-        after an unquoted ``#``, inside ``$(( ))`` arithmetic, or is a ``<<<`` here-string.
+    list of tuple
+        ``(terminator, mode)`` per opener, mode being ``""``, ``"-"`` or ``"~"``. A ``<<``
+        inside a quoted string, after an unquoted ``#``, inside ``$(( ))`` arithmetic, or in
+        a ``<<<`` here-string is not an opener.
     """
+    list_out = []
     for cls_match in RE_SHELL_TOKEN.finditer(str_line):
         if cls_match.lastgroup == "comment":
-            return None
+            break
         if cls_match.group("opener"):
-            return cls_match.group("name"), cls_match.group("mode") is not None
-    return None
+            list_out.append((cls_match.group("name"), cls_match.group("mode") or ""))
+    return list_out
+
+
+def is_terminator(str_line: str, tuple_open: tuple, str_kind: str) -> bool:
+    """Return whether a body line ends the heredoc that ``tuple_open`` opened.
+
+    Parameters
+    ----------
+    str_line : str
+        The candidate line.
+    tuple_open : tuple
+        ``(terminator, mode)``.
+    str_kind : str
+        ``heredoc_kind`` of the file.
+
+    Returns
+    -------
+    bool
+        Shell: exact for ``<<``, leading tabs stripped for ``<<-``. YAML dedents the script
+        and Ruby allows an indented terminator, so both ignore surrounding whitespace.
+    """
+    str_name, str_mode = tuple_open
+    if str_kind in ("yaml", "ruby"):
+        return str_line.strip() == str_name
+    return str_line.lstrip("\t") == str_name if str_mode == "-" else str_line == str_name
 
 
 def heredoc_lines(str_source: str, str_kind: str = "shell") -> set:
@@ -340,15 +366,14 @@ def heredoc_lines(str_source: str, str_kind: str = "shell") -> set:
     ``<<`` in Python or TOML is a shift or text, and a false opener there would hide the
     rest of the file from the ratchet. An opener whose terminator never appears is not a
     heredoc: its lines are counted, because a false skip hides debt and a false count is
-    only noise.
+    only noise. Several openers on one line (``cat <<A <<B``) take their bodies in order.
 
     Parameters
     ----------
     str_source : str
         The file's text.
     str_kind : str, optional
-        ``"yaml"`` when a block scalar dedents the script, so an indented terminator ends a
-        plain ``<<EOF`` heredoc too; ``"shell"`` otherwise.
+        ``"shell"``, ``"yaml"`` or ``"ruby"``; see ``is_terminator``.
 
     Returns
     -------
@@ -357,16 +382,16 @@ def heredoc_lines(str_source: str, str_kind: str = "shell") -> set:
     """
     set_out: set = set()
     list_pending: list = []
-    tuple_open = None
+    list_queue: list = []
     for int_line, str_line in enumerate(str_source.splitlines(), 1):
-        if tuple_open is None:
-            tuple_open = heredoc_opener(str_line)
+        if not list_queue:
+            list_queue = heredoc_openers(str_line)
             continue
         list_pending.append(int_line)
-        str_seen = str_line.strip() if tuple_open[1] or str_kind == "yaml" else str_line.rstrip()
-        if str_seen == tuple_open[0]:
+        if is_terminator(str_line, list_queue[0], str_kind):
             set_out.update(list_pending)
-            list_pending, tuple_open = [], None
+            list_pending = []
+            list_queue = list_queue[1:]
     return set_out
 
 
@@ -381,10 +406,12 @@ def heredoc_kind(path_file: pathlib.Path) -> str:
     Returns
     -------
     str
-        ``""`` for every file that is not shell, YAML or Ruby.
+        ``""`` for every file that is not shell, YAML or Ruby; Ruby is ``"ruby"``.
     """
     if path_file.suffix in TUPLE_YAML_SUFFIXES:
         return "yaml"
+    if path_file.suffix == ".rb":
+        return "ruby"
     bool_shell = path_file.suffix in TUPLE_SHELL_SUFFIXES or path_file.name.startswith(
         TUPLE_SHELL_NAMES
     )
@@ -790,7 +817,7 @@ RE_SLASH_TOKEN = re.compile(
 RE_DASH_TOKEN = re.compile(r"""'(?:[^']|'')*'|"[^"]*"|--[^\n]*""")
 RE_SHELL_TOKEN = re.compile(
     r"""(?P<quoted>'[^']*'|"(?:\\.|[^"\\])*")"""
-    r"""|(?P<comment>(?<!\S)\#.*)"""
+    r"""|(?P<comment>(?<![^\s;&|()<>])\#.*)"""
     r"""|(?P<arith>\$\(\(.*?\)\))"""
     r"""|(?P<opener>(?<!<)<<(?!<)(?P<mode>-|~)?[ \t]*(?P<q>["']?)(?P<name>[A-Za-z_]\w*)(?P=q))"""
 )
