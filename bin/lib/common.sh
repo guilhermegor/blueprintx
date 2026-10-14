@@ -1,25 +1,14 @@
 #!/bin/bash
-# lib/common.sh
-# Shared shell utilities for the BlueprintX repo tooling. Sourced by sibling
-# scripts (bin/*.sh, bin/scaffold/*.sh) so each one shares a single
-# print_status implementation and color set.
-# Sourcing contract:
-#   - Idempotent (guarded with _BX_COMMON_LOADED so re-sourcing is a no-op).
-#   - Optional: scripts may set LOG_FILE before sourcing; print_status will tee
-#     timestamped output there. If LOG_FILE is unset, console output only.
-#   - Refuses direct execution.
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     echo "lib/common.sh is meant to be sourced, not executed." >&2
     exit 1
 fi
 
-# Re-sourcing guard
 if [ -n "${_BX_COMMON_LOADED:-}" ]; then
     return 0
 fi
 _BX_COMMON_LOADED=1
-
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -29,39 +18,8 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-# The six colours above are already each bound to one print_status level
-# (RED=error, GREEN=success, YELLOW=warning, BLUE=info, CYAN=config,
-# MAGENTA=debug/section). Reusing any of them for "this is a top-level
-# question" or "this is a deliberate, non-error exit" would give that colour
-# a second, unrelated meaning — the exact defect blueprintx#253 reported
-# (Cancel painted RED, print_status's "error" colour, even though cancelling
-# is not a failure). So these three get their own escape codes instead of
-# aliasing an existing level:
-#
-#   PROMPT_PRIMARY — a top-level scaffolder question (bold blue)
-#   PROMPT_SUB     — a conditional follow-up, always rendered indented with
-#                     a "└" continuation glyph so the hierarchy survives
-#                     NO_COLOR / a non-TTY pipe with the colour stripped
-#                     (bold magenta — the "pink" asked for in both issues)
-#   CANCEL         — the menu's Cancel option: deliberately the SAME code as
-#                     PROMPT_SUB, because both are "secondary but
-#                     intentional, never an error"
-#
-# BlueprintX-repo-only, deliberately NOT added to templates/common or
-# templates/python-common/bin/lib/common.sh: those two are copied verbatim
-# into every generated project, and "which scaffolder question is a
-# sub-question" is a concept of BlueprintX's own interactive menu, not
-# something a generated project's scripts ask about. Shipping it there would
-# be a scaffolder-only concept leaking into every user's repo.
-#
-#   read -r -p "$(prompt_main "Question? [y/N]: ")" answer
-#   read -r -p "$(prompt_sub  "Follow-up? [a/b]: ")" sub_answer
-#   printf "  ${CANCEL}%d) Cancel${NC}\n" "$idx"
-
 PROMPT_PRIMARY='\033[1;34m'
 PROMPT_SUB='\033[1;35m'
-# Read by bin/blueprintx.sh (a different file), which shellcheck cannot follow
-# when it lints this file standalone.
 # shellcheck disable=SC2034
 CANCEL="$PROMPT_SUB"
 
@@ -115,23 +73,6 @@ prompt_yes_no() {
     esac
 }
 
-# BRAND COLOURS — logo/tagline accent (blueprintx#256)
-#
-# assets/logo.png is two-tone (teal BLUEPRINT + pink X), but the banner in
-# bin/blueprintx.sh painted the whole wordmark CYAN and the whole tagline
-# MAGENTA, losing the pink half of the identity. MAGENTA/CYAN are NOT reused
-# here: MAGENTA already means "debug/section" and CYAN "config" in
-# print_status, and reusing either would give it a second, unrelated meaning
-# (the same defect #253 was filed against). Measured from assets/logo.png:
-#   BLUEPRINT / "Blueprints." -> #4EB8C0 / #3BB2C3 -> xterm-256 73  (#5FAFAF)
-#   X / "Expansible."         -> #A63698 / #CC3DA2 -> xterm-256 169 (#D75FAF)
-#
-# 256-colour has no 4-bit equivalent, so a terminal that lacks it falls back
-# to the existing CYAN/MAGENTA, and NO_COLOR disables all three vars (incl.
-# BRAND_NC, so no bare reset escape leaks into redirected output). Scoped to
-# the brand tokens only — the rest of this file's palette stays unconditional;
-# making that repo-wide is a separate behaviour change (flagged in #256, not
-# done here).
 if [ -n "${NO_COLOR:-}" ]; then
     BRAND_TEAL=''
     BRAND_PINK=''
@@ -141,8 +82,6 @@ elif command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null || echo 0)"
     BRAND_PINK='\033[38;5;169m'
     BRAND_NC="$NC"
 else
-    # Read by bin/blueprintx.sh (a different file), which shellcheck cannot
-    # follow when it lints this file standalone.
     # shellcheck disable=SC2034
     BRAND_TEAL="$CYAN"
     # shellcheck disable=SC2034
@@ -150,15 +89,6 @@ else
     # shellcheck disable=SC2034
     BRAND_NC="$NC"
 fi
-
-#
-# Usage:
-#   print_status <level> <message>
-#
-# Levels: success | error | warning | info | config | debug | section
-# Unknown levels fall through to a neutral "[ ] message" prefix.
-# Errors go to stderr; everything else to stdout.
-# If $LOG_FILE is set, every call appends a timestamped line to it.
 
 print_status() {
     local status="$1"
@@ -189,12 +119,6 @@ print_status() {
             echo -e "${MAGENTA}========================================${NC}\n"
             ;;
         *)
-            # A typo'd status used to land here and print an UNMARKED line, so a warning
-            # rendered exactly like neutral output — measured: 35 calls spelled "warn"
-            # instead of "warning" across the five Python scaffolds, every one of them a
-            # warning the user could not tell apart from ordinary chatter. Nothing in the
-            # repo uses this branch deliberately (every status in use is in the list
-            # above), so it now names the bad status on stderr instead of swallowing it.
             echo -e "${YELLOW}[?]${NC} ${message}" >&2
             echo "print_status: unknown status '${status}' — expected one of:" \
                 "success|error|warning|info|config|debug|section" >&2
@@ -206,23 +130,10 @@ print_status() {
     fi
 }
 
-#
-# Usage:
-#   print_section <title>
-#
-# Thin wrapper over the "section" print_status level for call-site readability.
-
 print_section() {
     local title="$1"
     print_status "section" "$title"
 }
-
-#
-# Usage:
-#   exit_error <message> [exit_code]
-#
-# Routes the message through print_status "error" (stderr + log) then exits
-# with the given code (default 1).
 
 exit_error() {
     local message="$1"
@@ -231,34 +142,13 @@ exit_error() {
     exit "$code"
 }
 
-#
-# Usage:
-#   sed_inplace <sed-args...> <file>
-#
-# Portable "sed -i": GNU sed's `-i` takes no argument, BSD/macOS sed's `-i` REQUIRES one —
-# the README claims macOS support but every scaffold used the GNU-only form, aborting
-# partway through a scaffold on that platform (blueprintx#459). `-i.bak` satisfies both sed
-# implementations identically; the backup this creates is removed immediately after.
-#
-# Drop-in for a direct `sed -i <script...> <file>` call — replace `sed -i` with `sed_inplace`
-# and keep everything else. NOT usable under `xargs` (xargs execs a binary by name and cannot
-# invoke a shell function) — convert an `... | xargs -r sed -i <script>` site to a
-# `while read -r file; do sed_inplace <script> "$file"; done < <(...)` loop instead (see
-# conditional_copy_webhooks_yaml in bin/scaffold/python_mvc_service.sh for the pattern).
-
 sed_inplace() {
-    # Operands are the arguments that already name existing files; sed creates a backup for
-    # those and for nothing else. Collect them BEFORE the edit, because appending the suffix
-    # to every argument would hand `rm` an unrelated pre-existing "<sed-script>.bak" that this
-    # invocation never created (blueprintx#502).
     local -a arr_operands=()
     local str_arg
     for str_arg in "$@"; do
         [[ -f "$str_arg" ]] && arr_operands+=("$str_arg")
     done
 
-    # A per-invocation suffix, so a backup this call did not make can never match the cleanup
-    # below even when the operand genuinely has a committed ".bak" sibling.
     local str_suffix=".bpxbak$$"
     local int_status=0
     sed "-i${str_suffix}" "$@" || int_status=$?
@@ -267,19 +157,8 @@ sed_inplace() {
         [[ -f "${str_arg}${str_suffix}" ]] && rm -f "${str_arg}${str_suffix}"
     done
 
-    # Return sed's own status, not the cleanup's: under `set +e` a successful cleanup would
-    # otherwise mask a failed edit and the caller would proceed on unedited content.
     return "$int_status"
 }
-
-#
-# Usage:
-#   target="$(resolve_default_branch [explicit_name])"
-#
-# Resolution order: explicit argument, then $DEFAULT_BRANCH, then the remote's
-# origin/HEAD, then a local "main", else "master". Used by the git-workflow
-# targets (new_branch / git_merge_to_main) so both agree on the integration
-# branch.
 
 resolve_default_branch() {
     local explicit="${1:-}"
@@ -306,19 +185,6 @@ resolve_default_branch() {
     echo "master"
 }
 
-#
-# A project's config can ship as a single inputs.yaml/outputs.yaml (default) or
-# as env-suffixed pairs (inputs_dev.yaml/inputs_prd.yaml, …) that `ENV` selects
-# via src/config/env_config.resolve_config_path. These two helpers offer that as
-# a scaffold-time choice, shared here so every Python service tier (mvc-*, ddd-*,
-# and any future one) inherits identical behaviour from one place.
-#
-# Usage in a scaffold:
-#   prompt_env_wise_config                 # sets INCLUDE_ENV_WISE (true|false)
-#   ...
-#   copy_global_config "$PROJECT_PATH"     # ships the plain inputs/outputs.yaml
-#   apply_env_wise_config "$PROJECT_PATH"  # splits them into dev/prd if chosen
-
 prompt_env_wise_config() {
     prompt_yes_no INCLUDE_ENV_WISE \
         "$(prompt_main "Use env-wise config (inputs_dev/prd.yaml, outputs_dev/prd.yaml) instead of single files? [y/N]: ")"
@@ -328,20 +194,6 @@ prompt_env_wise_config() {
         print_status "config" "Config: single inputs.yaml + outputs.yaml (default)"
     fi
 }
-
-#
-# Usage:
-#   strip_bump_version "$project_path"
-#
-# Meaningless once versioning is tag-driven (lib: poetry-dynamic-versioning;
-# services: the release.yaml workflow) — it would bump a frozen "0.0.0" stub.
-# Call only on the ONLINE path; offline scaffolds keep the task (cz bump).
-# Shared by every Python scaffold so the regex lives in one place.
-#
-# Before the poe migration this edited BOTH the Makefile and tasks.sh, in three
-# places each (.PHONY / recipe / help, then function / case branch / help) — six
-# regexes for one removal, which is what two implementations of one command list
-# costs even at deletion time. One TOML table replaces all six.
 
 strip_bump_version() {
     local project_path="$1"
@@ -376,22 +228,6 @@ with open(path_tasks, "w", encoding="utf-8") as fh:
 PY
 }
 
-#
-# Usage:
-#   add_poe_include "$project_path" "poe_tasks.offline.toml"
-#
-# The Makefile declared both conditional fragments unconditionally as
-# `-include make/*.mk`, whose leading '-' made a missing file silent. Poe's
-# `include` is NOT equivalent: a missing path does not fail the run, but it
-# DOES print `Warning: Poe could not include file from invalid path …` on every
-# invocation — measured. An online, non-library project would print two warnings
-# before every `poe lint`, which is how a team learns to read past warnings.
-#
-# So the include list names only the fragments actually copied, appended here at
-# scaffold time. Idempotent: re-adding the same file is a no-op, and a second
-# distinct file extends the existing list rather than opening a second
-# `[tool.poe]` table (which would be invalid TOML).
-
 add_poe_include() {
     local project_path="$1"
     local include_file="$2"
@@ -421,10 +257,6 @@ PY_INNER
 }
 
 apply_env_wise_config() {
-    # When env-wise was chosen, split each plain config file into _dev/_prd copies
-    # and remove the plain file — so env_config.resolve_config_path switches to
-    # env-wise mode (an unknown ENV then fails loud). No-op otherwise. Idempotent
-    # and safe under `set -u` (INCLUDE_ENV_WISE may be unset → treated as false).
     local project_path="$1"
     [[ "${INCLUDE_ENV_WISE:-false}" == "true" ]] || return 0
 
@@ -441,17 +273,6 @@ apply_env_wise_config() {
 }
 
 scaffold_purge_caches() {
-    # Strip interpreter/tool caches from a freshly generated tree.
-    #
-    # The scaffolds copy template trees with `cp -r`, which has no exclusion
-    # mechanism, so any __pycache__ / .pytest_cache / .ruff_cache / .mypy_cache
-    # left in templates/ by a local tool run is copied straight into the new
-    # project. CI cannot see it — a fresh checkout has no caches — and the
-    # generated .gitignore then hides the result from `git status` downstream,
-    # so it ships silently from a maintainer's machine and nowhere else.
-    #
-    # Purging once, after the copy phase, keeps ONE implementation instead of an
-    # exclusion argument repeated at ~30 `cp -r` call sites (and needs no rsync).
     local project_path="$1"
     [ -d "$project_path" ] || return 0
 
@@ -463,54 +284,21 @@ scaffold_purge_caches() {
 }
 
 to_import_package_name() {
-    # Derive the Python IMPORT package name from a distribution name (blueprintx#113).
-    #
-    # A PyPI *distribution* name may contain hyphens; a Python *import package* may
-    # not — a hyphen is an operator, so `from my-lib.thing import x` is a parse-time
-    # SyntaxError. Conflating the two writes `src/my-lib/` and every deep import
-    # inside the generated package fails to compile.
-    #
-    # It hides unusually well, which is why it survived: the top-level `__init__`
-    # compiles either way (it has nothing to import from itself), and
-    # `importlib.import_module("my-lib")` succeeds on the string form. Only a
-    # submodule import written as SOURCE actually breaks — so the smoke test that
-    # catches it has to reach past the top level.
     local str_dist="$1"
     printf '%s' "${str_dist//-/_}"
 }
 
 is_valid_project_name() {
-    # A project name must survive both identities: a hyphenated dist name AND the
-    # underscored import package derived from it. Rejecting here is the whole fix
-    # for names no substitution can rescue (a leading digit, a dot, a space).
     local str_name="$1"
     [[ "$str_name" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
 }
 
-# Ship the branch-protection provisioner into a NON-Python skeleton (blueprintx#564).
-#
-# The Python tiers already get `enable_repo_rules.sh` for free — they copy
-# `templates/python-common/bin/` wholesale — so before this the TypeScript and Bash
-# skeletons had no provisioning at all: not one required check, zero, with every
-# qualifying name they emit required by nothing.
-#
-# ⚠️ The script is language-agnostic and its home SHOULD be `templates/common/bin/`,
-# the same move `check_review_threads.py` made in blueprintx#175. It is read from
-# `templates/python-common/bin/` instead because `.github/workflows/verify_branch_protection.yml`
-# hardcodes that path to run the script's read-only `verify` mode against BlueprintX
-# itself, and moving the file without that workflow would turn `main` red. One
-# implementation either way — only the path is pending. Tracked as a follow-up.
-#
-# The per-tier check list travels as DATA ($2), because a shared script cannot require
-# a name only one tier emits — see each `required-checks.txt` for what qualified and why.
 copy_repo_rules_provisioner() {
     local project_path="$1"
     local required_checks_src="$2"
     local blueprintx_root
     blueprintx_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
     mkdir -p "$project_path/bin/lib"
-    # lib/common.sh is the script's ONE dependency (print_status) — copied here rather
-    # than assumed, so a caller that never materialised bin/lib/ still gets a runnable script.
     cp "$blueprintx_root/templates/common/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$blueprintx_root/templates/python-common/bin/enable_repo_rules.sh" \
         "$project_path/bin/enable_repo_rules.sh"

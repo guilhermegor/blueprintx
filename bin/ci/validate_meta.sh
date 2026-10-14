@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Validates every templates/*/skeleton.meta:
-#   1. All four required fields are present and non-empty.
-#   2. The scaffold= path exists relative to repo root.
-#   3. The skeleton's own directory name is mentioned in the root CLAUDE.md — a live
-#      skeleton (discoverable in the `make new` menu via its skeleton.meta) undocumented
-#      in CLAUDE.md is exactly the blueprintx#478 gap: a brief written from CLAUDE.md's
-#      skeleton list alone silently under-counts the scaffolding surface by one skeleton.
-#      Machine-decidable ("is this substring present"), so it is a gate, not a review
-#      question — CLAUDE.md's own QUALITY of the mention stays a human call.
 
 set -euo pipefail
 
@@ -28,9 +19,6 @@ for meta in "$TEMPLATES_DIR"/*/skeleton.meta; do
     echo "Checking: templates/$skeleton_dir/skeleton.meta"
 
     for field in "${REQUIRED_FIELDS[@]}"; do
-        # `|| true`: under `set -euo pipefail` a missing key makes grep exit 1 and kills the
-        # whole gate BEFORE the check below can name the field. Measured: exit 1 with no
-        # message at all, which every should-fail test read as proof the check had run.
         value="$(grep "^${field}=" "$meta" | cut -d= -f2- | tr -d '[:space:]' || true)"
         if [ -z "$value" ]; then
             echo "  ERROR: field '$field' is missing or empty" >&2

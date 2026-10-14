@@ -30,14 +30,11 @@ import re
 import subprocess
 import sys
 
-
 _RE_SURFACE_BLOCK = re.compile(r"```surface\s*\n(.*?)```", re.S)
 _RE_OVERRIDE_TRAILER = re.compile(r"^surface-override:\s*(.+)$", re.I | re.M)
 
-
 class ScopeCheckUnknown(Exception):
     """The GitHub API could not be read — must surface as UNKNOWN, never a silent pass."""
-
 
 def gh_json(list_args: list[str]) -> dict:
     """Run a ``gh`` command and parse its stdout as JSON.
@@ -78,7 +75,6 @@ def gh_json(list_args: list[str]) -> dict:
     except json.JSONDecodeError as cls_exc:
         raise ScopeCheckUnknown(f"gh {' '.join(list_args)} returned non-JSON output") from cls_exc
 
-
 def pr_snapshot(str_repo: str, str_pr: str) -> tuple[list[str], list[int], list[str]]:
     """Return a PR's changed files, closed issue numbers, and commit bodies in one API call.
 
@@ -113,7 +109,6 @@ def pr_snapshot(str_repo: str, str_pr: str) -> tuple[list[str], list[int], list[
     list_bodies = [dict_c.get("messageBody", "") or "" for dict_c in dict_pr.get("commits", [])]
     return list_files, list_issues, list_bodies
 
-
 def issue_surface(str_repo: str, int_issue: int) -> set[str] | None:
     """Return one issue's declared file-surface patterns, or None if it declares none.
 
@@ -139,12 +134,7 @@ def issue_surface(str_repo: str, int_issue: int) -> set[str] | None:
         for str_line in cls_match.group(1).splitlines()
         if str_line.strip() and not str_line.strip().startswith("#")
     }
-    # An empty fence (or one holding only comments) is UNDECLARED, never "declared as nothing".
-    # Returning an empty set here would put every changed file outside the surface and fail the
-    # PR, which is the opposite of the documented non-blocking behaviour for an undeclared
-    # surface — and the issue template ships exactly that shape.
     return set_patterns or None
-
 
 def path_in_surface(str_path: str, set_patterns: set[str]) -> bool:
     """Return whether a changed file falls inside a declared surface.
@@ -168,7 +158,6 @@ def path_in_surface(str_path: str, set_patterns: set[str]) -> bool:
         for str_pattern in set_patterns
     )
 
-
 def override_reason(list_bodies: list[str]) -> str | None:
     """Return the reason from a ``surface-override:`` commit trailer, if any commit carries one.
 
@@ -187,7 +176,6 @@ def override_reason(list_bodies: list[str]) -> str | None:
         if cls_match:
             return cls_match.group(1).strip()
     return None
-
 
 def gather_declared_surfaces(
     str_repo: str, list_issues: list[int]
@@ -220,7 +208,6 @@ def gather_declared_surfaces(
         else:
             dict_declared[int_issue] = set_surface
     return dict_declared, list_undeclared
-
 
 def report_violations(
     list_files: list[str],
@@ -272,7 +259,6 @@ def report_violations(
     )
     return 1, list_lines
 
-
 def evaluate(str_repo: str, str_pr: str) -> tuple[int, list[str]]:
     """Evaluate one PR against its linked issues' declared surfaces.
 
@@ -306,7 +292,6 @@ def evaluate(str_repo: str, str_pr: str) -> tuple[int, list[str]]:
 
     return report_violations(list_files, dict_declared, list_bodies)
 
-
 def main() -> int:
     """Run the scope check from ``GITHUB_REPOSITORY`` / ``PR_NUMBER`` and print the verdict.
 
@@ -326,7 +311,6 @@ def main() -> int:
     for str_line in list_lines:
         print(str_line, file=str_stream)
     return int_code
-
 
 if __name__ == "__main__":
     sys.exit(main())

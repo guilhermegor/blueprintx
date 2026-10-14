@@ -1,33 +1,4 @@
 #!/usr/bin/env bash
-# Shared "copy the common Python templates" step for the four service scaffolds.
-#
-# WHY THIS FILE EXISTS. `copy_common_templates` was 95 lines duplicated across
-# python_ddd_service.sh, python_ddd_service_orm.sh, python_mvc_service.sh and
-# python_mvc_service_orm.sh. Measured with `diff`, the four copies differed by
-# EXACTLY ONE TOKEN each -- the tier directory name, in two lines out of 95:
-#
-#   envsubst < "$BLUEPRINTX_ROOT/templates/<TIER>/pyproject.toml" > ...
-#   cp        "$BLUEPRINTX_ROOT/templates/<TIER>/.vscode/tasks.json" ...
-#
-# So 285 lines existed to vary one word. That is the copy-list drift this repo keeps
-# paying for: a file added to python-common reaches a tier only if someone remembers to
-# add a `cp` line in each of four places, and the tier that gets forgotten fails nowhere.
-#
-# WHY IT IS SPLIT INTO FOUR. Merging the copies would still leave one 95-line function,
-# which the 60-line gate rejects for the same reason a reader would: a flat wall of `cp`
-# has no seams to navigate by. The split is by DESTINATION CONCERN -- project identity,
-# tooling config, shared tests, executables -- so a new asset has an obvious home.
-#
-# ⚠️ CONTRACT WITH bin/ci/check_test_copy_lists.py. That gate asserts every shared unit
-# test is reachable from each scaffold's copy list, and it reads the SCAFFOLD SCRIPTS.
-# Moving the test `cp` lines here would have blinded it -- it would have found empty
-# lists and reported every shared test as missing. It now follows the `source` line into
-# this file, so the reachable set it computes is the real union. If you move these lines
-# again, that gate moves with them.
-#
-# ⚠️ This is a sourced lib: define-only, no work on source. It reads globals the caller
-# has already set (BLUEPRINTX_ROOT, COMMON_TEMPLATE_ROOT, SHARED_TEMPLATE_ROOT,
-# LICENSES_TEMPLATE_ROOT, LICENSE_CHOICE, PROJECT_* and GITHUB_USERNAME).
 
 # shellcheck source=bin/lib/scaffold_provenance.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_provenance.sh"
@@ -54,13 +25,6 @@ scaffold_render_pyproject() {
 	envsubst <"$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" >"$str_project_path/LICENSE"
 }
 
-# scaffold_prune_optin_dependency: delete a declared dependency's line (and, when the sed
-# pattern is a range, its descriptive comment) from the just-rendered pyproject.toml when the
-# opt-in feature that imports it was declined -- blueprintx#274. A tier manifest used to
-# declare an opt-in's dependency UNCONDITIONALLY, so a project that declined the feature still
-# installed it; deptry's DEP002 (declared, never imported) then had to be silenced with a
-# per_rule_ignores entry instead of a real fix. Called once per opt-in per tier, AFTER
-# scaffold_render_pyproject, with the flag the matching prompt_* function already set.
 scaffold_prune_optin_dependency() {
 	local str_project_path="$1" str_flag_value="$2" str_sed_pattern="$3"
 
@@ -75,9 +39,6 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$str_project_path/.pydocstyle"
 	cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$str_project_path/requirements.txt"
 	cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$str_project_path/.codespellrc"
-	# Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
-	# review tools is a row here rather than an edit to the gate. Skipped when the
-	# scaffold answered "no reviewer bot" (blueprintx#374 — rationale in docs/faq.md).
 	if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
 		cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$str_project_path/.review-bots.yaml"
 	fi
@@ -88,44 +49,26 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/.yamllint" "$str_project_path/.yamllint"
 	cp "$COMMON_TEMPLATE_ROOT/.shellcheckrc" "$str_project_path/.shellcheckrc"
 	cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$str_project_path/CONTRIBUTING.md"
-	# The command interface: poe_tasks.toml replaces the Makefile + tasks.sh pair.
 	cp "$COMMON_TEMPLATE_ROOT/poe_tasks.toml" "$str_project_path/poe_tasks.toml"
 	cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$str_project_path/pytest.ini"
 	cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$str_project_path/ruff.toml"
-	# Seed CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
-	# release; cz changelog regenerates it from tags at release/docs-build time.
 	cp "$COMMON_TEMPLATE_ROOT/CHANGELOG.md" "$str_project_path/CHANGELOG.md"
 	cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$str_project_path/poetry.toml"
 	cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$str_project_path/.gitlint"
 	cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$str_project_path/.coveragerc"
-	# SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
-	# file, language-agnostic, so it lives in templates/common not python-common.
 	cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$str_project_path/PRINCIPLES.md"
-	# Commitizen config, out of pyproject.toml since blueprintx#233. Losing this copy does
-	# NOT error — cz falls back to defaults and exits 0 — so scaffold_lint_test.sh asserts it.
 	cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$str_project_path/.cz.toml"
 }
 
 scaffold_copy_shared_tests() {
 	local str_project_path="$1"
 
-	# Reference integration test for the shared bin/ shell seams (poetry_exec.sh,
-	# precommit.sh). Ships from python-common — the per-tier `cp -r tests/.` does not
-	# reach python-common/tests/. See bin/CLAUDE.md "Testing shell scripts".
 	mkdir -p "$str_project_path/tests/integration"
 	cp "$COMMON_TEMPLATE_ROOT/tests/integration/test_bin_scripts.py" \
 		"$str_project_path/tests/integration/test_bin_scripts.py"
 	rm -f "$str_project_path/tests/integration/.keep"
 
-	# Network-block guard + introspective-convention example — ship from python-common to
-	# every tier (the per-tier `cp -r tests/.` does not reach python-common/tests/). The
-	# conftest makes a real network call impossible in any test; the example demonstrates
-	# enforcing a family convention via __all__.
 	mkdir -p "$str_project_path/tests/unit"
-	# The tests/ leaf doc — ONE source for all six tiers (blueprintx#124, #152). It used to
-	# exist only in the two MVC tiers, byte-identical, and shipping it per-tier would have
-	# made six copies of one file: exactly the drift check_codespell_sync.sh exists to
-	# police. Layout-specific guidance lives in a table INSIDE the doc, not in six forks.
 	cp "$COMMON_TEMPLATE_ROOT/tests/CLAUDE.md" "$str_project_path/tests/CLAUDE.md"
 	cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$str_project_path/tests/conftest.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
@@ -144,18 +87,13 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_function_length_gate.py"
 }
 
-# Split from scaffold_copy_shared_tests (blueprintx#127): the gate/example tests plus
-# fixtures, kept separate so neither half nears the 60-line function-length ceiling.
 scaffold_copy_shared_test_gates() {
 	local str_project_path="$1"
 
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_coverage_floor_gate.py" \
 		"$str_project_path/tests/unit/test_coverage_floor_gate.py"
-	# Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
-	# selector could be wrong without any tier noticing (blueprintx#211).
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
 		"$str_project_path/tests/unit/test_pip_requirements.py"
-	# The should-fail witness for the pip-fallback import verification (blueprintx#127).
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_verify_venv_imports.py" \
 		"$str_project_path/tests/unit/test_verify_venv_imports.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_startup_fragility_order.py" \
@@ -165,8 +103,6 @@ scaffold_copy_shared_test_gates() {
 		"$str_project_path/tests/unit/test_contract_oracle_example.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
 		"$str_project_path/tests/unit/test_family_convention_example.py"
-	# Ships to all five tiers; self-skips at module level in lib-minimal, which carries no
-	# contract registry and therefore no drift driver.
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_drift.py" \
 		"$str_project_path/tests/unit/test_contract_drift.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
@@ -177,9 +113,6 @@ scaffold_copy_shared_test_gates() {
 		"$str_project_path/tests/fixtures/example_source__header.csv"
 }
 
-# The tests that cover the gates themselves. Split out of scaffold_copy_shared_tests when
-# that function crossed the 60-line ceiling: this is a real grouping, not an arbitrary cut,
-# so the next gate test has an obvious home instead of pushing the parent over again.
 scaffold_copy_gate_tests() {
 	local str_project_path="$1"
 
@@ -226,20 +159,11 @@ scaffold_copy_executables_and_vscode() {
 	cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$str_project_path/bin/commit.sh"
 	chmod +x "$str_project_path/bin/export_repo_content.sh" \
 		"$str_project_path/bin/ship.sh" "$str_project_path/bin/commit.sh"
-	# check_review_threads.py moved out of python-common/bin/ into the language-agnostic
-	# templates/common/bin/ (blueprintx#175 follow-up) — the wholesale COMMON_TEMPLATE_ROOT
-	# copy above no longer reaches it, so it is copied explicitly from SHARED_TEMPLATE_ROOT,
-	# same destination as before (project bin/), so review_threads.yaml's
-	# `python bin/check_review_threads.py` needs no change.
 	cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" \
 		"$str_project_path/bin/check_review_threads.py"
-	# Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-	# commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
 	cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$str_project_path/.specs"
 	mkdir -p "$str_project_path/.specs/backlog"
 	touch "$str_project_path/.specs/backlog/.gitkeep"
-	# The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
-	# implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
 	cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" \
 		"$str_project_path/bin/check_specs_structure.sh"
 	chmod +x "$str_project_path/bin/check_specs_structure.sh"
@@ -247,15 +171,10 @@ scaffold_copy_executables_and_vscode() {
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"
 
-	# VS Code: shared settings (python-common) + per-tier tasks (commands differ).
 	mkdir -p "$str_project_path/.vscode"
 	cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$str_project_path/.vscode/settings.json"
 	cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.json" \
 		"$str_project_path/.vscode/extensions.json"
-	# Single source for the four service tiers. They each carried their own copy until the
-	# poe migration and all four were byte-identical (md5 09515a32) — four copies of one
-	# file, which is the drift check_codespell_sync.sh exists to police. lib-minimal keeps
-	# its own (its task set genuinely differs) and copies it in its own scaffold.
 	cp "$COMMON_TEMPLATE_ROOT/.vscode/tasks.json" \
 		"$str_project_path/.vscode/tasks.json"
 }
@@ -263,22 +182,9 @@ scaffold_copy_executables_and_vscode() {
 scaffold_copy_docs_extras() {
 	local str_project_path="$1"
 
-	# Incident-record page (blueprintx#240) — shared source so all reachable tiers stay in
-	# sync, same reasoning as the usage/examples/faq/contributing/changelog loop in each
-	# tier's own copy_mkdocs_templates. Copied here (not there) because docs/ already
-	# exists by the time this runs, and this file is not touched by any in-flight PR.
 	cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" "$str_project_path/docs/incidents.md"
 }
 
-# The per-directory leaf CLAUDE.md docs. They are the asset class the copy lists kept
-# forgetting: nothing imports a doc, no test fails without it, and the generated project is
-# green precisely because the file is not there — so a doc written in python-common could sit
-# unshipped indefinitely (blueprintx#325). bin/ci/check_test_copy_lists.py now scans this
-# copy list as a third asset class, next to shared tests and shared workflows.
-#
-# src/config/CLAUDE.md is NOT here: each tier copies it in its own copy_global_config, next to
-# the config payload it documents. Moving it would be a behaviour change in five scaffolds for
-# no gain — the gate accepts either home.
 scaffold_copy_leaf_docs() {
 	local str_project_path="$1"
 
@@ -288,7 +194,6 @@ scaffold_copy_leaf_docs() {
 	cp "$COMMON_TEMPLATE_ROOT/src/utils/CLAUDE.md" "$str_project_path/src/utils/CLAUDE.md"
 }
 
-# The tier scaffold already copied the CLAUDE.md @import bridge; this ships its target.
 scaffold_copy_agents_md() {
 	local str_tier="$1"
 	local str_project_path="$2"
@@ -310,9 +215,6 @@ scaffold_copy_common_templates() {
 	scaffold_copy_docs_extras "$str_project_path"
 	scaffold_copy_leaf_docs "$str_project_path"
 	scaffold_copy_agents_md "$str_tier" "$str_project_path"
-	# Every skeleton's root CLAUDE.md points readers at `.claude/CLAUDE.md` for the
-	# conventions shared across all skeletons (blueprintx#549) — copy the single
-	# source so that pointer resolves instead of dangling.
 	mkdir -p "$str_project_path/.claude"
 	cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$str_project_path/.claude/CLAUDE.md"
 	print_status "success" "Common templates applied"

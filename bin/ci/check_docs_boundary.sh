@@ -1,59 +1,7 @@
 #!/usr/bin/env bash
-# Guards the docs/ boundary (blueprintx#536): docs/ is solely for published MkDocs
-# documentation. Working material about HOW the work gets done — backlog ledgers, lesson
-# stores, .superpowers material, spec/plan artifacts — belongs outside it. This is the
-# owner's standing rule (2026-09-18): "docs/backlog, docs/**/*lessons*, .superpowers and
-# any other work related to lessons to other packages/repos/frameworks/ai handling/
-# superpowers — the boundary is to stay here, docs/ is solely for documentation."
-#
-# 🔴 ROOT-REPO-ONLY, DECIDED — NOT "not done yet" (blueprintx#576, the follow-up #536
-# promised). This gate walks BlueprintX's own docs/ and deliberately never walks
-# templates/*/docs/. A generated project's docs/ answers to its own authors, and the same
-# path means opposite things on the two sides: docs/backlog/ here is the violation the rule
-# names, while inside templates/<tier>/ it is a shipped product surface with its own gate
-# (templates/python-common/bin/check_backlog_ledger.py, wired into that tier's pre-commit +
-# CI) present in five tiers today. Same precedent as en-US prose (blueprintx#194): the rule
-# is this repo's, and check_comment_language.py is locale-agnostic precisely because a
-# generated project may legitimately differ. Reasoning in CONTRIBUTING.md → "Rules scoped
-# to BlueprintX, not inherited by scaffolds"; tests/test_check_docs_boundary.sh asserts the
-# scope rather than leaving it to this comment. There is therefore no --root flag: under
-# this decision there is only ever one tree to walk, and a knob nothing turns is an
-# invitation to widen the scope without re-deciding it.
-#
-# 🔴 THE RULE IS THE PRINCIPLE, THE LIST IS ONLY WHAT WE HAVE MET SO FAR.
-# Everything under docs/ must be published documentation. Anything that is not does not
-# merely get REJECTED — it gets REDIRECTED to the place that owns it. Every rule below
-# therefore names a destination, and a rule that cannot name one is not ready to ship:
-# "this does not belong here" without "it belongs there" just moves the problem to
-# whoever reads the failure.
-#
-# ⚠️ The deny-list is OPEN and expected to grow. It is a list of cases encountered, not a
-# definition of the rule, and the destinations below are examples of the shape — the
-# right home may be .specs/, CONTRIBUTING.md, README.md, SECURITY.md, a tool's own
-# directory, or somewhere nobody has needed yet. When you meet a new kind of
-# working material, add the case AND its destination; do not treat the absence of a rule
-# as permission.
-#
-# Known cases and where each belongs:
-#   - docs/backlog/ → out of docs/: a progress ledger beside the work; reader-facing
-#     content to README.md / CONTRIBUTING.md
-#   - basename contains "lesson" → the operator's ~/.claude/memory/lessons* stores; a
-#     lesson that has hardened into a project rule goes to CONTRIBUTING.md as the RULE
-#   - basename design.md / plan.md → .specs/features/<feature-name>/ (blueprintx#447)
-#   - basename security.md / threat*.md → the ROOT SECURITY.md (GitHub only reads it from
-#     the repo root, .github/ or docs/ root, so a nested copy is invisible to the
-#     advisory UI)
-#   - any .superpowers* path segment → that tool's own home, never the published site
-#
-# A directory that matches the deny-list is reported ONCE and not descended into — the
-# violation is the whole path, not each file under it (the spike that sized this gate
-# already counted those separately; see the PR body).
 
 set -euo pipefail
 
-# `*` skips dot-prefixed entries (the check_specs_structure.sh defect this gate must not
-# repeat) — dotglob covers a `.superpowers/` directory; nullglob keeps an empty directory
-# from yielding the literal glob pattern as a filename.
 shopt -s dotglob nullglob
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -61,22 +9,17 @@ DOCS_DIR="$REPO_ROOT/docs"
 errors=0
 checked=0
 
-# No docs/ at all is not an error — some scaffolds/contexts have none.
 if [ ! -d "$DOCS_DIR" ]; then
     echo "check_docs_boundary: no docs/ directory — nothing to check."
     exit 0
 fi
 
-# Present but unreadable must FAIL, never silently pass as "clean" — same rule as
-# gate_free_surface: a check that cannot see its subject is not a check that passed one.
 if [ ! -r "$DOCS_DIR" ]; then
     echo "ERROR: docs/ exists but is not readable" >&2
     exit 1
 fi
 
 is_denied() {
-    # $1 = path relative to docs/, e.g. "backlog" or "guide/lessons-learned.md".
-    # Prints the reason and returns 0 on a match; returns 1 (no output) otherwise.
     local rel="$1" base parts segment
     base="$(basename "$rel")"
     case "$rel" in
@@ -120,12 +63,6 @@ is_denied() {
     return 1
 }
 
-# Judge what git would publish (blueprintx#632), but only in a repo whose top level IS
-# REPO_ROOT: an enclosing repo's .gitignore must not decide for a plain directory inside it.
-# Computed once; a non-repo or an enclosed dir leaves every entry "not ignored".
-# GIT_DIR/GIT_WORK_TREE inherited from a hook would re-point the probe, and the developer's
-# global excludes would make a local verdict differ from CI's, so neither reaches git here.
-# GIT_INDEX_FILE is kept on purpose: a pre-commit run judges the index being committed.
 unset GIT_DIR GIT_WORK_TREE
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 bool_own_repo=0
@@ -139,11 +76,9 @@ is_git_ignored() {
 }
 
 walk() {
-    # $1 = absolute directory to walk.
     local dir="$1" entry rel reason
     for entry in "$dir"/*; do
         [ -e "$entry" ] || continue
-        # An ignored entry is skipped whole, like a denied directory.
         if is_git_ignored "$entry"; then
             continue
         fi
@@ -152,25 +87,12 @@ walk() {
         if reason="$(is_denied "$rel")"; then
             echo "ERROR: docs/$rel — $reason" >&2
             errors=$((errors + 1))
-            continue # denied dir: already flagged as a whole, don't enumerate its contents
+            continue
         fi
-        # A symlink is classified above like any other entry, then treated as a LEAF.
-        # Recursing into one lets a link that points at an ancestor re-enter the tree
-        # through a longer path: measured on a 3-file fixture with docs/a/b/loop -> docs,
-        # the walk reported "163 entries checked" and only stopped because the kernel
-        # hit its ELOOP limit. A denied file inside such a loop is also reported many
-        # times over. The published site is a file tree; nothing here needs to follow
-        # links to classify what lives under docs/.
         if [ -L "$entry" ]; then
             continue
         fi
         if [ -d "$entry" ]; then
-            # 🔴 An unreadable/unsearchable directory must FAIL, never pass quietly.
-            # `"$dir"/*` yields nothing when the directory cannot be read, so walk would
-            # return having recorded no error: measured with docs/secret/ at mode 000
-            # holding docs/secret/backlog/, the gate printed "boundary is clean" and
-            # exited 0 while a real violation sat inside it. That is the one outcome this
-            # gate family forbids — reporting success for having checked nothing.
             if [ ! -r "$entry" ] || [ ! -x "$entry" ]; then
                 echo "ERROR: docs/$rel — directory is not readable/searchable, so its" \
                      "contents cannot be checked; this is a broken check, not a clean one" >&2
@@ -184,8 +106,6 @@ walk() {
 
 walk "$DOCS_DIR"
 
-# A readable docs/ that yields zero entries is suspicious (an empty dir, or a walk bug),
-# not evidence of a clean tree — report it as a failure rather than a silent pass.
 if [ "$checked" -eq 0 ]; then
     echo "ERROR: docs/ exists but contains nothing to check" >&2
     exit 1

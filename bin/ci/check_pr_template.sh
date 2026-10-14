@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Checks a PR body against the layout .github/PULL_REQUEST_TEMPLATE.md declares
-# (blueprintx#587): every `##`/`###` heading and `**Label**:` field the template carries must
-# appear at line start with real content, bar the conditional ones recorded below. The
-# contract is walked out of the template, never hardcoded; only the mandatory-versus-
-# conditional split, which syntax cannot tell us, is data here. Rationale and the rule a
-# human reads: CONTRIBUTING.md -> "PR template layout".
-#
-# Usage: check_pr_template.sh --body-file FILE|- [--author LOGIN] [--template FILE]
-# Exit: 0 clean or bot-exempt, 1 layout problems, 2 unusable input (never a silent pass).
 
 set -euo pipefail
 
@@ -15,8 +6,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$REPO_ROOT/bin/lib/common.sh"
 
-# Keys are "<kind>:<section>/<name>": 2 = `##`, 3 = `###` under its `##`, F = `**Name**:`
-# field under its `##`. Section-qualified so a label written in the wrong section is not credited.
 readonly -a ARR_OPTIONAL=("F:Additional Notes/Dependencies" "F:Additional Notes/Follow-up")
 readonly -a ARR_CHANGE_GROUP=("F:Changes Made/Added" "F:Changes Made/Updated" "F:Changes Made/Fixed")
 readonly -a ARR_TESTING_PAIR=("3:Testing/Manual Testing" "3:Testing/Automated Testing")
@@ -29,8 +18,6 @@ declare -A MAP_TPL_LINES=() MAP_BODY_LINES=() MAP_BODY_PAR=() MAP_REAL=() MAP_PH
 declare -a ARR_PROBLEMS=()
 
 normalize() {
-    # Drops CRs, HTML comments (multi-line) and fenced code: none of it is layout. A fence is
-    # judged first, so a literal `<!--` inside a code block never opens comment mode.
     tr -d '\r' | awk '
         BEGIN { in_comment = 0; in_fence = 0 }
         {
@@ -60,10 +47,6 @@ normalize() {
 }
 
 parse_layout() {
-    # stdin: normalized markdown. Prints "KEY<TAB>PARENT<TAB>own-lines" per node in first-seen
-    # order, own lines joined by \037. A line is credited to the innermost open scope only
-    # (field, else `###`, else `##`); a `**Label**:` line closes the open `###`. A heading or
-    # label line itself is not content, and a `---` rule is neither content nor a scope change.
     awk -v sep="$STR_SEP" '
         function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
         function see(k, p) { if (!(k in seen)) { seen[k] = 1; par[k] = p; keys[++nk] = k } }
@@ -88,8 +71,6 @@ parse_layout() {
 }
 
 load_layout() {
-    # $1 = template|body, $2 = file. The template fills MAP_TPL_LINES; the body also records
-    # each node's parent so a heading can be judged on its descendants (tally_body).
     local str_kind="$1" path_file="$2" str_key str_par str_lines
     while IFS=$'\t' read -r str_key str_par str_lines; do
         if [ "$str_kind" = "template" ]; then
@@ -104,11 +85,6 @@ load_layout() {
 }
 
 tally_body() {
-    # MAP_PH[key] = own lines that are verbatim template lines of the same node (placeholders).
-    # A bullet that is only a bold label (`- **CI (this PR)**:`) is structure the template
-    # expects to stay: neither a placeholder nor content.
-    # MAP_REAL[key] = the node's own real lines plus its descendants' (a `##` with only filled
-    # `###`/fields beneath it is not empty).
     local str_key str_line str_up
     local -a arr_lines
     for str_key in "${ARR_BODY_KEYS[@]}"; do
@@ -124,7 +100,6 @@ tally_body() {
                 continue
             fi
             for str_up in "$str_key" "${MAP_BODY_PAR[$str_key]}"; do
-                # `if`, not `&&`: a false test as the last statement exits under set -e (#706).
                 if [ "$str_up" != "-" ]; then
                     MAP_REAL["$str_up"]=$((MAP_REAL[$str_up] + 1))
                 fi
@@ -134,7 +109,6 @@ tally_body() {
 }
 
 describe() {
-    # Shows the bare label: the "<section>/" qualifier is for keying, not for the author.
     local str_name="${1#*:}"
     str_name="${str_name##*/}"
     case "${1%%:*}" in
@@ -147,7 +121,6 @@ describe() {
 problem() { ARR_PROBLEMS+=("$1"); }
 
 is_filled() {
-    # Present, with real content, and no template placeholder line left in place.
     local str_key="$1"
     [ -n "${MAP_REAL[$str_key]+x}" ] || return 1
     [ "${MAP_REAL[$str_key]}" -gt 0 ] && [ "${MAP_PH[$str_key]}" -eq 0 ]
@@ -172,7 +145,6 @@ in_list() {
 }
 
 check_registry_is_current() {
-    # A classification naming a label the template no longer has would rot silently.
     local str_key
     for str_key in "${ARR_OPTIONAL[@]}" "${ARR_CHANGE_GROUP[@]}" "${ARR_TESTING_PAIR[@]}" \
         "$STR_NOT_APPLICABLE" "$STR_CHANGES_SECTION"; do
@@ -199,7 +171,6 @@ check_change_group() {
 }
 
 check_testing() {
-    # Not Applicable is required exactly when a testing subsection is not filled in.
     local str_key bool_need_na=0
     for str_key in "${ARR_TESTING_PAIR[@]}"; do
         is_filled "$str_key" && continue
@@ -214,7 +185,6 @@ check_testing() {
 }
 
 check_optional_not_filler() {
-    # Absent is fine; a template placeholder line left in place looks answered but is not.
     local str_key
     for str_key in "${ARR_OPTIONAL[@]}" "${ARR_CHANGE_GROUP[@]}"; do
         [ -n "${MAP_PH[$str_key]+x}" ] || continue

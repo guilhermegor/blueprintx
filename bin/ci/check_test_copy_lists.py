@@ -28,19 +28,12 @@ import pathlib
 import re
 import sys
 
-
 _ROOT = pathlib.Path(__file__).resolve().parents[2]
 _SHARED_ROOT = _ROOT / "templates/python-common"
 _SHARED_TESTS = _SHARED_ROOT / "tests/unit"
 _SHARED_WORKFLOWS = _SHARED_ROOT / ".github/workflows"
 _SCAFFOLD_DIR = _ROOT / "bin/scaffold"
 
-# Leaf CLAUDE.md docs are the THIRD copy list with this defect shape, and the quietest: a test
-# that never ships at least changes a count somewhere, a doc that never ships changes nothing
-# a machine reads. src/config/contracts/CLAUDE.md sat unshipped in python-common until
-# blueprintx#325. Keyed by path relative to python-common, since every one is named CLAUDE.md.
-# lib-minimal ships its own config/utils docs from templates/lib-minimal/ (config_CLAUDE.md,
-# utils_CLAUDE.md) because its _internal/ layout differs from the service tiers'.
 DICT_DOCS_EXPECTED_ABSENT = {
     "python_lib_minimal.sh": {
         "src/config/CLAUDE.md": "lib-minimal ships templates/lib-minimal/config_CLAUDE.md",
@@ -48,74 +41,32 @@ DICT_DOCS_EXPECTED_ABSENT = {
         "src/utils/CLAUDE.md": "lib-minimal ships templates/lib-minimal/utils_CLAUDE.md",
     },
 }
-# The python-common root CLAUDE.md documents the template FAMILY for BlueprintX maintainers —
-# it is the one doc that must never ship, so it is not a shared asset at all.
 _DOCS_NEVER_SHIPPED = {"CLAUDE.md"}
 
-# Which exclusion table a stale-exclusion message should name, per asset class.
 _EXCLUSION_TABLE_NAMES = {
     "test": "DICT_EXPECTED_ABSENT",
     "workflow": "DICT_WORKFLOWS_EXPECTED_ABSENT",
     "doc": "DICT_DOCS_EXPECTED_ABSENT",
 }
 
-# Workflows are the SECOND hand-maintained copy list with exactly this defect shape, and it is
-# worse there: a CI job that no scaffold copies is not a test that silently does not run, it is
-# a GATE that silently does not exist in any generated project — and nothing anywhere reports a
-# workflow that was never installed. Found by adding `review_threads.yaml` and noticing the cp
-# list would not carry it.
 DICT_WORKFLOWS_EXPECTED_ABSENT = {
     "python_lib_minimal.sh": {
-        # A library publishes to PyPI through its own release-pypi / release-test-pypi pair.
         "release.yaml": "lib-minimal ships its own release-pypi workflows",
-        # Contract drift describes an ingested external file; a library tier registers none.
         "contract_drift.yaml": "lib-minimal ships no contract oracle registry",
     },
 }
 
-# Tests a given scaffold deliberately does NOT copy, with the reason. An entry here is a claim
-# that the tier cannot use the test, not a shortcut for "I forgot to wire it".
 DICT_EXPECTED_ABSENT = {
     "python_lib_minimal.sh": {
-        # A distributable library has no runtime .env to read, so the service tiers'
-        # env-config seam (and its test) is not shipped.
         "test_env_config.py": "lib-minimal ships no src/config/env_config.py",
-        # A clean exclusion, not the vendoring hole below: the per-engine query loader
-        # resolves config/queries/<DB_BACKEND>/, and a distributable library selects no
-        # database engine and ships no queries directory. utils/queries.py is not vendored
-        # into lib-minimal at all, so its test has nothing to cover.
         "test_queries.py": "lib-minimal ships no DB engine selection or queries/ tree",
-        # Contract oracles describe an ingested external file; a library tier ships none.
         "test_contract_oracle_example.py": "lib-minimal ships no contract oracle registry",
-        # The weekly drift reporter re-fetches the sources in config/contract_oracles.yaml;
-        # a library tier ships neither the registry nor bin/check_contract_drift.py, so the
-        # test would have no module to load.
         "test_contract_drift.py": "lib-minimal ships no contract_drift driver or registry",
-        # The gate walks src/ packages that declare __all__; lib-minimal declares none.
         "test_all_exports_gate.py": "lib-minimal ships no package declaring __all__",
         "test_contract_family_conventions.py": "lib-minimal ships no contract family",
-        # startup.py is a service-tier singleton; a library has no import-time bootstrap.
         "test_startup_fragility_order.py": "lib-minimal ships no src/config/startup.py",
-        # verify_venv_imports.py is invoked only from bin/lib/pip_fallback.sh, and lib-minimal
-        # copies only bin/lib/common.sh (line ~680) — no bootstrap.sh, pip_fallback.sh, venv.sh
-        # or run.sh, so it has no pip-fallback bootstrap to guard in the first place.
         "test_verify_venv_imports.py": "lib-minimal ships no bin/lib/pip_fallback.sh bootstrap",
-        # NOT missing — DELIVERED BY A THIRD MECHANISM this gate does not model: the scaffold
-        # RENDERS it from templates/lib-minimal/rendered/test_typing.py.tmpl via envsubst,
-        # because the file needs the package name substituted in and covers a smaller matrix
-        # than the service tiers'. (It was a heredoc until blueprintx#189 moved it into a
-        # template file; the mechanism changed, the exclusion did not.) Verified present and
-        # running in a real lib-minimal scaffold. Modelling the render would mean a third
-        # parser for one case; the stale-exclusion check below will flag this entry the day
-        # it becomes an ordinary `cp` from python-common.
         "test_typing.py": "lib-minimal RENDERS it from a template, not a cp",
-        # ⚠️ NOT a clean exclusion — a known gap, recorded honestly rather than hidden.
-        # lib-minimal vendors the shared helpers into `<pkg>/_internal/utils/` and rewrites
-        # their import prefix, so these tests — written against the service tiers' flat
-        # `utils.x` layout — would not resolve as copied. The modules therefore ship into
-        # every generated library WITHOUT their tests. Fixing it means running the same
-        # `rewrite_internal_imports` over the test files; until then this is a documented
-        # hole, not a design decision.
         "test_br_identifiers.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_dates.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_decimals.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
@@ -138,42 +89,21 @@ DICT_EXPECTED_ABSENT = {
         "test_xml_reader.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_text.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_zip_extractor.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
-        # ms_office/ (Outlook automation, Excel sheet-name rules) and email/ (dispatch
-        # orchestration) are service-tier concerns (blueprintx#118/#121) — lib-minimal ships
-        # neither package, so their tests have no module here to cover.
         "test_ms_office_excel_sheet_names.py": "lib-minimal does not ship ms_office/",
         "test_email_dispatch.py": "lib-minimal does not ship email/",
         "test_email_sender.py": "lib-minimal does not ship email/",
         "test_email_html_body.py": "lib-minimal does not ship email/",
-        # ⚠️ NOT a clean exclusion — the config/schemas/ seam (blueprintx#267) ships in
-        # src/config/schemas/ here, but `pydantic` is not yet a declared dependency in ANY
-        # tier's pyproject.toml (that needs its own explicit yes, priced separately per the
-        # issue), so wiring the cp line now would ship a test that imports a package the
-        # generated project never installs. Remove this exclusion together with the cp line
-        # the day pydantic lands as a dependency.
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
-        # The dead-code GATE itself (bin/check_dead_code.py) is not yet copied by any
-        # scaffold either — it needs vulture as a declared dependency first, priced
-        # separately as the blueprintx#332 follow-up. Remove both exclusions together with
-        # the two cp lines the day that dependency lands.
         "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
-        # ⚠️ NOT a clean exclusion — see the identical note under python_ddd_service.sh below.
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
         "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
     "python_ddd_service.sh": {
         "test_config_schemas_example.py": "schemas/ pydantic dep not yet wired (#267)",
         "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
-        # ⚠️ NOT a clean exclusion — a known gap, recorded honestly rather than hidden.
-        # check_migration_graph.py (#308) ships in python-common/bin/, copied wholesale, but
-        # its test has no cp line in any scaffold yet: bin/scaffold/*.sh was held by another
-        # open PR when this test landed. Wiring the cp line is a follow-up — see #308's PR body.
         "test_migration_graph_gate.py": "cp line not yet wired into any scaffold (#308 follow-up)",
         "test_docs_gap_gate.py": "cp line not yet wired into any scaffold (#340 follow-up)",
     },
-    # fastapi pulls pydantic in transitively, but that is not the same claim as #267's "declare
-    # it as a direct dependency" — and the module the test imports (src/config/schemas/, #267)
-    # is not shipped by this tier either, same as the four sibling service scaffolds.
     "python_api_service.sh": {
         "test_config_schemas_example.py": "schemas/ seam not yet wired (#267); no src/config/schemas/ module",
         "test_dead_code_gate.py": "check_dead_code.py gate not yet wired (#332 follow-up)",
@@ -199,44 +129,18 @@ DICT_EXPECTED_ABSENT = {
     },
 }
 
-# ⚠️ Both patterns must prove a COPY, not merely a mention.
-#
-# An earlier version matched `tests/unit/(test_x.py)` anywhere in the file, so a filename inside
-# a comment — or inside this gate's own exclusion prose quoted into a script — counted as
-# delivery. Likewise it accepted the first `for util in …; do` anywhere, without checking the
-# loop actually copies the test. Either way the gate could report a scaffold as complete while
-# the file never arrives, which is a FALSE PASS in the one direction that matters: the whole
-# point is catching a test that silently never runs.
-#
-# So: the explicit form must be an active `cp` command whose SOURCE is the shared tests dir, and
-# the loop form must be the real `copy_shared_utils` body containing a `cp` of `test_${util}.py`.
-
-# `cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_x.py" …` — anchored on `cp` and on the source root,
-# and rejecting a leading `#` so a commented-out line never counts.
 _RE_EXPLICIT_CP = re.compile(
     r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*?COMMON_TEMPLATE_ROOT/tests/unit/(test_[a-z0-9_]+\.py)",
     re.M,
 )
 
-# Same anchoring for the workflow copy list, plus one more constraint the test form does not
-# need: the shared path must be the **SOURCE operand**, i.e. immediately after `cp` and its
-# flags. Allowing it anywhere on the line counts a REVERSE copy —
-#   cp "$project_path/.github/workflows/tests.yaml" "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml"
-# — as delivery, when it installs nothing in the generated project. Verified: the looser regex
-# reported `tests.yaml` reachable from exactly that line.
 _RE_WORKFLOW_CP = re.compile(
-    # `cp`, then only FLAGS, then the shared path as the first operand. Anything else between
-    # them would let the destination match instead of the source.
     r"^[^\S\n]*(?!#)\S*\bcp\b(?:\s+-{1,2}[A-Za-z-]+)*\s+"
     r"[\"']?\$(?:\{)?COMMON_TEMPLATE_ROOT(?:\})?/\.github/workflows/"
     r"([a-z0-9_\-]+\.ya?ml)",
     re.M,
 )
 
-# Any `cp` whose SOURCE operand is under python-common, plus its DESTINATION operand. A doc is
-# reachable either by its own cp line or by a wholesale directory copy (`cp -r
-# "$COMMON_TEMPLATE_ROOT/bin/." …`), which is how bin/CLAUDE.md ships — but only when the
-# destination stays inside the generated project and keeps the source's name (blueprintx#569).
 _RE_SHARED_SOURCE_CP = re.compile(
     r"^[^\S\n]*(?!#)\S*\bcp\b(?:\s+-{1,2}[A-Za-z-]+)*\s+"
     r"[\"']?\$(?:\{)?COMMON_TEMPLATE_ROOT(?:\})?/([A-Za-z0-9_./-]+)[\"']?"
@@ -244,28 +148,15 @@ _RE_SHARED_SOURCE_CP = re.compile(
     re.M,
 )
 
-# The `copy_shared_utils` function body, from its definition to the closing brace.
 _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
-# Its `for util in … ; do` header, searched INSIDE that body only — and rejected when
-# commented out, exactly like the explicit form above. Both patterns need the guard: adding
-# `(?!#)` to only one of them leaves the other able to satisfy the gate from a comment.
 _RE_UTILS_LOOP = re.compile(r"^[^\S\n]*(?!#)\S*\s*for\s+util\s+in\s+(.*?);\s*do", re.M | re.S)
-# The names may live in the loop header OR in a `local -a utils=( … )` array the loop iterates
-# — the scaffolds declare the array so the step can print a COUNT instead of an enumeration
-# that goes stale. Reading only the header would call every shared test undelivered the moment
-# a scaffold switches form, which is a FALSE FAILURE in a gate whose value is its false-pass
-# detection. Same no-comment anchoring as the rest.
 _RE_UTILS_ARRAY = re.compile(
     r"^[^\S\n]*(?!#)\S*\s*local\s+-a\s+utils=\((.*?)\)", re.M | re.S
 )
-# A util name, so a shell token in the same position (`"${utils[@]}"`, a `\` continuation) is
-# not mistaken for a module.
 _RE_UTIL_NAME = re.compile(r"[a-z][a-z0-9_]*")
-# Proof the loop body actually copies the test beside the module — likewise not from a comment.
 _RE_UTILS_TEST_CP = re.compile(
     r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*tests/unit/test_\$\{util\}\.py", re.M
 )
-
 
 def shared_test_names() -> set:
     """Return every shared unit test filename.
@@ -277,7 +168,6 @@ def shared_test_names() -> set:
     """
     return {path_file.name for path_file in _SHARED_TESTS.glob("test_*.py")}
 
-
 def shared_workflow_names() -> set:
     """Return every shared workflow filename.
 
@@ -287,7 +177,6 @@ def shared_workflow_names() -> set:
         Filenames like ``tests.yaml`` under ``templates/python-common/.github/workflows/``.
     """
     return {path_file.name for path_file in _SHARED_WORKFLOWS.glob("*.y*ml")}
-
 
 def shared_doc_names() -> set:
     """Return every shippable leaf doc, as a path relative to python-common.
@@ -301,7 +190,6 @@ def shared_doc_names() -> set:
         path_file.relative_to(_SHARED_ROOT).as_posix()
         for path_file in _SHARED_ROOT.rglob("CLAUDE.md")
     } - _DOCS_NEVER_SHIPPED
-
 
 def dest_stays_in_project(str_operand: str, str_dest: str) -> bool:
     """Return whether a ``cp`` destination lands inside the project under the source's name.
@@ -327,7 +215,6 @@ def dest_stays_in_project(str_operand: str, str_dest: str) -> bool:
         and ".." not in list_dst
         and list_dst[-int_tail:] == list_src[-int_tail:]
     )
-
 
 def reachable_docs(str_source: str, set_shared: set) -> set:
     """Return the shared leaf docs one scaffold script copies, by file or by directory.
@@ -355,7 +242,6 @@ def reachable_docs(str_source: str, set_shared: set) -> set:
             set_reachable.update(str_doc for str_doc in set_shared if str_doc.startswith(str_prefix))
     return set_reachable
 
-
 def _reachable_util_names(str_names: str, cls_array: re.Match | None) -> set:
     """Return the valid utility names reachable from a copy_shared_utils loop body.
 
@@ -375,7 +261,6 @@ def _reachable_util_names(str_names: str, cls_array: re.Match | None) -> set:
         str_names = f"{str_names} {cls_array.group(1)}"
     return {str_util for str_util in str_names.split() if _RE_UTIL_NAME.fullmatch(str_util)}
 
-
 def reachable_tests(str_source: str) -> set:
     """Return the shared tests one scaffold script can deliver, by either mechanism.
 
@@ -391,8 +276,6 @@ def reachable_tests(str_source: str) -> set:
     """
     set_reachable = set(_RE_EXPLICIT_CP.findall(str_source))
 
-    # The loop counts only when it is the real copy_shared_utils body AND that body demonstrably
-    # copies test_${util}.py. A loop that merely iterates util names copies no test.
     cls_fn = _RE_UTILS_FN.search(str_source)
     if cls_fn:
         str_body = cls_fn.group(1)
@@ -403,7 +286,6 @@ def reachable_tests(str_source: str) -> set:
                 set_reachable.add(f"test_{str_util}.py")
 
     return set_reachable
-
 
 def reachable_workflows(str_source: str) -> set:
     """Return the shared workflows one scaffold script copies.
@@ -419,7 +301,6 @@ def reachable_workflows(str_source: str) -> set:
         Workflow filenames delivered by an active ``cp`` from the shared workflows directory.
     """
     return set(_RE_WORKFLOW_CP.findall(str_source))
-
 
 def asset_problems(
     path_scaffold: pathlib.Path,
@@ -467,8 +348,6 @@ def asset_problems(
             f"❌ {path_scaffold.name}: never copies {str_asset} — {str_consequence}"
         )
 
-    # A stale exclusion is its own defect: it silently keeps an asset out long after the reason
-    # expired, and reads as intentional forever.
     for str_asset, str_reason in sorted(dict_allowed.items()):
         if str_asset in set_reachable:
             list_problems.append(
@@ -482,7 +361,6 @@ def asset_problems(
             )
 
     return list_problems
-
 
 def scaffold_source_text(path_scaffold: pathlib.Path) -> str:
     """Return a scaffold's text joined with every ``bin/lib`` script it sources.
@@ -514,7 +392,6 @@ def scaffold_source_text(path_scaffold: pathlib.Path) -> str:
         if path_lib.is_file():
             list_parts.append(path_lib.read_text(encoding="utf-8"))
     return "\n".join(list_parts)
-
 
 def scaffold_problems(
     path_scaffold: pathlib.Path, set_shared: set, set_workflows: set, set_docs: set
@@ -565,7 +442,6 @@ def scaffold_problems(
         "that CI gate would not exist at all in any generated project",
     )
 
-
 def main() -> int:
     """Check every Python scaffold's test copy list against the shared source.
 
@@ -578,7 +454,6 @@ def main() -> int:
     set_workflows = shared_workflow_names()
     set_docs = shared_doc_names()
 
-    # Scanning nothing yields no findings, which reads exactly like a clean pass.
     if not set_shared:
         print(f"❌ no shared tests found under {_SHARED_TESTS} — this gate would pass vacuously")
         return 1
@@ -618,9 +493,7 @@ def main() -> int:
     )
     return 0
 
-
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs above.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

@@ -1,25 +1,7 @@
 #!/usr/bin/env bash
-# Validates the .specs/ layout (blueprintx#447, #583). One implementation, two callers: this
-# repo's own tree and every generated project, which gets this file copied to its bin/ at
-# scaffold time (there is no second copy under templates/). Either way the tree is `--root <dir>`;
-# without it the root is two levels up from bin/ci/ here, one level up from bin/ in a project.
-# .specs/CLAUDE.md is the human-facing version of every rule below; each is checked, not claimed.
-#
-#   1. If .specs/ exists, .specs/CLAUDE.md must exist.
-#   2. Top level allows only CLAUDE.md, features/, backlog/, _lessons/ (_lessons/ is free-form).
-#   3. features/ holds directories only, kebab-case with a letter, and never a change TYPE
-#      (bugfix/, chore/, ... — dotfiles-dev#442: features/ splits on lifecycle, not change type).
-#   4. features/<name>/ holds at least one of design.md, plan.md, tasks.md. pr.md or
-#      pr-<N>-<kebab>.md are recognized but never sufficient; any other pr[-_0-9]*.md name fails.
-#   5. Every task line in tasks.md uses [ ], [~] <branch> or [x] — [~] must name a <type>/<name> branch.
-#   6. backlog/ is flat, <kebab-topic>_YYYYMMDD_HHMMSS.md.
 
 set -euo pipefail
 
-# `*` skips dot-prefixed entries, so a stray `.specs/.notes` or a hidden feature directory
-# walked straight past both loops below — the scans reported clean on exactly the entries
-# a reviewer would least expect to be there. `nullglob` keeps an empty directory from
-# yielding the literal pattern as a filename.
 shopt -s dotglob nullglob
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -28,7 +10,6 @@ ci) REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)" ;;
 *) REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)" ;;
 esac
 if [ "${1:-}" = "--root" ]; then
-	# A missing --root must fail: every later check would see "no .specs/" and report success.
 	[ -n "${2:-}" ] && [ -d "$2" ] || {
 		echo "ERROR: --root needs an existing directory (got '${2:-}')" >&2
 		exit 2
@@ -43,7 +24,6 @@ fi
 SPECS_DIR="$REPO_ROOT/.specs"
 errors=0
 
-# Conventional-Commit and branch types — a feature directory named after one is a type-folder.
 is_change_type() {
 	case "$1" in
 	feat | feature | fix | bugfix | hotfix | chore | docs | refactor | perf | test | tests | style | build | ci | revert | release)
@@ -53,8 +33,6 @@ is_change_type() {
 	esac
 }
 
-# Every task line (`-`/`*`/`+`/`1.` bullets, outside code fences) must be [ ], [~] <type>/<branch>
-# or [x]. A fence closes on the same character, at least as long, with nothing after it.
 check_tasks_markers() {
 	local file="$1" label="$2" bad
 	bad="$(awk '
@@ -84,7 +62,6 @@ check_tasks_markers() {
 	fi
 }
 
-# No .specs/ at all is not an error — it's simply not adopted yet.
 if [ ! -d "$SPECS_DIR" ]; then
 	echo "check_specs_structure: no .specs/ directory — nothing to check."
 	exit 0
@@ -110,16 +87,12 @@ if [ -d "$SPECS_DIR/features" ]; then
 	for entry in "$SPECS_DIR/features"/*; do
 		[ -e "$entry" ] || continue
 		name="$(basename "$entry")"
-		# A placeholder that keeps an otherwise empty features/ in git, as the scaffold ships.
 		[ "$name" = ".gitkeep" ] && [ -f "$entry" ] && continue
 		if [ ! -d "$entry" ]; then
 			echo "ERROR: .specs/features/$name is not a directory" >&2
 			errors=$((errors + 1))
 			continue
 		fi
-		# Kebab-case AND at least one letter. `[a-z0-9]` alone accepts a bare `447`,
-		# which is the exact case this check was added for — an issue number is not a
-		# feature name. Caught by the fixture, not by reading the pattern.
 		if ! printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$' ||
 			! printf '%s' "$name" | grep -q '[a-z]'; then
 			echo "ERROR: .specs/features/$name is not kebab-case — .specs/CLAUDE.md" \

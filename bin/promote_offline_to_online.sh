@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
-#
-# promote_offline_to_online.sh — turn an OFFLINE scaffolded project into an ONLINE one
-# without re-scaffolding (blueprintx#382).
-#
-# Adds the GitHub-only assets apply_offline_mode skipped, creates the GitHub repo and
-# pushes, applies best-effort branch protection, and removes/neutralises the offline-only
-# fallbacks (git-diff scripts, poe_tasks.offline.toml, the swapped protect-branch hook).
-#
-# Deliberately standalone: it does NOT source or edit any bin/scaffold/*.sh — it
-# transcribes their manifests (see docs/offline-to-online.md for the manifest this script mirrors).
-#
-# Usage: bin/promote_offline_to_online.sh <project_path> --tier <tier> [options]
-# See usage() below or --help for the full flag list.
 
 set -euo pipefail
 
@@ -58,7 +45,6 @@ exit_usage_error() {
     exit_error "$1"
 }
 
-# `shift 2` on a lone flag fails under set -e with no message at all.
 require_flag_value() {
     [ $# -ge 2 ] || exit_usage_error "$1 requires a value"
 }
@@ -130,8 +116,6 @@ parse_args() {
     require_valid_visibility
 }
 
-# --publish / --deploy-target are tier-specific. A typo, or a value for a tier that ignores the
-# option, must FAIL — silently dropping it reports a promotion that is not the one asked for.
 require_valid_tier_options() {
     case "$PUBLISH_TARGET" in
         none | pypi | test-pypi | both) ;;
@@ -147,8 +131,6 @@ require_valid_tier_options() {
         || exit_usage_error "--deploy-target applies to --tier react-spa-webpack only"
 }
 
-# Refuse loudly rather than guess: an unknown tier, or a tier whose skeleton no longer
-# exists in this BlueprintX checkout, must FAIL — never silently copy nothing.
 require_known_tier() {
     local tier_ok=false candidate
     for candidate in "${TIERS[@]}"; do
@@ -163,14 +145,10 @@ require_git_repo() {
     [ -d "$PROJECT_PATH" ] || exit_error "No such directory: $PROJECT_PATH"
     git -C "$PROJECT_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
         || exit_error "$PROJECT_PATH is not a git repository — refusing to promote."
-    # rev-parse succeeds for any directory INSIDE another repo; add -A and gh repo create
-    # --source=. would then stage and publish the parent.
     [ "$(git -C "$PROJECT_PATH" rev-parse --show-toplevel)" = "$(cd "$PROJECT_PATH" && pwd -P)" ] \
         || exit_error "$PROJECT_PATH is inside another git repository, not its root — refusing to promote the parent."
 }
 
-# gh repo create --push pushes the CURRENT branch while protection targets main, so a promotion
-# started on a feature branch would publish the wrong branch and 404 the protection call.
 require_on_main() {
     local branch
     branch="$(git -C "$PROJECT_PATH" symbolic-ref --short HEAD 2>/dev/null || true)"
@@ -183,9 +161,6 @@ require_clean_tree() {
         || exit_error "$PROJECT_PATH has uncommitted changes — commit or stash them first, then re-run."
 }
 
-# A run whose promotion commit failed (a hook failed or rewrote files) leaves the copied assets
-# dirty in the tree and no origin yet. The only changes allowed on that resume are the paths
-# this script itself writes or removes; anything else is the user's work and is refused.
 require_resumable_tree() {
     local line path
     while IFS= read -r line; do
@@ -204,15 +179,11 @@ require_gh_ready() {
     gh auth status >/dev/null 2>&1 || exit_error "gh is not authenticated — run 'gh auth login' first."
 }
 
-# Sets HAS_ORIGIN / HAS_GITHUB_ASSETS. Both flow into the should-fail witnesses in main():
-# already-online is a clean no-op, origin-without-assets is an ambiguous state we refuse.
 detect_state() {
     HAS_ORIGIN=false
     git -C "$PROJECT_PATH" remote get-url origin >/dev/null 2>&1 && HAS_ORIGIN=true
 
     HAS_GITHUB_ASSETS=false
-    # CODEOWNERS is the one file every tier writes; react-spa-webpack with --deploy-target none
-    # writes no workflow, so workflows alone would read a promoted project as ambiguous.
     if [ -f "$PROJECT_PATH/.github/CODEOWNERS" ] \
         || [ -n "$(find "$PROJECT_PATH/.github/workflows" -mindepth 1 2>/dev/null)" ]; then
         HAS_GITHUB_ASSETS=true
@@ -228,9 +199,6 @@ resolve_identity() {
     export PROJECT_NAME PROJECT_DISPLAY_NAME GITHUB_USERNAME REPOSITORY
 }
 
-# Mirrors copy_github_assets() in the 5 service scaffolds (bin/scaffold/python_*_service*.sh) —
-# identical manifest across all five, transcribed rather than sourced (those scripts are held
-# by other PRs). See docs/offline-to-online.md for the source table.
 copy_online_assets_service_tier() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local dest="$PROJECT_PATH" wf
@@ -247,9 +215,6 @@ copy_online_assets_service_tier() {
     print_status "success" "GitHub assets copied (.github, SECURITY.md)"
 }
 
-# Mirrors lib_minimal_copy_github_assets() in bin/scaffold/python_lib_minimal.sh. The original
-# PyPI/Test-PyPI choice is not recorded offline, so --publish decides which release workflow(s)
-# come back; default "none" restores everything except them (see docs/offline-to-online.md).
 copy_online_assets_lib_minimal() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local skeleton="$BLUEPRINTX_ROOT/templates/lib-minimal" dest="$PROJECT_PATH" wf
@@ -272,9 +237,6 @@ copy_online_assets_lib_minimal() {
     print_status "success" "GitHub assets copied (.github, SECURITY.md, publish=$PUBLISH_TARGET)"
 }
 
-# Mirrors the .github copy in bin/scaffold/ts_react_app.sh. No SECURITY.md or dependabot.yml —
-# ts-common ships neither. --deploy-target decides the single deploy workflow, for the same
-# reason --publish does above: the original choice is not recorded offline.
 copy_online_assets_react() {
     local shared="$BLUEPRINTX_ROOT/templates/common" dest="$PROJECT_PATH"
     local deploy_root="$BLUEPRINTX_ROOT/templates/react-spa-webpack/optional/deploy"
@@ -324,9 +286,6 @@ copy_shared_github_overlay() {
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
 }
 
-# secret_scan.yaml is opt-in: the scaffolds ship it only when GITGUARDIAN_API_KEY is exported,
-# because ggshield fails every non-bot scan in a repo that has no such secret. Same rule here;
-# set_secret_scan_key then gives the new repo the key. The TS and bash tiers never shipped it.
 copy_secret_scan_if_keyed() {
     case "$TIER" in react-spa-webpack | ts-lib | bash-cli) return 0 ;; esac
     [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0
@@ -345,8 +304,6 @@ copy_online_assets() {
     copy_secret_scan_if_keyed
 }
 
-# git_diffs/ is where a real offline user parks exported diffs — never rm -rf blindly.
-# Removable only when it holds nothing but the .keep placeholder apply_offline_mode created.
 remove_git_diffs_dir() {
     local dir="$PROJECT_PATH/git_diffs"
     [ -d "$dir" ] || return 0
@@ -360,9 +317,6 @@ remove_git_diffs_dir() {
     print_status "info" "Removed git_diffs/ (offline-only placeholder)"
 }
 
-# Mirrors the removal half of apply_offline_mode() in the 5 python bin/scaffold/python_*.sh
-# scripts: bin/new_branch.sh, git_merge_to_main.sh, protect_branch.sh, the git-diff trio,
-# and poe_tasks.offline.toml. bin/lib/common.sh is left alone — it is not offline-only.
 remove_offline_only_python() {
     local dest="$PROJECT_PATH" f
     for f in bin/git_diff_export.sh bin/git_diff_apply.sh bin/git_diff_check.sh \
@@ -372,9 +326,6 @@ remove_offline_only_python() {
     remove_git_diffs_dir
 }
 
-# Mirrors the removal half of apply_offline_mode() in ts_react_app.sh, ts_lib.sh and bash_cli.sh: no
-# new_branch/git_merge_to_main/protect_branch or poe include there, so only the git-diff
-# trio + git_diffs/ + the package.json script entries come back off.
 remove_offline_only_react() {
     local dest="$PROJECT_PATH" f
     for f in bin/git_diff_export.sh bin/git_diff_apply.sh bin/git_diff_check.sh; do
@@ -395,9 +346,6 @@ remove_offline_only() {
     esac
 }
 
-# Reverses add_poe_include() (bin/lib/common.sh): drops "poe_tasks.offline.toml" from
-# poe_tasks.toml's [tool.poe] include list, and drops the whole table if it is then empty.
-# Idempotent: a no-op when the entry is already absent (never scaffolded, or already promoted).
 strip_poe_include() {
     local tasks="$PROJECT_PATH/poe_tasks.toml"
     [ -f "$tasks" ] || return 0
@@ -439,10 +387,6 @@ PY
     return 0
 }
 
-# Reverses swap_protect_branch_hook() (bin/scaffold/python_*.sh): drops the local
-# protect-branch hook it inserted and restores the stock no-commit-to-branch hook as the
-# first entry of the pre-commit-hooks repo block. Idempotent: a no-op when the local hook
-# is already absent (never swapped, or already promoted).
 restore_protect_branch_hook() {
     local pc="$PROJECT_PATH/.pre-commit-config.yaml"
     [ -f "$pc" ] || return 0
@@ -496,8 +440,6 @@ PY
     return 0
 }
 
-# Reverses the git:diff:* entries patch_package_json() added in ts_react_app.sh's
-# apply_offline_mode(). Idempotent: json.dump of an already-clean scripts table is a no-op.
 strip_package_json_git_diff_scripts() {
     local pkg="$PROJECT_PATH/package.json"
     [ -f "$pkg" ] || return 0
@@ -531,20 +473,14 @@ PY
 commit_promotion_changes() {
     [ -n "$(git -C "$PROJECT_PATH" status --porcelain)" ] || return 0
     git -C "$PROJECT_PATH" add -A
-    # Only no-commit-to-branch is skipped: an offline project commits on main by design, and the
-    # stock hook restored just above would refuse this one promotion commit. Every other hook runs.
     SKIP=no-commit-to-branch git -C "$PROJECT_PATH" commit -q -m "chore: promote project to online GitHub workflow"
     print_status "success" "Committed promotion changes"
 }
 
-# `gh repo create --push` records refs/remotes/origin/<branch> only when the push succeeded, so
-# a local ref check (no network) tells "online" apart from "remote added, nothing pushed".
 has_pushed_remote_ref() {
     git -C "$PROJECT_PATH" show-ref --verify --quiet refs/remotes/origin/main
 }
 
-# Created WITHOUT --push so the secret can be set before the push that triggers the workflows;
-# otherwise the first secret_scan run starts with no key and is red.
 create_remote() {
     local visibility_flag="--private"
     [ "$VISIBILITY" = "public" ] && visibility_flag="--public"
@@ -561,7 +497,6 @@ push_initial_commit() {
     print_status "success" "Pushed $REPOSITORY"
 }
 
-# Key on stdin, never --body: --body exposes it in gh's process arguments (CWE-200).
 set_secret_scan_key() {
     [ -f "$PROJECT_PATH/.github/workflows/secret_scan.yaml" ] || return 0
     [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0
@@ -570,9 +505,6 @@ set_secret_scan_key() {
         || print_status "warning" "Could not set GITGUARDIAN_API_KEY on $REPOSITORY — secret_scan.yaml will fail until you run: gh secret set GITGUARDIAN_API_KEY --repo $REPOSITORY (or delete the workflow)"
 }
 
-# Best-effort: a fresh repo can lag a moment behind API-visibility, and a solo maintainer's
-# exact review policy is a judgment call this script does not prompt for — so a failure here
-# warns rather than aborts an otherwise-complete promotion (the assets are already pushed).
 apply_branch_protection() {
     [ "$SKIP_BRANCH_PROTECTION" = "true" ] && return 0
     PROTECTION_APPLIED=false
@@ -646,8 +578,6 @@ main() {
     print_final_summary
 }
 
-# Guarded so tests/test_promote_offline_to_online.sh can `source` this file (to exercise
-# individual mutation functions against a fixture) without triggering a real run.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi

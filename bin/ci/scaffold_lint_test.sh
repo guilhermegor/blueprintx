@@ -1,15 +1,4 @@
 #!/usr/bin/env bash
-# Real (non-dry-run) scaffold of a Python skeleton, then run the generated
-# project's own quality gate end-to-end: `poe lint` (and assert it changed
-# nothing) followed by `poe unit_tests` and `poe integration_tests`.
-#
-# This complements bin/ci/smoke_test.sh, which only does `--dry-run` (prints the
-# structure, writes no files). Here we actually generate the project and prove a
-# fresh scaffold lints clean and its unit tests pass — so a template defect that
-# would otherwise surface only in a downstream project is caught in BlueprintX CI.
-#
-# Usage:  bash bin/ci/scaffold_lint_test.sh <skeleton>
-# Non-Python skeletons are skipped (exit 0).
 
 set -euo pipefail
 
@@ -18,8 +7,6 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=bin/lib/spec.sh
 source "$REPO_ROOT/bin/lib/spec.sh"
 
-# The offline run below drops .github/, so it cannot see a CODEOWNERS that kept its literal
-# `${GITHUB_USERNAME}`; assert the render at the source instead (#715).
 if grep -nE 'cp .*\.github/CODEOWNERS' "$REPO_ROOT"/bin/scaffold/*.sh; then
     echo "ERROR: a scaffold copies CODEOWNERS with cp; render it with envsubst '\${GITHUB_USERNAME}'" >&2
     exit 1
@@ -37,30 +24,15 @@ fi
 str_scaffold_rel="$(grep '^scaffold=' "$META" | cut -d= -f2-)"
 [ -n "$str_scaffold_rel" ] || { echo "ERROR: no scaffold= in $META" >&2; exit 1; }
 
-# Git identity is required for the scaffold's first commit; CI runners have none.
 git config --global user.email >/dev/null 2>&1 || git config --global user.email "ci-bot@example.com"
 git config --global user.name >/dev/null 2>&1 || git config --global user.name "ci-bot"
 
 source "$REPO_ROOT/bin/lib/no_background_git.sh"
 
 WORK_DIR="$(mktemp -d)"
-# HYPHENATED on purpose (blueprintx#113). This was `ci_scaffold` — already underscored,
-# which is exactly why the tier that derives its import package from the project name
-# scaffolded an unimportable `src/my-lib/` for years with this job green. A verification
-# name that cannot express the defect verifies nothing. Overridable for a one-off probe.
 PROJECT_NAME="${SCAFFOLD_PROJECT_NAME:-ci-scaffold}"
 PROJECT_PATH="$WORK_DIR/$PROJECT_NAME"
 
-# Seed interpreter caches into templates/ BEFORE scaffolding (#205).
-#
-# `cp -r` has no exclusion mechanism, so a __pycache__ sitting in templates/ is copied
-# into the generated project. CI checks out fresh and therefore never has one — which is
-# exactly why this shipped unnoticed from maintainers' machines for as long as it did. The
-# only way this harness can see the defect is to reproduce the precondition itself.
-# ⚠️ ONE ENTRY PER DIRECTORY NAME THE ASSERTION REJECTS. Seeding only __pycache__ while the
-# check also rejects .pytest_cache/.ruff_cache/.mypy_cache would leave three quarters of that
-# assertion never exercised — a check that cannot fail for the cases it claims to cover, which
-# is the same vacuous shape the seeding exists to close. Raised by review on #215.
 SEEDED_CACHES=(
     "$REPO_ROOT/templates/$SKELETON/src/__pycache__"
     "$REPO_ROOT/templates/$SKELETON/src/.pytest_cache"
@@ -69,8 +41,6 @@ SEEDED_CACHES=(
     "$REPO_ROOT/templates/python-common/optional/typing/__pycache__"
     "$REPO_ROOT/templates/python-common/optional/typing/.mypy_cache"
 )
-# Loose compiled artifacts, which live OUTSIDE a cache directory and are pruned by the second
-# `find` in scaffold_purge_caches — the half the directory fixtures above cannot reach.
 SEEDED_FILES=(
     "$REPO_ROOT/templates/python-common/src/utils/seeded_probe.pyc"
     "$REPO_ROOT/templates/python-common/src/utils/seeded_probe.pyo"
@@ -84,8 +54,6 @@ trap cleanup EXIT
 
 int_seeded=0
 for str_cache in "${SEEDED_CACHES[@]}"; do
-    # Only seed under a directory the template already has — creating the parent would
-    # change what the scaffold copies, which is not what this test is for.
     [ -d "$(dirname "$str_cache")" ] || continue
     mkdir -p "$str_cache"
     printf 'seeded by scaffold_lint_test.sh\n' >"$str_cache/seeded.cpython-000.pyc"
@@ -96,9 +64,6 @@ for str_file in "${SEEDED_FILES[@]}"; do
     printf 'seeded by scaffold_lint_test.sh\n' >"$str_file"
     int_seeded=$((int_seeded + 1))
 done
-# Every rejected directory name must have been seeded at least once, or that branch of the
-# assertion is untested. lib-minimal has no templates/lib-minimal/src, hence the -ge 4 floor
-# (the four python-common fixtures) rather than a count of the whole list.
 [ "$int_seeded" -ge 4 ] || {
     echo "ERROR: seeded $int_seeded fixture(s) — too few for the purge check to mean anything" >&2
     exit 1
@@ -106,19 +71,10 @@ done
 
 str_opt_label="${SCAFFOLD_SPEC_FILE:+opt-ins from $SCAFFOLD_SPEC_FILE}"
 echo "::group::Scaffold $SKELETON (offline, ${str_opt_label:-no opt-ins})"
-# Driven by bin/lib/spec.sh (#481) instead of a blind positional `printf`: a
-# stdin stream built from NAMED keys (defaulting to "decline everything, no
-# remote"), so a scaffold script gaining a new prompt fails loudly in
-# spec_stdin_for_skeleton instead of silently shifting every answer after it
-# to the wrong question. SCAFFOLD_SPEC_FILE overrides the (empty, all-default)
-# spec for a one-off probe, mirroring SCAFFOLD_PROJECT_NAME above.
 spec_skeleton_supported "$SKELETON" || {
     echo "ERROR: bin/lib/spec.sh has no named-key prompt map for '$SKELETON'" >&2
     exit 1
 }
-# A set-but-unusable override (missing, unreadable, or a directory, which spec_get skips) would
-# otherwise read as an all-default spec and scaffold the wrong thing; and a bad y/n value must
-# stop here, not become a quiet "n" (see spec_yn).
 if [ -n "${SCAFFOLD_SPEC_FILE:-}" ] && { [ ! -f "$SCAFFOLD_SPEC_FILE" ] || [ ! -r "$SCAFFOLD_SPEC_FILE" ]; }; then
     echo "ERROR: SCAFFOLD_SPEC_FILE is set but is not a readable file: $SCAFFOLD_SPEC_FILE" >&2
     exit 1
@@ -129,8 +85,6 @@ spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
         "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
 
-# The generated project's own .gitignore lists __pycache__/, so a copied cache is invisible
-# to `git status` downstream — `find` is the only witness (#205).
 str_leaked="$(find "$PROJECT_PATH" \
     \( -type d \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.ruff_cache' \
     -o -name '.mypy_cache' \) -o -type f -name '*.py[cod]' \) -print)"
@@ -141,9 +95,6 @@ if [ -n "$str_leaked" ]; then
 fi
 echo "No interpreter/tool caches leaked into the generated project."
 
-# This harness scaffolds OFFLINE (it declines the remote), so the GitHub-only assets must be
-# absent. Asserting it here is what stops a workflow being shipped into a project that has no
-# Actions to run it: dead weight that can never go green, and nothing else would notice.
 for str_online_only in coderabbit_trigger.yaml review_threads.yaml review_retry.yaml secret_scan.yaml; do
     if [ -e "$PROJECT_PATH/.github/workflows/$str_online_only" ]; then
         echo "ERROR: offline scaffold shipped the GitHub-only $str_online_only" >&2
@@ -154,9 +105,6 @@ echo "No GitHub-only workflows in the offline project."
 
 bash "$REPO_ROOT/bin/ci/check_review_config_shipped.sh" --project "$PROJECT_PATH"
 
-# The .specs/ gate ships into every Python project (blueprintx#583). Run the PROJECT'S copy on
-# the shipped skeleton (must pass) and on a copy with a stray top-level note (must fail): a gate
-# that only ever passes would also satisfy the first half.
 bash "$PROJECT_PATH/bin/check_specs_structure.sh" --root "$PROJECT_PATH"
 str_probe="$(mktemp -d)"
 cp -r "$PROJECT_PATH/.specs" "$str_probe/.specs"
@@ -172,25 +120,12 @@ echo "The project's .specs/ gate passes its skeleton and rejects a stray note."
 cd "$PROJECT_PATH"
 
 echo "::group::poetry install (runtime + dev)"
-# In-project venv (poetry.toml). Drivers/runtime ship as wheels — no system libs
-# needed to install, and the unit tests import DB drivers lazily (never at import
-# time), so the env is sufficient for both lint and unit tests.
 poetry install --with dev --no-interaction --no-ansi
 echo "::endgroup::"
 
-# Commit anything left in the tree as the baseline, AFTER poetry install (the
-# scaffold already commits its own output, including offline artifacts; this
-# mainly captures the generated poetry.lock). With a clean baseline, the
-# post-lint check below reflects only what `poe lint` itself changes.
 git add -A
 git commit -q --no-verify -m "ci: scaffold baseline" || true
 
-# The lockfile is what makes a generated project reproducible for the second developer who
-# clones it, and the only thing keeping it that way is an ABSENCE — `poetry.lock` is not
-# listed in the shipped .gitignore. An absence is exactly what an unrelated edit
-# reintroduces: someone adds a `*.lock` pattern, copies a .gitignore from elsewhere, and
-# nothing anywhere fails. `git add -A` above would then silently skip the file, so this is
-# the one line that can tell the difference (#235).
 if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
     echo "ERROR: [$SKELETON] the generated project does not TRACK poetry.lock." >&2
     echo "       It exists on disk but git is ignoring it — check .gitignore for a" >&2
@@ -201,13 +136,6 @@ if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
 fi
 echo "The generated project tracks poetry.lock."
 
-# Commitizen's config lives in .cz.toml rather than pyproject.toml (#233), and losing it is
-# the quietest failure in this tree: cz tries pyproject.toml first, finds no [tool.commitizen],
-# falls through to .cz.toml, and when that is absent too it does NOT error — measured, it
-# prints "No project information in this project." and exits **0**. The symptom would be a
-# differently formatted changelog and an unprefixed tag at release time, months later. So the
-# assertion is not "the file was copied" but "cz can still answer", which is the thing that
-# actually breaks.
 str_cz_version="$(poetry run cz version --project 2>/dev/null || true)"
 case "$str_cz_version" in
     [0-9]*.[0-9]*.[0-9]*) echo "commitizen resolves its config ($str_cz_version)." ;;
@@ -221,11 +149,7 @@ case "$str_cz_version" in
 esac
 
 echo "::group::poe lint (must leave the tree unchanged)"
-# Through the resolver, never a bare `poe`: `poetry install` puts poe in the in-project
-# .venv but NOT on PATH, which is precisely the case poe_exec.sh's first branch exists for.
 bash bin/poe_exec.sh lint
-# `poe lint` auto-fixes (ruff --fix / format). On a clean scaffold it must change
-# nothing — any diff or new file means the template shipped non-compliant code.
 if [ -n "$(git status --porcelain)" ]; then
     echo "ERROR: 'poe lint' modified the freshly scaffolded tree:" >&2
     git status --short >&2
@@ -239,11 +163,6 @@ echo "::group::poe unit_tests"
 bash bin/poe_exec.sh unit_tests
 echo "::endgroup::"
 
-# The integration suite is where every bin/*.sh seam is actually EXECUTED — the unit suite
-# cannot reach a shell script. Without this step those tests were written, shipped into every
-# tier, and never run by the one harness that proves a tier works, so a broken shell seam
-# looked exactly like a working one. `|| [ $? -eq 5 ]` tolerates pytest's "no tests collected"
-# for a tier that ships none; a real failure (exit 1) still fails the run.
 echo "::group::poe integration_tests"
 bash bin/poe_exec.sh integration_tests || [ $? -eq 5 ]
 echo "::endgroup::"
