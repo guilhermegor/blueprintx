@@ -168,6 +168,9 @@ happening silently:
    widens discovery, rows for the newly read types are not counted as a raise against a base
    written under the older scope, while every listed row still cannot go up.
 
+   Heredoc bodies (`<<EOF`, `<<'EOF'`, `<<-EOF`, Ruby `<<~EOS`) are data a script writes out,
+   so the gate never counts their lines as comments; a shebang inside one is output.
+
    `.env.example` carries keys and example values only. Each tier documents its variables in
    `docs/configuration.md`, one table row per variable, and
    `templates/python-common/bin/check_env_docs_sync.py` fails when the file's keys and the
