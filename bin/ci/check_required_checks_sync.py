@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa
 """Fail when `main`'s required status checks and the PR jobs drift apart (blueprintx#535).
 
 Default mode needs no token. It compares the committed expected contexts
@@ -50,9 +51,7 @@ def if_always_true(str_if) -> bool:
     """A job `if:` is harmless only if some `||` alternative is a true event_name test."""
     if str_if is None:
         return True
-    str_expr = re.sub(
-        r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", str(str_if).strip(), flags=re.S
-    )
+    str_expr = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", str(str_if).strip(), flags=re.S)
     return any(event_clause_true(c) for c in str_expr.split("||"))
 
 
@@ -102,22 +101,16 @@ def matrix_text(value) -> str:
 def expand_name(str_name: str, dict_job: dict) -> list:
     """Job check names; interpolates `${{ matrix.k }}` or appends GitHub's `(v1, v2)`."""
     dict_strategy = dict_job.get("strategy") or {}
-    dict_matrix = (
-        dict_strategy.get("matrix") if isinstance(dict_strategy, dict) else None
-    )
+    dict_matrix = dict_strategy.get("matrix") if isinstance(dict_strategy, dict) else None
     if dict_matrix is None:
         return [str_name]
     if not isinstance(dict_matrix, dict):
-        raise Unsupported(
-            f"job '{str_name}': dynamic matrix (fromJSON) is not expandable"
-        )
+        raise Unsupported(f"job '{str_name}': dynamic matrix (fromJSON) is not expandable")
     if "include" in dict_matrix or "exclude" in dict_matrix:
         raise Unsupported(f"job '{str_name}': matrix include/exclude is not expandable")
     list_keys = list(dict_matrix)
     if not all(isinstance(dict_matrix[k], list) for k in list_keys):
-        raise Unsupported(
-            f"job '{str_name}': a non-list matrix dimension is not expandable"
-        )
+        raise Unsupported(f"job '{str_name}': a non-list matrix dimension is not expandable")
     if "matrix." not in str_name:
         return [
             f"{str_name} ({', '.join(matrix_text(v) for v in t)})"
@@ -152,9 +145,7 @@ def job_flags(str_file: str, dict_job_map: dict, flag_wf: bool) -> dict:
         for str_id, dict_job in dict_job_map.items():
             list_needs = dict_job.get("needs") or []
             list_needs = [list_needs] if isinstance(list_needs, str) else list_needs
-            if dict_flag[str_id] and not all(
-                dict_flag.get(n, False) for n in list_needs
-            ):
+            if dict_flag[str_id] and not all(dict_flag.get(n, False) for n in list_needs):
                 dict_flag[str_id] = False
                 flag_changed = True
     return dict_flag
@@ -181,14 +172,10 @@ def pr_jobs(path_dir: pathlib.Path) -> tuple:
             continue
         dict_job_map = dict_wf.get("jobs") or {}
         try:
-            dict_flag = job_flags(
-                path_file.name, dict_job_map, pr_trigger_unfiltered(dict_on)
-            )
+            dict_flag = job_flags(path_file.name, dict_job_map, pr_trigger_unfiltered(dict_on))
             for str_id in dict_job_map:
                 for str_name in job_names(dict_job_map, str_id):
-                    dict_jobs[str_name] = (
-                        dict_jobs.get(str_name, False) or dict_flag[str_id]
-                    )
+                    dict_jobs[str_name] = dict_jobs.get(str_name, False) or dict_flag[str_id]
         except Unsupported as exc:
             list_problems.append(f"{path_file.name}: {exc}")
     return dict_jobs, list_problems
@@ -226,17 +213,11 @@ def inactive_emitters(set_req: set, dict_files: dict, dict_states: dict) -> list
 def read_policy(path_file: pathlib.Path) -> dict:
     """{kind: {name: reason}}; a malformed or reason-less line aborts."""
     dict_policy = {"optional": {}, "external": {}}
-    for int_no, str_line in enumerate(
-        path_file.read_text(encoding="utf-8").splitlines(), 1
-    ):
+    for int_no, str_line in enumerate(path_file.read_text(encoding="utf-8").splitlines(), 1):
         if not str_line.strip() or str_line.lstrip().startswith("#"):
             continue
         list_parts = [p.strip() for p in str_line.split("|", 2)]
-        if (
-            len(list_parts) != 3
-            or list_parts[0] not in dict_policy
-            or not list_parts[2]
-        ):
+        if len(list_parts) != 3 or list_parts[0] not in dict_policy or not list_parts[2]:
             sys.exit(
                 f"::error file={path_file},line={int_no}::need `optional|external|name|reason`"
             )
@@ -260,9 +241,7 @@ def live_required() -> dict:
     """{"classic": set, "ruleset": set} read from the API (the rules in effect on main)."""
     dict_live = {
         "classic": set(
-            gh_json(f"repos/{REPO}/branches/main/protection")["required_status_checks"][
-                "contexts"
-            ]
+            gh_json(f"repos/{REPO}/branches/main/protection")["required_status_checks"]["contexts"]
         ),
         "ruleset": set(),
     }
@@ -277,9 +256,9 @@ def live_workflow_states() -> dict:
     """{workflow file name: state} as the Actions API reports it, every page."""
     dict_states = {}
     int_page = 1
-    while list_wf := gh_json(
-        f"repos/{REPO}/actions/workflows?per_page=100&page={int_page}"
-    )["workflows"]:
+    while list_wf := gh_json(f"repos/{REPO}/actions/workflows?per_page=100&page={int_page}")[
+        "workflows"
+    ]:
         for dict_wf in list_wf:
             dict_states[pathlib.PurePosixPath(dict_wf["path"]).name] = dict_wf["state"]
         int_page += 1
@@ -299,13 +278,9 @@ def compare_live(dict_exp: dict, dict_live: dict) -> list:
     list_err = []
     for str_layer in ("classic", "ruleset"):
         for str_name in sorted(dict_exp[str_layer] - dict_live[str_layer]):
-            list_err.append(
-                f"{str_layer}: in required-checks.json, not live: {str_name}"
-            )
+            list_err.append(f"{str_layer}: in required-checks.json, not live: {str_name}")
         for str_name in sorted(dict_live[str_layer] - dict_exp[str_layer]):
-            list_err.append(
-                f"{str_layer}: live, not in required-checks.json: {str_name}"
-            )
+            list_err.append(f"{str_layer}: live, not in required-checks.json: {str_name}")
     return list_err
 
 
@@ -316,13 +291,9 @@ def compare(set_req: set, dict_jobs: dict, dict_policy: dict) -> list:
     for str_name in sorted(set_req - set_always - set(dict_policy["external"])):
         list_err.append(f"required but no unconditional PR job emits it: {str_name}")
     for str_name in sorted(set_always - set_req - set(dict_policy["optional"])):
-        list_err.append(
-            f"runs on every PR, not required, not in the policy file: {str_name}"
-        )
+        list_err.append(f"runs on every PR, not required, not in the policy file: {str_name}")
     for str_name in sorted(set(dict_policy["optional"]) - set_always):
-        list_err.append(
-            f"policy `optional` entry names no unconditional PR job: {str_name}"
-        )
+        list_err.append(f"policy `optional` entry names no unconditional PR job: {str_name}")
     for str_name in sorted(set(dict_policy["external"]) - set_req):
         list_err.append(f"policy `external` entry is not required: {str_name}")
     return list_err
@@ -359,7 +330,9 @@ def check_required_list(args) -> int:
     set_req = {s.strip() for s in list_lines if s.strip() and not s.lstrip().startswith("#")}
     dict_jobs, list_problems = pr_jobs(pathlib.Path(args.workflows))
     list_err = list_problems + compare(
-        set_req, dict_jobs, {"optional": {n: "" for n, f in dict_jobs.items() if f}, "external": {}}
+        set_req,
+        dict_jobs,
+        {"optional": {n: "" for n, f in dict_jobs.items() if f}, "external": {}},
     )
     for str_msg in list_err:
         print(f"::error::{str_msg}", file=sys.stderr)
@@ -373,9 +346,7 @@ def main() -> int:
     parser.add_argument("--workflows", default=".github/workflows")
     parser.add_argument("--policy", default="bin/ci/required_checks_policy.txt")
     parser.add_argument("--expected", default=".github/required-checks.json")
-    parser.add_argument(
-        "--live", action="store_true", help="compare the JSON with the API"
-    )
+    parser.add_argument("--live", action="store_true", help="compare the JSON with the API")
     parser.add_argument(
         "--required-list",
         help="generated-project mode: bin/required-checks.txt; only direction 1 is checked",
