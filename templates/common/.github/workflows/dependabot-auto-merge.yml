@@ -3,10 +3,8 @@ name: Dependabot auto-merge
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
-
-permissions:
-  contents: write
-  pull-requests: write
+  pull_request_review:
+    types: [submitted]
 
 jobs:
   dependabot:
@@ -14,6 +12,9 @@ jobs:
     name: Arm Dependabot auto-merge
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Classify the update
         id: metadata

@@ -15,18 +15,22 @@ classify_update() {
 
 is_pure_dependabot() {
 	local str_pr="$1" str_bad
-	[[ "$(gh api "repos/$GH_REPO/pulls/$str_pr" --jq .user.login)" == "$DEPENDABOT_LOGIN" ]] || return 1
-	str_bad=$(gh api "repos/$GH_REPO/pulls/$str_pr/commits" --paginate \
-		--jq "[.[] | select(.author.login != \"$DEPENDABOT_LOGIN\")] | length") || return 1
-	[[ -n "$str_bad" ]] && [[ "${str_bad//[0 $'\n']/}" == "" ]]
+	[[ "$(gh api "repos/$GH_REPO/pulls/$str_pr" | jq -r .user.login)" == "$DEPENDABOT_LOGIN" ]] || return 1
+	str_bad=$(gh api "repos/$GH_REPO/pulls/$str_pr/commits" --paginate |
+		jq -s --arg bot "$DEPENDABOT_LOGIN" '[.[][] | select(.author.login != $bot)] | length') || return 1
+	[[ "$str_bad" == 0 ]]
 }
 
 has_review_on_head() {
 	local str_pr="$1" str_head="$2" str_n
-	str_n=$(gh api "repos/$GH_REPO/pulls/$str_pr/reviews" --paginate --jq \
-		"[.[] | select(.commit_id == \"$str_head\" and .user.login != \"$DEPENDABOT_LOGIN\" and (.state == \"APPROVED\" or .state == \"COMMENTED\" or .state == \"CHANGES_REQUESTED\"))] | length") || return 1
-	[[ "${str_n//[0 $'\n']/}" == "" ]] && return 1
-	return 0
+	str_n=$(gh api "repos/$GH_REPO/pulls/$str_pr/reviews" --paginate |
+		jq -s --arg head "$str_head" --arg bot "$DEPENDABOT_LOGIN" \
+			'[.[][] | select(.commit_id == $head and .user.login != $bot and (.state | IN("APPROVED", "COMMENTED", "CHANGES_REQUESTED")))] | length') || return 1
+	[[ "$str_n" =~ ^[0-9]+$ ]] && ((str_n > 0))
+}
+
+disarm() {
+	gh pr merge "$1" --disable-auto --repo "$GH_REPO" 2>/dev/null || true
 }
 
 decide() {
@@ -46,8 +50,14 @@ main() {
 	str_decision=$(decide "$PR" "$HEAD_SHA" "${DEPS_JSON:-}") || return 1
 	case "$str_decision" in
 	arm) gh pr merge "$PR" --auto --squash --repo "$GH_REPO" ;;
-	wait-review) echo "::notice::major update: waiting for a review on $HEAD_SHA; re-run this job after it" ;;
-	*) echo "::notice::not a pure Dependabot PR: auto-merge not armed" ;;
+	wait-review)
+		disarm "$PR"
+		echo "::notice::major update: waiting for a review on $HEAD_SHA"
+		;;
+	*)
+		disarm "$PR"
+		echo "::notice::not a pure Dependabot PR: auto-merge not armed"
+		;;
 	esac
 }
 
