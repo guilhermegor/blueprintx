@@ -6,6 +6,10 @@ on:
   pull_request_review:
     types: [submitted]
 
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   dependabot:
     if: github.event.pull_request.user.login == 'dependabot[bot]'
@@ -13,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read
       contents: write
       pull-requests: write
     steps:

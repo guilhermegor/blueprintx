@@ -52,7 +52,7 @@ has_review_on_head() {
 			'[.[][] | select(.user.login != $bot and (
 				(.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))
 				or (.user.type == "Bot" and (.user.login | IN($roster[]))) ))] as $trusted
-			| ($trusted | group_by(.user.login) | map(last)) as $latest
+			| ($trusted | map(select(.state | IN("APPROVED", "CHANGES_REQUESTED", "DISMISSED"))) | group_by(.user.login) | map(last)) as $latest
 			| if any($latest[]; .state == "CHANGES_REQUESTED") then 0
 			  else [$trusted[] | select(.commit_id == $head and (.state | IN("APPROVED", "COMMENTED")))] | length end') || return 1
 	[[ "$str_n" =~ ^[0-9]+$ ]] && ((str_n > 0))

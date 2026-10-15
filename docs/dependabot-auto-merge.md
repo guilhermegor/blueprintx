@@ -41,7 +41,7 @@ Each of these removes the exemption, and the PR needs a review as usual:
 - the update type is major, missing or unparsable (decided from metadata, never the title);
 - the author is not Dependabot;
 - any commit is not Dependabot's, so a human push voids it (`@dependabot rebase` restores it);
-- the PR has more than 100 commits.
+- the PR has more than 100 commits (checked by the review gate only).
 
 The workflow uses `pull_request_target` because one trigger then covers Dependabot
 opens and pushes with a write token, and the review event runs the same code. It never checks out PR code; the script comes from
@@ -116,3 +116,7 @@ grouped PR with one major.
 - The review-triggered run uses the workflow file from the PR's merge ref. It runs only after
   a review is submitted, and a Dependabot bump of this workflow's own pins is part of the diff
   that review covers.
+- The roster parser expects `- login:` before `posts:` inside an entry, as the shipped
+  `.review-bots.yaml` writes it; an entry in another order is ignored, so that bot never counts.
+- Runs are serialised per PR (`concurrency`, newest wins), so a late run on an old head cannot
+  disarm what a newer run armed.

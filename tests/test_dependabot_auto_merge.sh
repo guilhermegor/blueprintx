@@ -195,6 +195,16 @@ expect "a standing trusted block from an older head still blocks" wait-review "$
 STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"author_association":"OWNER","state":"CHANGES_REQUESTED"},{"commit_id":"abc","user":{"login":"owner"},"author_association":"OWNER","state":"APPROVED"}]'
 expect "the same reviewer approving after requesting changes arms" arm "$major"
 
+STUB_REVIEWS='[{"commit_id":"old","user":{"login":"owner"},"author_association":"OWNER","state":"CHANGES_REQUESTED"},{"commit_id":"abc","user":{"login":"owner"},"author_association":"OWNER","state":"COMMENTED"}]'
+expect "a later COMMENTED does not clear a standing CHANGES_REQUESTED" wait-review "$major"
+
+for str_wf in .github/workflows/dependabot-auto-merge.yml templates/common/.github/workflows/dependabot-auto-merge.yml; do
+	grep -qE '^      actions: read' "$REPO_ROOT/$str_wf"
+	check "$str_wf grants actions: read for the pusher lookup" 0 "$?"
+	grep -q '^concurrency:' "$REPO_ROOT/$str_wf"
+	check "$str_wf serialises runs per PR" 0 "$?"
+done
+
 diff <(sed 's#bin/dependabot_auto_merge.sh#X#' "$REPO_ROOT/.github/workflows/dependabot-auto-merge.yml" | sed 's#templates/common/X#X#') \
 	<(sed 's#bin/dependabot_auto_merge.sh#X#' "$REPO_ROOT/templates/common/.github/workflows/dependabot-auto-merge.yml") >/dev/null
 check "root and template workflows differ only in the script path" 0 "$?"
