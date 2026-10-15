@@ -167,6 +167,13 @@ repos:
         files: ^\.specs/|^bin/check_specs_structure\.sh$
         pass_filenames: false
 
+      - id: required-checks-sync
+        name: required checks are all unconditional PR jobs (blueprintx#164)
+        entry: bash bin/poetry_exec.sh run python bin/check_required_checks_sync.py --required-list bin/required-checks.txt
+        language: system
+        files: ^(\.github/workflows/.*\.ya?ml|bin/required-checks\.txt|bin/check_required_checks_sync\.py)$
+        pass_filenames: false
+
       - id: docs-boundary
         name: docs/ boundary guard (working material belongs in .specs/, blueprintx#576)
         entry: bash bin/check_docs_boundary.sh --root .
