@@ -65,5 +65,22 @@ check "failure message mentions a commit hook" yes "$(grep -q 'commit hook' "$WO
 check "offline React scaffold leaves git status clean" "" "$str_status"
 check "offline React scaffold has 2 commits" 2 "$(git -C "$proj" rev-list --count HEAD)"
 
+for str_name in python_ddd_service python_ddd_service_orm python_api_service python_mvc_service \
+    python_mvc_service_orm python_lib_minimal ts_lib; do
+    check "$str_name swallows no artifact commit" 0 "$(grep -c 'no-verify.*|| true' "$REPO_ROOT/bin/scaffold/$str_name.sh")"
+done
+
+proj="$WORK_DIR/artifacts"
+git init -q -b main "$proj"
+echo a >"$proj/a"
+str_out="$(env HOME="$WORK_DIR" GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@e.com \
+    GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@e.com bash -c '
+    source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
+    scaffold_commit_artifacts "$2" clean; echo "clean=$?"; echo b >"$2/b"
+    git() { [ "$3" = commit ] && return 1; command git "$@"; }
+    scaffold_commit_artifacts "$2" boom; echo "boom=$?"' _ "$REPO_ROOT" "$proj" 2>&1)"
+check "an artifact commit that fails stops the scaffold" 0 "$(grep -c '^boom=' <<<"$str_out")"
+check "the failure names the commit" 1 "$(grep -c "Could not commit 'boom'" <<<"$str_out")"
+
 [ "$int_failures" -eq 0 ] || { echo "$int_failures failure(s)"; exit 1; }
 echo "all passed"

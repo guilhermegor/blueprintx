@@ -800,8 +800,7 @@ apply_offline_mode() {
 commit_offline_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
-    git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+    scaffold_commit_artifacts "$project_path" "chore: enable offline git workflow"
 }
 
 # The first commit (pushed by prompt_git_remote_setup) runs before the online versioning/docs
@@ -813,8 +812,7 @@ commit_online_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
     [ -n "$(git -C "$project_path" status --porcelain)" ] || return 0
-    git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: apply tag-driven versioning and docs URL" || true
+    scaffold_commit_artifacts "$project_path" "chore: apply tag-driven versioning and docs URL"
     git -C "$project_path" push >/dev/null 2>&1 \
         || print_status "warning" "Could not push versioning changes; run 'git push' manually."
 }
