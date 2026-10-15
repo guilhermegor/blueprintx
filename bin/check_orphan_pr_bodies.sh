@@ -1,24 +1,4 @@
 #!/usr/bin/env bash
-# Report-only scan for PR/issue bodies left in <repo>/.git/*.md that match no PR or issue
-# on the forge (blueprintx#657). Local-only by design: .git/ is outside the worktree, so no
-# CI job can see these files. Never deletes or moves anything. Needs python3.
-#
-# Matching is by CONTENT, never by filename, through ONE normaliser applied to both sides
-# (NFKC, case-folded, all Unicode whitespace collapsed, `[x]` read as `[ ]` because ticking a
-# box on GitHub rewrites the stored body). MATCHED = the local body is contained in exactly one
-# forge body. Containment runs one way only: a forge body that is just the unfilled PR template
-# must not match every local body built from it. A body edited on the forge since is UNKNOWN
-# (near a PR), never ORPHAN: ORPHAN needs no forge body even close.
-#
-# Fails closed: anything undecidable (forge unreadable, no origin, body under 40 characters,
-# ambiguous or near match) is UNKNOWN, never ORPHAN, and never a silent skip.
-#
-# Usage: bash bin/check_orphan_pr_bodies.sh [git-dir]   (origin is read from that git-dir)
-# Env:   BLUEPRINTX_REPO=owner/name  overrides the slug parsed from `origin`.
-# Exit:  0 all MATCHED | 1 ORPHAN found | 2 could not decide (UNKNOWN, forge or input unreadable)
-#        2 takes precedence: one UNKNOWN anywhere hides ORPHANs from the code, not from the report.
-# Scope: scans <git-dir>/*.md only (not .git/worktrees/*/). A body mostly built from the PR
-#        template can read UNKNOWN (near #N) instead of ORPHAN: false negative, never false ORPHAN.
 
 set -uo pipefail
 
@@ -52,7 +32,6 @@ fi
 str_forge="$(mktemp -d)"
 trap 'rm -rf "$str_forge"' EXIT
 
-# REST on purpose (GraphQL is rate-limited more tightly). /issues returns PRs too.
 bool_forge_ok=1
 if [ -z "$str_repo" ]; then
 	bool_forge_ok=0
@@ -143,4 +122,4 @@ for path_md in list_files:
 sys.exit(2 if int_unknown else 3 if int_orphans else 0)  # 1 is what a traceback exits with
 PY
 int_rc=$?
-case "$int_rc" in 0 | 2) exit "$int_rc" ;; 3) exit 1 ;; *) exit 2 ;; esac # a traceback is never ORPHAN
+case "$int_rc" in 0 | 2) exit "$int_rc" ;; 3) exit 1 ;; *) exit 2 ;; esac

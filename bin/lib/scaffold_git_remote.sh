@@ -1,62 +1,17 @@
 #!/usr/bin/env bash
-# Git remote / GitHub repo setup, shared by every scaffold regardless of language.
-#
-# ⚠️ WHY THIS IS A SEPARATE FILE FROM scaffold_python_templates.sh, and not one
-# "scaffold_common.sh". It was one file for exactly as long as it took
-# bin/ci/check_test_copy_lists.py to go wrong: that gate treats a scaffold plus the
-# libs it SOURCES as the reachable set, but lib-minimal sources this half for the git
-# prompt while never calling the Python copy functions -- so the union claimed four
-# shared tests reached lib-minimal when nothing copies them there. Over-reporting
-# reachability is the DANGEROUS direction for that gate: it is the one that lets a test
-# silently never run while the gate says it does.
-#
-# Splitting the file makes `source` mean what the gate assumes it means, with no call
-# graph to maintain: a scaffold sources only the halves it uses.
-#
-# This is a sourced lib: define-only, no work on source. Reads GITHUB_USERNAME,
-# DEFAULT_GITHUB_USERNAME, PROJECT_NAME and PROJECT_DESCRIPTION from the caller.
 
-# Git remote / GitHub repo setup — LANGUAGE-AGNOSTIC (used by the Python and TS scaffolds
-# alike, unlike the copy_common_templates half above, which is Python-tier-specific).
-#
-# This replaced six near-identical copies (65, 65, 65, 65, 67, 64 lines). After the
-# `warn` -> `warning` fix they reduced to exactly TWO axes of variation, which is what
-# made one implementation honest rather than a lowest-common-denominator merge:
-#
-#   1. an optional `--homepage` on the created repo (lib-minimal sets the Pages docs URL);
-#   2. what runs AFTER the prompt (nothing for the service tiers, which defer branch
-#      protection to commit_and_push_github_assets; apply_branch_protection for
-#      lib-minimal; that plus prompt_pages_setup for the React SPA).
-#
-# Axis 1 is a variable the caller may set; axis 2 stays in the caller's own wrapper,
-# because "what happens next" is genuinely per-tier policy and folding it in would mean
-# a flag that means "which tier am I", which is how a shared function rots.
-
-# The kanban board and house labels offered once the repo exists (blueprintx#592).
 # shellcheck source=bin/lib/scaffold_kanban.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_kanban.sh"
 
-# Set by the caller before scaffold_prompt_git_remote_setup; empty means no --homepage.
 : "${SCAFFOLD_REPO_HOMEPAGE:=}"
 
-# Set BY scaffold_prompt_review_bot_roster below, read by each scaffold's copy step to
-# decide whether .review-bots.yaml ships. Defaults to "true" (every project scaffolded
-# before this flag existed shipped it). blueprintx#374 — rationale in docs/faq.md
-# ("I don't use a PR review bot..."). Same `:` default-assignment idiom as
-# SCAFFOLD_REPO_HOMEPAGE above, so shellcheck sees the value as read rather than
-# flagging it SC2034 for a cross-file consumer it cannot follow.
 : "${INCLUDE_REVIEW_BOT_ROSTER:=true}"
 
-# blueprintx#374: without a roster, a generated project's "Review threads answered"
-# required check can never pass. See docs/faq.md for the full rationale — in short,
-# omitting .review-bots.yaml (never shipping it empty, blueprintx#262) makes the gate
-# self-skip (report success) instead of demanding a reviewer that will never exist.
 scaffold_prompt_review_bot_roster() {
 	local str_answer
 	prompt_read str_answer "$(prompt_main "Do you have (or will you install) a PR review bot such as CodeRabbit on this repo? [Y/n]: ")"
 	case "$str_answer" in
 	n | N)
-		# Read by each scaffold's copy step (a different file), which shellcheck cannot follow.
 		# shellcheck disable=SC2034
 		INCLUDE_REVIEW_BOT_ROSTER=false
 		print_status "config" ".review-bots.yaml: not shipped — the review-thread required check will self-skip (pass) until a reviewer is declared"
@@ -68,24 +23,12 @@ scaffold_prompt_review_bot_roster() {
 	esac
 }
 
-# TS scaffolds copy ts-common/.github wholesale (no per-file skip point like the Python
-# scaffolds' scaffold_copy_tooling_configs), so the roster is removed after the fact
-# instead. blueprintx#374 — rationale in docs/faq.md.
 scaffold_prune_review_bot_roster() {
 	local str_project_path="$1"
 	[[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] ||
 		rm -f "$str_project_path/.github/.review-bots.yaml"
 }
 
-# Set BY this lib, read by the caller's `main`: 1 only once `origin` has been verified to be
-# the repository this scaffold names.
-#
-# ⚠️ A RETURN VALUE IS NOT ENOUGH, because `main` asks its question much later and asks it of
-# git, not of us. Every tier selects online mode with `rev-parse @{u}` — "is there an upstream
-# tracking branch?" — which is TRUE for a pre-existing clone whose origin points at someone
-# else's repository. So a mismatch could be refused here, swallowed by the caller's `|| true`,
-# and the scaffold would still take the online path and push the generated assets there.
-# Raised by review on #215; the `|| true` alone was not the fix it looked like.
 SCAFFOLD_REMOTE_VERIFIED=0
 
 scaffold_repo_slug() {
@@ -93,30 +36,17 @@ scaffold_repo_slug() {
 }
 
 scaffold_remote_slug() {
-	# Reduce a GitHub remote URL to its `owner/repo`, so ssh, scp-style and https
-	# spellings of the SAME repository compare equal. Anything else returns unchanged
-	# and therefore never equals a slug.
-	#
-	# ⚠️ THE HOST MUST BE MATCHED AS A HOST, NOT AS A SUBSTRING. The first version of
-	# this matched `*github.com[:/]*` and cut at the LAST occurrence, so
-	# `https://evil.example/github.com/octocat/widget.git` reduced to `octocat/widget`
-	# and the guard accepted a remote pointing at an arbitrary host — defeating the
-	# whole check for exactly the crafted input it exists to stop. Measured, not
-	# theorised. Raised by review on #215.
 	local str_url="${1%.git}"
 	local str_rest
 	str_url="${str_url%/}"
 
 	case "$str_url" in
-	# scp-style: [user@]github.com:owner/repo
 	*@github.com:*) str_rest="${str_url##*@github.com:}" ;;
 	github.com:*) str_rest="${str_url#github.com:}" ;;
-	# URL forms: <scheme>://[user[:password]@]github.com/owner/repo
 	*://*)
 		str_rest="${str_url#*://}"
 		str_rest="${str_rest#*@}"
 		case "$str_rest" in
-		# Anchored: `github.com.evil.com/...` and `evil.example/github.com/...` both miss.
 		github.com/*) str_rest="${str_rest#github.com/}" ;;
 		*) str_rest="$str_url" ;;
 		esac
@@ -127,24 +57,12 @@ scaffold_remote_slug() {
 }
 
 scaffold_add_git_remote() {
-	# Returns non-zero when `origin` exists but points somewhere other than the
-	# repository this scaffold was told to create.
-	#
-	# ⚠️ The verification is the point (#212). This used to treat "origin exists" as
-	# "nothing to do" and move on — after which `gh repo create --push`, the follow-up
-	# push, and branch protection all operated against whatever that remote happened to
-	# be. Scaffolding into an existing clone therefore wrote to someone else's
-	# repository. Low likelihood, and the highest-consequence operations in this file.
 	local str_project_path="$1"
 	local str_slug str_url
 	local -a list_urls=()
 	str_slug="$(scaffold_repo_slug)"
 
 	if git -C "$str_project_path" remote get-url origin >/dev/null 2>&1; then
-		# ⚠️ EVERY url, fetch AND push. `remote.origin.pushurl` may differ from the fetch
-		# URL, so checking only `get-url origin` lets a remote that FETCHES from the right
-		# repository PUSH the generated project somewhere else — and pushing is the whole
-		# risk here. `--all` also covers a remote with several configured URLs.
 		mapfile -t list_urls < <(
 			git -C "$str_project_path" remote get-url --all origin 2>/dev/null
 			git -C "$str_project_path" remote get-url --push --all origin 2>/dev/null
@@ -167,14 +85,6 @@ scaffold_add_git_remote() {
 }
 
 scaffold_create_github_repo() {
-	# Returns 0 when the repo was created AND pushed, so the caller can skip its own push.
-	#
-	# ⚠️ The exit status is the whole point. The version this replaced set `push_done=1`
-	# INSIDE a `( cd … )` subshell, so the assignment never reached the parent and the
-	# follow-up push always ran. ShellCheck had been reporting it as SC2030/SC2031 the
-	# entire time — at `info` severity, below the `--severity=warning` floor the gate used,
-	# so nobody ever saw it. Testing the subshell's status keeps the `cd` contained without
-	# needing a variable to escape it.
 	local str_project_path="$1"
 	local str_slug str_vis_choice str_vis_flag
 	str_slug="$(scaffold_repo_slug)"
@@ -238,22 +148,6 @@ scaffold_push_initial_commit() {
 }
 
 scaffold_set_review_trigger_secret() {
-	# Give the new repo the PAT its coderabbit_trigger workflow needs, from the environment.
-	#
-	# ⚠️ WHY THE SCAFFOLD DOES THIS AT ALL. Actions secrets are per-repository and `gh repo
-	# create` copies none, so every scaffolded project starts with the workflow present and the
-	# secret absent — the job red on its first PR. The scaffolder is already authenticated with
-	# `gh` right here (it just created the repo and is about to protect the branch), so this is
-	# one call at the only moment the information and the authority coexist.
-	#
-	# ⚠️ NEVER PERSIST THE VALUE IN THIS REPO. It is read from the environment — the shell gets
-	# it from a git-ignored `~/.claude/.env` — so no BlueprintX file ever holds a credential.
-	# A `.env` here would be a SECOND copy of the same secret on disk, and the second copy is
-	# the one nobody remembers to rotate.
-	#
-	# Absent variable is a warning, not a failure: scaffolding must not abort over an optional
-	# reviewer integration. The workflow itself is the thing that fails loudly, later, on the
-	# first PR — where the person who can fix it is looking.
 	local str_slug
 	str_slug="$(scaffold_repo_slug)"
 
@@ -267,8 +161,6 @@ scaffold_set_review_trigger_secret() {
 	if ! command -v gh >/dev/null 2>&1; then
 		return 0
 	fi
-	# --body, never a redirect: a trailing newline in a stored token 401s exactly like an
-	# expired one, and the error says nothing about which. Measured, twice.
 	if gh secret set GH_PAT_REVIEW_TRIGGER --repo "$str_slug" \
 		--body "$GH_PAT_REVIEW_TRIGGER" >/dev/null 2>&1; then
 		print_status "success" "Review-trigger secret set on ${str_slug}"
@@ -278,36 +170,17 @@ scaffold_set_review_trigger_secret() {
 }
 
 scaffold_set_secret_scan_key() {
-	# Give the new repo the GitGuardian key its (opt-in) secret_scan.yaml workflow needs, from
-	# the environment. Sibling of scaffold_set_review_trigger_secret — same reasoning, same
-	# never-persist-locally rule, applied to blueprintx#287's key instead of #155's PAT.
-	#
-	# ⚠️ THE PRESENCE OF THIS VARIABLE IS ALSO THE OPT-IN SIGNAL. Each scaffold's
-	# copy_github_assets copies .github/workflows/secret_scan.yaml only when
-	# GITGUARDIAN_API_KEY is set at scaffold time — so a project that never exported it never
-	# receives a workflow it has no key for, and this function has nothing to propagate.
 	local str_slug
 	str_slug="$(scaffold_repo_slug)"
 
 	if [ -z "${GITGUARDIAN_API_KEY:-}" ]; then
 		return 0
 	fi
-	# ⚠️ WITHDRAW THE OPT-IN WHENEVER THE KEY CANNOT BE PROPAGATED, here and nowhere else.
-	# The variable IS the opt-in signal (see above), so leaving it set after a failed
-	# propagation ships secret_scan.yaml to a repo that has no secret to run it with, and
-	# ggshield exits 3 on the first non-bot scan — a workflow that fails for a reason the
-	# project never chose. Unsetting it at this single boundary makes every scaffold's
-	# copy_github_assets skip the workflow without repeating the check in each one.
 	if ! command -v gh >/dev/null 2>&1; then
 		print_status "warning" "gh unavailable — skipping the secret-scan workflow (no key can be set)"
 		unset GITGUARDIAN_API_KEY
 		return 0
 	fi
-	# Pipe on stdin, never `--body` and never a redirect: `--body` puts the key in gh's
-	# process arguments, readable by any same-host process for the life of the call
-	# (CWE-200), while a file redirect reintroduces the trailing-newline hazard that
-	# GH_PAT_REVIEW_TRIGGER above documents. `printf '%s'` appends no newline, so this
-	# form avoids both.
 	if printf '%s' "$GITGUARDIAN_API_KEY" |
 		gh secret set GITGUARDIAN_API_KEY --repo "$str_slug" >/dev/null 2>&1; then
 		print_status "success" "GitGuardian secret-scan key set on ${str_slug}"
@@ -319,10 +192,6 @@ scaffold_set_secret_scan_key() {
 }
 
 scaffold_prompt_git_remote_setup() {
-	# Returns 0 only when `origin` is present AND verified to be the repository this
-	# scaffold names — so a caller can gate branch protection / Pages on the remote
-	# itself rather than on "the prompt returned" (#212). Declining is a normal
-	# non-zero: there is no remote, so there is nothing to protect.
 	local str_project_path="$1"
 	local str_answer
 	SCAFFOLD_REMOTE_VERIFIED=0
@@ -340,7 +209,6 @@ scaffold_prompt_git_remote_setup() {
 	esac
 
 	scaffold_add_git_remote "$str_project_path" || return 1
-	# Read by each scaffold's `main` (a different file), which shellcheck cannot follow.
 	# shellcheck disable=SC2034
 	SCAFFOLD_REMOTE_VERIFIED=1
 	if ! scaffold_create_github_repo "$str_project_path"; then

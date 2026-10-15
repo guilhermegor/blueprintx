@@ -1,11 +1,3 @@
-# Data file read by bin/check_precommit_ci_parity.sh — one entry per line, pipe-delimited:
-#   <script-basename>|<side>|<reason>
-# <side> is "precommit_only" (a pre-commit hook runs it, no CI workflow does) or "ci_only"
-# (a CI workflow runs it, no pre-commit hook does). A line with an empty reason is rejected
-# by the script — the reason is what makes an exemption load-bearing rather than decorative
-# (same shape as .review-bots.yaml / .layer-policy.yaml, blueprintx#384).
-#
-# Lines starting with "#" are comments. Blank lines are ignored.
 
 smoke_test.sh|ci_only|blueprintx#384: dry-run-smoke scaffolds every one of the 6 skeletons on every push; pre-commit only reruns hooks whose files: pattern matches the staged diff, so a hook could never give the same matrix coverage (see the comment above dry-run-smoke in scaffold_checks.yml).
 scaffold_lint_test.sh|ci_only|blueprintx#384: scaffold-lint-test / scaffold-lint-test-multi do a real scaffold + make lint + make unit_tests per tier — same reason as smoke_test.sh, too heavy for a file-pattern-triggered pre-commit hook.
