@@ -790,12 +790,7 @@ initialize_git_repo() {
         return
     fi
 
-    (
-        cd "$project_path" || exit 1
-        git init -q -b main || true
-        git add . || true
-        git commit -q -m "feat: first commit" >/dev/null 2>&1 || true
-    )
+    scaffold_initial_commit "$project_path"
     print_status "success" "Initialized git repo (branch main) with first commit"
 }
 

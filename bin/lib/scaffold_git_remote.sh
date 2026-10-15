@@ -219,3 +219,15 @@ scaffold_prompt_git_remote_setup() {
 	git -C "$str_project_path" rev-parse '@{u}' >/dev/null 2>&1 || return 1
 	print_status "success" "Git repo initialized."
 }
+
+scaffold_initial_commit() {
+	local str_project_path="$1"
+	if ! (
+		cd "$str_project_path" || exit 1
+		git init -q -b main &&
+			git add . &&
+			git commit -q -m "feat: first commit"
+	); then
+		exit_error "Could not create the initial commit in '$str_project_path'. Set git user.name and user.email (and fix any failing commit hook), then re-run."
+	fi
+}
