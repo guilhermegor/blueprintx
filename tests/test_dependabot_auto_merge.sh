@@ -7,7 +7,12 @@ source "$REPO_ROOT/templates/common/bin/dependabot_auto_merge.sh"
 
 GH_REPO=o/r
 STUB_AUTHOR="dependabot[bot]"
-STUB_COMMIT_AUTHORS='"dependabot[bot]"'
+good_commit='{"author":{"login":"dependabot[bot]"},"committer":{"login":"web-flow"},"commit":{"verification":{"verified":true}}}'
+forged_commit='{"author":{"login":"dependabot[bot]"},"committer":{"login":"mallory"},"commit":{"verification":{"verified":false}}}'
+human_signed_commit='{"author":{"login":"dependabot[bot]"},"committer":{"login":"mallory"},"commit":{"verification":{"verified":true}}}'
+unverified_webflow_commit='{"author":{"login":"dependabot[bot]"},"committer":{"login":"web-flow"},"commit":{"verification":{"verified":false}}}'
+human_commit='{"author":{"login":"human"},"committer":{"login":"web-flow"},"commit":{"verification":{"verified":true}}}'
+STUB_COMMITS="[$good_commit]"
 STUB_REVIEWS='[]'
 STUB_CALLS=""
 STUB_BASE_ROSTER='reviewers:
@@ -26,7 +31,7 @@ gh() {
 	*"contents/.review-bots.yaml"*) printf '%s\n%s\n' "$STUB_BASE_ROSTER" "$STUB_HEAD_ROSTER_EXTRA" ;;
 	"pr merge"*) STUB_CALLS+="$* ;" ;;
 	*"/commits"*)
-		printf '[%s]\n' "$(printf '%s' "$STUB_COMMIT_AUTHORS" | sed -E 's/("[^"]*")/{"author":{"login":\1}}/g')"
+		printf '%s\n' "$STUB_COMMITS"
 		;;
 	*"/reviews"*) printf '%s\n' "$STUB_REVIEWS" ;;
 	*"/pulls/"*) printf '{"user":{"login":"%s"},"base":{"ref":"main"}}\n' "$STUB_AUTHOR" ;;
@@ -95,15 +100,23 @@ STUB_REVIEWS='[]'
 STUB_AUTHOR="mallory"
 expect "non-dependabot author is skipped" skip "$patch"
 STUB_AUTHOR="dependabot[bot]"
-STUB_COMMIT_AUTHORS='"dependabot[bot]","human"'
+STUB_COMMITS="[$good_commit,$human_commit]"
 expect "human commit on a dependabot branch is skipped" skip "$minor"
+STUB_COMMITS="[$forged_commit]"
+expect "forged author with an unverified signature is skipped" skip "$minor"
+STUB_COMMITS="[$human_signed_commit]"
+expect "verified commit by a human committer is skipped" skip "$minor"
+STUB_COMMITS="[$unverified_webflow_commit]"
+expect "web-flow committer without a verified signature is skipped" skip "$minor"
+STUB_COMMITS="[$good_commit]"
+expect "genuine dependabot commit shape is armed" arm "$minor"
 
-STUB_COMMIT_AUTHORS='"dependabot[bot]"'
+STUB_COMMITS="[$good_commit]"
 run_main "$patch"
 check "patch arms auto-merge" "pr merge 1 --auto --squash --match-head-commit abc --repo o/r ;" "$STUB_CALLS"
 run_main "$major"
 check "unreviewed major disarms" "pr merge 1 --disable-auto --repo o/r ;" "$STUB_CALLS"
-STUB_COMMIT_AUTHORS='"dependabot[bot]","human"'
+STUB_COMMITS="[$good_commit,$human_commit]"
 run_main "$minor"
 check "human commit disarms a previously armed PR" "pr merge 1 --disable-auto --repo o/r ;" "$STUB_CALLS"
 

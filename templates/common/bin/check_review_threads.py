@@ -220,7 +220,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       commits(last:1) { nodes { commit { committedDate } } }
       allCommits: commits(first:100) {
         pageInfo { hasNextPage }
-        nodes { commit { message author { email } } }
+        nodes { commit { message author { email } signature { isValid signer { login } } } }
       }
       reviewThreads(first:100, after:$tc) {
         pageInfo { hasNextPage endCursor }
@@ -2136,9 +2136,19 @@ _STR_DEPENDABOT_EMAIL = "+dependabot[bot]@users.noreply.github.com"
 
 
 def _is_dependabot_commit(dict_node: dict) -> bool:
-    """Return whether one commit node was authored by Dependabot."""
-    str_email = ((dict_node.get("commit") or {}).get("author") or {}).get("email") or ""
-    return str_email.endswith(_STR_DEPENDABOT_EMAIL)
+    """Return whether one commit is Dependabot's: its email AND a valid GitHub web-flow signature.
+
+    The author email alone is forgeable by any pusher; only GitHub's own signature is not.
+    """
+    dict_commit = dict_node.get("commit") or {}
+    str_email = (dict_commit.get("author") or {}).get("email") or ""
+    dict_sig = dict_commit.get("signature") or {}
+    str_signer = (dict_sig.get("signer") or {}).get("login") or ""
+    return (
+        str_email.endswith(_STR_DEPENDABOT_EMAIL)
+        and dict_sig.get("isValid") is True
+        and str_signer == "web-flow"
+    )
 
 
 def _is_dependabot_bot(dict_author: dict) -> bool:

@@ -47,6 +47,17 @@ The workflow uses `pull_request_target` because a Dependabot `pull_request` run 
 read-only token and cannot arm auto-merge. It never checks out PR code; the script comes from
 the default branch.
 
+## What counts as a Dependabot commit
+
+A commit's author is resolved from an email any pusher can forge, so it proves nothing alone.
+Every commit must also be signed by GitHub itself: REST `committer.login == "web-flow"` and
+`verification.verified == true`; in the review gate, GraphQL `signature.isValid` with signer
+`web-flow`. Dependabot's own commits satisfy all of it. A forged author, a verified commit by a
+human committer, and a merge commit made with the "Update branch" button all fail closed;
+`@dependabot rebase` restores a PR. Residual risk: a write-access user who can create
+GitHub-signed commits with a chosen author through the API is not distinguishable by these
+fields, and CI is then the only check.
+
 ## Who counts as a reviewer
 
 A public repo accepts reviews from any account, so a review counts toward a major only when it

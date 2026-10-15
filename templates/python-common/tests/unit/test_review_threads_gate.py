@@ -3589,13 +3589,24 @@ def test_carry_forward_worst_case_fits_half_the_shortest_job_timeout() -> None:
 
 
 _BOT_EMAIL = "49699333+dependabot[bot]@users.noreply.github.com"
+_WEB_FLOW_SIG = {"isValid": True, "signer": {"login": "web-flow"}}
 
 
-def _dep_commit(str_type: str = "minor", str_email: str = _BOT_EMAIL) -> dict:
+def _dep_commit(
+    str_type: str = "minor",
+    str_email: str = _BOT_EMAIL,
+    dict_signature: dict | None = _WEB_FLOW_SIG,
+) -> dict:
     """Build a commit node carrying Dependabot's ``update-type`` metadata."""
     str_update = f"update-type: version-update:semver-{str_type}"
     str_msg = f"Bump x\n\n---\nupdated-dependencies:\n- dependency-name: x\n  {str_update}\n..."
-    return {"commit": {"message": str_msg, "author": {"email": str_email}}}
+    return {
+        "commit": {
+            "message": str_msg,
+            "author": {"email": str_email},
+            "signature": dict_signature,
+        }
+    }
 
 
 def _dep_pr(
@@ -3654,3 +3665,20 @@ def test_dependabot_with_more_than_one_page_of_commits_is_not_exempt() -> None:
     dict_pr = _dep_pr([_dep_commit()])
     dict_pr["allCommits"]["pageInfo"]["hasNextPage"] = True
     assert not _load_gate().dependabot_review_exempt(dict_pr)
+
+
+@pytest.mark.parametrize(
+    "dict_signature",
+    [
+        None,
+        {"isValid": False, "signer": {"login": "web-flow"}},
+        {"isValid": True, "signer": {"login": "mallory"}},
+        {"isValid": True, "signer": None},
+    ],
+)
+def test_forged_dependabot_author_without_a_web_flow_signature_is_not_exempt(
+    dict_signature: dict | None,
+) -> None:
+    """A forgeable author email alone never proves the commit is Dependabot's."""
+    dict_commit = _dep_commit(dict_signature=dict_signature)
+    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]))
