@@ -1,6 +1,6 @@
 # Retire classic protection on main (blueprintx#750)
 
-Status: measurement and proposal done 2026-10-15; the PUT and the delete are the owner's.
+Status: measured and proposed 2026-10-15 (the date differs from the filename, which keeps its creation timestamp); the PUT and the delete are the owner's.
 
 - [x] Scaffold half: generated projects get the ruleset (PR #801, merged).
 - [x] Measure which classic checks report on every PR (below).
@@ -80,8 +80,10 @@ among its languages) emits it through the `github-actions` app, with `Analyze (a
 | scaffold kanban board and labels | 30/30 | always |
 | sed portability — no bare sed -i (blueprintx#459) | 30/30 | always |
 
-No name is conditional or absent: all 56 reported on 30 of 30. Both ruleset-only contexts also
-reported on 30 of 30. That is a sample, not proof, so it is cross-checked structurally:
+All 56 reported on 30 of 30, but that count proves little: classic is strict with `enforce_admins`,
+so a merged PR must already have had every one of its 56 names green. The real evidence is the
+structural check, plus the two ruleset-only TypeScript contexts (30 of 30, and not previously
+enforced by classic):
 `python3 bin/ci/check_required_checks_sync.py` on `origin/main` returns `findings=0`, meaning
 every required context is emitted by an unconditional PR job or is declared `external` in
 `bin/ci/required_checks_policy.txt` (CodeQL, the four `Analyze` names, GitGuardian Security
@@ -90,30 +92,49 @@ the gate result is what rules that out.
 
 ## Proposal
 
-New `required_status_checks` list: the union of classic's 56 and the ruleset's 2 TypeScript
-contexts, 58 names, all always-reporting, `strict_required_status_checks_policy: true` (equal to
-classic's `strict`). Nothing is dropped. The three `optional` entries in the policy file stay
-optional until they have a green record.
+New `required_status_checks` list: classic's 56 names plus the ruleset's 2 TypeScript contexts,
+58 entries, `strict_required_status_checks_policy: true` (equal to classic's `strict`). Nothing is
+dropped. The seven `optional` entries in `bin/ci/required_checks_policy.txt` stay optional:
+`PR files within declared issue scope`, `Required checks sync — expected contexts vs PR jobs
+(blueprintx#535)`, `.env.example matches docs/configuration.md (blueprintx#304)`, and the four
+`Scaffold + lint + test (otel opt-in)` jobs (api-service-native-db, ddd-service-orm-db,
+lib-minimal, mvc-service-orm-db).
+
+Each entry is pinned to the app that reports it (`integration_id`), as classic does: 54 to
+15368 (GitHub Actions), `CodeQL` to 57789, `GitGuardian Security Checks` to 46505. The two
+TypeScript contexts are reported by app 15368 on a recent PR. A bare `context` would let any
+reporter satisfy `Gate integrity` or `Review threads answered`.
+
+`conditions.ref_name.include` gains `refs/heads/main` beside `~DEFAULT_BRANCH`, so the ruleset
+still guards `main` if the default branch is ever switched (it was, briefly, on 2026-10-14).
 
 Every other rule is preserved byte for byte: `pull_request` (0 approvals, thread resolution
-required), `code_scanning` (CodeQL), `copilot_code_review`, `non_fast_forward`, `deletion`.
-A PUT replaces the whole rules array, so the payload below carries all six.
+required), `code_scanning`, `copilot_code_review`, `non_fast_forward`, `deletion`. A PUT replaces
+the whole rules array, so the payload carries all six.
 
 ## Owner steps
 
-1. Save the payload below as `payload.json` (or rebuild it: take `gh api repos/guilhermegor/blueprintx/rulesets/23741414`,
-   keep `name`, `target`, `enforcement`, `conditions`, `bypass_actors` and `rules`, and replace the
-   `required_status_checks` rule's list with classic's contexts plus the two TypeScript ones).
+1. Back up both layers. For the ruleset, which is valid PUT input after trimming:
+   `gh api repos/guilhermegor/blueprintx/rulesets/23741414 > ruleset.before.json`. Classic:
+   `gh api repos/guilhermegor/blueprintx/branches/main/protection > classic.before.json`. Note that
+   `GET branches/main/protection` output is **not** valid PUT input (it nests `{enabled, url}`
+   objects and uses `contexts` plus `checks`); rebuilding classic needs reshaping, which is why
+   the ruleset backup is the one to rely on.
 2. Apply: `gh api -X PUT repos/guilhermegor/blueprintx/rulesets/23741414 --input payload.json`.
-3. Read it back: `gh api repos/guilhermegor/blueprintx/rulesets/23741414 --jq '.rules[]|select(.type=="required_status_checks")|.parameters.required_status_checks|length'` must print 58.
-4. Verify with one throwaway PR (a one-line docs change): the merge button must stay blocked until
-   all 58 report, and a red check must block it. Do this before step 5, while classic is still a net.
-5. Delete classic: `gh api -X DELETE repos/guilhermegor/blueprintx/branches/main/protection`.
-6. Run `python3 bin/ci/check_required_checks_sync.py --live` (admin token) and update
-   `.github/required-checks.json` so `classic` is `[]` and `ruleset` has the 58 names. Then close #750.
+3. Verify the rules in effect: `gh api repos/guilhermegor/blueprintx/rules/branches/main` must
+   list a `required_status_checks` rule with `ruleset_id` 23741414 and 58 entries, each with an
+   `integration_id`.
+4. Delete classic: `gh api -X DELETE repos/guilhermegor/blueprintx/branches/main/protection`.
+5. Only now run the red-check proof: a throwaway PR with a deliberately failing check must show
+   the merge blocked by the ruleset alone.
+6. Update `.github/required-checks.json` (`classic` to `[]`, `ruleset` to the 58 names) in a PR
+   right after the delete. `check_required_checks_sync.py --live` treats an unprotected branch as
+   an empty classic set, so it keeps working after step 4. Then close #750.
 
-Rollback: the old state is the same two calls reversed; keep the classic JSON from
-`gh api repos/guilhermegor/blueprintx/branches/main/protection > classic.json` before step 5.
+Rollback: restore the ruleset with
+`jq '{name,target,enforcement,conditions,bypass_actors,rules}' ruleset.before.json | gh api -X PUT repos/guilhermegor/blueprintx/rulesets/23741414 --input -`.
+Classic is not restored by replaying `classic.before.json`; re-create it from the Settings UI or a
+hand-built PUT body, which is why step 3 must pass before step 4.
 
 ## Payload
 
@@ -124,10 +145,11 @@ Rollback: the old state is the same two calls reversed; keep the classic JSON fr
   "enforcement": "active",
   "conditions": {
     "ref_name": {
-      "exclude": [],
       "include": [
-        "~DEFAULT_BRANCH"
-      ]
+        "~DEFAULT_BRANCH",
+        "refs/heads/main"
+      ],
+      "exclude": []
     }
   },
   "bypass_actors": [],
@@ -181,181 +203,240 @@ Rollback: the old state is the same two calls reversed; keep the classic JSON fr
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           {
-            "context": "--spec regression tests"
+            "context": "--spec regression tests",
+            "integration_id": 15368
           },
           {
-            "context": ".specs/ structure guard"
+            "context": ".specs/ structure guard",
+            "integration_id": 15368
           },
           {
-            "context": "Analyze (actions)"
+            "context": "Analyze (actions)",
+            "integration_id": 15368
           },
           {
-            "context": "Analyze (javascript-typescript)"
+            "context": "Analyze (javascript-typescript)",
+            "integration_id": 15368
           },
           {
-            "context": "Analyze (python)"
+            "context": "Analyze (python)",
+            "integration_id": 15368
           },
           {
-            "context": "Analyze (ruby)"
+            "context": "Analyze (ruby)",
+            "integration_id": 15368
           },
           {
-            "context": "CodeQL"
+            "context": "CodeQL",
+            "integration_id": 57789
           },
           {
-            "context": "Comment budget — long runs + decorative banners (blueprintx#303)"
+            "context": "Comment budget — long runs + decorative banners (blueprintx#303)",
+            "integration_id": 15368
           },
           {
-            "context": "Cyclomatic complexity — templates/python-common (tests 1, src 2, bin 8)"
+            "context": "Cyclomatic complexity — templates/python-common (tests 1, src 2, bin 8)",
+            "integration_id": 15368
           },
           {
-            "context": "Cyclomatic complexity — tests 1, src 2, bin 8"
+            "context": "Cyclomatic complexity — tests 1, src 2, bin 8",
+            "integration_id": 15368
           },
           {
-            "context": "Dist name vs import package"
+            "context": "Dist name vs import package",
+            "integration_id": 15368
           },
           {
-            "context": "Docs code references — symbols + import paths (blueprintx#159)"
+            "context": "Docs code references — symbols + import paths (blueprintx#159)",
+            "integration_id": 15368
           },
           {
-            "context": "Docs gap — published pages registered in nav and index"
+            "context": "Docs gap — published pages registered in nav and index",
+            "integration_id": 15368
           },
           {
-            "context": "Dry-run smoke — bash-cli"
+            "context": "Dry-run smoke — bash-cli",
+            "integration_id": 15368
           },
           {
-            "context": "Dry-run smoke — ddd-service-native-db"
+            "context": "Dry-run smoke — ddd-service-native-db",
+            "integration_id": 15368
           },
           {
-            "context": "Dry-run smoke — ddd-service-orm-db"
+            "context": "Dry-run smoke — ddd-service-orm-db",
+            "integration_id": 15368
           },
           {
-            "context": "Dry-run smoke — lib-minimal"
+            "context": "Dry-run smoke — lib-minimal",
+            "integration_id": 15368
           },
           {
-            "context": "Dry-run smoke — mvc-service-native-db"
+            "context": "Dry-run smoke — mvc-service-native-db",
+            "integration_id": 15368
           },
           {
-            "context": "Dry-run smoke — mvc-service-orm-db"
+            "context": "Dry-run smoke — mvc-service-orm-db",
+            "integration_id": 15368
           },
           {
-            "context": "Dry-run smoke — react-spa-webpack"
+            "context": "Dry-run smoke — react-spa-webpack",
+            "integration_id": 15368
           },
           {
-            "context": "Every skeleton ships the hosted-reviewer config"
+            "context": "Every skeleton ships the hosted-reviewer config",
+            "integration_id": 15368
           },
           {
-            "context": "Function length — 60 lines, docstring excluded"
+            "context": "Function length — 60 lines, docstring excluded",
+            "integration_id": 15368
           },
           {
-            "context": "Gate integrity — a PR must not weaken a check without saying why"
+            "context": "Gate integrity — a PR must not weaken a check without saying why",
+            "integration_id": 15368
           },
           {
-            "context": "GitGuardian Security Checks"
+            "context": "GitGuardian Security Checks",
+            "integration_id": 46505
           },
           {
-            "context": "GitGuardian — secret scan"
+            "context": "GitGuardian — secret scan",
+            "integration_id": 15368
           },
           {
-            "context": "Lockfile sync — templates/*/package.json vs package-lock.json"
+            "context": "Lockfile sync — templates/*/package.json vs package-lock.json",
+            "integration_id": 15368
           },
           {
-            "context": "Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)"
+            "context": "Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)",
+            "integration_id": 15368
           },
           {
-            "context": "MkDocs build — strict mode"
+            "context": "MkDocs build — strict mode",
+            "integration_id": 15368
           },
           {
-            "context": "PR file-count ceiling — 90 files (blueprintx#551)"
+            "context": "PR file-count ceiling — 90 files (blueprintx#551)",
+            "integration_id": 15368
           },
           {
-            "context": "Pre-commit and CI run the same checks, both directions (blueprintx#384)"
+            "context": "Pre-commit and CI run the same checks, both directions (blueprintx#384)",
+            "integration_id": 15368
           },
           {
-            "context": "Review threads answered"
+            "context": "Review threads answered",
+            "integration_id": 15368
           },
           {
-            "context": "Review-bot roster opt-out — \"no\" must omit .review-bots.yaml"
+            "context": "Review-bot roster opt-out — \"no\" must omit .review-bots.yaml",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test (multi-intent) — mvc-service-native-db"
+            "context": "Scaffold + lint + test (multi-intent) — mvc-service-native-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test (multi-intent) — mvc-service-orm-db"
+            "context": "Scaffold + lint + test (multi-intent) — mvc-service-orm-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test (storage opt-in) — api-service-native-db"
+            "context": "Scaffold + lint + test (storage opt-in) — api-service-native-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test (storage opt-in) — ddd-service-native-db"
+            "context": "Scaffold + lint + test (storage opt-in) — ddd-service-native-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test (storage opt-in) — ddd-service-orm-db"
+            "context": "Scaffold + lint + test (storage opt-in) — ddd-service-orm-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test — ddd-service-native-db"
+            "context": "Scaffold + lint + test — ddd-service-native-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test — ddd-service-orm-db"
+            "context": "Scaffold + lint + test — ddd-service-orm-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test — lib-minimal"
+            "context": "Scaffold + lint + test — lib-minimal",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test — mvc-service-native-db"
+            "context": "Scaffold + lint + test — mvc-service-native-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold + lint + test — mvc-service-orm-db"
+            "context": "Scaffold + lint + test — mvc-service-orm-db",
+            "integration_id": 15368
           },
           {
-            "context": "Scaffold origin verification — mismatched remote must fail"
+            "context": "Scaffold origin verification — mismatched remote must fail",
+            "integration_id": 15368
           },
           {
-            "context": "Shared test copy lists — scaffolds vs python-common"
+            "context": "Shared test copy lists — scaffolds vs python-common",
+            "integration_id": 15368
           },
           {
-            "context": "ShellCheck — bin/**/*.sh"
+            "context": "ShellCheck — bin/**/*.sh",
+            "integration_id": 15368
           },
           {
-            "context": "Spell check — docs/ and templates/"
+            "context": "Spell check — docs/ and templates/",
+            "integration_id": 15368
           },
           {
-            "context": "TypeScript build + lint — react-spa-webpack template"
+            "context": "TypeScript build + lint — react-spa-webpack template",
+            "integration_id": 15368
           },
           {
-            "context": "TypeScript build + lint — ts-lib template"
+            "context": "TypeScript build + lint — ts-lib template",
+            "integration_id": 15368
           },
           {
-            "context": "Validate skeleton.meta integrity"
+            "context": "Validate skeleton.meta integrity",
+            "integration_id": 15368
           },
           {
-            "context": "Version sync — pyproject vs CLI"
+            "context": "Version sync — pyproject vs CLI",
+            "integration_id": 15368
           },
           {
-            "context": "actionlint — workflows (repo + templates)"
+            "context": "actionlint — workflows (repo + templates)",
+            "integration_id": 15368
           },
           {
-            "context": "docs/ boundary guard"
+            "context": "docs/ boundary guard",
+            "integration_id": 15368
           },
           {
-            "context": "gitleaks — repo history (root + templates)"
+            "context": "gitleaks — repo history (root + templates)",
+            "integration_id": 15368
           },
           {
-            "context": "markdownlint — measured rule set (blueprintx#383)"
+            "context": "markdownlint — measured rule set (blueprintx#383)",
+            "integration_id": 15368
           },
           {
-            "context": "promote_offline_to_online.sh refusal-path tests"
+            "context": "promote_offline_to_online.sh refusal-path tests",
+            "integration_id": 15368
           },
           {
-            "context": "quality-rules.yaml validation (blueprintx#432)"
+            "context": "quality-rules.yaml validation (blueprintx#432)",
+            "integration_id": 15368
           },
           {
-            "context": "scaffold kanban board and labels"
+            "context": "scaffold kanban board and labels",
+            "integration_id": 15368
           },
           {
-            "context": "sed portability — no bare sed -i (blueprintx#459)"
+            "context": "sed portability — no bare sed -i (blueprintx#459)",
+            "integration_id": 15368
           }
         ]
       }
     }
   ]
-}```
+}
+```
