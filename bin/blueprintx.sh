@@ -2,10 +2,6 @@
 
 set -e
 
-# Fallback version for installs WITHOUT a .git tree (packaged installs + `make install` stamp the
-# real value here at build/install time). A git checkout ignores this and derives the version from
-# the tag via `git describe` — see print_version. Do not hand-bump: the release tag is the single
-# source of truth.
 BLUEPRINTX_VERSION="0.0.0"
 
 DEV_MODE=0
@@ -23,7 +19,6 @@ TEMPLATES_ROOT="$BLUEPRINTX_ROOT/templates"
 source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=bin/lib/spec.sh
 source "$SCRIPT_DIR/lib/spec.sh"
-
 
 print_usage() {
     echo "Usage: blueprintx [subcommand] [options]"
@@ -54,8 +49,6 @@ print_usage() {
 }
 
 print_version() {
-    # Prefer the git tag (the single source of truth) when run from a checkout; fall back to the
-    # stamped BLUEPRINTX_VERSION literal for packaged installs / source archives without a .git.
     local str_version
     if str_version=$(git -C "$BLUEPRINTX_ROOT" describe --tags --always 2>/dev/null) \
         && [ -n "$str_version" ]; then
@@ -105,13 +98,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-
 show_banner() {
-    # Column 72 is the exact BLUEPRINT/X glyph boundary on every one of the six
-    # rows below (blueprintx#256, verified against assets/logo.png): it always
-    # falls inside the T glyph or a blank inset column, and the X glyph never
-    # starts before column 73 — one split index works for every row, no
-    # per-row offset needed.
     local -a rows=(
         " ██████╗ ██╗     ██╗   ██╗███████╗██████╗ ██████╗ ██╗███╗   ██╗████████╗██╗  ██╗ "
         " ██╔══██╗██║     ██║   ██║██╔════╝██╔══██╗██╔══██╗██║████╗  ██║╚══██╔══╝╚██╗██╔╝ "
@@ -304,10 +291,6 @@ prompt_project_name() {
     if [ -z "$PROJECT_NAME" ]; then
         exit_error "Project name cannot be empty."
     fi
-    # The name has to serve TWO identities: the distribution name (hyphens legal) and
-    # the import package derived from it (hyphens illegal). `to_import_package_name`
-    # rescues a hyphen; nothing rescues a leading digit, a dot or a space, so those are
-    # refused here rather than shipped as a package that cannot be imported.
     if ! is_valid_project_name "$PROJECT_NAME"; then
         exit_error "Invalid project name '$PROJECT_NAME'. Use a letter or underscore first, then letters, digits, '-' or '_'."
     fi
@@ -364,7 +347,6 @@ show_skeleton_structure() {
             show_lib_minimal
             ;;
         *)
-            # Fall back to description from skeleton.meta
             local meta="$TEMPLATES_ROOT/$skeleton/skeleton.meta"
             if [ -f "$meta" ]; then
                 local description=""
@@ -509,10 +491,6 @@ prompt_license() {
     esac
 }
 
-# The locale of the GENERATED project's published pages only. It says nothing about
-# BlueprintX's own prose, which is en-US with no exceptions (root CLAUDE.md), and nothing
-# about code: comments and docstrings stay English in every locale, enforced in the
-# generated project by bin/check_comment_language.py. See docs/cli-reference.md, "Documentation locale".
 prompt_docs_locale() {
     printf "${CYAN}Select documentation locale${NC} (language the new project's README.md and docs/ are meant to be written in; shipped text is English)\n" >&2
     printf "  ${BLUE}1) en${NC}    — English (default)\n" >&2
@@ -533,7 +511,6 @@ prompt_docs_locale() {
     esac
 }
 
-# The locales prompt_docs_locale offers; the --spec flow validates against the same two.
 is_valid_docs_locale() {
     case "$1" in
         en|pt-BR) return 0 ;;
@@ -572,10 +549,6 @@ create_project() {
         bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
 }
 
-
-# Validate spec values against the chosen skeleton before any file is written: a bad value would
-# otherwise reach the scaffold, which reads a nonexistent license template after the project
-# dir already exists. Reads LANG_CHOICE, SKELETON_CHOICE, LICENSE_CHOICE and DOCS_LOCALE.
 validate_spec_answers() {
     local skeleton_language
     skeleton_language=$(grep '^language=' "$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta" | cut -d= -f2-)
@@ -585,15 +558,12 @@ validate_spec_answers() {
         || exit_error "--spec: unknown license '$LICENSE_CHOICE' (no templates/licenses/$LICENSE_CHOICE)."
     is_valid_docs_locale "$DOCS_LOCALE" \
         || exit_error "--spec: 'docs_locale' must be en or pt-BR, got '$DOCS_LOCALE'."
-    # A bad y/n value must stop the run here, in the main shell: spec_yn used to turn it into "n".
     if spec_skeleton_supported "$SKELETON_CHOICE"; then
         spec_validate_answers "$SKELETON_CHOICE" "$SPEC_FILE" \
             || exit_error "--spec: fix the y/n value(s) above before scaffolding."
     fi
 }
 
-# --dev: scaffold into a fresh temp root instead of the working directory; with --clean the
-# root is removed on exit. Shared by the interactive flow and the --spec flow.
 select_dev_project_root() {
     TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/BlueprintX.XXXXXX")
     PROJECT_ROOT="$TEMP_ROOT"
@@ -614,7 +584,6 @@ print_dev_mode_notice() {
     fi
 }
 
-# Pipe the named-key answers into the skeleton's scaffold. Reads the globals the spec flow set.
 scaffold_from_spec() {
     print_status "info" "Creating project '$PROJECT_NAME' under '$PROJECT_ROOT' from spec '$SPEC_FILE'"
 
@@ -624,9 +593,6 @@ scaffold_from_spec() {
     scaffold_script="$BLUEPRINTX_ROOT/$scaffold_rel"
     [ -f "$scaffold_script" ] || exit_error "Scaffold script not found: $scaffold_script"
 
-    # Resolve the answers BEFORE the scaffold starts, into a file rather than `$(...)`, which
-    # would strip trailing empty (accept-default) answer lines. No pipe also means no SIGPIPE
-    # status when the scaffold finishes before reading every line.
     local path_answers
     path_answers="$(mktemp)"
     spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" >"$path_answers" || {
@@ -640,13 +606,6 @@ scaffold_from_spec() {
     rm -f "$path_answers"
 }
 
-#
-# --spec: answer blueprintx's own top-level prompts (project_name, ...,
-# skeleton, license) plus every scaffold-internal prompt by NAME instead of
-# interactively — the fix for #481 (positional stdin breaks the moment a
-# prompt is added anywhere). See docs/spec-answers.md for the full key
-# catalog.
-#
 run_create_flow_from_spec() {
     PROJECT_NAME=$(spec_get "$SPEC_FILE" project_name)
     [ -n "$PROJECT_NAME" ] || exit_error "--spec: 'project_name' key is required."
@@ -685,8 +644,6 @@ run_create_flow_from_spec() {
         exit 0
     fi
 
-    # Refuse before anything is created: a skeleton with no prompt map would otherwise run its
-    # scaffold with interactive prompts, hanging an unattended run.
     spec_skeleton_supported "$SKELETON_CHOICE" \
         || exit_error "--spec: '$SKELETON_CHOICE' has no named-key prompt map, so it cannot run unattended. Use the interactive flow, or one of: $(spec_supported_skeletons)."
 
@@ -812,7 +769,6 @@ main() {
     run_create_flow
 }
 
-# Sourced by tests/test_docs_locale_prompt.sh to reach the prompt helpers without the menu.
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     main
 fi

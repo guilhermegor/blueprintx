@@ -1,19 +1,4 @@
 #!/usr/bin/env bash
-# patch_package_json — add "scripts"/"dependencies" entries to a generated
-# project's package.json. Shared by every ts-* scaffold (#397).
-#
-# ⚠️ The path travels through argv and is NEVER interpolated into the Python source. Four
-# copies of this block wrote open('$project_path/package.json') inside a double-quoted
-# `python3 -c`, so a project path holding an apostrophe (…/Joao's app/) ended the Python
-# string literal — and with a newline it injected statements. The break is not exotic: an
-# apostrophe in a directory name is enough (fixed for ts_react_app.sh by #396).
-#
-# Extracted here rather than left copy-pasted into ts_lib.sh (#397): both scaffolds already
-# source bin/lib/ for common.sh and scaffold_git_remote.sh, and ts_lib.sh's own git-diff
-# offline-mode block wants the exact same three-script patch ts_react_app.sh's does — the
-# one-implementation rule (CLAUDE.md) applies as much here as it did to the git remote flow.
-#
-# This is a sourced lib: define-only, no work on source.
 patch_package_json() {
     local pkg_path="$1" section="$2"
     shift 2

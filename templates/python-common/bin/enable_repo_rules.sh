@@ -162,7 +162,7 @@ build_rules_json() {
 	cat <<EOF
 [
   {"type":"pull_request","parameters":{
-    "required_approving_review_count":0,
+    "required_approving_review_count":${RULESET_APPROVALS:-0},
     "dismiss_stale_reviews_on_push":false,
     "require_code_owner_review":false,
     "require_last_push_approval":false,
@@ -176,6 +176,7 @@ build_rules_json() {
     "review_draft_pull_requests":false
   }},
   {"type":"non_fast_forward"},
+  {"type":"required_linear_history"},
   {"type":"deletion"}${str_checks_rule}
 ]
 EOF

@@ -611,10 +611,8 @@ lib_minimal_copy_project_scaffolding() {
     touch "$project_path/.specs/backlog/.gitkeep"
     # The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
     # implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
-    cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" "$project_path/bin/check_specs_structure.sh"
-    chmod +x "$project_path/bin/check_specs_structure.sh"
-    cp "$BLUEPRINTX_ROOT/bin/ci/check_docs_boundary.sh" "$project_path/bin/check_docs_boundary.sh"
-    chmod +x "$project_path/bin/check_docs_boundary.sh"
+    cp "$BLUEPRINTX_ROOT"/bin/ci/{check_specs_structure.sh,check_docs_boundary.sh,check_required_checks_sync.py} "$project_path/bin/"
+    chmod +x "$project_path"/bin/check_{specs_structure,docs_boundary}.sh
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).
@@ -681,6 +679,7 @@ copy_mkdocs_templates() {
 }
 
 apply_branch_protection() {
+    local project_path="$1"
     local branch="main"
     local repo="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
 
@@ -707,36 +706,18 @@ apply_branch_protection() {
             # rule — GitHub forbids self-approval, so the first PR's merge
             # would be permanently blocked. Ask whether human reviewers will
             # gate merges, and build the protection payload accordingly.
-            local reviews_json
+            local reviews_approvals
             reviews_ans=""
             prompt_read reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
             case "$reviews_ans" in
                 y|Y)
-                    reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
+                    reviews_approvals=1
                     ;;
                 *)
-                    reviews_json='"required_pull_request_reviews": null,'
+                    reviews_approvals=0
                     ;;
             esac
-            if gh api --method PUT \
-                -H "Accept: application/vnd.github+json" \
-                "/repos/$repo/branches/$branch/protection" \
-                --input - <<EOF
-{
-  "required_status_checks": { "strict": true, "contexts": [] },
-  "enforce_admins": true,
-  $reviews_json
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false,
-  "required_linear_history": true
-}
-EOF
-            then
-                print_status "success" "Branch '$branch' protected on GitHub."
-            else
-                print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
-            fi
+            (cd "$project_path" && RULESET_APPROVALS="$reviews_approvals" bash bin/enable_repo_rules.sh)
             ;;
         *) print_status "info" "Skipped branch protection";;
     esac
