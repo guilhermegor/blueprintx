@@ -3697,6 +3697,13 @@ def test_forged_dependabot_author_without_a_web_flow_signature_is_not_exempt(
     assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]), _by_dependabot)
 
 
+def test_dependabot_group_with_an_entry_lacking_update_type_is_not_exempt() -> None:
+    """A dependency entry without ``update-type`` cannot hide behind the others."""
+    dict_commit = _dep_commit()
+    dict_commit["commit"]["message"] += "\n- dependency-name: y\n"
+    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]), _by_dependabot)
+
+
 def test_dependabot_commit_pushed_by_a_human_is_not_exempt() -> None:
     """A genuine-looking commit pushed by a human (actor lookup says no) gets no exemption."""
     dict_pr = _dep_pr([_dep_commit()])

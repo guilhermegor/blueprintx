@@ -105,3 +105,14 @@ grouped PR with one major.
   unanswered (blueprintx#630), so nothing merges unread.
 - Auto-merge needs "Allow auto-merge" and required status checks on the repository; without
   them `--auto` fails or merges immediately.
+- The pusher lookup needs at least one `pull_request` workflow run on the head commit. A
+  repository whose CI only runs on `push` or skips lockfile-only diffs gets no exemption and
+  no major ever arms; this fails closed.
+- A failed `--disable-auto` fails the job (only "not enabled" is ignored), so a PR armed at an
+  earlier head never stays armed behind a green run.
+- The roster is read at the base commit SHA. Reviews are collapsed to each trusted reviewer's
+  latest state, so an approval after a change request arms, and a standing block from an
+  earlier head still blocks.
+- The review-triggered run uses the workflow file from the PR's merge ref. It runs only after
+  a review is submitted, and a Dependabot bump of this workflow's own pins is part of the diff
+  that review covers.

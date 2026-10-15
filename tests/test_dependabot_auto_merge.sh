@@ -15,6 +15,7 @@ human_commit='{"author":{"login":"human"},"committer":{"login":"web-flow"},"comm
 STUB_COMMITS="[$good_commit]"
 STUB_RUNS='{"total_count":1,"workflow_runs":[{"actor":{"login":"dependabot[bot]"}}]}'
 STUB_REVIEWS='[]'
+CALLS_FILE=$(mktemp)
 STUB_CALLS=""
 STUB_BASE_ROSTER='reviewers:
   - login: coderabbitai[bot]
@@ -29,15 +30,19 @@ STUB_HEAD_ROSTER_EXTRA='  - login: evil-bot[bot]
 gh() {
 	case "$*" in
 	*"contents/.review-bots.yaml"*) [[ -n "${STUB_NO_ROSTER:-}" ]] && return 1 ;;&
-	*"contents/.review-bots.yaml?ref=main"*) printf '%s\n' "$STUB_BASE_ROSTER" ;;
+	*"contents/.review-bots.yaml?ref=basesha"*) printf '%s\n' "$STUB_BASE_ROSTER" ;;
 	*"contents/.review-bots.yaml"*) printf '%s\n%s\n' "$STUB_BASE_ROSTER" "$STUB_HEAD_ROSTER_EXTRA" ;;
-	"pr merge"*) STUB_CALLS+="$* ;" ;;
+	"pr merge"*)
+		printf "%s ;" "$*" >>"$CALLS_FILE"
+		[[ -n "${STUB_DISARM_ERR:-}" && "$*" == *--disable-auto* ]] && { echo "$STUB_DISARM_ERR" >&2; return 1; }
+		return 0
+		;;
 	*"actions/runs"*) printf '%s\n' "$STUB_RUNS" ;;
 	*"/commits"*)
 		printf '%s\n' "$STUB_COMMITS"
 		;;
 	*"/reviews"*) printf '%s\n' "$STUB_REVIEWS" ;;
-	*"/pulls/"*) printf '{"user":{"login":"%s"},"base":{"ref":"main"}}\n' "$STUB_AUTHOR" ;;
+	*"/pulls/"*) printf '{"user":{"login":"%s"},"base":{"sha":"basesha"}}\n' "$STUB_AUTHOR" ;;
 	*)
 		echo "UNEXPECTED gh $*" >&2
 		return 1
@@ -57,8 +62,11 @@ check() {
 }
 expect() { check "$1" "$2" "$(decide 1 abc "$3")"; }
 run_main() {
-	STUB_CALLS=""
-	PR=1 HEAD_SHA=abc DEPS_JSON="$1" main >/dev/null
+	: >"$CALLS_FILE"
+	PR=1 HEAD_SHA=abc DEPS_JSON="$1" main >/dev/null 2>&1
+	local int_rc=$?
+	STUB_CALLS=$(cat "$CALLS_FILE")
+	return "$int_rc"
 }
 
 patch='[{"updateType":"version-update:semver-patch"}]'
@@ -169,7 +177,26 @@ for str_wf in .github/workflows/dependabot-auto-merge.yml templates/common/.gith
 	awk '/id: metadata/ {f=1} f && /continue-on-error: true/ {ok=1} /Checkout base/ {f=0} END {exit !ok}' "$REPO_ROOT/$str_wf"
 	check "$str_wf lets a failing metadata step still reach the disarm path" 0 "$?"
 	grep -q 'ref: ${{ github.event.pull_request.base.sha }}' "$REPO_ROOT/$str_wf"
-	check "$str_wf checks out the base sha, where the roster is read" 0 "$?"
+	check "$str_wf checks out the base sha, where the script runs" 0 "$?"
 done
+
+STUB_DISARM_ERR="GraphQL: Pull request Auto merge is not enabled"
+run_main "$major"
+check "disarm tolerates 'not enabled'" 0 "$?"
+STUB_DISARM_ERR="HTTP 502 bad gateway"
+run_main "$major"
+check "a real disarm failure fails the job" 1 "$?"
+STUB_DISARM_ERR=""
+
+STUB_AUTHOR="dependabot[bot]"
+STUB_COMMITS="[$good_commit]"
+STUB_REVIEWS='[{"commit_id":"old","user":{"login":"owner"},"author_association":"OWNER","state":"CHANGES_REQUESTED"},{"commit_id":"abc","user":{"login":"m"},"author_association":"MEMBER","state":"APPROVED"}]'
+expect "a standing trusted block from an older head still blocks" wait-review "$major"
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"author_association":"OWNER","state":"CHANGES_REQUESTED"},{"commit_id":"abc","user":{"login":"owner"},"author_association":"OWNER","state":"APPROVED"}]'
+expect "the same reviewer approving after requesting changes arms" arm "$major"
+
+diff <(sed 's#bin/dependabot_auto_merge.sh#X#' "$REPO_ROOT/.github/workflows/dependabot-auto-merge.yml" | sed 's#templates/common/X#X#') \
+	<(sed 's#bin/dependabot_auto_merge.sh#X#' "$REPO_ROOT/templates/common/.github/workflows/dependabot-auto-merge.yml") >/dev/null
+check "root and template workflows differ only in the script path" 0 "$?"
 
 ((int_failures == 0)) || exit 1

@@ -2132,6 +2132,7 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
 
 
 _RE_UPDATE_TYPE = re.compile(r"^\s*update-type:\s*version-update:semver-(\w+)\s*$", re.M)
+_RE_DEPENDENCY_NAME = re.compile(r"^\s*-?\s*dependency-name:", re.M)
 _SET_EXEMPT_UPDATES = frozenset({"patch", "minor"})
 _STR_DEPENDABOT_EMAIL = "+dependabot[bot]@users.noreply.github.com"
 
@@ -2218,6 +2219,8 @@ def dependabot_review_exempt(
         return False
     str_messages = "\n".join(d["commit"].get("message") or "" for d in list_nodes)
     list_types = _RE_UPDATE_TYPE.findall(str_messages)
+    if len(list_types) != len(_RE_DEPENDENCY_NAME.findall(str_messages)):
+        return False
     return bool(list_types) and set(list_types) <= _SET_EXEMPT_UPDATES
 
 
