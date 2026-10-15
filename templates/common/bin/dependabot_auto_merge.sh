@@ -21,11 +21,23 @@ is_pure_dependabot() {
 	[[ "$str_bad" == 0 ]]
 }
 
+roster_bots() {
+	local str_pr="$1" str_base
+	str_base=$(gh api "repos/$GH_REPO/pulls/$str_pr" | jq -r .base.ref) || return 1
+	gh api -H "Accept: application/vnd.github.raw" \
+		"repos/$GH_REPO/contents/.review-bots.yaml?ref=$str_base" 2>/dev/null |
+		awk '/^[[:space:]]*-[[:space:]]+login:/ { sub(/^[^:]*:[[:space:]]*/, ""); gsub(/["\047[:space:]]/, ""); str_login = $0 }
+			/^[[:space:]]+posts:[[:space:]]*threads/ && str_login != "" { print str_login; str_login = "" }'
+}
+
 has_review_on_head() {
-	local str_pr="$1" str_head="$2" str_n
+	local str_pr="$1" str_head="$2" str_n str_roster
+	str_roster=$(roster_bots "$str_pr" | jq -R -s -c 'split("\n") | map(select(. != ""))') || return 1
 	str_n=$(gh api "repos/$GH_REPO/pulls/$str_pr/reviews" --paginate |
-		jq -s --arg head "$str_head" --arg bot "$DEPENDABOT_LOGIN" \
-			'[.[][] | select(.commit_id == $head and .user.login != $bot and (.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")))] as $r
+		jq -s --arg head "$str_head" --arg bot "$DEPENDABOT_LOGIN" --argjson roster "$str_roster" \
+			'[.[][] | select(.commit_id == $head and .user.login != $bot and (
+				(.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))
+				or (.user.type == "Bot" and (.user.login | IN($roster[]))) ))] as $r
 			| if any($r[]; .state == "CHANGES_REQUESTED") then 0
 			  else [$r[] | select(.state | IN("APPROVED", "COMMENTED"))] | length end') || return 1
 	[[ "$str_n" =~ ^[0-9]+$ ]] && ((str_n > 0))

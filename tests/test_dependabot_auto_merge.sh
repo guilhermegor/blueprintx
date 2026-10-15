@@ -10,15 +10,26 @@ STUB_AUTHOR="dependabot[bot]"
 STUB_COMMIT_AUTHORS='"dependabot[bot]"'
 STUB_REVIEWS='[]'
 STUB_CALLS=""
+STUB_BASE_ROSTER='reviewers:
+  - login: coderabbitai[bot]
+    posts: threads
+  - login: github-actions[bot]
+    posts: status
+  - login: guilhermegor-review-ladder[bot]
+    posts: threads'
+STUB_HEAD_ROSTER_EXTRA='  - login: evil-bot[bot]
+    posts: threads'
 
 gh() {
 	case "$*" in
+	*"contents/.review-bots.yaml?ref=main"*) printf '%s\n' "$STUB_BASE_ROSTER" ;;
+	*"contents/.review-bots.yaml"*) printf '%s\n%s\n' "$STUB_BASE_ROSTER" "$STUB_HEAD_ROSTER_EXTRA" ;;
 	"pr merge"*) STUB_CALLS+="$* ;" ;;
 	*"/commits"*)
 		printf '[%s]\n' "$(printf '%s' "$STUB_COMMIT_AUTHORS" | sed -E 's/("[^"]*")/{"author":{"login":\1}}/g')"
 		;;
 	*"/reviews"*) printf '%s\n' "$STUB_REVIEWS" ;;
-	*"/pulls/"*) printf '{"user":{"login":"%s"}}\n' "$STUB_AUTHOR" ;;
+	*"/pulls/"*) printf '{"user":{"login":"%s"},"base":{"ref":"main"}}\n' "$STUB_AUTHOR" ;;
 	*)
 		echo "UNEXPECTED gh $*" >&2
 		return 1
@@ -65,6 +76,21 @@ STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"dependabot[bot]"},"author_ass
 expect "major reviewed only by dependabot waits" wait-review "$major"
 STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"author_association":"MEMBER","state":"PENDING"}]'
 expect "major with a pending review waits" wait-review "$major"
+bot_review() { printf '[{"commit_id":"%s","user":{"login":"%s","type":"%s"},"author_association":"NONE","state":"COMMENTED"}]' "$1" "$2" "$3"; }
+STUB_REVIEWS=$(bot_review abc "guilhermegor-review-ladder[bot]" Bot)
+expect "roster bot review on head arms a major" arm "$major"
+STUB_REVIEWS=$(bot_review abc "coderabbitai[bot]" Bot)
+expect "second roster bot arms a major" arm "$major"
+STUB_REVIEWS=$(bot_review abc "random-bot[bot]" Bot)
+expect "non-roster bot does not arm a major" wait-review "$major"
+STUB_REVIEWS=$(bot_review abc "coderabbitai[bot]" User)
+expect "User named like a roster bot does not arm a major" wait-review "$major"
+STUB_REVIEWS=$(bot_review abc "evil-bot[bot]" Bot)
+expect "bot added to the roster only on the PR head does not arm" wait-review "$major"
+STUB_REVIEWS=$(bot_review abc "github-actions[bot]" Bot)
+expect "status-only roster member does not arm a major" wait-review "$major"
+STUB_REVIEWS=$(bot_review old "coderabbitai[bot]" Bot)
+expect "roster bot review on an older head does not arm" wait-review "$major"
 STUB_REVIEWS='[]'
 STUB_AUTHOR="mallory"
 expect "non-dependabot author is skipped" skip "$patch"

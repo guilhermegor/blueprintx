@@ -49,8 +49,16 @@ the default branch.
 
 ## Who counts as a reviewer
 
-A public repo accepts reviews from any account, so only a review whose `author_association` is
-OWNER, MEMBER or COLLABORATOR, on the current head, in state APPROVED or COMMENTED, counts. A
+A public repo accepts reviews from any account, so a review counts toward a major only when it
+is on the current head, in state APPROVED or COMMENTED, and comes from one of:
+
+- a human whose `author_association` is OWNER, MEMBER or COLLABORATOR;
+- a reviewer bot: `user.type` is `Bot` and the exact login is a `posts: threads` entry in
+  `.review-bots.yaml` (for example `coderabbitai[bot]` and the reviewer-ladder App).
+
+The roster is read from the PR's base branch through the contents API, never from the PR head,
+so a commit on the Dependabot branch cannot add itself to it. A `User` account named like a
+roster bot does not count, nor does a `posts: status` member such as `github-actions[bot]`. A
 trusted CHANGES_REQUESTED on the head blocks. The job gates on the PR author, never the actor
 (on a review event the actor is the reviewer), and arms with `--match-head-commit` so GitHub
 refuses if the head moved after the check. The review-thread exemption never counts reviews,
