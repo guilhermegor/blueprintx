@@ -31,4 +31,4 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
 - `pr-self-assign.yml` skips fork PRs (read-only token) and needs only `pull-requests: write`.
 - The new check names are deliberately absent from each tier's `bin/required-checks.txt`, which
   allows a name only after a real PR has emitted it. Add them once they have reported.
-- Offline scaffolds drop `.github/` but keep the `close_linked_issues.sh` and `check_pr_policy.sh` scripts but drop `dependabot_auto_merge.sh` (tracked in #727).
+- Offline scaffolds drop `.github/` but keep `close_linked_issues.sh` and `check_pr_policy.sh` in `bin/`, and drop `dependabot_auto_merge.sh` (tracked in #727).

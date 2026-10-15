@@ -732,7 +732,7 @@ jobs:
           scaffold="$(grep '^scaffold=' "templates/$SKELETON/skeleton.meta" | cut -d= -f2-)"
           bash "$scaffold" "$RUNNER_TEMP" ci-scaffold "CI scaffold" </dev/null
 
-      - name: Install npm dependencies (npm ci enforces the committed lockfile,
+      - name: Install npm dependencies (npm ci enforces the committed lockfile)
         working-directory: ${{ runner.temp }}/ci-scaffold
         run: npm ci
 

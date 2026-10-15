@@ -686,3 +686,566 @@ conventions, which the suites no longer repeat in headers:
 - **Prompt through the `bin/lib/common.sh` helpers, never a bare `read`** - `prompt_yes_no <var> "$(prompt_main "...")" [y|n]` for y/n questions, `prompt_read <var> "..."` for choices and text. A piped stdin is not an answer: with no terminal both leave the variable at its default, so a stray line on a pipe cannot enable an opt-in. Pick the non-interactive default per prompt (`n` for an opt-in, `y` only when "yes" is the safe unattended answer). When a prompt falls back to its default because stdin is not a terminal, the helper prints one line to stderr naming the prompt and the default (stdout and the exit status are unchanged). A harness that feeds answers on purpose exports `BLUEPRINTX_STDIN_ANSWERS=1`; `bin/lib/spec.sh` (named-key answers, `--spec`) is the supported non-interactive path and sets up that feed, so prefer it over hand-built pipes. `bin/blueprintx.sh` menus are exempt: they have no safe default. `tests/test_prompt_tty_guard.sh` fails on an unguarded `read` in `bin/scaffold/` or `bin/lib/scaffold_*.sh`.
 
 We appreciate your contributions and look forward to collaborating with you!
+
+## Repository scripts under `bin/`
+
+The scripts under `bin/` carry no comments, so the reasoning lives here. Per-script rules,
+grouped by what they guard.
+
+### Entry point and shared libraries
+
+- **Version.** `bin/blueprintx.sh` prefers `git describe` from a checkout and falls back to
+  the stamped `BLUEPRINTX_VERSION` literal for packaged installs and source archives with no
+  `.git`. The literal stays `0.0.0`; the release tag is the single source of truth, and
+  `bin/ci/check_version_sync.sh` rejects a hand-bump of it or of `pyproject.toml`.
+- **Banner.** Column 72 is the BLUEPRINT/X glyph boundary on every one of the six logo rows
+  (#256, verified against `assets/logo.png`): it falls inside the T glyph or a blank inset
+  column and the X never starts before column 73, so one split index works for all rows.
+- **Two identities in a project name (#113).** A PyPI distribution name may contain hyphens;
+  an import package may not (`from my-lib.thing import x` is a parse-time SyntaxError). The
+  derivation rescues a hyphen; nothing rescues a leading digit, a dot or a space, so the
+  prompt refuses those. The defect hid because the top-level `__init__` compiles either way
+  and `importlib.import_module("my-lib")` succeeds on the string form; only a submodule
+  import written as source breaks. `bin/ci/check_project_name_identities.sh` therefore renders
+  the real templates with a hyphenated name and asks Python to compile them (compile, never
+  import, since the rendered modules import a package that does not exist here). The CI
+  harness scaffolds with a hyphenated name for the same reason: the previous underscored
+  default let the tier ship an unimportable `src/my-lib/` with the job green.
+- **Documentation locale** is the locale of the generated project's published pages only.
+  It says nothing about this repository's prose (en-US) or about code: comments and
+  docstrings stay English in every locale, enforced in the generated project by
+  `bin/check_comment_language.py`.
+- **`--spec`** (#481) answers prompts by name instead of stdin position. Resolve the answers
+  before the scaffold starts, into a file rather than `$(...)`, which strips trailing empty
+  (accept-default) lines; no pipe also means no SIGPIPE status when the scaffold finishes
+  before reading every line. Validate in the main shell before piping: a bad y/n must stop
+  the run, never become a quiet `n`, and a skeleton with no prompt map is refused up front
+  because it would otherwise hang an unattended run on interactive prompts.
+  `bin/lib/spec.sh` is the one seam that maps a stable key to the stdin position its prompt
+  holds today, so a new prompt needs one new line there. Keys for publishing or registry
+  verification must delegate to the `publishprobe` tool, never reimplement credentials.
+  `spec_get` tolerates CRLF, a missing file or key (the default applies), and keeps
+  `|| true` so a `pipefail` caller does not read an absent key as failure; the emitters wrap
+  `spec_get` in `echo` because it prints without a trailing newline and the next answer would
+  glue onto it. The review-bot answer is the raw y/n of a `[Y/n]` prompt, not a polarity flip.
+
+  It is the translator because the scaffold scripts still read
+  positional stdin and were owned by other open PRs (#503, #509) when it was written.
+
+  - `spec_skeleton_supported` compares by exact equality, since a substring match accepted two
+    supported names joined by a space.
+  - The status check in `spec_stdin_for_skeleton` is defence in depth: a failure inside a
+    pipeline emits no answers instead of stopping it, so `scaffold_from_spec` also reads that
+    status from `PIPESTATUS`.
+  - The publish and registry keys (`publish_pypi`, `publish_test_pypi`, `consume_private`)
+    only answer the scaffold's existing yes/no gate.
+  - The problem it solves: an answer stream like `printf 'n\n%.0s' {1..12}` is positional, so
+    inserting a prompt anywhere shifts every later answer onto the wrong question; a name does
+    not move when a prompt is inserted.
+  - `spec_get` prints with `printf '%s'` and no trailing newline so that it composes under
+    command substitution.
+- **Colours (`bin/lib/common.sh`, #253, #256).** The six status colours are each bound to one
+  `print_status` level, so three more codes exist rather than reusing one with a second
+  meaning: `PROMPT_PRIMARY` (bold blue), `PROMPT_SUB` (bold magenta, indented with a `└`) and
+  `CANCEL` (the same code as `PROMPT_SUB`, secondary but intentional, never an error). They
+  stay out of `templates/common` and `templates/python-common/bin/lib/common.sh`, which are
+  copied into every generated project, because "which question is a sub-question" is a
+  concept of this menu. The brand tokens (teal 256-colour 73, pink 169, measured from the
+  logo) fall back to CYAN and MAGENTA without 256-colour support, and `NO_COLOR` disables all
+  three including `BRAND_NC`. An unknown `print_status` level now names itself on stderr: 35
+  calls spelled `warn` rendered as unmarked chatter.
+- **`sed_inplace` (#459, #502).** GNU `sed -i` takes no argument and BSD requires one, so a
+  bare `sed -i` aborts a scaffold on macOS. `-i.bak` satisfies both and the backup is removed.
+  It cannot run under `xargs` (a function is not a binary): use a `while read` loop. Backups
+  are named per invocation and only for arguments that already name files, so a committed
+  `.bak` sibling can never be deleted. It returns sed's own status, not the cleanup's.
+  `bin/ci/check_sed_portability.sh` rejects a bare `-i`, including `-i''` and `-i""`, which
+  quote removal turns into a bare `-i`; `-i.bak` matches neither branch and comment lines
+  are skipped.
+
+  Replace `sed -i <script...> <file>` with `sed_inplace` and keep
+  the rest. For an `... | xargs -r sed -i` site, use the `while read -r file` loop shown in
+  `conditional_copy_webhooks_yaml` in `bin/scaffold/python_mvc_service.sh`.
+- **Env-wise config.** A project's config ships as one `inputs.yaml` or as env-suffixed pairs
+  that `ENV` selects through `env_config.resolve_config_path`. The two helpers offer that as a
+  scaffold-time choice for every Python service tier; an unknown `ENV` then fails loud, and
+  `INCLUDE_ENV_WISE` unset is false.
+- **`strip_bump_version`, `add_poe_include`.** A bump task is meaningless once versioning is
+  tag-driven, so it is removed on the online path only (offline keeps `cz bump`). One TOML
+  table replaced six regexes across the Makefile and `tasks.sh`. Poe warns on every run about
+  an included file that does not exist, so the include list names only fragments actually
+  copied, idempotently, extending one `[tool.poe]` table.
+- **Cache purge.** `cp -r` has no exclusion mechanism, so a `__pycache__` or tool cache in
+  `templates/` is copied into the new project, where the generated `.gitignore` hides it.
+  CI checks out fresh and never sees one, so it shipped silently from maintainers' machines.
+  One purge after the copy phase replaces an exclusion at about 30 call sites.
+
+  It needs no `rsync`.
+- **Branch-protection provisioner for non-Python skeletons (#564).** Python tiers get
+  `enable_repo_rules.sh` with `templates/python-common/bin/`; TypeScript and Bash had none,
+  so no required check at all. Its proper home is `templates/common/bin/`, but
+  `verify_branch_protection.yml` hardcodes the Python path, so moving it needs that workflow
+  too. The per-tier check list travels as data (each tier's `required-checks.txt`), and `lib/common.sh` is copied alongside as the
+  script's one dependency.
+- **`scaffold_git_remote.sh` is separate from `scaffold_python_templates.sh`.** They were one
+  file until `bin/ci/check_test_copy_lists.py` went wrong: it treats a scaffold plus the libs
+  it sources as the reachable set, and lib-minimal sources the git half without calling the
+  Python copy functions, so the union claimed four shared tests reached lib-minimal. Over-
+  reporting reachability is the dangerous direction for that gate. A scaffold now sources
+  only the halves it uses. The git half replaced six near-identical copies (65, 65, 65, 65, 67 and 64 lines); they differed on
+  an optional `--homepage` (`SCAFFOLD_REPO_HOMEPAGE`) and on what runs after the prompt,
+  which stays in each caller's wrapper because a flag meaning "which tier am I" is how a
+  shared function rots.
+
+  It reads `GITHUB_USERNAME`, `DEFAULT_GITHUB_USERNAME`,
+  `PROJECT_NAME` and `PROJECT_DESCRIPTION` from the caller. `SCAFFOLD_REPO_HOMEPAGE` and the
+  roster flag use the `:` default-assignment idiom so ShellCheck sees the value as read
+  instead of flagging SC2034 for a consumer in another file. The roster default is `true`:
+  every project scaffolded before the flag existed shipped it.
+- **Remote verification (#212).** Scaffolding into an existing clone used to treat "origin
+  exists" as nothing to do, so `gh repo create --push`, the push and branch protection wrote
+  to whatever that remote was. Now every URL, fetch and push (`--all`), must reduce to this
+  repository's `owner/repo`. The host is matched as a host, not a substring: the first
+  version cut at the last `github.com` and accepted `https://evil.example/github.com/o/r`
+  (review on #215). `github.com.evil.com/...` also misses. ssh, scp-style and https spellings
+  of one repository compare equal; a non-GitHub remote never equals a slug. A return value is
+  not enough, because each tier later selects online mode by `rev-parse @{u}`, which is true
+  for a clone pointing elsewhere, so the verified result is also published in a variable the
+  caller's `main` reads.
+- **Exit status of the repo-create step.** The earlier version set `push_done=1` inside a
+  `( cd ... )` subshell, so the assignment never reached the parent and the follow-up push
+  always ran, in six scaffolds. ShellCheck had reported it as SC2030/SC2031 at `info`, below
+  the `warning` floor (see `check_shell.sh`). Testing the subshell's status keeps the `cd`
+  contained.
+- **Reviewer roster opt-out (#374).** With no reviewer, a generated project's "Review threads
+  answered" check can never pass. Omitting `.review-bots.yaml` (never shipping it empty,
+  #262) makes the gate self-skip. The TS scaffolds copy `.github` wholesale, so they remove it
+  afterwards; lib-minimal gates it in its own function. `docs/faq.md` has the full answer.
+  `bin/ci/check_review_bot_roster_optout.sh` copies the real TypeScript `.github` tree (a hand-
+  made roster made the "present" case pass even if the template stopped shipping it) and
+  extracts lib-minimal's function body to evaluate it alone, since scaffolds run `main` on
+  source.
+
+  The copy of `.review-bots.yaml` is also read by
+  `scaffold_copy_tooling_configs` (#540).
+- **Secrets propagated by the scaffold.** Actions secrets are per repository and `gh repo
+  create` copies none, so a scaffolded project would have `coderabbit_trigger` without its
+  PAT and fail on the first PR. The scaffold sets it, at the one moment the authority and the
+  information coexist, from the environment (the shell gets it from a git-ignored
+  `~/.claude/.env`); no BlueprintX file ever holds a credential, because a second copy is the
+  one nobody rotates. An absent variable warns and does not fail: scaffolding must not abort
+  over an optional integration. Pass the PAT with `--body`; a redirect keeps a trailing
+  newline that 401s like an expired token. The GitGuardian key is piped on stdin, never
+  `--body` (process arguments are readable by any same-host process, CWE-200) and never a
+  redirect (the newline hazard); `printf '%s'` avoids both. That variable also *is* the
+  opt-in signal for `secret_scan.yaml`, so a failed propagation unsets it at that single
+  boundary: otherwise the workflow ships to a repo with no secret and `ggshield` exits 3.
+
+  Same reasoning as the PAT function, applied to the
+  key from #287 instead of the PAT from #155.
+- **Kanban board and labels (#592).** The board mirrors this repository's: Status Blocked,
+  Backlog, Ready, In progress, In review, Done, plus Priority, Size, Estimate, Start date,
+  Target date, Points and Blocker (Internal, External or Decision); the `state:blocked` label
+  means "cannot start, see the Blocked by line". Views and built-in workflows have no public API, so they are reported, never
+  pretended. Only the Status field needs GraphQL (`gh project field-create` cannot edit a
+  built-in field). Labels are `name|colour|description` and `--force` makes them re-runnable.
+  A token without the `project` scope fails 403, and the message says how to fix it, on
+  stderr because callers run inside `$(...)`. Visibility defaults to the repo's own. A board
+  is matched on its exact title; several matches mean never guess (return 2). EOF or no
+  readable stdin is no: never create a project unasked. Everything is non-fatal.
+- **`patch_package_json` (#397).** The project path travels through argv and is never
+  interpolated into the Python source: four copies wrote `open('$project_path/package.json')`
+  inside a double-quoted `python3 -c`, so an apostrophe in a directory name (`Joao's app/`)
+  ended the literal and a newline could inject statements (#396).
+- **`scaffold_python_templates.sh`.** `copy_common_templates` was 95 lines duplicated in four
+  scaffolds that differed by one token, the tier directory, so 285 lines varied one word. It
+  is split into four by destination concern (project identity, tooling config, shared tests,
+  executables), not merged into one 95-line function the 60-line gate rejects. Contract with
+  `check_test_copy_lists.py`: it follows the `source` line into this file, so moving test
+  `cp` lines again moves the gate with them. A declined opt-in's dependency line is pruned
+  from the rendered `pyproject.toml` (#274) instead of silencing deptry's DEP002. The
+  reviewer roster is data; the tests, leaf `CLAUDE.md` docs, `tests/` leaf doc (one source
+  for six tiers, #124, #152), VS Code settings, incident page (#240) and the `.specs/` gate
+  copy are single-sourced from python-common so the copies cannot drift. Leaf docs are the
+  asset class the copy lists kept forgetting (#325): nothing imports a doc, so a generated
+  project is green precisely because it is absent. `check_review_threads.py` lives in
+  `templates/common/bin/` (#175) and is copied explicitly to the same destination.
+
+  The principles file
+  (SRP and actor cohesion, Clean Code function principles, #540) is language-agnostic, so it
+  lives in `templates/common`. The feature-spec skeleton (#446) gives feature specs a place
+  from the first commit and ships no templated principles. Every skeleton's root `CLAUDE.md`
+  points at `.claude/CLAUDE.md` for the shared conventions (#549), so the single source is
+  copied to keep that pointer from dangling. The gate and example tests were split from
+  `scaffold_copy_shared_tests` (#127) to stay under the 60-line ceiling; the pip-fallback
+  selector tests cover the PEP 621 layouts no tier ships, the only place the selector could be
+  wrong unnoticed (#211).
+
+  `poe_tasks.toml` replaces the Makefile and
+  `tasks.sh` pair; the four service tiers' copies were byte-identical (md5 09515a32) before
+  being single-sourced, and lib-minimal keeps its own because its task set differs. A seeded
+  `CHANGELOG.md` lets the docs Changelog page (`--8<--` include) build before the first
+  release; `cz changelog` regenerates it from tags. Shared tests ship from python-common
+  because each tier's `cp -r tests/.` does not reach `python-common/tests/`: the reference
+  integration test for the shared `bin/` shell seams (`poetry_exec.sh`, `precommit.sh`, see
+  `bin/CLAUDE.md` "Testing shell scripts"), the network-block guard (its `conftest` makes a
+  real network call impossible in any test) and the introspective-convention example that
+  enforces a family convention through `__all__`. The contract-drift test ships to all five
+  tiers and self-skips at module level in lib-minimal, which has no contract registry. The
+  incident-record page (#240) is copied here rather than in each tier's mkdocs step because
+  `docs/` already exists by then and the file was not touched by any in-flight PR. The tier's
+  `src/config/CLAUDE.md` is copied by each tier's `copy_global_config`, next to the payload it
+  documents; the copy-list gate accepts either home. VS Code settings are shared from
+  python-common and the tasks are per tier because the commands differ.
+- **`bin/lib/common.sh` contract.** It is sourced, never executed (it refuses direct
+  execution), idempotent through the `_BX_COMMON_LOADED` re-sourcing guard, and shares one
+  `print_status` and one colour set across `bin/*.sh` and `bin/scaffold/*.sh`. If a script sets
+  `LOG_FILE` before sourcing, `print_status` also appends a timestamped line there; unset, it
+  is console only. Levels are `success`, `error`, `warning`, `info`, `config`, `debug` and
+  `section`; errors go to stderr, everything else to stdout. `print_section` is a thin
+  wrapper over the `section` level for call-site readability, and `exit_error <message>
+  [code]` routes through the `error` level (stderr and log) before exiting with the code
+  (default 1). Variables whose only reader is another file carry a `shellcheck disable=SC2034`
+  because ShellCheck cannot follow a standalone lint into `bin/blueprintx.sh`.
+- **`resolve_default_branch [name]`.** Order: explicit argument, `$DEFAULT_BRANCH`, the remote's
+  `origin/HEAD`, a local `main`, else `master`. It is shared by the `new_branch` and
+  `git_merge_to_main` targets so both agree on the integration branch.
+
+### Gates in `bin/ci/` and `bin/`
+
+- **`check_makefile_pairing.sh` (#241).** Every user-facing Makefile target needs a `case`
+  branch in `tasks.sh` and a line in `bin/help.sh`. Root-repo-only: those files exist only at
+  this root, so the gate lives at `bin/`, outside `bin/ci/` (which #271 was reworking), and is
+  not part of the family CI and pre-commit share. A target preceded by a `# pairing:internal`
+  line is exempt; the marker must be the whole comment token, since a substring test also
+  accepted `pairing:internalized`. Every name before the colon counts (`build test:` declares
+  two), `dev-clean` and `dev_clean` are equivalent in both companions, and normalising in only
+  one made a correct pairing fail.
+
+  `poe_tasks.toml` replaced the Makefile and `tasks.sh` in
+  generated projects (#236).
+- **`check_precommit_ci_parity.sh` (#384).** It verifies pre-commit and CI run the same
+  checks. The join key is the invoked script, never a hook id or job name, because the two
+  sides express a check differently (51 hooks versus one CI job of 31 steps on the scaffold
+  side). It scans every workflow, not only `scaffold_checks.yml`: `check_secrets.sh` looks
+  pre-commit-only from there and runs in CI from `secret_scan.yml`. Candidates are scripts in
+  local hooks, plus `bin/ci/`, plus `check_makefile_pairing.sh`; repo automation such as
+  `pr_reconcile.sh` was never a candidate. The check is for invocation, not presence: YAML
+  comments are stripped and the name must sit at a command position (a comment naming a
+  script used to pass a script CI never runs). Match with a here-string, never
+  `sed | grep -q`: `grep -q` closes the pipe, `sed` dies of SIGPIPE and `pipefail` reports
+  141, so a script that is invoked read as absent (17 false mismatches over 24 scripts, only
+  on inputs big enough that `sed` was still writing). Exemptions are data in
+  `bin/precommit_ci_parity_exemptions.txt`, one `script|side|reason` per line, side being
+  `precommit_only` or `ci_only`; a reason-less entry is rejected, and the whole file is
+  validated up front rather than only when a mismatch consults it. `printf '%s\n'
+  "${arr[@]}"` with an empty array still prints one blank line and would manufacture a phantom
+  candidate, so it is guarded.
+
+  Stripping YAML comments before matching can only hide a
+  match, so the failure direction stays closed. The workflow read is broad on purpose: a
+  multi-line `run: |` scalar is plain text and must not be missed. The pre-commit side matches
+  the script wherever it sits in an `entry:` (after `bash` or `python3`, before `--root .`),
+  and only local hooks have `entry:`. The classifier is a pure decision about one name; the
+  caller keeps the counters. The gate is not part of the `bin/ci/*.sh` family that CI jobs
+  share with pre-commit, since it concerns neither templates nor generated-project linting.
+- **`check_actions.sh`.** actionlint over this repo's workflows and those under `templates/`.
+  yamllint validates YAML, actionlint validates a workflow, and a workflow GitHub rejects
+  produces no red check. The templates are in scope because they never execute here; the
+  first run found 8 defects, including `actions/cache@v3` in three tiers and a `workflow_call`
+  output that could only resolve to the empty string. One false positive is tolerated by
+  rule: a template's local `uses: ./.github/workflows/...` resolves against the generated
+  project. Group `-name '*.yaml' -o -name '*.yml'` before `-type f`. Templates have two
+  shapes: `.github/workflows/` copied wholesale, and conditionally copied workflows under
+  `optional/deploy/`, which a path filter anchored on `.github/workflows` would miss. Every
+  job with a runner must set `timeout-minutes` (default 6 hours; measured twice in two days on
+  an `apt-get` step across 22 workflows with no bound, #192); jobs that only `uses:` a
+  reusable workflow are skipped. Every remote action is pinned to a 40-hex SHA with a trailing
+  `# vX.Y.Z` (#369): a tag is a movable pointer. Discovery must match something, and the
+  count is printed. The pin and timeout checks need no tool, so they run before the
+  actionlint resolve and never inherit its graceful skip, which is a placebo in CI
+  (`LINT_ACTIONS_REQUIRED=1`). A comment in a workflow may not start with the tool's name, or
+  it parses as a lint directive. The filter that limits the pin check to templates stays only
+  until this repository's own workflows are pinned (follow-up from #369); then drop it and
+  pass the full list.
+
+  The shell lint of `run:` blocks uses the same rules as the rest of
+  this repository, so a block cannot pass one gate and fail the other.
+- **`check_codespell_sync.sh`.** The two `ignore-words-list` values must match. They drifted in
+  both directions (30 words missing from the template, 25 the other way) and the template was
+  the stale side, so each generated project re-learned words one rejected commit at a time.
+  Compare verbatim and sorted, not case-folded: codespell splits the list in two, so a
+  lowercase entry filters its typo dictionary while a cased one matches only that
+  capitalisation, and folding before comparing would call two differently behaving configs in
+  sync. Entries with an uppercase letter are rejected: the found word is lowercased before
+  lookup, so a cased entry is never more useful than its lowercase form.
+- **`check_docs_boundary.sh` (#536, #576, #632).** `docs/` is solely for published
+  documentation (owner rule, 2026-09-18). Anything else is redirected, not merely rejected,
+  so every rule names a destination: `docs/backlog/` to `.specs/` or `CONTRIBUTING.md`; a
+  basename containing "lesson" to the operator's lessons stores (a hardened rule goes to
+  `CONTRIBUTING.md`); `design.md` and `plan.md` to `.specs/features/<name>/` (#447);
+  `security.md` and `threat*.md` to the root `SECURITY.md`, which GitHub reads only from the
+  root, `.github/` or `docs/` root; any `.superpowers*` segment to that tool. The list is open
+  and grows with each new kind of working material. A matching directory is reported once and
+  not descended into. It walks only this repository's `docs/`, never `templates/*/docs/`,
+  deliberately: `docs/backlog/` is a violation here and a shipped product surface in the five
+  tiers (gated by `check_backlog_ledger.py`). `--root <dir>` repoints it at another project
+  root, which is how the copy shipped into scaffolds runs; a bad `--root` fails, and the scope
+  is still that root's `docs/` only, so it never reaches `templates/*/docs/` from here (see
+  `docs/docs-boundary-gate.md`). `dotglob` and `nullglob` keep hidden entries
+  visible and an empty directory from yielding the literal glob. An unreadable directory must
+  fail (a `docs/secret/` at mode 000 holding a real violation once printed "boundary is
+  clean"). A symlink is classified then treated as a leaf (a link to an ancestor re-entered
+  the tree through a longer path: "163 entries checked" on a 3-file fixture, stopped only by
+  `ELOOP`). A readable `docs/` with zero entries fails. It judges what git would publish,
+  only when the top level is this repository (an enclosing repo's `.gitignore` must not
+  decide), with `GIT_DIR`/`GIT_WORK_TREE` and the global excludes file kept out, and
+  `GIT_INDEX_FILE` kept so a pre-commit run judges the index.
+
+  It follows the en-US precedent (#194): the rule is this
+  repository's, and a generated project may legitimately differ.
+- **`check_gate_staleness.sh` (#368).** A report, not a fix: `gh pr update-branch` moves the
+  head and can flip a clean review to SUPERSEDED (measured on #444). It pairs "behind base"
+  with "a gate file changed since the merge-base". It fetches `refs/pull/<n>/head`, not
+  `headRefName`, which does not exist on `origin` for a fork PR and could silently resolve an
+  unrelated branch. Advisory, never failing: a red required check would pressure a mass
+  update-branch, a review-quota burst. The gate-relevant path list is kept in sync by hand
+  with the gate table in `CLAUDE.md`.
+- **`check_git_remote_guard.sh` (#212).** Negative control for the remote check: the dangerous
+  direction is a false pass on a foreign remote, so the case that matters asserts a mismatch
+  fails. Status alone is not the assertion: a pass must leave `origin` on our slug and a fail
+  must leave it untouched. It covers a remote that fetches from us but pushes elsewhere, a
+  missing secret not killing a scaffold run under `set -e`, one repository spelled four ways
+  reducing to one slug, a non-GitHub remote never equalling a slug, and host confusion.
+- **`check_issue_scope.py`.** An empty fence, or one holding only comments, is undeclared and
+  never "declared as nothing": an empty set would put every file outside the surface and fail
+  every PR, and the issue template ships exactly that shape.
+- **`check_markdown.sh` (#383).** `pymarkdownlnt` over every tracked `.md`, with a measured
+  rule set in `.pymarkdown.json`: MD018/019/020/021/023, MD047, MD009. MD013 and MD040 are off
+  because both fired on the bulk of the prose, the "number nobody pays" shape of
+  `check_complexity.sh`'s history. The measured counts and the tool comparison are in the #383
+  PR body. It is deliberately not shipped into generated projects. Resolve, do not install: a
+  missing tool is a graceful skip locally and `MARKDOWNLINT_REQUIRED=1` hard-fails in CI.
+- **`check_pr_file_count.py` (#551, #560).** CodeRabbit refuses to review above 100 files
+  ("Review skipped: N files exceed the limit of 100"), so the ceiling sits 10 below it: a PR
+  that trips the vendor cap is already too late. Calibrated over 100 PRs: 1 violation (#424,
+  241 files) against a legitimate maximum of 59 (#532); #424's seam was real, and none has
+  surfaced since, so there is no escape hatch. Mid-merge, the index holds the incoming side
+  while `HEAD` is the pre-merge tip, so the base comes from `git merge-base` over the merge
+  commit about to be created (186 reported versus 69 real). The `git` call is a constant
+  argv with no shell; S607 is by design, because the hook must use the developer's `PATH`
+  `git`. A Windows cp1252 stdout would raise `UnicodeEncodeError` on the status glyphs and
+  block every commit from a Windows checkout, so it is guarded. A detached HEAD compares tips;
+  unrelated history or a too-shallow clone has nothing to check.
+- **`check_pr_template.sh` (#587, #672, #706).** It checks a PR body against the layout the
+  template declares: every `##`/`###` heading and `**Label**:` field must appear at line start
+  with real content, bar the conditional ones. The contract is walked out of the template, and
+  only the mandatory-versus-conditional split is data. Keys are `<kind>:<section>/<name>` so a
+  label in the wrong section is not credited. HTML comments and fenced code are dropped, a
+  fence judged first. A line is credited to the innermost open scope. A bullet that is only a
+  bold label is structure, neither placeholder nor content. Use `if`, not `&&`, where a false
+  last statement would exit under `set -e`. A classification naming a label the template no
+  longer has fails rather than rotting. **Not Applicable** is required exactly when a testing
+  subsection is not filled in. Rationale for humans is in "PR template layout".
+- **`check_shell.sh`.** ShellCheck at warning or above, with `-x` following `source` into
+  `bin/lib` guided by `# shellcheck source=` directives: a variable whose only consumer is a
+  sourced lib otherwise reads as SC2034, which is a question ShellCheck cannot answer one file
+  at a time, and following it makes the finding disappear because it stopped being true. A
+  second targeted pass includes SC2030 and SC2031 (a variable set in a `( ... )` subshell is
+  lost to the parent), rated `info` and so filtered out; that is how the `push_done` bug
+  survived. The rest of the `info` tier (SC2059, SC2016, SC1091, about 78 findings) is noise.
+- **`check_specs_structure.sh` (#447, #583, #696).** One implementation for this repository
+  and every generated project (the file is copied to the project's `bin/`); the root is two
+  levels up from `bin/ci/` here and one up from `bin/` in a project, and survives
+  `cd bin/ci && bash ...`. The rules: `.specs/CLAUDE.md` exists; the top level allows only
+  `CLAUDE.md`, `features/`, `backlog/`, `_lessons/` (free-form); `features/` holds kebab-case
+  directories with a letter and never a change type (dotfiles-dev#442), because `[a-z0-9]`
+  alone accepts a bare `447`; each holds `design.md`, `plan.md` or `tasks.md` (`pr.md` is
+  recognised but never sufficient); every task line is `[ ]`, `[~] <type>/<branch>` or `[x]`,
+  outside code fences (a fence closes on the same character, at least as long); `backlog/` is
+  flat `<kebab-topic>_YYYYMMDD_HHMMSS.md`. `dotglob` and `nullglob` so a hidden entry is not
+  walked past. A missing `--root` fails (it would report "no `.specs/`" and succeed), and no
+  `.specs/` at all is not an error.
+- **`check_test_copy_lists.py`.** It asserts every shared test, workflow and leaf doc is
+  reachable from each scaffold's copy list. Both patterns must prove a copy, not a mention:
+  an `cp` whose *source* operand is the shared path (immediately after `cp` and its flags, or
+  a reverse copy would count), uncommented (`(?!#)` on both patterns, or the other can satisfy
+  the gate from a comment), and the loop form must be the real `copy_shared_utils` body that
+  copies `test_${util}.py`, with names read from the header or a `local -a utils=(...)` array.
+  Exclusions are claims that a tier cannot use an asset, not shortcuts, and a stale one fails.
+  Recorded clean exclusions: lib-minimal has no runtime `.env` (env-config seam), no database
+  engine (query loader), no contract registry or drift reporter, no `__all__` packages, no
+  import-time bootstrap, no `ms_office/` or `email/` packages, and no pip-fallback bootstrap
+  (`verify_venv_imports.py`). Known gaps, recorded rather than hidden: lib-minimal vendors the
+  helpers under `_internal/utils/` with rewritten imports, so those modules ship without
+  their tests until `rewrite_internal_imports` runs over the test files; `config/schemas`
+  tests wait for `pydantic` to be a declared dependency (#267, remove the exclusion with the
+  `cp` line); the dead-code gate waits for `vulture` (#332); `check_migration_graph.py`'s test
+  has no `cp` line yet (#308); lib-minimal's `test_typing.py` is rendered from
+  `templates/lib-minimal/rendered/test_typing.py.tmpl` by `envsubst` (a heredoc until #189),
+  a third delivery mechanism the gate does not model. Leaf docs are the third copy-list asset
+  class with this defect, the quietest (#325), and `python-common`'s root `CLAUDE.md` is the
+  one doc that must never ship. A doc is reachable by its own `cp` or a wholesale directory
+  copy only when the destination stays inside the project and keeps the source name (#569).
+  Workflows are the second copy list with this defect, and worse: a job no scaffold copies is
+  a gate that does not exist in any generated project, and nothing reports a workflow never
+  installed. It was found when adding `review_threads.yaml` showed the `cp` list would not
+  carry it. Workflow exclusions: a library publishes through its own release-pypi and
+  release-test-pypi pair, and contract drift describes an ingested external file, which a
+  library registers none of. lib-minimal ships its own `config_CLAUDE.md` and
+  `utils_CLAUDE.md` from `templates/lib-minimal/` because its `_internal/` layout differs
+  from the service tiers'. `api-service-native-db` excludes the `config/schemas` test for the
+  same reason as its siblings: `fastapi` pulls `pydantic` in transitively, which is not the
+  claim #267 makes (declare it as a direct dependency), and the module the test imports is not
+  shipped by that tier either. Scanning nothing is not a pass, and Windows stdout is guarded
+  for the status glyphs.
+
+  lib-minimal ships neither `ms_office/` nor `email/`
+  (service-tier concerns, #118 and #121), so their tests have no module to cover.
+
+  - A copy must be proven, not mentioned. An earlier version matched a test filename anywhere,
+    including inside the gate's own exclusion prose quoted into a script, which was a false
+    pass in the one direction that matters.
+  - Leaf docs are keyed by path relative to python-common, because every one is named
+    `CLAUDE.md`.
+  - The loop form's names may come from a `local -a utils=(...)` array, which exists so the
+    step prints a count instead of an enumeration that goes stale; reading only the loop
+    header would call every shared test undelivered the moment a scaffold switched form, a
+    false failure in a gate valued for catching false passes.
+  - A name must look like a util, so a shell token (`"${utils[@]}"`, a `\` continuation) is
+    not mistaken for a module.
+  - A stale exclusion silently keeps an asset out long after its reason expired and reads as
+    intentional forever, so it fails.
+  - `verify_venv_imports.py` is excluded for lib-minimal because it is only invoked from
+    `bin/lib/pip_fallback.sh`, and lib-minimal copies only `bin/lib/common.sh`: no
+    `bootstrap.sh`, `pip_fallback.sh`, `venv.sh` or `run.sh`.
+- **`reevaluate_issue_scope.sh` (#314).** The PR-event job runs when the PR changes, never
+  when the issue changes, so a surface edited later leaves a green status describing an older
+  declaration. This posts a commit status on each open PR whose `closingIssuesReferences`
+  (what GitHub acts on at merge, never a branch-name guess) names the edited issue. Its
+  context is deliberately distinct from the PR job's check name: a status and a check run
+  sharing a name are ambiguous for branch protection. It fails the job too, since a red
+  status on someone else's PR is easy to miss from the issue timeline. See `docs/issue-scope.md`.
+- **`validate_meta.sh` (#407, #478).** Every `skeleton.meta` has all four fields non-empty, a
+  `scaffold=` path that exists, and the skeleton directory named in the root `CLAUDE.md`:
+  machine-decidable, so a gate, while the quality of the mention stays a human call. A missing
+  key under `set -euo pipefail` used to kill the gate inside its own `grep` pipeline with exit
+  1 and no message, which every should-fail test read as proof the check ran; hence `|| true`.
+- **Shell helper scripts.** `check_docs_build.sh` builds MkDocs `--strict`, preferring `poetry
+  run` and falling back to `mkdocs` on `PATH`; `check_spelling.sh` runs codespell over `docs/`
+  and `templates/` with the root `.codespellrc`; neither inlines flags, so CI and pre-commit
+  cannot drift. `smoke_test.sh` computes menu indices dynamically from `skeleton.meta` with
+  the same glob order and de-duplication as `blueprintx.sh`, so directory reordering cannot
+  break it. `optin_specs/storage.answers` answers the storage opt-in `y` so the harness lints
+  the `chassis/db_wschema` files that ship only on that opt-in (#650).
+- **`check_orphan_pr_bodies.sh` (#657).** A report-only, local-only scan of PR and issue
+  bodies left in `<repo>/.git/*.md` that match nothing on the forge (`.git/` is outside the
+  worktree, so no CI job can see them). It never deletes or moves anything. Matching is by
+  content through one normaliser on both sides (NFKC, case-folded, all Unicode whitespace
+  collapsed, `[x]` read as `[ ]` because ticking a box rewrites the stored body); MATCHED
+  means the local body is contained in exactly one forge body, one way only, so a forge body
+  that is just the unfilled template cannot match every local body. A body edited on the
+  forge since is UNKNOWN, never ORPHAN. It fails closed: anything undecidable (forge
+  unreadable, no origin, body under 40 characters, ambiguous or near match) is UNKNOWN.
+  Usage `bin/check_orphan_pr_bodies.sh [git-dir]`; `BLUEPRINTX_REPO=owner/name` overrides the
+  slug parsed from `origin`. Exit 0 all matched, 1 an orphan, 2 could not decide, and 2 takes
+  precedence: one UNKNOWN hides ORPHANs from the code, not from the report. It scans
+  `<git-dir>/*.md` only, not `worktrees/*/`. A body mostly built from the PR template can read
+  UNKNOWN instead of ORPHAN: a false negative, never a false ORPHAN. REST on purpose, since
+  GraphQL is rate-limited more tightly, and a traceback is never ORPHAN.
+- **`promote_offline_to_online.sh` (#382).** Turns an offline project into an online one
+  without re-scaffolding. It adds the GitHub-only assets, creates and pushes the repo,
+  provisions the branch ruleset and removes the offline fallbacks. It is standalone:
+  it transcribes the scaffolds' manifests (see `docs/offline-to-online.md`) rather than
+  sourcing scripts other PRs hold. It refuses rather than guesses: an unknown tier or one
+  whose skeleton is gone, a typo'd or tier-inapplicable `--publish`/`--deploy-target`, a
+  directory merely inside another repository (`rev-parse` succeeds there, and `gh repo create
+  --source=.` would publish the parent), and a non-`main` branch (`--push` pushes the current
+  branch while protection targets `main`). A resume after a failed promotion commit allows
+  only the paths the script itself writes; anything else is the user's work. The original
+  PyPI or deploy choice is not recorded offline, so the flags decide (default `none`).
+  CODEOWNERS is the one file every tier writes, so it decides "online" for
+  `react-spa-webpack --deploy-target none`. `secret_scan.yaml` is opt-in on
+  `GITGUARDIAN_API_KEY`; the repo is created without `--push` so the key exists before the push
+  that triggers the workflows (otherwise the first run is red). The key goes on stdin. The
+  restored `no-commit-to-branch` hook is the only one skipped for the promotion commit.
+  `git_diffs/` is removed only when it holds just the `.keep` placeholder. Each reversal is idempotent. The file ends guarded so tests can
+  `source` it.
+  More promote rules: `shift 2` on a lone flag fails silently under `set -e`, so flags are
+  checked first. "Online" is told from "remote added, nothing pushed" by the local
+  `refs/remotes/origin/<branch>` ref, which `gh repo create --push` records only on success
+  (no network). An already-online project is a clean no-op, while an origin without the
+  GitHub assets is ambiguous and refused. `bin/lib/common.sh` is left alone, since it is not
+  offline-only. The TypeScript and Bash tiers ship no `SECURITY.md`, `dependabot.yml` or
+  `secret_scan.yaml`, so nothing of those comes back. An offline project commits on `main` by
+  design, which is why only `no-commit-to-branch` is skipped for the promotion commit.
+  The ruleset step runs the project's own `bin/enable_repo_rules.sh` (the `pr-quality-gate`
+  ruleset), then `enable_repo_rules.sh verify`. It never aborts the promotion, since the
+  assets are already pushed; if the script is missing it warns, and when `verify` fails the
+  final summary says branch protection on `main` is NOT in place.
+
+  The online state is carried by `HAS_ORIGIN` and
+  `HAS_GITHUB_ASSETS`, both set by one detection step and both consumed by the witnesses in
+  `main()`.
+- **`scaffold_lint_test.sh`.** The real verification for template work, complementing the
+  dry-run `smoke_test.sh`. It scaffolds a project, runs its own lint (which must change
+  nothing), unit and integration tests. It seeds interpreter-cache fixtures into `templates/`
+  before scaffolding (#205): `cp -r` has no exclusion, CI never has a cache, so the harness
+  reproduces the precondition itself. One entry per directory name the assertion rejects (a
+  check that cannot fail for the cases it claims is vacuous; #215), plus loose compiled
+  artifacts outside cache directories, only under directories the template already has, with
+  a floor of 4 for lib-minimal. Answers come from `bin/lib/spec.sh`, so a new prompt fails in
+  `spec_stdin_for_skeleton` instead of shifting every answer; `SCAFFOLD_SPEC_FILE` overrides
+  it, and an unusable override fails rather than reading as all-default. It asserts the
+  offline scaffold ships no GitHub-only asset, runs the project's `.specs/` gate on the
+  skeleton (must pass) and on a copy with a stray note (must fail), checks that
+  `poetry.lock` is not ignored (an absence an unrelated `*.lock` edit would reintroduce,
+  #235) and that `cz` still answers (it prints "No project information in this project." and
+  exits 0 without `.cz.toml`, #233). It runs poe through the resolver, never bare, and the
+  integration suite is where every `bin/*.sh` seam is executed. `|| [ $? -eq 5 ]` tolerates
+  pytest's "no tests collected".
+
+  `scaffold_lint_test.sh` asserts the CODEOWNERS render at the source,
+  because the offline run drops `.github/` and cannot see a CODEOWNERS that kept its literal
+  `${GITHUB_USERNAME}` (#715).
+
+  - A git identity is set because the scaffold's first commit needs one and CI runners have
+    none.
+  - The project venv from `poetry.toml` suffices: drivers ship as wheels and the unit tests
+    import DB drivers lazily.
+  - Poe goes through the resolver because `poetry install` puts it in the in-project `.venv`
+    but not on `PATH`, which is what the first branch of `poe_exec.sh` exists for.
+  - A baseline commit is made after `poetry install`, so the post-lint diff reflects only what
+    `poe lint` changed.
+  - The seeded cache fixtures are `templates/python-common/src/utils/{__pycache__,.ruff_cache,
+    seeded_probe.pyc,seeded_probe.pyo}` and `templates/python-common/optional/typing/
+    {__pycache__,.mypy_cache}`, six of the eight, which is why concurrent runs collide.
+  - The generated `.gitignore` hides `__pycache__`, so `find` is the only witness (#205).
+  - Seeding happens only under a directory the template already has: creating the parent
+    would change what the scaffold copies.
+- **`scaffold_lint_test_all.sh` (`make verify_tiers`).** Runs every Python tier in parallel,
+  each worker in its own copy of `templates/` and `bin/` (about 9 MB): the tiers are not
+  independent, because the harness seeds fixtures and removes them in an EXIT trap and six of
+  its eight fixtures sit in the shared `templates/python-common/` tree, so the first tier to
+  finish deletes the others' fixtures: an intermittent, misattributed failure. The worker
+  disables Poetry's keyring (`PYTHON_KEYRING_BACKEND`): concurrent `poetry install`s race on
+  the DBus session bus ("Message recipient disconnected from message bus without replying",
+  1 of 5 tiers, passing sequentially); that fix lives here and not in the harness, which also
+  runs one job per tier in CI. It uses a status file per worker, since `xargs -P` collapses
+  statuses (123) and cannot say which tier; a worker that wrote none died and counts as
+  failed. Tiers are discovered from `skeleton.meta` with `language=python`, never a list, and
+  zero discovery fails. CI does not need it (`tests.yaml` runs one job per tier). Flags:
+  `--jobs N`; `--jobs 1` serialises for debugging.
+
+  A worker reads only `templates/` and `bin/`, because
+  `scaffold_lint_test.sh` resolves its root from `$0`, reads `skeleton.meta` and executes the
+  scaffold it names. The worker is a self-invoking mode because `xargs -P` can only fan out
+  over a command and an exported shell function is fragile. The sequential loop it replaced
+  took about 10 minutes, one tier at a time. Nothing in a worker needs credentials; it installs
+  from the public index. `--jobs 2` caps concurrency, and `--jobs 1` is the sequential
+  debugging escape hatch.
+- **`check_version_sync.sh`.** See "Version" above: both literals stay the `0.0.0` stub.
+- **`update_licenses.sh`.** The AGPL-3.0 closes the SaaS loophole (network use counts as
+  distribution), so the AGPL preamble states the dual-licensing model: organisations that
+  cannot comply must obtain a commercial licence from the copyright holder. SPDX ids map to
+  GitHub Licenses API keys in display order.

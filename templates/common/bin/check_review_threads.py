@@ -2174,9 +2174,11 @@ def dependabot_pushed_head(str_repo_full: str, str_head_oid: str) -> bool:
         f"repos/{str_repo_full}/actions/runs?head_sha={str_head_oid}&event=pull_request&per_page=100",
     ]
     try:
-        cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
+        cls_run = subprocess.run(  # noqa: S603
+            list_cmd, capture_output=True, text=True, check=False, timeout=_INT_COMPARE_TIMEOUT_S
+        )
         dict_out = json.loads(cls_run.stdout)
-    except (OSError, ValueError):
+    except (OSError, ValueError, subprocess.TimeoutExpired):
         return False
     list_runs = dict_out.get("workflow_runs") or []
     if cls_run.returncode != 0 or not list_runs or dict_out.get("total_count") != len(list_runs):

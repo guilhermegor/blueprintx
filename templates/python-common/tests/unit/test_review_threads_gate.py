@@ -3743,3 +3743,10 @@ def test_dependabot_pushed_head_reads_the_run_actor_and_fails_closed(
 def test_dependabot_pushed_head_without_a_head_oid_is_closed() -> None:
     """An empty head oid cannot be looked up."""
     assert not _load_gate().dependabot_pushed_head("o/r", "")
+
+
+def test_dependabot_pushed_head_fails_closed_on_a_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hung ``gh api`` call gives no exemption instead of hanging the gate."""
+    cls_hang = Mock(side_effect=subprocess.TimeoutExpired("gh", 20))
+    monkeypatch.setattr(subprocess, "run", cls_hang)
+    assert not _load_gate().dependabot_pushed_head("o/r", "abc")
