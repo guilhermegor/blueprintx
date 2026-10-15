@@ -128,4 +128,26 @@ test_secret_is_set_before_the_push
 test_prompt_fails_when_first_push_fails
 test_fallback_sets_secret_before_the_push
 test_failed_push_is_reported_incomplete
+test_no_classic_protection_put() {
+    if grep -lE 'branches/.*/protection' "$REPO_ROOT"/bin/scaffold/*.sh "$REPO_ROOT/bin/promote_offline_to_online.sh" | grep -q .; then
+        echo "FAIL (classic protection PUT still in a scaffold or the promoter)"
+        int_failures=$((int_failures + 1))
+    else
+        echo "ok: no scaffold or promoter PUTs classic branch protection"
+    fi
+}
+
+test_ruleset_keeps_pull_request_rule() {
+    local str_json
+    str_json="$(cd "$WORK_DIR" && bash -c 'source "$1"/bin/lib/common.sh 2>/dev/null; sed -n "/^build_rules_json/,/^}/p" "$1/templates/python-common/bin/enable_repo_rules.sh"' _ "$REPO_ROOT")"
+    if grep -q '"type":"pull_request"' <<<"$str_json" && grep -q 'RULESET_APPROVALS:-0' <<<"$str_json" && grep -q '"type":"required_linear_history"' <<<"$str_json"; then
+        echo "ok: the ruleset requires a pull_request and linear history even in solo mode"
+    else
+        echo "FAIL (ruleset lost its pull_request rule)"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
+test_no_classic_protection_put
+test_ruleset_keeps_pull_request_rule
 exit "$int_failures"
