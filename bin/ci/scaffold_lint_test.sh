@@ -117,6 +117,19 @@ fi
 rm -rf "$str_probe"
 echo "The project's .specs/ gate passes its skeleton and rejects a stray note."
 
+bash "$PROJECT_PATH/bin/check_docs_boundary.sh" --root "$PROJECT_PATH"
+str_probe="$(mktemp -d)"
+cp -r "$PROJECT_PATH/docs" "$str_probe/docs"
+mkdir -p "$str_probe/docs/backlog"
+touch "$str_probe/docs/backlog/x.md"
+if bash "$PROJECT_PATH/bin/check_docs_boundary.sh" --root "$str_probe" >/dev/null 2>&1; then
+    echo "ERROR: the project's docs/ boundary gate accepted docs/backlog/x.md" >&2
+    rm -rf "$str_probe"
+    exit 1
+fi
+rm -rf "$str_probe"
+echo "The project's docs/ gate passes its skeleton and rejects docs/backlog/."
+
 cd "$PROJECT_PATH"
 
 echo "::group::poetry install (runtime + dev)"

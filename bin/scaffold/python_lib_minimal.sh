@@ -612,6 +612,8 @@ lib_minimal_copy_project_scaffolding() {
     # implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
     cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" "$project_path/bin/check_specs_structure.sh"
     chmod +x "$project_path/bin/check_specs_structure.sh"
+    cp "$BLUEPRINTX_ROOT/bin/ci/check_docs_boundary.sh" "$project_path/bin/check_docs_boundary.sh"
+    chmod +x "$project_path/bin/check_docs_boundary.sh"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).
