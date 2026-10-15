@@ -848,6 +848,33 @@ grouped by what they guard.
   project is green precisely because it is absent. `check_review_threads.py` lives in
   `templates/common/bin/` (#175) and is copied explicitly to the same destination.
 
+Further facts carried by the removed comments:
+
+- **Rendered assertions.** `scaffold_lint_test.sh` asserts the CODEOWNERS render at the source,
+  because the offline run drops `.github/` and cannot see a CODEOWNERS that kept its literal
+  `${GITHUB_USERNAME}` (#715).
+- **Single-sourced shared files in `scaffold_python_templates.sh`.** The principles file
+  (SRP and actor cohesion, Clean Code function principles, #540) is language-agnostic, so it
+  lives in `templates/common`. The feature-spec skeleton (#446) gives feature specs a place
+  from the first commit and ships no templated principles. Every skeleton's root `CLAUDE.md`
+  points at `.claude/CLAUDE.md` for the shared conventions (#549), so the single source is
+  copied to keep that pointer from dangling. The gate and example tests were split from
+  `scaffold_copy_shared_tests` (#127) to stay under the 60-line ceiling; the pip-fallback
+  selector tests cover the PEP 621 layouts no tier ships, the only place the selector could be
+  wrong unnoticed (#211).
+- **`spec.sh` ownership note.** It is the translator because the scaffold scripts still read
+  positional stdin and were owned by other open PRs (#503, #509) when it was written.
+- **Reviewer roster.** The copy of `.review-bots.yaml` is also read by
+  `scaffold_copy_tooling_configs` (#540).
+- **`check_test_copy_lists.py`.** lib-minimal ships neither `ms_office/` nor `email/`
+  (service-tier concerns, #118 and #121), so their tests have no module to cover.
+- **`check_makefile_pairing.sh`.** `poe_tasks.toml` replaced the Makefile and `tasks.sh` in
+  generated projects (#236).
+- **`check_docs_boundary.sh`.** It follows the en-US precedent (#194): the rule is this
+  repository's, and a generated project may legitimately differ.
+- **`scaffold_set_gitguardian_secret`.** Same reasoning as the PAT function, applied to the
+  key from #287 instead of the PAT from #155.
+
 ### Gates in `bin/ci/` and `bin/`
 
 - **`check_makefile_pairing.sh` (#241).** Every user-facing Makefile target needs a `case`
@@ -890,7 +917,10 @@ grouped by what they guard.
   `# vX.Y.Z` (#369): a tag is a movable pointer. Discovery must match something, and the
   count is printed. The pin and timeout checks need no tool, so they run before the
   actionlint resolve and never inherit its graceful skip, which is a placebo in CI
-  (`LINT_ACTIONS_REQUIRED=1`).
+  (`LINT_ACTIONS_REQUIRED=1`). A comment in a workflow may not start with the tool's name, or
+  it parses as a lint directive. The filter that limits the pin check to templates stays only
+  until this repository's own workflows are pinned (follow-up from #369); then drop it and
+  pass the full list.
 - **`check_codespell_sync.sh`.** The two `ignore-words-list` values must match. They drifted in
   both directions (30 words missing from the template, 25 the other way) and the template was
   the stale side, so each generated project re-learned words one rejected commit at a time.
@@ -1002,7 +1032,18 @@ grouped by what they guard.
   class with this defect, the quietest (#325), and `python-common`'s root `CLAUDE.md` is the
   one doc that must never ship. A doc is reachable by its own `cp` or a wholesale directory
   copy only when the destination stays inside the project and keeps the source name (#569).
-  Scanning nothing is not a pass, and Windows stdout is guarded for the status glyphs.
+  Workflows are the second copy list with this defect, and worse: a job no scaffold copies is
+  a gate that does not exist in any generated project, and nothing reports a workflow never
+  installed. It was found when adding `review_threads.yaml` showed the `cp` list would not
+  carry it. Workflow exclusions: a library publishes through its own release-pypi and
+  release-test-pypi pair, and contract drift describes an ingested external file, which a
+  library registers none of. lib-minimal ships its own `config_CLAUDE.md` and
+  `utils_CLAUDE.md` from `templates/lib-minimal/` because its `_internal/` layout differs
+  from the service tiers'. `api-service-native-db` excludes the `config/schemas` test for the
+  same reason as its siblings: `fastapi` pulls `pydantic` in transitively, which is not the
+  claim #267 makes (declare it as a direct dependency), and the module the test imports is not
+  shipped by that tier either. Scanning nothing is not a pass, and Windows stdout is guarded
+  for the status glyphs.
 - **`reevaluate_issue_scope.sh` (#314).** The PR-event job runs when the PR changes, never
   when the issue changes, so a surface edited later leaves a green status describing an older
   declaration. This posts a commit status on each open PR whose `closingIssuesReferences`
@@ -1056,6 +1097,17 @@ grouped by what they guard.
   `git_diffs/` is removed only when it holds just the `.keep` placeholder. Branch protection
   warns rather than aborts. Each reversal is idempotent. The file ends guarded so tests can
   `source` it.
+  More promote rules: `shift 2` on a lone flag fails silently under `set -e`, so flags are
+  checked first. "Online" is told from "remote added, nothing pushed" by the local
+  `refs/remotes/origin/<branch>` ref, which `gh repo create --push` records only on success
+  (no network). An already-online project is a clean no-op, while an origin without the
+  GitHub assets is ambiguous and refused. `bin/lib/common.sh` is left alone, since it is not
+  offline-only. The TypeScript and Bash tiers ship no `SECURITY.md`, `dependabot.yml` or
+  `secret_scan.yaml`, so nothing of those comes back. An offline project commits on `main` by
+  design, which is why only `no-commit-to-branch` is skipped for the promotion commit.
+  Branch protection warns instead of aborting because a fresh repository can lag behind API
+  visibility and a solo maintainer's review policy is a judgment call the script does not
+  prompt for; the assets are already pushed by then.
 - **`scaffold_lint_test.sh`.** The real verification for template work, complementing the
   dry-run `smoke_test.sh`. It scaffolds a project, runs its own lint (which must change
   nothing), unit and integration tests. It seeds interpreter-cache fixtures into `templates/`
