@@ -173,9 +173,21 @@ test_empty_stdin_means_no_board() {
     expect_out "EOF" "$str_out" "Skipped the kanban board"
 }
 
+GNU_INSTALL_RE='(^|[[:space:];&|(])install( +[^ ;|&]+)* +-[a-zA-Z]*D'
+
 test_no_gnu_only_install_in_bin() {
-    local str_hits
-    str_hits="$(grep -rnE 'install +(-[a-zA-Z]+ +)*-[a-zA-Z]*D' "$REPO_ROOT/bin" || true)"
+    local str_hits str_case
+    for str_case in 'install -D a b' 'install -m 755 -D a b' 'install -Dm644 a b' 'install -o x -D a b'; do
+        grep -qE -- "$GNU_INSTALL_RE" <<<"$str_case" || {
+            print_status "error" "install guard missed: $str_case"
+            int_failures=$((int_failures + 1))
+        }
+    done
+    if grep -qE -- "$GNU_INSTALL_RE" <<<'install -m 644 a b'; then
+        print_status "error" "install guard flagged a command without -D"
+        int_failures=$((int_failures + 1))
+    fi
+    str_hits="$(grep -rnE -- "$GNU_INSTALL_RE" "$REPO_ROOT/bin" || true)"
     if [ -n "$str_hits" ]; then
         print_status "error" "BSD/macOS install has no -D; use mkdir -p && cp: $str_hits"
         int_failures=$((int_failures + 1))
