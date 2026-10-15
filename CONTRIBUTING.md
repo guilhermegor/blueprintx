@@ -943,6 +943,53 @@ Further details restored after review of #805:
   - `spec_get` prints with `printf '%s'` and no trailing newline so that it composes under
     command substitution.
 
+Lib facts without an issue number, restored after a pass over the removed lib comments:
+
+- **`bin/lib/common.sh` contract.** It is sourced, never executed (it refuses direct
+  execution), idempotent through the `_BX_COMMON_LOADED` re-sourcing guard, and shares one
+  `print_status` and one colour set across `bin/*.sh` and `bin/scaffold/*.sh`. If a script sets
+  `LOG_FILE` before sourcing, `print_status` also appends a timestamped line there; unset, it
+  is console only. Levels are `success`, `error`, `warning`, `info`, `config`, `debug` and
+  `section`; errors go to stderr, everything else to stdout. `print_section` is a thin
+  wrapper over the `section` level for call-site readability, and `exit_error <message>
+  [code]` routes through the `error` level (stderr and log) before exiting with the code
+  (default 1). Variables whose only reader is another file carry a `shellcheck disable=SC2034`
+  with the reason, because ShellCheck cannot follow a standalone lint into `bin/blueprintx.sh`.
+- **`resolve_default_branch [name]`.** Order: explicit argument, `$DEFAULT_BRANCH`, the remote's
+  `origin/HEAD`, a local `main`, else `master`. It is shared by the `new_branch` and
+  `git_merge_to_main` targets so both agree on the integration branch.
+- **`sed_inplace` migration.** Replace `sed -i <script...> <file>` with `sed_inplace` and keep
+  the rest. For an `... | xargs -r sed -i` site, use the `while read -r file` loop shown in
+  `conditional_copy_webhooks_yaml` in `bin/scaffold/python_mvc_service.sh`.
+- **`add_poe_include`.** Before the poe migration, removing the bump task edited both the
+  Makefile and `tasks.sh` in three places each (six regexes); one TOML table replaced them.
+  The Makefile's `-include make/*.mk` made a missing file silent, whereas poe's `include`
+  prints `Warning: Poe could not include file from invalid path ...` on every invocation
+  (measured), which is how a team learns to read past warnings.
+- **Cache purge.** Interpreter and tool caches (`__pycache__`, `.pytest_cache`, `.ruff_cache`,
+  `.mypy_cache`) are stripped once after the copy phase, needing no `rsync`.
+- **`scaffold_python_templates.sh` placement.** `poe_tasks.toml` replaces the Makefile and
+  `tasks.sh` pair; the four service tiers' copies were byte-identical (md5 09515a32) before
+  being single-sourced, and lib-minimal keeps its own because its task set differs. A seeded
+  `CHANGELOG.md` lets the docs Changelog page (`--8<--` include) build before the first
+  release; `cz changelog` regenerates it from tags. Shared tests ship from python-common
+  because each tier's `cp -r tests/.` does not reach `python-common/tests/`: the reference
+  integration test for the shared `bin/` shell seams (`poetry_exec.sh`, `precommit.sh`, see
+  `bin/CLAUDE.md` "Testing shell scripts"), the network-block guard (its `conftest` makes a
+  real network call impossible in any test) and the introspective-convention example that
+  enforces a family convention through `__all__`. The contract-drift test ships to all five
+  tiers and self-skips at module level in lib-minimal, which has no contract registry. The
+  incident-record page (#240) is copied here rather than in each tier's mkdocs step because
+  `docs/` already exists by then and the file was not touched by any in-flight PR. The tier's
+  `src/config/CLAUDE.md` is copied by each tier's `copy_global_config`, next to the payload it
+  documents; the copy-list gate accepts either home. VS Code settings are shared from
+  python-common and the tasks are per tier because the commands differ.
+- **`scaffold_git_remote.sh`.** It reads `GITHUB_USERNAME`, `DEFAULT_GITHUB_USERNAME`,
+  `PROJECT_NAME` and `PROJECT_DESCRIPTION` from the caller. `SCAFFOLD_REPO_HOMEPAGE` and the
+  roster flag use the `:` default-assignment idiom so ShellCheck sees the value as read
+  instead of flagging SC2034 for a consumer in another file. The roster default is `true`:
+  every project scaffolded before the flag existed shipped it.
+
 ### Gates in `bin/ci/` and `bin/`
 
 - **`check_makefile_pairing.sh` (#241).** Every user-facing Makefile target needs a `case`
