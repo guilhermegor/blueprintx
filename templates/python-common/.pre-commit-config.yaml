@@ -167,6 +167,13 @@ repos:
         files: ^\.specs/|^bin/check_specs_structure\.sh$
         pass_filenames: false
 
+      - id: docs-boundary
+        name: docs/ boundary guard (working material belongs in .specs/, blueprintx#576)
+        entry: bash bin/check_docs_boundary.sh --root .
+        language: system
+        pass_filenames: false
+        always_run: true
+
       # A masked CPF/CNPJ compared against a stored unmasked column matches ZERO rows and
       # raises nothing: the query is valid, the answer is silently empty. Scans .py and .sql
       # alike, since SQL reaches the database through both.

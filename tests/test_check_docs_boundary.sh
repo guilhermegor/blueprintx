@@ -223,6 +223,31 @@ test_templates_tree_is_deliberately_not_walked() {
     fi
 }
 
+test_generated_project_root_flag_rejects_docs_backlog() {
+    local str_proj str_gate str_got="pass"
+    str_proj="$(mktemp -d)"
+    mkdir -p "$str_proj/bin" "$str_proj/docs/backlog"
+    cp "$REPO_ROOT/bin/ci/check_docs_boundary.sh" "$str_proj/bin/check_docs_boundary.sh"
+    printf '# Hello\n' > "$str_proj/docs/index.md"
+    printf '# Ledger\n' > "$str_proj/docs/backlog/x.md"
+    str_gate="$str_proj/bin/check_docs_boundary.sh"
+    bash "$str_gate" --root "$str_proj" > /dev/null 2>&1 && str_got="pass" || str_got="fail"
+    if [ "$str_got" != "fail" ]; then
+        print_status "error" "generated project docs/backlog/x.md -> passed (expected fail)"
+        int_failures=$((int_failures + 1))
+    fi
+    rm -rf "$str_proj/docs/backlog"
+    bash "$str_gate" --root "$str_proj" > /dev/null 2>&1 || {
+        print_status "error" "generated project clean docs/ -> failed (expected pass)"
+        int_failures=$((int_failures + 1))
+    }
+    bash "$str_gate" --root "$str_proj/missing" > /dev/null 2>&1 && {
+        print_status "error" "bad --root -> passed (expected fail)"
+        int_failures=$((int_failures + 1))
+    }
+    rm -rf "$str_proj"
+}
+
 make_git_sandbox() {
     local str_root
     str_root="$(make_sandbox)"
@@ -329,6 +354,7 @@ main() {
     test_empty_docs_dir_fails
     test_unreadable_docs_dir_fails
     test_templates_tree_is_deliberately_not_walked
+    test_generated_project_root_flag_rejects_docs_backlog
     test_git_ignored_lessons_file_passes
     test_unignored_lessons_file_still_fails
     test_tracked_lessons_file_still_fails
