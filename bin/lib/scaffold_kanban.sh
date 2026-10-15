@@ -3,12 +3,12 @@
 # (blueprintx#592). Sourced by scaffold_git_remote.sh; define-only, no work on source.
 # Reads GITHUB_USERNAME, DEFAULT_GITHUB_USERNAME and PROJECT_NAME from the caller.
 #
-# The board mirrors blueprintx's own: Status Backlog/Ready/In progress/In review/Done, plus
+# The board mirrors blueprintx's own: Status Blocked/Backlog/Ready/In progress/In review/Done, plus
 # Priority, Size, Estimate, Start date, Target date and Points. Views and the built-in workflows
 # have no public API, so they are reported, never pretended. The row for the Status field is
 # the only one that needs GraphQL: `gh project field-create` cannot edit a built-in field.
 
-SCAFFOLD_KANBAN_STATUS_OPTIONS="Backlog Ready In-progress In-review Done"
+SCAFFOLD_KANBAN_STATUS_OPTIONS="Blocked Backlog Ready In-progress In-review Done"
 
 # name|colour|description, one per line — `gh label create --force` makes them re-runnable.
 SCAFFOLD_HOUSE_LABELS="type:task|0E8A16|A unit of work
@@ -18,7 +18,8 @@ hitl|FBCA04|Needs a human in the loop
 afk|C2E0C6|Safe to run unattended
 oracle:strong|0052CC|Verifiable by a strong oracle (tests, types, gates)
 oracle:weak|BFD4F2|No strong oracle; needs review
-do-not-merge|B60205|Hold: must not be merged yet"
+do-not-merge|B60205|Hold: must not be merged yet
+state:blocked|D93F0B|Cannot start: see the Blocked by line"
 
 scaffold_kanban_scope_hint() {
 	# A token without the `project` scope fails with a 403 / "insufficient scopes"; say how to fix it.
@@ -97,7 +98,7 @@ scaffold_kanban_status_options() {
 }
 
 scaffold_kanban_fields() {
-	# Priority, Size, Estimate, Start date, Target date, Points — as on blueprintx kanban.
+	# Priority, Size, Estimate, Start date, Target date, Points, Blocker — as on blueprintx kanban.
 	local str_owner="$1" str_number="$2" int_failed=0 str_spec str_name str_type str_opts
 	while IFS='|' read -r str_name str_type str_opts; do
 		if [ -n "$str_opts" ]; then
@@ -113,7 +114,8 @@ Size|SINGLE_SELECT|XS,S,M,L,XL
 Estimate|NUMBER|
 Start date|DATE|
 Target date|DATE|
-Points|NUMBER|"
+Points|NUMBER|
+Blocker|SINGLE_SELECT|Internal,External,Decision"
 	[ "$int_failed" -eq 0 ] || print_status "warning" "A project field could not be created (last failure: ${str_spec})"
 }
 
@@ -139,7 +141,7 @@ scaffold_kanban_create() {
 	gh project link "$str_number" --owner "$str_owner" --repo "$str_slug" >/dev/null 2>&1 ||
 		print_status "warning" "Could not link the board to ${str_slug}"
 	scaffold_kanban_status_options "$str_owner" "$str_number" ||
-		print_status "warning" "Could not set the Status options (Backlog / Ready / In progress / In review / Done)"
+		print_status "warning" "Could not set the Status options (Blocked / Backlog / Ready / In progress / In review / Done)"
 	scaffold_kanban_fields "$str_owner" "$str_number"
 	print_status "success" "Created '${str_title}' (${str_vis}), linked to ${str_slug}"
 	print_status "info" "No public API for views or built-in workflows — enable auto-add and item-closed -> Done at: $(scaffold_kanban_url "$str_owner" "$str_number")/workflows"

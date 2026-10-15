@@ -511,6 +511,7 @@ lib_minimal_copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
+    mkdir -p "$project_path/.github/ISSUE_TEMPLATE" && cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$project_path/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     copy_repo_policy_workflows "$project_path"
 }
 
@@ -612,6 +613,8 @@ lib_minimal_copy_project_scaffolding() {
     # implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
     cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" "$project_path/bin/check_specs_structure.sh"
     chmod +x "$project_path/bin/check_specs_structure.sh"
+    cp "$BLUEPRINTX_ROOT/bin/ci/check_docs_boundary.sh" "$project_path/bin/check_docs_boundary.sh"
+    chmod +x "$project_path/bin/check_docs_boundary.sh"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).

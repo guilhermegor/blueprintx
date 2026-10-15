@@ -64,6 +64,6 @@ the job fails visibly and the fallback is re-running it from the Actions tab.
 
 ## Tests
 
-`tests/test_dependabot_auto_merge.sh` stubs `gh`; `test_review_threads_dependabot.py` covers
+`tests/test_dependabot_auto_merge.sh` stubs `gh`; the Dependabot cases in `templates/python-common/tests/unit/test_review_threads_gate.py` cover
 the gate. Both pin the should-fail cases: major, non-Dependabot author, human commit, and a
 grouped PR with one major.
