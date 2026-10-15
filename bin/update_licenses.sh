@@ -9,7 +9,6 @@ BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LICENSES_DIR="$BLUEPRINTX_ROOT/templates/licenses"
 GITHUB_API="https://api.github.com/licenses"
 
-# Map SPDX IDs to GitHub Licenses API keys (ordered for display)
 SPDX_IDS=(MIT Apache-2.0 GPL-3.0 AGPL-3.0 LGPL-2.1 MPL-2.0 BSD-2-Clause BSD-3-Clause BSL-1.0 CC0-1.0 Unlicense)
 declare -A LICENSE_KEYS=(
     ["MIT"]="mit"
@@ -25,11 +24,6 @@ declare -A LICENSE_KEYS=(
     ["Unlicense"]="unlicense"
 )
 
-# The AGPL-3.0 closes the SaaS loophole: network use counts as distribution,
-# so any service built on this code must also be released under the AGPL-3.0.
-# This makes it ideal for dual-licensing — organisations that cannot comply
-# (e.g. proprietary or commercial hosted services) must obtain a separate
-# commercial license from the copyright holder.
 AGPL_PREAMBLE="NOTE: This software is released under the GNU Affero General Public License v3.0.
 This license is designed for a dual-licensing model: any software that uses this
 code — including software delivered as a network service or API — must also be
@@ -39,7 +33,6 @@ must obtain a separate commercial license from the copyright holder.
 ───────────────────────────────────────────────────────────────────────────────
 
 "
-
 
 check_dependencies() {
     if ! command -v curl >/dev/null 2>&1; then
@@ -108,7 +101,6 @@ update_all_licenses() {
 
     print_status "success" "All ${#SPDX_IDS[@]} licenses updated"
 }
-
 
 main() {
     check_dependencies

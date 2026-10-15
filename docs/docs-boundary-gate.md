@@ -24,6 +24,8 @@ destination.
 ## Design notes
 
 - A denied directory is reported once and not descended into.
+- A bad `--root` fails: otherwise every later check would see "no `docs/`" and report success.
+- A missing `docs/` is not an error: the gate exits 0 with "nothing to check".
 - Git-ignored entries are skipped, but only when `--root` is itself a repository top level,
   and with global git config disabled so local and CI verdicts agree.
 - Symlinks are classified, then treated as leaves: following them re-enters the tree through

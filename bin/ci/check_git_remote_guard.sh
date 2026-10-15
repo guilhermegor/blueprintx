@@ -1,16 +1,6 @@
 #!/bin/bash
-# Negative control for the `origin` verification in bin/lib/scaffold_git_remote.sh (#212).
-#
-# The dangerous direction here is a FALSE PASS: scaffold_add_git_remote returning 0 for a
-# remote pointing at someone else's repository, after which `gh repo create --push`, the
-# follow-up push and branch protection all write there. So the test that matters is the one
-# asserting a MISMATCH fails — a suite that only proves the happy path would have passed
-# against the very code this replaced.
-#
-# Usage:  bash bin/ci/check_git_remote_guard.sh
 
 set -euo pipefail
-# Run as a git hook, GIT_DIR points at the host repo and every `git -C <tmp>` below writes there.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -34,7 +24,6 @@ expect_slug() {
 }
 
 make_repo_with_origin() {
-    # Prints the path of a fresh repo whose origin is $1 (empty = no origin).
     local str_url="${1:-}" str_path
     str_path="$(mktemp -d)"
     git -C "$str_path" init -q -b main
@@ -45,12 +34,6 @@ make_repo_with_origin() {
 }
 
 expect_add_remote() {
-    # $1 = existing origin URL (empty for none), $2 = expected outcome (pass|fail)
-    #
-    # ⚠️ The exit status is NOT the whole assertion. A pass that added no remote, or a fail
-    # that rewrote the existing one, would both slip past a status-only check — and "the
-    # guard refused but retargeted origin anyway" is the failure mode with teeth. So a pass
-    # must leave origin resolving to OUR slug, and a fail must leave it untouched.
     local str_url="$1" str_want="$2" str_path str_got="pass" str_after
     str_path="$(make_repo_with_origin "$str_url")"
     scaffold_add_git_remote "$str_path" >/dev/null 2>&1 || str_got="fail"
@@ -76,9 +59,6 @@ expect_add_remote() {
 }
 
 expect_push_url_mismatch() {
-    # A remote whose FETCH url is ours but whose PUSH url is not. `git remote get-url origin`
-    # returns only the fetch URL, so a fetch-only check waves this through — and it is the
-    # push that writes to the other repository.
     local str_path str_got="pass"
     str_path="$(make_repo_with_origin "git@github.com:octocat/widget.git")"
     git -C "$str_path" remote set-url --push origin "git@github.com:someone-else/widget.git"
@@ -92,9 +72,6 @@ expect_push_url_mismatch() {
 }
 
 expect_absent_pat_does_not_abort() {
-    # Scaffolding must not die because an OPTIONAL reviewer integration has no credential.
-    # The scaffolds run under `set -e`, so a non-zero here would abort a project mid-creation
-    # over a secret — trading a red check on a future PR for a broken scaffold today.
     local int_rc=0
     ( unset GH_PAT_REVIEW_TRIGGER; scaffold_set_review_trigger_secret >/dev/null 2>&1 ) || int_rc=$?
     if [ "$int_rc" -ne 0 ]; then
@@ -105,29 +82,22 @@ expect_absent_pat_does_not_abort() {
 }
 
 main() {
-    # The same repository, spelled four ways, must reduce to one slug — otherwise the
-    # guard would reject a remote the user set up correctly and be disabled by the first
-    # person it inconveniences.
     expect_slug "git@github.com:octocat/widget.git" "octocat/widget"
     expect_slug "https://github.com/octocat/widget" "octocat/widget"
     expect_slug "https://github.com/octocat/widget.git" "octocat/widget"
     expect_slug "ssh://git@github.com/octocat/widget.git" "octocat/widget"
     expect_slug "ssh://git@github.com/octocat/widget" "octocat/widget"
-    # A non-GitHub remote reduces to itself, so it can never equal an owner/repo slug.
     expect_slug "git@gitlab.com:octocat/widget.git" "git@gitlab.com:octocat/widget"
-    # 🔴 HOST CONFUSION — the bypasses the first implementation accepted. `github.com` must be
-    # matched as a HOST, not as a substring: cutting at the last occurrence reduced the first
-    # of these to `octocat/widget` and the guard waved an arbitrary host through.
     expect_slug "https://evil.example/github.com/octocat/widget.git" \
         "https://evil.example/github.com/octocat/widget"
     expect_slug "https://github.com.evil.com/octocat/widget" \
         "https://github.com.evil.com/octocat/widget"
     expect_slug "https://github.com/octocat/widget/extra" "octocat/widget/extra"
 
-    expect_add_remote "" "pass"                                      # no origin → add it
-    expect_add_remote "git@github.com:octocat/widget.git" "pass"     # same repo, ssh
-    expect_add_remote "https://github.com/octocat/widget" "pass"     # same repo, https
-    expect_add_remote "git@github.com:someone-else/widget.git" "fail"  # ← the one with teeth
+    expect_add_remote "" "pass"
+    expect_add_remote "git@github.com:octocat/widget.git" "pass"
+    expect_add_remote "https://github.com/octocat/widget" "pass"
+    expect_add_remote "git@github.com:someone-else/widget.git" "fail"
     expect_add_remote "git@github.com:octocat/other-project.git" "fail"
     expect_add_remote "git@gitlab.com:octocat/widget.git" "fail"
     expect_add_remote "https://evil.example/github.com/octocat/widget.git" "fail"

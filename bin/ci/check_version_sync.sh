@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# BlueprintX's version is the git tag (see bin/blueprintx.sh print_version) — it is NOT hand-bumped.
-# Both in-repo version literals must therefore stay at the "0.0.0" stub:
-#   - pyproject.toml      (version = "0.0.0")          — only drives the docs site
-#   - bin/blueprintx.sh   (BLUEPRINTX_VERSION="0.0.0") — fallback, stamped from the tag at
-#                                                        install time (make install / packaging)
-# A non-stub value here means someone hand-bumped out of old habit; the release tag is the source.
 
 set -euo pipefail
 

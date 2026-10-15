@@ -1,21 +1,10 @@
 #!/usr/bin/env bash
-# Re-run the issue-scope check for every OPEN PR that closes a just-edited issue.
-#
-# WHY THIS EXISTS: the PR-event job runs when the PR changes, never when the ISSUE changes. A
-# surface edited after that job passed leaves a green status describing an older declaration
-# (blueprintx#314 review). GitHub re-evaluates nothing on its own, so this posts a commit status
-# of its own on each affected PR head.
-#
-# The context is DELIBERATELY distinct from the PR job's check name. A commit status and a check
-# run sharing one name is ambiguous for branch protection; a separate context is unambiguous and
-# can be required on its own. Rationale: docs/issue-scope.md.
 set -euo pipefail
 
 str_repo="${GITHUB_REPOSITORY:?}"
 int_issue="${ISSUE_NUMBER:?}"
 str_context="issue-scope/after-issue-edit"
 
-# closingIssuesReferences is what GitHub itself acts on at merge time — never a branch-name guess.
 str_query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){
   pullRequests(states:OPEN,first:100){nodes{number headRefOid
     closingIssuesReferences(first:20){nodes{number}}}}}}'
@@ -54,5 +43,4 @@ for str_pr in "${arr_prs[@]}"; do
 	echo "#${int_number} (${str_sha:0:8}): ${str_state} — ${str_desc}"
 done
 
-# Fail the job too: a red status on someone else's PR is easy to miss from the issue timeline.
 exit "$int_failed"
