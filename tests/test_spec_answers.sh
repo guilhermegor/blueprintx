@@ -2,6 +2,7 @@
 
 set -uo pipefail
 
+export GIT_AUTHOR_NAME=ci-bot GIT_COMMITTER_NAME=ci-bot GIT_AUTHOR_EMAIL=ci-bot@example.com GIT_COMMITTER_EMAIL=ci-bot@example.com
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')

@@ -3,6 +3,7 @@
 set -uo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 
+unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -59,6 +60,8 @@ str_status="$(env HOME="$WORK_DIR" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYST
     bash -c 'source "$1"; initialize_git_repo "$2" && apply_offline_mode "$2"' _ \
     "$(load_copy ts_react_app)" "$proj" >"$WORK_DIR/react.out" 2>&1
     git -C "$proj" status --porcelain)"
+check "failure message names user.email" yes "$(grep -q 'user.email' "$WORK_DIR/python_ddd_service-identity.out" && echo yes)"
+check "failure message mentions a commit hook" yes "$(grep -q 'commit hook' "$WORK_DIR/python_ddd_service-identity.out" && echo yes)"
 check "offline React scaffold leaves git status clean" "" "$str_status"
 check "offline React scaffold has 2 commits" 2 "$(git -C "$proj" rev-list --count HEAD)"
 

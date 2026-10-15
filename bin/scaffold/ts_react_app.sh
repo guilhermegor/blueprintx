@@ -701,7 +701,8 @@ commit_offline_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
     git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+    git -C "$project_path" diff --cached --quiet && return 0
+    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow"
 }
 
 

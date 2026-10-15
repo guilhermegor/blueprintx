@@ -228,6 +228,6 @@ scaffold_initial_commit() {
 			git add . &&
 			git commit -q -m "feat: first commit"
 	); then
-		exit_error "Could not create the initial commit in '$str_project_path'. Set git user.name and user.email (and fix any failing commit hook), then re-run."
+		exit_error "Could not create the initial commit in '$str_project_path'. Either git user.name/user.email is unset (git config --global user.email you@example.com; git config --global user.name 'Your Name') or a commit hook rejected the commit. Fix that, then re-run."
 	fi
 }
