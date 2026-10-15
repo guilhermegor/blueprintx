@@ -10,9 +10,9 @@ source "$REPO_ROOT/bin/lib/scaffold_git_remote.sh"
 # shellcheck source=bin/lib/scaffold_python_templates.sh
 source "$REPO_ROOT/bin/lib/scaffold_python_templates.sh"
 
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034  # read by scaffold_copy_tooling_configs, which shellcheck cannot follow
 COMMON_TEMPLATE_ROOT="$REPO_ROOT/templates/python-common"
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034  # also read by scaffold_copy_tooling_configs (#540)
 SHARED_TEMPLATE_ROOT="$REPO_ROOT/templates/common"
 int_failures=0
 

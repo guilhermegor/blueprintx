@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SCAFFOLD_KANBAN_STATUS_OPTIONS="Backlog Ready In-progress In-review Done"
+SCAFFOLD_KANBAN_STATUS_OPTIONS="Blocked Backlog Ready In-progress In-review Done"
 
 SCAFFOLD_HOUSE_LABELS="type:task|0E8A16|A unit of work
 type:research|1D76DB|A question to answer, not code to ship
@@ -9,7 +9,8 @@ hitl|FBCA04|Needs a human in the loop
 afk|C2E0C6|Safe to run unattended
 oracle:strong|0052CC|Verifiable by a strong oracle (tests, types, gates)
 oracle:weak|BFD4F2|No strong oracle; needs review
-do-not-merge|B60205|Hold: must not be merged yet"
+do-not-merge|B60205|Hold: must not be merged yet
+state:blocked|D93F0B|Cannot start: see the Blocked by line"
 
 scaffold_kanban_scope_hint() {
 	if grep -qiE 'scope|403|insufficient|read:project' <<<"$1"; then
@@ -93,7 +94,8 @@ Size|SINGLE_SELECT|XS,S,M,L,XL
 Estimate|NUMBER|
 Start date|DATE|
 Target date|DATE|
-Points|NUMBER|"
+Points|NUMBER|
+Blocker|SINGLE_SELECT|Internal,External,Decision"
 	[ "$int_failed" -eq 0 ] || print_status "warning" "A project field could not be created (last failure: ${str_spec})"
 }
 
@@ -119,7 +121,7 @@ scaffold_kanban_create() {
 	gh project link "$str_number" --owner "$str_owner" --repo "$str_slug" >/dev/null 2>&1 ||
 		print_status "warning" "Could not link the board to ${str_slug}"
 	scaffold_kanban_status_options "$str_owner" "$str_number" ||
-		print_status "warning" "Could not set the Status options (Backlog / Ready / In progress / In review / Done)"
+		print_status "warning" "Could not set the Status options (Blocked / Backlog / Ready / In progress / In review / Done)"
 	scaffold_kanban_fields "$str_owner" "$str_number"
 	print_status "success" "Created '${str_title}' (${str_vis}), linked to ${str_slug}"
 	print_status "info" "No public API for views or built-in workflows — enable auto-add and item-closed -> Done at: $(scaffold_kanban_url "$str_owner" "$str_number")/workflows"

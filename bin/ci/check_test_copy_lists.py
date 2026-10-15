@@ -158,6 +158,7 @@ _RE_UTILS_TEST_CP = re.compile(
     r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*tests/unit/test_\$\{util\}\.py", re.M
 )
 
+
 def shared_test_names() -> set:
     """Return every shared unit test filename.
 
@@ -168,6 +169,7 @@ def shared_test_names() -> set:
     """
     return {path_file.name for path_file in _SHARED_TESTS.glob("test_*.py")}
 
+
 def shared_workflow_names() -> set:
     """Return every shared workflow filename.
 
@@ -177,6 +179,7 @@ def shared_workflow_names() -> set:
         Filenames like ``tests.yaml`` under ``templates/python-common/.github/workflows/``.
     """
     return {path_file.name for path_file in _SHARED_WORKFLOWS.glob("*.y*ml")}
+
 
 def shared_doc_names() -> set:
     """Return every shippable leaf doc, as a path relative to python-common.
@@ -190,6 +193,7 @@ def shared_doc_names() -> set:
         path_file.relative_to(_SHARED_ROOT).as_posix()
         for path_file in _SHARED_ROOT.rglob("CLAUDE.md")
     } - _DOCS_NEVER_SHIPPED
+
 
 def dest_stays_in_project(str_operand: str, str_dest: str) -> bool:
     """Return whether a ``cp`` destination lands inside the project under the source's name.
@@ -215,6 +219,7 @@ def dest_stays_in_project(str_operand: str, str_dest: str) -> bool:
         and ".." not in list_dst
         and list_dst[-int_tail:] == list_src[-int_tail:]
     )
+
 
 def reachable_docs(str_source: str, set_shared: set) -> set:
     """Return the shared leaf docs one scaffold script copies, by file or by directory.
@@ -242,6 +247,7 @@ def reachable_docs(str_source: str, set_shared: set) -> set:
             set_reachable.update(str_doc for str_doc in set_shared if str_doc.startswith(str_prefix))
     return set_reachable
 
+
 def _reachable_util_names(str_names: str, cls_array: re.Match | None) -> set:
     """Return the valid utility names reachable from a copy_shared_utils loop body.
 
@@ -260,6 +266,7 @@ def _reachable_util_names(str_names: str, cls_array: re.Match | None) -> set:
     if cls_array:
         str_names = f"{str_names} {cls_array.group(1)}"
     return {str_util for str_util in str_names.split() if _RE_UTIL_NAME.fullmatch(str_util)}
+
 
 def reachable_tests(str_source: str) -> set:
     """Return the shared tests one scaffold script can deliver, by either mechanism.
@@ -287,6 +294,7 @@ def reachable_tests(str_source: str) -> set:
 
     return set_reachable
 
+
 def reachable_workflows(str_source: str) -> set:
     """Return the shared workflows one scaffold script copies.
 
@@ -301,6 +309,7 @@ def reachable_workflows(str_source: str) -> set:
         Workflow filenames delivered by an active ``cp`` from the shared workflows directory.
     """
     return set(_RE_WORKFLOW_CP.findall(str_source))
+
 
 def asset_problems(
     path_scaffold: pathlib.Path,
@@ -362,6 +371,7 @@ def asset_problems(
 
     return list_problems
 
+
 def scaffold_source_text(path_scaffold: pathlib.Path) -> str:
     """Return a scaffold's text joined with every ``bin/lib`` script it sources.
 
@@ -392,6 +402,7 @@ def scaffold_source_text(path_scaffold: pathlib.Path) -> str:
         if path_lib.is_file():
             list_parts.append(path_lib.read_text(encoding="utf-8"))
     return "\n".join(list_parts)
+
 
 def scaffold_problems(
     path_scaffold: pathlib.Path, set_shared: set, set_workflows: set, set_docs: set
@@ -441,6 +452,7 @@ def scaffold_problems(
         "templates/python-common/.github/workflows/",
         "that CI gate would not exist at all in any generated project",
     )
+
 
 def main() -> int:
     """Check every Python scaffold's test copy list against the shared source.
@@ -492,6 +504,7 @@ def main() -> int:
         f"{len(list_scaffolds)} Python scaffolds."
     )
     return 0
+
 
 if __name__ == "__main__":
     for cls_stream in (sys.stdout, sys.stderr):

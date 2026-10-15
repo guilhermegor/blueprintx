@@ -83,7 +83,7 @@ expect_out() {
 test_house_labels_are_created_idempotently() {
     local str_label str_out
     str_out="$(run_setup 'n\n')"
-    for str_label in type:task type:research type:grilling hitl afk oracle:strong oracle:weak do-not-merge; do
+    for str_label in type:task type:research type:grilling hitl afk oracle:strong oracle:weak do-not-merge state:blocked; do
         expect_log "house labels" "label create $str_label --repo octo/widget" present
     done
     expect_log "house labels" "--force" present
@@ -103,9 +103,12 @@ test_default_creates_the_full_board() {
     expect_log "board" "project create --owner octo --title widget kanban" present
     expect_log "board" "project edit 7 --owner octo --visibility PUBLIC" present
     expect_log "board" "project link 7 --owner octo --repo octo/widget" present
-    for str_field in Priority Size Estimate "Start date" "Target date" Points; do
+    for str_field in Priority Size Estimate "Start date" "Target date" Points Blocker; do
         expect_log "board fields" "project field-create 7 --owner octo --name $str_field" present
     done
+    expect_log "board status" '"name":"Blocked"' present
+    expect_log "board status" '[{"name":"Blocked"' present
+    expect_log "board fields" "Internal,External,Decision" present
     expect_log "board status" '"name":"Backlog"' present
     expect_log "board status" '"name":"In progress"' present
     expect_log "board status" '"name":"In review"' present
@@ -170,6 +173,27 @@ test_empty_stdin_means_no_board() {
     expect_out "EOF" "$str_out" "Skipped the kanban board"
 }
 
+GNU_INSTALL_RE='(^|[[:space:];&|(])install( +[^ ;|&]+)* +-[a-zA-Z]*D'
+
+test_no_gnu_only_install_in_bin() {
+    local str_hits str_case
+    for str_case in 'install -D a b' 'install -m 755 -D a b' 'install -Dm644 a b' 'install -o x -D a b'; do
+        grep -qE -- "$GNU_INSTALL_RE" <<<"$str_case" || {
+            print_status "error" "install guard missed: $str_case"
+            int_failures=$((int_failures + 1))
+        }
+    done
+    if grep -qE -- "$GNU_INSTALL_RE" <<<'install -m 644 a b'; then
+        print_status "error" "install guard flagged a command without -D"
+        int_failures=$((int_failures + 1))
+    fi
+    str_hits="$(grep -rnE -- "$GNU_INSTALL_RE" "$REPO_ROOT/bin" || true)"
+    if [ -n "$str_hits" ]; then
+        print_status "error" "BSD/macOS install has no -D; use mkdir -p && cp: $str_hits"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 main() {
     make_stub
     [ "$(PATH="$WORK_DIR/bin:$PATH" command -v gh)" = "$WORK_DIR/bin/gh" ] || exit 2
@@ -183,6 +207,7 @@ main() {
     test_a_failed_project_list_still_prints_the_scope_fix
     test_stderr_noise_on_success_never_corrupts_values
     test_empty_stdin_means_no_board
+    test_no_gnu_only_install_in_bin
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
         exit 1

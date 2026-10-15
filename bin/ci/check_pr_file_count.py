@@ -8,7 +8,7 @@ blueprintx#424, open 13+ days at 241 files, selected twice in one hour by the
 reviewer-slot step because it wins on contention and age (dotfiles-dev#420).
 
 Calibrated over the 100 most recent PRs (blueprintx#551): exactly ONE violation
-(#424, 241 files). The largest LEGITIMATE PR in that same set is
+(#424, 241 files). The largest LEGITIMATE PR in that same set is #532 at 59 files —
 an entire new skeleton tier. MAX_CHANGED_FILES = 90 therefore sits 10 below
 CodeRabbit's vendor cap of 100 and 31 files above the biggest real change this repo
 produces: headroom on both sides, not a number chosen to match today's diff.
@@ -21,7 +21,7 @@ Three design points, decided rather than assumed:
   only the count.
 * **No escape hatch.** Every other hatch in this family (``# complexity-ok:
   <reason>``, ``lang:pt-ok``) exists because a real, hard-to-avoid case was found.
-  None has surfaced here, and
+  None has surfaced here, and #424's own honest seam turned out to be
   whitespace-only vs content-changed, not an indivisible change — with 31 files of
   headroom before the vendor cap, the split is always available. Add a hatch only
   when a genuine indivisible case is found, per this repo's own one-implementation
@@ -42,6 +42,7 @@ import subprocess
 import sys
 
 MAX_CHANGED_FILES = 90
+
 
 def _git(list_args: list) -> str:
     """Run a read-only git command and return stdout (empty string on failure).
@@ -66,6 +67,7 @@ def _git(list_args: list) -> str:
     except OSError:
         return ""
     return cls_proc.stdout.strip()
+
 
 def default_branch_ref() -> str:
     """Return a ref that resolves to the CURRENT default branch tip.
@@ -98,6 +100,7 @@ def default_branch_ref() -> str:
         return str_remote_ref
     return str_branch
 
+
 def is_on_default_branch(str_default_ref: str) -> bool:
     """Report whether the current checkout IS the default branch.
 
@@ -122,6 +125,7 @@ def is_on_default_branch(str_default_ref: str) -> bool:
         return str_current == str_default_ref.rsplit("/", 1)[-1]
     return _git(["rev-parse", "HEAD"]) == _git(["rev-parse", str_default_ref])
 
+
 def merge_heads() -> list:
     """Return every incoming commit of a merge in progress (several for an octopus).
 
@@ -138,6 +142,7 @@ def merge_heads() -> list:
         return []
     return pathlib.Path(str_path).read_text(encoding="utf-8").split()
 
+
 def changed_file_count(str_base: str) -> int:
     """Return the branch's cumulative changed-file count, INDEX included.
 
@@ -153,6 +158,7 @@ def changed_file_count(str_base: str) -> int:
     """
     str_out = _git(["diff", "--cached", "--name-only", str_base])
     return len([p for p in str_out.splitlines() if p])
+
 
 def main() -> int:
     """Check the branch's cumulative diff against the file-count ceiling.
@@ -182,6 +188,7 @@ def main() -> int:
         f"{MAX_CHANGED_FILES} files or fewer each."
     )
     return 1
+
 
 if __name__ == "__main__":
     for cls_stream in (sys.stdout, sys.stderr):
