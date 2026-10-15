@@ -659,6 +659,47 @@ jobs:
           SCAFFOLD_SPEC_FILE: bin/ci/optin_specs/storage.answers
         run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
 
+  scaffold-lint-test-otel:
+    name: Scaffold + lint + test (otel opt-in) — ${{ matrix.skeleton }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        skeleton:
+          - ddd-service-orm-db
+          - api-service-native-db
+          - mvc-service-orm-db
+          - lib-minimal
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pip
+          key: pip-poetry-${{ hashFiles('templates/*/pyproject.toml') }}
+          restore-keys: pip-poetry-
+
+      - name: Install scaffold tooling (envsubst)
+        run: command -v envsubst >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext-base; }
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Real scaffold with the otel opt-in, then lint + tests
+        env:
+          GITHUB_USERNAME: ci-bot
+          SKELETON: ${{ matrix.skeleton }}
+          SCAFFOLD_SPEC_FILE: bin/ci/optin_specs/otel.answers
+        run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
+
   typecheck-ts:
     name: TypeScript build + lint — ${{ matrix.skeleton }} template
     runs-on: ubuntu-latest
