@@ -26,6 +26,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239) |
 | `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |
 | `lockfile-sync.md` | Utility page | The package.json vs package-lock.json gate, its regression test, and the ts-lib Dependabot grouping (blueprintx#588) |
+| `docs-boundary-gate.md` | Utility page | What `check_docs_boundary.sh` denies, where each case belongs, and why it ships to generated projects (blueprintx#576) |
 | `offline-to-online.md` | Utility page | Promoting an offline scaffold to online with `bin/promote_offline_to_online.sh` — per-tier manifests, flags, preconditions, idempotency (blueprintx#382) |
 | `prompt-defaults.md` | Utility page | The non-terminal stdin guard on scaffold prompts, the helpers, and the per-prompt default table (blueprintx#539) |
 | `template-drift.md` | Utility page | The drift doctor and the provenance stamp it reads, plus the promote-script mirror notes (blueprintx#109) |
@@ -170,6 +171,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `troubleshooting.md` | What-broke record | Per-defect symptom/cause/fix sections, plus a Decisions table for what does/doesn't get scaffolded into `templates/` |
 | `coverage-floor.md` | Gate design record | What the gate enforces, why `fail_under` alone is insufficient, the coarse-by-design boundary, and what stays out of scope |
 | `lockfile-sync.md` | Gate design record | What the gate compares and skips, the two-direction regression test, and why the eslint group comes first in the ts-lib Dependabot entry |
+| `docs-boundary-gate.md` | Gate design record | The deny-list with destinations, ignore handling, symlink and unreadable-directory behaviour |
 | `offline-to-online.md` | Offline-to-online promotion record | The flags and per-tier manifests, the ordered preconditions, idempotency and resume-before-first-push, what stays manual afterwards (branch protection, secret key), and the live round trip stated as unverified |
 | `prompt-defaults.md` | Prompt-guard record | Why a piped line must not answer a prompt, the four helpers, how a default is chosen per prompt (with the table), and the three legs of the regression test |
 | `template-drift.md` | Drift doctor record | The provenance stamp and its version fallback, how the doctor reads the scaffold lib's `--list-copies` dry run, conditional copies, the should-fail witness, the manual poe task |

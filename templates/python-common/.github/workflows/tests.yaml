@@ -226,6 +226,10 @@ jobs:
         # bypasses it. A tree with no .specs/ passes; a malformed one fails by name.
         run: bash bin/check_specs_structure.sh --root .
 
+      - name: Run Docs Boundary Gate
+        if: runner.os == 'Linux'
+        run: bash bin/check_docs_boundary.sh --root .
+
       - name: Run Fixture Scope Gate
         if: runner.os == 'Linux'
         # Mirrors the `fixture-scope` pre-commit hook. A PROXY (blueprintx#442), not a
