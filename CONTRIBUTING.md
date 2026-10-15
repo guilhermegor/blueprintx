@@ -1155,7 +1155,7 @@ grouped by what they guard.
   GraphQL is rate-limited more tightly, and a traceback is never ORPHAN.
 - **`promote_offline_to_online.sh` (#382).** Turns an offline project into an online one
   without re-scaffolding. It adds the GitHub-only assets, creates and pushes the repo,
-  applies best-effort branch protection and removes the offline fallbacks. It is standalone:
+  provisions the branch ruleset and removes the offline fallbacks. It is standalone:
   it transcribes the scaffolds' manifests (see `docs/offline-to-online.md`) rather than
   sourcing scripts other PRs hold. It refuses rather than guesses: an unknown tier or one
   whose skeleton is gone, a typo'd or tier-inapplicable `--publish`/`--deploy-target`, a
@@ -1169,8 +1169,7 @@ grouped by what they guard.
   `GITGUARDIAN_API_KEY`; the repo is created without `--push` so the key exists before the push
   that triggers the workflows (otherwise the first run is red). The key goes on stdin. The
   restored `no-commit-to-branch` hook is the only one skipped for the promotion commit.
-  `git_diffs/` is removed only when it holds just the `.keep` placeholder. Branch protection
-  warns rather than aborts. Each reversal is idempotent. The file ends guarded so tests can
+  `git_diffs/` is removed only when it holds just the `.keep` placeholder. Each reversal is idempotent. The file ends guarded so tests can
   `source` it.
   More promote rules: `shift 2` on a lone flag fails silently under `set -e`, so flags are
   checked first. "Online" is told from "remote added, nothing pushed" by the local
@@ -1180,9 +1179,10 @@ grouped by what they guard.
   offline-only. The TypeScript and Bash tiers ship no `SECURITY.md`, `dependabot.yml` or
   `secret_scan.yaml`, so nothing of those comes back. An offline project commits on `main` by
   design, which is why only `no-commit-to-branch` is skipped for the promotion commit.
-  Branch protection warns instead of aborting because a fresh repository can lag behind API
-  visibility and a solo maintainer's review policy is a judgment call the script does not
-  prompt for; the assets are already pushed by then.
+  The ruleset step runs the project's own `bin/enable_repo_rules.sh` (the `pr-quality-gate`
+  ruleset), then `enable_repo_rules.sh verify`. It never aborts the promotion, since the
+  assets are already pushed; if the script is missing it warns, and when `verify` fails the
+  final summary says branch protection on `main` is NOT in place.
 
   The online state is carried by `HAS_ORIGIN` and
   `HAS_GITHUB_ASSETS`, both set by one detection step and both consumed by the witnesses in
