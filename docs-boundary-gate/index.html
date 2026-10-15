@@ -2018,6 +2018,8 @@ destination.</p>
 <h2 id="design-notes">Design notes<a class="headerlink" href="#design-notes" title="Permanent link">&para;</a></h2>
 <ul>
 <li>A denied directory is reported once and not descended into.</li>
+<li>A bad <code>--root</code> fails: otherwise every later check would see "no <code>docs/</code>" and report success.</li>
+<li>A missing <code>docs/</code> is not an error: the gate exits 0 with "nothing to check".</li>
 <li>Git-ignored entries are skipped, but only when <code>--root</code> is itself a repository top level,
   and with global git config disabled so local and CI verdicts agree.</li>
 <li>Symlinks are classified, then treated as leaves: following them re-enters the tree through
