@@ -858,8 +858,9 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   emitted, the defaults keep the previous behaviour (both shipped) for non-interactive runs,
   and the two axes (where this library publishes, where its own dependencies come from) are
   separated so Q3 does not read as a fork of Q1 and Q2. Q3 appends a documented, commented
-  explicit-priority source block; `priority = "explicit"` is the dependency-confusion guard,
-  since poetry and pip never fall back to that source for other packages. The generic service
+  explicit-priority source block; Poetry's `priority = "explicit"` stops Poetry falling back
+  to that source for other packages. Pip ignores `tool.poetry.source`, so pip installs from a
+  private index must use `--index-url`, never `--extra-index-url`. The generic service
   `release.yaml` does not apply and is stripped defensively, reported only when something was
   removed. Release workflows are rendered with `envsubst` restricted to `PACKAGE_NAME` and
   `OWNER`, so GitHub's `${{ }}` and `$SHELL_VARS` in `run:` blocks survive.
