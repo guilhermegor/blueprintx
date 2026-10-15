@@ -151,4 +151,9 @@ str_script=$(sed -nE 's/.*run: bash (.*)$/\1/p' "$REPO_ROOT/.github/workflows/de
 [[ -f "$REPO_ROOT/$str_script" ]]
 check "root workflow runs a script that exists in this repo" 0 "$?"
 
+for str_wf in .github/workflows/review_threads.yml templates/*/.github/workflows/review[-_]threads.y*ml; do
+	grep -qE '^  actions: (read|write)' "$REPO_ROOT/$str_wf"
+	check "$str_wf grants actions: for the pusher lookup" 0 "$?"
+done
+
 ((int_failures == 0)) || exit 1
