@@ -173,21 +173,30 @@ test_empty_stdin_means_no_board() {
     expect_out "EOF" "$str_out" "Skipped the kanban board"
 }
 
-GNU_INSTALL_RE='(^|[[:space:];&|(])install( +[^ ;|&]+)* +-[a-zA-Z]*D'
+GNU_INSTALL_RE='(^|[[:space:];&|(])install([[:space:]]+[^[:space:];|&]+)*[[:space:]]+-[a-zA-Z]*D'
+PKG_MANAGER_RE='(npm|yarn|pnpm|bun|pip|poetry|apt|apt-get|brew)[[:space:]]+([^[:space:]]+[[:space:]]+)*install'
+
+gnu_install_hits() {
+    grep -E -- "$GNU_INSTALL_RE" | grep -vE -- "$PKG_MANAGER_RE" || true
+}
 
 test_no_gnu_only_install_in_bin() {
     local str_hits str_case
-    for str_case in 'install -D a b' 'install -m 755 -D a b' 'install -Dm644 a b' 'install -o x -D a b'; do
-        grep -qE -- "$GNU_INSTALL_RE" <<<"$str_case" || {
+    for str_case in 'install -D a b' 'install -m 755 -D a b' 'install -Dm644 a b' 'install -o x -D a b' \
+        "$(printf 'install\t-m 755\t-D a b')"; do
+        [ -n "$(gnu_install_hits <<<"$str_case")" ] || {
             print_status "error" "install guard missed: $str_case"
             int_failures=$((int_failures + 1))
         }
     done
-    if grep -qE -- "$GNU_INSTALL_RE" <<<'install -m 644 a b'; then
-        print_status "error" "install guard flagged a command without -D"
-        int_failures=$((int_failures + 1))
-    fi
-    str_hits="$(grep -rnE -- "$GNU_INSTALL_RE" "$REPO_ROOT/bin" || true)"
+    for str_case in 'install -m 644 a b' 'npm install -D x' 'pnpm --silent install -D x' 'reinstall -D x' 'install -m 644 a-Dx b'; do
+        [ -z "$(gnu_install_hits <<<"$str_case")" ] || {
+            print_status "error" "install guard flagged: $str_case"
+            int_failures=$((int_failures + 1))
+        }
+    done
+    str_hits="$(grep -rnE --exclude-dir=node_modules -- "$GNU_INSTALL_RE" "$REPO_ROOT/bin" "$REPO_ROOT/templates" |
+        grep -vE -- "$PKG_MANAGER_RE" || true)"
     if [ -n "$str_hits" ]; then
         print_status "error" "BSD/macOS install has no -D; use mkdir -p && cp: $str_hits"
         int_failures=$((int_failures + 1))
