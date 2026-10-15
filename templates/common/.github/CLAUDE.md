@@ -134,6 +134,27 @@ complementary to (not a replacement for) pushing so the full matrix runs on GitH
 ## Kanban board and labels
 
 If you accepted the scaffolder's offer, the repo has a `<repo> kanban` GitHub Project and the
-house labels (`type:*`, `hitl`, `afk`, `oracle:*`, `do-not-merge`). `Estimate`, `Size` and
+house labels (`type:*`, `hitl`, `afk`, `oracle:*`, `do-not-merge`, `state:blocked`). `Estimate`, `Size` and
 `Priority` are project fields, not labels. The board's views and workflows have no public API:
 enable auto-add and "item closed -> Done" in the project's Workflows page.
+
+## Blocked work
+
+Work that cannot start because an upstream is unfinished carries the `state:blocked` label and a
+`**Blocked by:**` line at the start of a body line, naming each blocker as `repo#N`, or as
+`decision: <why>` when the blocker is a choice nobody has made yet. `ISSUE_TEMPLATE/feature_or_fix.md`
+carries the line and an `issue-template-guard:` directive; a tool that reads the directive rejects a
+`state:blocked` issue without the line. A `decision:` blocker is never auto-cleared by a reconciler.
+
+Use the native `blocked_by` relationship as an extra mirror for same-repo blockers; it cannot name
+a blocker in another repository, so the body line is the record.
+
+If you accepted the scaffolder's board, it has the `state:blocked` label, a `Blocked` Status option
+(first, before `Backlog`) and a `Blocker` field (`Internal | External | Decision`). **A board you
+created yourself has none of these: add them by hand.** When you add `Blocked` to an existing
+board, send every existing option with its `id` (`updateProjectV2Field` replaces the whole set
+and mints a new option for any without one, leaving every item's Status empty), and snapshot the
+board to JSON first.
+
+The scaffold ships no reconciler that clears a `Blocked` item when its blocker closes; that is
+operator tooling, not project code.
