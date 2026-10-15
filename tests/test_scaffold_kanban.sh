@@ -173,19 +173,43 @@ test_empty_stdin_means_no_board() {
     expect_out "EOF" "$str_out" "Skipped the kanban board"
 }
 
-GNU_INSTALL_RE='(^|[[:space:];&|(])install([[:space:]]+[^[:space:];|&]+)*[[:space:]]+-[a-zA-Z]*D'
-PKG_MANAGER_RE='^[[:space:]]*((RUN|sudo)[[:space:]]+)*(npm|yarn|pnpm|bun|pip|poetry|apt|apt-get|brew)[[:space:]]+([^[:space:]]+[[:space:]]+)*install'
+GNU_INSTALL_PERL='
+my ($buf, $hit) = ("", 0);
+sub scan {
+    my ($line) = @_;
+    while ($line =~ /(?<![\w.\/-])install(?:\s+[^\s;|&]+)*?\s+-[a-zA-Z]*D/g) {
+        my $before = substr($line, 0, $-[0]);
+        next if $before =~ /\b(?:npm|pnpm|yarn|bun|pip3?|poetry|apt|apt-get|brew|gem|cargo|go)(?:\s+-\S+)*\s+$/;
+        $hit = 1;
+        print "$line\n";
+        last;
+    }
+}
+while (my $l = <STDIN>) {
+    chomp $l;
+    if ($buf eq "" && $l =~ /^\s*#/) { next }
+    if ($l =~ s/\\$//) { $buf .= $l; next }
+    scan($buf . $l);
+    $buf = "";
+}
+scan($buf) if $buf ne "";
+'
 
 gnu_install_hits() {
-    perl -0pe 's/\\\n[ \t]*/ /g; s/(^|[ \t])#.*//mg; s/(;|&&|\|\||\|)/\n/g' |
-        grep -E -- "$GNU_INSTALL_RE" | grep -vE -- "$PKG_MANAGER_RE" || true
+    perl -e "$GNU_INSTALL_PERL"
 }
 
 scan_tree_for_gnu_install() {
-    local path_file
-    while IFS= read -r path_file; do
-        [ -z "$(gnu_install_hits <"$path_file")" ] || printf '%s\n' "$path_file"
-    done < <(grep -rlE --exclude-dir=node_modules -- "install" "$@")
+    local path_dir path_file int_scanned=0
+    for path_dir in "$@"; do
+        [ -d "$path_dir" ] || { printf 'missing scan dir: %s\n' "$path_dir"; return; }
+        while IFS= read -r path_file; do
+            int_scanned=$((int_scanned + 1))
+            [ -z "$(gnu_install_hits <"$path_file")" ] || printf '%s\n' "$path_file"
+        done < <(find "$path_dir" \( -name node_modules -prune \) -o -type f \
+            \( -name '*.sh' -o -name Makefile -o -name '*.mk' \) -print)
+    done
+    [ "$int_scanned" -gt 0 ] || printf 'scanned no files\n'
 }
 
 test_no_gnu_only_install_in_bin() {
@@ -194,14 +218,16 @@ test_no_gnu_only_install_in_bin() {
         "$(printf 'install\t-m 755\t-D a b')" \
         'apt-get install -y x && install -D a b' 'brew install x; install -Dm644 a b' \
         'install -D a b # pip install x' 'install -D a b && npm install' \
-        "$(printf 'install \\\n  -D a b')"; do
+        "$(printf 'install \\\n  -D a b')" \
+        'true & install -D a b' 'echo "step #1"; install -D a b' \
+        "$(printf '# note \\\ninstall -D a b')" 'x=`install -D a b`' "bash -c 'install -D a b'"; do
         [ -n "$(gnu_install_hits <<<"$str_case")" ] || {
             print_status "error" "install guard missed: $str_case"
             int_failures=$((int_failures + 1))
         }
     done
     for str_case in 'install -m 644 a b' 'npm install -D x' 'pnpm --silent install -D x' 'reinstall -D x' \
-        'install -m 644 a-Dx b' 'echo hi # install -D a b' 'RUN npm install -D x && echo ok'; do
+        'install -m 644 a-Dx b' '# install -D a b' 'RUN npm install -D x && echo ok' 'env X=1 npm install -D x'; do
         [ -z "$(gnu_install_hits <<<"$str_case")" ] || {
             print_status "error" "install guard flagged: $str_case"
             int_failures=$((int_failures + 1))
