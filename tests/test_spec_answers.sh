@@ -353,12 +353,13 @@ case "$1 $2" in
     "auth status") [ "${STUB_AUTH:-ok}" = ok ] || exit 1 ;;
     "api user") echo ci-bot ;;
     "repo view")
+        case "$*" in *--json*) echo ci-bot/spec-probe; exit 0 ;; esac
         [ "${STUB_REPO_EXISTS:-0}" = 1 ] || [ -e "$STUB_STATE/created" ] && exit 0
         [ "${STUB_VIEW_ERROR:-0}" = 1 ] && { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
         echo "GraphQL: Could not resolve to a Repository with the name '$3'. (repository)" >&2
         exit 1 ;;
     "repo create") touch "$STUB_STATE/created" ;;
-    "api --method") cat >"$STUB_STATE/protection.json" ;;
+    "api -X") case "$*" in *rulesets*) cat >"$STUB_STATE/protection.json" ;; esac ;;
 esac
 exit 0
 STUB
@@ -402,7 +403,8 @@ test_create_repo_runs_gh_with_the_chosen_visibility_and_protection() {
         && [[ "$str_calls" == *"e2e-pub-state/calls.log:repo create ci-bot/spec-probe"*"--public"* ]] \
         && [[ "$str_calls" == *"e2e-nop-state/calls.log:repo create ci-bot/spec-probe"*"--private"* ]] \
         && [[ "$str_prot" == *'"required_approving_review_count":1'* ]] \
-        && grep -q '"required_pull_request_reviews": null' "$WORK_DIR/e2e-pub-state/protection.json" \
+        && [[ "$(tr -d '\n ' <"$WORK_DIR/e2e-pub-state/protection.json")" == *'"required_approving_review_count":0'* ]] \
+        && ! grep -qhE 'PUT .*branches/.*/protection|--method PUT' "$WORK_DIR"/e2e-*-state/calls.log \
         && [ ! -e "$WORK_DIR/e2e-nop-state/protection.json" ] \
         && [ "$int_rc" -eq 0 ] \
         && [ -d "$WORK_DIR/e2e-priv-root/spec-probe" ] && [ -d "$WORK_DIR/e2e-pub-root/spec-probe" ] \

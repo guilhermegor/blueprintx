@@ -227,6 +227,7 @@ copy_mkdocs_templates() {
 }
 
 apply_branch_protection() {
+    local project_path="$1"
     local branch="main"
     local repo="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
 
@@ -245,7 +246,7 @@ apply_branch_protection() {
         return
     fi
 
-    local do_protect reviews_ans reviews_json
+    local do_protect reviews_ans reviews_approvals
     prompt_yes_no do_protect "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     if [ "$do_protect" != "true" ]; then
         print_status "info" "Skipped branch protection"
@@ -258,29 +259,11 @@ apply_branch_protection() {
     # gate merges, and build the protection payload accordingly.
     prompt_yes_no reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
     if [ "$reviews_ans" = "true" ]; then
-        reviews_json='"required_pull_request_reviews": { "dismiss_stale_reviews": true, "require_code_owner_reviews": false, "required_approving_review_count": 1 },'
+        reviews_approvals=1
     else
-        reviews_json='"required_pull_request_reviews": null,'
+        reviews_approvals=0
     fi
-    if gh api --method PUT \
-        -H "Accept: application/vnd.github+json" \
-        "/repos/$repo/branches/$branch/protection" \
-        --input - <<EOF
-{
-  "required_status_checks": { "strict": true, "contexts": [] },
-  "enforce_admins": true,
-  $reviews_json
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false,
-  "required_linear_history": true
-}
-EOF
-    then
-        print_status "success" "Branch '$branch' protected on GitHub."
-    else
-        print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
-    fi
+    (cd "$project_path" && RULESET_APPROVALS="$reviews_approvals" bash bin/enable_repo_rules.sh)
 }
 
 prompt_docker_compose() {
