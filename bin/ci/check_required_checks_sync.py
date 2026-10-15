@@ -34,6 +34,7 @@ except ImportError:
 
 REPO = "guilhermegor/blueprintx"
 PR_TYPES = {"opened", "reopened", "synchronize"}
+POLICY_FIELDS = 3
 PR_EVENTS = ("pull_request", "pull_request_target")
 FILTERS = ("branches", "branches-ignore", "paths", "paths-ignore")
 RE_EVENT_CLAUSE = re.compile(r"^github\.event_name\s*(==|!=)\s*'([a-z_]+)'$")
@@ -47,20 +48,20 @@ def event_clause_true(str_clause: str) -> bool:
     return (match.group(2) == "pull_request") == (match.group(1) == "==")
 
 
-def if_always_true(str_if) -> bool:
-    """A job `if:` is harmless only if some `||` alternative is a true event_name test."""
+def if_always_true(str_if: object) -> bool:
+    """Return whether a job `if:` holds on a pull_request (a true `||` alternative)."""
     if str_if is None:
         return True
     str_expr = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", str(str_if).strip(), flags=re.S)
     return any(event_clause_true(c) for c in str_expr.split("||"))
 
 
-class Unsupported(Exception):
+class UnsupportedError(Exception):
     """A workflow shape this gate cannot expand; reported per workflow, never fatal."""
 
 
-def pr_event_keys(dict_on) -> list:
-    """The pull_request / pull_request_target keys a workflow's `on:` carries."""
+def pr_event_keys(dict_on: object) -> list:
+    """Return the pull_request / pull_request_target keys a workflow's `on:` carries."""
     if isinstance(dict_on, str):
         dict_on = {dict_on: None}
     elif isinstance(dict_on, list):
@@ -70,10 +71,12 @@ def pr_event_keys(dict_on) -> list:
     return [k for k in PR_EVENTS if k in dict_on]
 
 
-def pr_trigger_unfiltered(dict_on) -> bool:
-    """`pull_request` has no filter and `types:` covering new pushes. A workflow that only
-    `pull_request_target` triggers is judged but conditional: its checks may not attach to
-    the PR head, so it is never classed as running on every PR."""
+def pr_trigger_unfiltered(dict_on: object) -> bool:
+    """Return whether `pull_request` has no filter and `types:` covering new pushes.
+
+    A workflow that only `pull_request_target` triggers is judged but conditional: its checks
+    may not attach to the PR head, so it is never classed as running on every PR.
+    """
     if isinstance(dict_on, str):
         dict_on = {dict_on: None}
     elif isinstance(dict_on, list):
@@ -81,7 +84,7 @@ def pr_trigger_unfiltered(dict_on) -> bool:
     return "pull_request" in dict_on and event_unfiltered(dict_on["pull_request"])
 
 
-def event_unfiltered(dict_event) -> bool:
+def event_unfiltered(dict_event: dict | None) -> bool:
     """One event's config: no filter, and `types:` (a scalar counts as a list) complete."""
     dict_event = dict_event or {}
     if any(k in dict_event for k in FILTERS):
@@ -90,11 +93,11 @@ def event_unfiltered(dict_event) -> bool:
     if list_types is None:
         return True
     list_types = [list_types] if isinstance(list_types, str) else list_types
-    return PR_TYPES <= set(list_types)
+    return set(list_types) >= PR_TYPES
 
 
-def matrix_text(value) -> str:
-    """A matrix value as GitHub renders it (booleans lowercase)."""
+def matrix_text(value: object) -> str:
+    """Render a matrix value as GitHub renders it (booleans lowercase)."""
     return str(value).lower() if isinstance(value, bool) else str(value)
 
 
@@ -105,12 +108,12 @@ def expand_name(str_name: str, dict_job: dict) -> list:
     if dict_matrix is None:
         return [str_name]
     if not isinstance(dict_matrix, dict):
-        raise Unsupported(f"job '{str_name}': dynamic matrix (fromJSON) is not expandable")
+        raise UnsupportedError(f"job '{str_name}': dynamic matrix (fromJSON) is not expandable")
     if "include" in dict_matrix or "exclude" in dict_matrix:
-        raise Unsupported(f"job '{str_name}': matrix include/exclude is not expandable")
+        raise UnsupportedError(f"job '{str_name}': matrix include/exclude is not expandable")
     list_keys = list(dict_matrix)
     if not all(isinstance(dict_matrix[k], list) for k in list_keys):
-        raise Unsupported(f"job '{str_name}': a non-list matrix dimension is not expandable")
+        raise UnsupportedError(f"job '{str_name}': a non-list matrix dimension is not expandable")
     if "matrix." not in str_name:
         return [
             f"{str_name} ({', '.join(matrix_text(v) for v in t)})"
@@ -119,9 +122,9 @@ def expand_name(str_name: str, dict_job: dict) -> list:
     list_names = []
     for tuple_vals in itertools.product(*(dict_matrix[k] for k in list_keys)):
         str_out = str_name
-        for str_key, str_val in zip(list_keys, tuple_vals):
+        for str_key, str_val in zip(list_keys, tuple_vals, strict=True):
             str_out = re.sub(
-                r"\$\{\{\s*matrix\.%s\s*\}\}" % re.escape(str_key),
+                r"\$\{\{\s*matrix\.%s\s*\}\}".replace("%s", re.escape(str_key)),
                 matrix_text(str_val),
                 str_out,
             )
@@ -134,7 +137,7 @@ def job_flags(str_file: str, dict_job_map: dict, flag_wf: bool) -> dict:
     dict_flag = {}
     for str_id, dict_job in dict_job_map.items():
         if "uses" in dict_job:
-            raise Unsupported(
+            raise UnsupportedError(
                 f"reusable-workflow job '{str_id}' is unsupported; "
                 "add its emitted check names to the policy file by hand"
             )
@@ -163,7 +166,7 @@ def job_names(dict_job_map: dict, str_id: str) -> list:
 
 
 def pr_jobs(path_dir: pathlib.Path) -> tuple:
-    """({emitted name: unconditional on every PR}, [per-workflow problems])."""
+    """Return ({emitted name: unconditional on every PR}, [per-workflow problems])."""
     dict_jobs, list_problems = {}, []
     for path_file in sorted(path_dir.glob("*.y*ml")):
         dict_wf = load_workflow(path_file)
@@ -176,13 +179,13 @@ def pr_jobs(path_dir: pathlib.Path) -> tuple:
             for str_id in dict_job_map:
                 for str_name in job_names(dict_job_map, str_id):
                     dict_jobs[str_name] = dict_jobs.get(str_name, False) or dict_flag[str_id]
-        except Unsupported as exc:
+        except UnsupportedError as exc:
             list_problems.append(f"{path_file.name}: {exc}")
     return dict_jobs, list_problems
 
 
 def emitting_files(path_dir: pathlib.Path) -> tuple:
-    """({emitted name: {file}}, [per-workflow problems]) over every workflow."""
+    """Return ({emitted name: {file}}, [per-workflow problems]) over every workflow."""
     dict_files, list_problems = {}, []
     for path_file in sorted(path_dir.glob("*.y*ml")):
         dict_job_map = load_workflow(path_file).get("jobs") or {}
@@ -192,13 +195,13 @@ def emitting_files(path_dir: pathlib.Path) -> tuple:
                     continue
                 for str_name in job_names(dict_job_map, str_id):
                     dict_files.setdefault(str_name, set()).add(path_file.name)
-        except Unsupported as exc:
+        except UnsupportedError as exc:
             list_problems.append(f"{path_file.name}: {exc}")
     return dict_files, list_problems
 
 
 def inactive_emitters(set_req: set, dict_files: dict, dict_states: dict) -> list:
-    """Required contexts whose emitting workflow file is not `active` in the Actions UI."""
+    """List required contexts whose emitting workflow file is not `active` in the Actions UI."""
     list_err = []
     for str_name in sorted(set_req & set(dict_files)):
         for str_file in sorted(dict_files[str_name]):
@@ -217,7 +220,11 @@ def read_policy(path_file: pathlib.Path) -> dict:
         if not str_line.strip() or str_line.lstrip().startswith("#"):
             continue
         list_parts = [p.strip() for p in str_line.split("|", 2)]
-        if len(list_parts) != 3 or list_parts[0] not in dict_policy or not list_parts[2]:
+        if (
+            len(list_parts) != POLICY_FIELDS
+            or list_parts[0] not in dict_policy
+            or not list_parts[2]
+        ):
             sys.exit(
                 f"::error file={path_file},line={int_no}::need `optional|external|name|reason`"
             )
@@ -230,9 +237,13 @@ def read_policy(path_file: pathlib.Path) -> dict:
     return dict_policy
 
 
-def gh_json(str_path: str):
-    str_out = subprocess.run(
-        ["gh", "api", str_path], capture_output=True, text=True, check=True
+def gh_json(str_path: str) -> object:
+    """Return the parsed JSON of one `gh api` call."""
+    str_out = subprocess.run(  # noqa: S603 - fixed argv, no shell; str_path is a repo-controlled endpoint
+        ["gh", "api", str_path],  # noqa: S607 - gh is resolved from PATH on purpose
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     return json.loads(str_out)
 
@@ -266,7 +277,7 @@ def live_workflow_states() -> dict:
 
 
 def read_expected(path_file: pathlib.Path) -> dict:
-    """The committed {"classic": set, "ruleset": set}; any other shape aborts."""
+    """Read the committed {"classic": set, "ruleset": set}; any other shape aborts."""
     dict_raw = json.loads(path_file.read_text(encoding="utf-8"))
     if set(dict_raw) != {"classic", "ruleset"}:
         sys.exit(f"::error file={path_file}::need exactly the keys classic and ruleset")
@@ -306,8 +317,8 @@ def live_read() -> dict:
     return dict_live
 
 
-def read_or_skip(args) -> tuple:
-    """(expected, live-or-None, exit code or None); the API is read only under --live."""
+def read_or_skip(args: argparse.Namespace) -> tuple:
+    """Return (expected, live-or-None, exit code or None); the API is read only under --live."""
     try:
         if yaml is None:
             raise ValueError("PyYAML is not installed")
@@ -321,7 +332,7 @@ def read_or_skip(args) -> tuple:
         return None, None, 0
 
 
-def check_required_list(args) -> int:
+def check_required_list(args: argparse.Namespace) -> int:
     """Generated-project mode: every name in a plain list must be emitted unconditionally."""
     if yaml is None:
         print("::error::PyYAML is not installed", file=sys.stderr)
