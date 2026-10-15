@@ -28,6 +28,7 @@ STUB_HEAD_ROSTER_EXTRA='  - login: evil-bot[bot]
 
 gh() {
 	case "$*" in
+	*"contents/.review-bots.yaml"*) [[ -n "${STUB_NO_ROSTER:-}" ]] && return 1 ;;&
 	*"contents/.review-bots.yaml?ref=main"*) printf '%s\n' "$STUB_BASE_ROSTER" ;;
 	*"contents/.review-bots.yaml"*) printf '%s\n%s\n' "$STUB_BASE_ROSTER" "$STUB_HEAD_ROSTER_EXTRA" ;;
 	"pr merge"*) STUB_CALLS+="$* ;" ;;
@@ -73,6 +74,12 @@ expect "empty metadata waits (fail-closed)" wait-review ""
 expect "garbage metadata waits (fail-closed)" wait-review "not json"
 STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"author_association":"MEMBER","state":"APPROVED"}]'
 expect "major with a review on head arms" arm "$major"
+STUB_NO_ROSTER=1
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"owner"},"author_association":"MEMBER","state":"APPROVED"}]'
+expect "missing roster still lets a trusted human review arm a major" arm "$major"
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"coderabbitai[bot]","type":"Bot"},"author_association":"NONE","state":"COMMENTED"}]'
+expect "missing roster trusts no bot" wait-review "$major"
+STUB_NO_ROSTER=""
 STUB_REVIEWS='[{"commit_id":"old","user":{"login":"owner"},"author_association":"MEMBER","state":"APPROVED"}]'
 expect "major reviewed at an older head waits" wait-review "$major"
 STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"stranger"},"author_association":"NONE","state":"APPROVED"},{"commit_id":"abc","user":{"login":"c"},"author_association":"CONTRIBUTOR","state":"APPROVED"}]'

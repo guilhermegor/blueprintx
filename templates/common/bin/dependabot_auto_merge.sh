@@ -38,8 +38,8 @@ pushed_by_dependabot() {
 roster_bots() {
 	local str_pr="$1" str_base
 	str_base=$(gh api "repos/$GH_REPO/pulls/$str_pr" | jq -r .base.ref) || return 1
-	gh api -H "Accept: application/vnd.github.raw" \
-		"repos/$GH_REPO/contents/.review-bots.yaml?ref=$str_base" 2>/dev/null |
+	{ gh api -H "Accept: application/vnd.github.raw" \
+		"repos/$GH_REPO/contents/.review-bots.yaml?ref=$str_base" 2>/dev/null || true; } |
 		awk '/^[[:space:]]*-[[:space:]]+login:/ { sub(/^[^:]*:[[:space:]]*/, ""); gsub(/["\047[:space:]]/, ""); str_login = $0 }
 			/^[[:space:]]+posts:[[:space:]]*threads/ && str_login != "" { print str_login; str_login = "" }'
 }
