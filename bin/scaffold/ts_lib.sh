@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Scaffolds the ts-lib skeleton: a publishable TypeScript library (ESM + CJS +
-# .d.ts via plain tsc, Jest, ESLint). Mechanics mirror ts_react_app.sh; the
-# packaging discipline (offline mode, git-remote flow) mirrors every other
-# scaffold in bin/scaffold/.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,7 +16,6 @@ GITHUB_USERNAME="${GITHUB_USERNAME:-}"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SKELETON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/ts-lib"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/ts-common"
-# Language-agnostic assets shared by every skeleton (CODEOWNERS, PR template)
 SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
@@ -94,22 +89,12 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.types.json" "$project_path/tsconfig.types.json"
     cp "$SKELETON_TEMPLATE_ROOT/babel.config.test.cjs" "$project_path/babel.config.test.cjs"
     cp "$SKELETON_TEMPLATE_ROOT/jest.config.cjs" "$project_path/jest.config.cjs"
-    # .mjs (not .js): package.json's "type" field is left absent (Node treats that
-    # identically to "type": "commonjs", so dist/cjs needs no per-file marker — see
-    # templates/ts-lib/AGENTS.md), and these three configs are authored as ESM — the
-    # explicit extension makes each tool load them as ESM regardless of the package's
-    # own module type.
     cp "$SKELETON_TEMPLATE_ROOT/eslint.config.mjs" "$project_path/eslint.config.mjs"
     cp "$SKELETON_TEMPLATE_ROOT/.prettierrc.mjs" "$project_path/.prettierrc.mjs"
     cp "$SKELETON_TEMPLATE_ROOT/lint-staged.config.mjs" "$project_path/lint-staged.config.mjs"
     cp "$SKELETON_TEMPLATE_ROOT/bin/write_esm_package_json.sh" "$project_path/bin/write_esm_package_json.sh"
     cp "$SKELETON_TEMPLATE_ROOT/bin/smoke_pack.sh" "$project_path/bin/smoke_pack.sh"
     chmod +x "$project_path/bin/write_esm_package_json.sh" "$project_path/bin/smoke_pack.sh"
-    # Docusaurus site (#134) + npm OIDC / Verdaccio CI (#135, #136). sidebars.js and the
-    # three workflow files below carry no ${VAR} placeholders, so a plain cp is enough;
-    # docusaurus.config.js, docs/*.md and release-npm.yml DO carry placeholders and are
-    # rendered later in copy_common_templates, where PROJECT_NAME/GITHUB_USERNAME etc.
-    # are already exported for envsubst.
     cp "$SKELETON_TEMPLATE_ROOT/sidebars.js" "$project_path/sidebars.js"
     cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/docs.yml" "$project_path/.github/workflows/docs.yml"
     cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/docs-deploy.yml" "$project_path/.github/workflows/docs-deploy.yml"
@@ -118,15 +103,6 @@ copy_skeleton_files() {
     print_status "success" "Skeleton files copied"
 }
 
-# envsubst does no JSON escaping — a description containing a quote or backslash
-# (e.g. `A "small" library`) would land in package.json as an unescaped string and
-# produce invalid JSON, breaking every npm command. Render it with Python's json
-# module instead, which escapes each value before substitution and then re-parses
-# the result so a bad render fails loudly here rather than shipping broken JSON.
-# Same hazard as package.json, one syntax over: envsubst does no JavaScript escaping, so a
-# description containing an apostrophe (`Alan's toolkit`) lands inside the single-quoted
-# `tagline:` value and breaks the Docusaurus config parse. json.dumps produces a valid JS
-# string literal for every input, so substitute the ESCAPED form.
 render_docusaurus_config() {
     local project_path="$1"
     python3 - "$SKELETON_TEMPLATE_ROOT/docusaurus.config.js" "$project_path/docusaurus.config.js" \
@@ -197,8 +173,6 @@ with open(path_out, "w", encoding="utf-8") as fh:
 PY
 }
 
-# Shared TS source (blueprintx#436) — mirrors templates/python-common/src/utils/.
-# ts-lib is a flat package (no shared/ layer), so it lands directly under src/utils/.
 copy_shared_ts_source() {
     local project_path="$1"
     mkdir -p "$project_path/src/utils"
@@ -217,12 +191,6 @@ refresh_lockfile_for_otel() {
     print_status "warning" "lockfile refresh failed (npm missing, offline or timed out): package-lock.json omitted — run 'npm install' before the first push"
 }
 
-# OTLP log export (opt-in, blueprintx#438): the emitter (imports @opentelemetry/* — the ONLY
-# place it is imported), its unit test, the pinned package.json dependencies (declared only
-# here, so an opt-out never installs them), a local-dev collector compose fragment, and the
-# public-barrel re-export — one function, mirroring conditional_copy_otel in the Python
-# scaffolds. ts-lib ships no .env file (unlike react-spa-webpack), so the env vars are
-# printed at the end instead of appended to one.
 conditional_copy_otel() {
     local project_path="$1"
     if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
@@ -231,9 +199,6 @@ conditional_copy_otel() {
     cp "$COMMON_TEMPLATE_ROOT/optional/otel-log-emitter.test.ts" "$project_path/src/utils/otel-log-emitter.test.ts"
     cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
     cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
-    # EXACT pins, deliberately against this repo's house style of ranges (^X.0.0) — see
-    # otel-log-emitter.ts's module docstring: the Logs signal is still "not yet stable"
-    # upstream, so a minor bump may change behaviour. Re-check that status before bumping.
     patch_package_json "$project_path/package.json" dependencies \
         '@opentelemetry/api=1.9.1' \
         '@opentelemetry/api-logs=0.222.0' \
@@ -252,8 +217,6 @@ TSBLOCK
     print_status "info" "Set OTEL_EXPORTER_OTLP_ENDPOINT (and optionally OTEL_SERVICE_NAME / OTEL_EXPORTER_OTLP_HEADERS) in your host's real environment to enable export"
 }
 
-# The language-agnostic .github/ overlay every skeleton ships from templates/common — split
-# out of copy_common_templates so that function stays under the 60-line ceiling.
 copy_shared_github_overlay() {
     local project_path="$1"
 
@@ -280,23 +243,17 @@ copy_common_templates() {
         < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" \
         > "$project_path/AGENTS.md"
     cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
-    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
-    # file, language-agnostic, so it lives in templates/common not ts-common.
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME}' \
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
         > "$project_path/README.md"
 
-    # Docusaurus site (#134): docs/*.md and docusaurus.config.js carry ${PROJECT_NAME} /
-    # ${PROJECT_DESCRIPTION} / ${GITHUB_USERNAME} placeholders, resolved here where they
-    # are already exported (unlike copy_skeleton_files, which runs before this export).
     for doc_file in index usage examples faq contributing; do
         envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
             < "$SKELETON_TEMPLATE_ROOT/docs/$doc_file.md" \
             > "$project_path/docs/$doc_file.md"
     done
     render_docusaurus_config "$project_path"
-    # npm OIDC release workflow (#135): PACKAGE_NAME env in release-npm.yml.
     envsubst '${PROJECT_NAME}' \
         < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release-npm.yml" \
         > "$project_path/.github/workflows/release-npm.yml"
@@ -308,9 +265,6 @@ copy_common_templates() {
     print_status "success" "Common templates applied"
 }
 
-# Split out of copy_common_templates (blueprintx#446) to stay under the 60-line
-# function-length ceiling — same split shape as ts_react_app.sh's
-# copy_static_ts_common_files: plain `cp`/`envsubst` of files that need no per-tier logic.
 copy_static_ts_lib_files() {
     local project_path="$1"
 
@@ -325,20 +279,13 @@ copy_static_ts_lib_files() {
     cp -r "$COMMON_TEMPLATE_ROOT/.github/." "$project_path/.github"
     copy_shared_github_overlay "$project_path"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
-    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 
-    # Ship the repo->LLM context exporter (and its print_status helper) unconditionally,
-    # so `npm run context:export` works whether or not a GitHub remote is connected.
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     chmod +x "$project_path/bin/export_repo_content.sh"
 
-    # The review-threads.yml gate's only dependency: the ONE shared implementation of the
-    # answered-review-thread predicate (blueprintx#175), same file the Python tiers ship, so
-    # the CI job above never fetches or vendors a copy of its own.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
 }
 
@@ -366,8 +313,6 @@ apply_branch_protection() {
     prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y|Y)
-            # A solo maintainer cannot satisfy a required-approving-review rule — GitHub
-            # forbids self-approval, so the first PR's merge would be permanently blocked.
             local reviews_approvals
             reviews_ans=""
             prompt_read reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
@@ -385,9 +330,6 @@ apply_branch_protection() {
     esac
 }
 
-# Always initialise a local git repo with a first commit, independent of any
-# remote setup, so every scaffold is a git repo even in non-interactive (--dev)
-# runs. Skips gracefully when git is unavailable or the repo already exists.
 initialize_git_repo() {
     local project_path="$1"
 
@@ -411,8 +353,6 @@ initialize_git_repo() {
 }
 
 prompt_git_remote_setup() {
-    # Branch protection runs only once the remote is verified to be the repository this
-    # scaffold names — not merely because the prompt returned (#212).
     if scaffold_prompt_git_remote_setup "$1"; then
         apply_branch_protection "$1"
     fi
@@ -422,8 +362,6 @@ apply_offline_mode() {
     local project_path="$1"
 
     print_status "info" "No GitHub remote connected — switching to offline mode"
-    # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
-    # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
     remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
@@ -445,10 +383,6 @@ apply_offline_mode() {
     commit_offline_artifacts "$project_path"
 }
 
-# initialize_git_repo's first commit runs BEFORE apply_offline_mode, so the offline
-# rewrites (.github removed, bin/git_diff_*.sh added, package.json's scripts patched)
-# are left uncommitted — every offline scaffold would otherwise finish with a dirty
-# working tree. --no-verify bypasses the just-installed hooks (HEAD is main).
 commit_offline_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
@@ -472,15 +406,10 @@ main() {
     copy_common_templates "$PROJECT_PATH"
     conditional_copy_otel "$PROJECT_PATH"
     scaffold_prune_review_bot_roster "$PROJECT_PATH"
-    # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
-    # When the project is not connected to a GitHub remote (no upstream tracking branch
-    # after setup), switch to offline mode: drop GitHub-only assets and ship the
-    # git-diff sync workflow instead. Offline is the safe default for an unverified
-    # remote too (#212).
     if [ "$SCAFFOLD_REMOTE_VERIFIED" != "1" ] \
         || ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         apply_offline_mode "$PROJECT_PATH"

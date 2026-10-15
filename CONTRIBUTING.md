@@ -687,6 +687,230 @@ conventions, which the suites no longer repeat in headers:
 
 We appreciate your contributions and look forward to collaborating with you!
 
+## Scaffold scripts under `bin/scaffold/`
+
+The scaffold scripts carry no comments, so the reasoning lives here. Text a script writes
+into a generated file (heredocs, and `sed` or `printf` bodies that span lines, such as the
+pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, including its
+`#` lines.
+
+### Shared by every scaffold
+
+- **Direct calls.** The scaffolds are also callable directly (`bin/ci/scaffold_lint_test.sh`
+  does exactly that), so the project-name guard lives in each script and not only in
+  `prompt_project_name` (#113). Identity: the docs and README title is the distribution name
+  (lowercase, hyphenated), and `PROJECT_DISPLAY_NAME` overrides it.
+- **GitHub username** resolves in order: the `GH_USERNAME` environment override, the
+  authenticated `gh` CLI, then a prompt.
+- **Language-agnostic assets** (CODEOWNERS, PR template, `lib/common.sh`, the principles file
+  of #540 and the `.specs/` skeleton of #446) come from `templates/common`. bash-cli was added
+  after #540 was scoped and takes the same files for consistency with the other skeleton roots.
+- **`envsubst`** does no error checking, and a substitution list of one variable per call (the
+  idiom `ts_lib.sh` uses) lets every other `${...}`, such as Make variables, GitHub Actions
+  `${{ }}` and `${1:-}`, pass through. It also does no JSON or JavaScript escaping, so
+  `ts_lib.sh` renders `package.json` and `docusaurus.config.js` through Python's `json.dumps`
+  and re-parses the result: a description with a quote would otherwise give invalid JSON, and
+  one with an apostrophe breaks the single-quoted `tagline:`.
+- **Opt-in dependencies** are declared only inside the opt-in's function, so a declined
+  feature never installs them (#274: `joblib` only for the storage opt-in, `pymsteams` only for
+  the webhook opt-in).
+- **OTLP log export (#438).** One function does the module, its test, the env block, the pinned
+  dependencies, a local collector compose fragment (separate from `docker-compose.yml`, which
+  the DB prompt already claims) and the `startup.py` wiring, because a bare copy with no wiring,
+  or the reverse, is a state neither side should be in. The module is the only place that
+  imports `opentelemetry` (`.layer-policy.yaml`). The pins are exact, against this repository's
+  house style of ranges, because the Logs signal is still "Development" upstream: a range such
+  as `>=1.27,<2.0` lets a behaviour change land silently on the next `poetry update`. Re-check
+  that status before bumping.
+- **Git steps.** The first commit is made on every scaffold, independent of any remote and
+  also under `--dev`, and skips gracefully when git is missing or the repo exists. Its failures
+  are not swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
+  a repo with a branch, a staged tree and no commit, which resurfaces as an inexplicable push
+  failure later, and `exit_error` inside a subshell only ends the subshell, so the caller reads
+  the status and the success line never prints for a repo with no commit. A non-zero from the
+  remote step only means "no verified remote" (#212) and must not abort under `set -e`;
+  `main` routes it to offline mode through the `@{u}` check plus `SCAFFOLD_REMOTE_VERIFIED`,
+  because `@{u}` alone is true for a clone whose origin points elsewhere (review on #215).
+- **GitHub-only assets** (Actions workflows, CODEOWNERS, PR template, `SECURITY.md`,
+  `dependabot.yml`) exist exactly when a GitHub remote was established; offline gets the
+  git-diff workflow and the local git-flow helpers instead. Online assets are committed and
+  pushed after the first commit, before the ruleset is applied, so that direct push is never
+  blocked by the rules about to be set. Offline artifacts are committed with `--no-verify`
+  (HEAD is the default branch and the protect-branch hook is already installed), so a fresh
+  offline project starts clean. The swapped `protect-branch` pre-commit hook replaces the stock
+  `no-commit-to-branch`, and `add_poe_include` adds the offline task fragment only when copied.
+  Online, releases are cut by tagging and `strip_bump_version` runs before the assets commit so
+  its edits ride the same commit and push.
+- **Workflow set, and why the three review workflows ship together.** The gate fails a PR
+  nobody reviewed; a new repository has zero stars, so CodeRabbit declines to review it by
+  construction, hence the trigger; and a rate-limited reviewer declines the trigger, so the
+  retry janitor re-asks on a schedule (the only trigger that fires while a PR merely waits).
+  Without the trigger every PR blocks; without the gate nothing notices when the trigger stops
+  working. The retry relaxes no verdict: upstream, 19 PRs hit a rate limit and 18 were
+  reviewed. The gate re-evaluates on `pull_request_review` and `pull_request_review_comment`,
+  since a push-only trigger goes stale exactly when a thread opens after the last push. The PR
+  quality gate classifies by path and arms native auto-merge, with a reconciler that closes the
+  linked issues of bot-merged PRs (a bot merge suppresses both the issue close and
+  `delete_branch_on_merge`). The GitGuardian workflow is opt-in on `GITGUARDIAN_API_KEY` being
+  exported at scaffold time (#153, #287). Services ship a tag and GitHub Release with no PyPI,
+  contract drift runs weekly and non-gating, and docs deploy to Pages on push to the default
+  branch. `SECURITY.md` at the root flips GitHub's "Security policy" to Enabled, and
+  `bin/enable_security.sh` covers the settings-only toggles.
+- **Review-approval question.** A solo maintainer cannot satisfy a required approving review
+  because GitHub forbids self-approval, so the first PR would be blocked for good; the scaffold
+  asks whether human reviewers will gate merges and builds the protection payload from the
+  answer (the React tier keeps status checks and linear history and drops required reviews).
+
+### Python service tiers
+
+- **Copy lists.** Each scaffold hand-maintains its own list, so a shared file drifts silently:
+  four of five omitted the bootstrap pin file, so `poetry export` shipped without its plugin
+  in every service tier while lib-minimal alone had it (#116). That file pins Poetry and its
+  plugins for `bin/lib/bootstrap.sh`, which installs it into the interpreter Poetry runs from,
+  the only place a Poetry plugin can load. The layer policy read by `check_layer_imports.py` is
+  per tier and never shared, since layer names differ (lib-minimal nests them inside the
+  package, hence its `src_prefix_depth`); the gate used to self-skip without it and now fails.
+  An initial `coverage.svg` is shipped so the README badge resolves on the first push.
+- **Wrapper over the shared body.** The 95-line `copy_common_templates` body was identical
+  across the four service scaffolds except the tier name, twice; it lives in
+  `bin/lib/scaffold_python_templates.sh`, and the wrapper keeps the call sites and the tier
+  name in one place. `DOCS_LOCALE` falls back to `en` when a script runs directly.
+- **Docs.** The API reference is a directory (index plus one page) from the start, never a
+  single `api.md`, because splitting it later rots published deep links. The placeholder brand
+  image is `docs/assets/logo.png`, with size, position and border inline on the `<img>`. The
+  standard sections come from `python-common/docs`, and `architecture.md` joins the docs gate's
+  required pages (#130) because it ships in the tier but nothing enforced it.
+- **Shared utils.** A util is a module or a package (`retry/` became one in #116), and one flat
+  roster of names handles both. `cp -r src dst` nests when `dst` exists (`dst/retry/retry/`) and
+  leaves a stale unimportable tree on a rerun, so package contents are copied into a directory
+  the script creates. `ms_office/` and `email/` have several test files, and
+  `test_regime_adapters.py` covers four modules in one file, so each rides an explicit `cp` that
+  `check_test_copy_lists.py`'s static scan recognises (#117, #118, #121). The step prints a
+  count and never an enumeration, because the old message listed 15 of 17 names and had
+  already drifted. Companion tests for `check_fixture_scope.py` (#442) and
+  `check_one_assert.py` (#544) apply to every tier.
+- **Typing engine.** The runtime type-checking engine is single-sourced in
+  `python-common/optional/typing`. DDD and API keep the canonical `chassis.typing` prefix and
+  copy it as is; MVC vendors it as `utils/typing` and rewrites the prefix. Its unit test
+  resolves the layout through its own import shim, so one file serves both placements.
+  `chassis/db`, the `DatabaseHandler` ABC that `db_schema` and `db_wschema` extend, is always
+  injected for native `db_schema`; the ORM tier does not use it, so the ORM storage opt-in
+  injects `chassis/db` and `chassis/db_wschema` together. The ORM tier also provisions
+  Alembic's templates and the driver entry in one call, a single concern kept as one function
+  because #438 pushed `main()` over the function-length ceiling.
+- **Webhook, e-mail and pipeline seams.** Wiring depends only on the `WebhookNotifier` port,
+  so swapping platform never edits it; the platform is detected from `WEBHOOK_URL` and the
+  production gate derives from `ENV`, so neither `WEBHOOK_PLATFORM` nor `WEBHOOK_ENV_GATE` is
+  emitted. Notify is the final lifecycle step (`bootstrap.notify()` in DDD, the orchestrator's
+  last phase in MVC), imported only when chosen. DDD has no shared orchestrator, so a capability
+  calls `build_email_handler(...)` where it needs it. The e-mail seam merges and never does a
+  bare `cp -r` onto an existing `src/utils/email/` (#118, #121), which would nest the copy one
+  level deeper; the trailing `/.` copies contents. Its co-located test is relocated to
+  `tests/unit`. Multi-intent pipeline (MVC, opt-in, default No per YAGNI, forced by
+  `MULTI_PIPELINE_OPTIN=true` in the CI job) runs last among the controller patches: it
+  overwrites `main.py`, so any e-mail or webhook auto-wiring of the single `main.py` is
+  discarded (their env keys and packages remain; wire them into the intent pipelines per
+  `controller/CLAUDE.md`). It replaces `tests/unit/test_pipeline.py`, which imports the deleted
+  `controller._pipeline` (#289), and deletes `test_pipeline_enrichment.py` and
+  `test_pipeline_phases.py` outright, since they exercise paths reached only from the removed
+  single orchestrator and a replacement would test nothing (#617, #667). The MVC import policy
+  is per tier because `model/` may declare `sqlalchemy` in the ORM tier and nothing in the
+  native one.
+- **Unit placeholders.** `unit/` ships a real sample test, so its placeholder is dropped.
+
+### lib-minimal
+
+- **Names.** The distribution name allows hyphens and the import package derived from it does
+  not (`to_import_package_name`, #113).
+- **Render variable.** `envsubst` reads the environment, not shell variables, and the variable
+  is not exported until the render step later runs, so it must be exported on that very
+  command; otherwise the substitution silently yields the empty string, `version("")` and
+  `from .main import main`, a broken package that still scaffolds. The heredoc this replaced
+  used shell interpolation, which sees unexported variables. Generated Python files are
+  tab-indented and fully annotated so a fresh scaffold passes `make lint`.
+- **`_internal` layout.** The curated helpers are copied from python-common into a private
+  `_internal/utils` package (the underscore keeps it off the public surface while it ships in
+  the wheel), with `utils.` and `config.` import prefixes (and the `chassis.typing` fallback)
+  rewritten to `<pkg>._internal.*` on import lines only, recursively. `logs.py` is absent unless
+  `prompt_logs` is accepted, because `retry.py` takes an injectable `LogEmitter` and the
+  convention is to inject a logger; `logs_emitter` ships only beside it. `retry/` is a package
+  and needs `cp -r`, listed apart from the plain module loop. A smoke test of the typing engine
+  guards the rewrite, since lib-minimal is the only tier that rewrites its imports.
+  `test_regime_adapters.py` is copied and rewritten with the modules it covers, unlike the
+  other vendored utils' shared tests, a documented accepted gap in `check_test_copy_lists.py`,
+  so it runs here instead of widening that gap. Ports, contracts and schemas live under
+  `_internal/config`, documented by one `_internal/config/CLAUDE.md`.
+- **OTLP.** Single-sourced from `python-common/optional`, vendored separately, independent of
+  `INCLUDE_LOGS`, taking an injected `logging.Logger`; no `.env` is written, so it reads
+  `OTEL_EXPORTER_OTLP_ENDPOINT` from the consumer's environment at call time and never runs on
+  import. Its pinned dependency declaration is deliberately separate from `copy_internal_utils`,
+  which runs before `pyproject.toml` exists.
+- **No env files, library badges.** A distributable library has no runtime `.env`, so
+  `.env` and `.env.example` are removed. PyPI and Snyk badges are added after the Python
+  version badge, library-only, in the same placeholder style as the existing ones.
+- **Publish and consume (Q1 to Q3).** Official registry is PyPI, staging is Test PyPI, and a
+  private source is a PEP 503 index or git source. Only the selected release workflows are
+  emitted, the defaults keep the previous behaviour (both shipped) for non-interactive runs,
+  and the two axes (where this library publishes, where its own dependencies come from) are
+  separated so Q3 does not read as a fork of Q1 and Q2. Q3 appends a documented, commented
+  explicit-priority source block; `priority = "explicit"` is the dependency-confusion guard,
+  since poetry and pip never fall back to that source for other packages. The generic service
+  `release.yaml` does not apply and is stripped defensively, reported only when something was
+  removed. Release workflows are rendered with `envsubst` restricted to `PACKAGE_NAME` and
+  `OWNER`, so GitHub's `${{ }}` and `$SHELL_VARS` in `run:` blocks survive.
+- **Own copy step.** It is not the service tiers' shared copy: it renders a different
+  `pyproject` (Trove classifier from the license choice, `library.mk`) and installs the GitHub
+  assets inline. Online, `pyproject.toml` becomes a `0.0.0` stub with `poetry-dynamic-versioning`
+  so the version comes from the tag, `make bump_version` is removed, and homepage,
+  documentation and `[tool.poetry.urls]` point at the Pages URL that `docs.yaml` deploys to; the
+  repository Website field is set to the same URL. The versioning and docs rewrites run after
+  the first pushed commit, so they are committed and pushed to leave a clean tree (`--no-verify`
+  bypasses the test and coverage hooks). Docker Compose is offered for libraries whose
+  integration tests need a real database.
+
+### TypeScript and Bash scaffolds
+
+- **ts-lib.** A publishable library (ESM, CJS and `.d.ts` through plain `tsc`, Jest, ESLint)
+  whose mechanics mirror `ts_react_app.sh`. Its three config files are `.mjs` because
+  `package.json` leaves `"type"` absent, which Node treats as commonjs so `dist/cjs` needs no
+  per-file marker (see `templates/ts-lib/AGENTS.md`), and the configs are authored as ESM.
+  The Docusaurus site (#134) and the npm OIDC and Verdaccio CI (#135, #136): files without
+  placeholders are plain `cp`, while `docusaurus.config.js`, `docs/*.md` and `release-npm.yml`
+  are rendered in `copy_common_templates`, where the variables are already exported. Shared TS
+  source (#436) lands under `src/utils/` because ts-lib is flat. It ships no `.env`, so the
+  OTLP env vars are printed rather than appended; the pins are exact because the JS Logs signal
+  is "not yet stable" upstream. The context exporter ships unconditionally so
+  `npm run context:export` works with or without a remote, and `check_review_threads.py` is
+  the single shared implementation, so the CI job fetches no copy of its own (#175).
+- **react-spa-webpack.** One deploy target only, never both: each workflow triggers on push to
+  `main`, so both would deploy twice to two URLs. The workflows live under `optional/deploy/`
+  so the `.github` overlay cannot copy both, `vercel.json` goes at the project root (and is
+  removed with its workflow when not chosen), and the Vercel project must already exist for
+  its IDs to exist. A `.env` and a committed `.env.example` ship together. Docker (multi-stage
+  to nginx) and a plain-JavaScript delivery copy are opt-in; `js-copy/` is a build artifact
+  that is never committed and is excluded from lint, and `scripts/*.mjs` need Node globals.
+  The OTLP wrapper is wired into the composition root, because printing "now edit
+  `context.tsx` yourself" left an enabled scaffold exporting nothing, an opt-in that ships
+  inert being worse than one that is absent (#504 review); `webpack.config.js`'s
+  `DefinePlugin` already inlines every `.env` key. After `apply_package_variants` the lockfile
+  is refreshed or dropped, since the base lockfile no longer matches a zustand or redux
+  manifest and `npm ci` fails hard on that (#468 review); shipping no lockfile beats shipping a
+  wrong one. Static ts-common assets are split out of `copy_common_templates` (#464) for the
+  60-line ceiling, and skeleton overlays win name collisions over ts-common. Pages can only
+  be pointed at `gh-pages` once that branch exists, which the first push to `main` creates in
+  about one to three minutes (polled for roughly three minutes), and GitHub stopped
+  auto-enabling Pages around 2022, so it is offered with the local `gh` token because the
+  workflow's token lacks the permission. Pages is offered only for the Pages target, and the
+  ruleset and Pages steps run only once the remote is verified (#212).
+- **bash-cli.** A standalone Bash CLI starter with git-tag versioning, `make install` stamping
+  the version, bats tests and shell lint (shellcheck and shfmt).
+- **`ts_react_capability.sh`.** A helper rather than a skeleton:
+  `bash bin/scaffold/ts_react_capability.sh <name> [project-root]`, from inside a scaffolded
+  project or against a given root. It creates the four layer directories (domain, application,
+  infrastructure, ui) with thin per-layer `CLAUDE.md` files that `@`-import the shared rules
+  from `src/capabilities/_layers/`, refuses reserved names (the shared rules directory and
+  `example`), and first checks that all four layer rule files exist.
+
 ## Repository scripts under `bin/`
 
 The scripts under `bin/` carry no comments, so the reasoning lives here. Per-script rules,
