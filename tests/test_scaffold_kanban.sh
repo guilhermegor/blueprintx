@@ -174,29 +174,36 @@ test_empty_stdin_means_no_board() {
 }
 
 GNU_INSTALL_PERL='
-my ($buf, $hit) = ("", 0);
+my ($buf, $start) = ("", 0);
 sub scan {
-    my ($line) = @_;
-    while ($line =~ /(?<![\w.\/-])install(?:\s+[^\s;|&]+)*?\s+-[a-zA-Z]*D/g) {
-        my $before = substr($line, 0, $-[0]);
-        next if $before =~ /\b(?:npm|pnpm|yarn|bun|pip3?|poetry|apt|apt-get|brew|gem|cargo|go)(?:\s+-\S+)*\s+$/;
-        $hit = 1;
-        print "$line\n";
+    my ($line, $no) = @_;
+    while ($line =~ /(?<![\w.])(?<!\w-)install(?:\s+[^\s;|&]+)*?\s+-[a-zA-Z]*D/g) {
+        next if substr($line, 0, $-[0]) =~ /\b(?:npm|pnpm|yarn|bun|pip3?|poetry|apt|apt-get|brew|gem|cargo|go)(?:\s+-\S+)*\s+$/;
+        print "$ARGV:$no:$line\n";
         last;
     }
 }
-while (my $l = <STDIN>) {
+while (my $l = <>) {
     chomp $l;
     if ($buf eq "" && $l =~ /^\s*#/) { next }
+    $start = $. if $buf eq "";
     if ($l =~ s/\\$//) { $buf .= $l; next }
-    scan($buf . $l);
+    scan($buf . $l, $start);
     $buf = "";
 }
-scan($buf) if $buf ne "";
+scan($buf, $start) if $buf ne "";
 '
 
 gnu_install_hits() {
-    perl -e "$GNU_INSTALL_PERL"
+    command -v perl >/dev/null 2>&1 || { print_status "error" "perl is required by the install -D guard"; exit 2; }
+    perl -e "$GNU_INSTALL_PERL" "$@"
+}
+
+is_shell_file() {
+    case "$1" in
+    *.sh | *.bats | */Makefile | *.mk) return 0 ;;
+    esac
+    head -n1 "$1" 2>/dev/null | grep -aqE '^#!.*[/ ](ba|da|z)?sh([[:space:]]|$)'
 }
 
 scan_tree_for_gnu_install() {
@@ -204,35 +211,46 @@ scan_tree_for_gnu_install() {
     for path_dir in "$@"; do
         [ -d "$path_dir" ] || { printf 'missing scan dir: %s\n' "$path_dir"; return; }
         while IFS= read -r path_file; do
+            is_shell_file "$path_file" || continue
             int_scanned=$((int_scanned + 1))
-            [ -z "$(gnu_install_hits <"$path_file")" ] || printf '%s\n' "$path_file"
-        done < <(find "$path_dir" \( -name node_modules -prune \) -o -type f \
-            \( -name '*.sh' -o -name Makefile -o -name '*.mk' \) -print)
+            gnu_install_hits "$path_file"
+        done < <(find "$path_dir" \( -name node_modules -o -name .git \) -prune -o -type f -print)
     done
     [ "$int_scanned" -gt 0 ] || printf 'scanned no files\n'
 }
 
 test_no_gnu_only_install_in_bin() {
     local str_hits str_case
-    for str_case in 'install -D a b' 'install -m 755 -D a b' 'install -Dm644 a b' 'install -o x -D a b' \
+    for str_case in 'install -D a b' 'install -m 755 -D a b' 'install -Dm644 a b' 'install -o x -D a b' 'install -cD a b' '/usr/bin/install -D a b' '-install -D a b' \
         "$(printf 'install\t-m 755\t-D a b')" \
         'apt-get install -y x && install -D a b' 'brew install x; install -Dm644 a b' \
         'install -D a b # pip install x' 'install -D a b && npm install' \
         "$(printf 'install \\\n  -D a b')" \
         'true & install -D a b' 'echo "step #1"; install -D a b' \
         "$(printf '# note \\\ninstall -D a b')" 'x=`install -D a b`' "bash -c 'install -D a b'"; do
-        [ -n "$(gnu_install_hits <<<"$str_case")" ] || {
+        [ -n "$(gnu_install_hits - <<<"$str_case")" ] || {
             print_status "error" "install guard missed: $str_case"
             int_failures=$((int_failures + 1))
         }
     done
     for str_case in 'install -m 644 a b' 'npm install -D x' 'pnpm --silent install -D x' 'reinstall -D x' \
         'install -m 644 a-Dx b' '# install -D a b' 'RUN npm install -D x && echo ok' 'env X=1 npm install -D x'; do
-        [ -z "$(gnu_install_hits <<<"$str_case")" ] || {
+        [ -z "$(gnu_install_hits - <<<"$str_case")" ] || {
             print_status "error" "install guard flagged: $str_case"
             int_failures=$((int_failures + 1))
         }
     done
+    local path_fix
+    path_fix="$(mktemp -d)"
+    printf '#!/usr/bin/env bash\ninstall -D a b\n' >"$path_fix/tool"
+    printf 'all:\n\t-install -D a b\n' >"$path_fix/Makefile"
+    printf 'plain text\ninstall -D a b\n' >"$path_fix/notes"
+    str_hits="$(scan_tree_for_gnu_install "$path_fix")"
+    rm -rf "$path_fix"
+    [ "$(grep -c ':[0-9]*:' <<<"$str_hits")" -eq 2 ] || {
+        print_status "error" "scan fixture: expected the shebang file and Makefile only, got: $str_hits"
+        int_failures=$((int_failures + 1))
+    }
     str_hits="$(scan_tree_for_gnu_install "$REPO_ROOT/bin" "$REPO_ROOT/templates")"
     if [ -n "$str_hits" ]; then
         print_status "error" "BSD/macOS install has no -D; use mkdir -p && cp: $str_hits"
