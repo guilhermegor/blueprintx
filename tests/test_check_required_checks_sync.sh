@@ -194,6 +194,16 @@ str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --
 check "live reports an unrelated include matrix per workflow" "$int_rc" 1 "i.yml: job 'Other'" "$str_out"
 check "live keeps checking everything else" "$int_rc" 1 "not live: App check" "$str_out"
 
+printf '%s\n' '#!/bin/sh' 'case "$2" in' \
+	'*branches/main/protection) echo "gh: Branch not protected (HTTP 404)" >&2; exit 1 ;;' \
+	'*rules/branches/main) echo "[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"Rule live\"}]}}]" ;;' \
+	'*actions/workflows*) echo "{\"workflows\":[]}" ;;' \
+	'*) exit 1 ;;' 'esac' >"$str_tmp/bin/gh"
+fixture
+int_rc=0
+str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
+check "live treats an unprotected branch as an empty classic set" "$int_rc" 1 "classic: in required-checks.json, not live: Lint gate" "$str_out"
+
 list_mode() {
 	printf '%s\n' "$1" >"$str_tmp/req.txt"
 	int_rc=0
