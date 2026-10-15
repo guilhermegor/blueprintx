@@ -41,7 +41,7 @@ run_first_commit() {
 }
 
 for str_name in python_ddd_service python_ddd_service_orm python_api_service python_mvc_service \
-    python_mvc_service_orm python_lib_minimal ts_lib ts_react_app; do
+    python_mvc_service_orm python_lib_minimal ts_lib ts_react_app bash_cli; do
     for str_mode in hook identity; do
         int_rc="$(run_first_commit "$str_name" "$str_mode")"
         check "$str_name exits non-zero on failed first commit ($str_mode)" 1 "$int_rc"
@@ -66,7 +66,7 @@ check "offline React scaffold leaves git status clean" "" "$str_status"
 check "offline React scaffold has 2 commits" 2 "$(git -C "$proj" rev-list --count HEAD)"
 
 for str_name in python_ddd_service python_ddd_service_orm python_api_service python_mvc_service \
-    python_mvc_service_orm python_lib_minimal ts_lib; do
+    python_mvc_service_orm python_lib_minimal ts_lib bash_cli; do
     check "$str_name swallows no artifact commit" 0 "$(grep -c 'no-verify.*|| true' "$REPO_ROOT/bin/scaffold/$str_name.sh")"
 done
 
