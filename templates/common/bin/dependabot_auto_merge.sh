@@ -22,6 +22,19 @@ is_pure_dependabot() {
 	[[ "$str_bad" == 0 ]]
 }
 
+pushed_by_dependabot() {
+	local str_head="$1" str_n
+	if [[ "${EVENT_NAME:-}" == pull_request_target ]]; then
+		[[ "${SENDER:-}" == "$DEPENDABOT_LOGIN" ]]
+		return
+	fi
+	str_n=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$str_head&event=pull_request&per_page=100" |
+		jq --arg bot "$DEPENDABOT_LOGIN" \
+			'if .total_count == (.workflow_runs | length) and .total_count > 0
+			 then [.workflow_runs[] | select(.actor.login != $bot)] | length else -1 end') || return 1
+	[[ "$str_n" == 0 ]]
+}
+
 roster_bots() {
 	local str_pr="$1" str_base
 	str_base=$(gh api "repos/$GH_REPO/pulls/$str_pr" | jq -r .base.ref) || return 1
@@ -51,6 +64,7 @@ disarm() {
 decide() {
 	local str_pr="$1" str_head="$2" str_json="$3"
 	is_pure_dependabot "$str_pr" || { echo skip; return 0; }
+	pushed_by_dependabot "$str_head" || { echo skip; return 0; }
 	if [[ "$(classify_update "$str_json")" == minor ]]; then
 		echo arm
 	elif has_review_on_head "$str_pr" "$str_head"; then

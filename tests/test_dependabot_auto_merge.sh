@@ -13,6 +13,7 @@ human_signed_commit='{"author":{"login":"dependabot[bot]"},"committer":{"login":
 unverified_webflow_commit='{"author":{"login":"dependabot[bot]"},"committer":{"login":"web-flow"},"commit":{"verification":{"verified":false}}}'
 human_commit='{"author":{"login":"human"},"committer":{"login":"web-flow"},"commit":{"verification":{"verified":true}}}'
 STUB_COMMITS="[$good_commit]"
+STUB_RUNS='{"total_count":1,"workflow_runs":[{"actor":{"login":"dependabot[bot]"}}]}'
 STUB_REVIEWS='[]'
 STUB_CALLS=""
 STUB_BASE_ROSTER='reviewers:
@@ -30,6 +31,7 @@ gh() {
 	*"contents/.review-bots.yaml?ref=main"*) printf '%s\n' "$STUB_BASE_ROSTER" ;;
 	*"contents/.review-bots.yaml"*) printf '%s\n%s\n' "$STUB_BASE_ROSTER" "$STUB_HEAD_ROSTER_EXTRA" ;;
 	"pr merge"*) STUB_CALLS+="$* ;" ;;
+	*"actions/runs"*) printf '%s\n' "$STUB_RUNS" ;;
 	*"/commits"*)
 		printf '%s\n' "$STUB_COMMITS"
 		;;
@@ -110,6 +112,22 @@ STUB_COMMITS="[$unverified_webflow_commit]"
 expect "web-flow committer without a verified signature is skipped" skip "$minor"
 STUB_COMMITS="[$good_commit]"
 expect "genuine dependabot commit shape is armed" arm "$minor"
+STUB_RUNS='{"total_count":1,"workflow_runs":[{"actor":{"login":"mallory"}}]}'
+expect "genuine-looking commit pushed by a human is skipped" skip "$minor"
+STUB_RUNS=''
+expect "unreadable run actor is skipped" skip "$minor"
+STUB_RUNS='{"total_count":0,"workflow_runs":[]}'
+expect "no run for the head is skipped" skip "$minor"
+STUB_RUNS='{"total_count":1,"workflow_runs":[{"actor":{"login":"dependabot[bot]"}}]}'
+EVENT_NAME=pull_request_target SENDER=mallory
+expect "pull_request_target synchronize by a human is skipped" skip "$minor"
+run_main "$minor"
+check "human synchronize disarms" "pr merge 1 --disable-auto --repo o/r ;" "$STUB_CALLS"
+EVENT_NAME=pull_request_target SENDER="dependabot[bot]"
+STUB_RUNS=''
+expect "pull_request_target by dependabot is armed" arm "$minor"
+EVENT_NAME=""; SENDER=""
+STUB_RUNS='{"total_count":1,"workflow_runs":[{"actor":{"login":"dependabot[bot]"}}]}'
 
 STUB_COMMITS="[$good_commit]"
 run_main "$patch"

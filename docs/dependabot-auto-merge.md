@@ -49,14 +49,20 @@ the default branch.
 
 ## What counts as a Dependabot commit
 
-A commit's author is resolved from an email any pusher can forge, so it proves nothing alone.
-Every commit must also be signed by GitHub itself: REST `committer.login == "web-flow"` and
-`verification.verified == true`; in the review gate, GraphQL `signature.isValid` with signer
-`web-flow`. Dependabot's own commits satisfy all of it. A forged author, a verified commit by a
-human committer, and a merge commit made with the "Update branch" button all fail closed;
-`@dependabot rebase` restores a PR. Residual risk: a write-access user who can create
-GitHub-signed commits with a chosen author through the API is not distinguishable by these
-fields, and CI is then the only check.
+Commit metadata proves nothing about who pushed: `web-flow` signs every web-editor and API
+commit, and the author is a field any write-access user can set. So the rule has two layers:
+
+1. **Who pushed.** On a `pull_request_target` event the sender must be `dependabot[bot]`. On a
+   review event, and in the review-thread gate, every `pull_request` workflow run on the head
+   commit must have been started by `dependabot[bot]` (REST `actions/runs?head_sha=...`, the
+   run's `actor`; a re-run by a human does not change it). A human push, an unreadable
+   result, no run, or a truncated list all fail closed. A non-Dependabot synchronize also
+   disables auto-merge, and it stays off until Dependabot pushes again.
+2. **What was pushed.** Every commit has author `dependabot[bot]`, committer `web-flow` and a
+   verified signature (the gate reads GraphQL `signature.isValid` with signer `web-flow`).
+
+A merge commit from the "Update branch" button fails both layers; `@dependabot rebase`
+restores the PR.
 
 ## Who counts as a reviewer
 

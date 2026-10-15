@@ -3589,6 +3589,13 @@ def test_carry_forward_worst_case_fits_half_the_shortest_job_timeout() -> None:
 
 
 _BOT_EMAIL = "49699333+dependabot[bot]@users.noreply.github.com"
+
+
+def _by_dependabot(str_oid: str) -> bool:
+    """Stand in for the actor lookup: Dependabot pushed."""
+    return True
+
+
 _WEB_FLOW_SIG = {"isValid": True, "signer": {"login": "web-flow"}}
 
 
@@ -3622,49 +3629,55 @@ def _dep_pr(
 @pytest.mark.parametrize("str_update", ["patch", "minor"])
 def test_dependabot_patch_and_minor_are_exempt(str_update: str) -> None:
     """A pure patch or minor bump needs no review."""
-    assert _load_gate().dependabot_review_exempt(_dep_pr([_dep_commit(str_update)]))
+    assert _load_gate().dependabot_review_exempt(
+        _dep_pr([_dep_commit(str_update)]), _by_dependabot
+    )
 
 
 def test_dependabot_major_is_not_exempt() -> None:
     """A major still needs a review."""
-    assert not _load_gate().dependabot_review_exempt(_dep_pr([_dep_commit("major")]))
+    assert not _load_gate().dependabot_review_exempt(
+        _dep_pr([_dep_commit("major")]), _by_dependabot
+    )
 
 
 def test_dependabot_group_with_one_major_is_not_exempt() -> None:
     """One major in a grouped PR makes the whole PR a major."""
     list_commits = [_dep_commit("minor"), _dep_commit("major")]
-    assert not _load_gate().dependabot_review_exempt(_dep_pr(list_commits))
+    assert not _load_gate().dependabot_review_exempt(_dep_pr(list_commits), _by_dependabot)
 
 
 def test_non_dependabot_author_is_not_exempt() -> None:
     """Only the Dependabot bot is exempt."""
-    assert not _load_gate().dependabot_review_exempt(_dep_pr([_dep_commit()], "mallory", "User"))
+    assert not _load_gate().dependabot_review_exempt(
+        _dep_pr([_dep_commit()], "mallory", "User"), _by_dependabot
+    )
 
 
 def test_user_named_dependabot_is_not_exempt() -> None:
     """The author must be a ``Bot`` actor, not a user."""
     assert not _load_gate().dependabot_review_exempt(
-        _dep_pr([_dep_commit()], "dependabot", "User")
+        _dep_pr([_dep_commit()], "dependabot", "User"), _by_dependabot
     )
 
 
 def test_human_commit_on_a_dependabot_branch_is_not_exempt() -> None:
     """A human push voids the exemption."""
     list_commits = [_dep_commit(), _dep_commit(str_email="human@example.com")]
-    assert not _load_gate().dependabot_review_exempt(_dep_pr(list_commits))
+    assert not _load_gate().dependabot_review_exempt(_dep_pr(list_commits), _by_dependabot)
 
 
 def test_dependabot_without_update_metadata_is_not_exempt() -> None:
     """No ``update-type`` in the commit means unknown, which is not exempt."""
     dict_commit = {"commit": {"message": "Bump x", "author": {"email": _BOT_EMAIL}}}
-    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]))
+    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]), _by_dependabot)
 
 
 def test_dependabot_with_more_than_one_page_of_commits_is_not_exempt() -> None:
     """A truncated commit list cannot prove every commit is Dependabot's."""
     dict_pr = _dep_pr([_dep_commit()])
     dict_pr["allCommits"]["pageInfo"]["hasNextPage"] = True
-    assert not _load_gate().dependabot_review_exempt(dict_pr)
+    assert not _load_gate().dependabot_review_exempt(dict_pr, _by_dependabot)
 
 
 @pytest.mark.parametrize(
@@ -3681,4 +3694,52 @@ def test_forged_dependabot_author_without_a_web_flow_signature_is_not_exempt(
 ) -> None:
     """A forgeable author email alone never proves the commit is Dependabot's."""
     dict_commit = _dep_commit(dict_signature=dict_signature)
-    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]))
+    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]), _by_dependabot)
+
+
+def test_dependabot_commit_pushed_by_a_human_is_not_exempt() -> None:
+    """A genuine-looking commit pushed by a human (actor lookup says no) gets no exemption."""
+    dict_pr = _dep_pr([_dep_commit()])
+    dict_pr["headRefOid"] = "abc"
+    assert not _load_gate().dependabot_review_exempt(dict_pr, lambda str_oid: False)
+
+
+def test_dependabot_exemption_without_an_actor_lookup_is_closed() -> None:
+    """No pusher check wired in means no exemption."""
+    assert not _load_gate().dependabot_review_exempt(_dep_pr([_dep_commit()]))
+
+
+def _runs_result(monkeypatch: pytest.MonkeyPatch, str_stdout: str, int_code: int = 0) -> None:
+    """Make ``gh api`` return the given output."""
+    cls_done = subprocess.CompletedProcess([], int_code, stdout=str_stdout, stderr="")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: cls_done)
+
+
+@pytest.mark.parametrize(
+    ("str_stdout", "int_code", "bool_want"),
+    [
+        ('{"total_count":1,"workflow_runs":[{"actor":{"login":"dependabot[bot]"}}]}', 0, True),
+        ('{"total_count":1,"workflow_runs":[{"actor":{"login":"mallory"}}]}', 0, False),
+        (
+            '{"total_count":2,"workflow_runs":[{"actor":{"login":"dependabot[bot]"}},'
+            '{"actor":{"login":"mallory"}}]}',
+            0,
+            False,
+        ),
+        ('{"total_count":0,"workflow_runs":[]}', 0, False),
+        ('{"total_count":150,"workflow_runs":[{"actor":{"login":"dependabot[bot]"}}]}', 0, False),
+        ("", 1, False),
+        ("not json", 0, False),
+    ],
+)
+def test_dependabot_pushed_head_reads_the_run_actor_and_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, str_stdout: str, int_code: int, bool_want: bool
+) -> None:
+    """Only a readable, complete run list started solely by Dependabot passes."""
+    _runs_result(monkeypatch, str_stdout, int_code)
+    assert _load_gate().dependabot_pushed_head("o/r", "abc") is bool_want
+
+
+def test_dependabot_pushed_head_without_a_head_oid_is_closed() -> None:
+    """An empty head oid cannot be looked up."""
+    assert not _load_gate().dependabot_pushed_head("o/r", "")

@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import functools
 import hashlib
 import json
 import os
@@ -2159,21 +2160,52 @@ def _is_dependabot_bot(dict_author: dict) -> bool:
     )
 
 
-def dependabot_review_exempt(dict_pr: dict) -> bool:
+def dependabot_pushed_head(str_repo_full: str, str_head_oid: str) -> bool:
+    """Return whether every ``pull_request`` run on the head commit was started by Dependabot.
+
+    Commit metadata can be forged by anyone with write access; the actor of the run is who
+    pushed. Unreadable, empty or truncated results fail closed.
+    """
+    if not str_head_oid:
+        return False
+    list_cmd = [
+        "gh",
+        "api",
+        f"repos/{str_repo_full}/actions/runs?head_sha={str_head_oid}&event=pull_request&per_page=100",
+    ]
+    try:
+        cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
+        dict_out = json.loads(cls_run.stdout)
+    except (OSError, ValueError):
+        return False
+    list_runs = dict_out.get("workflow_runs") or []
+    if cls_run.returncode != 0 or not list_runs or dict_out.get("total_count") != len(list_runs):
+        return False
+    return all(((d.get("actor") or {}).get("login") or "") == "dependabot[bot]" for d in list_runs)
+
+
+def dependabot_review_exempt(
+    dict_pr: dict, fn_pusher: Callable[[str], bool] | None = None
+) -> bool:
     """Return whether a PR needs no review: a pure Dependabot patch/minor bump (fail-closed).
 
     Parameters
     ----------
     dict_pr : dict
         The fetched ``pullRequest`` node.
+    fn_pusher : Callable[[str], bool], optional
+        Maps the head oid to whether Dependabot itself pushed it; ``None`` fails closed.
 
     Returns
     -------
     bool
-        ``True`` only for a ``Bot`` author ``dependabot``, with every commit authored by
-        Dependabot and every ``update-type`` in the commit metadata a patch or minor.
+        ``True`` only for a ``Bot`` author ``dependabot``, pushed by Dependabot, with every
+        commit authored and signed as Dependabot's and every ``update-type`` in the commit
+        metadata a patch or minor.
     """
     if not _is_dependabot_bot(dict_pr.get("author") or {}):
+        return False
+    if fn_pusher is None or not fn_pusher(dict_pr.get("headRefOid") or ""):
         return False
     dict_all = dict_pr.get("allCommits") or {}
     list_nodes = dict_all.get("nodes") or []
@@ -2192,7 +2224,7 @@ def _missing_review(
     set_reviewers: set[str],
 ) -> tuple[str | None, str]:
     """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
-    if dependabot_review_exempt(dict_pr):
+    if dependabot_review_exempt(dict_pr, functools.partial(dependabot_pushed_head, str_repo_full)):
         return None, ""
     return check_missing_review(
         dict_pr.get("reviews", {}).get("nodes", []),
