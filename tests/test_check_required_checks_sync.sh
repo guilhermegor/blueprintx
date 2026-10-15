@@ -194,6 +194,38 @@ str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --
 check "live reports an unrelated include matrix per workflow" "$int_rc" 1 "i.yml: job 'Other'" "$str_out"
 check "live keeps checking everything else" "$int_rc" 1 "not live: App check" "$str_out"
 
+printf '%s\n' '#!/bin/sh' 'case "$2" in' \
+	'*branches/main/protection) echo "gh: Branch not protected (HTTP 404)" >&2; exit 1 ;;' \
+	'*rules/branches/main) echo "[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"Rule live\"}]}}]" ;;' \
+	'*actions/workflows*) echo "{\"workflows\":[]}" ;;' \
+	'*) exit 1 ;;' 'esac' >"$str_tmp/bin/gh"
+fixture
+int_rc=0
+str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
+check "live treats an unprotected branch as an empty classic set" "$int_rc" 1 "classic: in required-checks.json, not live: Lint gate" "$str_out"
+
+list_mode() {
+	printf '%s\n' "$1" >"$str_tmp/req.txt"
+	int_rc=0
+	str_out="$(python3 "$GATE" --workflows "$str_tmp/wf" --required-list "$str_tmp/req.txt" 2>&1)" || int_rc=$?
+}
+
+fixture
+list_mode "Lint gate"
+check "list mode: an unconditional job may be required" "$int_rc" 0 "findings=0" "$str_out"
+list_mode "Draft only"
+check "list mode: a job with an if: cannot be required" "$int_rc" 1 "no unconditional PR job emits it: Draft only" "$str_out"
+list_mode "Dependent gate"
+check "list mode: a job needing a conditional job cannot be required" "$int_rc" 1 "Dependent gate" "$str_out"
+list_mode "Filtered gate"
+check "list mode: a branch-filtered job cannot be required" "$int_rc" 1 "Filtered gate" "$str_out"
+for str_tier in python-common ts-common bash-cli; do
+	int_rc=0
+	str_out="$(python3 "$GATE" --workflows "$REPO_ROOT/templates/$str_tier/.github/workflows" \
+		--required-list "$REPO_ROOT/templates/$str_tier/bin/required-checks.txt" 2>&1)" || int_rc=$?
+	check "list mode: shipped $str_tier list is all unconditional" "$int_rc" 0 "findings=0" "$str_out"
+done
+
 [ "$int_failures" -eq 0 ] || {
 	echo "$int_failures case(s) failed"
 	exit 1
