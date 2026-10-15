@@ -855,6 +855,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#branch-protection-the-pr-quality-gate-ruleset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branch protection: the pr-quality-gate ruleset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#usage" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2055,6 +2066,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#branch-protection-the-pr-quality-gate-ruleset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branch protection: the pr-quality-gate ruleset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#usage" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2175,7 +2197,7 @@
 
 <h1 id="promoting-an-offline-scaffold-to-online">Promoting an offline scaffold to online<a class="headerlink" href="#promoting-an-offline-scaffold-to-online" title="Permanent link">&para;</a></h1>
 <p>blueprintx#382. <code>bin/promote_offline_to_online.sh</code> turns an offline-scaffolded project into an
-online one — a GitHub remote, the GitHub-only CI assets, branch protection — without
+online one — a GitHub remote, the GitHub-only CI assets, the branch ruleset — without
 re-scaffolding and without hand-copying files out of BlueprintX.</p>
 <h2 id="why-offline-mode-needs-an-inverse">Why offline mode needs an inverse<a class="headerlink" href="#why-offline-mode-needs-an-inverse" title="Permanent link">&para;</a></h2>
 <p><code>apply_offline_mode</code> (in every <code>bin/scaffold/python_*.sh</code> and <code>ts_react_app.sh</code>) runs once, at
@@ -2186,9 +2208,21 @@ the online workflow was scaffolding a second project and moving the code across 
 <p>The 5 Python <code>bin/scaffold/python_*.sh</code> scripts and <code>ts_react_app.sh</code> are left untouched on purpose:
 this script does not source or edit any of them — it transcribes their
 <code>copy_github_assets</code> / <code>apply_offline_mode</code> manifests instead (see the table below) and runs
-independently. It does not use <code>bin/enable_repo_rules.sh</code> or <code>bin/enable_security.sh</code> either —
-neither exists in this repo (measured: <code>grep -rln "enable_repo_rules\|enable_security" bin/</code>
-finds nothing); branch protection is applied inline via <code>gh api</code>.</p>
+independently. The one thing it does delegate is the branch ruleset: it runs the project's own
+<code>bin/enable_repo_rules.sh</code>, shipped at scaffold time, rather than carrying a second copy.</p>
+<h2 id="branch-protection-the-pr-quality-gate-ruleset">Branch protection: the <code>pr-quality-gate</code> ruleset<a class="headerlink" href="#branch-protection-the-pr-quality-gate-ruleset" title="Permanent link">&para;</a></h2>
+<p>Generated projects are protected by the <code>pr-quality-gate</code> repository <strong>ruleset</strong> on the default
+branch, never by classic <code>branches/&lt;b&gt;/protection</code>. Every scaffold (and this script, on
+promotion) runs the project's own <code>bin/enable_repo_rules.sh</code> once the remote exists, so the
+rules are in place from the first push instead of after someone remembers <code>poe enable_repo_rules</code>.
+Classic protection with <code>required_pull_request_reviews: null</code> used to be applied here, which left
+a direct push to <code>main</code> open.</p>
+<p>The ruleset requires a pull request, blocks force-push and deletion, and requires the contexts
+listed in <code>bin/required-checks.txt</code>. GitHub forbids self-approval, so the default is 0 required
+approvals; answering yes to "Will human reviewers gate merges?" at scaffold time sets
+<code>RULESET_APPROVALS=1</code>. The script is idempotent (it updates the ruleset found by name) and, when
+rulesets are unavailable (a private repo on a free plan returns 403), it warns loudly and the
+scaffold continues.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>bin/promote_offline_to_online.sh<span class="w"> </span>&lt;project_path&gt;<span class="w"> </span>--tier<span class="w"> </span>&lt;tier&gt;<span class="w"> </span><span class="o">[</span>options<span class="o">]</span>
 </span></code></pre></div>
@@ -2234,7 +2268,7 @@ finds nothing); branch protection is applied inline via <code>gh api</code>.</p>
 <tr>
 <td><code>--skip-branch-protection</code></td>
 <td>no</td>
-<td>Skip the best-effort <code>gh api</code> branch-protection call.</td>
+<td>Skip running <code>bin/enable_repo_rules.sh</code> (the branch ruleset).</td>
 </tr>
 </tbody>
 </table>
@@ -2244,7 +2278,7 @@ finds nothing); branch protection is applied inline via <code>gh api</code>.</p>
 <code>copy_github_assets()</code>, identical across all five:</p>
 <ul>
 <li><code>.github/workflows/{tests,review_threads,coderabbit_trigger,review_retry,pr-gate,pr-reconcile,contract_drift,release,docs}.yaml</code></li>
-<li><code>.github/workflows/secret_scan.yaml</code> only when <code>GITGUARDIAN_API_KEY</code> is exported (opt-in, as at scaffold time); the key is set as a repo secret after <code>gh repo create</code> and before the first push, so the first scan has its key. Setting it is best-effort like branch protection: if it fails the repo is already created and pushed, so the script warns with the exact <code>gh secret set</code> command rather than aborting, and a re-run does nothing</li>
+<li><code>.github/workflows/secret_scan.yaml</code> only when <code>GITGUARDIAN_API_KEY</code> is exported (opt-in, as at scaffold time); the key is set as a repo secret after <code>gh repo create</code> and before the first push, so the first scan has its key. Setting it is best-effort like the ruleset: if it fails the repo is already created and pushed, so the script warns with the exact <code>gh secret set</code> command rather than aborting, and a re-run does nothing</li>
 <li><code>.github/CODEOWNERS</code> (envsubst <code>GITHUB_USERNAME</code>, on every tier), <code>.github/CLAUDE.md</code>, <code>.github/PULL_REQUEST_TEMPLATE.md</code>, <code>.github/dependabot.yml</code></li>
 <li><code>SECURITY.md</code> (envsubst <code>PROJECT_DISPLAY_NAME</code>, <code>REPOSITORY</code>)</li>
 </ul>
@@ -2287,7 +2321,7 @@ tier-specific options are valid; the target is a git repository; not already ful
 <code>origin</code> remote <strong>and</strong> <code>.github/CODEOWNERS</code> or a populated <code>.github/workflows/</code> — that combination is a clean no-op, exit
 0); not in the ambiguous state of an <code>origin</code> remote <strong>without</strong> GitHub assets (refuses — could be
 mid-promotion or a manually-added remote, and guessing which is exactly what this script exists
-not to do); the current branch is <code>main</code> (the push and the branch protection both target it); the
+not to do); the current branch is <code>main</code> (the push and the ruleset both target it); the
 working tree is clean, unless a previous promotion was interrupted (see below); <code>gh</code> is installed
 and authenticated. All of these run before any <code>gh</code> call that changes anything.</p>
 <h2 id="idempotency-and-resuming">Idempotency and resuming<a class="headerlink" href="#idempotency-and-resuming" title="Permanent link">&para;</a></h2>
@@ -2304,10 +2338,12 @@ removes may be dirty on a resume; any other uncommitted change is refused. The a
 path, so an uncommitted edit of your own to one of those files (for example <code>package.json</code>) is
 indistinguishable from the promotion's and is committed with it — stash it first.</p>
 <p><strong>After the first push the project reads as online and a re-run does nothing.</strong> That includes the
-branch-protection step: if it failed (it is best-effort), set it up on GitHub by hand. The protection
-this script applies is a baseline — force-push and branch deletion on <code>main</code> are blocked, but
-required reviews and required status checks are <strong>not</strong> configured, so the result is weaker than an
-online scaffold's.</p>
+ruleset step: it is best-effort, and <code>enable_repo_rules.sh</code> exits 0 even when GitHub refuses, so the
+script then runs <code>enable_repo_rules.sh verify</code> and reports "NOT in place" unless that exits 0. If it
+did not, run <code>bash bin/enable_repo_rules.sh</code> yourself with repo-admin rights. What it applies is the
+same <code>pr-quality-gate</code> ruleset an online scaffold gets: a pull request is required, force-push,
+deletion and merge commits on <code>main</code> are blocked, and the always-running checks listed in
+<code>bin/required-checks.txt</code> are required.</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
 <p><code>bash -n</code> and <code>shellcheck --severity=warning --exclude=SC1091</code> pass clean (mirrors CI's
 <code>shellcheck</code> pre-commit hook). <code>tests/test_promote_offline_to_online.sh</code> exercises the refusal
@@ -2326,9 +2362,8 @@ scaffolded tree against BlueprintX's current idea of it — but compares against
 where this compares against the <em>online inventory</em>. If #109 lands, promotion could become a mode
 of it rather than a second walker; until then, keeping this standalone avoids inventing a tier
 marker or a data-file abstraction (<code>.review-bots.yaml</code>-shaped) for a single consumer. Branch
-protection here is inline <code>gh api</code>, independent of blueprintx#129's <code>bin/enable_repo_rules.sh</code>
-(a separate script) — if that is adopted, this script's <code>apply_branch_protection</code>
-is a natural place to delegate to it instead.</p>
+protection is the one piece that is not duplicated: <code>apply_branch_protection</code> delegates to the
+project's own <code>bin/enable_repo_rules.sh</code> (blueprintx#750).</p>
 <h2 id="remote-creation-order-at-scaffold-time">Remote creation order at scaffold time<a class="headerlink" href="#remote-creation-order-at-scaffold-time" title="Permanent link">&para;</a></h2>
 <p>blueprintx#732. <code>scaffold_create_github_repo</code> (<code>bin/lib/scaffold_git_remote.sh</code>) must not push in
 the same <code>gh repo create</code> call. The GitGuardian key has to exist before the first push, or the
