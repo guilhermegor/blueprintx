@@ -24,6 +24,7 @@ nav:
   - Decision Records: decision-records.md
   - Issue Scope: issue-scope.md
   - Lockfile Sync: lockfile-sync.md
+  - Docs Boundary Gate: docs-boundary-gate.md
   - Offline to Online: offline-to-online.md
   - Prompt Defaults: prompt-defaults.md
   - Quality Gate Blind Spots: quality-gate-blind-spots.md

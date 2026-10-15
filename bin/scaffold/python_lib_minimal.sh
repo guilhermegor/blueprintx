@@ -610,9 +610,8 @@ lib_minimal_copy_project_scaffolding() {
     touch "$project_path/.specs/backlog/.gitkeep"
     # The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
     # implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
-    cp "$BLUEPRINTX_ROOT/bin/ci/check_specs_structure.sh" "$project_path/bin/check_specs_structure.sh"
-    chmod +x "$project_path/bin/check_specs_structure.sh"
-    cp "$BLUEPRINTX_ROOT/bin/ci/check_required_checks_sync.py" "$project_path/bin/check_required_checks_sync.py"
+    cp "$BLUEPRINTX_ROOT"/bin/ci/{check_specs_structure.sh,check_docs_boundary.sh,check_required_checks_sync.py} "$project_path/bin/"
+    chmod +x "$project_path"/bin/check_{specs_structure,docs_boundary}.sh
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).

@@ -245,6 +245,8 @@ scaffold_copy_executables_and_vscode() {
 	chmod +x "$str_project_path/bin/check_specs_structure.sh"
 	cp "$BLUEPRINTX_ROOT/bin/ci/check_required_checks_sync.py" \
 		"$str_project_path/bin/check_required_checks_sync.py"
+	cp "$BLUEPRINTX_ROOT/bin/ci/check_docs_boundary.sh" "$str_project_path/bin/check_docs_boundary.sh"
+	chmod +x "$str_project_path/bin/check_docs_boundary.sh"
 
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"
