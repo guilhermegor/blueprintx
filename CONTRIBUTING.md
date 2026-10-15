@@ -875,6 +875,74 @@ Further facts carried by the removed comments:
 - **`scaffold_set_gitguardian_secret`.** Same reasoning as the PAT function, applied to the
   key from #287 instead of the PAT from #155.
 
+Further details restored after review of #805:
+
+- **`check_actions.sh`.** The shell lint of `run:` blocks uses the same rules as the rest of
+  this repository, so a block cannot pass one gate and fail the other.
+- **`promote_offline_to_online.sh`.** The online state is carried by `HAS_ORIGIN` and
+  `HAS_GITHUB_ASSETS`, both set by one detection step and both consumed by the witnesses in
+  `main()`.
+- **`check_test_copy_lists.py`.**
+  - A copy must be proven, not mentioned. An earlier version matched a test filename anywhere,
+    including inside the gate's own exclusion prose quoted into a script, which was a false
+    pass in the one direction that matters.
+  - Leaf docs are keyed by path relative to python-common, because every one is named
+    `CLAUDE.md`.
+  - The loop form's names may come from a `local -a utils=(...)` array, which exists so the
+    step prints a count instead of an enumeration that goes stale; reading only the loop
+    header would call every shared test undelivered the moment a scaffold switched form, a
+    false failure in a gate valued for catching false passes.
+  - A name must look like a util, so a shell token (`"${utils[@]}"`, a `\` continuation) is
+    not mistaken for a module. The `(?!#)` comment guard is needed on both patterns: adding it
+    to one leaves the other able to satisfy the gate from a comment.
+  - A stale exclusion silently keeps an asset out long after its reason expired and reads as
+    intentional forever, so it fails.
+  - `verify_venv_imports.py` is excluded for lib-minimal because it is only invoked from
+    `bin/lib/pip_fallback.sh`, and lib-minimal copies only `bin/lib/common.sh`: no
+    `bootstrap.sh`, `pip_fallback.sh`, `venv.sh` or `run.sh`.
+- **`check_precommit_ci_parity.sh`.** Stripping YAML comments before matching can only hide a
+  match, so the failure direction stays closed. The workflow read is broad on purpose: a
+  multi-line `run: |` scalar is plain text and must not be missed. The pre-commit side matches
+  the script wherever it sits in an `entry:` (after `bash` or `python3`, before `--root .`),
+  and only local hooks have `entry:`. The classifier is a pure decision about one name; the
+  caller keeps the counters. The gate is not part of the `bin/ci/*.sh` family that CI jobs
+  share with pre-commit, since it concerns neither templates nor generated-project linting.
+- **`scaffold_lint_test.sh`.**
+  - A git identity is set because the scaffold's first commit needs one and CI runners have
+    none.
+  - The project venv from `poetry.toml` suffices: drivers ship as wheels and the unit tests
+    import DB drivers lazily.
+  - Poe goes through the resolver because `poetry install` puts it in the in-project `.venv`
+    but not on `PATH`, which is what the first branch of `poe_exec.sh` exists for.
+  - A baseline commit is made after `poetry install`, so the post-lint diff reflects only what
+    `poe lint` changed.
+  - The seeded cache fixtures are `templates/python-common/src/utils/{__pycache__,.ruff_cache,
+    seeded_probe.pyc,seeded_probe.pyo}` and `templates/python-common/optional/typing/
+    {__pycache__,.mypy_cache}`, six of the eight, which is why concurrent runs collide.
+  - The generated `.gitignore` hides `__pycache__`, so `find` is the only witness (#205).
+  - Seeding happens only under a directory the template already has: creating the parent
+    would change what the scaffold copies.
+- **`scaffold_lint_test_all.sh`.** A worker reads only `templates/` and `bin/`, because
+  `scaffold_lint_test.sh` resolves its root from `$0`, reads `skeleton.meta` and executes the
+  scaffold it names. The worker is a self-invoking mode because `xargs -P` can only fan out
+  over a command and an exported shell function is fragile. The sequential loop it replaced
+  took about 10 minutes, one tier at a time. Nothing in a worker needs credentials; it installs
+  from the public index. `--jobs 2` caps concurrency, and `--jobs 1` is the sequential
+  debugging escape hatch.
+- **`spec.sh`.**
+  - `spec_skeleton_supported` compares by exact equality, since a substring match accepted two
+    supported names joined by a space.
+  - The status check in `spec_stdin_for_skeleton` is defence in depth: a failure inside a
+    pipeline emits no answers instead of stopping it, so `scaffold_from_spec` also reads that
+    status from `PIPESTATUS`.
+  - The publish and registry keys (`publish_pypi`, `publish_test_pypi`, `consume_private`)
+    only answer the scaffold's existing yes/no gate.
+  - The problem it solves: an answer stream like `printf 'n\n%.0s' {1..12}` is positional, so
+    inserting a prompt anywhere shifts every later answer onto the wrong question; a name does
+    not move when a prompt is inserted.
+  - `spec_get` prints with `printf '%s'` and no trailing newline so that it composes under
+    command substitution.
+
 ### Gates in `bin/ci/` and `bin/`
 
 - **`check_makefile_pairing.sh` (#241).** Every user-facing Makefile target needs a `case`
