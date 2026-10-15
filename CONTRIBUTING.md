@@ -785,14 +785,14 @@ grouped by what they guard.
   `enable_repo_rules.sh` with `templates/python-common/bin/`; TypeScript and Bash had none,
   so no required check at all. Its proper home is `templates/common/bin/`, but
   `verify_branch_protection.yml` hardcodes the Python path, so moving it needs that workflow
-  too. The per-tier check list travels as data, and `lib/common.sh` is copied alongside as the
+  too. The per-tier check list travels as data (each tier's `required-checks.txt`), and `lib/common.sh` is copied alongside as the
   script's one dependency.
 - **`scaffold_git_remote.sh` is separate from `scaffold_python_templates.sh`.** They were one
   file until `bin/ci/check_test_copy_lists.py` went wrong: it treats a scaffold plus the libs
   it sources as the reachable set, and lib-minimal sources the git half without calling the
   Python copy functions, so the union claimed four shared tests reached lib-minimal. Over-
   reporting reachability is the dangerous direction for that gate. A scaffold now sources
-  only the halves it uses. The git half replaced six near-identical copies; they differed on
+  only the halves it uses. The git half replaced six near-identical copies (65, 65, 65, 65, 67 and 64 lines); they differed on
   an optional `--homepage` (`SCAFFOLD_REPO_HOMEPAGE`) and on what runs after the prompt,
   which stays in each caller's wrapper because a flag meaning "which tier am I" is how a
   shared function rots.

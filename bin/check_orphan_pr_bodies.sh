@@ -54,10 +54,12 @@ import unicodedata
 INT_MIN_LEN = 40  # shorter normalised bodies match too loosely
 FLOAT_NEAR = 0.8  # share of the local body's words found in one forge body: edited, not orphan
 
+
 def norm(str_text: str) -> str:
     str_text = unicodedata.normalize("NFKC", str_text).casefold()
     str_text = re.sub(r"\[[x ]\]", "[ ]", str_text)
     return " ".join(str_text.split())
+
 
 def forge_items(path_json: str) -> list:
     """Parse the concatenated JSON arrays `gh api --paginate` prints, one per page."""
@@ -71,6 +73,7 @@ def forge_items(path_json: str) -> list:
         list_page, int_pos = cls_dec.raw_decode(str_raw, int_pos)
         list_out += [(str(d["number"]), norm(d.get("body") or "")) for d in list_page]
     return list_out
+
 
 def verdict(str_body: str, list_forge: list) -> str:
     if len(str_body) < INT_MIN_LEN:
@@ -88,6 +91,7 @@ def verdict(str_body: str, list_forge: list) -> str:
     if float_best >= FLOAT_NEAR:
         return f"UNKNOWN (near #{str_best}, {float_best:.0%} of words; edited since?)"
     return "ORPHAN"
+
 
 bool_ok = os.environ["FORGE_OK"] == "1"
 list_forge = []
