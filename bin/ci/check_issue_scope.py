@@ -30,7 +30,6 @@ import re
 import subprocess
 import sys
 
-
 _RE_SURFACE_BLOCK = re.compile(r"```surface\s*\n(.*?)```", re.S)
 _RE_OVERRIDE_TRAILER = re.compile(r"^surface-override:\s*(.+)$", re.I | re.M)
 
@@ -139,10 +138,6 @@ def issue_surface(str_repo: str, int_issue: int) -> set[str] | None:
         for str_line in cls_match.group(1).splitlines()
         if str_line.strip() and not str_line.strip().startswith("#")
     }
-    # An empty fence (or one holding only comments) is UNDECLARED, never "declared as nothing".
-    # Returning an empty set here would put every changed file outside the surface and fail the
-    # PR, which is the opposite of the documented non-blocking behaviour for an undeclared
-    # surface — and the issue template ships exactly that shape.
     return set_patterns or None
 
 

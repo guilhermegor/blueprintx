@@ -41,12 +41,6 @@ import pathlib
 import subprocess
 import sys
 
-
-# CodeRabbit's own hard limit is 100 ("Review skipped: N files exceed the limit of
-# 100"). This tracks THAT vendor limit, kept 10 below it — a PR that trips the vendor
-# cap exactly is already too late to react to, the review has already failed. Named
-# here rather than inlined in the message below, so a future vendor-limit change is
-# one edit, not a grep-and-replace across every place the number appears.
 MAX_CHANGED_FILES = 90
 
 
@@ -64,10 +58,6 @@ def _git(list_args: list) -> str:
         Captured stdout, stripped.
     """
     try:
-        # Constant, trusted argv built in-process; no shell involved. S607 (partial
-        # path) is resolution BY DESIGN — the hook must use the `git` the developer's
-        # PATH selects, the one their shell, hooks and CI all use, not a hardcoded
-        # path. Same precedent as check_backlog_ledger.py's identical helper.
         cls_proc = subprocess.run(  # noqa: S603
             ["git", *list_args],  # noqa: S607
             capture_output=True,
@@ -133,7 +123,6 @@ def is_on_default_branch(str_default_ref: str) -> bool:
     str_current = _git(["rev-parse", "--abbrev-ref", "HEAD"])
     if str_current and str_current != "HEAD":
         return str_current == str_default_ref.rsplit("/", 1)[-1]
-    # Detached HEAD (a CI checkout of a merge sha): compare tips, names are unavailable.
     return _git(["rev-parse", "HEAD"]) == _git(["rev-parse", str_default_ref])
 
 
@@ -181,16 +170,10 @@ def main() -> int:
     """
     str_default_ref = default_branch_ref()
     if is_on_default_branch(str_default_ref):
-        # Nothing branch-scoped to compare against.
         return 0
 
-    # ⚠️ Mid-merge, the INDEX already holds the incoming side's files but HEAD is still the
-    # pre-merge tip, so a base taken from HEAD alone charges the incoming delta to this
-    # branch (measured: 186 files reported for a real 69). With 3+ args git computes the
-    # base against the merge commit about to be created.
     str_base = _git(["merge-base", str_default_ref, "HEAD", *merge_heads()])
     if not str_base:
-        # Unrelated history or a clone too shallow to resolve one: nothing to check.
         return 0
 
     int_count = changed_file_count(str_base)
@@ -208,9 +191,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Same Windows cp1252 guard as check_backlog_ledger.py: this backs an always_run
-    # pre-commit hook, so a UnicodeEncodeError on the status glyphs would block every
-    # commit from a Windows checkout rather than failing the branch under check.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

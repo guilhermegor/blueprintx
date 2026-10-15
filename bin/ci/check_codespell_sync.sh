@@ -1,19 +1,4 @@
 #!/usr/bin/env bash
-# The repo-root .codespellrc and templates/python-common/.codespellrc must carry the SAME
-# ignore-words-list.
-#
-# Why a gate and not a comment: the two lists drifted in BOTH directions before anyone
-# noticed — 30 words present here and missing from the template, 25 the other way — and the
-# stale copy was the TEMPLATE, the one scaffolded into every new project. So the cost did not
-# land on this repo; it landed on each generated project, which inherited an older vocabulary
-# and re-learned the same words one rejected commit at a time. Nothing in either file could
-# reveal that, because each list is perfectly plausible read on its own.
-#
-# Locale vocabulary is learned the expensive way (a full gate run per discovery), so a word
-# this repo pays for must reach the template that ships it onward.
-#
-# Compared case-insensitively and order-independently: codespell itself matches
-# case-insensitively, and the order in the file carries no meaning.
 
 set -euo pipefail
 
@@ -22,15 +7,6 @@ ROOT_RC="$REPO_ROOT/.codespellrc"
 TEMPLATE_RC="$REPO_ROOT/templates/python-common/.codespellrc"
 
 extract_words() {
-	# Print the ignore-words-list entries, one per line, VERBATIM and sorted.
-	#
-	# ⚠️ Do NOT lowercase here. An earlier version did, on the belief that codespell matches
-	# case-insensitively — it does not, and the difference is the whole point of this gate.
-	# codespell splits the list in two (`process_ignore_words`): entries that are already
-	# lowercase filter its typo dictionary, while a CASED entry goes to a separate set and only
-	# ever matches that exact capitalisation. So `classe` and `Classe` are NOT interchangeable,
-	# and folding case before comparing would report two configs as "in sync" while they behave
-	# differently — the gate would be blind to the very drift it exists to catch.
 	local str_file="$1"
 	grep -E '^ignore-words-list = ' "$str_file" |
 		head -1 |
@@ -42,13 +18,6 @@ extract_words() {
 }
 
 check_lowercase() {
-	# Reject any entry carrying an uppercase letter.
-	#
-	# codespell lowercases the word it FOUND before looking it up, so a lowercase entry covers
-	# every capitalisation (`classe` silences `classe`/`Classe`/`CLASSE`) while a capitalised
-	# entry silences only itself. A cased entry is therefore never more useful than its
-	# lowercase form and is usually a mistake — the configs carried `Classe,classe` pairs that
-	# existed only to work around this.
 	local str_file="$1"
 	local str_cased
 	str_cased="$(extract_words "$str_file" | grep -E '[[:upper:]]' || true)"

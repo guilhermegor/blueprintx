@@ -13,7 +13,7 @@ gate did not read until P0.
 - [x] P0 (PR #785): gate reads every file type, `.env.example` keys-only with
   `docs/configuration.md` per tier and the key-sync gate
 - [x] 1 (PR #789) root `.github/`, root `tests/`, root dotfiles, `Makefile`, `mkdocs.yml`, root `.env.example` (38 files, 1205 lines)
-- [ ] 2 root `bin/` excluding `bin/scaffold/` (36 files, 1537 lines); also fix the truncated step name
+- [~] chore/comment-strip-slice2-304 2 root `bin/` excluding `bin/scaffold/` (36 files, 1537 lines); also fix the truncated step name
   `Install npm dependencies (npm ci enforces the committed lockfile,` in `scaffold_checks.yml`
   (` #464` was parsed as a YAML comment)
 - [ ] 3 (after the heredoc gate fix) `bin/scaffold/*.sh`, with a before/after scaffold diff of all tiers as the oracle (10 files, 1427 lines)
