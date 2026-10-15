@@ -209,18 +209,25 @@ is_shell_file() {
 scan_tree_for_gnu_install() {
     local path_dir path_file int_scanned=0
     for path_dir in "$@"; do
-        [ -d "$path_dir" ] || { printf 'missing scan dir: %s\n' "$path_dir"; return; }
+        [ -d "$path_dir" ] || {
+            print_status "error" "install guard: scan dir missing: $path_dir" >&2
+            return 1
+        }
         while IFS= read -r path_file; do
             is_shell_file "$path_file" || continue
             int_scanned=$((int_scanned + 1))
             gnu_install_hits "$path_file"
         done < <(find "$path_dir" \( -name node_modules -o -name .git \) -prune -o -type f -print)
     done
-    [ "$int_scanned" -gt 0 ] || printf 'scanned no files\n'
+    [ "$int_scanned" -gt 0 ] || {
+        print_status "error" "install guard: scanned no files under: $*" >&2
+        return 1
+    }
 }
 
 test_no_gnu_only_install_in_bin() {
     local str_hits str_case
+    command -v perl >/dev/null 2>&1 || { print_status "error" "perl is required by the install -D guard"; exit 2; }
     for str_case in 'install -D a b' 'install -m 755 -D a b' 'install -Dm644 a b' 'install -o x -D a b' 'install -cD a b' '/usr/bin/install -D a b' '-install -D a b' \
         "$(printf 'install\t-m 755\t-D a b')" \
         'apt-get install -y x && install -D a b' 'brew install x; install -Dm644 a b' \
@@ -251,8 +258,9 @@ test_no_gnu_only_install_in_bin() {
         print_status "error" "scan fixture: expected the shebang file and Makefile only, got: $str_hits"
         int_failures=$((int_failures + 1))
     }
-    str_hits="$(scan_tree_for_gnu_install "$REPO_ROOT/bin" "$REPO_ROOT/templates")"
-    if [ -n "$str_hits" ]; then
+    if ! str_hits="$(scan_tree_for_gnu_install "$REPO_ROOT/bin" "$REPO_ROOT/templates")"; then
+        int_failures=$((int_failures + 1))
+    elif [ -n "$str_hits" ]; then
         print_status "error" "BSD/macOS install has no -D; use mkdir -p && cp: $str_hits"
         int_failures=$((int_failures + 1))
     fi
