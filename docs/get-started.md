@@ -23,7 +23,7 @@ make dry_run     # print structure; no files written
 
 - `bash` ≥ 4
 - For **Python skeletons**: `pyenv` + `poetry` (or your Python toolchain of choice) in the generated project
-- For **TypeScript skeletons**: the Node.js floor is `^22.18.0 || >=24.11.0` for both `react-spa-webpack` and `ts-lib`, the range Babel 8 requires (each declares its own `engines.node`); run `npm install` after scaffolding
+- For **TypeScript skeletons**: the Node.js floor is `^22.18.0 || >=24.11.0` for `ts-lib` and `^22.22.0 || >=24.11.0` for `react-spa-webpack` (react-router 8 raises it), the range Babel 8 requires (each declares its own `engines.node`); run `npm install` after scaffolding
 
 ---
 
