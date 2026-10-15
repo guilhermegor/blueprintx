@@ -17,4 +17,4 @@ Secret scan — gitleaks
 # (blueprintx#564). This tier ships no review-threads workflow: it is a single-file CLI with no
 # Python runtime, and `bin/check_review_threads.py` would drag one in for one gate. Recorded as
 # an accepted exception rather than an omission, so the next audit does not rediscover it — the
-# two ci.yml names above are what makes a merge here binding instead.
+# three ci.yml names above are what makes a merge here binding instead.

@@ -1,7 +1,7 @@
 # Promoting an offline scaffold to online
 
 blueprintx#382. `bin/promote_offline_to_online.sh` turns an offline-scaffolded project into an
-online one — a GitHub remote, the GitHub-only CI assets, branch protection — without
+online one — a GitHub remote, the GitHub-only CI assets, the branch ruleset — without
 re-scaffolding and without hand-copying files out of BlueprintX.
 
 ## Why offline mode needs an inverse
@@ -16,9 +16,8 @@ the online workflow was scaffolding a second project and moving the code across 
 The 5 Python `bin/scaffold/python_*.sh` scripts and `ts_react_app.sh` are left untouched on purpose:
 this script does not source or edit any of them — it transcribes their
 `copy_github_assets` / `apply_offline_mode` manifests instead (see the table below) and runs
-independently. It does not use `bin/enable_repo_rules.sh` or `bin/enable_security.sh` either —
-neither exists in this repo (measured: `grep -rln "enable_repo_rules\|enable_security" bin/`
-finds nothing); the branch ruleset is applied by running the project's own `bin/enable_repo_rules.sh`.
+independently. The one thing it does delegate is the branch ruleset: it runs the project's own
+`bin/enable_repo_rules.sh`, shipped at scaffold time, rather than carrying a second copy.
 
 ## Branch protection: the `pr-quality-gate` ruleset
 
@@ -50,7 +49,7 @@ bin/promote_offline_to_online.sh <project_path> --tier <tier> [options]
 | `--visibility public\|private` | no | Default `private`. |
 | `--deploy-target none\|pages\|vercel` | no | `react-spa-webpack` only. Default `none` (see caveat below). |
 | `--publish none\|pypi\|test-pypi\|both` | no | `lib-minimal` only. Default `none` (see caveat below). |
-| `--skip-branch-protection` | no | Skip the best-effort `gh api` branch-protection call. |
+| `--skip-branch-protection` | no | Skip running `bin/enable_repo_rules.sh` (the branch ruleset). |
 
 ## What gets added, per tier
 
@@ -59,7 +58,7 @@ The 5 service tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service
 `copy_github_assets()`, identical across all five:
 
 - `.github/workflows/{tests,review_threads,coderabbit_trigger,review_retry,pr-gate,pr-reconcile,contract_drift,release,docs}.yaml`
-- `.github/workflows/secret_scan.yaml` only when `GITGUARDIAN_API_KEY` is exported (opt-in, as at scaffold time); the key is set as a repo secret after `gh repo create` and before the first push, so the first scan has its key. Setting it is best-effort like branch protection: if it fails the repo is already created and pushed, so the script warns with the exact `gh secret set` command rather than aborting, and a re-run does nothing
+- `.github/workflows/secret_scan.yaml` only when `GITGUARDIAN_API_KEY` is exported (opt-in, as at scaffold time); the key is set as a repo secret after `gh repo create` and before the first push, so the first scan has its key. Setting it is best-effort like the ruleset: if it fails the repo is already created and pushed, so the script warns with the exact `gh secret set` command rather than aborting, and a re-run does nothing
 - `.github/CODEOWNERS` (envsubst `GITHUB_USERNAME`, on every tier), `.github/CLAUDE.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/dependabot.yml`
 - `SECURITY.md` (envsubst `PROJECT_DISPLAY_NAME`, `REPOSITORY`)
 
@@ -111,7 +110,7 @@ tier-specific options are valid; the target is a git repository; not already ful
 `origin` remote **and** `.github/CODEOWNERS` or a populated `.github/workflows/` — that combination is a clean no-op, exit
 0); not in the ambiguous state of an `origin` remote **without** GitHub assets (refuses — could be
 mid-promotion or a manually-added remote, and guessing which is exactly what this script exists
-not to do); the current branch is `main` (the push and the branch protection both target it); the
+not to do); the current branch is `main` (the push and the ruleset both target it); the
 working tree is clean, unless a previous promotion was interrupted (see below); `gh` is installed
 and authenticated. All of these run before any `gh` call that changes anything.
 
@@ -132,10 +131,12 @@ path, so an uncommitted edit of your own to one of those files (for example `pac
 indistinguishable from the promotion's and is committed with it — stash it first.
 
 **After the first push the project reads as online and a re-run does nothing.** That includes the
-branch-protection step: if it failed (it is best-effort), set it up on GitHub by hand. The protection
-this script applies is a baseline — force-push and branch deletion on `main` are blocked, but
-required reviews and required status checks are **not** configured, so the result is weaker than an
-online scaffold's.
+ruleset step: it is best-effort, and `enable_repo_rules.sh` exits 0 even when GitHub refuses, so the
+script then runs `enable_repo_rules.sh verify` and reports "NOT in place" unless that exits 0. If it
+did not, run `bash bin/enable_repo_rules.sh` yourself with repo-admin rights. What it applies is the
+same `pr-quality-gate` ruleset an online scaffold gets: a pull request is required, force-push,
+deletion and merge commits on `main` are blocked, and the always-running checks listed in
+`bin/required-checks.txt` are required.
 
 ## Verification
 
@@ -159,9 +160,8 @@ scaffolded tree against BlueprintX's current idea of it — but compares against
 where this compares against the *online inventory*. If #109 lands, promotion could become a mode
 of it rather than a second walker; until then, keeping this standalone avoids inventing a tier
 marker or a data-file abstraction (`.review-bots.yaml`-shaped) for a single consumer. Branch
-protection here is inline `gh api`, independent of blueprintx#129's `bin/enable_repo_rules.sh`
-(a separate script) — if that is adopted, this script's `apply_branch_protection`
-is a natural place to delegate to it instead.
+protection is the one piece that is not duplicated: `apply_branch_protection` delegates to the
+project's own `bin/enable_repo_rules.sh` (blueprintx#750).
 
 ## Remote creation order at scaffold time
 
