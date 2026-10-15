@@ -221,7 +221,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       commits(last:1) { nodes { commit { committedDate } } }
       allCommits: commits(first:100) {
         pageInfo { hasNextPage }
-        nodes { commit { message author { email } signature { isValid signer { login } } } }
+        nodes { commit { message author { email } signature { isValid wasSignedByGitHub } } }
       }
       reviewThreads(first:100, after:$tc) {
         pageInfo { hasNextPage endCursor }
@@ -2144,11 +2144,10 @@ def _is_dependabot_commit(dict_node: dict) -> bool:
     dict_commit = dict_node.get("commit") or {}
     str_email = (dict_commit.get("author") or {}).get("email") or ""
     dict_sig = dict_commit.get("signature") or {}
-    str_signer = (dict_sig.get("signer") or {}).get("login") or ""
     return (
         str_email.endswith(_STR_DEPENDABOT_EMAIL)
         and dict_sig.get("isValid") is True
-        and str_signer == "web-flow"
+        and dict_sig.get("wasSignedByGitHub") is True
     )
 
 
@@ -2180,6 +2179,8 @@ def dependabot_pushed_head(str_repo_full: str, str_head_oid: str) -> bool:
         dict_out = json.loads(cls_run.stdout)
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return False
+    if not isinstance(dict_out, dict):
+        return False
     list_runs = dict_out.get("workflow_runs") or []
     if cls_run.returncode != 0 or not list_runs or dict_out.get("total_count") != len(list_runs):
         return False
@@ -2202,8 +2203,8 @@ def dependabot_review_exempt(
     -------
     bool
         ``True`` only for a ``Bot`` author ``dependabot``, pushed by Dependabot, with every
-        commit authored and signed as Dependabot's and every ``update-type`` in the commit
-        metadata a patch or minor.
+        commit authored and signed by GitHub as Dependabot's and every ``update-type`` in the
+        commit metadata a patch or minor.
     """
     if not _is_dependabot_bot(dict_pr.get("author") or {}):
         return False

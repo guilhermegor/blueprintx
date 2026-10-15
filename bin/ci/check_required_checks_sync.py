@@ -248,14 +248,20 @@ def gh_json(str_path: str) -> object:
     return json.loads(str_out)
 
 
+def classic_required() -> set:
+    """Read classic contexts; an unprotected branch (HTTP 404) is an empty set, not an error."""
+    try:
+        dict_prot = gh_json(f"repos/{REPO}/branches/main/protection")
+    except subprocess.CalledProcessError as exc:
+        if "Branch not protected" in (exc.stderr or ""):
+            return set()
+        raise
+    return set(dict_prot["required_status_checks"]["contexts"])
+
+
 def live_required() -> dict:
     """{"classic": set, "ruleset": set} read from the API (the rules in effect on main)."""
-    dict_live = {
-        "classic": set(
-            gh_json(f"repos/{REPO}/branches/main/protection")["required_status_checks"]["contexts"]
-        ),
-        "ruleset": set(),
-    }
+    dict_live = {"classic": classic_required(), "ruleset": set()}
     for dict_rule in gh_json(f"repos/{REPO}/rules/branches/main"):
         if dict_rule["type"] == "required_status_checks":
             list_chk = dict_rule["parameters"]["required_status_checks"]

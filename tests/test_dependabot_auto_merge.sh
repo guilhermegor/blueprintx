@@ -110,6 +110,8 @@ STUB_COMMITS="[$human_signed_commit]"
 expect "verified commit by a human committer is skipped" skip "$minor"
 STUB_COMMITS="[$unverified_webflow_commit]"
 expect "web-flow committer without a verified signature is skipped" skip "$minor"
+STUB_COMMITS="[]"
+expect "empty commit list is skipped" skip "$minor"
 STUB_COMMITS="[$good_commit]"
 expect "genuine dependabot commit shape is armed" arm "$minor"
 STUB_RUNS='{"total_count":1,"workflow_runs":[{"actor":{"login":"mallory"}}]}'
@@ -154,6 +156,13 @@ check "root workflow runs a script that exists in this repo" 0 "$?"
 for str_wf in .github/workflows/review_threads.yml templates/*/.github/workflows/review[-_]threads.y*ml; do
 	grep -qE '^  actions: (read|write)' "$REPO_ROOT/$str_wf"
 	check "$str_wf grants actions: for the pusher lookup" 0 "$?"
+done
+
+for str_wf in .github/workflows/dependabot-auto-merge.yml templates/common/.github/workflows/dependabot-auto-merge.yml; do
+	awk '/id: metadata/ {f=1} f && /continue-on-error: true/ {ok=1} /Checkout base/ {f=0} END {exit !ok}' "$REPO_ROOT/$str_wf"
+	check "$str_wf lets a failing metadata step still reach the disarm path" 0 "$?"
+	grep -q 'ref: ${{ github.event.pull_request.base.sha }}' "$REPO_ROOT/$str_wf"
+	check "$str_wf checks out the base sha, where the roster is read" 0 "$?"
 done
 
 ((int_failures == 0)) || exit 1

@@ -229,7 +229,7 @@ repos:
         entry: bash tests/test_dependabot_auto_merge.sh
         language: system
         pass_filenames: false
-        files: ^(templates/common/bin/dependabot_auto_merge\.sh|templates/common/\.github/workflows/dependabot-auto-merge\.yml|tests/test_dependabot_auto_merge\.sh)$
+        files: ^(bin/lib/common\.sh|\.github/workflows/dependabot-auto-merge\.yml|templates/common/bin/dependabot_auto_merge\.sh|templates/common/\.github/workflows/dependabot-auto-merge\.yml|tests/test_dependabot_auto_merge\.sh)$
 
       - id: check-pr-policy-tests
         name: check_pr_policy.sh should-fail regression tests (blueprintx#604)

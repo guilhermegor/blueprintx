@@ -18,7 +18,7 @@ is_pure_dependabot() {
 	[[ "$(gh api "repos/$GH_REPO/pulls/$str_pr" | jq -r .user.login)" == "$DEPENDABOT_LOGIN" ]] || return 1
 	str_bad=$(gh api "repos/$GH_REPO/pulls/$str_pr/commits" --paginate |
 		jq -s --arg bot "$DEPENDABOT_LOGIN" \
-			'[.[][] | select((.author.login == $bot and .committer.login == "web-flow" and .commit.verification.verified == true) | not)] | length') || return 1
+			'[.[][]] as $c | if ($c | length) == 0 then -1 else [$c[] | select((.author.login == $bot and .committer.login == "web-flow" and .commit.verification.verified == true) | not)] | length end') || return 1
 	[[ "$str_bad" == 0 ]]
 }
 

@@ -3577,13 +3577,13 @@ def test_pinned_job_minutes_do_not_exceed_any_workflow() -> None:
 
 
 def test_carry_forward_worst_case_fits_half_the_shortest_job_timeout() -> None:
-    """The head compare plus one compare per reviewed commit, each at its timeout, fit.
+    """Pusher lookup, head compare and one compare per reviewed commit, each at its timeout, fit.
 
     The retarget read is part of the GraphQL fetch and makes no call of its own. Half the job
     is left for checkout, setup and the GraphQL fetch.
     """
     cls_gate = _load_gate()
-    int_calls = 1 + cls_gate._INT_MAX_REVIEWED_COMMITS
+    int_calls = 2 + cls_gate._INT_MAX_REVIEWED_COMMITS
     int_worst_s = int_calls * cls_gate._INT_COMPARE_TIMEOUT_S
     assert int_worst_s <= _INT_SHORTEST_JOB_MINUTES * 60 // 2
 
@@ -3596,7 +3596,7 @@ def _by_dependabot(str_oid: str) -> bool:
     return True
 
 
-_WEB_FLOW_SIG = {"isValid": True, "signer": {"login": "web-flow"}}
+_WEB_FLOW_SIG = {"isValid": True, "wasSignedByGitHub": True}
 
 
 def _dep_commit(
@@ -3684,9 +3684,9 @@ def test_dependabot_with_more_than_one_page_of_commits_is_not_exempt() -> None:
     "dict_signature",
     [
         None,
-        {"isValid": False, "signer": {"login": "web-flow"}},
-        {"isValid": True, "signer": {"login": "mallory"}},
-        {"isValid": True, "signer": None},
+        {"isValid": False, "wasSignedByGitHub": True},
+        {"isValid": True, "wasSignedByGitHub": False},
+        {"isValid": True},
     ],
 )
 def test_forged_dependabot_author_without_a_web_flow_signature_is_not_exempt(
@@ -3729,6 +3729,7 @@ def _runs_result(monkeypatch: pytest.MonkeyPatch, str_stdout: str, int_code: int
         ('{"total_count":0,"workflow_runs":[]}', 0, False),
         ('{"total_count":150,"workflow_runs":[{"actor":{"login":"dependabot[bot]"}}]}', 0, False),
         ("", 1, False),
+        ("[]", 0, False),
         ("not json", 0, False),
     ],
 )

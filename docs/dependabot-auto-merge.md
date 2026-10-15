@@ -43,9 +43,9 @@ Each of these removes the exemption, and the PR needs a review as usual:
 - any commit is not Dependabot's, so a human push voids it (`@dependabot rebase` restores it);
 - the PR has more than 100 commits.
 
-The workflow uses `pull_request_target` because a Dependabot `pull_request` run has a
-read-only token and cannot arm auto-merge. It never checks out PR code; the script comes from
-the default branch.
+The workflow uses `pull_request_target` because one trigger then covers Dependabot
+opens and pushes with a write token, and the review event runs the same code. It never checks out PR code; the script comes from
+the base commit.
 
 ## What counts as a Dependabot commit
 
@@ -92,3 +92,16 @@ the job fails visibly and the fallback is re-running it from the Actions tab.
 `tests/test_dependabot_auto_merge.sh` stubs `gh`; the Dependabot cases in `templates/python-common/tests/unit/test_review_threads_gate.py` cover
 the gate. Both pin the should-fail cases: major, non-Dependabot author, human commit, and a
 grouped PR with one major.
+
+## Behaviours to know
+
+- A human reopen does not re-arm: `reopened` is not a trigger, so the PR waits for the next
+  Dependabot push (`@dependabot rebase`) or a qualifying review.
+- A human `labeled` or `edited` run on the head commit also counts as "not pushed by
+  Dependabot" in the pusher lookup, because the API has no event-action filter. That fails
+  closed: the PR needs a review or `@dependabot rebase`.
+- A reviewer-bot `COMMENTED` review can arm a major, but arming only queues the merge. The
+  required `Review threads answered` check still fails while the ladder's body findings are
+  unanswered (blueprintx#630), so nothing merges unread.
+- Auto-merge needs "Allow auto-merge" and required status checks on the repository; without
+  them `--auto` fails or merges immediately.
