@@ -141,6 +141,7 @@ copy_common_templates() {
 }
 
 apply_branch_protection() {
+    local project_path="$1"
     local branch="main"
     local repo="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}/${PROJECT_NAME}"
 
@@ -157,26 +158,8 @@ apply_branch_protection() {
     prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y | Y)
-            local reviews_json='"required_pull_request_reviews": null,'
-            if gh api --method PUT \
-                -H "Accept: application/vnd.github+json" \
-                "/repos/$repo/branches/$branch/protection" \
-                --input - <<EOF
-{
-  "required_status_checks": { "strict": true, "contexts": [] },
-  "enforce_admins": true,
-  $reviews_json
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false,
-  "required_linear_history": true
-}
-EOF
-            then
-                print_status "success" "Branch '$branch' protected on GitHub."
-            else
-                print_status "warning" "Failed to protect branch '$branch'; adjust settings manually in GitHub."
-            fi
+            local reviews_approvals=0
+            (cd "$project_path" && RULESET_APPROVALS="$reviews_approvals" bash bin/enable_repo_rules.sh)
             ;;
         *) print_status "info" "Skipped branch protection" ;;
     esac
