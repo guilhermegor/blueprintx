@@ -174,29 +174,40 @@ test_empty_stdin_means_no_board() {
 }
 
 GNU_INSTALL_RE='(^|[[:space:];&|(])install([[:space:]]+[^[:space:];|&]+)*[[:space:]]+-[a-zA-Z]*D'
-PKG_MANAGER_RE='(npm|yarn|pnpm|bun|pip|poetry|apt|apt-get|brew)[[:space:]]+([^[:space:]]+[[:space:]]+)*install'
+PKG_MANAGER_RE='^[[:space:]]*((RUN|sudo)[[:space:]]+)*(npm|yarn|pnpm|bun|pip|poetry|apt|apt-get|brew)[[:space:]]+([^[:space:]]+[[:space:]]+)*install'
 
 gnu_install_hits() {
-    grep -E -- "$GNU_INSTALL_RE" | grep -vE -- "$PKG_MANAGER_RE" || true
+    perl -0pe 's/\\\n[ \t]*/ /g; s/(^|[ \t])#.*//mg; s/(;|&&|\|\||\|)/\n/g' |
+        grep -E -- "$GNU_INSTALL_RE" | grep -vE -- "$PKG_MANAGER_RE" || true
+}
+
+scan_tree_for_gnu_install() {
+    local path_file
+    while IFS= read -r path_file; do
+        [ -z "$(gnu_install_hits <"$path_file")" ] || printf '%s\n' "$path_file"
+    done < <(grep -rlE --exclude-dir=node_modules -- "install" "$@")
 }
 
 test_no_gnu_only_install_in_bin() {
     local str_hits str_case
     for str_case in 'install -D a b' 'install -m 755 -D a b' 'install -Dm644 a b' 'install -o x -D a b' \
-        "$(printf 'install\t-m 755\t-D a b')"; do
+        "$(printf 'install\t-m 755\t-D a b')" \
+        'apt-get install -y x && install -D a b' 'brew install x; install -Dm644 a b' \
+        'install -D a b # pip install x' 'install -D a b && npm install' \
+        "$(printf 'install \\\n  -D a b')"; do
         [ -n "$(gnu_install_hits <<<"$str_case")" ] || {
             print_status "error" "install guard missed: $str_case"
             int_failures=$((int_failures + 1))
         }
     done
-    for str_case in 'install -m 644 a b' 'npm install -D x' 'pnpm --silent install -D x' 'reinstall -D x' 'install -m 644 a-Dx b'; do
+    for str_case in 'install -m 644 a b' 'npm install -D x' 'pnpm --silent install -D x' 'reinstall -D x' \
+        'install -m 644 a-Dx b' 'echo hi # install -D a b' 'RUN npm install -D x && echo ok'; do
         [ -z "$(gnu_install_hits <<<"$str_case")" ] || {
             print_status "error" "install guard flagged: $str_case"
             int_failures=$((int_failures + 1))
         }
     done
-    str_hits="$(grep -rnE --exclude-dir=node_modules -- "$GNU_INSTALL_RE" "$REPO_ROOT/bin" "$REPO_ROOT/templates" |
-        grep -vE -- "$PKG_MANAGER_RE" || true)"
+    str_hits="$(scan_tree_for_gnu_install "$REPO_ROOT/bin" "$REPO_ROOT/templates")"
     if [ -n "$str_hits" ]; then
         print_status "error" "BSD/macOS install has no -D; use mkdir -p && cp: $str_hits"
         int_failures=$((int_failures + 1))
