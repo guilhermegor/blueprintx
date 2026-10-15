@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# ruff: noqa
 """Fail when `main`'s required status checks and the PR jobs drift apart (blueprintx#535).
 
 Default mode needs no token. It compares the committed expected contexts
@@ -26,6 +25,7 @@ import pathlib
 import re
 import subprocess
 import sys
+
 
 try:
     import yaml

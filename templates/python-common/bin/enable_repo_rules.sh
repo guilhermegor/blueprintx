@@ -176,6 +176,7 @@ build_rules_json() {
     "review_draft_pull_requests":false
   }},
   {"type":"non_fast_forward"},
+  {"type":"required_linear_history"},
   {"type":"deletion"}${str_checks_rule}
 ]
 EOF

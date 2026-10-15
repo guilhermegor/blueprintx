@@ -276,6 +276,7 @@ ignore-fully-untyped = false  # flag functions that are completely untyped
 allow-star-arg-any = false  # do not allow `*args` and `**kwargs` to be untyped
 
 [lint.per-file-ignores]
+"bin/check_required_checks_sync.py" = ["ANN001", "ANN201", "B905", "D103", "D205", "D209", "D401", "N818", "PLR2004", "S603", "S607", "SIM300", "UP031"]
 # ⚠️ `bin` was ONCE in [exclude] above, with the reason "ruff-format would tabify
 # space-indented helpers and trip E101". Two things were wrong with that (blueprintx#207):
 #

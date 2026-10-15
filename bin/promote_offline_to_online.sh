@@ -580,7 +580,8 @@ apply_branch_protection() {
         print_status "warning" "$PROJECT_PATH/bin/enable_repo_rules.sh is missing; configure the branch ruleset on GitHub manually."
         return 0
     fi
-    if (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh); then
+    (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh) || true
+    if (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh verify); then
         PROTECTION_APPLIED=true
     fi
 }
