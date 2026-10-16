@@ -9,8 +9,7 @@ import tseslint from 'typescript-eslint';
 
 const VENDOR_POLICY = {
   __root__: {
-    allow: {
-    },
+    allow: {},
   },
 };
 

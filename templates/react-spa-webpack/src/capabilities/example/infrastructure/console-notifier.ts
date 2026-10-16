@@ -25,6 +25,5 @@ export class ConsoleNotifier implements INotifier {
     this.logEmitter.info(`[notifier:info] ${msg}`);
   }
 
-  dismiss(): void {
-  }
+  dismiss(): void {}
 }

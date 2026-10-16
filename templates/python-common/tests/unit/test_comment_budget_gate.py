@@ -1313,6 +1313,32 @@ def test_each_allowlisted_form_is_not_counted(
     assert _run(tmp_path, capsys)[0] == 0
 
 
+@pytest.mark.parametrize(
+    "str_source",
+    [
+        "// see @type {import('x').Y}: this is slow\nconst x = 1;\n",
+        "// @type {Foo} is a prose note\nconst x = 1;\n",
+    ],
+)
+def test_a_type_mention_in_prose_is_still_counted(
+    str_source: str, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Only a comment that starts with the JSDoc import form is exempt, not any mention.
+
+    Parameters
+    ----------
+    str_source : str
+        A comment that mentions ``@type {`` without being the annotation.
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "")
+    (tmp_path / "probe.js").write_text(str_source, encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] != 0
+
+
 @pytest.mark.skipif(
     not (_PATH_REPO / gate.STR_BASELINE_NAME).is_file(), reason="not the BlueprintX root"
 )
