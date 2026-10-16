@@ -41,28 +41,16 @@ def _compose_dsn(str_backend: str) -> str:  # complexity-ok: DSN assembly per ba
         "mssql": "mssql+pyodbc",
         "oracle": "oracle+oracledb",
     }
-    # ⚠️ This tier uses NATIVE drivers, so two backends must NOT get a SQLAlchemy-style
-    # URL — their handlers hand the string straight to the driver rather than parsing it
-    # (unlike postgres/mysql/mariadb, which run it through `_parse_dsn`). Composing a
-    # `mssql+pyodbc://…` or `oracle+oracledb://…` here fails at connect time, and only
-    # when someone selects that backend with the documented individual DB_* variables.
     if str_backend == "oracle":
-        # oracledb wants an Easy Connect DSN — host:port/service — with the credentials
-        # passed separately (see the oracle builder below).
         str_service = os.getenv("DB_SERVICE", "XEPDB1")
         return f"{str_host}:{str_port}/{str_service}"
     if str_backend == "mssql":
-        # pyodbc wants a `KEY=VALUE;` ODBC connection string, never a URL.
         str_driver = os.getenv("DB_ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
         return (
             f"DRIVER={{{str_driver}}};SERVER={str_host},{str_port};"
             f"DATABASE={str_name};UID={str_user};PWD={str_password}"
         )
     str_scheme = dict_schemes[str_backend]
-    # Percent-encode the credentials: a password containing @ : / or ? silently
-    # re-partitions a URL-form DSN, so the connection goes somewhere else or fails
-    # with an error naming the wrong host. The ODBC and Easy Connect forms above
-    # are not URLs and must NOT be encoded.
     return (
         f"{str_scheme}://{quote_plus(str_user)}:{quote_plus(str_password)}"
         f"@{str_host}:{str_port}/{str_name}"
@@ -76,19 +64,12 @@ def _sqlite() -> SQLiteDatabaseHandler:
     return SQLiteDatabaseHandler(path_db)
 
 
-# Engine name -> handler builder. Each builder takes the backend name so the map can live at
-# MODULE level: as closures over an enclosing `str_backend` these had to be rebuilt inside the
-# factory on every call, which also kept the engine NAMES private to that call — and the names
-# are exactly what `active_backend()` must validate against and what the
-# `config/queries/<engine>/` layout mirrors. One source, three readers.
 _DICT_BUILDERS: dict[str, Callable[[str], DatabaseHandler]] = {
     "sqlite": lambda _: _sqlite(),
     "postgresql": lambda b: PostgresDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
     "mariadb": lambda b: MariaDBDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
     "mysql": lambda b: MySQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
     "mssql": lambda b: MSSQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
-    # Credentials go as arguments, not in the DSN: an Easy Connect string has no
-    # place for them, and oracledb.connect() takes user/password separately.
     "oracle": lambda b: OracleDatabaseHandler(
         os.getenv("DB_DSN") or _compose_dsn(b),
         user=os.getenv("DB_USER", "app"),
@@ -96,7 +77,6 @@ _DICT_BUILDERS: dict[str, Callable[[str], DatabaseHandler]] = {
     ),
 }
 
-# The supported engine names, derived from the dispatch map so the two cannot drift.
 SET_BACKENDS: frozenset[str] = frozenset(_DICT_BUILDERS)
 
 _STR_DEFAULT_BACKEND = "sqlite"

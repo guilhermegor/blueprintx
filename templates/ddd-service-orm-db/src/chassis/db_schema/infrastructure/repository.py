@@ -97,7 +97,6 @@ class SQLAlchemyRecordRepository(Repository):
         if record is None:
             return None
 
-        # Last-write-wins by design, no arithmetic to corrupt — see db_schema/CLAUDE.md (#385).
         record.data = json.dumps(entity)
         self.session.flush()
         return entity

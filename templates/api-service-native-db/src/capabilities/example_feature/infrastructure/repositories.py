@@ -13,10 +13,6 @@ class InMemoryNoteRepository(metaclass=TypeChecker):
     """In-memory repository for quick starts and tests."""
 
     def __init__(self) -> None:
-        # One repository instance is shared by every request (AppContainer), and FastAPI
-        # runs a synchronous handler in a worker thread — so these methods DO run
-        # concurrently. See docs/architecture.md for why the lock is here and not in the
-        # use case.
         self._dict_items: dict[str, Note] = {}
         self._cls_lock = threading.Lock()
 

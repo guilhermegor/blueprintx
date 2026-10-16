@@ -13,10 +13,6 @@ env:
   OWNER: "${GITHUB_USERNAME}"
 
 jobs:
-  # Hard release gate: always run the full test suite (tests.yaml, full matrix) on the code
-  # being released. The build/publish jobs depend on this, so a release cannot proceed unless
-  # the tests actually pass here — the gate is enforced by the pipeline, never self-attested
-  # via a form input.
   run_tests:
     uses: ./.github/workflows/tests.yaml
     secrets: inherit
@@ -33,14 +29,6 @@ jobs:
         if: github.event_name != 'workflow_dispatch' && github.ref_type != 'tag'
         run: echo "This is not a tag or workflow_dispatch; exiting"; exit 1
 
-      # The input is free text and is interpolated into a tag below and, downstream,
-      # into a Test PyPI publish. Reject a malformed value here — before the test
-      # suite, the Test PyPI version-comparison and the build all run for nothing —
-      # rather than let it fail after a tag has already been pushed. PEP 440's own
-      # separator rules are lenient (a1, a.1 and a-1 all normalise to the same
-      # release), so this accepts a bare release plus an optional lowercase-letter
-      # suffix with an optional . / - separator on either side, matching the SUFFIX
-      # extraction below.
       - name: Validate version
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -63,7 +51,6 @@ jobs:
             TAG_NAME="$NEW_VERSION"
           else
             TAG_NAME=${GITHUB_REF#refs/tags/}
-            # Remove -test suffix if present
             CLEAN_TAG=$(echo "$TAG_NAME" | sed 's/-test$//')
             NEW_VERSION=$(echo "$CLEAN_TAG" | awk -F'-' '{print $1}')
             SUFFIX=$(printf '%s' "$CLEAN_TAG" | grep -oP '(?<=[0-9])(a|b|rc|\.post|\.dev)[0-9]+$' || echo "")
@@ -142,7 +129,6 @@ jobs:
       - name: Install Dependencies
         if: steps.cached-venv.outputs.cache-hit != 'true'
         run: |
-          # temporary pyproject without Windows platform-specific dependencies
           cp pyproject.toml pyproject.original.toml
           cat pyproject.original.toml | python -c '
           import sys, re
@@ -152,14 +138,12 @@ jobs:
           print(content)
           ' > pyproject.toml
 
-          # regenerate lock file, if needed
           if ! poetry check --lock; then
             echo "Lock file is outdated, regenerating..."
             rm -f poetry.lock
             poetry lock --no-cache
           fi
 
-          # install dependencies, excluding dev and docs groups if present
           without_groups=()
           if grep -q '\[tool.poetry.group.dev\]' pyproject.toml; then
             without_groups+=("dev")
@@ -169,9 +153,6 @@ jobs:
           fi
           if [ ${#without_groups[@]} -gt 0 ]; then
             echo "Excluding groups: ${without_groups[*]}"
-            # Joined into a quoted variable first: an unquoted $(...) word-splits, which is
-            # what SC2046 flags. Harmless for today's group names, and one group name with a
-            # space away from silently passing poetry two arguments instead of one.
             str_without="$(IFS=,; printf '%s' "${without_groups[*]}")"
             poetry install --no-interaction --no-root --without "$str_without"
           else
@@ -179,14 +160,11 @@ jobs:
             poetry install --no-interaction --no-root
           fi
 
-          # restore original pyproject.toml
           mv pyproject.original.toml pyproject.toml
           poetry env activate
 
       - name: Build Package
         env:
-          # Test PyPI is a dry run, so stamp the requested version directly via
-          # POETRY_DYNAMIC_VERSIONING_BYPASS instead of creating a real release tag.
           POETRY_DYNAMIC_VERSIONING_BYPASS: ${{ needs.details.outputs.new_version }}
         run: |
           python -m pip install --upgrade build
@@ -214,12 +192,6 @@ jobs:
           name: dist
           path: dist/
 
-      # OIDC trusted publishing — no stored token. The runner mints a short-lived
-      # OpenID Connect token (via `id-token: write`, above) that Test PyPI verifies against
-      # the trusted publisher registered for this repo/workflow/environment, then issues a
-      # one-time upload token for this run only. Requires a trusted publisher configured on
-      # test.pypi.org for owner=${GITHUB_USERNAME}, repo=${PROJECT_NAME},
-      # workflow=release-test-pypi.yaml, environment=release-test-pypi. No TEST_PYPI_TOKEN secret is used.
       - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
