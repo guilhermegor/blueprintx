@@ -9,14 +9,8 @@ import {
   withOtelLogExport,
 } from './otel-log-emitter';
 
-// Layout-agnostic like otel_logging.py's test suite (blueprintx#438): these pure functions
-// need no env mutation — the caller passes `process.env.X` in directly (see the module
-// docstring for why the property access must stay literal at the real call sites).
 describe('resolveSignalOverride', () => {
   it('prefers a set-but-empty signal value over the generic one', () => {
-    // The negative control for the `??`-chain defect: `''` would be falsy-ish for an `||`
-    // chain, so a naive fallback would use the generic value while the SDK — which keys on
-    // presence — uses the empty override. The two would then disagree about the endpoint.
     expect(resolveSignalOverride('', 'http://generic.example:4318')).toBe('');
   });
 
@@ -28,9 +22,6 @@ describe('resolveSignalOverride', () => {
 });
 
 describe('resolveOtlpLogsUrl', () => {
-  // CodeRabbit finding on PR #505: a generic-only endpoint was passed straight through as
-  // the exporter's `url`, bypassing the SDK's own `/v1/logs` append — logs silently targeted
-  // `/` instead of the collector's logs receiver.
   it('appends /v1/logs to a generic-only endpoint', () => {
     expect(resolveOtlpLogsUrl(undefined, 'http://localhost:4318')).toBe(
       'http://localhost:4318/v1/logs',
@@ -81,11 +72,6 @@ describe('isCleartextWithCredentials — Node runtime (no window global)', () =>
 });
 
 describe('isCleartextWithCredentials — browser runtime (CWE-319 redirect hazard)', () => {
-  // `fetch` (the ONLY transport the browser build can use) follows redirects with no config
-  // knob to disable it (verified against OTLPExporterConfigBase's .d.ts — no `redirect`
-  // option). So a browser runtime refuses every credentialed request, not just cleartext
-  // ones: an https:// or loopback endpoint can still 3xx to an attacker-controlled cleartext
-  // host, and fetch would resend the headers there. CodeRabbit finding on PR #505.
   const ORIGINAL_WINDOW = (globalThis as { window?: unknown }).window;
 
   beforeEach(() => {
@@ -133,8 +119,6 @@ describe('withOtelLogExport', () => {
   });
 
   it('returns baseEmitter UNCHANGED when no endpoint is configured', () => {
-    // The should-fail witness for "no import attempted": a project that never opted in gets
-    // the exact same object back, never a wrapper — and every call still lands on it directly.
     const emitter = withOtelLogExport(NULL_EMITTER);
     expect(emitter).toBe(NULL_EMITTER);
   });
@@ -152,14 +136,6 @@ describe('withOtelLogExport', () => {
     expect(warnings.some((m) => m.includes('secret-token'))).toBe(false);
   });
 
-  // The following tests use an INJECTED installer (the `install` parameter) instead of
-  // relying on the real dynamic `@opentelemetry/*` import rejecting. CodeRabbit finding on
-  // PR #505: the previous version depended on those packages being absent from ts-common's
-  // own devDependencies to exercise the fallback — true here, but false the moment this file
-  // is copied into an opted-in project (conditional_copy_otel adds the real packages), where
-  // Jest could instead construct a REAL BatchLogRecordProcessor against http://localhost:4318,
-  // making the test's outcome depend on network conditions in CI rather than on the code.
-  // Injection makes both branches deterministic regardless of which environment runs them.
   function fakeInstaller(logger: OtelLoggerLike) {
     return () => Promise.resolve(logger);
   }
@@ -177,7 +153,6 @@ describe('withOtelLogExport', () => {
       warn: (m, c) => calls.push([m, c]),
       error: (m, c) => calls.push([m, c]),
     };
-    // Never resolves within this test — proves delivery to baseEmitter does not wait on it.
     const neverSettles = () => new Promise<OtelLoggerLike>(() => undefined);
 
     const emitter = withOtelLogExport(spyEmitter, neverSettles);
@@ -203,7 +178,7 @@ describe('withOtelLogExport', () => {
 
     const emitter = withOtelLogExport(spyEmitter, rejectingInstaller('simulated load failure'));
     emitter.info('before settle');
-    await new Promise((resolve) => setTimeout(resolve, 0)); // let the rejection settle
+    await new Promise((resolve) => setTimeout(resolve, 0));
     emitter.info('after settle');
 
     expect(calls).toContain('before settle');
@@ -224,10 +199,10 @@ describe('withOtelLogExport', () => {
     };
 
     const emitter = withOtelLogExport(spyEmitter, fakeInstaller(fakeLogger));
-    await new Promise((resolve) => setTimeout(resolve, 0)); // let the resolution settle
+    await new Promise((resolve) => setTimeout(resolve, 0));
     emitter.info('hello', { key: 'value' });
 
-    expect(baseCalls).toContain('hello'); // base emitter still runs — additive, never replaced
+    expect(baseCalls).toContain('hello');
     expect(emitted).toContainEqual({
       severityText: 'INFO',
       severityNumber: 9,
@@ -238,11 +213,6 @@ describe('withOtelLogExport', () => {
 });
 
 describe('installOtelLogger — real construction, no network export', () => {
-  // Deliberately NOT mocked: constructing a LoggerProvider/OTLPLogExporter/BatchLogRecordProcessor
-  // performs no network I/O by itself (a batch processor only sends on a later flush this test
-  // never triggers), so this exercises the real @opentelemetry/* wiring. Only meaningful once
-  // copied into an opted-in project (conditional_copy_otel adds the real packages) — inside
-  // ts-common itself the dynamic import has nothing to resolve, so both branches are asserted.
   it('resolves to an emit-capable logger, or rejects — but never throws synchronously', async () => {
     const resultPromise = installOtelLogger('http://localhost:4318/v1/logs', {});
     expect(resultPromise).toBeInstanceOf(Promise);

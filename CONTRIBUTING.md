@@ -916,6 +916,194 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   from `src/capabilities/_layers/`, refuses reserved names (the shared rules directory and
   `example`), and first checks that all four layer rule files exist.
 
+## TypeScript and Bash skeleton notes
+
+The files under `templates/ts-common/`, `templates/ts-lib/`, `templates/react-spa-webpack/`
+and `templates/bash-cli/` carry no comments, so the reasoning behind them lives here. A
+generated project gets the behavior, not the history. `@ts-check` and the `/** @type {...} */`
+annotations that feed it are checker directives, so the comment gate allows them; the other
+`@type` annotations were removed with the comments, since no tier sets `checkJs`.
+
+### ESLint configs (`ts-lib`, `react-spa-webpack`)
+
+- **Vendor allowlist (ts-lib, #345).** A third-party import passes only if the file's layer
+  lists it with a written reason. It is deny-by-default on purpose: `no-restricted-imports`
+  is a blocklist and cannot catch a vendor nobody listed. The policy lives inline in
+  `eslint.config.mjs`, which the scaffold already copies verbatim, so no new `cp` line is
+  needed; extract it to `ts-common` only if `react-spa-webpack` adopts the same rule. ts-lib has
+  no `boundaries` entry because it is a flat library with no layers to police.
+- **What the local rule treats as an import (#348).** A static import, a dynamic
+  `import('x')` with a literal, a non-literal `import(x)` (reported, never waved through),
+  `require()` and `import x = require('x')` all count. A relative specifier is exempt. Both
+  `import type { A }` and `import { type A }` are erased at compile time and pass, while a
+  mixed `{ type A, b }` still couples at runtime and fails.
+- **Test files must not export (#442).** An exporting test file shares state across files.
+  The lint rule is the cheap half; `randomize: true` in `jest.config.cjs` is the other.
+  Jest prints the seed on every run, and a seed-specific failure is a real defect.
+- **No bare HTTP status literals (#453).** `detectObjects: true` is required: without it the
+  `{ statusCode: 201 }` response shape is not caught.
+- **Catch safety (#440).** `strict` already types a `catch (err)` variable as `unknown`, but
+  not the parameter of a promise `.catch(cb)`, so a type-aware rule closes that gap. Only
+  `Error` values may be thrown, so `instanceof Error` narrowing can succeed.
+- **Complexity ceilings (react, #167, #168).** `complexity` is 3 for `src/` (2 flags about
+  16% of the example capability's functions) and 2 for tests (1 flags about 17%).
+- **Function length (#439).** The ceiling is 60 lines for logic, matching the Python gate.
+  `.tsx` has its own ceiling of 100 because returned JSX can legitimately run long, and that
+  rule stays a separate block even when the numbers happen to match. `skipComments: true` is
+  the nearest ESLint has to "docstring excluded" but skips inline comments too; that gap is
+  accepted because every measured function sits 30 or more lines under the ceiling.
+- **Ignores.** `react-spa-webpack` ignores the inactive state-manager variants because
+  `tsconfig.json` excludes them and the type-aware parser cannot lint them. ts-lib ignores
+  `babel.config.test.cjs` and the Docusaurus config as tooling, not library source.
+
+### Logging port and OTLP export (`ts-common`, #436, #438)
+
+- **`LogEmitter` is a port.** Its value is the swappable destination. `NULL_EMITTER` is the
+  `ts-lib` default because a published package must not write to a host's output on its own
+  initiative. `CONSOLE_EMITTER` is the `react-spa-webpack` default because `console` is the
+  only destination a browser can reach without an explicit network call. In the SPA the
+  composition root injects the emitter, since `infrastructure/` may import only the domain
+  ports and external libraries.
+- **OTLP export wraps, never replaces.** `optional/otel-log-emitter.ts` adds export to
+  whatever emitter the caller already has, so a project with no collector behaves as before.
+  It is the only module that imports `@opentelemetry/*`, dynamically. The three logs packages
+  are published at 0.222.0, the same pre-stable status as the Python Logs signal: pin exact
+  versions and re-measure before bumping.
+- **The endpoint and headers are resolved in this file.** The browser build of the exporter
+  reads no `OTEL_EXPORTER_OTLP_*` variables, and a browser has no `process.env`. So
+  `resolveOtlpLogsUrl` and `resolveSignalOverride` resolve them and pass them explicitly,
+  unlike the Python port. `process.env.<KEY>` must stay a literal member access, the exact
+  shape webpack's `DefinePlugin` replaces. Presence decides precedence, never truthiness (a
+  signal value that is set but empty still wins), and a generic-only endpoint needs
+  `/v1/logs` appended or logs go to `/` (found in review of #505).
+- **Credentials are refused in a browser.** `fetch` follows redirects and the exporter config
+  has no `redirect` option, so even an https or loopback endpoint could redirect to an
+  attacker-controlled cleartext host and have the headers resent. `isCleartextWithCredentials`
+  therefore refuses every credentialed request in a browser and applies only the narrower
+  cleartext-off-host check in Node. The architectural answer is a same-origin collector proxy
+  that injects the credential server-side.
+- **Tests inject the installer.** The fallback tests pass an `install` function instead of
+  relying on the real `@opentelemetry/*` import failing, because that import succeeds once the
+  file is copied into an opted-in project and Jest would then build a real exporter against
+  `localhost:4318`.
+- **Collector files are a deliberate parallel copy.** `docker-compose.otel-collector.yml` and
+  `otel-collector-config.yaml` are byte-identical to the `python-common` ones. Collapsing them
+  into `templates/common/` is deferred because it would edit the Python scaffold `cp` lines.
+  The compose file publishes the receivers on `127.0.0.1` only, since they are
+  unauthenticated. The `0.0.0.0` bind in the collector config is the in-container address and
+  must not be "hardened": narrowing it makes the collector unreachable through the port
+  mapping, and the fire-and-forget exporter would fail silently.
+
+### Review roster and required checks (`ts-common`, `bash-cli`)
+
+- **`.review-bots.yaml` is the ts ecosystem's own roster.** It lists one threads reviewer.
+  GitHub's built-in Copilot reviewer is deliberately absent, because nothing in the TS
+  templates wires it up and a roster entry for a reviewer that never reports is the failure the
+  gate exists to catch. Every row needs `posts: threads` or `posts: status`, with at least one
+  `threads` member; a missing or misspelled value fails loudly. Deleting the file opts a
+  project out and the gate then skips.
+- **Why `review-threads.yml` stages the roster.** The shared script reads
+  `.review-bots.yaml` from the working directory, while this tier ships it under `.github/`,
+  so the workflow copies it first. The copy is guarded with `-f` because deleting the file is
+  the documented opt-out and an unguarded `cp` would fail the job under `bash -e`. A finding
+  needs both halves, a reply and a resolution; a bot resolving its own thread records its
+  satisfaction, not the author's reasoning.
+- **`required-checks.txt`.** One name per line, verbatim as GitHub reports it. Add a name only
+  after confirming a real PR emits it (`gh api repos/:owner/:repo/commits/<sha>/check-runs`),
+  because a name nothing emits blocks every PR forever. Every listed workflow runs on every PR
+  with no filter, and `check_required_checks_sync.py` refuses a name that stops being
+  unconditional. `bash-cli` omits `Review threads answered` on purpose (#564): it is a
+  single-file CLI with no Python runtime, so its three `ci.yml` names are what bind a merge.
+- **Secret scanning (#155).** The scan uses gitleaks, not GitGuardian, because `ggshield`
+  needs a hosted key a fresh project lacks and exits 3 having scanned nothing. It scans full
+  history, verifies the release checksum before unpacking an executable, and ships no config:
+  an allowlist is added only for a measured false positive.
+
+### ts-lib build, docs and release
+
+- **No `"type"` field in `package.json`.** An explicit `"type": "commonjs"` breaks the
+  Docusaurus 3 webpack build with an opaque `sourceType: module` error (found by bisecting a
+  vanilla site, #134). `dist/cjs` therefore needs no marker, and `bin/write_esm_package_json.sh`
+  writes a nested `package.json` into `dist/esm` instead.
+- **Jest's Babel config is not discoverable on purpose.** `babel.config.test.cjs` is wired
+  through `jest.config.cjs` with an absolute `configFile`, because a root `.babelrc` or
+  `babel.config.js` is also picked up by Docusaurus and breaks the docs build. Jest runs in the
+  `node` environment since a library has no DOM.
+- **`src/index.ts` re-exports with a `.js` extension.** Node's native ESM resolver, unlike CJS
+  or Jest, does not guess extensions, and `tsc` maps it back to the `.ts` source.
+- **`bin/smoke_pack.sh`** installs the packed tarball into a throwaway consumer and loads it by
+  package name, the only way to exercise the `exports` map and `files` allowlist. It is written
+  against the example `greet` export, so change its checks when the public API changes.
+- **`pack-smoke.yml`** is npm's analogue of Test PyPI: versions are immutable and no hosted test
+  registry exists. `pack-smoke` runs on every PR, and `verdaccio-rehearsal` does a real
+  publish-and-install round trip against a service-container registry.
+- **`release-npm.yml`** mirrors the Python release shape. The version input is validated
+  before any tag exists, the registry check queries the specific version rather than the
+  `latest` tag, and there is no package cache in a release build. Publishing uses OIDC trusted
+  publishing with no stored token and `npm stage publish`, which holds the package until a
+  maintainer approves with 2FA, so configure the trusted publisher as stage-only. Staged
+  publishing needs npm 11.15.0 or newer, so npm is pinned explicitly. The release asset is named
+  explicitly, because a glob over an empty directory leaves a draft release.
+- **`docs-deploy.yml`** runs after a release publishes and never for a prerelease, gated on the
+  release's own flag. A release created with `github.token` does not start a
+  `release: published` workflow, so `release-npm.yml` calls this one through `workflow_call`
+  and the `release` trigger remains for releases published by hand. `docs.yml` only builds, to
+  catch broken links before a release. Enabling Pages with the Actions source is a one-time
+  manual step, since the workflow token lacks repo-admin rights.
+
+### react-spa-webpack build and deploy
+
+- **Dockerfile.** A multi-stage build compiles with Node and serves `dist/` from nginx, so the
+  final image has no Node, `node_modules` or source. Build-time env arrives as a BuildKit secret
+  (`docker build --secret id=env,src=.env`), never as `ARG` or `ENV`, so it stays out of image
+  layers. Without the secret the build still succeeds and falls back to the committed `.env`
+  defaults. Pass `--build-arg NODE_VERSION="$(cat .nvmrc)"` to keep `.nvmrc` the single source.
+- **`nginx.conf`.** Fingerprinted assets are cached forever because a content change produces a
+  new filename. Unmatched paths fall back to `index.html` so client-side routes survive a
+  refresh, matching the dev server's `historyApiFallback`.
+- **GitHub Pages deploy** pushes `dist/` to `gh-pages` with the default token, which avoids the
+  manual Pages-source toggle that `actions/deploy-pages` needs. It builds with
+  `PUBLIC_PATH=/<repo-name>/`, copies `index.html` to `404.html` for deep links, adds
+  `.nojekyll` so underscore-prefixed chunks are served, and uses `rsync --delete` while
+  excluding `.git`.
+- **Vercel deploy (#390).** No job-wide `env:` is set, because `vercel build` runs the
+  project's own build and a job-wide credential would be readable by every dependency; each of
+  the three values is declared on the steps that use it. `vercel build` takes no token, since it
+  reads the state `vercel pull` wrote, and passing a token as an argument is worse because
+  argv is readable by other processes in the container. A surviving `.git` makes the CLI create
+  a git-linked deployment and wait forever for a build the Git integration never reports, so
+  the step removes it and `vercel.json` disables `git.deploymentEnabled`; both are required.
+  A green run does not prove the site updated, so probe the live bundle for a string unique to
+  the new commit.
+- **js-copy.** `emit-js-copy.mjs` writes a plain-JavaScript copy for contexts that must not
+  contain TypeScript, using the `@babel/*` packages already present. Two settings only matter
+  after the extension change: presets are declared inline with `babelrc: false` because a
+  `.babelrc` resolves against the invoking shell's cwd, and `resolve.fullySpecified: false`
+  because `"type": "module"` otherwise requires extensions on relative `.js` imports. Internal
+  developer docs are left out of the copy, and `verify-js-copy.mjs` fails if a generated document
+  names its sources by path, which would disclose the excluded toolchain.
+- **`lint-staged.config.js`** is the complete config here, because the JS file wins over a
+  `package.json` field; it adds CSS handling to the `ts-common` baseline.
+- **`declarations.d.ts` and the API adapter.** `PUBLIC_PATH` is injected by `DefinePlugin` and
+  defaults to `/` in local dev. The adapter keeps one local status constant rather than adding
+  `http-status-codes` (#453); promote it when a second call site needs one.
+
+### bash-cli
+
+- **Version.** `CLI_VERSION` is a fallback for installs without `.git`; a checkout derives the
+  version from the tag with `git describe`, and `make install` stamps the real value. Never
+  hand-bump it, the release tag is the source of truth.
+- **`release.yml`** mirrors BlueprintX's own: one `workflow_dispatch` entry and a tag job,
+  trimmed to a GitHub Release carrying a version-stamped tarball. Other channels are deferred.
+  The free-text version is validated before the tag exists, since `1.2.3/beta` is a legal tag
+  that then breaks the `sed` stamping and leaves a tag with no artifact.
+- **`make lint` is the CI job**, so local and CI run identical shellcheck and shfmt. `lib/common.sh`
+  is a byte-identical shared file, so shfmt checks only the project's own script while
+  shellcheck covers both. The repo-rules target needs a maintainer's `gh auth` with admin and
+  only warns when it runs without one.
+- **`tests/cli.bats`** is the smoke test for the entrypoint's `--version`, `--help` and
+  unknown-argument cases.
+
 ## Repository scripts under `bin/`
 
 The scripts under `bin/` carry no comments, so the reasoning lives here. Per-script rules,

@@ -5,10 +5,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Pushes the built SPA to the gh-pages branch. Avoids the manual
-# "Settings → Pages → Source = GitHub Actions" toggle required by
-# actions/deploy-pages. The default GITHUB_TOKEN with contents: write
-# is enough to push to the repo's own branch.
 permissions:
   contents: write
 
@@ -21,8 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      # Repository name → SPA basepath. Safe (slug); env-quoted to satisfy
-      # GitHub Actions injection-safety guidelines.
       REPO_NAME: ${{ github.event.repository.name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -34,26 +28,17 @@ jobs:
 
       - run: npm ci
 
-      # GitHub Pages serves the SPA under /<repo-name>/. Webpack reads
-      # PUBLIC_PATH at build time to set output.publicPath accordingly.
       - name: Build with GH Pages basepath
         env:
           PUBLIC_PATH: /${{ env.REPO_NAME }}/
         run: npm run build
 
-      # GH Pages serves 404.html for unknown paths; copying index.html
-      # lets the SPA take over and resolve client-side routes.
       - name: Add SPA 404 fallback
         run: cp dist/index.html dist/404.html
 
-      # Bypass Jekyll processing; Jekyll otherwise hides files whose names
-      # start with an underscore (some webpack chunks may use that naming).
       - name: Disable Jekyll on Pages
         run: touch dist/.nojekyll
 
-      # Prepare the gh-pages working directory. If the branch already exists
-      # on origin, clone it; otherwise initialise a fresh orphan branch on
-      # first deploy.
       - name: Prepare gh-pages working dir
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -70,9 +55,6 @@ jobs:
             git remote add origin "${REMOTE_URL}"
           fi
 
-      # rsync the freshly built dist/ into the gh-pages working dir.
-      # --delete removes stale assets; --exclude='.git' protects the branch's
-      # own git metadata.
       - name: Sync dist/ into gh-pages working dir
         run: rsync -av --delete --exclude='.git' dist/ gh-pages-work/
 

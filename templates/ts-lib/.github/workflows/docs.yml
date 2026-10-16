@@ -1,9 +1,5 @@
 name: Docs - Build Check
 
-# Build the Docusaurus site on every push and PR to catch broken links, a bad sidebar
-# entry, or a missing doc BEFORE it reaches a release. This workflow does NOT deploy —
-# deployment is owned by docs-deploy.yml, gated on a published, non-prerelease release.
-
 on:
   push:
     branches: [main]
