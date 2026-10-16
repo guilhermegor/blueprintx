@@ -739,9 +739,8 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   pushed after the first commit, before the ruleset is applied, so that direct push is never
   blocked by the rules about to be set. Offline artifacts are committed with `--no-verify`
   (HEAD is the default branch and the protect-branch hook is already installed), so a fresh
-  offline project starts clean for bash-cli, ts-lib and the Python scaffolds; the React scaffold makes its first
-  commit before `apply_offline_mode` and does not commit the offline rewrites, so an offline
-  React project starts with them uncommitted. The swapped `protect-branch` pre-commit hook replaces the stock
+  offline project starts clean for every scaffold, React included: its first commit precedes
+  `apply_offline_mode`, which then commits the rewrites through `scaffold_commit_artifacts` (#812). The swapped `protect-branch` pre-commit hook replaces the stock
   `no-commit-to-branch`, and `add_poe_include` adds the offline task fragment only when copied.
   Online, releases are cut by tagging and `strip_bump_version` runs before the assets commit so
   its edits ride the same commit and push.

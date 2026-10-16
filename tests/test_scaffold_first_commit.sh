@@ -80,6 +80,15 @@ str_out="$(env HOME="$WORK_DIR" GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GI
     scaffold_commit_artifacts "$2" clean; echo "clean=$?"; echo b >"$2/b"
     git() { [ "$3" = commit ] && return 1; command git "$@"; }
     scaffold_commit_artifacts "$2" boom; echo "boom=$?"' _ "$REPO_ROOT" "$proj" 2>&1)"
+parent="$WORK_DIR/parent"
+git init -q -b main "$parent"
+mkdir "$parent/child"
+echo c >"$parent/child/c"
+env HOME="$WORK_DIR" GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@e.com \
+    GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@e.com bash -c '
+    source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
+    scaffold_commit_artifacts "$2" nested' _ "$REPO_ROOT" "$parent/child" >/dev/null 2>&1
+check "a project nested in another repo is never committed into it" 0 "$(git -C "$parent" rev-list --all --count 2>/dev/null)"
 check "an artifact commit that fails stops the scaffold" 0 "$(grep -c '^boom=' <<<"$str_out")"
 check "the failure names the commit" 1 "$(grep -c "Could not commit 'boom'" <<<"$str_out")"
 
