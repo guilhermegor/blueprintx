@@ -217,6 +217,13 @@ repos:
         pass_filenames: false
         files: ^(templates/python-common/bin/check_secrets\.sh|tests/test_check_secrets\.sh)$
 
+      - id: scaffold-comment-budget-tests
+        name: generated projects ship the comment ratchet (blueprintx#826)
+        entry: bash tests/test_scaffold_comment_budget.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/scaffold_comment_budget\.sh|bin/scaffold/.*\.sh|templates/common/bin/comment_budget_routing\.txt|templates/python-common/bin/check_comment_budget\.py|tests/test_scaffold_comment_budget\.sh)$
+
       - id: close-linked-issues-tests
         name: close_linked_issues.sh should-fail regression tests (blueprintx#604)
         entry: bash tests/test_close_linked_issues.sh

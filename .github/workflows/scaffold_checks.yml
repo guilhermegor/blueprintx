@@ -105,6 +105,9 @@ jobs:
       - name: Check the comment budget across bin/ and templates/
         run: python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline
 
+      - name: Generated projects ship the comment ratchet
+        run: bash tests/test_scaffold_comment_budget.sh
+
       - name: The baseline must not exceed the base branch's
         if: github.event_name == 'pull_request'
         env:

@@ -38,3 +38,9 @@ repos:
         language: system
         pass_filenames: false
         files: \.(sh|bats)$|^bin/
+
+      - id: check-comment-budget
+        name: comment budget (zero-comment ratchet)
+        entry: python3 bin/check_comment_budget.py --require-baseline
+        language: system
+        pass_filenames: false
