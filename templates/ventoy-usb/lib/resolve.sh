@@ -210,19 +210,28 @@ resolve_windows() {
     printf '%s\t%s\t\n' "$(basename "${str_url%%\?*}")" "$str_url"
 }
 
+second_origin_missing() {
+    if [ "${ALLOW_SINGLE_ORIGIN:-0}" = 1 ]; then
+        print_status "warning" "second origin (ventoy.net) $2: $1 checked against one origin only (ALLOW_SINGLE_ORIGIN=1)" >&2
+        return 0
+    fi
+    echo "resolve: second origin (ventoy.net) $2 for $1 (fail closed; set ALLOW_SINGLE_ORIGIN=1 to accept one origin)" >&2
+    return 1
+}
+
 second_origin_check() {
     local str_name="$1" str_hash="$2" path_tmp str_other
     path_tmp="$(mktemp)"
     if ! net_get "https://www.ventoy.net/en/download.html" "$path_tmp"; then
         rm -f "$path_tmp"
-        print_status "warning" "second origin (ventoy.net) unreachable: $str_name checked against one origin only" >&2
-        return 0
+        second_origin_missing "$str_name" "unreachable"
+        return
     fi
     str_other="$(sed -nE 's/.*"linsha" *: *"([0-9a-f]{64})".*/\1/p' "$path_tmp" | head -n1)"
     rm -f "$path_tmp"
     if [ -z "$str_other" ]; then
-        print_status "warning" "second origin (ventoy.net) lists no checksum: $str_name checked against one origin only" >&2
-        return 0
+        second_origin_missing "$str_name" "lists no checksum"
+        return
     fi
     if [ "$str_other" != "${str_hash,,}" ]; then
         echo "resolve: GitHub digest and ventoy.net disagree for $str_name (fail closed)" >&2

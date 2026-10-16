@@ -215,13 +215,16 @@ make_signed_sums() {
     [[ "$output" == *"disagree"* ]]
 }
 
-@test "two-origin: an unreachable second origin only warns" {
+@test "two-origin: an unreachable second origin fails closed unless opted in" {
     iso="vt"
     export GITHUB_API="https://api.test"
     fixture "https://api.test/repos/o/r/releases/latest" \
         "{\"assets\":[{\"name\":\"ventoy-1.0-linux.tar.gz\",\"browser_download_url\":\"https://github.com/o/r/x.tgz\",\"digest\":\"sha256:$(sha_of "$iso")\"}]}"
     fixture "https://github.com/o/r/x.tgz" "$iso"
     fetch_one 'v|tool|@tools|github|o/r|^ventoy-[0-9.]+-linux\.tar\.gz$|gh-digest|||two-origin'
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"fail closed"* ]]
+    ALLOW_SINGLE_ORIGIN=1 fetch_one 'v|tool|@tools|github|o/r|^ventoy-[0-9.]+-linux\.tar\.gz$|gh-digest|||two-origin'
     [ "$status" -eq 0 ]
     [[ "$output" == *"one origin only"* ]]
 }

@@ -123,3 +123,13 @@ STUB
     run "$CLI" drive --target /dev/sdb </dev/null
     [ "$(cat "$TMP/mnt/persistance/persistence_ext4_8GB_casper-rw.dat")" = keep ]
 }
+
+@test "a symlink on the drive is removed itself and its target is never followed" {
+    make_stubs
+    mkdir -p "$TMP/outside"
+    echo keep >"$TMP/outside/precious"
+    ln -s "$TMP/outside" "$TMP/mnt/link"
+    run "$CLI" drive --target /dev/sdb --yes-delete-extras </dev/null
+    [ ! -e "$TMP/mnt/link" ]
+    [ -f "$TMP/outside/precious" ]
+}

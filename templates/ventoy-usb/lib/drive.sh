@@ -116,12 +116,19 @@ drive_copy_persistence() {
     done
 }
 
+drive_is_extra() {
+    local path_drive="$1" path_mnt="$2" path_item="$3" str_name
+    str_name="${path_item#"$path_mnt"/}"
+    [ -L "$path_item" ] && return 0
+    [ ! -e "$path_drive/$str_name" ]
+}
+
 drive_offer_extras() {
     local path_drive="$1" path_mnt="$2" str_rel="$3" yes_all="$4" path_item str_name str_answer
     for path_item in "$path_mnt/$str_rel"/* "$path_mnt/$str_rel"/.[!.]*; do
-        [ -e "$path_item" ] || continue
+        [ -e "$path_item" ] || [ -L "$path_item" ] || continue
         str_name="${path_item#"$path_mnt"/}"
-        if [ ! -e "$path_drive/$str_name" ]; then
+        if drive_is_extra "$path_drive" "$path_mnt" "$path_item"; then
             str_answer=n
             if [ "$yes_all" = 1 ]; then
                 str_answer=y
@@ -131,7 +138,7 @@ drive_offer_extras() {
             else
                 read -r -p "delete $str_name? [y/N] " str_answer || str_answer=n
             fi
-            case "$str_answer" in y | Y) ${DRIVE_RUN-} rm -rf "$path_item" ;; esac
+            case "$str_answer" in y | Y) ${DRIVE_RUN-} rm -rf --one-file-system -- "$path_item" ;; esac
         elif [ -d "$path_item" ]; then
             drive_offer_extras "$path_drive" "$path_mnt" "$str_name" "$yes_all"
         fi

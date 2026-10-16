@@ -89,7 +89,7 @@ Each manifest entry names how its download is authenticated, and the build print
 | level | meaning | entries |
 |---|---|---|
 | `gpg:<fingerprint>:<suffix>:<key url>` | the checksum file's detached signature is verified with `gpg` against a key whose fingerprint is written in the manifest; a missing `gpg`, key or valid signature fails the entry | Ubuntu desktop and server, Lubuntu (Ubuntu CD signing key), Kali |
-| `two-origin` | the GitHub digest must equal the sha256 listed on `ventoy.net`; a disagreement fails, an unreachable second origin warns | Ventoy |
+| `two-origin` | the GitHub digest must equal the sha256 listed on `ventoy.net`; a disagreement fails, and so does an unreachable second origin unless `ALLOW_SINGLE_ORIGIN=1` is set (then it warns) | Ventoy |
 | `same-origin-digest` | the checksum comes from the same place as the file: it detects corruption, not a tampered upstream | the other checksum-bearing entries (Rocky, Proxmox, Clonezilla, KolibriOS, TrueNAS, SystemRescue, MiniOS, Talos, Rufus, RustDesk, SourceForge and archive.org entries, the persistence image) |
 | `none` | the vendor publishes nothing; explicit `none:<reason>` in the checksum field | vendor installers, Windows 11 |
 
@@ -99,7 +99,7 @@ the tarball's two-origin check matters most.
 
 Hardening: every request uses `--proto =https --tlsv1.2`; names taken from upstream must match
 `^[A-Za-z0-9._+-]+$` without `..`, and a GitHub download URL must be on `github.com`; archives
-extract into a fresh temp dir; checksum lines are matched exactly.
+extract into a fresh temp dir; the sync deletes a symlink on the drive as the link itself, never follows it, and runs `rm --one-file-system`; checksum lines are matched exactly.
 
 ## Tools
 
