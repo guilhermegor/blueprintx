@@ -247,3 +247,63 @@ make_signed_sums() {
     fetch_one 'u|core|isos/Others|dirsums|https://h/d/|^u-24\.04(\.[0-9]+)*\.iso$|sums:SHA256SUMS|||same-origin-digest'
     [ "$(cat "$BUILD_DIR/drive/isos/Others/u-24.04.5.iso")" = "$iso" ]
 }
+
+@test "gpg trust: an inline-signed message by the pinned key cannot stand in for a detached signature" {
+    command -v gpg || skip "gpg missing"
+    make_signed_sums "$(sha_of evil) *s.iso
+"
+    GNUPGHOME="$TMP/gh" gpg --batch -q --yes --sign -o "$TMP/inline.gpg" <<<"an older, genuinely signed message"
+    fixture_file "https://h/d/SHA256SUMS.gpg" "$TMP/inline.gpg"
+    fixture "https://h/d/s.iso" "evil"
+    fetch_one "s|core|isos/Others|dirsums|https://h/d/|^s\\.iso\$|sums:SHA256SUMS|||gpg:$FPR:.gpg:https://h/key.asc"
+    [ "$status" -ne 0 ]
+    [ ! -e "$BUILD_DIR/drive/isos/Others/s.iso" ]
+}
+
+@test "gpg trust: a key file carrying extra keys is refused" {
+    command -v gpg || skip "gpg missing"
+    make_signed_sums "$(sha_of x) *s.iso
+"
+    mkdir -m700 "$TMP/other"
+    GNUPGHOME="$TMP/other" gpg --batch -q --passphrase '' --quick-gen-key "attacker <a@example.com>" ed25519 sign 0 2>/dev/null
+    GNUPGHOME="$TMP/other" gpg --batch -q --armor --export >>"$TMP/key.asc"
+    fixture_file "https://h/key.asc" "$TMP/key.asc"
+    fixture "https://h/d/s.iso" "x"
+    fetch_one "s|core|isos/Others|dirsums|https://h/d/|^s\\.iso\$|sums:SHA256SUMS|||gpg:$FPR:.gpg:https://h/key.asc"
+    [ "$status" -ne 0 ]
+}
+
+@test "gpg trust: a fingerprint that is not 40 hex digits is rejected by the manifest" {
+    write_manifest 's|core|isos/Others|dirsums|https://h/d/|^s\.iso$|sums:SHA256SUMS|||gpg:ABCD:.gpg:https://h/key.asc'
+    run "$CLI" layout
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"trust level"* ]]
+}
+
+@test "test hooks are ignored outside the test harness" {
+    printf '#!/bin/sh\ntouch "%s/hook-used"\nexit 1\n' "$TMP" >"$TMP/fakecurl"
+    chmod +x "$TMP/fakecurl"
+    write_manifest 'p|core|isos/Others|latesturl|https://invalid.invalid/p.iso|^p\.iso$|none:t|||none'
+    VENTOY_USB_TESTING=0 CURL="$TMP/fakecurl" run "$CLI" fetch
+    [ ! -e "$TMP/hook-used" ]
+}
+
+@test "a Microsoft session failure fails the entry" {
+    fixture "https://www.microsoft.com/en-us/software-download/windows11" '<option value="3813">x</option>'
+    fetch_one 'w|windows|isos/Windows|windows|Brazilian Portuguese|\.iso$|none:no hash page|||none'
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"w: could not resolve"* ]]
+}
+
+@test "a checksum file without a matching name fails instead of downloading" {
+    fixture "https://h/d/SHA256SUMS" "$(sha_of x) *other.iso"
+    fetch_one 'u|core|isos/Others|dirsums|https://h/d/|^u\.iso$|sums:SHA256SUMS|||same-origin-digest'
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"could not resolve"* ]]
+}
+
+@test "a directory index without a matching link fails instead of downloading" {
+    fixture "https://h/" '<a href="nothing.txt">x</a>'
+    fetch_one 'tn|core|isos/Others|dirindex|https://h/|^T-[0-9]\.iso$|sidecar:.sha256|||same-origin-digest'
+    [ "$status" -ne 0 ]
+}

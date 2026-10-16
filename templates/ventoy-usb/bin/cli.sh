@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/../lib/common.sh"
+[ "${VENTOY_USB_TESTING:-0}" = 1 ] || unset CURL GITHUB_API LSBLK FINDMNT VENTOY_DIR DRIVE_MNT SUDO
 for str_lib in manifest resolve layout ventoy_config drive; do
     # shellcheck source=/dev/null
     source "$SCRIPT_DIR/../lib/$str_lib.sh"
@@ -39,6 +40,7 @@ print_usage() {
     echo "  --target PATH  Pendrive mount point or /dev/sdX; asked for when omitted"
     echo "  --dry-run      Print what 'drive' would do and touch nothing"
     echo "  --yes-delete-extras  Delete drive items outside the layout without asking"
+    echo "  --keep-persistence   Never replace an existing persistence image with a newer release"
     echo "  -V, --version  Print version and exit"
     echo "  -h, --help     Show this help"
 }
@@ -91,6 +93,7 @@ main() {
                 ;;
             --dry-run) int_dry=1 ;;
             --yes-delete-extras) int_yes=1 ;;
+            --keep-persistence) export KEEP_PERSISTENCE=1 ;;
             -*)
                 print_status "error" "Unknown option: $1"
                 print_usage

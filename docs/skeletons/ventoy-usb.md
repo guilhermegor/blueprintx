@@ -72,10 +72,12 @@ against the release notes and extracts it. Only when no published image matches 
 size that is not 1, 2 or 4 GB) does it fall back to Ventoy's `CreatePersistentImg.sh -s <MB> -t
 ext4 -l <label> -o <path>`, which needs root for a loop device.
 
-The image is replaced only when missing or when the configured size or label changes (the file
-name encodes both), with a warning that the saved session data is lost. A newer `ventoy/backend`
-release does not replace it: the images are blank templates, and replacing one would wipe the
-session for nothing. The folder is spelled `persistance`, as on the original drive.
+The release the image came from is recorded in `persistance/.persistence-release`. When a newer
+`ventoy/backend` release exists, both `build` and the drive sync replace the image by default
+and print a warning that its saved session data is lost; `--keep-persistence` (or
+`KEEP_PERSISTENCE=1` with make) opts out. A changed size or label always yields a new image, and
+an unreachable `ventoy/backend` keeps the existing one. The folder is spelled `persistance`, as
+on the original drive.
 
 `ventoy.json` is generated from the manifest, so a persistence `image` is the path the ISO
 actually landed at (`/isos/Linux/Desktop/ubuntu-...iso`). `check`, also run by `build`, fails if
@@ -88,7 +90,7 @@ Each manifest entry names how its download is authenticated, and the build print
 
 | level | meaning | entries |
 |---|---|---|
-| `gpg:<fingerprint>:<suffix>:<key url>` | the checksum file's detached signature is verified with `gpg` against a key whose fingerprint is written in the manifest; a missing `gpg`, key or valid signature fails the entry | Ubuntu desktop and server, Lubuntu (Ubuntu CD signing key), Kali |
+| `gpg:<fingerprint>:<suffix>:<key url>` | the checksum file's detached signature is verified with `gpg` against a key whose 40-hex fingerprint is written in the manifest (the key file must hold exactly that one key, the signature must be detached and good, and the primary fingerprint of the signer must match); a missing `gpg`, key or valid signature fails the entry | Ubuntu desktop and server, Lubuntu (Ubuntu CD signing key), Kali |
 | `two-origin` | the GitHub digest must equal the sha256 listed on `ventoy.net`; a disagreement fails, and so does an unreachable second origin unless `ALLOW_SINGLE_ORIGIN=1` is set (then it warns) | Ventoy |
 | `same-origin-digest` | the checksum comes from the same place as the file: it detects corruption, not a tampered upstream | the other checksum-bearing entries (Rocky, Proxmox, Clonezilla, KolibriOS, TrueNAS, SystemRescue, MiniOS, Talos, Rufus, RustDesk, SourceForge and archive.org entries, the persistence image) |
 | `none` | the vendor publishes nothing; explicit `none:<reason>` in the checksum field | vendor installers, Windows 11 |
@@ -96,6 +98,8 @@ Each manifest entry names how its download is authenticated, and the build print
 Rocky's `CHECKSUM` and Proxmox's and Clonezilla's checksum files have no signature or key I could
 verify here, so they stay `same-origin-digest`. Ventoy2Disk runs as root on a block device, so
 the tarball's two-origin check matters most.
+
+Test hooks (`CURL`, `GITHUB_API`, `LSBLK`, `FINDMNT`, `VENTOY_DIR`, `DRIVE_MNT`, `SUDO`) are ignored unless `VENTOY_USB_TESTING=1`, so the environment cannot redirect a root-run tool.
 
 Hardening: every request uses `--proto =https --tlsv1.2`; names taken from upstream must match
 `^[A-Za-z0-9._+-]+$` without `..`, and a GitHub download URL must be on `github.com`; archives

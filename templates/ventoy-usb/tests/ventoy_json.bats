@@ -116,3 +116,52 @@ build_tree() {
     [[ "$output" == *"CreatePersistentImg.sh"* ]]
     [ "$(cat "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat")" = fallback ]
 }
+
+backend_release() {
+    export GITHUB_API="https://api.test"
+    rm -rf "$TMP/z"
+    mkdir -p "$TMP/z/images" "$TMP/z/d"
+    printf '%s' "$2" >"$TMP/z/d/persistence_ext4_4GB_casper-rw.dat"
+    (cd "$TMP/z/d" && 7z a -bso0 -bsp0 ../images/persistence_ext4_4GB_casper-rw.dat.7z persistence_ext4_4GB_casper-rw.dat)
+    (cd "$TMP/z" && 7z a -bso0 -bsp0 images.zip images)
+    fixture_file "https://github.com/ventoy/backend/images.zip" "$TMP/z/images.zip"
+    sum="$(sha256sum "$TMP/z/images/persistence_ext4_4GB_casper-rw.dat.7z" | cut -d' ' -f1)"
+    jq -n --arg t "$1" --arg b "$sum  persistence_ext4_4GB_casper-rw.dat.7z" \
+        '{tag_name: $t, body: $b, assets: [{name: "images.zip", browser_download_url: "https://github.com/ventoy/backend/images.zip"}]}' \
+        >"$TMP/rel.json"
+    fixture_file "https://api.test/repos/ventoy/backend/releases/latest" "$TMP/rel.json"
+}
+
+prepare_persistence() {
+    write_manifest "$ENTRY"
+    mkdir -p "$BUILD_DIR/drive/persistance"
+    echo "$1" >"$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat"
+    printf '%s' "$2" >"$BUILD_DIR/drive/persistance/.persistence-release"
+}
+
+@test "a newer ventoy/backend release replaces the image, warns and records the release" {
+    command -v 7z || skip "7z missing"
+    backend_release v5.0 fresh
+    prepare_persistence session v4.0
+    run "$CLI" persistence
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"saved session data is lost"* ]]
+    [ "$(cat "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat")" = fresh ]
+    [ "$(cat "$BUILD_DIR/drive/persistance/.persistence-release")" = v5.0 ]
+}
+
+@test "--keep-persistence leaves the image alone" {
+    command -v 7z || skip "7z missing"
+    backend_release v5.0 fresh
+    prepare_persistence session v4.0
+    run "$CLI" persistence --keep-persistence
+    [ "$(cat "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat")" = session ]
+}
+
+@test "the same release keeps the image" {
+    command -v 7z || skip "7z missing"
+    backend_release v5.0 fresh
+    prepare_persistence session v5.0
+    run "$CLI" persistence
+    [ "$(cat "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat")" = session ]
+}

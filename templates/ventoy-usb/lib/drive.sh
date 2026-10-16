@@ -88,30 +88,72 @@ drive_cleanup_mount() {
     }
 }
 
+drive_inside() {
+    local path_mnt path_real
+    path_mnt="$(realpath -e -- "$1")" || return 1
+    path_real="$(realpath -e -- "$2")" || return 1
+    [ "$path_real" = "$path_mnt" ] || [[ "$path_real" == "$path_mnt"/* ]]
+}
+
+drive_remove() {
+    local path_mnt="$1" path_item="$2"
+    if [ -L "$path_item" ]; then
+        ${DRIVE_RUN-} rm -f -- "$path_item"
+    elif drive_inside "$path_mnt" "$path_item"; then
+        ${DRIVE_RUN-} rm -rf --one-file-system -- "$path_item"
+    else
+        print_status "error" "refusing to delete $path_item: it resolves outside the drive"
+        return 1
+    fi
+}
+
 drive_replace_managed() {
-    local path_manifest="$1" path_mnt="$2" path_resolved="$3" str_id str_rel str_line
+    local path_manifest="$1" path_mnt="$2" path_resolved="$3" str_id str_rel str_line path_dir
     while IFS=$'\t' read -r str_id str_rel; do
         str_line="$(manifest_entries "$path_manifest" | grep "^$str_id|")" || continue
-        remove_older_versions "$path_mnt/$(dirname "$str_rel")" "$(manifest_field "$str_line" 6)" "$(basename "$str_rel")"
+        path_dir="$path_mnt/$(dirname "$str_rel")"
+        [ -d "$path_dir" ] || continue
+        if [ -L "$path_dir" ] || ! drive_inside "$path_mnt" "$path_dir"; then
+            print_status "error" "refusing to replace files in $path_dir: it resolves outside the drive"
+            continue
+        fi
+        remove_older_versions "$path_dir" "$(manifest_field "$str_line" 6)" "$(basename "$str_rel")"
     done <"$path_resolved"
 }
 
+drive_persistence_newer() {
+    [ "${KEEP_PERSISTENCE:-0}" != 1 ] || return 1
+    persistence_release_newer "$(cat "$1/persistance/$PERSISTENCE_RELEASE_FILE" 2>/dev/null || true)" \
+        "$(cat "$2/persistance/$PERSISTENCE_RELEASE_FILE" 2>/dev/null || true)"
+}
+
 drive_copy_persistence() {
-    local path_drive="$1" path_mnt="$2" path_img str_name str_label
+    local path_drive="$1" path_mnt="$2" path_img str_name str_label path_old
     for path_img in "$path_drive"/persistance/*.dat; do
         [ -f "$path_img" ] || continue
         str_name="$(basename "$path_img")"
-        [ ! -f "$path_mnt/persistance/$str_name" ] || continue
-        str_label="${str_name#persistence_ext4_*GB_}"
-        if compgen -G "$path_mnt/persistance/persistence_ext4_*_$str_label" >/dev/null; then
-            print_status "warning" "persistence image changed: saved session data on the drive is lost"
-            ${DRIVE_RUN-} rm -f "$path_mnt"/persistance/persistence_ext4_*_"$str_label"
+        if [ -e "$path_mnt/persistance/$str_name" ]; then
+            drive_persistence_newer "$path_drive" "$path_mnt" || continue
+            print_status "warning" "newer persistence release: replacing the image on the drive, its saved session data is lost (--keep-persistence opts out)"
+            [ "${DRY_RUN:-0}" = 1 ] || drive_remove "$path_mnt" "$path_mnt/persistance/$str_name"
         fi
+        if [ -e "$path_mnt/persistance" ] && { [ -L "$path_mnt/persistance" ] || ! drive_inside "$path_mnt" "$path_mnt/persistance"; }; then
+            print_status "error" "refusing to write persistance/: it resolves outside the drive"
+            return 1
+        fi
+        str_label="${str_name#persistence_ext4_*GB_}"
+        while IFS= read -r -d '' path_old; do
+            print_status "warning" "persistence image changed: saved session data on the drive is lost"
+            [ "${DRY_RUN:-0}" = 1 ] || drive_remove "$path_mnt" "$path_old"
+        done < <(find "$path_mnt/persistance" -maxdepth 1 -name "persistence_ext4_*_$str_label" -print0 2>/dev/null)
         if [ "${DRY_RUN:-0}" = 1 ]; then
             print_status "info" "dry-run: would copy $str_name"
         else
             ${DRIVE_RUN-} mkdir -p "$path_mnt/persistance"
-            ${DRIVE_RUN-} cp "$path_img" "$path_mnt/persistance/$str_name"
+            ${DRIVE_RUN-} cp -- "$path_img" "$path_mnt/persistance/$str_name"
+            if [ -f "$path_drive/persistance/$PERSISTENCE_RELEASE_FILE" ]; then
+                ${DRIVE_RUN-} cp -- "$path_drive/persistance/$PERSISTENCE_RELEASE_FILE" "$path_mnt/persistance/$PERSISTENCE_RELEASE_FILE"
+            fi
         fi
     done
 }
@@ -125,8 +167,7 @@ drive_is_extra() {
 
 drive_offer_extras() {
     local path_drive="$1" path_mnt="$2" str_rel="$3" yes_all="$4" path_item str_name str_answer
-    for path_item in "$path_mnt/$str_rel"/* "$path_mnt/$str_rel"/.[!.]*; do
-        [ -e "$path_item" ] || [ -L "$path_item" ] || continue
+    while IFS= read -r -d '' -u 3 path_item; do
         str_name="${path_item#"$path_mnt"/}"
         if drive_is_extra "$path_drive" "$path_mnt" "$path_item"; then
             str_answer=n
@@ -138,11 +179,11 @@ drive_offer_extras() {
             else
                 read -r -p "delete $str_name? [y/N] " str_answer || str_answer=n
             fi
-            case "$str_answer" in y | Y) ${DRIVE_RUN-} rm -rf --one-file-system -- "$path_item" ;; esac
+            case "$str_answer" in y | Y) drive_remove "$path_mnt" "$path_item" || true ;; esac
         elif [ -d "$path_item" ]; then
             drive_offer_extras "$path_drive" "$path_mnt" "$str_name" "$yes_all"
         fi
-    done
+    done 3< <(find "$path_mnt/$str_rel" -mindepth 1 -maxdepth 1 -print0 | sort -z)
 }
 
 drive_sync() {

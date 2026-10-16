@@ -34,6 +34,26 @@ sidecar_hash() {
     rm -f "$path_tmp"
 }
 
+gpg_key_is_pinned() {
+    local path_home="$1" str_fpr="$2" str_keys
+    str_keys="$(gpg --homedir "$path_home" --batch --show-keys --with-colons "$path_home/key.asc" 2>/dev/null)" || return 1
+    [ "$(grep -c '^pub:' <<<"$str_keys")" -eq 1 ] || return 1
+    [ "$(awk -F: '$1 == "fpr" { print $10; exit }' <<<"$str_keys")" = "$str_fpr" ]
+}
+
+gpg_signature_is_detached() {
+    ! gpg --homedir "$1" --batch --list-packets "$1/sig" 2>/dev/null | grep -qE '^:(literal data|onepass_sig|compressed)'
+}
+
+gpg_status_is_good() {
+    awk -v f="$1" '
+        $1 != "[GNUPG:]" { next }
+        $2 == "VALIDSIG" && $NF == f { valid = 1 }
+        $2 == "GOODSIG" { good = 1 }
+        $2 ~ /^(BADSIG|EXPSIG|EXPKEYSIG|REVKEYSIG|ERRSIG)$/ { bad = 1 }
+        END { exit !(valid && good && !bad) }'
+}
+
 gpg_verify_sums() {
     local path_sums="$1" str_url="$2" str_trust="$3" str_fpr str_suffix str_keyurl path_home int_rc=1
     IFS=: read -r _ str_fpr str_suffix str_keyurl <<<"$str_trust"
@@ -44,11 +64,11 @@ gpg_verify_sums() {
     path_home="$(mktemp -d)"
     chmod 700 "$path_home"
     if net_get "$str_url$str_suffix" "$path_home/sig" && net_get "$str_keyurl" "$path_home/key.asc" &&
-        gpg --homedir "$path_home" --batch --show-keys --with-colons "$path_home/key.asc" 2>/dev/null |
-        awk -F: '$1 == "fpr" { print $10 }' | grep -qx "$str_fpr" &&
+        gpg_key_is_pinned "$path_home" "$str_fpr" &&
+        gpg_signature_is_detached "$path_home" &&
         gpg --homedir "$path_home" --batch -q --import "$path_home/key.asc" 2>/dev/null &&
         gpg --homedir "$path_home" --batch --status-fd 1 --verify "$path_home/sig" "$path_sums" 2>/dev/null |
-        awk -v f="$str_fpr" '$1 == "[GNUPG:]" && $2 == "VALIDSIG" && $NF == f { ok = 1 } END { exit !ok }'; then
+        gpg_status_is_good "$str_fpr"; then
         int_rc=0
     else
         echo "gpg: signature of $str_url not verified against key $str_fpr (fail closed)" >&2
@@ -185,7 +205,11 @@ resolve_windows() {
         return 1
     }
     str_edition="$(grep -oE 'value="[0-9]{4,5}"' "$path_tmp" | head -n1 | tr -dc 0-9)"
-    net_get "https://vlscppe.microsoft.com/tags?org_id=y6jn8c31&session_id=$str_sid" "$path_tmp" || true
+    net_get "https://vlscppe.microsoft.com/tags?org_id=y6jn8c31&session_id=$str_sid" "$path_tmp" || {
+        rm -f "$path_tmp"
+        echo "resolve: could not register the Microsoft download session" >&2
+        return 1
+    }
     net_get "$str_api/getskuinformationbyproductedition?$str_q&productEditionId=$str_edition&SKU=undefined" "$path_tmp" || {
         rm -f "$path_tmp"
         return 1

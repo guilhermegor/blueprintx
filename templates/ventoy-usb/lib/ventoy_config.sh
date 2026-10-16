@@ -67,6 +67,25 @@ tools_ensure() {
     fi
 }
 
+PERSISTENCE_RELEASE_FILE=".persistence-release"
+
+persistence_latest_tag() {
+    local path_json str_tag
+    path_json="$(mktemp)"
+    net_get "${GITHUB_API:-https://api.github.com}/repos/ventoy/backend/releases/latest" "$path_json" || {
+        rm -f "$path_json"
+        return 1
+    }
+    str_tag="$(jq -r '.tag_name // empty' "$path_json")"
+    rm -f "$path_json"
+    [[ "$str_tag" =~ ^v?[0-9][0-9A-Za-z._-]*$ ]] || return 1
+    printf '%s' "$str_tag"
+}
+
+persistence_release_newer() {
+    [ -n "$1" ] && [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
+}
+
 persistence_download() {
     local path_img="$1" int_size_mb="$2" str_label="$3" path_tmp path_tmp_json str_name str_gb str_zip str_hash str_body
     [ $((int_size_mb % 1024)) -eq 0 ] || return 1
@@ -95,29 +114,50 @@ persistence_download() {
     rm -rf "$path_tmp"
 }
 
+persistence_stale() {
+    local path_drive="$1" path_img="$2" str_tag
+    [ "${KEEP_PERSISTENCE:-0}" != 1 ] || return 1
+    str_tag="$(persistence_latest_tag)" || {
+        print_status "info" "ventoy/backend unreachable: keeping the existing persistence image"
+        return 1
+    }
+    persistence_release_newer "$str_tag" "$(cat "$path_drive/persistance/$PERSISTENCE_RELEASE_FILE" 2>/dev/null || true)" || return 1
+    PERSISTENCE_TAG="$str_tag"
+}
+
+persistence_make() {
+    local path_manifest="$1" path_drive="$2" int_size_mb="$3" str_label="$4" path_img="$5" path_tool
+    mkdir -p "$path_drive/persistance"
+    if persistence_download "$path_img" "$int_size_mb" "$str_label"; then
+        print_status "info" "persistence image downloaded from ventoy/backend (checksum from the release notes)"
+        persistence_latest_tag >"$path_drive/persistance/$PERSISTENCE_RELEASE_FILE" || true
+        return 0
+    fi
+    print_status "warning" "no published image for ${int_size_mb} MB / $str_label: creating it with CreatePersistentImg.sh (needs root)"
+    tools_ensure "$path_manifest" || return 1
+    path_tool="${VENTOY_DIR:-$(tools_ventoy_dir)}"
+    ${SUDO-sudo} bash "$path_tool/CreatePersistentImg.sh" -s "$int_size_mb" -t ext4 -l "$str_label" -o "$path_img"
+    ${SUDO-sudo} chown "$(id -u):$(id -g)" "$path_img"
+    rm -f "$path_drive/persistance/$PERSISTENCE_RELEASE_FILE"
+}
+
 persistence_create() {
     local path_manifest="$1" path_drive="$2" int_size_mb="$3"
-    local str_line str_label path_img path_tool str_name
+    local str_line str_label path_img str_name
     manifest_entries "$path_manifest" >/dev/null || return 1
     while IFS= read -r str_line; do
         str_label="$(manifest_field "$str_line" 8)"
         [ -n "$str_label" ] || continue
         str_name="$(persistence_file_name "$int_size_mb" "$str_label")"
         path_img="$path_drive/persistance/$str_name"
-        [ ! -f "$path_img" ] || continue
-        if compgen -G "$path_drive/persistance/persistence_ext4_*_${str_label}.dat" >/dev/null; then
+        if [ -f "$path_img" ]; then
+            persistence_stale "$path_drive" "$path_img" || continue
+            print_status "warning" "ventoy/backend $PERSISTENCE_TAG is newer: replacing the persistence image, its saved session data is lost (--keep-persistence opts out)"
+            rm -f "$path_img"
+        elif compgen -G "$path_drive/persistance/persistence_ext4_*_${str_label}.dat" >/dev/null; then
             print_status "warning" "persistence size changed: the saved session data in the old image is lost"
             rm -f "$path_drive"/persistance/persistence_ext4_*_"${str_label}".dat
         fi
-        mkdir -p "$path_drive/persistance"
-        if persistence_download "$path_img" "$int_size_mb" "$str_label"; then
-            print_status "info" "persistence image downloaded from ventoy/backend (checksum from the release notes)"
-            continue
-        fi
-        print_status "warning" "no published image for ${int_size_mb} MB / $str_label: creating it with CreatePersistentImg.sh (needs root)"
-        tools_ensure "$path_manifest" || return 1
-        path_tool="${VENTOY_DIR:-$(tools_ventoy_dir)}"
-        ${SUDO-sudo} bash "$path_tool/CreatePersistentImg.sh" -s "$int_size_mb" -t ext4 -l "$str_label" -o "$path_img"
-        ${SUDO-sudo} chown "$(id -u):$(id -g)" "$path_img"
+        persistence_make "$path_manifest" "$path_drive" "$int_size_mb" "$str_label" "$path_img" || return 1
     done < <(manifest_entries "$path_manifest")
 }

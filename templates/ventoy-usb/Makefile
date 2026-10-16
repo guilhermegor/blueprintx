@@ -13,10 +13,10 @@ tools:
 	@bin/${PROJECT_NAME} tools
 
 build:
-	@bin/${PROJECT_NAME} build
+	@bin/${PROJECT_NAME} build $(if $(KEEP_PERSISTENCE),--keep-persistence)
 
 drive:
-	@bin/${PROJECT_NAME} drive $(if $(TARGET),--target "$(TARGET)") $(if $(DRY_RUN),--dry-run) $(if $(YES_DELETE_EXTRAS),--yes-delete-extras)
+	@bin/${PROJECT_NAME} drive $(if $(TARGET),--target "$(TARGET)") $(if $(DRY_RUN),--dry-run) $(if $(YES_DELETE_EXTRAS),--yes-delete-extras) $(if $(KEEP_PERSISTENCE),--keep-persistence)
 
 repo_rules:
 	@bash bin/enable_repo_rules.sh

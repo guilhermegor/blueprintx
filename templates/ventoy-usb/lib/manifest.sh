@@ -27,7 +27,7 @@ manifest_checksum_valid() {
 manifest_trust_valid() {
     local str_kind="$1" str_sum="$2" str_trust="$3"
     case "$str_trust" in
-        gpg:[0-9A-F][0-9A-F]*:*:https://*) [ "$str_kind" = dirsums ] ;;
+        gpg:*) [ "$str_kind" = dirsums ] && [[ "$str_trust" =~ ^gpg:[0-9A-F]{40}:[^:]+:https://[^|]+$ ]] ;;
         two-origin) [ "$str_kind" = github ] ;;
         same-origin-digest) [[ "$str_sum" != none:* && "$str_kind" != manual ]] ;;
         none) [[ "$str_sum" == none:* ]] ;;

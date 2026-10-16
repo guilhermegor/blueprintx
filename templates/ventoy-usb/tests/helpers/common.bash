@@ -3,7 +3,7 @@ CLI="$ROOT/bin/${PROJECT_NAME}"
 
 setup() {
     TMP="$(mktemp -d)"
-    export FIXTURES="$TMP/fixtures" BUILD_DIR="$TMP/build" TOOLS_DIR="$TMP/tools" SUDO=""
+    export VENTOY_USB_TESTING=1 FIXTURES="$TMP/fixtures" BUILD_DIR="$TMP/build" TOOLS_DIR="$TMP/tools" SUDO=""
     export CURL="$BATS_TEST_DIRNAME/helpers/curl_stub.sh"
     export VENTOY_USB_CONF="$TMP/none.conf"
     mkdir -p "$FIXTURES"

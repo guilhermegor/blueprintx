@@ -66,8 +66,9 @@ git-ignored; PDFs and scripts are not, so keep this repo private if they are not
 
 The persistence image is downloaded from Ventoy's `ventoy/backend` releases and verified against
 the sha256 in the release notes; `CreatePersistentImg.sh` (root) is only the fallback for sizes
-nobody publishes. It is replaced only when missing or when the configured size changes, and the
-sync prints a warning because its saved session data is lost. `ventoy.json` is generated from the
+nobody publishes. The release is recorded in `persistance/.persistence-release`; a newer release replaces the image
+(`KEEP_PERSISTENCE=1` or `--keep-persistence` opts out) and a changed size makes a new one, with a
+warning because the saved session data is lost. `ventoy.json` is generated from the
 manifest, so the persistence `image` is the path the ISO landed at; `check` fails the build if
 any path in it is missing from the tree.
 

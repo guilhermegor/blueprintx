@@ -133,3 +133,46 @@ STUB
     [ ! -e "$TMP/mnt/link" ]
     [ -f "$TMP/outside/precious" ]
 }
+
+sync_persistence() {
+    make_stubs
+    mkdir -p "$BUILD_DIR/drive/persistance" "$TMP/mnt/persistance"
+    echo new >"$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat"
+    printf v5.0 >"$BUILD_DIR/drive/persistance/.persistence-release"
+    echo session >"$TMP/mnt/persistance/persistence_ext4_4GB_casper-rw.dat"
+    printf v4.0 >"$TMP/mnt/persistance/.persistence-release"
+}
+
+@test "sync replaces the drive image when the build carries a newer release" {
+    sync_persistence
+    run "$CLI" drive --target /dev/sdb </dev/null
+    [[ "$output" == *"saved session data"* ]]
+    [ "$(cat "$TMP/mnt/persistance/persistence_ext4_4GB_casper-rw.dat")" = new ]
+    [ "$(cat "$TMP/mnt/persistance/.persistence-release")" = v5.0 ]
+}
+
+@test "sync with --keep-persistence keeps the session" {
+    sync_persistence
+    run "$CLI" drive --target /dev/sdb --keep-persistence </dev/null
+    [ "$(cat "$TMP/mnt/persistance/persistence_ext4_4GB_casper-rw.dat")" = session ]
+}
+
+@test "a symlinked directory pointing outside the mount is never traversed" {
+    make_stubs
+    mkdir -p "$TMP/outside/sub"
+    echo keep >"$TMP/outside/sub/precious"
+    ln -s "$TMP/outside" "$TMP/mnt/isos"
+    run "$CLI" drive --target /dev/sdb --yes-delete-extras </dev/null
+    [ -f "$TMP/outside/sub/precious" ]
+}
+
+@test "files are never replaced through a symlinked parent that escapes the mount" {
+    make_stubs
+    mkdir -p "$TMP/outside"
+    echo keep >"$TMP/outside/u-1.iso"
+    mkdir -p "$TMP/mnt/isos/Linux"
+    ln -s "$TMP/outside" "$TMP/mnt/isos/Linux/Desktop"
+    run "$CLI" drive --target /dev/sdb </dev/null
+    [ -f "$TMP/outside/u-1.iso" ]
+    [[ "$output" == *"resolves outside the drive"* ]]
+}
