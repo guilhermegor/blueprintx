@@ -61,11 +61,9 @@ mike = ">=2.1.0"
 pymdown-extensions = ">=10.0"
 
 [tool.deptry.package_module_name_map]
-# DEP001 win32com three times in utils/ms_office/outlook_gateway.py AND DEP002 on pywin32 itself.
 pywin32 = ["win32com", "win32api", "pythoncom", "pywintypes"]
 
 [tool.deptry.per_rule_ignores]
-# DEP002 = declared but never imported. Every entry carries its reason, exactly as
 DEP002 = ["openpyxl", "alembic"]
 
 [build-system]
