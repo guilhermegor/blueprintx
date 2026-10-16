@@ -103,6 +103,24 @@ _spec_answer_git_remote() {
     spec_yn "$1" git_remote n
 }
 
+_spec_answer_ventoy_options() {
+    local file="$1"
+    spec_yn "$file" include_windows y
+    spec_yn "$file" include_android y
+    spec_get "$file" persistence_size_mb 4096
+    echo
+}
+
+_spec_validate_ventoy() {
+    local skeleton="$1" file="$2" str_size
+    [ "$skeleton" = ventoy-usb ] || return 0
+    str_size="$(spec_get "$file" persistence_size_mb 4096)"
+    if ! [[ "$str_size" =~ ^[0-9]+$ ]] || [ "$str_size" -lt 1024 ] || [ $((str_size % 1024)) -ne 0 ]; then
+        echo "spec: 'persistence_size_mb' must be a multiple of 1024 (>= 1024), got '$str_size'" >&2
+        return 1
+    fi
+}
+
 _spec_visibility_choice() {
     case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
         public) echo 1 ;;
@@ -135,7 +153,7 @@ _spec_answer_publish_targets() {
     spec_yn "$file" consume_private n
 }
 
-_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db api-service-native-db mvc-service-native-db mvc-service-orm-db lib-minimal ts-lib etcher-chromeos"
+_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db api-service-native-db mvc-service-native-db mvc-service-orm-db lib-minimal ts-lib etcher-chromeos ventoy-usb"
 
 spec_skeleton_supported() {
     local str_name
@@ -189,6 +207,12 @@ spec_stdin_for_skeleton() {
             _spec_answer_git_remote "$file"
             _spec_answer_create_repo "$file"
             ;;
+        ventoy-usb)
+            _spec_answer_ventoy_options "$file"
+            _spec_answer_review_bot "$file"
+            _spec_answer_git_remote "$file"
+            _spec_answer_create_repo "$file"
+            ;;
         etcher-chromeos)
             _spec_answer_default_os "$file"
             _spec_answer_review_bot "$file"
@@ -227,6 +251,11 @@ _spec_key_map() {
             keys=(review_bot_roster:n otel:n git_remote:n create_repo:n \
                 repo_visibility:private kanban:n protect_branch:n human_reviewers:n)
             ;;
+        ventoy-usb)
+            keys=(include_windows:y include_android:y persistence_size_mb:4096 \
+                review_bot_roster:n git_remote:n create_repo:n repo_visibility:private \
+                kanban:n protect_branch:n)
+            ;;
         etcher-chromeos)
             keys=(default_os:chromeos-flex review_bot_roster:n git_remote:n)
             ;;
@@ -250,6 +279,7 @@ spec_validate_answers() {
         esac
     done <<<"$map"
     _spec_validate_remote "$skeleton" "$file" || int_bad=1
+    _spec_validate_ventoy "$skeleton" "$file" || int_bad=1
     [ "$skeleton" != etcher-chromeos ] || _spec_validate_default_os "$file" || int_bad=1
     return "$int_bad"
 }

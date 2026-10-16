@@ -5,7 +5,24 @@ Status: measured and proposed 2026-10-15 (the date differs from the filename, wh
 - [x] Scaffold half: generated projects get the ruleset (PR #801, merged).
 - [x] Measure which classic checks report on every PR (below).
 - [x] Propose the ruleset's new list and the exact PUT payload (below).
-- [ ] Owner: PUT the ruleset, verify with a throwaway PR, delete classic protection.
+- [x] Owner-approved 2026-10-16, applied: PUT the ruleset, verify `rules/branches/main`, delete classic protection, red-check proof, sync `.github/required-checks.json`.
+
+## Applied (2026-10-16)
+
+Completed. Kept as a record.
+
+The payload was rebuilt from the **live** state, not the stored copy below, because two things had changed since the proposal:
+
+- **59 checks, not 58.** #821 added `Dry-run smoke — etcher-chromeos` to the classic policy file. It is an unconditional matrix job, reported by app 15368 on PR heads, so it was added. Every entry is pinned to the `app_id` classic used.
+- **Two classic protections were missing from the proposal and were added to the ruleset before the delete:** `required_linear_history` (classic `required_linear_history: true`), and `dismiss_stale_reviews_on_push: true` (classic `dismiss_stale_reviews: true`). Deleting classic without them would have silently weakened `main`. Both were already in effect through classic, so the effective rules did not change.
+
+Sequence:
+1. Backed up `rulesets/23741414` and `branches/main/protection`.
+2. PUT the ruleset.
+3. Verified `rules/branches/main`: ruleset 23741414 with 59 checks, 0 unpinned, plus `required_linear_history`.
+4. `DELETE branches/main/protection` returned 204, and a follow-up read returned "Branch not protected".
+5. Red-check proof: no throwaway PR was needed. With classic gone, #822 and #823 (both failing `Review threads answered`) read `blocked` from the ruleset alone, while #819 (all green) read `clean` and merged.
+6. `.github/required-checks.json`: `classic` is now `[]` and `ruleset` holds the 59 names. `check_required_checks_sync.py` returns `findings=0` both statically and with `--live`.
 
 ## Measurement
 

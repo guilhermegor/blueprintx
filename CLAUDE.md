@@ -237,7 +237,8 @@ BlueprintX/
 │       ├── ts_react_app.sh            # React SPA (Webpack) scaffold logic
 │       ├── ts_react_capability.sh     # helper: add a capability to an existing React SPA
 │       ├── ts_lib.sh                  # publishable TS library scaffold logic
-│       └── etcher_chromeos.sh         # ChromeOS Flex / FydeOS pendrive flasher CLI scaffold logic
+│       ├── etcher_chromeos.sh         # ChromeOS Flex / FydeOS pendrive flasher CLI scaffold logic
+│       └── ventoy_usb.sh              # Ventoy drive builder scaffold logic
 ├── templates/
 │   ├── common/                     # language-agnostic assets copied into EVERY skeleton
 │   │                               #   (CODEOWNERS, PR template, bin/ git-diff scripts + export_repo_content.sh + lib/common.sh, make/git_diff.mk)
@@ -261,6 +262,7 @@ BlueprintX/
 │   │   └── skeleton.meta
 │   ├── bash-cli/                   # standalone Bash CLI, git-tag versioned, bats + shellcheck
 │   │   └── skeleton.meta
+│   ├── ventoy-usb/                 # Ventoy drive builder: manifest-driven latest ISOs, verified, ventoy.json
 │   ├── etcher-chromeos/            # Bash CLI that flashes ChromeOS Flex or FydeOS to a USB pendrive
 │   │   └── skeleton.meta
 │   └── licenses/                   # license text files (MIT, Apache-2.0, GPL-3.0, …)
@@ -288,9 +290,9 @@ To add a new skeleton: create its directory under `templates/`, add a `skeleton.
 
 ## How scaffolding works
 
-**Ten skeletons ship today** — six Python (`ddd-service-native-db`, `ddd-service-orm-db`,
+**Eleven skeletons ship today** — six Python (`ddd-service-native-db`, `ddd-service-orm-db`,
 `api-service-native-db`, `mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`), two TypeScript
-(`react-spa-webpack`, `ts-lib`) and two Bash (`bash-cli`, `etcher-chromeos`), one `skeleton.meta` each (see "Repo architecture" above and
+(`react-spa-webpack`, `ts-lib`) and three Bash (`bash-cli`, `etcher-chromeos`, `ventoy-usb`), one `skeleton.meta` each (see "Repo architecture" above and
 "Discovery system" below). `bin/ci/validate_meta.sh` enforces that every one of these
 directory names is also named here — this count is a should-fail witness in its own right:
 add or remove a skeleton without updating it and the number goes stale before the paragraph

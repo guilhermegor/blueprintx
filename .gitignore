@@ -29,6 +29,7 @@ MANIFEST
 
 *.manifest
 !templates/common/review-config.manifest
+!templates/ventoy-usb/sources.manifest
 *.spec
 
 pip-log.txt
