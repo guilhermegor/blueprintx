@@ -69,18 +69,23 @@ drive_install() {
 }
 
 drive_data_mount() {
-    local str_dev="$1" str_mnt
-    if [ -n "${DRIVE_MNT:-}" ]; then
-        printf '%s' "$DRIVE_MNT"
-        return 0
+    local str_dev="$1"
+    DRIVE_MNT_PATH="${DRIVE_MNT:-}"
+    [ -z "$DRIVE_MNT_PATH" ] || return 0
+    DRIVE_MNT_PATH="$("${LSBLK:-lsblk}" -nro MOUNTPOINT,LABEL "$str_dev" | awk '$2 == "Ventoy" && $1 != "" { print $1; exit }')"
+    if [ -z "$DRIVE_MNT_PATH" ]; then
+        DRIVE_MNT_PATH="$(mktemp -d)"
+        DRIVE_MOUNTED_BY_US="$DRIVE_MNT_PATH"
+        ${SUDO-sudo} mount "$(drive_partition "$str_dev")" "$DRIVE_MNT_PATH"
     fi
-    str_mnt="$("${LSBLK:-lsblk}" -nro MOUNTPOINT,LABEL "$str_dev" | awk '$2 == "Ventoy" && $1 != "" { print $1; exit }')"
-    if [ -z "$str_mnt" ]; then
-        str_mnt="$(mktemp -d)"
-        ${SUDO-sudo} mount "$(drive_partition "$str_dev")" "$str_mnt"
-        DRIVE_MOUNTED_BY_US="$str_mnt"
-    fi
-    printf '%s' "$str_mnt"
+}
+
+drive_cleanup_mount() {
+    [ -z "${DRIVE_MOUNTED_BY_US:-}" ] || {
+        ${SUDO-sudo} umount "$DRIVE_MOUNTED_BY_US" || true
+        rmdir "$DRIVE_MOUNTED_BY_US" 2>/dev/null || true
+        DRIVE_MOUNTED_BY_US=""
+    }
 }
 
 drive_replace_managed() {
@@ -147,7 +152,7 @@ drive_sync() {
 
 drive_write() {
     local str_target="$1" path_manifest="$2" path_drive="$3" path_resolved="$4" yes_all="$5"
-    local str_dev path_mnt
+    local str_dev
     [ -n "$str_target" ] || str_target="$(drive_prompt_target)" || return 1
     str_dev="$(drive_resolve_device "$str_target")" || return 1
     drive_guard "$str_dev" || return 1
@@ -160,7 +165,8 @@ drive_write() {
         tools_ensure "$path_manifest" || return 1
         drive_install "$str_dev" || return 1
     fi
-    path_mnt="$(drive_data_mount "$str_dev")"
-    drive_sync "$path_manifest" "$path_drive" "$path_mnt" "$path_resolved" "$yes_all"
-    [ -z "${DRIVE_MOUNTED_BY_US:-}" ] || ${SUDO-sudo} umount "$DRIVE_MOUNTED_BY_US"
+    trap drive_cleanup_mount EXIT
+    drive_data_mount "$str_dev"
+    drive_sync "$path_manifest" "$path_drive" "$DRIVE_MNT_PATH" "$path_resolved" "$yes_all"
+    drive_cleanup_mount
 }

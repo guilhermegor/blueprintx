@@ -330,8 +330,9 @@ fetch_entry() {
     path_dest="$path_dir/$str_name"
     str_final="$str_name"
     [ -z "$str_extract" ] || str_final="$(cat "$path_state/$str_id.final" 2>/dev/null || true)"
-    if [ -f "$path_state/$str_id" ] && [ "$(cat "$path_state/$str_id")" = "$str_name $str_hash" ] &&
-        [ -n "$str_final" ] && [ -f "$path_dir/$str_final" ]; then
+    if [ -f "$path_state/$str_id" ] && [ "$(cut -f1-2 "$path_state/$str_id")" = "$str_name"$'\t'"$str_hash" ] &&
+        [ -n "$str_final" ] && [ -f "$path_dir/$str_final" ] &&
+        [ "$(cut -f3 "$path_state/$str_id")" = "$(stat -c %s "$path_dir/$str_final")" ]; then
         :
     else
         print_status "info" "download: $str_id -> $str_name [trust: $(manifest_field "$str_line" 10 | cut -d: -f1)]"
@@ -353,7 +354,7 @@ fetch_entry() {
             rm -f "$path_dest"
             printf '%s' "$str_final" >"$path_state/$str_id.final"
         fi
-        printf '%s' "$str_name $str_hash" >"$path_state/$str_id"
+        printf '%s\t%s\t%s' "$str_name" "$str_hash" "$(stat -c %s "$path_dir/$str_final")" >"$path_state/$str_id"
     fi
     remove_older_versions "$path_dir" "${str_extract:-$str_re}" "$str_final"
     [ "$str_folder" = "@tools" ] || printf '%s\t%s\n' "$str_id" "$str_folder/$str_final" >>"$path_resolved"

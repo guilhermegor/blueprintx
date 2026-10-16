@@ -35,7 +35,8 @@ entry that cannot be resolved fails alone with a message while the rest continue
 | `manual` | nothing resolvable | n/a |
 
 A missing or unparsable checksum fails the entry (fail closed). The only opt-out is an explicit
-`none:<reason>`. Hashes are matched by length (sha256, sha1, md5); md5 and sha1 come from the
+`none:<reason>`, allowed for `github` (an asset with no API digest), `dirindex`, `latesturl` and
+`windows`; `dirsums`, `sfrss` and `archive` always carry a checksum. Hashes are matched by length (sha256, sha1, md5); md5 and sha1 come from the
 upstream's own feed and are weaker.
 
 Measured 2026-10-16 (every kind returned its entry live except Windows, which Microsoft rejected, and Clonezilla, whose mirror was down):

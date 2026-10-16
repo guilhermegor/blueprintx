@@ -234,3 +234,13 @@ make_signed_sums() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"unexpected file name"* ]]
 }
+
+@test "a truncated cached payload is downloaded again" {
+    iso="payload-9"
+    fixture "https://h/d/SHA256SUMS" "$(sha_of "$iso") *u-24.04.5.iso"
+    fixture "https://h/d/u-24.04.5.iso" "$iso"
+    fetch_one 'u|core|isos/Others|dirsums|https://h/d/|^u-24\.04(\.[0-9]+)*\.iso$|sums:SHA256SUMS|||same-origin-digest'
+    : >"$BUILD_DIR/drive/isos/Others/u-24.04.5.iso"
+    fetch_one 'u|core|isos/Others|dirsums|https://h/d/|^u-24\.04(\.[0-9]+)*\.iso$|sums:SHA256SUMS|||same-origin-digest'
+    [ "$(cat "$BUILD_DIR/drive/isos/Others/u-24.04.5.iso")" = "$iso" ]
+}
