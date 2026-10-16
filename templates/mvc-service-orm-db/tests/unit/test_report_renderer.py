@@ -13,9 +13,6 @@ from pytest_mock import MockerFixture
 from src.view.report_renderer import RenderToExcel
 
 
-# --------------------------
-# Tests
-# --------------------------
 def test_render_writes_file_to_disk(df_sample: pd.DataFrame, tmp_path: Path) -> None:
     """The rendered ``.xlsx`` file exists on disk after render.
 

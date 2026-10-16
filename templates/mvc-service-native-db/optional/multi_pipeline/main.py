@@ -34,15 +34,8 @@ from controller.pipeline_dispatch import build_pipeline, raw_intent, resolve_int
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# E-mail handler (opt-in seam): the assignment below is replaced at scaffold time when the
-# e-mail opt-in is chosen, to build an EmailHandler (Outlook backend by default). By default
-# no handler is wired and the chosen pipeline runs without sending.
 CLS_EMAIL_HANDLER = None
 
-# Precedence: an explicit `poe run <intent>` CLI argument wins over PIPELINE_INTENT — see
-# raw_intent's docstring. PIPELINE_INTENT keeps .env-driven callers (CI, cron, containers)
-# working when no argument is given; default "send" preserves single-mode behaviour.
-# resolve_intent normalises the spelling and fails loud (SystemExit 2) on an unknown value.
 STR_INTENT = resolve_intent(raw_intent(sys.argv, os.getenv("PIPELINE_INTENT", "send")))
 
 build_pipeline(

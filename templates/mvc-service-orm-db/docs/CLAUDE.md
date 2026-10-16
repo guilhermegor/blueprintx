@@ -11,7 +11,7 @@ them.
 
 Keep working documents outside `docs/`, in `.specs/`. A few legacy files and
 folders still sit inside `docs/` but are excluded from the build; `exclude_docs` in
-`mkdocs.yml` is the authoritative list.
+`mkdocs.yml` is the authoritative list. It uses `.gitignore` syntax, which has no inline comments: a trailing `# ...` becomes part of the pattern and silently disables the exclusion, so keep any comment on its own line.
 
 - `.specs/backlog/` — work-to-do backlogs and follow-up notes (outside `docs/`, so
   never published). For any non-trivial branch, keep a

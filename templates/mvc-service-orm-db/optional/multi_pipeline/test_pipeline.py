@@ -20,9 +20,6 @@ from controller.pipeline_reconcile import ReconcilePipeline
 from controller.pipeline_send import SendPipeline
 
 
-# --------------------------
-# Helpers
-# --------------------------
 def _build_args(tmp_path: Path) -> tuple:
     """Return the positional collaborator args every ``pipeline_<intent>`` constructor accepts.
 
@@ -49,9 +46,6 @@ def _build_args(tmp_path: Path) -> tuple:
     )
 
 
-# --------------------------
-# resolve_intent
-# --------------------------
 @pytest.mark.parametrize(
     ("str_raw", "str_expected"),
     [
@@ -99,9 +93,6 @@ def test_resolve_intent_raises_systemexit_on_unknown_spelling() -> None:
     assert cls_exc_info.value.code == 2
 
 
-# --------------------------
-# build_pipeline
-# --------------------------
 def test_build_pipeline_returns_send_pipeline_for_send_intent(tmp_path: Path) -> None:
     """``build_pipeline("send", ...)`` constructs the ``send`` orchestrator.
 

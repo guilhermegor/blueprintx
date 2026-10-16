@@ -367,7 +367,7 @@ conditional_apply_multi_pipeline() {
 conditional_prune_optin_deps() {
     local project_path="$1"
     scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
-        '/^# Microsoft Teams incoming-webhook transport/,/^pymsteams = /d'
+        '/^pymsteams = /d'
 }
 
 copy_global_config() {

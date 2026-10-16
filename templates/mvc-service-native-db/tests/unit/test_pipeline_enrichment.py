@@ -20,9 +20,6 @@ from pytest_mock import MockerFixture
 from src.controller._pipeline import PipelineOrchestrator
 
 
-# --------------------------
-# Helpers
-# --------------------------
 def _build_orchestrator(tmp_path: Path, path_labels: Path | None) -> PipelineOrchestrator:
     """Build a minimal orchestrator for exercising ``_enrich`` in isolation.
 
@@ -59,9 +56,6 @@ def _report() -> pd.DataFrame:
     return pd.DataFrame({"id": [1], "title": ["Hello from MVC native-db service!"]})
 
 
-# --------------------------
-# Tests — the five degradation modes
-# --------------------------
 def _degraded_run(tmp_path: Path, mocker: MockerFixture, path_labels: Path | None) -> tuple:
     """Run ``_enrich`` once and return the result, the input report and the joined log text.
 
@@ -252,9 +246,6 @@ def test_enrich_degradation_logs_its_cause(
     assert str_cause in tuple_run[2]
 
 
-# --------------------------
-# Tests — the happy path and phase ordering
-# --------------------------
 def test_enrich_merges_labels_when_file_is_valid(tmp_path: Path) -> None:
     """When the labels file is present and well-formed, the merge actually runs."""
     df_report = _report()

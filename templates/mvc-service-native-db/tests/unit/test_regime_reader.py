@@ -9,18 +9,11 @@ two periods as the cutover.
 
 import pytest
 
-# Bare `model.` imports (not `src.model.`) — RegimeRegistry/RegimeReader import RegimeWindow
-# the same way internally; a `src.`-prefixed import here would create a SECOND, distinct
-# RegimeWindow class under pytest's dual `pythonpath = . src`, and beartype's nominal
-# isinstance check on `list[RegimeWindow]` would reject fixture instances built from it.
 from model.regime_reader import RegimeReader
 from model.regime_registry import RegimeRegistry
 from model.regime_window import RegimeWindow
 
 
-# --------------------------
-# Fixtures
-# --------------------------
 @pytest.fixture
 def cls_registry() -> RegimeRegistry:
     """Build the two-regime registry from the issue's measured cutover (202311 / 202312).
@@ -41,9 +34,6 @@ def cls_registry() -> RegimeRegistry:
     )
 
 
-# --------------------------
-# RegimeWindow.covers
-# --------------------------
 def test_window_covers_period_at_its_closed_end(cls_registry: RegimeRegistry) -> None:
     """The legacy window covers its own last published period, 202311.
 
@@ -74,9 +64,6 @@ def test_window_covers_period_at_the_new_regimes_start(cls_registry: RegimeRegis
     assert cls_registry.resolve(202312).str_name == "cnpj_classe_keyed"
 
 
-# --------------------------
-# RegimeRegistry.resolve — out-of-regime refusal
-# --------------------------
 def test_resolve_out_of_regime_period_raises_naming_known_regimes() -> None:
     """A period no registered window covers raises, naming every known regime.
 
@@ -94,9 +81,6 @@ def test_resolve_out_of_regime_period_raises_naming_known_regimes() -> None:
         cls_bounded_registry.resolve(202312)
 
 
-# --------------------------
-# RegimeRegistry.default_period — closed-regime default
-# --------------------------
 def test_default_period_for_closed_regime_returns_its_last_covered_period(
     cls_registry: RegimeRegistry,
 ) -> None:
@@ -130,9 +114,6 @@ def test_default_period_for_open_regime_raises(cls_registry: RegimeRegistry) -> 
         cls_registry.default_period("cnpj_classe_keyed")
 
 
-# --------------------------
-# RegimeReader — constructor contract
-# --------------------------
 def test_reader_with_no_period_defaults_to_its_regimes_last_covered_period(
     cls_registry: RegimeRegistry,
 ) -> None:
