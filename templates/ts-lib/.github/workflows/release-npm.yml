@@ -1,16 +1,5 @@
 name: Release to npm (OIDC Trusted Publishing)
 
-# Mirrors templates/python-common's release-pypi.yaml shape: a manual, versioned
-# release, gated by the full test suite, publishing without a stored long-lived
-# token. npm has no hosted "Test npm" and no pending-publisher concept (the trusted
-# publisher is configured in the PACKAGE's own npmjs.com settings, so the package
-# must already exist — see docs/contributing.md's bootstrap steps).
-#
-# `npm stage publish` (not `npm publish`) is the approval gate: it uploads to the
-# real registry but holds the package until a maintainer approves with 2FA on
-# npmjs.com. Configure the trusted publisher as stage-only (allow `npm stage
-# publish`, disallow `npm publish`) for that reason.
-
 on:
   workflow_dispatch:
     inputs:
@@ -29,9 +18,6 @@ jobs:
     outputs:
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      # The input is free text and is interpolated into the tag name below and later
-      # compared against package.json. Reject a malformed value up front rather than
-      # let it drift into a tag or a confusing mismatch error downstream.
       - name: Validate version
         env:
           VERSION: ${{ inputs.version }}
@@ -56,8 +42,6 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          # Query the specific version, not the "latest" dist-tag — a version published
-          # under another tag (or not tagged "latest") would otherwise be missed.
           published_version=$(npm view "$PACKAGE_NAME@$INPUT_VERSION" version 2>/dev/null || echo "none")
           echo "Published version check for $INPUT_VERSION: $published_version"
           if [ "$published_version" = "$INPUT_VERSION" ]; then
@@ -103,25 +87,17 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      # No package-manager cache in a release build — never publish from a cache hit.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: false
 
-      # Pin npm explicitly: `npm stage publish` (staged publishing) requires npm >=
-      # 11.15.0 — higher than trusted publishing's own 11.5.1 floor — which may be
-      # newer than what ships with the pinned Node version.
       - name: Pin npm >= 11.15.0
         run: npm install -g npm@^11.15.0
 
       - run: npm ci
       - run: npm run build
 
-      # OIDC trusted publishing — no NPM_TOKEN secret. The runner mints a short-lived
-      # OIDC token (via `id-token: write`, above) that npm verifies against the trusted
-      # publisher registered for this repo/workflow/environment. Provenance is
-      # generated automatically by trusted publishing; do not pass --provenance.
       - name: Stage publish
         run: npm stage publish --access public
 
@@ -153,8 +129,6 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          # Name the artifact explicitly, never a glob over an empty dir — a 0-byte or
-          # missing asset aborts action-gh-release mid-way and leaves a draft release.
           files: '*.tgz'
           generate_release_notes: true
         env:
@@ -163,9 +137,6 @@ jobs:
   docs_deploy:
     name: Deploy docs
     needs: github_release
-    # This release was just created with github.token, so its `release: types:
-    # [published]` event will NOT start docs-deploy.yml on its own — GitHub does not
-    # trigger workflow runs from GITHUB_TOKEN-authored events. Invoke it explicitly.
     uses: ./.github/workflows/docs-deploy.yml
     permissions:
       contents: read

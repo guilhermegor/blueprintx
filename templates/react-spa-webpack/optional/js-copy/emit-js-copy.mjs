@@ -1,28 +1,4 @@
 #!/usr/bin/env node
-/**
- * Emits a plain-JavaScript copy of this project's `src/` + `public/` into
- * `js-copy/`, for delivery contexts that must not contain TypeScript (a
- * course submission, a client handoff, a consumer with no TS toolchain).
- *
- * Strips types with @babel/core + @babel/preset-typescript — both are
- * already devDependencies (babel-loader uses them on every build), so this
- * adds no new dependency.
- *
- * The generated webpack.config.js bakes in two fixes that only surface
- * *after* the extension change from .ts/.tsx to .js/.jsx, both with error
- * messages that point away from the real cause:
- *   1. A `.babelrc` in the copy is resolved against the invoking shell's
- *      cwd, not the copy's own root, so it is silently ignored when built
- *      from elsewhere. Presets are declared inline instead, with
- *      `babelrc: false, configFile: false`.
- *   2. `"type": "module"` puts every `.js` under ESM's "fully specified"
- *      import resolution, which requires the extension on every relative
- *      import — `.ts`/`.tsx` are exempt, which is why the TypeScript
- *      original never hits this. `resolve.fullySpecified: false` opts out.
- *
- * Run `node scripts/verify-js-copy.mjs` after this to prove the output (and
- * any document generated alongside it) is actually free of the toolchain.
- */
 import { transformSync } from '@babel/core';
 import fs from 'fs';
 import path from 'path';
@@ -34,10 +10,6 @@ const OUT_DIR = path.resolve(PROJECT_ROOT, 'js-copy');
 
 const TS_EXTENSIONS = new Set(['.ts', '.tsx']);
 const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'coverage', 'js-copy', '.git']);
-// Internal developer docs (CLAUDE.md, src/capabilities/_layers/*.md) describe
-// the TypeScript layer architecture and reference .ts paths throughout — they
-// are not part of the runtime app, and shipping them in a plain-JS delivery
-// would disclose the excluded toolchain (see verify-js-copy.mjs).
 const SKIP_FILE_EXTENSIONS = new Set(['.md']);
 
 function jsExtensionFor(tsExtension) {
