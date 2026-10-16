@@ -17,9 +17,6 @@ import pytest
 from model.example_entity import ExampleEntity
 
 
-# --------------------------
-# Fixtures
-# --------------------------
 @pytest.fixture
 def cls_connection(tmp_path: Path) -> Iterator[sqlite3.Connection]:
     """Provide a connection to a throwaway SQLite database file.
@@ -58,9 +55,6 @@ def cls_entity(cls_connection: sqlite3.Connection) -> ExampleEntity:
     return cls_built
 
 
-# --------------------------
-# Tests
-# --------------------------
 def test_fetch_all_passes_the_type_checker_on_the_frame_annotation(
     cls_entity: ExampleEntity,
 ) -> None:

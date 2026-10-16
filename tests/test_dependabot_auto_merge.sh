@@ -205,6 +205,14 @@ for str_wf in .github/workflows/dependabot-auto-merge.yml templates/common/.gith
 	check "$str_wf serialises runs per PR" 0 "$?"
 done
 
+STUB_REVIEWS='[{"commit_id":"abc","user":{"login":"some-app[bot]","type":"Bot"},"author_association":"COLLABORATOR","state":"APPROVED"}]'
+expect "a Bot with a collaborator association is not a trusted human" wait-review "$major"
+
+for str_wf in .github/workflows/dependabot-auto-merge.yml templates/common/.github/workflows/dependabot-auto-merge.yml; do
+	grep -q 'types: \[submitted, dismissed\]' "$REPO_ROOT/$str_wf"
+	check "$str_wf re-evaluates on a dismissed review" 0 "$?"
+done
+
 diff <(sed 's#bin/dependabot_auto_merge.sh#X#' "$REPO_ROOT/.github/workflows/dependabot-auto-merge.yml" | sed 's#templates/common/X#X#') \
 	<(sed 's#bin/dependabot_auto_merge.sh#X#' "$REPO_ROOT/templates/common/.github/workflows/dependabot-auto-merge.yml") >/dev/null
 check "root and template workflows differ only in the script path" 0 "$?"

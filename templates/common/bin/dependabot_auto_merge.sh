@@ -50,7 +50,7 @@ has_review_on_head() {
 	str_n=$(gh api "repos/$GH_REPO/pulls/$str_pr/reviews" --paginate |
 		jq -s --arg head "$str_head" --arg bot "$DEPENDABOT_LOGIN" --argjson roster "$str_roster" \
 			'[.[][] | select(.user.login != $bot and (
-				(.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))
+				(.user.type != "Bot" and (.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")))
 				or (.user.type == "Bot" and (.user.login | IN($roster[]))) ))] as $trusted
 			| ($trusted | map(select(.state | IN("APPROVED", "CHANGES_REQUESTED", "DISMISSED"))) | group_by(.user.login) | map(last)) as $latest
 			| if any($latest[]; .state == "CHANGES_REQUESTED") then 0

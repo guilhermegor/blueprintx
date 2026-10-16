@@ -27,7 +27,7 @@ so they keep the review.
    someone other than Dependabot reviewed the current head; otherwise it waits. Whenever
    it does not arm (a human commit, an unreviewed major, a rebase that superseded the
    review), it also disables auto-merge, so a PR armed at an earlier head never merges on
-   stale approval. A submitted review re-triggers the job (`pull_request_review`), so a
+   stale approval. A submitted or dismissed review re-triggers the job (`pull_request_review`), so a
    reviewed major merges on green without a manual re-run.
 3. The `Review threads answered` gate (`check_review_threads.py`) skips its "a declared
    reviewer must have reported" check for a PR that is `dependabot` (a `Bot`), whose every
@@ -69,7 +69,7 @@ restores the PR.
 A public repo accepts reviews from any account, so a review counts toward a major only when it
 is on the current head, in state APPROVED or COMMENTED, and comes from one of:
 
-- a human whose `author_association` is OWNER, MEMBER or COLLABORATOR;
+- a human (`user.type` is not `Bot`) whose `author_association` is OWNER, MEMBER or COLLABORATOR;
 - a reviewer bot: `user.type` is `Bot` and the exact login is a `posts: threads` entry in
   `.review-bots.yaml` (for example `coderabbitai[bot]` and the reviewer-ladder App).
 

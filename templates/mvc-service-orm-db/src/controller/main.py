@@ -30,9 +30,6 @@ from controller._pipeline import PipelineOrchestrator  # noqa: E402
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# E-mail handler (opt-in seam): the assignment below is replaced at scaffold time when the
-# e-mail opt-in is chosen, to build an EmailHandler (Outlook backend by default). By default
-# no handler is wired and the orchestrator runs without sending.
 CLS_EMAIL_HANDLER = None
 
 PipelineOrchestrator(
