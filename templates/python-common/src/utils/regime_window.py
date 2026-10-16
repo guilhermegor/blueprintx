@@ -18,10 +18,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). See src/utils/CLAUDE.md — TYPE_CHECKING
-# stubs the decorator/metaclass shape locally (no import), since mypy flags a bare
-# try/except import as a name redefinition once actually type-checked (blueprintx#360).
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -36,7 +32,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import TypeChecker, type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import TypeChecker, type_checker
 
 
@@ -137,9 +133,6 @@ class RegimeWindow(metaclass=TypeChecker):
             ``True`` when ``int_period`` is within ``[int_period_start, int_period_end]``
             (either bound may be open).
         """
-        # Bounds are validated on construction; the queried period was not. Without this,
-        # an open window reports month 13 as covered and the adapter bound to it reads a
-        # month that does not exist.
         _validate_period(int_period, "int_period")
         bool_after_start = self.int_period_start is None or int_period >= self.int_period_start
         bool_before_end = self.int_period_end is None or int_period <= self.int_period_end

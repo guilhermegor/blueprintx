@@ -28,11 +28,6 @@ from utils.paths import to_absolute
 from utils.signatures import resolve_signature
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -47,7 +42,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import TypeChecker, type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import TypeChecker, type_checker
 
 
@@ -120,10 +115,6 @@ class OutlookGateway(metaclass=TypeChecker):
             if self.path_signatures_dir is not None
             else ""
         )
-        # Outlook runs as its own process, so a relative attachment path re-anchors in ITS
-        # working directory rather than ours, and on Windows a driveless path re-anchors to
-        # whichever drive it sits on. The existence check downstream runs in our process, so
-        # it passes and the attachment is then silently dropped.
         list_attachments_abs = [str(to_absolute(Path(str_path))) for str_path in list_attachments]
         _com_send_email(
             str_subject=str_subject,
@@ -191,9 +182,6 @@ class OutlookGateway(metaclass=TypeChecker):
                 str_email_account=str_email_account,
                 str_folder=str_folder,
                 str_subject_substring=str_subject_substring,
-                # Outlook writes the file itself; a driveless destination lands on ITS drive
-                # while our existence check looks at ours -- a false failure reported over a
-                # file that really did save.
                 str_dest_dir=str(to_absolute(path_dest_dir)),
                 list_file_formats=list_formats,
                 str_subfolder=str_subfolder,
@@ -222,12 +210,6 @@ class OutlookGateway(metaclass=TypeChecker):
         )
         return None
 
-    # ⚠️ The COM helpers below carry the complexity hatch, for one reason stated once here.
-    # They are Windows COM interop with NON-FATAL degradation. Every branch is a platform
-    # guard, an optional field the COM object may or may not expose, or a failure that has to
-    # be logged and survived rather than raised. That last property is the whole contract of
-    # this gateway, since a mail integration that dies takes the routine down with it, so
-    # collapsing those branches would trade a documented, survivable path for a shorter one.
     def get_body_content(  # complexity-ok: COM interop, non-fatal degradation
         self,
         str_email_account: str,

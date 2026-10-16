@@ -40,17 +40,9 @@ import uuid
 
 import pandas as pd
 
-# Imports the CLASS only for a type annotation (stamp_provenance's contract parameter) — it never
-# constructs one, so it carries the documented line-scoped exemption to the TID251 ban that keeps
-# FileContract construction inside config/contracts/ (see src/config/CLAUDE.md).
 from utils.tabular_reader import FileContract  # noqa: TID251
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -62,11 +54,10 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
-# Read the file in 1 MiB blocks so hashing a large artifact never loads it whole into memory.
 _HASH_CHUNK_BYTES = 1 << 20
 
 

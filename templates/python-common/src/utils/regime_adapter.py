@@ -25,9 +25,6 @@ from utils.regime_registry import RegimeRegistry
 from utils.regime_window import RegimeWindow
 
 
-# TYPE_CHECKING stubs the metaclass shape locally instead of importing: mypy treats a
-# try/except import as executed code and flags the redefinition once actually
-# type-checked, so this branch can't pick either layout (blueprintx#360).
 if TYPE_CHECKING:
 
     class TypeChecker(type):
@@ -35,7 +32,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import TypeChecker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import TypeChecker
 
 

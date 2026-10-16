@@ -23,11 +23,6 @@ from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -42,21 +37,14 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import TypeChecker, type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import TypeChecker, type_checker
 
 
-# Frame modules skipped when reconstructing the caller context: the stdlib logging and inspect
-# machinery, pydantic and typing internals, the project's own runtime type-checker, and the
-# logging seam itself (logs, logs emitter, retry) whose wrapper frames would otherwise mask the
-# real caller. Matched on the module name's last dotted component (see the walker below), so a
-# package-qualified name still matches its final segment where a prefix match would not.
 _SET_SKIP_MODULES = frozenset(
     {"pydantic", "typing", "inspect", "logging", "logs", "logs_emitter", "retry"}
 )
 
-# The severities a message may carry — shared by ``CreateLog.log_message`` and the module-level
-# ``log_message`` seam so the two never drift (mypy checks the forwarded argument against this).
 LogLevel = Literal["info", "warning", "error", "critical"]
 
 
@@ -78,9 +66,6 @@ class CreateLog(metaclass=TypeChecker):
         ValueError
             If ``path`` is empty or not a string.
         """
-        # ⚠️ Type BEFORE emptiness. The other order described a non-string falsy value, such
-        # as zero or an empty list, as "cannot be empty" — which sends the reader looking for
-        # a blank string that was never there.
         if not isinstance(path, str):
             raise ValueError("Path must be a string")
         if not path:
@@ -117,12 +102,6 @@ class CreateLog(metaclass=TypeChecker):
         -------
         None
         """
-        # Clearing the handler list alone only drops the reference — the stale FileHandler,
-        # and the OS file descriptor it holds open, survives until garbage collection, which
-        # is when Python raises an invisible ResourceWarning that never surfaces under default
-        # settings. A caller that reconfigures the logger, say rotating to a new dated log
-        # file, leaked one open file handle per reconfiguration. Closing first releases the
-        # descriptor immediately, not at GC time.
         for cls_stale_handler in logger.handlers:
             cls_stale_handler.close()
         logger.handlers.clear()
@@ -167,7 +146,6 @@ class CreateLog(metaclass=TypeChecker):
                 datefmt="%Y-%m-%d,%H:%M:%S",
             )
         )
-        # Reconfiguring must release the previous file descriptor, not just forget it.
         self._close_handlers(logger)
         logger.addHandler(handler)
         return logger
@@ -222,9 +200,6 @@ class CreateLog(metaclass=TypeChecker):
             if not frame:
                 break
             str_module_name = frame.f_globals.get("__name__", "UnknownModule")
-            # Match on the module name's last dotted component so a package-qualified module
-            # still matches its final segment. A prefix match silently failed for the nested,
-            # distributable layout and misattributed the caller class.
             if str_module_name.rsplit(".", 1)[-1] in _SET_SKIP_MODULES:
                 continue
             self_potential_cls = frame.f_locals.get("self")
@@ -307,8 +282,6 @@ def log_message(
     _CLS_LOG.log_message(logger, str_message, str_level)
 
 
-# What each outcome of the parent-folder attempt means, expressed as data. Anything absent
-# from this table is an unexpected value and is rejected rather than silently ignored.
 _DICT_PARENT_FOLDER_OUTCOME = {
     True: "Logs parent directory created successfully.",
     False: "Logs parent directory could not be created.",
@@ -341,8 +314,6 @@ def _report_parent_folder(
     """
     bool_dispatch = cls_create_log.creating_parent_folder(path_log)
     cls_create_log.log_message(logger, f"Logs parent directory: {path_log}", "info")
-    # The outcome names a message, so it is a lookup rather than a branch chain — and the
-    # table doubles as the set of values considered valid, one source instead of two.
     str_outcome = _DICT_PARENT_FOLDER_OUTCOME.get(bool_dispatch)
     if str_outcome is None:
         raise RuntimeError(f"Unexpected dispatch value: {bool_dispatch}") from None
