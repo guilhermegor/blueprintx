@@ -1,4 +1,4 @@
 language=bash
 display_name=Etcher ChromeOS flasher
-description=Bash CLI that downloads, verifies and flashes the latest ChromeOS Flex or FydeOS image to a USB pendrive
+description=Bash CLI that flashes the latest ChromeOS Flex image, or a FydeOS image you downloaded, to a USB pendrive after verifying it
 scaffold=bin/scaffold/etcher_chromeos.sh

@@ -13,7 +13,7 @@
 - Interactive CLI (`make new`) with auto-discovered language and skeleton menus
 - **Python skeletons**: **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, **MVC service (Native DB)**, **MVC service (ORM DB)**, and **lib-minimal**
 - **TypeScript skeletons**: **React SPA (Webpack)** — React 19 + TypeScript + Webpack 5 + Babel + ESLint + Prettier
-- **Bash skeletons**: **etcher-chromeos** — a CLI that downloads, verifies and flashes ChromeOS Flex or FydeOS to a USB pendrive (see `docs/skeletons/etcher-chromeos.md`)
+- **Bash skeletons**: **bash-cli** — a standalone Bash CLI with git-tag versioning, bats and shellcheck; **etcher-chromeos** — a CLI that downloads, verifies and flashes ChromeOS Flex or FydeOS to a USB pendrive (see `docs/skeletons/etcher-chromeos.md`)
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders
 - Common TypeScript baseline: `package.json` with pinned deps, `.gitignore`, VS Code settings, `CONTRIBUTING.md`, GitHub Actions CI (type-check + lint + build)
 - **Offline git-diff sync**: when you scaffold a project without connecting it to GitHub, BlueprintX adds a `git_diff_export` / `git_diff_check` / `git_diff_apply` workflow for moving changes between machines via patch files (e.g. email) — no GitHub required

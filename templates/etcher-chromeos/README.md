@@ -26,12 +26,12 @@ bin/${PROJECT_NAME} flash --target /dev/sdb --os fydeos \
   unauthenticated "latest" URL, so you download the file and pass its published hash.
   The hash is checked against the archive before it is unpacked.
 - **Flashing.** The distro's `bmaptool` when installed (`apt install bmap-tools`), else
-  `dd conv=fsync status=progress`, which needs no download. `make tools` never downloads.
-  `make tools ALLOW_UNSIGNED_DOWNLOAD=1` fetches the latest GitHub bmaptool release and
-  `make tools_etcher ALLOW_UNSIGNED_DOWNLOAD=1` the balenaEtcher GUI (no maintained CLI).
-  Both are verified only against a digest served by the same release, not publisher-attested.
-  Every flash shows the device's model, size and partitions and requires typing the device
-  name. `--dry-run` writes nothing.
+  `dd conv=fsync status=progress`, which needs no download. `make tools` only checks for
+  bmaptool and never downloads it. balenaEtcher has no maintained CLI;
+  `make tools_etcher ALLOW_UNSIGNED_DOWNLOAD=1` fetches the GUI, verified only against a
+  digest served by the same release, not publisher-attested. Every flash shows the
+  device's model, size and partitions and requires typing the device name. `--dry-run`
+  writes nothing.
 - **Docker.** The `Dockerfile` is for tests and resolvers only. It cannot flash: that would
   need `--privileged` and would lose the removable-device check.
 

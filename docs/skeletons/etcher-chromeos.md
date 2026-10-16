@@ -38,17 +38,17 @@ readable index. The CLI therefore takes a file you downloaded plus its published
 Etcher's `SHA256SUMS.Linux.x64.txt`, for hand use.
 
 **Trust model for tools.** Whatever runs as root against a block device must be
-publisher-attested, so `make tools` never downloads bmaptool by default. It uses
+publisher-attested, so bmaptool is never downloaded. `make tools` uses
 `command -v bmaptool` (a distro-signed package: `apt install bmap-tools`,
-`dnf install bmap-tools`) and otherwise leaves flashing to plain `dd`. Downloading from
-GitHub is opt-in only (`make tools ALLOW_UNSIGNED_DOWNLOAD=1` or `--allow-github-digest`),
-prints a warning, and is protected only by a same-origin digest: GitHub's `digest` field for
-the bmaptool asset, or Etcher's `SHA256SUMS.Linux.x64.txt`. Both detect corruption, not a
-tampered release. Nothing is pinned: the latest release is resolved at run time, the tag
-must match `^v?[0-9]+(\.[0-9]+)*$` and asset names `^[A-Za-z0-9._-]+$` before a URL is built,
-each run extracts into a fresh temporary directory, the checksum line must match the
-filename exactly, and `curl` is restricted to HTTPS with TLS 1.2 or later. bmaptool's
-releases currently carry no assets, so the opt-in fetch fails with a message.
+`dnf install bmap-tools`) and otherwise leaves flashing to plain `dd`. bmaptool's GitHub
+releases carry no assets and no checksum, so there is nothing to verify a download against.
+The balenaEtcher GUI is the only download, opt-in (`make tools_etcher ALLOW_UNSIGNED_DOWNLOAD=1`
+or `--allow-github-digest`), with a warning: it is protected only by Etcher's
+`SHA256SUMS.Linux.x64.txt` from the same release, which detects corruption, not a tampered
+release. Nothing is pinned: the latest release is resolved at run time, the tag must match
+`^v?[0-9]+(\.[0-9]+)*$` and asset names `^[A-Za-z0-9._-]+$` before a URL is built, the
+download works in a temporary directory removed on exit, the checksum line must match the
+filename exactly, and `curl` is restricted to HTTPS with TLS 1.2 or later.
 
 ## Docker
 

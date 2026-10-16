@@ -102,7 +102,9 @@ cmd_flash() {
         return 0
     fi
 
-    [ "$ARG_OS" = chromeos-flex ] && flex_download "$DOWNLOAD_DIR"
+    if [ "$ARG_OS" = chromeos-flex ]; then
+        flex_download "$DOWNLOAD_DIR"
+    fi
     device_fits "$(stat -c %s "$IMAGE_PATH")"
     device_confirm "$ARG_CONFIRM"
     flash_image

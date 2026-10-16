@@ -29,7 +29,7 @@ repo_rules_verify:
 	@bash bin/enable_repo_rules.sh verify
 
 help:
-	@echo "make tools              - use the distro bmaptool (add ALLOW_UNSIGNED_DOWNLOAD=1 to download one)"
+	@echo "make tools              - check for the distro bmaptool (never downloads)"
 	@echo "make tools_etcher       - balenaEtcher GUI into .tools/ (needs ALLOW_UNSIGNED_DOWNLOAD=1)"
 	@echo "make lint               - shellcheck + shfmt"
 	@echo "make test               - bats tests/ (network and devices stubbed)"

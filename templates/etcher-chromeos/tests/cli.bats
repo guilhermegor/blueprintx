@@ -194,16 +194,6 @@ STUB
     [ ! -e "$BATS_TEST_TMPDIR/tools/bin/bmaptool" ]
 }
 
-@test "tools: bmaptool opt-in refuses a release with no digest to verify against" {
-    command -v bmaptool >/dev/null && skip "bmaptool is installed"
-    ALLOW_UNSIGNED_DOWNLOAD=1 CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" \
-        CROS_BMAPTOOL_API="https://api.example.test/releases/latest" \
-        run "$BATS_TEST_DIRNAME/../bin/fetch_tools.sh" bmaptool
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"no usable .tar.gz asset"* ]]
-    [ ! -e "$BATS_TEST_TMPDIR/tools/bin/bmaptool" ]
-}
-
 @test "tools: a malformed tag_name is rejected before any URL is built" {
     printf '{"tag_name": "v1.0/../x", "assets": []}' >"$FIX/release.json"
     ALLOW_UNSIGNED_DOWNLOAD=1 CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" \
