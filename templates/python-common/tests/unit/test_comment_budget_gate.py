@@ -1261,6 +1261,8 @@ _DICT_ALLOWED = {
     "prettier": "// prettier-ignore\nconst x = 1;\n",
     "ts_expect": "// @ts-expect-error legacy\nconst x = 1;\n",
     "ts_ignore": "// @ts-ignore\nconst x = 1;\n",
+    "ts_check": "// @ts-check\nconst x = 1;\n",
+    "ts_type": "/** @type {import('jest').Config} */\nconst x = 1;\n",
     "hadolint": "# hadolint ignore=DL3008\nX=1\n",
     "shebang": "#!/usr/bin/env bash\nX=1\n",
     "syntax": "# syntax=docker/dockerfile:1\nX=1\n",
@@ -1274,6 +1276,8 @@ _DICT_SUFFIX = {
     "prettier": ".ts",
     "ts_expect": ".ts",
     "ts_ignore": ".ts",
+    "ts_check": ".js",
+    "ts_type": ".js",
     "sha_pin_version": ".yaml",
     "provenance": ".yaml",
     "shellcheck_disable": ".sh",
@@ -1307,6 +1311,32 @@ def test_each_allowlisted_form_is_not_counted(
     _tree(tmp_path, "")
     (tmp_path / str_name).write_text(_DICT_ALLOWED[str_form], encoding="utf-8")
     assert _run(tmp_path, capsys)[0] == 0
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    [
+        "// see @type {import('x').Y}: this is slow\nconst x = 1;\n",
+        "// @type {Foo} is a prose note\nconst x = 1;\n",
+    ],
+)
+def test_a_type_mention_in_prose_is_still_counted(
+    str_source: str, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Only a comment that starts with the JSDoc import form is exempt, not any mention.
+
+    Parameters
+    ----------
+    str_source : str
+        A comment that mentions ``@type {`` without being the annotation.
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    _tree(tmp_path, "")
+    (tmp_path / "probe.js").write_text(str_source, encoding="utf-8")
+    assert _run(tmp_path, capsys)[0] != 0
 
 
 @pytest.mark.skipif(

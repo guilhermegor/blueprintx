@@ -13,6 +13,7 @@
 - Interactive CLI (`make new`) with auto-discovered language and skeleton menus
 - **Python skeletons**: **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, **MVC service (Native DB)**, **MVC service (ORM DB)**, and **lib-minimal**
 - **TypeScript skeletons**: **React SPA (Webpack)** — React 19 + TypeScript + Webpack 5 + Babel + ESLint + Prettier
+- **Bash skeletons**: **bash-cli** — a standalone Bash CLI with git-tag versioning, bats and shellcheck; **etcher-chromeos** — a CLI that downloads, verifies and flashes ChromeOS Flex or FydeOS to a USB pendrive (see `docs/skeletons/etcher-chromeos.md`)
 - Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders
 - Common TypeScript baseline: `package.json` with pinned deps, `.gitignore`, VS Code settings, `CONTRIBUTING.md`, GitHub Actions CI (type-check + lint + build)
 - **Offline git-diff sync**: when you scaffold a project without connecting it to GitHub, BlueprintX adds a `git_diff_export` / `git_diff_check` / `git_diff_apply` workflow for moving changes between machines via patch files (e.g. email) — no GitHub required
@@ -330,6 +331,9 @@ project/
 
 After scaffolding, run `npm install && npm run build && npm test` to build all three targets (`dist/esm`, `dist/cjs`, `dist/types`) and run the test suite.
 
+### Ventoy USB (templates/ventoy-usb)
+Rebuilds a [Ventoy](https://www.ventoy.net) multiboot drive with a fixed folder layout. A source manifest drives everything: latest ISOs are resolved and downloaded at build time, each verified against an upstream checksum (the build fails closed without one), an empty persistence image is created the way Ventoy does it, and `ventoy.json` is generated and path-checked. `make drive` asks for the pendrive, then installs Ventoy (after a typed confirmation) or syncs an existing one, asking before deleting anything outside the layout; `DRY_RUN=1` previews. ISOs, installers and persistence images are never committed; small own files go in `payload/`. Replaces a ~50 GB drive backup. See `docs/skeletons/ventoy-usb.md`.
+
 ## 🔁 Offline git-diff sync
 
 When you scaffold a project and **decline** connecting it to a GitHub remote, BlueprintX adds a small offline-sync workflow so you can move changes between machines as patch files (e.g. attach to an email) — useful in restricted/air-gapped environments. It is **only** added in this no-GitHub case; projects pushed to GitHub stay clean.
@@ -372,7 +376,8 @@ BlueprintX/
 │       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold
 │       ├── ts_react_app.sh            # React SPA (Webpack) scaffold
-│       └── ts_lib.sh                  # publishable TS library scaffold
+│       ├── ts_lib.sh                  # publishable TS library scaffold
+│       └── ventoy_usb.sh              # Ventoy drive builder scaffold
 ├── templates/               # skeleton contents + discovery metadata
 │   ├── common/                 # language-agnostic shared assets (CODEOWNERS, PR template,
 │   │   │                       #   bin/ git-diff scripts + lib/common.sh, make/git_diff.mk)
@@ -393,6 +398,9 @@ BlueprintX/
 │   ├── react-spa-webpack/      # React 19 + TypeScript + Webpack 5 SPA
 │   │   └── skeleton.meta
 │   ├── ts-lib/                 # publishable TypeScript library
+│   │   └── skeleton.meta
+│   ├── ventoy-usb/             # Ventoy drive builder (manifest, verified downloads)
+│   ├── etcher-chromeos/        # Bash CLI that flashes ChromeOS Flex or FydeOS
 │   │   └── skeleton.meta
 │   └── licenses/               # license text files
 ├── docs/                    # mkdocs sources

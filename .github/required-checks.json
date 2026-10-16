@@ -42,6 +42,7 @@
     "Cyclomatic complexity — templates/python-common (tests 1, src 2, bin 8)",
     "Docs gap — published pages registered in nav and index",
     "Dry-run smoke — bash-cli",
+    "Dry-run smoke — etcher-chromeos",
     "Every skeleton ships the hosted-reviewer config",
     "Lockfile sync — templates/*/package.json vs package-lock.json",
     "PR file-count ceiling — 90 files (blueprintx#551)",

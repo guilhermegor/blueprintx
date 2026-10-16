@@ -18,11 +18,6 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -34,22 +29,12 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
-# pandas < 3 has no real ``str`` dtype: ``astype("str")`` on a missing value yields the
-# LITERAL three-character string ``"nan"`` (object dtype), and ``.isna()`` then reports
-# ``False`` — a blank source field becomes indistinguishable from one the source actually
-# sent, and nothing raises. pandas 3 introduced a true ``str`` dtype that preserves NA.
-# A ``poetry.lock`` routinely ships BOTH majors keyed by Python marker, so the same dtype
-# declaration would produce different DATA on different CI legs (and a dev box on pandas 3
-# sees a fully green suite). The nullable ``"string"`` dtype behaves identically on 2 and 3,
-# and its elements are still ordinary ``str`` — ``isinstance(x, str)`` keeps passing.
 _DTYPE_TEXT = "string"
 
-# Text spellings that mean "missing" once a value has been through a stringifying reader.
-# Named rather than inlined so the set has one home if a source adds another spelling.
 _FROZENSET_MISSING_TEXT = frozenset({"nan", "none", "<na>"})
 
 
@@ -110,10 +95,6 @@ def _to_decimal(value: object) -> object:
     return _decimal_by_type(value)
 
 
-# Dispatch on the value's TYPE rather than an isinstance chain — the house rule
-# (rules/python.md, "Composition Patterns"). Dispatch follows the MRO, so the float handler
-# is reached for a float and the int one for an int, without the ordering that the chain had
-# to get right by hand. ``pd.NA`` is not a type, so its check stays in the caller above.
 @functools.singledispatch
 @type_checker
 def _decimal_by_type(value: object) -> object:
@@ -288,10 +269,6 @@ def apply_dtypes(
     if dict_dtypes:
         df_typed = df_typed.astype(_resolve_text_dtypes(dict_dtypes))
 
-    # One assign call rather than three mutating loops, the pandas idiom this project prefers
-    # and documents in its Python rules file. The whole set of derived columns becomes one
-    # expression, so the result's shape is visible instead of accumulated a statement at a
-    # time. Column names need not be identifiers for the double-star form.
     dict_derived = {
         **{
             str_col: pd.to_datetime(df_typed[str_col], errors="raise")
@@ -336,8 +313,6 @@ def _validate_referenced_columns(  # complexity-ok: two distinct validation faul
     if set_missing:
         raise KeyError(f"Columns not found in DataFrame: {sorted(set_missing)}")
 
-    # A Counter states "named more than once" directly, where the seen/overlap pair of sets
-    # had to build the same fact one element at a time.
     cls_counts = collections.Counter(list_referenced)
     set_overlap = {str_col for str_col, int_n in cls_counts.items() if int_n > 1}
     if set_overlap:

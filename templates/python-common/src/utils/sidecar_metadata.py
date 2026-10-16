@@ -28,15 +28,6 @@ from typing import TYPE_CHECKING
 from utils.http_downloader import download_file
 
 
-# ``Callable`` is a **runtime** import (not TYPE_CHECKING-only): ``@type_checker`` (beartype)
-# resolves the ``fn_download: Callable[...]`` hint against this module's globals when the function
-# runs, so the name must exist at runtime even under ``from __future__ import annotations``.
-
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from typing import TypeVar
 
@@ -47,12 +38,10 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
-# A descriptor needs a header line plus at least one field line to carry anything. Named so
-# the guard states that, rather than testing a bare 2.
 _INT_MIN_DESCRIPTOR_LINES = 2
 
 
@@ -156,9 +145,6 @@ def parse_sidecar_metadata(str_text: str, str_sep: str = ";") -> dict[str, dict[
         return {}
     list_headers = [cell.strip() for cell in list_lines[0].split(str_sep)]
     list_rows = [[cell.strip() for cell in str_line.split(str_sep)] for str_line in list_lines[1:]]
-    # Each row is projected onto the header, with short rows padded by empty strings. Written
-    # as a projection rather than an accumulating loop, so the shape of the result is visible
-    # in the expression instead of assembled one statement at a time.
     return {
         list_cells[0]: {
             str_header: (list_cells[int_idx] if int_idx < len(list_cells) else "")

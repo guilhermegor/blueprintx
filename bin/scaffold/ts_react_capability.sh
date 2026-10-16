@@ -1,23 +1,6 @@
 #!/usr/bin/env bash
-# Create a new capability inside a scaffolded blueprintx React project.
-#
-# Adds the standard layer directory structure (domain, application,
-# infrastructure, ui) and the thin per-layer CLAUDE.md files that
-# @-import the shared rules from src/capabilities/_layers/.
-#
-# Usage:
-#   bash ts_react_capability.sh <capability-name> [project-root]
-#
-# Examples:
-#   # From inside a scaffolded project root
-#   bash ~/github/blueprintx/bin/scaffold/ts_react_capability.sh billing
-#
-#   # Targeting a specific project root
-#   bash ts_react_capability.sh notifications /path/to/project
 
 set -euo pipefail
-
-# --- Args --------------------------------------------------------------------
 
 CAPABILITY_NAME="${1:-}"
 PROJECT_ROOT="${2:-$(pwd)}"
@@ -34,7 +17,6 @@ if [[ ! "$CAPABILITY_NAME" =~ ^[a-z][a-z0-9-]*$ ]]; then
     exit 1
 fi
 
-# Reserved names (would collide with the shared layer rules dir or example)
 case "$CAPABILITY_NAME" in
     _layers|example)
         echo "ERROR: '$CAPABILITY_NAME' is reserved" >&2
@@ -42,13 +24,9 @@ case "$CAPABILITY_NAME" in
         ;;
 esac
 
-# --- Paths -------------------------------------------------------------------
-
 CAPABILITIES_DIR="$PROJECT_ROOT/src/capabilities"
 LAYERS_DIR="$CAPABILITIES_DIR/_layers"
 NEW_CAP_DIR="$CAPABILITIES_DIR/$CAPABILITY_NAME"
-
-# --- Preflight ---------------------------------------------------------------
 
 if [[ ! -d "$CAPABILITIES_DIR" ]]; then
     echo "ERROR: $CAPABILITIES_DIR not found." >&2
@@ -71,8 +49,6 @@ if [[ -e "$NEW_CAP_DIR" ]]; then
     exit 1
 fi
 
-# Sanity-check: all 4 layer rule files must be present before we generate
-# imports that depend on them.
 for layer in domain application infrastructure ui; do
     if [[ ! -f "$LAYERS_DIR/$layer.md" ]]; then
         echo "ERROR: missing $LAYERS_DIR/$layer.md" >&2
@@ -80,8 +56,6 @@ for layer in domain application infrastructure ui; do
         exit 1
     fi
 done
-
-# --- Generate ----------------------------------------------------------------
 
 for layer in domain application infrastructure ui; do
     mkdir -p "$NEW_CAP_DIR/$layer"
@@ -95,8 +69,6 @@ for layer in domain application infrastructure ui; do
 -->
 EOF
 done
-
-# --- Report ------------------------------------------------------------------
 
 echo "✅ Capability '$CAPABILITY_NAME' created at:"
 echo "   $NEW_CAP_DIR"

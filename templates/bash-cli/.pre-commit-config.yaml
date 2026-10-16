@@ -32,8 +32,6 @@ repos:
 
   - repo: local
     hooks:
-      # `make lint` IS the CI job (.github/workflows/ci.yml) — one implementation,
-      # local and CI run identical shellcheck + shfmt.
       - id: lint
         name: shellcheck + shfmt
         entry: make lint

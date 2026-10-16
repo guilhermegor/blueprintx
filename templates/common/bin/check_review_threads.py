@@ -82,30 +82,11 @@ except ModuleNotFoundError:  # pragma: no cover - the gate self-skips without it
 
 _ROSTER_FILE = ".review-bots.yaml"
 
-# ⚠️ `posts:` IS NOT DECORATION — IT DECIDES WHO CAN SATISFY THE MISSING-REVIEW GATE.
-#
-# Reviewer shapes differ: some post inline review THREADS, some post only a STATUS CHECK. The
-# thread half of this gate correctly subtracts BOTH (a `status` member posts no answers either),
-# but `find_missing_review_problem` must consider only the members that can actually submit a
-# review. Without that split, `github-actions[bot]` — which CAN submit a review with the ambient
-# GITHUB_TOKEN — silently satisfies a gate whose entire purpose is "a real reviewer looked at
-# this". Same class of hole as #208: a signal that reads as a review without being one.
 _POSTS_THREADS = "threads"
 _POSTS_STATUS = "status"
-# The dict IS the branch and the frozenset IS the validity set, so the two cannot drift.
 _POSTS_CAN_REVIEW = {_POSTS_THREADS: True, _POSTS_STATUS: False}
 _POSTS_VALID = frozenset(_POSTS_CAN_REVIEW)
 
-# ⚠️ GraphQL and REST disagree on a bot's login, and the gate lives or dies on it.
-#
-# REST reports `coderabbitai[bot]`; the GraphQL `author { login }` field returns the Bot
-# actor's login WITHOUT the suffix — `coderabbitai`. The roster is written in the REST form
-# (that is the login GitHub shows everywhere else), so a literal comparison against GraphQL
-# output NEVER MATCHED. Every reviewer comment therefore counted as an "answer", and the gate
-# reported "all threads answered" on a PR where nobody had replied to anything.
-#
-# It is the worst possible failure for a gate: permanently, silently green. Both sides are now
-# normalised, and `test_review_threads_gate.py` pins the bot-suffix case by name.
 _BOT_SUFFIX = "[bot]"
 
 
@@ -126,76 +107,10 @@ def normalise_login(str_login: str) -> str:
     return str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
 
 
-# Floor for a "substantive" reply. Measured, not invented: the replies on the PR that motivated
-# this gate ran 100-667 characters (median 439), and an earlier sample of genuine verdict
-# replies ran 356-1126. 100 sits at or below the shortest real one, so it excludes "done" and
-# "fixed" without ever arguing with a real answer.
 _MIN_REPLY_CHARS = 100
 
-# ⚠️ A REVIEWER NOTICE IS QUOTED IN THE MESSAGE AND NEVER COUNTED AS A VERDICT (#259).
-#
-# `reviews == 0` collapses states with different remedies — nobody ran, refused, rate-limited,
-# or declined as redundant — so the notice is worth SHOWING. It is not worth trusting, and the
-# first draft of this file trusted it. Measured on #264, the PR that introduced it:
-#
-#   ✅ Action performed     "Review finished."      + the "already reviewed" footnote
-#   ⚠️ Action not completed "Review rate limited."  + the "already reviewed" footnote
-#   ❌ Action failed        "Review failed."        + the "already reviewed" footnote
-#
-# That sentence is a STANDING FOOTNOTE about how the product works, appended to every outcome —
-# not a statement about this PR. Keying a pass on it made a rate-limited and an outright FAILED
-# review read as "declined as redundant", which is the exact defect shape this file exists to
-# remove: prose that is always true, mistaken for evidence. Caught by review on #264, which asked
-# for evidence the commits were reviewed; there is none in the text, so there is no pass.
-#
-# ⚠️ AND THE UNSATISFIABILITY THAT JUSTIFIED THE PASS DOES NOT EXIST. #259 argued the gate would
-# be unsatisfiable because the remedy it prints (`@coderabbitai review`) is the command that
-# answers "already reviewed". A DIFFERENT documented command does not: `@coderabbitai full
-# review` "disregards any comments that CodeRabbit has already made on this pull request, and
-# generates a complete review of the entire pull request" (CodeRabbit's own docs). So the failure
-# stands and the message names the command that actually clears it.
 _RE_MARKUP = re.compile(r"<!--.*?-->|<[^>]+>", re.DOTALL)
 
-# ⚠️ `reviews` is here because THREADS ALONE CANNOT SEE AN ABSENT REVIEWER.
-#
-# A reviewer that ran and found nothing produces zero threads. A reviewer that never ran
-# produces zero threads. Reading only `reviewThreads`, those are the same number, and the
-# gate reported the second as success — see `find_missing_review_problem`.
-#
-# A submitted review is the discriminator, and it had to be measured rather than assumed:
-# on #204 and #213 (both merged unreviewed) the roster posted an issue COMMENT — the
-# star-gate refusal notice — but `reviews` was 0. So "the roster said something" would have
-# passed both; "the roster submitted a review" fails both and passes #209 (10) and #215 (1).
-# ⚠️ THE `states:` FILTER ON `reviews` IS LOAD-BEARING — measured, not defensive. Without it the
-# connection also returns unsubmitted DRAFT reviews. Verified on #216: opening a draft review and
-# re-querying showed it in the connection. The gate would then read "a reviewer reported" off
-# something nobody else can see — the vacuous pass this whole check exists to remove. It lives
-# outside the query string on purpose: a comment inside it is shipped over the wire on every
-# call, and its wording would collide with the test that pins the filter. Raised by review on #216.
-# ⚠️ BOTH CONNECTIONS PAGINATE, AND THE THREADS HALF IS THE DANGEROUS ONE.
-#
-# `first:100` is a CAP, not "all". Raised by review on #216 for `reviews`, where truncation
-# causes a false FAILURE — annoying, and it needs 100 non-roster reviews before the roster's
-# first (measured: `first` returns OLDEST first, `last` returns newest). The same cap on
-# `reviewThreads` is worse and nobody flagged it: thread 101 is simply never examined, and the
-# gate prints "All 100 review thread(s) answered" over unfinished conversations — a false PASS,
-# which is the exact shape this file exists to eliminate.
-# ⚠️ `commit { oid }` IS WHY A REVIEW COUNTS, AND IT COSTS NOTHING TO ASK FOR.
-#
-# A submitted review is pinned to the commit it was written against, and nothing re-pins it
-# when the branch moves. Measured on #219: `head=9ae76ab` while the PR's only review was
-# attributed to `9e7d1fe`, a commit superseded five minutes earlier — and the review's own
-# content proved the staleness, arguing a point the newer commit had already falsified. The
-# gate passed, because it asked "did a roster member submit a review?" and never "of which
-# code?". Triggering a review is necessary and NOT sufficient (#220).
-#
-# ⚠️ `comments` HERE IS THE PR'S ISSUE-COMMENT STREAM, NOT A THREAD'S REPLIES.
-#
-# A reviewer that declines to work posts an ISSUE comment, never a review thread — verified on
-# #257. That stream is the only place the difference between "nobody looked at this" and "these
-# commits were already reviewed" is written down (#259). It is paginated like reviews and
-# threads: a PR past 100 comments (#282 and #319 have 140) must not drop either a review comment
-# or the answer to it.
 _QUERY = """
 query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:String) {
   repository(owner:$owner, name:$repo) {
@@ -249,8 +164,6 @@ def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
             invents a violation.
     """
     for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
-        # S607 (partial path) is resolution BY DESIGN: use the `git` on PATH, the one the
-        # developer's shell and CI already use, not a path hardcoded here.
         cls_run = subprocess.run(  # noqa: S603
             ["git", "-C", str(path_root), "cat-file", "-e", f"{str_ref}:{_ROSTER_FILE}"],  # noqa: S607
             capture_output=True,
@@ -287,8 +200,6 @@ def posts_of(dict_row: dict) -> str:
     str_login = str(dict_row.get("login") or "").strip()
     str_posts = str(dict_row.get("posts") or "").strip()
     if str_posts not in _POSTS_VALID:
-        # Name the row AND the value it declared. A roster error that reports only "invalid
-        # posts" sends the reader back through the file to work out which of N rows it meant.
         raise RuntimeError(
             f"{_ROSTER_FILE}: reviewer {str_login or '<no login>'} declares "
             f"posts: {str_posts or '<missing>'} — expected one of "
@@ -327,10 +238,6 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
     if yaml is None:
         return {}
     if not path_roster.is_file():
-        # ⚠️ ABSENT is only "not adopted here" when it was never there. If the DEFAULT branch
-        # carries the roster and this branch does not, the file was DELETED — and since an
-        # empty roster makes the gate a no-op, deleting it is a one-line way to switch the
-        # gate off inside the very PR it is meant to police. Fail loudly instead.
         if _roster_exists_on_default_branch(path_root):
             raise RuntimeError(
                 f"{_ROSTER_FILE} exists on the default branch but not here — deleting it "
@@ -344,14 +251,6 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
         if d.get("login")
     }
     if not dict_roster:
-        # ⚠️ EMPTYING THE LIST IS THE SAME ONE-LINE SWITCH-OFF AS DELETING THE FILE.
-        #
-        # The guard above rejects a roster deleted inside the PR it polices; `reviewers: []`
-        # walks through the same door with different keystrokes — the file is present, so the
-        # deletion guard never fires, and `main()` reads the empty result as "not adopted here"
-        # and exits 0. Opting out is documented as DELETING the file, which self-skips with a
-        # message; a roster that exists and declares nobody is a disabled gate, not an absent
-        # one. Raised by review on #262.
         raise RuntimeError(
             f"{_ROSTER_FILE} exists but declares no reviewers — an empty roster makes this "
             f"gate a no-op, which is the same as deleting it. Declare a reviewer, or delete "
@@ -430,7 +329,6 @@ def _fetch_page(
         "-F",
         f"cc={str_comment_cursor}" if str_comment_cursor else "cc=",
     ]
-    # Constant argv built from CI-provided identifiers; no shell is involved.
     cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
     if cls_run.returncode != 0:
         raise RuntimeError(f"GraphQL query failed: {cls_run.stderr.strip()[:400]}")
@@ -475,10 +373,6 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
     dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None, None)
     list_sides = [(dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr]
 
-    # Follow every cursor until none has a next page. Independent cursors, one request each
-    # round: passing a cursor for a connection that is already exhausted just re-returns its
-    # last (empty) page, so the loop terminates on the slowest of them. A failed page raises
-    # in `_fetch_page`, so the loop can only stop early by finishing, never by an error.
     while any(dict_side["pageInfo"]["hasNextPage"] for dict_side, _ in list_sides):
         dict_next = _fetch_page(
             str_owner,
@@ -542,10 +436,6 @@ def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str
     list of str
         Commit oids, deduplicated, empty oids dropped.
     """
-    # Every review, not each reviewer's latest: an equal fingerprint means identical PR code, so
-    # an older identical review is a true carry-forward. `reviewers_who_reported` filters by
-    # neither recency nor state at HEAD; DISMISSED is excluded HERE, stricter on purpose, since
-    # a dismissal retracts the review and a stale one should not be revived by a merge.
     list_oids = [
         (d.get("commit") or {}).get("oid") or ""
         for d in list_reviews
@@ -555,21 +445,12 @@ def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str
     return list(dict.fromkeys(str_oid for str_oid in reversed(list_oids) if str_oid))
 
 
-# The compare API lists at most this many files, whatever `per_page` says (it pages COMMITS,
-# not files; measured). A full list may be cut off, so it fails closed.
 _INT_COMPARE_FILES = 300
 
-# One compare call may not stall the job: a hang would end as `cancelled` at the job timeout,
-# which reads like a human cancelling (#192).
 _INT_COMPARE_TIMEOUT_S = 20
 
-# At most this many reviewed commits are compared with the head: (1 head + 5) calls x 20 s stays
-# well inside the job's `timeout-minutes` (pinned by a test); a PR with more is re-reviewed.
 _INT_MAX_REVIEWED_COMMITS = 5
 
-# Everything that means "the patch could not be computed": an API or `gh` failure, a timeout, a
-# missing `gh`, an unusable response. Malformed response PARTS are turned into a ValueError at
-# the parsing site (`patch_fingerprint`), so a programming bug elsewhere is NOT swallowed here.
 _TUPLE_FINGERPRINT_ERRORS = (
     RuntimeError,
     ValueError,
@@ -633,7 +514,6 @@ def patch_fingerprint(list_files: list[dict]) -> str:
         ]
     except (KeyError, TypeError, AttributeError) as cls_error:
         raise ValueError(f"patch unavailable: malformed file entry ({cls_error!r})") from cls_error
-    # JSON is unambiguous: no filename or patch line can collide with a field separator.
     return hashlib.sha256(json.dumps(list_parts).encode()).hexdigest()
 
 
@@ -677,7 +557,6 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
         "api",
         f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1",
     ]
-    # Constant argv built from CI-provided identifiers; no shell is involved.
     cls_run = subprocess.run(  # noqa: S603
         list_cmd,
         capture_output=True,
@@ -789,8 +668,6 @@ def review_carried_forward(
     return ""
 
 
-# Display budget for a quoted notice. ⚠️ It bounds what a HUMAN reads, never what a matcher
-# reads — see `newest_roster_notice` below (blueprintx#372).
 _INT_NOTICE_DISPLAY_CHARS = 200
 
 
@@ -821,8 +698,6 @@ def newest_roster_notice(list_notices: list[dict], set_roster: set[str]) -> str:
     carried a completion phrase past the budget, so the gate would claim no review completed
     on a PR whose reviewer had written "Review finished".
     """
-    # Only the NEWEST roster notice. An older one is a sentence the reviewer has since
-    # superseded, so quoting it would describe a state that no longer holds.
     for dict_comment in reversed(list_notices):
         if (
             normalise_login((dict_comment.get("author") or {}).get("login") or "")
@@ -876,56 +751,12 @@ def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) ->
     return ""
 
 
-# ⚠️ TWO QUOTAS WEAR THE SAME WORDS "RATE LIMIT", AND THEY WANT OPPOSITE BEHAVIOUR (blueprintx#364).
-#
-# CodeRabbit emits two structurally different refusals under one umbrella phrase:
-#
-#   REVIEW quota — "Review rate limited." inside a `<details>` block, resets in HOURS.
-#   CHAT quota   — "...exceeded the limit for the number of chat messages per hour...", resets
-#                  in MINUTES — and POSTING A REVIEW REQUEST IS ITSELF A CHAT MESSAGE, so the act
-#                  of asking for a review is exactly what can spend this quota.
-#
-# Measured on this repo, 562 notices over 7 days: 503 review, 59 chat. 10.5% is not an error rate
-# a caller can round away — the NEWEST notice is what a caller reads, so one chat notice landing
-# last inverts the answer. Measured 2026-08-30T18:44:28Z: a 4-minute-37-second chat wait was read
-# as an hours-long review block and cost a review-request window.
-#
-# `NOTICE_UNKNOWN` exists because a notice that says "rate limit" in neither recognised shape is
-# still NOT an all-clear — collapsing it into `NOTICE_OK` is how a caller re-derives the very
-# conflation this function exists to remove.
 _RE_CHAT_LIMIT = re.compile(
     r"exceeded\s+the\s+limit\s+for\s+the\s+number\s+of\s+chat\s+messages", re.IGNORECASE
 )
 _RE_REVIEW_LIMIT = re.compile(r"review\s+rate\s+limited", re.IGNORECASE)
 _RE_ANY_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 
-# ⚠️ A FILE-COUNT CAP IS A THIRD STATE, NOT A SYNONYM FOR "NO REVIEWER RAN" (blueprintx#433).
-#
-# CodeRabbit refuses any PR over its file cap outright — no formal review, no thread, just this
-# ISSUE comment: "Review skipped: 241 files exceed the limit of 100." That collapses onto the
-# exact same reviews=0/threads=0 shape as "nobody ever ran", which is the discrimination this
-# gate could not make before: a reviewer that was ASKED and gave a structural reason looks
-# identical to an outage. Confirmed live on #424, monotonically — 238 files, then 241, the
-# second push made necessary by an unrelated CI fix and landing further past the cap.
-#
-# Anchored on "Review skipped:" as well as the file/limit wording so an unrelated sentence that
-# merely mentions "files" and "limit" does not match — this is untrusted third-party text, and a
-# loose pattern here would misclassify silently rather than loudly.
-#
-# ⚠️ "Review skipped" IS NOT ITSELF THE DISCRIMINATOR. CodeRabbit reuses that exact bare prefix
-# for at least one other, unrelated refusal — "Review skipped — Bot user detected" (measured on
-# #400), which is clearable simply by asking (the notice names the command itself) and is
-# nothing like a structural cap. Matching on the shared prefix alone would conflate the two and
-# tell a bot-authored one-file PR to split itself — caught before it shipped by re-checking the
-# measurement against a second real PR, the same discipline the rate-limit block above already
-# paid for once. The pattern below requires the FULL sentence ("N files exceed the limit of M"),
-# so "Bot user detected" and every other "Review skipped" reason fall through to NOTICE_OK and
-# get the generic "trigger a review" remedy, which is the correct one for them.
-#
-# The trailing limit number needs its OWN sentence boundary too (blueprintx#458 review) — bare
-# `\d+` with no terminator matches its digit prefix inside a longer token ("100x", "100,000"),
-# so require the vendor's period or end-of-string right after it rather than trusting `\s` to
-# already be there.
 _RE_FILE_CAP = re.compile(
     r"review\s+skipped:\s*\d+\s+files?\s+exceed\s+the\s+limit\s+of\s+\d+(?:\.|$)",
     re.IGNORECASE,
@@ -965,15 +796,6 @@ def classify_reviewer_notice(str_notice: str) -> str:
     return NOTICE_OK
 
 
-# 🔴 THE REVIEWER DECLARES ITS OWN WAIT — READ IT INSTEAD OF GUESSING.
-#
-# `retry_rate_limited_review.py` carries an earlier attempt at this idea and, measured against
-# the real bodies above, matches neither format (blueprintx#364) — this is the fixed version;
-# that file still needs the same fix, tracked as a follow-up rather than duplicated here.
-#
-# Returned in SECONDS, not minutes: the chat quota declares "N minutes AND M seconds" (a
-# whole-minute unit would truncate the 37 seconds that made the #364 window wrong), while the
-# review quota declares whole minutes only. Seconds is the one unit that loses nothing either way.
 _RE_CHAT_WAIT = re.compile(
     r"wait\s+\*{0,2}(\d+)\s+minutes?(?:\s+and\s+(\d+)\s+seconds?)?\*{0,2}",
     re.IGNORECASE,
@@ -1002,7 +824,6 @@ def parse_declared_wait(str_notice: str) -> int | None:
         try:
             return int(cls_chat.group(1)) * 60 + int(cls_chat.group(2) or 0)
         except ValueError:
-            # Untrusted external digits — mirrors the guard in the sibling parser's own file.
             return None
     cls_review = _RE_REVIEW_WAIT.search(str_notice)
     if cls_review is not None:
@@ -1013,36 +834,6 @@ def parse_declared_wait(str_notice: str) -> int | None:
     return None
 
 
-# ⚠️ COMPLETION — THE ONE NOTICE THAT IS EVIDENCE, AND WHY IT IS NOT A REVERSAL.
-#
-# The notice block above establishes that a roster COMMENT is not evidence a review happened,
-# and that measurement stands: on #204 and #213 (both merged unreviewed) the roster posted an
-# issue comment and `reviews` was 0, so "the roster said something" would have passed both.
-#
-# What that block rejected was the STANDING FOOTNOTE ("does not re-review already reviewed
-# commits") — prose appended to every outcome, true whatever happened, therefore evidence of
-# nothing. These phrases are the opposite: CodeRabbit emits them only on the path where it
-# reviewed and had nothing to attach. A formal review object is produced ONLY when there are
-# line comments to hang on it, so on a clean review `reviews` is 0 and threads are 0 — byte
-# for byte identical to "never ran", which is the state the gate must still fail.
-#
-# Measured 2026-08-29, the narrow phrase against the exact counter-examples that killed the
-# broad version:
-#
-#     #204  merged unreviewed (star-gate refusal)  reviews=0  phrase=0  -> still FAILS ✅
-#     #213  merged unreviewed (star-gate refusal)  reviews=0  phrase=0  -> still FAILS ✅
-#     #209  genuinely reviewed                     reviews=19 phrase=1  -> passes (already did)
-#     #215  genuinely reviewed                     reviews=9  phrase=1  -> passes (already did)
-#     #328  reviewed, found nothing                reviews=0  phrase=1  -> FAILED, now passes
-#
-# ⚠️ THIS IS A LOOSENING, NOT A PURE BUG FIX. A comment is cheaper to produce than a review
-# object, so the gate proves slightly less than it did. The reduction is bounded on purpose:
-# roster author only, literal vendor strings, and evidence that a review RAN — never that a
-# thread was resolved. Thread strictness is untouched.
-#
-# ⚠️ The rate-limit notice deliberately does NOT match. "Rate limited" means the reviewer was
-# turned away, which is the same as never running, and the gate must keep failing it — that
-# is the difference between waiting for a review and skipping one.
 _TUPLE_COMPLETION_PHRASES = (
     "review finished",
     "no actionable comments were generated",
@@ -1075,13 +866,10 @@ def reviewer_declared_completion(
     """
     if not str_head_date:
         return False
-    # The complete notice rather than the display summary — four of 112 real notices buried
-    # their completion phrase past the display budget (blueprintx#372).
     str_newest = newest_roster_notice(list_notices, set_roster).casefold()
     if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
         return False
     str_when = newest_roster_notice_date(list_notices, set_roster)
-    # ISO-8601 UTC from GitHub sorts lexicographically, so no parsing is needed.
     return bool(str_when) and str_when >= str_head_date
 
 
@@ -1255,19 +1043,6 @@ def ladder_marker_declared(
     return ladder_reports_zero_findings(list_lines)
 
 
-# ⚠️ THE FILE-CAP MESSAGE IS A THIRD SENTENCE, NOT A THIRD VERDICT (blueprintx#433).
-#
-# Both branches below are FAILURES — a file-cap decline must never read as a pass, or the
-# #213 hole reopens under a different name: a PR merging because a bot said "too big to look
-# at" is exactly as unreviewed as one that merged because the bot never ran at all. What
-# differs is the REMEDY: "trigger a review" fixes "nobody ran"; only "split the PR" fixes a
-# structural cap, and telling an author to retry a review that can never run wastes the same
-# trigger #208 already measured being wasted by the wrong sentence.
-#
-# Deliberately does NOT unblock the PR by any means (no opt-out label, no bypass) — see the
-# module docstring's file-cap block for why an opt-out label was considered and rejected: it
-# would let any collaborator silently satisfy this gate on a PR that only LOOKS capped, which
-# is a differently-shaped version of the exact hole #213 closed.
 def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: list[dict]) -> str:
     """Return the message for a PR with zero reviews submitted by the roster.
 
@@ -1314,9 +1089,6 @@ def _notice_quote(list_notices: list[dict], set_roster: set[str]) -> str:
     return f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
 
 
-# ⚠️ TWO FAILURES, TWO SENTENCES. They used to print identically, which is the whole reason
-# #208 rewrote this message once already: "the reviewer ran on older code" and "no reviewer
-# ever ran" call for different actions, and a reader told the wrong one wastes the trigger.
 def _notice_declares_review(
     list_notices: list[dict],
     set_roster: set[str],
@@ -1389,15 +1161,6 @@ def check_missing_review(  # noqa: PLR0913
     """
     set_roster = {normalise_login(s) for s in set_reviewers}
     if normalise_login(str_pr_author) in set_roster:
-        # A reviewer's own PR (a bot's dependency bump). Requiring it to review itself is a
-        # gate nobody can satisfy, and those get bypassed with --admin, taking the real
-        # blocks with them.
-        #
-        # ⚠️ The exemption narrowed with the parameter, ON PURPOSE. It used to cover every
-        # roster member, so a PR opened by a `posts: status` member (github-actions[bot],
-        # which opens workflow PRs) skipped the check entirely — yet that author cannot
-        # review, so a real reviewer CAN look at its PR and there is nothing unsatisfiable
-        # about asking. The exemption is "do not ask X to review X", not "bots are exempt".
         return None, ""
 
     if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
@@ -1408,16 +1171,12 @@ def check_missing_review(  # noqa: PLR0913
     ):
         return None, ""
 
-    # After the notice check, so a PR that already passes makes no compare call at all.
     str_carried = review_carried_forward(fn_fingerprint, list_reviews, set_roster, str_head_oid)
     if str_carried:
         return None, str_carried
 
-    # The reviewer's own latest word, quoted so the reader can see WHICH zero-review state this
-    # is (never ran / refused / rate-limited). Display only — see the notice block above.
     str_quote = _notice_quote(list_notices or [], set_roster)
 
-    # TWO FAILURES, TWO SENTENCES — see the block above the function.
     if reviewers_who_reported(list_reviews, set_roster):
         str_problem = (
             f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "
@@ -1461,14 +1220,6 @@ def find_missing_review_problem(  # noqa: PLR0913
     )[0]
 
 
-#
-# `required_conversation_resolution` (and its ruleset spelling `required_review_thread_resolution`)
-# drops a thread whose lines no longer exist in the diff. Measured on #193: the merge button was
-# ENABLED over a thread reading `resolved=False outdated=True`, with every one of 29 checks green
-# and the setting confirmed `enabled`. Outdating is caused by the AUTHOR'S OWN COMMIT, so it is
-# precisely the state an author can manufacture — reply thinly, rewrite the commented lines,
-# merge. This gate is the only layer that can assert it, which is why the message NAMES the flag
-# instead of failing silently on it (#196).
 def find_thread_problems(
     list_threads: list[dict],
     set_roster: set[str],
@@ -1499,9 +1250,6 @@ def find_thread_problems(
             ``bool_require_resolved`` is set, is resolved as well. Both halves are the contract:
             the reply records the reasoning, the resolution records that the exchange is over.
     """
-    # Normalise the roster here too, so the predicate is correct however the caller built the
-    # set — `load_roster` already normalises, but a hand-built set (a test, another caller)
-    # would otherwise silently never match, which is the exact defect this function had.
     set_roster = {normalise_login(s) for s in set_roster}
 
     list_problems: list[str] = []
@@ -1530,7 +1278,6 @@ def find_thread_problems(
             )
             continue
 
-        # ANSWERED but still OPEN — see the OUTDATED block above the function.
         if bool_require_resolved and not dict_thread.get("isResolved"):
             str_why = (
                 " — this thread is OUTDATED, so the merge button will NOT block on it and "
@@ -1545,36 +1292,23 @@ def find_thread_problems(
     return list_problems
 
 
-# A review BODY carries findings the thread count cannot see (blueprintx#630).
 _STR_SEVERITY = r"critical|major|minor|blocker"
-# Nitpick and Trivial are deliberately absent: optional by definition, so they need no reply.
-# A marker counts only at the START of a line (after a list marker), as bold or a bracket, so
-# "a *minor* cleanup" and "(minor nits only)" in prose are not findings.
 _RE_BODY_SEVERITY = re.compile(
     rf"🔴|🟠|🟡|\bseverity\s*:\s*\w"
     rf"|^[^\w\n]*(?:\d+[.)]\s*)?(?:\*\*|\[)\s*(?:{_STR_SEVERITY})\b"
     rf"|^\W*(?:{_STR_SEVERITY})\b\s*[:—-]",
     re.IGNORECASE | re.MULTILINE,
 )
-# A count counts only as a statement of what the review found, not "Addressed 2 findings".
 _RE_BODY_COUNT = re.compile(
     r"^[^\w\n]*(?:(?:found|posted|reported|with|has|have)\s+)?[1-9]\d*\s+findings?\b",
     re.IGNORECASE | re.MULTILINE,
 )
 _RE_BODY_HEADING = re.compile(r"^#{1,6}\s*(?:findings|issues|problems)\b", re.I | re.M)
-# A review declares itself by structure: a heading, a
-# bullet or a bold label that starts with "Review" or "Finding(s)". Ambiguity counts as a review.
 _RE_BODY_REVIEW_LINE = re.compile(
     r"^[^\w\n]*(?:\d+[.)]\s*)?[*_]{0,2}\s*(?:review|findings?)\b"
     r"(?!\s+(?:ladder|skipped|profile|details|status|in progress|completed))",
     re.IGNORECASE | re.MULTILINE,
 )
-# Printed counts are authoritative, but each speaks for what it counts. CodeRabbit's header counts
-# INLINE comments, which are threads the thread gate already holds; only its body sections
-# (outside the diff, duplicates) live where no thread can see them. The ladder posts no threads,
-# so its count is the body's. The two counts that can CLEAR a body are anchored to a line start so
-# a quotation cannot fire them; a section marker can only ADD a finding, so it stays unanchored
-# (CodeRabbit nests it inside a `<summary>` tag).
 _RE_BODY_SECTION = re.compile(
     r"\b(?:outside diff range|duplicate) comments(?:\s*\((\d+)\))?", re.IGNORECASE
 )
@@ -1593,8 +1327,6 @@ _STR_CLEAN_LINE = (
     rf"|(?:{_STR_SEVERITY}|nitpick|severity)[^\w\n]*(?:none|n/?a|no)"
     r"(?:\s+(?:found|issues?|findings?))?)[^\w\n]*$"
 )
-# A clean line must BE the line ("No major issues."), never a phrase inside a longer one
-# ("parse() has no known bugs on ASCII but crashes"), or it would mask a real finding.
 _RE_BODY_CLEAN_LINE = re.compile(_STR_CLEAN_LINE, re.I | re.M)
 _RE_BODY_CLEAN_SECTION = re.compile(
     r"^#{1,6}\s*(?:findings|issues|problems|review)\b[^\n]*\n(?:[^\S\n]*\n)*" + _STR_CLEAN_LINE,
@@ -1608,15 +1340,9 @@ _RES_BODY_FINDING = (
 )
 
 
-# Quoted material is never the review's own structure: a fenced block or a "> " line can hold
-# another reviewer's header verbatim, and counting it would let one body clear its own findings.
 _RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*", re.M | re.S)
 
 
-# Count authority belongs to the AUTHOR, never to the body's shape: any body can print any header.
-# The roster carries no per-format data, so the two authors whose counts this gate trusts are
-# named here. Any other author's counts are ignored and its body is read by
-# structure alone, which fails closed.
 _SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
 _SET_LADDER_AUTHORS = frozenset({"guilhermegor-review-ladder"})
 
@@ -1747,11 +1473,6 @@ def _answered_after(
     )
 
 
-# An answer declares itself by structure too: a LINE THAT OPENS with "Reply to review", "Answers
-# to the ladder review", "Re: review", "Verdicts/Judgment on ... review"; a "review <id>"
-# citation; "Addressed/Fixed in <sha>"; "Finding 1: ..."; or a "> quoted finding" followed by a
-# response. Any of these counts at any length. Anchored: "re-review" and "Not answered yet" are
-# not answers.
 _STR_REVIEW_NOUN = (
     r"(?:the\s+|our\s+|my\s+)?(?:(?:ladder|fallback|claude|coderabbit|cli|rung)\s+)*review\b"
 )
@@ -1943,8 +1664,6 @@ def report_verdict(
         )
         return 1
     if not int_threads:
-        # Reached only once a reviewer HAS reported — find_missing_review_problem owns the
-        # other case, and the two must never print the same sentence again.
         print("A declared reviewer reported and raised no findings (0 review threads).")
         return 0
     str_scope = "answered and resolved" if bool_require_resolved else "answered"
@@ -1952,21 +1671,6 @@ def report_verdict(
     return 0
 
 
-# ⚠️ SUPERSEDED 2026-08-24 (#196). CI NOW ASSERTS BOTH HALVES, AND THE COST IS ACCEPTED.
-#
-# `main` used to run under REVIEW_THREADS_REQUIRE_RESOLVED=0 in CI, on the reasoning that a job
-# must not assert what it cannot re-evaluate: resolving a thread emits
-# `pull_request_review_thread`, which is NOT a workflow trigger, so nothing re-runs this after a
-# resolve and the run sits red on a PR that is actually finished (measured: 7 stale red runs on
-# one PR). That reasoning was sound; the DELEGATION it justified was not. It handed the resolve
-# half to `required_conversation_resolution`, which DROPS AN OUTDATED THREAD — so the half nobody
-# could re-evaluate was also the half nobody was checking, and the guarantee this file described
-# was partial. A guarantee people believe in is worse than one they know is partial.
-#
-# The trade is therefore explicit: a resolve leaves this check RED until the run is re-run by
-# hand. ⚠️ That makes the stale-run accumulation in the merge rollup (#263) load-bearing rather
-# than cosmetic — the re-run is the ONLY way a finished PR goes green, so #263 must land for that
-# re-run to actually clear the block.
 def parse_args(list_argv: list[str] | None = None) -> argparse.Namespace:
     """Parse this gate's CLI arguments.
 
@@ -1991,10 +1695,6 @@ def parse_args(list_argv: list[str] | None = None) -> argparse.Namespace:
     return cls_parser.parse_args(list_argv)
 
 
-# blueprintx#364 — the gate's only interface was English prose, so every caller grepped
-# sentences; one re-implementation matched the phrase "so zero threads would be fine" inside the
-# no-reviewer message via `grep 'thread'` and misreported 27 PRs. `--json` is additive: the
-# default (prose) path below is untouched line for line, so existing callers see no change.
 def _print_skip(bool_json: bool, str_reason: str) -> int:
     """Print a self-skip in the requested representation and return ``0``."""
     print(json.dumps({"status": "skipped", "reason": str_reason}) if bool_json else str_reason)
@@ -2006,7 +1706,6 @@ def _print_missing_review(
 ) -> int:
     """Print the missing-review failure in the requested representation and return ``1``."""
     if bool_json:
-        # Classify the complete notice — the display summary can hide the phrase (blueprintx#372).
         str_notice = newest_roster_notice(list_notices, set_reviewers)
         print(
             json.dumps(
@@ -2118,7 +1817,6 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     """
     str_owner, _, str_repo = str_repo_full.partition("/")
     str_base = dict_pr.get("baseRefOid") or ""
-    # ⚠️ `nodes`, never `totalCount`: the count ignores `itemTypes` and counts the whole timeline.
     list_changes = (dict_pr.get("timelineItems") or {}).get("nodes")
 
     def fn_fingerprint(str_oid: str) -> str:
@@ -2271,9 +1969,6 @@ def main(list_argv: list[str] | None = None) -> int:
             bool_json, f"No {_ROSTER_FILE} — the review-thread gate is not adopted here"
         )
 
-    # TWO sets from one roster, and they are not the same set. The thread half subtracts every
-    # member (a status member posts no answers either); the missing-review half considers only
-    # the members that can submit a review.
     set_roster = set(dict_roster)
     set_reviewers = reviewer_logins(dict_roster)
 
@@ -2282,27 +1977,16 @@ def main(list_argv: list[str] | None = None) -> int:
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 
-    # ⚠️ THE EMPTY SET IS THE CASE THIS GATE MOST NEEDS TO CATCH, AND IT USED TO PASS IT.
-    #
-    # With zero threads the loop below finds zero problems and the gate printed
-    # "All 0 review thread(s) answered." — green. So the check that exists to stop a PR
-    # merging with unfinished review conversations could not stop one merging with NO REVIEW
-    # AT ALL, the only case where nothing else is watching. Measured on #204: 29 of 30 checks
-    # passed and it merged with the reviewer having posted only its refusal notice.
     str_missing, str_carried = _missing_review(dict_pr, str_repo_full, set_reviewers)
     if str_missing:
         return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
 
     list_body_problems = _unanswered_bodies(dict_pr, list_notices, set_roster)
 
-    # Both halves by default; set REVIEW_THREADS_REQUIRE_RESOLVED=0 for the reply half only.
-    # See the SUPERSEDED block above `main` for why CI stopped passing 0.
     bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
     list_problems = find_thread_problems(
         list_threads, set_roster, bool_require_resolved=bool_require_resolved
     )
-    # Both failures at once: fixing the body reply only to meet the open threads next run is a
-    # second round trip the first run could have saved.
     if list_body_problems:
         return _print_review_body_problems(bool_json, list_body_problems, list_problems)
 
@@ -2316,11 +2000,6 @@ def main(list_argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

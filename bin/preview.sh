@@ -24,7 +24,14 @@ show_languages() {
     print_status "config" "  * .github/workflows (PR + tests), CODEOWNERS, PULL_REQUEST_TEMPLATE"
     print_status "config" "  * tests/{integration,performance,unit}"
     echo
-    print_status "info" "2) cancel"
+    print_status "info" "2) bash"
+    print_status "config" "Status: supported"
+    print_status "config" "Skeletons:"
+    print_status "config" "  * bash-cli (standalone CLI, git-tag versioned)"
+    print_status "config" "  * etcher-chromeos (ChromeOS Flex / FydeOS pendrive flasher)"
+    print_status "config" "  * ventoy-usb (rebuild a Ventoy drive, latest ISOs, verified downloads)"
+    echo
+    print_status "info" "3) cancel"
     print_status "config" "Exit without creating a project"
 }
 
@@ -276,6 +283,55 @@ show_lib_minimal() {
 EOF
 }
 
+show_etcher_chromeos() {
+    echo
+    print_section "etcher-chromeos skeleton (bash)"
+
+    print_status "info" "Description:"
+    print_status "config" "Bash CLI that asks for the pendrive path first, then downloads the latest"
+    print_status "config" "ChromeOS Flex image (or verifies a FydeOS download) and flashes it."
+    echo
+    print_status "info" "Example structure:"
+    cat << 'EOF'
+  project/
+    bin/
+      project_name         # flash --target --os --dry-run
+      fetch_tools.sh       # make tools: bmaptool into .tools/
+    lib/
+      device.sh flex.sh fydeos.sh flash.sh verify.sh
+    tests/
+      cli.bats
+      fixtures/
+    Dockerfile             # tests and resolvers only, never writes a device
+    Makefile
+EOF
+}
+
+show_ventoy_usb() {
+    echo
+    print_section "ventoy-usb skeleton"
+
+    print_status "info" "Description:"
+    print_status "config" "Rebuilds a Ventoy multiboot drive from a source manifest: latest ISOs"
+    print_status "config" "downloaded and checksum-verified at build time, never committed."
+    echo
+    print_status "info" "Example structure:"
+    cat << 'EOF'
+  project/
+    bin/project
+    lib/{manifest,resolve,layout,ventoy_config,drive}.sh
+    sources.manifest
+    ventoy-usb.conf
+    manual/
+    tests/*.bats
+  build/drive/            (generated, git-ignored)
+    isos/{Android,Linux/{Desktop,Rescue and Maintenance,
+          Security and Pentest,Servers},Others,Windows}
+    dotfiles/windows/  persistance/  recovery_tools/
+    dynfileos/  temp/  ventoy/ventoy.json
+EOF
+}
+
 main() {
     show_languages
     show_api_service
@@ -284,6 +340,8 @@ main() {
     show_mvc_native
     show_mvc_orm
     show_lib_minimal
+    show_etcher_chromeos
+    show_ventoy_usb
     echo
     print_status "success" "Preview complete."
 }

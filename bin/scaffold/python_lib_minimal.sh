@@ -11,16 +11,12 @@ source "$SCRIPT_DIR/../lib/scaffold_provenance.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
-# The DISTRIBUTION name (hyphens legal on PyPI) and the IMPORT package derived from it
-# (a hyphen in an import is a parse-time SyntaxError). See to_import_package_name in
-# bin/lib/common.sh — blueprintx#113.
 PROJECT_PKG_NAME="$(to_import_package_name "$PROJECT_NAME")"
 PROJECT_DESCRIPTION="${3:-}"
 PROJECT_VERSION="${4:-0.0.1}"
 LICENSE_CHOICE="${LICENSE_CHOICE:-MIT}"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/python-common"
-# Language-agnostic assets shared by every skeleton (CODEOWNERS, PR template)
 SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
@@ -29,10 +25,6 @@ INCLUDE_DOCKER_COMPOSE=false
 DB_COMPOSE_BACKEND="postgresql"
 INCLUDE_LOGS=false
 INCLUDE_OTEL=false
-# Publish/consume wiring (scaffold-publish-target-selection). Python resolution of the
-# ecosystem-neutral questions: official public registry = PyPI, staging/sandbox = Test PyPI,
-# private/non-official source = a PEP 503 index or git source. Defaults keep the prior behaviour
-# (both release workflows shipped) so non-interactive --dev runs are unchanged.
 PUBLISH_PYPI=true
 PUBLISH_TEST_PYPI=true
 CONSUME_PRIVATE=false
@@ -42,9 +34,6 @@ validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
         exit_error "Usage: $0 <project_root_dir> <project_name>"
     fi
-    # The prompt validates too, but the scaffolds are also callable DIRECTLY
-    # (bin/ci/scaffold_lint_test.sh does exactly that), so a guard living only in
-    # prompt_project_name protects one of the two entry points. blueprintx#113.
     if ! is_valid_project_name "$PROJECT_NAME"; then
         exit_error "Invalid project name '$PROJECT_NAME'. Use a letter or underscore first, then letters, digits, '-' or '_'."
     fi
@@ -52,20 +41,15 @@ validate_inputs() {
 }
 
 format_display_name() {
-    # Identity: the docs/README title IS the distribution name (lowercase,
-    # hyphenated), mirroring filings-cvm/filings-b3 — not a title-cased variant.
-    # Set PROJECT_DISPLAY_NAME explicitly before scaffolding to override.
     echo "$1"
 }
 
 resolve_github_username() {
-    # 1) GH_USERNAME env override
     if [ -n "$GITHUB_USERNAME" ]; then
         print_status "config" "GitHub username (env): $GITHUB_USERNAME"
         return
     fi
 
-    # 2) gh CLI (authenticated)
     if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
         local gh_user
         gh_user=$(gh api user -q .login 2>/dev/null || true)
@@ -76,7 +60,6 @@ resolve_github_username() {
         fi
     fi
 
-    # 3) Fallback prompt
     local input
     prompt_read input "$(prompt_main "GitHub username (default: $DEFAULT_GITHUB_USERNAME): ")"
     if [ -n "$input" ]; then
@@ -94,8 +77,6 @@ create_directory_structure() {
 
     mkdir -p "$project_path"/src/"$PROJECT_PKG_NAME"/_internal/utils/typing
     mkdir -p "$project_path"/src/"$PROJECT_PKG_NAME"/_internal/config/contracts
-    # ports live UNDER config/ — config/ is the home of all private structural declarations
-    # (contracts + ports + schemas), not a top-level sibling. See _internal/config/CLAUDE.md.
     mkdir -p "$project_path"/src/"$PROJECT_PKG_NAME"/_internal/config/ports
     mkdir -p "$project_path"/tests/integration
     mkdir -p "$project_path"/tests/performance
@@ -115,48 +96,19 @@ create_python_files() {
 
     print_status "info" "Creating Python files..."
 
-    # Public package init. Exposes __version__ (resolved from the installed distribution's
-    # metadata), which install_dist_locally's wheel smoke-test asserts. Tab-indented so a fresh
-    # scaffold passes `make lint`.
-    # ⚠️ The render variable must be exported ON THIS COMMAND: envsubst reads the
-    # ENVIRONMENT, not the shell's variables, and it is not exported until
-    # lib_minimal_render_pyproject runs later. Without it the substitution silently
-    # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
-    # package that still scaffolds without error. The heredoc this replaced used shell
-    # interpolation, which sees unexported variables; envsubst does not.
     PROJECT_NAME="$PROJECT_NAME" envsubst '${PROJECT_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/package__init__.py.tmpl" \
         > "$project_path/src/$PROJECT_PKG_NAME/__init__.py"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/main.py" "$project_path/src/$PROJECT_PKG_NAME/main.py"
 
-    # Create test file with project name substitution. Tab-indented and fully
-    # annotated/docstringed so a freshly scaffolded project passes `make lint`.
     mkdir -p "$project_path/tests/unit"
-    # ⚠️ The render variable must be exported ON THIS COMMAND: envsubst reads the
-    # ENVIRONMENT, not the shell's variables, and it is not exported until
-    # lib_minimal_render_pyproject runs later. Without it the substitution silently
-    # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
-    # package that still scaffolds without error. The heredoc this replaced used shell
-    # interpolation, which sees unexported variables; envsubst does not.
-    # Companion test for check_fixture_scope.py (#442) — applies to every tier, no exclusion.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
-    # Companion test for check_one_assert.py (#544) — applies to every tier, no exclusion.
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
 
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_main.py.tmpl" \
         > "$project_path/tests/unit/test_main.py"
 
-    # Smoke-test the runtime type-checking engine in the wheel layout. lib-minimal is the only
-    # tier that rewrites the engine's own imports to `<pkg>._internal.utils.typing`; a broken
-    # rewrite would fail here and nowhere else, so this guards that path (the full behavioural
-    # matrix is covered by the service tiers' test_typing.py).
-    # ⚠️ The render variable must be exported ON THIS COMMAND: envsubst reads the
-    # ENVIRONMENT, not the shell's variables, and it is not exported until
-    # lib_minimal_render_pyproject runs later. Without it the substitution silently
-    # yields the EMPTY STRING — `version("")` and `from .main import main` — a broken
-    # package that still scaffolds without error. The heredoc this replaced used shell
-    # interpolation, which sees unexported variables; envsubst does not.
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_typing.py.tmpl" \
         > "$project_path/tests/unit/test_typing.py"
@@ -164,10 +116,6 @@ create_python_files() {
     print_status "success" "Python files created"
 }
 
-# Rewrite the bare `utils.`/`config.` import prefixes (and the `chassis.typing` runtime
-# fallback) to the package-qualified private path `<pkg>._internal.*`, on import lines only.
-# The curated helpers are copied verbatim from python-common (DRY single source); this is the
-# one adaptation that makes them resolve when nested inside the distributed package.
 rewrite_internal_imports() {
     local internal_dir="$1"
     local pkg_prefix="${PROJECT_PKG_NAME}._internal"
@@ -182,12 +130,6 @@ rewrite_internal_imports() {
     done < <(grep -rlE "^[[:space:]]*(from|import) (utils|config|ports|chassis)\." "$internal_dir" 2>/dev/null)
 }
 
-# OTLP log export (opt-in, blueprintx#438) — single source in python-common/optional/, not
-# src/utils/ (unlike copy_internal_utils's modules), so it is vendored separately. Independent
-# of INCLUDE_LOGS: it takes an injected stdlib logging.Logger (configure_otel_logging(logger))
-# rather than importing logs.py, matching this tier's "inject, don't hard-import" convention.
-# No .env is written (lib-minimal ships none) — it reads OTEL_EXPORTER_OTLP_ENDPOINT etc. from
-# the consumer's own process environment at call time, the pattern ts_lib.sh already uses.
 copy_internal_otel() {
     local internal_dir="$1"
     local test_path="$2/tests/unit/test_otel_logging.py"
@@ -197,10 +139,6 @@ copy_internal_otel() {
     sed_inplace -E "s@^( +)from (utils|chassis)\.otel_logging@\1from ${PROJECT_PKG_NAME}._internal.utils.otel_logging@" "$test_path"
 }
 
-# The curated internal helper set for a distributable library — copied from python-common
-# into a PRIVATE `_internal/utils` package (leading underscore keeps it off the consumer's
-# public import surface, yet it ships inside the wheel). `logs.py` is intentionally absent:
-# `retry.py` is decoupled from it via an injectable `LogEmitter`.
 copy_internal_utils() {
     local project_path="$1"
     local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
@@ -211,15 +149,8 @@ copy_internal_utils() {
         zip_extractor.py raw_workspace.py daily_cache.py
         regime_window.py regime_registry.py regime_adapter.py spec_gap_registry.py
     )
-    # retry/ is a PACKAGE, not a module (blueprintx#116) — it needs cp -r, and it is listed
-    # apart from `modules` so the loop below stays a plain file copy. rewrite_internal_imports
-    # recurses, so its intra-package `from utils.retry.x` imports are rewritten like any other.
     local -a packages=(retry)
-    # logs.py is opt-in (prompt_logs): the convention is to inject a logger, not import one
-    # (see the shipped utils/CLAUDE.md), so a lib only carries it when explicitly requested.
     if [[ "$INCLUDE_LOGS" == "true" ]]; then
-        # logs_emitter (rich default sink) delegates to logs.py's CreateLog, so it ships only
-        # alongside logs.py (the opt-in logging helper), never on its own.
         modules+=(logs.py logs_emitter.py)
     fi
     local module
@@ -231,25 +162,15 @@ copy_internal_utils() {
     done
     local package
     for package in "${packages[@]}"; do
-        # Contents, not the directory: `cp -r src dst` nests when dst exists.
         mkdir -p "$internal_dir/utils/$package"
         cp -r "$utils_src/$package/." "$internal_dir/utils/$package/"
     done
-    # Runtime type-checking engine — single source in python-common/optional/typing.
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$internal_dir/utils/typing"
     copy_internal_otel "$internal_dir" "$project_path"
-    # Convention guide for the utils layer (logging → dependency injection). Kept out of the
-    # wheel by the `exclude` in pyproject.toml.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
 
     rewrite_internal_imports "$internal_dir"
 
-    # test_regime_adapters.py is the shared oracle for the four regime_* modules above. Unlike
-    # the OTHER vendored utils (whose shared tests are a documented, accepted gap — see
-    # DICT_EXPECTED_ABSENT in bin/ci/check_test_copy_lists.py — because they assert against the
-    # bare `utils.` import path a vendored+rewritten module no longer has), this one is copied
-    # AND rewritten through the same mechanism as the modules it covers, so it actually runs
-    # here instead of adding a fifth entry to that documented gap.
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_regime_adapters.py" \
         "$project_path/tests/unit/test_regime_adapters.py"
@@ -258,9 +179,6 @@ copy_internal_utils() {
     print_status "success" "Private internal utils (_internal/utils) applied"
 }
 
-# The config-layer data contracts (declarations only), mirroring the MVC tiers — nested in
-# the same private `_internal/config` package so the library author gets the contract seam
-# without exposing it to consumers.
 copy_internal_config() {
     local project_path="$1"
     local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
@@ -276,13 +194,6 @@ copy_internal_config() {
     print_status "success" "Private internal config (_internal/config/contracts) applied"
 }
 
-# Behavioural ports (private ABCs) — the ports of hexagonal ports-and-adapters, one operation
-# per file with `ABCTypeCheckerMeta`. Nested under `_internal/config/ports` (config/ is the home
-# of every private structural declaration — contracts + ports + schemas — not a top-level
-# sibling), so the library author gets the port/adapter seam without exposing it to consumers.
-# The whole config/ layer is documented by one _internal/config/CLAUDE.md (copied by
-# copy_internal_config); ports has no separate CLAUDE.md. Source is a generic reference
-# (`ExamplePort`), mirroring `config/contracts/example_source.py`.
 copy_internal_ports() {
     local project_path="$1"
     local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
@@ -295,11 +206,6 @@ copy_internal_ports() {
     print_status "success" "Private internal ports (_internal/config/ports) applied"
 }
 
-# Add the PyPI/Snyk library badges (package identity + security) to the copied README, right
-# after the Python Version badge. Library-only — service tiers are not published to PyPI, so these
-# badges would be misleading there. Kept in the same ${...}-placeholder style as the existing
-# README badges, so they render/fill together (PYPI_NAME = the PyPI distribution name;
-# PROJECT_SLUG = the GitHub repo). Idempotent.
 add_library_badges() {
     local project_path="$1"
     local readme="$project_path/README.md"
@@ -355,34 +261,20 @@ copy_templates() {
     mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/lib-minimal/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
-    # Ship an initial coverage.svg so the README ![Test Coverage](./coverage.svg) badge
-    # resolves on the first push instead of 404-ing; regenerated by the coverage-badge hook.
     cp "$COMMON_TEMPLATE_ROOT/coverage.svg" "$project_path/coverage.svg"
     add_library_badges "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
-    # No .env / .env.example: a distributable library has no runtime env to seed (unlike the
-    # service tiers). Removing them keeps the published package free of service-only cruft.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/AGENTS.md" "$project_path/AGENTS.md"
     mkdir -p "$project_path/.claude"
     cp "$SHARED_TEMPLATE_ROOT/CLAUDE.md" "$project_path/.claude/CLAUDE.md"
-    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
-    # file, language-agnostic, so it lives in templates/common not python-common.
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.coveragerc" "$project_path/.coveragerc"
-    # Seed CHANGELOG.md so the docs Changelog page (--8<-- include) builds before the first
-    # release; cz changelog regenerates it from tags at release/docs-build time. Single-sourced
-    # from python-common (same seed every Python tier ships) — no per-tier duplicate.
     cp "$COMMON_TEMPLATE_ROOT/CHANGELOG.md" "$project_path/CHANGELOG.md"
 
     print_status "success" "Templates copied and configured"
 }
 
-# lib-minimal's own template copy step. It is NOT the four service tiers' shared
-# scaffold_copy_common_templates: this tier renders a different pyproject (PyPI Trove
-# classifier, library.mk) and installs the GitHub assets inline, where the service
-# scaffolds have a separate copy_github_assets. Split by DESTINATION CONCERN, the same
-# way the shared lib is, so a new asset has an obvious home.
 lib_minimal_render_pyproject() {
     local project_path="$1"
 
@@ -397,7 +289,6 @@ lib_minimal_render_pyproject() {
     COPYRIGHT_YEAR="$(date +%Y)"
     AUTHOR_NAME="${GITHUB_USERNAME}"
     PROJECT_LICENSE="${LICENSE_CHOICE}"
-    # Map the license choice to its PyPI Trove classifier (generic OSI fallback otherwise).
     case "$PROJECT_LICENSE" in
         MIT) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved :: MIT License" ;;
         Apache-2.0) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved :: Apache Software License" ;;
@@ -417,16 +308,8 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$project_path/.pydocstyle"
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
-    # Per-layer import policy read by bin/check_layer_imports.py (pre-commit + CI).
-    # ⚠️ Per-tier, never shared: the layer NAMES differ, and lib-minimal nests them
-    # inside the distributable package (hence its src_prefix_depth). Without this file
-    # the gate used to self-skip in silence, so this tier shipped with no import
-    # boundary while its CI stayed green; it now FAILS instead.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
-    # Reviewer roster for bin/check_review_threads.py — data, not logic, so swapping
-    # review tools is a row here rather than an edit to the gate. Skipped when the
-    # scaffold answered "no reviewer bot" (blueprintx#374 — rationale in docs/faq.md).
     if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
         cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
     fi
@@ -438,56 +321,28 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/.shellcheckrc" "$project_path/.shellcheckrc"
     cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$project_path/CONTRIBUTING.md"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
-    # The command interface: poe_tasks.toml replaces the Makefile + tasks.sh pair.
     cp "$COMMON_TEMPLATE_ROOT/poe_tasks.toml" "$project_path/poe_tasks.toml"
-    # Library-only task (install_dist_locally). add_poe_include wires it into
-    # poe_tasks.toml — an unconditional include would warn on every run in tiers
-    # that do not ship the file.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/poe_tasks.library.toml" \
         "$project_path/poe_tasks.library.toml"
     add_poe_include "$project_path" "poe_tasks.library.toml"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
-    # Commitizen config, out of pyproject.toml since blueprintx#233. Losing this copy does
-    # NOT error — cz falls back to defaults and exits 0 — so scaffold_lint_test.sh asserts it.
     cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$project_path/.cz.toml"
 }
 
-# GitHub-platform assets only. apply_offline_mode drops all of .github/, so everything
-# here is reachable exactly when the project has a remote.
 lib_minimal_copy_github_assets() {
     local project_path="$1"
 
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
-    # GitGuardian secret-scanning gate (blueprintx#153), OPT-IN (blueprintx#287): only when
-    # GITGUARDIAN_API_KEY was exported at scaffold time — see scaffold_set_secret_scan_key.
     if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
         cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
     fi
-    # Re-evaluates on pull_request_review / pull_request_review_comment, so a thread opened
-    # after the last push is still checked — a push-only trigger goes stale exactly then.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
-    # Its other half: the gate above fails a PR nobody reviewed, and this asks for the review.
-    # A new repo has 0 stars, so CodeRabbit declines to review it automatically BY CONSTRUCTION
-    # — ship the gate without the trigger and every PR blocks; ship the trigger without the
-    # gate and nothing notices when it stops working. GitHub-only, hence here.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/coderabbit_trigger.yaml" "$project_path/.github/workflows/coderabbit_trigger.yaml"
-    # Its THIRD half, and the reason the pair above is survivable: a rate-limited reviewer
-    # declines the trigger, the gate then correctly blocks, and nothing re-asks. This retries on
-    # a schedule (the only trigger that fires while a PR merely WAITS). It relaxes no verdict —
-    # measured upstream, 19 rate-limited PRs and 18 reviewed in the end, so it is a delay to
-    # automate rather than an unavailability to forgive. GitHub-only.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_retry.yaml" "$project_path/.github/workflows/review_retry.yaml"
-    # PR quality gate (classify by path, sticky comment, native auto-merge) + the reconciler
-    # that closes linked issues of BOT-merged PRs (a bot merge suppresses both the issue close
-    # and delete_branch_on_merge). GitHub-only, like tests.yaml.
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yaml" "$project_path/.github/workflows/pr-gate.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yaml" "$project_path/.github/workflows/pr-reconcile.yaml"
-    # PyPI + Test-PyPI release workflows (GitHub-remote-only, like tests.yaml). Restricted
-    # envsubst substitutes ONLY PACKAGE_NAME/OWNER — GitHub's own `${{ … }}` expressions and
-    # the `$SHELL_VARS` inside run: blocks are left untouched.
-    # Emit only the selected release workflows (Q1/Q2 from prompt_publish_targets).
     if [[ "$PUBLISH_PYPI" == "true" ]]; then
         envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
             < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release-pypi.yaml" \
@@ -498,14 +353,10 @@ lib_minimal_copy_github_assets() {
             < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release-test-pypi.yaml" \
             > "$project_path/.github/workflows/release-test-pypi.yaml"
     fi
-    # Docs → GitHub Pages deploy (gh-deploy on push to default branch). No placeholders; plain cp.
-    # GitHub-remote-only, like the release workflows — apply_offline_mode drops all of .github/.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/docs.yaml" \
         "$project_path/.github/workflows/docs.yaml"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
-    # SECURITY.md (root; GitHub auto-detects it and flips "Security policy" to Enabled) +
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
-    # bin/enable_security.sh). Both are GitHub-platform features, hence GitHub-only.
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
         < "$SHARED_TEMPLATE_ROOT/SECURITY.md" > "$project_path/SECURITY.md"
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
@@ -515,10 +366,6 @@ lib_minimal_copy_github_assets() {
     copy_repo_policy_workflows "$project_path"
 }
 
-# The tests that cover the gates themselves. Split out of the copy function when it crossed
-# the 60-line ceiling: a real grouping, not an arbitrary cut, so the next gate test has an
-# obvious home instead of pushing the parent over again. Mirrors scaffold_copy_gate_tests()
-# in bin/lib/scaffold_python_templates.sh.
 lib_minimal_copy_gate_tests() {
     local project_path="$1"
 
@@ -569,19 +416,11 @@ lib_minimal_copy_project_scaffolding() {
 
     cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
-    # Reference integration test for the shared bin/ shell seams (poetry_exec.sh,
-    # precommit.sh). Ships from python-common — the per-tier `cp -r tests/.` does not
-    # reach python-common/tests/. See bin/CLAUDE.md "Testing shell scripts".
     mkdir -p "$project_path/tests/integration"
     cp "$COMMON_TEMPLATE_ROOT/tests/integration/test_bin_scripts.py" \
         "$project_path/tests/integration/test_bin_scripts.py"
     rm -f "$project_path/tests/integration/.keep"
-    # Network-block guard + introspective-convention example — ship from
-    # python-common to every tier (the per-tier `cp -r tests/.` does not reach
-    # python-common/tests/). The conftest makes a real network call impossible in
-    # any test; the example demonstrates enforcing a family convention via __all__.
     mkdir -p "$project_path/tests/unit"
-    # The tests/ leaf doc — one source for every tier (blueprintx#124, #152).
     cp "$COMMON_TEMPLATE_ROOT/tests/CLAUDE.md" "$project_path/tests/CLAUDE.md"
     cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
@@ -589,8 +428,6 @@ lib_minimal_copy_project_scaffolding() {
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
     lib_minimal_copy_gate_tests "$project_path"
-    # Covers the PEP 621 layouts no tier ships, which is the only place the pip-fallback
-    # selector could be wrong without any tier noticing (blueprintx#211).
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
         "$project_path/tests/unit/test_pip_requirements.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
@@ -599,23 +436,14 @@ lib_minimal_copy_project_scaffolding() {
     cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
     chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh" "$project_path/bin/commit.sh"
-    # check_review_threads.py moved out of python-common/bin/ into the language-agnostic
-    # templates/common/bin/ (blueprintx#175 follow-up) — the wholesale COMMON_TEMPLATE_ROOT
-    # copy above no longer reaches it, so it is copied explicitly, same destination as
-    # before, so review_threads.yaml's `python bin/check_review_threads.py` needs no change.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
-    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
     mkdir -p "$project_path/.specs/backlog"
     touch "$project_path/.specs/backlog/.gitkeep"
-    # The gate for that layout is BlueprintX's own bin/ci/ script, copied as-is: one
-    # implementation, run by the specs-structure hook with `--root .` (blueprintx#583).
     cp "$BLUEPRINTX_ROOT"/bin/ci/{check_specs_structure.sh,check_docs_boundary.sh,check_required_checks_sync.py} "$project_path/bin/"
     chmod +x "$project_path"/bin/check_{specs_structure,docs_boundary}.sh
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
-    # VS Code: shared settings (python-common) + slim per-tier tasks (no db tasks).
     mkdir -p "$project_path/.vscode"
     cp "$COMMON_TEMPLATE_ROOT/.vscode/settings.json" "$project_path/.vscode/settings.json"
     cp "$COMMON_TEMPLATE_ROOT/.vscode/extensions.json" "$project_path/.vscode/extensions.json"
@@ -640,7 +468,6 @@ copy_mkdocs_templates() {
 
     print_status "info" "Copying MkDocs templates..."
 
-    # Falls back to en when a scaffold script is run directly, without the menu.
     export DOCS_LOCALE="${DOCS_LOCALE:-en}"
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/mkdocs.yml" \
@@ -650,15 +477,11 @@ copy_mkdocs_templates() {
         > "$project_path/docs/index.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/usage.md" \
         "$project_path/docs/usage.md"
-    # API reference is a directory (index + one page) from day one, never a single
-    # api.md — splitting it later rots published deep links (see docs/api/index.md).
     mkdir -p "$project_path/docs/api"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/api/index.md" \
         "$project_path/docs/api/index.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/api/reference.md" \
         "$project_path/docs/api/reference.md"
-    # Placeholder brand image (header logo/favicon + landing hero) + its tunable CSS.
-    # Swap docs/assets/logo.png for a real asset; size/position/border are inline on the <img>.
     mkdir -p "$project_path/docs/assets"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
         "$project_path/docs/assets/logo.png"
@@ -670,7 +493,6 @@ copy_mkdocs_templates() {
         "$project_path/docs/contributing.md"
     cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
-    # Non-published docs/ authoring guide.
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
 
@@ -702,10 +524,6 @@ apply_branch_protection() {
     prompt_read protect_ans "$(prompt_main "Protect branch '$branch' on GitHub now? [y/N]: ")"
     case "$protect_ans" in
         y|Y)
-            # A solo maintainer cannot satisfy a required-approving-review
-            # rule — GitHub forbids self-approval, so the first PR's merge
-            # would be permanently blocked. Ask whether human reviewers will
-            # gate merges, and build the protection payload accordingly.
             local reviews_approvals
             reviews_ans=""
             prompt_read reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
@@ -723,9 +541,6 @@ apply_branch_protection() {
     esac
 }
 
-# Always initialise a local git repo with a first commit, independent of any
-# remote setup, so every scaffold is a git repo even in non-interactive (--dev)
-# runs. Skips gracefully when git is unavailable or the repo already exists.
 initialize_git_repo() {
     local project_path="$1"
 
@@ -739,21 +554,12 @@ initialize_git_repo() {
         return
     fi
 
-    (
-        cd "$project_path" || exit 1
-        git init -q -b main || true
-        git add . || true
-        git commit -q -m "feat: first commit" >/dev/null 2>&1 || true
-    )
+    scaffold_initial_commit "$project_path"
     print_status "success" "Initialized git repo (branch main) with first commit"
 }
 
 prompt_git_remote_setup() {
-	# The About-sidebar Website field, same URL apply_online_docs_url writes into
-	# pyproject — the most visible entry point on the repo page; blank looks unfinished.
 	SCAFFOLD_REPO_HOMEPAGE="https://${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}.github.io/${PROJECT_NAME}/"
-	# Protection is applied to the remote only once that remote is verified to be the
-	# repository this scaffold names — not merely because the prompt returned (#212).
 	if scaffold_prompt_git_remote_setup "$1"; then
 		apply_branch_protection "$1"
 	fi
@@ -763,8 +569,6 @@ apply_offline_mode() {
     local project_path="$1"
 
     print_status "info" "No GitHub remote connected — switching to offline mode"
-    # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
-    # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
     remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
@@ -773,7 +577,6 @@ apply_offline_mode() {
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_export.sh" "$project_path/bin/git_diff_export.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_apply.sh" "$project_path/bin/git_diff_apply.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_diff_check.sh" "$project_path/bin/git_diff_check.sh"
-    # Local git workflow + branch guard — substitute for GitHub's branch/PR flow.
     cp "$SHARED_TEMPLATE_ROOT/bin/new_branch.sh" "$project_path/bin/new_branch.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/git_merge_to_main.sh" "$project_path/bin/git_merge_to_main.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/protect_branch.sh" "$project_path/bin/protect_branch.sh"
@@ -784,48 +587,30 @@ apply_offline_mode() {
         "$project_path/bin/git_merge_to_main.sh" \
         "$project_path/bin/protect_branch.sh"
     mkdir -p "$project_path/make"
-    # Offline-only tasks. add_poe_include wires the fragment in only when it is copied:
-    # poe warns on every invocation for a missing include, unlike make's silent -include.
     cp "$SHARED_TEMPLATE_ROOT/poe_tasks.offline.toml" "$project_path/poe_tasks.offline.toml"
     add_poe_include "$project_path" "poe_tasks.offline.toml"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
-    # Swap the stock no-commit-to-branch hook for the friendly local protect-branch
-    # guard that points at `make new_branch` (offline has no server-side protection).
     swap_protect_branch_hook "$project_path"
     commit_offline_artifacts "$project_path"
     print_status "success" "Offline workflow enabled (new_branch | git_merge_to_main | git_diff_* | protect-branch)"
 }
 
-# The scaffold's first commit runs before the online/offline branch, so the
-# offline artifacts (local git workflow, swapped pre-commit hook, removed
-# .github) would otherwise be left uncommitted. Commit them so a freshly
-# scaffolded offline project starts with a clean working tree. --no-verify
-# bypasses the just-installed protect-branch hook (HEAD is the default branch).
 commit_offline_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
-    git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+    scaffold_commit_artifacts "$project_path" "chore: enable offline git workflow"
 }
 
-# The first commit (pushed by prompt_git_remote_setup) runs before the online versioning/docs
-# rewrites (apply_online_tag_versioning + apply_online_docs_url), so pyproject.toml + Makefile +
-# tasks.sh are left modified afterwards. Commit + push them so a fresh online scaffold starts with
-# a clean, fully-pushed working tree. Mirrors the service tiers' commit_and_push_github_assets.
-# --no-verify bypasses the test/coverage hooks (HEAD is the default branch).
 commit_online_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
     [ -n "$(git -C "$project_path" status --porcelain)" ] || return 0
-    git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: apply tag-driven versioning and docs URL" || true
+    scaffold_commit_artifacts "$project_path" "chore: apply tag-driven versioning and docs URL"
     git -C "$project_path" push >/dev/null 2>&1 \
         || print_status "warning" "Could not push versioning changes; run 'git push' manually."
 }
 
-# Replace the stock pre-commit `no-commit-to-branch` hook with a local hook that
-# runs bin/protect_branch.sh first (fail-fast, friendly message). Offline only.
 swap_protect_branch_hook() {
     local project_path="$1"
     local pc="$project_path/.pre-commit-config.yaml"
@@ -866,10 +651,6 @@ PY
     print_status "success" "Swapped no-commit-to-branch → local protect-branch hook"
 }
 
-# Online (GitHub remote) versioning: rewrite pyproject.toml to a "0.0.0" stub +
-# poetry-dynamic-versioning so the published version is derived from the git tag, and remove
-# `make bump_version` (releases are cut by tagging via the CI release workflows). Offline
-# scaffolds keep the static version + bump_version. See the versioning-origin-dependent lesson.
 apply_online_tag_versioning() {
     local project_path="$1"
     local pyproject="$project_path/pyproject.toml"
@@ -916,12 +697,6 @@ PY
     print_status "success" "Online: tag-driven versioning (poetry-dynamic-versioning); make bump_version removed"
 }
 
-# strip_bump_version is shared across every Python scaffold — see bin/lib/common.sh.
-
-# Online (GitHub remote) docs website: point pyproject.toml's homepage / documentation /
-# [tool.poetry.urls] Documentation at the GitHub Pages docs URL that docs.yaml deploys to
-# (https://<owner>.github.io/<repo>/). Online-only — an offline scaffold has no public docs site,
-# so its homepage stays generic. Pairs with the repo Website field set by prompt_git_remote_setup.
 apply_online_docs_url() {
     local project_path="$1"
     local pyproject="$project_path/pyproject.toml"
@@ -961,12 +736,6 @@ PY
     print_status "success" "Online: docs website URL wired into pyproject ($docs_url)"
 }
 
-# Optional in-repo logging helper (utils/logs.py). Kept opt-in because the convention is to
-# INJECT a logger, not hard-import one (see the shipped _internal/utils/CLAUDE.md and
-# retry.py's LogEmitter). logs.py provides:
-#   - CreateLog                                       — logger factory (console + optional file)
-#   - log_message(logger, str_message, str_level)     — level-routed emit (None → timestamped print)
-#   - initiate_logging(logger, path_log)              — attach handlers / a log file
 prompt_logs() {
     local answer
     prompt_read answer "$(prompt_main "Include the in-repo logging helper (utils/logs.py)? [y/N]: ")"
@@ -976,10 +745,6 @@ prompt_logs() {
     esac
 }
 
-# OTLP log export (opt-in, blueprintx#438) — mirrors ts_lib.sh's prompt_otel wording. A
-# distributable library ships no .env (see CLAUDE.md), so this wires an ADDITIONAL,
-# injectable emitter the consumer's own host process configures via its own environment;
-# it never auto-runs on import.
 prompt_otel() {
     local answer
     prompt_read answer "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
@@ -989,11 +754,6 @@ prompt_otel() {
     esac
 }
 
-# Pinned dependency declaration for the OTLP exporter — deliberately separate from
-# copy_internal_utils (which runs before pyproject.toml exists; see copy_common_templates's
-# envsubst). Mirrors the service tiers' EXACT pins (blueprintx#438): the Logs signal is
-# still "Development" status upstream (see optional/otel_logging.py), so a minor bump may
-# change behaviour — do not "fix" these back to a version range without re-checking that.
 conditional_pyproject_otel() {
     local project_path="$1"
     if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
@@ -1008,15 +768,8 @@ opentelemetry-exporter-otlp-proto-http = "==1.44.0"' "$pyproject"
     print_status "success" "OTLP log export (_internal/utils/otel_logging.py) added — call configure_otel_logging(your_logger) to wire it"
 }
 
-# Q1/Q2/Q3 publish/consume selection (scaffold-publish-target-selection). The ecosystem-neutral
-# questions, resolved for Python: official public registry = PyPI, staging/sandbox = Test PyPI,
-# private/non-official source = a PEP 503 index or git source. Only the selected release workflows
-# are emitted; Q3 wires a consumer-side source. Empty answers (non-interactive --dev) take the
-# shown defaults, preserving the prior behaviour.
 prompt_publish_targets() {
     local answer
-    # Two orthogonal axes, banner-separated so Q3 doesn't read as a fork of Q1/Q2:
-    # publishing = where THIS library ships to; consuming = where its own deps come from.
     print_status "section" "Publishing — where this library ships to"
     prompt_read answer "$(prompt_main "Publish to the official public registry (PyPI)? [Y/n]: ")"
     case "$answer" in n | N) PUBLISH_PYPI=false ;; *) PUBLISH_PYPI=true ;; esac
@@ -1032,9 +785,6 @@ prompt_publish_targets() {
     print_status "config" "Private consumer source: $CONSUME_PRIVATE"
 }
 
-# Q3 consumer-side wiring: when the library will be consumed from a non-official source, append a
-# documented (commented) explicit-priority source block to pyproject. priority = "explicit" is the
-# dependency-confusion guard — poetry/pip never falls back to it for other packages.
 apply_private_consumer_source() {
     local project_path="$1"
     [[ "$CONSUME_PRIVATE" == "true" ]] || return 0
@@ -1056,8 +806,6 @@ EOF
     print_status "success" "Q3: private consumer-source template appended to pyproject.toml"
 }
 
-# Optional Docker Compose DB infrastructure (mirrors the DDD/MVC prompt). A library rarely
-# needs it, but the seam is offered for libs whose integration tests spin up a real DB.
 prompt_docker_compose() {
     local answer db_ans
     prompt_read answer "$(prompt_main "Include Docker Compose for database infrastructure? [y/N]: ")"
@@ -1110,33 +858,20 @@ main() {
     apply_private_consumer_source "$PROJECT_PATH"
     conditional_copy_docker_compose "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
-    # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
-    # When the project is not connected to a GitHub remote (no upstream tracking
-    # branch after setup), switch to offline mode: drop GitHub-only assets and
-    # ship the git-diff sync workflow instead.
-    # ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
-    # for a pre-existing clone whose origin points elsewhere. Offline is the safe default, so
-    # an unverified remote falls here too (#212, raised by review on #215).
     if [ "$SCAFFOLD_REMOTE_VERIFIED" != "1" ] \
         || ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         apply_offline_mode "$PROJECT_PATH"
     else
         apply_online_tag_versioning "$PROJECT_PATH"
         apply_online_docs_url "$PROJECT_PATH"
-        # The generic service release.yaml (tag + GitHub Release, no publish) does not apply to a
-        # library — the lib ships its own release-pypi.yaml / release-test-pypi.yaml. The lib copy
-        # step doesn't pull it in today, but strip defensively so a future copy-list change can't
-        # leak it. Only report when a file was actually removed — never claim a no-op removal.
         if [[ -f "$PROJECT_PATH/.github/workflows/release.yaml" ]]; then
             rm -f "$PROJECT_PATH/.github/workflows/release.yaml"
             print_status "success" "Library: generic service release.yaml removed (uses release-pypi instead)"
         fi
-        # Sweep the online versioning/docs rewrites into a commit + push (they run after the first
-        # pushed commit) so the scaffold ends with a clean working tree.
         commit_online_artifacts "$PROJECT_PATH"
     fi
 

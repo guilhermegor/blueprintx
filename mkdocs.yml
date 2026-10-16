@@ -55,6 +55,8 @@ nav:
       - Lib Minimal: py-lib-minimal.md
   - Bash:
       - Bash CLI: skeletons/bash-cli.md
+      - Ventoy USB: skeletons/ventoy-usb.md
+      - Etcher ChromeOS flasher: skeletons/etcher-chromeos.md
   - TypeScript:
       - React SPA (Webpack): ts-react-spa-webpack.md
       - Library (TS, npm-ready): ts-lib.md

@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Scaffolds the bash-cli skeleton: a standalone Bash CLI starter with git-tag
-# versioning, `make install` stamping the version, bats tests, and shell lint
-# (shellcheck + shfmt). Mechanics mirror ts_lib.sh / python_lib_minimal.sh.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,8 +13,6 @@ LICENSE_CHOICE="${LICENSE_CHOICE:-MIT}"
 GITHUB_USERNAME="${GITHUB_USERNAME:-}"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SKELETON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/bash-cli"
-# Language-agnostic assets shared by every skeleton (CODEOWNERS, PR template, the
-# shared print_status lib/common.sh).
 SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
@@ -27,9 +22,6 @@ validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
         exit_error "Usage: $0 <project_root_dir> <project_name>"
     fi
-    # The prompt validates too, but the scaffolds are also callable DIRECTLY
-    # (bin/ci/scaffold_lint_test.sh does exactly that), so a guard living only in
-    # prompt_project_name protects one of the two entry points. blueprintx#113.
     if ! is_valid_project_name "$PROJECT_NAME"; then
         exit_error "Invalid project name '$PROJECT_NAME'. Use a letter or underscore first, then letters, digits, '-' or '_'."
     fi
@@ -68,10 +60,6 @@ create_directory_structure() {
     print_status "success" "Directory structure created"
 }
 
-# envsubst does no error checking of its own; restricting the substitution list to
-# the one variable per call (same idiom as ts_lib.sh) means every other ${...} in
-# these files — Make variables, GitHub Actions `${{ }}` expressions, bash parameter
-# expansions like ${1:-} — passes through untouched.
 copy_skeleton_files() {
     local project_path="$1"
     print_status "info" "Copying bash-cli skeleton files..."
@@ -107,8 +95,6 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$SKELETON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
 
-    # Shared print_status/resolve_default_branch implementation (templates/common) —
-    # one implementation across every skeleton, bash-cli included (blueprintx CLAUDE.md).
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/lib/common.sh"
 
     print_status "success" "Skeleton files copied"
@@ -122,9 +108,6 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
     mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/bash-cli/.greptile/"* "$project_path/.greptile/"
-    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
-    # file, language-agnostic; bash-cli was added after #540 was scoped, included here
-    # for consistency with the other seven skeleton roots.
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
@@ -133,8 +116,6 @@ copy_common_templates() {
     copy_repo_policy_workflows "$project_path"
     copy_repo_rules_provisioner "$project_path" "$SKELETON_TEMPLATE_ROOT/bin/required-checks.txt"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
-    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 
     print_status "success" "Common templates applied"
@@ -175,19 +156,7 @@ initialize_git_repo() {
         print_status "info" "Git repo already initialized; skipping"
         return
     fi
-    # No `|| true` on any of these: an unconfigured user.name/user.email makes the
-    # commit fail, and swallowing it leaves a repo with a branch, a staged tree and NO
-    # commit — which resurfaces as an inexplicable push failure in the remote step.
-    # `exit_error` inside the subshell would only kill the subshell, so the caller has
-    # to read its status: the success line must not print for a repo with no commit.
-    if ! (
-        cd "$project_path" || exit 1
-        git init -q -b main &&
-            git add . &&
-            git commit -q -m "feat: first commit"
-    ); then
-        exit_error "Could not create the initial commit in '$project_path'. Set git user.name and user.email, then re-run."
-    fi
+    scaffold_initial_commit "$project_path"
     print_status "success" "Initialized git repo (branch main) with first commit"
 }
 
@@ -200,8 +169,6 @@ prompt_git_remote_setup() {
 apply_offline_mode() {
     local project_path="$1"
     print_status "info" "No GitHub remote connected — switching to offline mode"
-    # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
-    # without a GitHub remote; remove them and ship the offline git-diff workflow.
     rm -rf "$project_path/.github"
     remove_repo_policy_scripts "$project_path"
     mkdir -p "$project_path/bin/lib"
@@ -221,8 +188,7 @@ apply_offline_mode() {
 commit_offline_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
-    git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+    scaffold_commit_artifacts "$project_path" "chore: enable offline git workflow"
 }
 
 main() {

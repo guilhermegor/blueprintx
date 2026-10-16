@@ -17,11 +17,6 @@ import re
 from typing import TYPE_CHECKING
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -33,13 +28,10 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
-# The check-digit arithmetic both identifiers share: the weighted sum is taken modulo 11, and
-# a remainder below 2 yields a digit of 0 rather than a negative one. Named because these two
-# numbers ARE the rule — a reader meeting a bare 11 cannot tell it from an array bound.
 _INT_MODULUS = 11
 _INT_MIN_REMAINDER = 2
 
@@ -47,11 +39,9 @@ _LEN_CNPJ: int = 14
 _LEN_CPF: int = 11
 _ASCII_ZERO: int = ord("0")
 
-# Mod-11 weights, applied left-to-right over the base (excluding the check digits).
 _CNPJ_WEIGHTS_DV1: tuple[int, ...] = (5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
 _CNPJ_WEIGHTS_DV2: tuple[int, ...] = (6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
 
-# Matches a stringified integer that picked up a float tail, e.g. "12345678000190.0".
 _RE_FLOAT_ARTIFACT: re.Pattern[str] = re.compile(r"^\s*(\d+)\.0+\s*$")
 _RE_NON_ALNUM: re.Pattern[str] = re.compile(r"[^0-9A-Za-z]")
 _RE_NON_DIGIT: re.Pattern[str] = re.compile(r"\D")
@@ -163,11 +153,6 @@ def is_valid_cnpj(str_value: str) -> bool:
         zeros) are rejected.
     """
     str_clean = unmask_cnpj(str_value)
-    # One conjunction rather than a stack of early exits. For a pure predicate this states
-    # the whole definition in one place — right length, numeric check digits, not a repeated
-    # character filler, correct digits — where the guard form scattered it over four exits.
-    # Conjunction short-circuits, so the check digits are still computed only on a well shaped
-    # value, and an expression costs nothing against the ceiling that branching does.
     return (
         len(str_clean) == _LEN_CNPJ
         and str_clean[12:].isdigit()
@@ -276,7 +261,6 @@ def is_valid_cpf(str_value: str) -> bool:
         check digits. Repeated-digit values (e.g. all ones) are rejected.
     """
     str_clean = unmask_cpf(str_value)
-    # One conjunction rather than a stack of early exits; see the CNPJ validator for why.
     return (
         len(str_clean) == _LEN_CPF
         and str_clean.isdigit()

@@ -17,11 +17,6 @@ from typing import TYPE_CHECKING
 import zipfile
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -33,7 +28,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
@@ -93,8 +88,6 @@ def unzip_if_needed(
         ``True`` when extraction was performed, ``False`` when skipped (target already
         present, extraction disabled, or the zip is absent).
     """
-    # The three skip conditions are one question — "is there anything to do?" — so they read
-    # as one predicate instead of two exits placed apart.
     bool_should_extract = bool_enabled and not path_target.exists() and path_zip.exists()
     if not bool_should_extract:
         return False
@@ -132,9 +125,6 @@ def extract_members(path_zip: Path, path_dest_dir: Path, list_members: list[str]
     path_dest_dir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path_zip) as cls_zip:
         set_names = set(cls_zip.namelist())
-        # Extraction hands back the path it created, so one comprehension both does the work
-        # and collects the result. No accumulator, and deliberately not the extract-all form,
-        # which would widen this from the named members to whatever the archive contains.
         return [
             Path(cls_zip.extract(str_member, path_dest_dir))
             for str_member in list_members
