@@ -239,12 +239,7 @@ initialize_git_repo() {
         return
     fi
 
-    (
-        cd "$project_path" || exit 1
-        git init -q -b main || true
-        git add . || true
-        git commit -q -m "feat: first commit" >/dev/null 2>&1 || true
-    )
+    scaffold_initial_commit "$project_path"
     print_status "success" "Initialized git repo (branch main) with first commit"
 }
 
@@ -470,8 +465,7 @@ commit_and_push_github_assets() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
     if [ -n "$(git -C "$project_path" status --porcelain)" ]; then
-        git -C "$project_path" add -A
-        git -C "$project_path" commit -q --no-verify -m "chore: add GitHub project assets" || true
+        scaffold_commit_artifacts "$project_path" "chore: add GitHub project assets"
         git -C "$project_path" push >/dev/null 2>&1 \
             || print_status "warning" "Could not push GitHub assets; run 'git push' manually."
     fi
@@ -638,8 +632,7 @@ apply_offline_mode() {
 commit_offline_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
-    git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+    scaffold_commit_artifacts "$project_path" "chore: enable offline git workflow"
 }
 
 swap_protect_branch_hook() {
