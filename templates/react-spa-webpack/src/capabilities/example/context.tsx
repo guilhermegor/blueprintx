@@ -15,9 +15,6 @@ interface NoteProviderProps {
 
 export function NoteProvider({ children, repository }: NoteProviderProps) {
   const repo = useMemo(() => repository ?? new ApiNoteRepository(), [repository]);
-  // CONSOLE_EMITTER is this skeleton's default LogEmitter (blueprintx#436) — the
-  // composition root is the layer allowed to import `shared/`, so it injects the
-  // emitter here rather than console-notifier.ts reaching into shared/ itself.
   const notifier = useMemo(() => new ConsoleNotifier(CONSOLE_EMITTER), []);
 
   const { execute: createNote, loading: createLoading, error: createError } = useCreateNote(repo, notifier);

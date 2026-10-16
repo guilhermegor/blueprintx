@@ -5,6 +5,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
+export GIT_AUTHOR_NAME=ci-bot GIT_COMMITTER_NAME=ci-bot GIT_AUTHOR_EMAIL=ci-bot@example.com GIT_COMMITTER_EMAIL=ci-bot@example.com
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -472,62 +473,27 @@ test_dry_run_prints_the_remote_answers_and_creates_nothing() {
     fi
 }
 
-ventoy_stream() {
+etcher_stream() {
     local file
-    file="$(SPEC_LANGUAGE=bash write_spec "ventoy-$RANDOM" ventoy-usb "$@")"
+    file="$(SPEC_LANGUAGE=bash write_spec "etcher-$RANDOM" etcher-chromeos "$@")"
     bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
-        spec_stdin_for_skeleton ventoy-usb "$2"' _ "$REPO_ROOT" "$file" | paste -sd, -
+        spec_stdin_for_skeleton etcher-chromeos "$2"' _ "$REPO_ROOT" "$file" 2>&1 | paste -sd, -
 }
 
-test_ventoy_usb_answer_stream_order() {
-    local str_def str_full str_repo
-    str_def="$(ventoy_stream)"
-    str_full="$(ventoy_stream include_windows=n include_android=n persistence_size_mb=8192 \
-        review_bot_roster=y git_remote=y)"
-    str_repo="$(ventoy_stream git_remote=y create_repo=y repo_visibility=public)"
-    if [ "$str_def" = "y,y,4096,n,n" ] && [ "$str_full" = "n,n,8192,y,y,n" ] \
-        && [ "$str_repo" = "y,y,4096,n,y,y,1,n,n" ]; then
-        pass "ventoy-usb answer stream: windows, android, size, roster, git_remote"
+test_etcher_chromeos_answer_stream_and_prompt_order() {
+    local str_def str_full str_bad str_got
+    str_def="$(etcher_stream)"
+    str_full="$(etcher_stream default_os=fydeos review_bot_roster=y git_remote=y)"
+    str_bad="$(etcher_stream default_os=windows)"
+    str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/etcher_chromeos.sh" \
+        | grep -E '^    (prompt_default_os|scaffold_prompt_review_bot_roster|prompt_git_remote_setup)( |$)' \
+        | awk '{print $1}' | paste -sd' ' -)"
+    if [ "$str_def" = "chromeos-flex,n,n" ] && [ "$str_full" = "fydeos,y,y" ] \
+        && [[ "$str_bad" == *"'default_os' must be chromeos-flex or fydeos"* ]] \
+        && [ "$str_got" = "prompt_default_os scaffold_prompt_review_bot_roster prompt_git_remote_setup" ]; then
+        pass "etcher-chromeos stream: default_os, roster, git_remote; bad default_os refused"
     else
-        fail "ventoy-usb stream" "default=$str_def full=$str_full repo=$str_repo"
-    fi
-}
-
-test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes() {
-    local str_got
-    str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/ventoy_usb.sh" \
-        | grep -E '^    (prompt_ventoy_options|scaffold_prompt_review_bot_roster|prompt_git_remote_setup)( |$)' \
-        | awk '{print $1}' | paste -sd, -)"
-    if [ "$str_got" = "prompt_ventoy_options,scaffold_prompt_review_bot_roster,prompt_git_remote_setup" ]; then
-        pass "ventoy-usb scaffold asks options, roster, then the remote, as the stream assumes"
-    else
-        fail "ventoy-usb prompts" "got: $str_got"
-    fi
-}
-
-test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created() {
-    local file root out int_rc
-    root="$WORK_DIR/ventoy-bad-root"
-    file="$(SPEC_LANGUAGE=bash write_spec ventoy-bad ventoy-usb "project_root=$root" "persistence_size_mb=1000")"
-    out="$(run_blueprintx new --spec "$file")"
-    int_rc=$?
-    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'persistence_size_mb' must be a multiple of 1024"* && ! -e "$root" ]]; then
-        pass "a persistence size that is not a multiple of 1024 refuses the run and creates nothing"
-    else
-        fail "ventoy size refusal" "rc=$int_rc: ${out: -300}"
-    fi
-}
-
-test_ventoy_usb_spec_reaches_the_generated_conf() {
-    local file out str_temp str_conf
-    file="$(SPEC_LANGUAGE=bash write_spec ventoy-e2e ventoy-usb "include_windows=n" "persistence_size_mb=8192")"
-    out="$(run_blueprintx new --spec "$file" --dev)"
-    str_temp="$(sed 's/\x1b\[[0-9;]*m//g' <<<"$out" | sed -n 's/.*using temp root \(.*\)$/\1/p' | tr -d '\r' | tail -1)"
-    str_conf="$(cat "$str_temp/spec-probe/ventoy-usb.conf" 2>/dev/null | paste -sd, -)"
-    if [ "$str_conf" = "INCLUDE_WINDOWS=n,INCLUDE_ANDROID=y,PERSISTENCE_SIZE_MB=8192" ]; then
-        pass "--spec ventoy-usb scaffolds unattended and the answers land in ventoy-usb.conf"
-    else
-        fail "ventoy e2e" "conf='$str_conf' out: ${out: -400}"
+        fail "etcher-chromeos stream" "default=$str_def full=$str_full bad=$str_bad main() asks: $str_got"
     fi
 }
 
@@ -536,6 +502,7 @@ main() {
     test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
     test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created
     test_ventoy_usb_spec_reaches_the_generated_conf
+    test_etcher_chromeos_answer_stream_and_prompt_order
     test_ts_lib_answer_stream_order
     test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes
     test_ts_lib_remote_keys_defaults

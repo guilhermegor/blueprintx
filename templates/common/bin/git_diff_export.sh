@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Export commits in DIFF_RANGE (default main..HEAD) as a dated .diff for
-# offline / email transfer. Output lands in DIFF_DIR (default ./git_diffs).
 
 set -euo pipefail
 

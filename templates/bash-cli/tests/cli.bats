@@ -1,6 +1,4 @@
 #!/usr/bin/env bats
-# Smoke coverage for bin/${PROJECT_NAME} — the "one runnable check" a lazy skeleton
-# still owes its own logic (a case statement over --version/--help/unknown).
 
 CLI="$BATS_TEST_DIRNAME/../bin/${PROJECT_NAME}"
 

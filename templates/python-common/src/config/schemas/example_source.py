@@ -23,8 +23,6 @@ from config.schemas._fields import CnpjStr
 from utils.decimals import to_decimal
 
 
-# Sentinel default for ``to_decimal``: a value it can never produce from parsable input, so
-# "the fallback fired" stays distinguishable from "the payload said zero".
 _UNPARSABLE = Decimal("NaN")
 
 

@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
-# Create a new feature branch off the default branch (main or master).
-# Flow: resolve default branch → checkout it → fast-forward pull when a remote
-# exists → validate the CONTRIBUTING branch prefix → create and checkout it.
-#
-# Branch name: first argument, the NAME=<name> env var, or an interactive prompt.
-# Override the base branch with DEFAULT_BRANCH=<name>.
-#
-# Offline-only: this script ships only when a project is scaffolded WITHOUT a
-# GitHub remote. Online projects use the GitHub flow (branch + PR) instead.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
-# Allowed branch prefixes (kept in sync with CONTRIBUTING.md).
 BRANCH_PREFIX_PATTERN='^(feat|fix|docs|refactor|chore|hotfix|release)/.+'
 
 ensure_git_repo() {

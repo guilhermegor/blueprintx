@@ -20,11 +20,6 @@ import shutil
 from typing import TYPE_CHECKING
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -36,12 +31,10 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
-# pt-BR month names (index 1..12), accent-folded to match folder names on disk
-# (``abril-2026``). Folders are created without accents, so ``marco`` not ``março``.
 _MONTHS_PT: tuple[str, ...] = (
     "",
     "janeiro",
@@ -74,8 +67,6 @@ _MONTHS_PT_ABBR: tuple[str, ...] = (
 )
 
 
-# A drive-letter prefix is exactly two characters, such as C-colon. Named so the length test
-# reads as "is there room for a drive letter?" rather than as an arbitrary bound.
 _INT_DRIVE_PREFIX_LEN = 2
 
 
@@ -125,8 +116,6 @@ def resolve_path(str_path: str) -> Path:
     str_stripped = str_path.strip()
     if not is_windows_path(str_stripped):
         return Path(str_stripped).expanduser()
-    # On Windows the string is already native; elsewhere it is parsed through PureWindowsPath
-    # so its parts come out right even though the path is not reachable locally.
     return Path(str_stripped) if os.name == "nt" else Path(PureWindowsPath(str_stripped))
 
 
@@ -251,9 +240,6 @@ def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | Non
         The resolved file, or ``None`` when nothing matches.
     """
     dict_tokens = date_tokens(dt_ref)
-    # Two genuinely different resolutions behind one name, so each gets its own function and
-    # this one only chooses. The mapping form searches a directory; the string form names a
-    # file outright.
     if isinstance(spec, dict):
         return _resolve_mapping_spec(spec, dict_tokens)
     return _resolve_plain_spec(str(spec or ""), dict_tokens)
@@ -380,7 +366,6 @@ def _latest_match(path_dir: Path, str_pattern: str) -> Path | None:
     pathlib.Path or None
         The most recently modified matching file, or ``None``.
     """
-    # The default keyword carries the empty case, so no second guard is needed for it.
     return max(
         _matching_files(path_dir, str_pattern),
         key=lambda path: path.stat().st_mtime,

@@ -16,11 +16,6 @@ from typing import TYPE_CHECKING
 import unicodedata
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -32,7 +27,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
@@ -80,9 +75,5 @@ def safe_str(value: object, default: str = "") -> str:
     str
         ``str(value).strip()``, or ``default`` when ``value`` is ``None``/NaN.
     """
-    # Both guards ask one question — "is this a missing-value sentinel?" — so they are one
-    # predicate and one conditional expression rather than two exits.
-    # Comparing a value with itself is the canonical NaN test, since NaN is the only value
-    # that is not equal to itself.
     bool_missing = value is None or (isinstance(value, float) and value != value)  # noqa: PLR0124
     return default if bool_missing else str(value).strip()

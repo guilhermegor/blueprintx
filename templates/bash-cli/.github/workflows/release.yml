@@ -1,11 +1,5 @@
 name: Release
 
-# Mirrors BlueprintX's own release.yml (single workflow_dispatch entry point + a tag
-# job) trimmed to the one channel v1 of this skeleton ships: a GitHub Release
-# carrying a version-stamped tarball. Other package-manager channels (Homebrew, apt,
-# Snap, Chocolatey — see BlueprintX's release_*.yml) are deliberately deferred; see
-# docs/skeletons/bash-cli.md in the BlueprintX repo for the backlog.
-
 on:
   workflow_dispatch:
     inputs:
@@ -25,11 +19,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # The input is free text. `1.2.3/beta` yields the tag `v1.2.3/beta`, which git
-      # accepts; the packaging job then interpolates it into a `sed` expression where
-      # the `/` breaks the command — leaving a pushed tag and no release artifact.
-      # Reject it before the tag exists, so a bad input is a no-op rather than a
-      # half-done release someone has to unpick.
       - name: Validate version
         env:
           VERSION: ${{ github.event.inputs.version }}
@@ -58,9 +47,6 @@ jobs:
           ref: v${{ github.event.inputs.version }}
           persist-credentials: false
 
-      # No .git in the eventual tarball, so `git describe` can't resolve a version
-      # at runtime — stamp the tag's version into the entrypoint before packaging,
-      # same as BlueprintX's own install/release_*.yml jobs stamp BLUEPRINTX_VERSION.
       - name: Stamp version and build the release tarball
         env:
           VERSION: ${{ github.event.inputs.version }}

@@ -85,6 +85,20 @@ _spec_answer_review_bot() {
     spec_yn "$1" review_bot_roster n
 }
 
+_spec_answer_default_os() {
+    echo "$(spec_get "$1" default_os chromeos-flex)"
+}
+
+_spec_validate_default_os() {
+    local str_os
+    str_os="$(spec_get "$1" default_os chromeos-flex)"
+    case "$str_os" in
+        chromeos-flex | fydeos) return 0 ;;
+    esac
+    echo "spec: 'default_os' must be chromeos-flex or fydeos, got '$str_os'" >&2
+    return 1
+}
+
 _spec_answer_git_remote() {
     spec_yn "$1" git_remote n
 }
@@ -139,7 +153,7 @@ _spec_answer_publish_targets() {
     spec_yn "$file" consume_private n
 }
 
-_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db api-service-native-db mvc-service-native-db mvc-service-orm-db lib-minimal ts-lib ventoy-usb"
+_SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db api-service-native-db mvc-service-native-db mvc-service-orm-db lib-minimal ts-lib etcher-chromeos ventoy-usb"
 
 spec_skeleton_supported() {
     local str_name
@@ -199,6 +213,11 @@ spec_stdin_for_skeleton() {
             _spec_answer_git_remote "$file"
             _spec_answer_create_repo "$file"
             ;;
+        etcher-chromeos)
+            _spec_answer_default_os "$file"
+            _spec_answer_review_bot "$file"
+            _spec_answer_git_remote "$file"
+            ;;
         *)
             return 1
             ;;
@@ -237,6 +256,9 @@ _spec_key_map() {
                 review_bot_roster:n git_remote:n create_repo:n repo_visibility:private \
                 kanban:n protect_branch:n)
             ;;
+        etcher-chromeos)
+            keys=(default_os:chromeos-flex review_bot_roster:n git_remote:n)
+            ;;
         *)
             echo "no named-key prompt map for '$skeleton' yet" >&2
             return 1
@@ -258,6 +280,7 @@ spec_validate_answers() {
     done <<<"$map"
     _spec_validate_remote "$skeleton" "$file" || int_bad=1
     _spec_validate_ventoy "$skeleton" "$file" || int_bad=1
+    [ "$skeleton" != etcher-chromeos ] || _spec_validate_default_os "$file" || int_bad=1
     return "$int_bad"
 }
 

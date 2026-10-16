@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# ${PROJECT_NAME} entrypoint.
 set -e
 
-# Fallback version for installs WITHOUT a .git tree ('make install' stamps the real
-# value here at install time). A git checkout ignores this and derives the version
-# from the tag via `git describe` — see print_version. Do not hand-bump: the release
-# tag is the single source of truth. Mirrors BlueprintX's own bin/blueprintx.sh.
 CLI_VERSION="0.0.0"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,9 +17,6 @@ print_usage() {
 }
 
 print_version() {
-    # Prefer the git tag (the single source of truth) when run from a checkout; fall
-    # back to the stamped CLI_VERSION literal for a packaged / `make install`ed copy
-    # without a .git tree.
     local str_version
     if str_version=$(git -C "$PROJECT_ROOT" describe --tags --always 2>/dev/null) &&
         [ -n "$str_version" ]; then

@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Preview whether a .diff applies cleanly to the current working tree, without
-# modifying any files. Usage: git_diff_check.sh <path-to.diff>
 
 set -euo pipefail
 

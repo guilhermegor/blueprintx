@@ -1,17 +1,4 @@
 #!/usr/bin/env node
-/**
- * Proves `js-copy/` (built by scripts/emit-js-copy.mjs) is actually free of
- * the TypeScript toolchain it was generated to hide. Run after every build:
- *   npm run js-copy:build && npm run js-copy:verify
- *
- * A constraint enforced on the primary artifact (the transpiled source) is
- * NOT automatically enforced on documents generated beside it — a README or
- * footer that credits its sources BY PATH ("gerado a partir de
- * src/foo.ts") discloses the excluded toolchain even when zero .ts files
- * exist in the tree. Name generated sources by ROLE instead ("gerado a
- * partir do código-fonte da aplicação"); this check fails loudly if a
- * generated document does it by path instead.
- */
 import fs from 'fs';
 import path from 'path';
 

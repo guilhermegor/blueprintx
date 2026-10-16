@@ -156,14 +156,7 @@ initialize_git_repo() {
         print_status "info" "Git repo already initialized; skipping"
         return
     fi
-    if ! (
-        cd "$project_path" || exit 1
-        git init -q -b main &&
-            git add . &&
-            git commit -q -m "feat: first commit"
-    ); then
-        exit_error "Could not create the initial commit in '$project_path'. Set git user.name and user.email, then re-run."
-    fi
+    scaffold_initial_commit "$project_path"
     print_status "success" "Initialized git repo (branch main) with first commit"
 }
 
@@ -195,8 +188,7 @@ apply_offline_mode() {
 commit_offline_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
-    git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+    scaffold_commit_artifacts "$project_path" "chore: enable offline git workflow"
 }
 
 main() {

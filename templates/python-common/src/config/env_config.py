@@ -23,11 +23,6 @@ from typing import TYPE_CHECKING, NoReturn
 import unicodedata
 
 
-# The runtime type-checking engine is always injected, but at a layout-dependent path:
-# utils.typing (MVC) or chassis.typing (DDD). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and
-# flags the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -39,15 +34,10 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
-# Accepted ENV values -> config-file suffix (English + pt-BR + short forms). Keys MUST be in
-# normalised form (see _normalise_keyword): lower-case, no diacritics, spaces/hyphens folded
-# to "_". The lookup normalises its input the same way, so every reasonable spelling of a
-# listed value resolves (e.g. "PROD", " prd ", "produção", "Desenvolvimento") without an
-# entry per casing/accent. Anything still unmatched in env-wise mode is a typo and fails loud.
 ENV_TO_SUFFIX: dict[str, str] = {
     "development": "dev",
     "desenvolvimento": "dev",

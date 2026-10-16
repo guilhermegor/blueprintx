@@ -723,11 +723,10 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   as `>=1.27,<2.0` lets a behaviour change land silently on the next `poetry update`. Re-check
   that status before bumping.
 - **Git steps.** The first commit is made on every scaffold, independent of any remote and
-  also under `--dev`, and skips gracefully when git is missing or the repo exists. Only
-  `bash_cli.sh` refuses to swallow a failed first commit; the Python scaffolds, `ts_lib.sh` and
-  `ts_react_app.sh` still end `git init`, `git add` and the first commit with `|| true`, so a
-  missing identity there is silent (a known gap: fixing it changes scaffold behaviour and is out
-  of scope for the comment strip). The reason it must not be swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
+  also under `--dev`, and skips gracefully when git is missing or the repo exists. Every
+  scaffold stops on a failed first commit through `scaffold_initial_commit` in
+  `bin/lib/scaffold_git_remote.sh`, and on a failed later artifact commit through
+  `scaffold_commit_artifacts` (#812; `tests/test_scaffold_first_commit.sh` covers all nine). The first commit deliberately runs the user's commit hooks (the artifact commits use `--no-verify`), so a global hook that rejects it stops the scaffold with a message naming the hook; the half-created `.git` is removed so a re-run starts clean. The reason it must not be swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
   a repo with a branch, a staged tree and no commit, which resurfaces as an inexplicable push
   failure later, and `exit_error` inside a subshell only ends the subshell, so the caller reads
   the status and the success line never prints for a repo with no commit. A non-zero from the
@@ -740,9 +739,8 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   pushed after the first commit, before the ruleset is applied, so that direct push is never
   blocked by the rules about to be set. Offline artifacts are committed with `--no-verify`
   (HEAD is the default branch and the protect-branch hook is already installed), so a fresh
-  offline project starts clean for bash-cli, ts-lib and the Python scaffolds; the React scaffold makes its first
-  commit before `apply_offline_mode` and does not commit the offline rewrites, so an offline
-  React project starts with them uncommitted. The swapped `protect-branch` pre-commit hook replaces the stock
+  offline project starts clean for every scaffold, React included: its first commit precedes
+  `apply_offline_mode`, which then commits the rewrites through `scaffold_commit_artifacts` (#812). The swapped `protect-branch` pre-commit hook replaces the stock
   `no-commit-to-branch`, and `add_poe_include` adds the offline task fragment only when copied.
   Online, releases are cut by tagging and `strip_bump_version` runs before the assets commit so
   its edits ride the same commit and push.
@@ -916,6 +914,393 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   infrastructure, ui) with thin per-layer `CLAUDE.md` files that `@`-import the shared rules
   from `src/capabilities/_layers/`, refuses reserved names (the shared rules directory and
   `example`), and first checks that all four layer rule files exist.
+
+## TypeScript and Bash skeleton notes
+
+The files under `templates/ts-common/`, `templates/ts-lib/`, `templates/react-spa-webpack/`
+and `templates/bash-cli/` carry no comments, so the reasoning behind them lives here. A
+generated project gets the behavior, not the history. `@ts-check` and the `/** @type {...} */`
+annotations that feed it are checker directives, so the comment gate allows them; the other
+`@type` annotations were removed with the comments, since no tier sets `checkJs`.
+
+### ESLint configs (`ts-lib`, `react-spa-webpack`)
+
+- **Vendor allowlist (ts-lib, #345).** A third-party import passes only if the file's layer
+  lists it with a written reason. It is deny-by-default on purpose: `no-restricted-imports`
+  is a blocklist and cannot catch a vendor nobody listed. The policy lives inline in
+  `eslint.config.mjs`, which the scaffold already copies verbatim, so no new `cp` line is
+  needed; extract it to `ts-common` only if `react-spa-webpack` adopts the same rule. ts-lib has
+  no `boundaries` entry because it is a flat library with no layers to police.
+- **What the local rule treats as an import (#348).** A static import, a dynamic
+  `import('x')` with a literal, a non-literal `import(x)` (reported, never waved through),
+  `require()` and `import x = require('x')` all count. A relative specifier is exempt. Both
+  `import type { A }` and `import { type A }` are erased at compile time and pass, while a
+  mixed `{ type A, b }` still couples at runtime and fails.
+- **Test files must not export (#442).** An exporting test file shares state across files.
+  The lint rule is the cheap half; `randomize: true` in `jest.config.cjs` is the other.
+  Jest prints the seed on every run, and a seed-specific failure is a real defect.
+- **No bare HTTP status literals (#453).** `detectObjects: true` is required: without it the
+  `{ statusCode: 201 }` response shape is not caught.
+- **Catch safety (#440).** `strict` already types a `catch (err)` variable as `unknown`, but
+  not the parameter of a promise `.catch(cb)`, so a type-aware rule closes that gap. Only
+  `Error` values may be thrown, so `instanceof Error` narrowing can succeed.
+- **Complexity ceilings (react, #167, #168).** `complexity` is 3 for `src/` (2 flags about
+  16% of the example capability's functions) and 2 for tests (1 flags about 17%).
+- **Function length (#439).** The ceiling is 60 lines for logic, matching the Python gate.
+  `.tsx` has its own ceiling of 100 because returned JSX can legitimately run long, and that
+  rule stays a separate block even when the numbers happen to match. `skipComments: true` is
+  the nearest ESLint has to "docstring excluded" but skips inline comments too; that gap is
+  accepted because every measured function sits 30 or more lines under the ceiling.
+- **Ignores.** `react-spa-webpack` ignores the inactive state-manager variants because
+  `tsconfig.json` excludes them and the type-aware parser cannot lint them. ts-lib ignores
+  `babel.config.test.cjs` and the Docusaurus config as tooling, not library source.
+
+### Logging port and OTLP export (`ts-common`, #436, #438)
+
+- **`LogEmitter` is a port.** Its value is the swappable destination. `NULL_EMITTER` is the
+  `ts-lib` default because a published package must not write to a host's output on its own
+  initiative. `CONSOLE_EMITTER` is the `react-spa-webpack` default because `console` is the
+  only destination a browser can reach without an explicit network call. In the SPA the
+  composition root injects the emitter, since `infrastructure/` may import only the domain
+  ports and external libraries.
+- **OTLP export wraps, never replaces.** `optional/otel-log-emitter.ts` adds export to
+  whatever emitter the caller already has, so a project with no collector behaves as before.
+  It is the only module that imports `@opentelemetry/*`, dynamically. The three logs packages
+  are published at 0.222.0, the same pre-stable status as the Python Logs signal: pin exact
+  versions and re-measure before bumping.
+- **The endpoint and headers are resolved in this file.** The browser build of the exporter
+  reads no `OTEL_EXPORTER_OTLP_*` variables, and a browser has no `process.env`. So
+  `resolveOtlpLogsUrl` and `resolveSignalOverride` resolve them and pass them explicitly,
+  unlike the Python port. `process.env.<KEY>` must stay a literal member access, the exact
+  shape webpack's `DefinePlugin` replaces. Presence decides precedence, never truthiness (a
+  signal value that is set but empty still wins), and a generic-only endpoint needs
+  `/v1/logs` appended or logs go to `/` (found in review of #505).
+- **Credentials are refused in a browser.** `fetch` follows redirects and the exporter config
+  has no `redirect` option, so even an https or loopback endpoint could redirect to an
+  attacker-controlled cleartext host and have the headers resent. `isCleartextWithCredentials`
+  therefore refuses every credentialed request in a browser and applies only the narrower
+  cleartext-off-host check in Node. The architectural answer is a same-origin collector proxy
+  that injects the credential server-side.
+- **Tests inject the installer.** The fallback tests pass an `install` function instead of
+  relying on the real `@opentelemetry/*` import failing, because that import succeeds once the
+  file is copied into an opted-in project and Jest would then build a real exporter against
+  `localhost:4318`.
+- **Collector files are a deliberate parallel copy.** `docker-compose.otel-collector.yml` and
+  `otel-collector-config.yaml` are byte-identical to the `python-common` ones. Collapsing them
+  into `templates/common/` is deferred because it would edit the Python scaffold `cp` lines.
+  The compose file publishes the receivers on `127.0.0.1` only, since they are
+  unauthenticated. The `0.0.0.0` bind in the collector config is the in-container address and
+  must not be "hardened": narrowing it makes the collector unreachable through the port
+  mapping, and the fire-and-forget exporter would fail silently.
+
+### Review roster and required checks (`ts-common`, `bash-cli`)
+
+- **`.review-bots.yaml` is the ts ecosystem's own roster.** It lists one threads reviewer.
+  GitHub's built-in Copilot reviewer is deliberately absent, because nothing in the TS
+  templates wires it up and a roster entry for a reviewer that never reports is the failure the
+  gate exists to catch. Every row needs `posts: threads` or `posts: status`, with at least one
+  `threads` member; a missing or misspelled value fails loudly. Deleting the file opts a
+  project out and the gate then skips.
+- **Why `review-threads.yml` stages the roster.** The shared script reads
+  `.review-bots.yaml` from the working directory, while this tier ships it under `.github/`,
+  so the workflow copies it first. The copy is guarded with `-f` because deleting the file is
+  the documented opt-out and an unguarded `cp` would fail the job under `bash -e`. A finding
+  needs both halves, a reply and a resolution; a bot resolving its own thread records its
+  satisfaction, not the author's reasoning.
+- **`required-checks.txt`.** One name per line, verbatim as GitHub reports it. Add a name only
+  after confirming a real PR emits it (`gh api repos/:owner/:repo/commits/<sha>/check-runs`),
+  because a name nothing emits blocks every PR forever. Every listed workflow runs on every PR
+  with no filter, and `check_required_checks_sync.py` refuses a name that stops being
+  unconditional. `bash-cli` omits `Review threads answered` on purpose (#564): it is a
+  single-file CLI with no Python runtime, so its three `ci.yml` names are what bind a merge.
+- **Secret scanning (#155).** The scan uses gitleaks, not GitGuardian, because `ggshield`
+  needs a hosted key a fresh project lacks and exits 3 having scanned nothing. It scans full
+  history, verifies the release checksum before unpacking an executable, and ships no config:
+  an allowlist is added only for a measured false positive.
+
+### ts-lib build, docs and release
+
+- **No `"type"` field in `package.json`.** An explicit `"type": "commonjs"` breaks the
+  Docusaurus 3 webpack build with an opaque `sourceType: module` error (found by bisecting a
+  vanilla site, #134). `dist/cjs` therefore needs no marker, and `bin/write_esm_package_json.sh`
+  writes a nested `package.json` into `dist/esm` instead.
+- **Jest's Babel config is not discoverable on purpose.** `babel.config.test.cjs` is wired
+  through `jest.config.cjs` with an absolute `configFile`, because a root `.babelrc` or
+  `babel.config.js` is also picked up by Docusaurus and breaks the docs build. Jest runs in the
+  `node` environment since a library has no DOM.
+- **`src/index.ts` re-exports with a `.js` extension.** Node's native ESM resolver, unlike CJS
+  or Jest, does not guess extensions, and `tsc` maps it back to the `.ts` source.
+- **`bin/smoke_pack.sh`** installs the packed tarball into a throwaway consumer and loads it by
+  package name, the only way to exercise the `exports` map and `files` allowlist. It is written
+  against the example `greet` export, so change its checks when the public API changes.
+- **`pack-smoke.yml`** is npm's analogue of Test PyPI: versions are immutable and no hosted test
+  registry exists. `pack-smoke` runs on every PR, and `verdaccio-rehearsal` does a real
+  publish-and-install round trip against a service-container registry.
+- **`release-npm.yml`** mirrors the Python release shape. The version input is validated
+  before any tag exists, the registry check queries the specific version rather than the
+  `latest` tag, and there is no package cache in a release build. Publishing uses OIDC trusted
+  publishing with no stored token and `npm stage publish`, which holds the package until a
+  maintainer approves with 2FA, so configure the trusted publisher as stage-only. Staged
+  publishing needs npm 11.15.0 or newer, so npm is pinned explicitly. The release asset is named
+  explicitly, because a glob over an empty directory leaves a draft release.
+- **`docs-deploy.yml`** runs after a release publishes and never for a prerelease, gated on the
+  release's own flag. A release created with `github.token` does not start a
+  `release: published` workflow, so `release-npm.yml` calls this one through `workflow_call`
+  and the `release` trigger remains for releases published by hand. `docs.yml` only builds, to
+  catch broken links before a release. Enabling Pages with the Actions source is a one-time
+  manual step, since the workflow token lacks repo-admin rights.
+
+### react-spa-webpack build and deploy
+
+- **Dockerfile.** A multi-stage build compiles with Node and serves `dist/` from nginx, so the
+  final image has no Node, `node_modules` or source. Build-time env arrives as a BuildKit secret
+  (`docker build --secret id=env,src=.env`), never as `ARG` or `ENV`, so it stays out of image
+  layers. Without the secret the build still succeeds and falls back to the committed `.env`
+  defaults. Pass `--build-arg NODE_VERSION="$(cat .nvmrc)"` to keep `.nvmrc` the single source.
+- **`nginx.conf`.** Fingerprinted assets are cached forever because a content change produces a
+  new filename. Unmatched paths fall back to `index.html` so client-side routes survive a
+  refresh, matching the dev server's `historyApiFallback`.
+- **GitHub Pages deploy** pushes `dist/` to `gh-pages` with the default token, which avoids the
+  manual Pages-source toggle that `actions/deploy-pages` needs. It builds with
+  `PUBLIC_PATH=/<repo-name>/`, copies `index.html` to `404.html` for deep links, adds
+  `.nojekyll` so underscore-prefixed chunks are served, and uses `rsync --delete` while
+  excluding `.git`.
+- **Vercel deploy (#390).** No job-wide `env:` is set, because `vercel build` runs the
+  project's own build and a job-wide credential would be readable by every dependency; each of
+  the three values is declared on the steps that use it. `vercel build` takes no token, since it
+  reads the state `vercel pull` wrote, and passing a token as an argument is worse because
+  argv is readable by other processes in the container. A surviving `.git` makes the CLI create
+  a git-linked deployment and wait forever for a build the Git integration never reports, so
+  the step removes it and `vercel.json` disables `git.deploymentEnabled`; both are required.
+  A green run does not prove the site updated, so probe the live bundle for a string unique to
+  the new commit.
+- **js-copy.** `emit-js-copy.mjs` writes a plain-JavaScript copy for contexts that must not
+  contain TypeScript, using the `@babel/*` packages already present. Two settings only matter
+  after the extension change: presets are declared inline with `babelrc: false` because a
+  `.babelrc` resolves against the invoking shell's cwd, and `resolve.fullySpecified: false`
+  because `"type": "module"` otherwise requires extensions on relative `.js` imports. Internal
+  developer docs are left out of the copy, and `verify-js-copy.mjs` fails if a generated document
+  names its sources by path, which would disclose the excluded toolchain.
+- **`lint-staged.config.js`** is the complete config here, because the JS file wins over a
+  `package.json` field; it adds CSS handling to the `ts-common` baseline.
+- **`declarations.d.ts` and the API adapter.** `PUBLIC_PATH` is injected by `DefinePlugin` and
+  defaults to `/` in local dev. The adapter keeps one local status constant rather than adding
+  `http-status-codes` (#453); promote it when a second call site needs one.
+
+### bash-cli
+
+- **Version.** `CLI_VERSION` is a fallback for installs without `.git`; a checkout derives the
+  version from the tag with `git describe`, and `make install` stamps the real value. Never
+  hand-bump it, the release tag is the source of truth.
+- **`release.yml`** mirrors BlueprintX's own: one `workflow_dispatch` entry and a tag job,
+  trimmed to a GitHub Release carrying a version-stamped tarball. Other channels are deferred.
+  The free-text version is validated before the tag exists, since `1.2.3/beta` is a legal tag
+  that then breaks the `sed` stamping and leaves a tag with no artifact.
+- **`make lint` is the CI job**, so local and CI run identical shellcheck and shfmt. `lib/common.sh`
+  is a byte-identical shared file, so shfmt checks only the project's own script while
+  shellcheck covers both. The repo-rules target needs a maintainer's `gh auth` with admin and
+  only warns when it runs without one.
+- **`tests/cli.bats`** is the smoke test for the entrypoint's `--version`, `--help` and
+  unknown-argument cases.
+
+## Shared template notes (`templates/python-common/src` and `templates/common`)
+
+The Python utilities, the config templates and the shared shell scripts carry no comments, so
+the reasoning behind them lives here. A generated project gets the behavior, not the history.
+
+### Runtime type-checking import (every `src/` module that uses it)
+
+The runtime type-checking engine is always injected, but at a layout-dependent path:
+`utils.typing` in MVC and `chassis.typing` in DDD. Each module declares the decorator's shape
+under `TYPE_CHECKING` instead of importing it, then resolves the real engine with a
+`try/except ModuleNotFoundError` at runtime. mypy treats a `try/except` import as executed code
+and flags the redefinition once it actually checks the module, so that branch alone cannot pick
+either layout (blueprintx#360). A few modules stub the metaclass shape instead of the decorator.
+
+### Config (`src/config`)
+
+- **Startup order.** `startup.py` is an import-time singleton, so it builds its observability
+  before the first thing that can fail; otherwise a failure has nowhere to be written and the
+  process dies with no log file, no traceback and no run folder. Everything above the
+  fragility line must not be able to fail, and the read of `outputs.yaml` is captured rather
+  than raised. The shape check (an empty file loads as nothing, a non-mapping root loads as a
+  scalar or a list) sits inside that guard for the same reason. The guard catches `Exception`,
+  never `BaseException`, so the `SystemExit(2)` for an unknown `ENV` passes straight through.
+  Once the logger exists the failure goes to the log file and stderr, names the log's path and
+  exits 2, because running on fallback config would run the job against values nobody set.
+- **Env-wise config.** A plain `inputs.yaml` and `outputs.yaml` is the default; a project opts
+  into env-wise config by deleting the plain file and shipping `inputs_dev.yaml`,
+  `inputs_prd.yaml` and so on, after which `ENV` selects the file and an unknown value fails
+  loudly. Accepted `ENV` values are keyed in normalised form (lower-case, no diacritics,
+  spaces and hyphens folded to `_`) and the lookup normalises its input the same way, so
+  `PROD`, ` prd ` and `produção` all resolve.
+- **`inputs.yaml`.** One output root for logs and run artifacts; `~` expands, and absolute and
+  Windows UNC paths work. Output can be partitioned into `<base>/<YYYY-MM-DD>/`, while filenames
+  keep the compact date. A source's reference ("golden copy") override lists only the sources
+  whose reference lives elsewhere; the rest fall back to their real input through
+  `resolve_reference_spec`, so a `{dir, pattern}` is never declared twice (blueprintx#225).
+- **`outputs.yaml`** holds filename templates, with `environment`, `app_name`, `user`, `date`
+  and `time` substituted in `startup.py`.
+- **`contract_oracles.yaml`** is the registry read by `bin/check_contract_drift.py` in the
+  weekly, non-gating drift job. Each key must match a `FileContract.str_source_key`; `url` is
+  the live artifact to diff, `sep` defaults to `;` and `encoding` to `utf-8-sig`. It is empty
+  by default, the job then skips to success, and it must never gate a PR or a release.
+- **Contract construction.** Contracts are built only in `config/contracts/`; other modules
+  import the instance, and a module that needs the class for an annotation carries the
+  line-scoped TID251 exemption. `to_decimal`'s sentinel default is a value it can never produce
+  from parsable input, so "the fallback fired" differs from "the payload said zero".
+
+### Utilities (`src/utils`)
+
+- **dtypes.** pandas below 3 has no real `str` dtype: `astype("str")` turns a missing value
+  into the literal string `"nan"` and `.isna()` then reports `False`. A lockfile can ship both
+  majors, so the same declaration would produce different data on different CI legs. The
+  nullable `"string"` dtype behaves identically on 2 and 3. `tabular_reader` therefore coerces
+  with the NA-safe helper and never `astype(str)`.
+- **tabular_reader.** Stripped header names can collide when a source publishes one name both
+  padded and unpadded, which leaves two columns under one label and passes the required-column
+  check, so it fails at that point while the cause is visible. Format dispatch is a table keyed
+  by extension with Excel as the default, annotated with `Callable` because mypy otherwise
+  infers a value type that cannot be called, and only a generated project runs mypy over
+  `src/`. A missing file is reported, not raised ("Never raises includes a missing file" in
+  `utils/CLAUDE.md`), and `xml_reader` shares the same validate-then-type tail.
+- **decimals.** Truncation is the default, with commercial or regulatory rounding as a per-call
+  override. `bool` is listed explicitly because the runtime checker treats it as distinct from
+  `int` while `_parse` deliberately maps it to the default. `nan` and `inf` parse as `Decimal`,
+  so the finite check maps them to the default. A comma marks a Brazilian-formatted cell, whose
+  thousands dot is removed; without a comma the existing dot is the decimal point.
+- **br_identifiers.** The check digits use a weighted sum modulo 11, with a remainder below 2
+  giving 0. The validators are single conjunctions, so the definition sits in one place and the
+  check digits are computed only on a well-shaped value.
+- **logs.** Frame modules skipped when finding the caller are matched on the last dotted
+  component of the module name, since a prefix match failed for the nested, distributable layout
+  and misattributed the caller. Type is checked before emptiness, so a falsy non-string is not
+  described as an empty string. Reconfiguring closes the old handlers before clearing them,
+  because dropping the reference alone leaks one file descriptor per reconfiguration. The
+  parent-folder outcomes are a lookup table that doubles as the set of valid values.
+- **logs_emitter.** An unrecognised level degrades to `warning` so the emitter stays as
+  forgiving as the base class. `super()` swaps `None` for a module logger, so the original is
+  kept (blueprintx#597).
+- **http_downloader.** Transient failures (timeout, dropped connection, 5xx) retry with
+  exponential backoff, while a `ValueError` from a bad or SSRF-blocked URL does not. The opener
+  refuses 3xx so a download never hops to a host other than the one validated.
+- **retry.** Strategy dispatch is a dict whose keys are also the set of valid strategy names.
+  `RetryPolicy` validates the strategy and attempt count. Its `complexity-ok` hatches are
+  structural: a decorator factory is three nested scopes and mccabe folds each into the
+  enclosing one, and the policy checks two independent invariants that a frozen dataclass has
+  no per-field hook to split.
+- **outlook_gateway.** Outlook runs as its own process, so a relative or driveless path
+  re-anchors in its working directory, where our existence check then passes and the attachment
+  is silently dropped, or fails falsely on a file that saved. Paths are resolved first. The COM
+  helpers carry the complexity hatch because every branch is a platform guard, an optional COM
+  field, or a failure that must be logged and survived, and that non-fatal contract is the point
+  of the gateway.
+- **regime_registry and regime_window.** Ambiguity is rejected at construction, never at
+  lookup: `resolve` returns the first covering window, so overlapping windows would bind a
+  period to a schema by list order and silently read a real file against the wrong header. The
+  registry stores an immutable copy so a later append cannot slip a window past the check, and a
+  window validates its bounds but also the queried period (an open window must not report
+  month 13 as covered).
+- **raw_workspace.** `@contextmanager` must stay outermost; in the other order the return type
+  no longer matches the `Iterator[Path]` annotation the checker reads and every call raises.
+- **sidecar_metadata.** `Callable` is a runtime import because the type-checker resolves the
+  hint against the module globals at call time, even with postponed annotations.
+- **paths, dates, excel_sheet_names, provenance.** Month names are accent-folded to match
+  folders on disk. A drive prefix is two characters. A non-Windows host parses a Windows path
+  with `PureWindowsPath`. The business calendar is one shared instance and fetches nothing.
+  "History" is reserved in every Excel version and matched case-insensitively, and the control
+  and format Unicode categories (Cc, Cf) are rejected in sheet names. `provenance` hashes in
+  1 MiB blocks.
+- **Style choices.** Several bodies are expressions, dict dispatch, comprehensions or a
+  `Counter` rather than guard chains, loops with an exit in the middle or accumulators. That is
+  the house rule in `rules/python.md` and it keeps each function under the complexity ceiling
+  without changing behavior.
+
+### Shared shell scripts and hooks (`templates/common`)
+
+- **`lib/common.sh`** is the single source of truth and is byte-identical to
+  `templates/python-common/bin/lib/common.sh`, enforced in CI. Offline scaffolds copy the
+  `common/` version over the other, so both must carry `resolve_default_branch` and
+  `_read_env_var`. It is idempotent through `_BX_COMMON_LOADED`, refuses direct execution, and
+  tees to `LOG_FILE` when that is set. `print_status` reports an unknown level on stderr: 35
+  calls were spelled `warn`, and each printed an unmarked line that looked like neutral output.
+  `_read_env_var` does not strip an inline `#`, so passwords containing `#` or `$` survive.
+  `ensure_dir` checks for existence first because `mkdir -p` over an existing mapped or UNC
+  Windows path can fail with "Permission denied".
+- **Offline-only scripts** (`new_branch.sh`, `git_merge_to_main.sh`, `protect_branch.sh`, the
+  `git_diff_*` helpers and `poe_tasks.offline.toml`) ship only when a project is scaffolded
+  without a GitHub remote; online projects use GitHub flow and server-side protection.
+  `poe_tasks.offline.toml` is wired in by `add_poe_include` rather than declared, because poe
+  warns on every run about a missing include. `protect_branch.sh` is a guard rail, not a
+  security control (`--no-verify` bypasses it). `git_merge_to_main.sh` writes an append-only
+  checkpoints file because without a remote nothing answers "what was the target before this
+  merge"; it is anchored to the repo root (a run from `src/` would create a second, invisible
+  ledger), snapshots before appending so a rejected commit can be undone, and uses
+  `--no-verify` so the protect hook does not block the merge commit.
+- **`commit.sh`** retries a commit once, because auto-fixing hooks rewrite staged files and
+  abort the first attempt, leaving HEAD unmoved. It re-stages and then verifies HEAD advanced.
+- **`export_repo_content.sh`** honors `.gitignore` inside a work tree and otherwise walks and
+  prunes heavy directories. Real `.env` files, logs and the corporate CA are always skipped,
+  and so are binaries and the output file.
+- **`ship.sh`** archives the committed tree of the default branch, not the working tree, then
+  prunes heavy or secret paths committed by mistake. `git_diffs/` is bundled in because in
+  offline mode it is the branch-exchange payload. The staging directory is removed even if
+  zipping fails, with the path expanded into the trap at definition time.
+- **`close_linked_issues.sh`** (blueprintx#604) is strict because a wrong closure is worse than
+  a missed one: a number is taken only from a leading `<type>/<N>-<slug>` branch or from
+  `Closes|Fixes|Resolves #N`, with a date-like prefix (`2026-10`) not read as an issue, negated
+  uses skipped, fenced code, quotes, HTML comments and inline code ignored, and bot branches
+  skipped because their bodies quote another repository's notes. The workflow cannot close
+  anything from a fork PR (read-only token) or a PR merged into a non-default branch, and it
+  passes untrusted text through `env`, never interpolated into the script.
+- **`check_review_threads.py`** is the shared review-thread gate. Its design points:
+  - *Roster.* `posts:` decides who can satisfy the missing-review check: a `status` member posts
+    no answers and cannot review, and without the split `github-actions[bot]` would satisfy a
+    gate meant to prove a real reviewer looked. A roster deleted or emptied inside the PR it
+    polices fails loudly, since either is a one-line way to switch the gate off.
+  - *Logins.* REST reports `coderabbitai[bot]` while GraphQL returns `coderabbitai`; both sides
+    are normalised, because a literal comparison never matched and every reviewer comment
+    counted as an answer.
+  - *Reviews versus threads.* A reviewer that found nothing and one that never ran both produce
+    zero threads, so the gate also reads submitted reviews, filtered to submitted states to
+    exclude drafts (#216), and pinned to a commit, because a review is attached to the code it
+    was written against and a newer push leaves it stale (#220). Both connections paginate; a
+    silent cap on threads would print "all answered" over unfinished conversations.
+  - *Notices.* A reviewer's issue comment is shown but never trusted as a verdict: the standing
+    "does not re-review already reviewed commits" footnote is appended to every outcome. Only
+    phrases CodeRabbit emits solely when it reviewed and had nothing to attach count as
+    completion (#328), and rate-limit, file-cap and failure notices keep failing. `@coderabbitai
+    full review` is the command that clears an "already reviewed" refusal.
+  - *Quotas.* The review quota resets in hours and the chat quota in minutes, and posting a
+    review request spends the chat quota (blueprintx#364), so the declared wait is parsed in
+    seconds. A file-count cap ("N files exceed the limit of M") is a structural third state with
+    its own remedy, splitting the PR, and the pattern requires the whole sentence so the
+    unrelated "Bot user detected" skip is not misread.
+  - *Carry-forward.* A review carries over a merge when the compare API shows an identical
+    patch, within bounded calls (1 head plus 5, 20 s each, pinned by a test). A truncated file
+    list fails closed, a dismissed review is never revived, and any failure to compute the patch
+    means the PR is re-reviewed.
+  - *Findings in a review body* (#630) are read by structure, not prose: leading severity
+    markers, printed counts trusted only for the two named authors, quoted material ignored, and
+    answers recognised by their opening structure at any length.
+  - *Resolution.* The reply half and the resolve half are both asserted
+    (`REVIEW_THREADS_REQUIRE_RESOLVED=1`, #196). An outdated thread counts, because the merge
+    setting drops it and an author can manufacture that state by rewriting the commented lines.
+    The cost is that a resolve leaves the check red until it is re-run by hand (#263).
+  - *Misc.* `--json` exists because grepping the prose misreported 27 PRs (#364). The reply
+    length floor of 100 characters sits at or below the shortest real verdict measured and
+    excludes "done" and "fixed". Stdout is reconfigured so the status glyphs do not crash a
+    Windows cp1252 console, which would block every commit through the always-run hook.
+- **Config files.** `.editorconfig` pins tabs for Make, shell and SQL, 2 spaces for
+  TypeScript, JavaScript, HTML, CSS and YAML (the spec forbids tabs), 4 for Python, and keeps
+  Markdown trailing whitespace because it can be a hard line break. `.gitattributes` forces LF
+  on shell scripts so a CRLF checkout does not fail with `bash\r`, and collapses generated
+  files in diffs (see `docs/graphite-config.md`).
+- **`docs_version/docs.yaml`** builds MkDocs with `--strict` on every push and PR and does not
+  deploy: the release workflow deploys with `mike` after the tag, so the site only reflects
+  shipped versions. Pages is set once to deploy from `gh-pages` (`poe enable_pages`). The build
+  fetches full history so `cz changelog` sees the tags, and the changelog is never committed by
+  CI.
 
 ## Repository scripts under `bin/`
 

@@ -8,7 +8,7 @@ Source: `templates/ventoy-usb/`, `bin/scaffold/ventoy_usb.sh` (blueprintx#817, p
 
 ## What it ships
 
-- `sources.manifest`: one line per payload (`id|group|folder|kind|source|pattern|checksum|persist`).
+- `sources.manifest`: one line per payload (`id|group|folder|kind|source|pattern|checksum|persist|extract|trust`).
   The drive tree, the downloads and `ventoy/ventoy.json` are all derived from it.
 - `bin/<project>`: `layout`, `tools`, `fetch`, `persistence`, `config`, `check`, `build`, `drive`.
 - `lib/`: `manifest.sh` (parse and validate), `resolve.sh` (resolvers, download, verify),
