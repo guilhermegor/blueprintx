@@ -250,7 +250,7 @@ repos:
         entry: bash tests/test_scaffold_first_commit.sh
         language: system
         pass_filenames: false
-        files: ^(bin/lib/scaffold_[^/]+\.sh|bin/scaffold/[^/]+\.sh|tests/test_scaffold_first_commit\.sh)$
+        files: ^(bin/lib/common\.sh|bin/lib/scaffold_[^/]+\.sh|bin/scaffold/[^/]+\.sh|tests/test_scaffold_first_commit\.sh)$
 
       - id: scaffold-lint-test-cleanup-tests
         name: scaffold_lint_test.sh cleanup-trap should-fail tests (blueprintx#762)

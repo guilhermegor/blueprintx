@@ -3,7 +3,7 @@
 set -uo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 
-unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL EMAIL
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -66,7 +66,7 @@ check "offline React scaffold leaves git status clean" "" "$str_status"
 check "offline React scaffold has 2 commits" 2 "$(git -C "$proj" rev-list --count HEAD)"
 
 for str_name in python_ddd_service python_ddd_service_orm python_api_service python_mvc_service \
-    python_mvc_service_orm python_lib_minimal ts_lib bash_cli; do
+    python_mvc_service_orm python_lib_minimal ts_lib ts_react_app bash_cli; do
     check "$str_name swallows no artifact commit" 0 "$(grep -c 'no-verify.*|| true' "$REPO_ROOT/bin/scaffold/$str_name.sh")"
 done
 

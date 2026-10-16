@@ -589,15 +589,9 @@ apply_offline_mode() {
         'git:diff:check=bash bin/git_diff_check.sh' \
         'git:diff:apply=bash bin/git_diff_apply.sh'
     print_status "success" "git-diff workflow enabled (npm run git:diff:export | git:diff:check | git:diff:apply)"
-    commit_offline_artifacts "$project_path"
-}
-
-commit_offline_artifacts() {
-    local project_path="$1"
-    git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
-    git -C "$project_path" add -A
-    git -C "$project_path" diff --cached --quiet && return 0
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow"
+    if git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        scaffold_commit_artifacts "$project_path" "chore: enable offline git workflow"
+    fi
 }
 
 
