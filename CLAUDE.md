@@ -260,6 +260,8 @@ BlueprintX/
 │   │   └── skeleton.meta
 │   ├── bash-cli/                   # standalone Bash CLI, git-tag versioned, bats + shellcheck
 │   │   └── skeleton.meta
+│   ├── etcher-chromeos/            # Bash CLI that flashes ChromeOS Flex or FydeOS to a USB pendrive
+│   │   └── skeleton.meta
 │   └── licenses/                   # license text files (MIT, Apache-2.0, GPL-3.0, …)
 ├── docs/                           # MkDocs source pages
 └── mkdocs.yml
