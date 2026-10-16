@@ -23,9 +23,6 @@ from utils.text import normalize_text
 from utils.typing import type_checker
 
 
-# Accepted spellings -> canonical intent (English + pt-BR). normalize_text folds case and
-# accents; resolve_intent additionally folds spaces/hyphens, so "Envio", "ENVIO", "reconciliação"
-# all map. Anything unmatched fails loud.
 _INTENT_ALIASES: dict[str, str] = {
     "send": "send",
     "envio": "send",
@@ -33,7 +30,6 @@ _INTENT_ALIASES: dict[str, str] = {
     "reconciliacao": "reconcile",
 }
 
-# Canonical intent -> orchestrator class. One entry per pipeline_<intent>.py.
 _INTENT_BUILDERS: dict[str, Callable[..., Pipeline]] = {
     "send": SendPipeline,
     "reconcile": ReconcilePipeline,
@@ -98,12 +94,6 @@ def resolve_intent(str_raw: str) -> str:
 
 
 @type_checker
-# ⚠️ PLR0913 is suppressed on the builder below, and the reason is the pattern rather
-# than the count: this is a COMPOSITION ROOT, so injecting collaborators is literally
-# its job (rules/common.md — 'Dependency injection: collaborators wired at
-# construction'). Folding them into a config object moves the same nine behind a
-# constructor and buys nothing; the wide signature is what makes every dependency of a
-# pipeline visible in one place.
 def build_pipeline(  # noqa: PLR0913
     str_intent: str,
     cls_logger: Logger | None,
@@ -164,8 +154,6 @@ def build_pipeline(  # noqa: PLR0913
 
 
 # type-checker-ok: the bare `-> NoReturn` must stay visible to mypy so it narrows the callers'
-# Optional values after the `if x is None: _abort(...)` guard; wrapping it would erase that, and
-# the runtime checker adds nothing to a one-arg string abort.
 def _abort(str_reason: str) -> NoReturn:
     """Print a startup error to stderr and abort the process (``SystemExit`` code 2).
 

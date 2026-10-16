@@ -15,9 +15,6 @@ from sqlalchemy import Engine, create_engine, inspect
 from src.model.example_entity import _DICT_DTYPES, ExampleEntity
 
 
-# --------------------------
-# Fixtures
-# --------------------------
 @pytest.fixture
 def cls_engine(tmp_path: Path) -> Iterator[Engine]:
     """Provide an engine bound to a throwaway SQLite database file.
@@ -56,9 +53,6 @@ def cls_entity(cls_engine: Engine) -> ExampleEntity:
     return cls_built
 
 
-# --------------------------
-# Tests
-# --------------------------
 def test_ensure_table_creates_the_example_table(cls_engine: Engine) -> None:
     """``ensure_table`` creates the ``example`` table in an empty database."""
     ExampleEntity(cls_engine).ensure_table()

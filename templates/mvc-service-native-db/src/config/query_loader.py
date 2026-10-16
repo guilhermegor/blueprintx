@@ -17,9 +17,6 @@ from utils.queries import load_query as _load_query_from
 from utils.typing import type_checker
 
 
-# Anchored to this module, never to the working directory — a pipeline launched from cron,
-# a VS Code task or a different drive must resolve the same queries as one launched from the
-# project root.
 _PATH_QUERIES_ROOT = Path(__file__).resolve().parent / "queries"
 
 

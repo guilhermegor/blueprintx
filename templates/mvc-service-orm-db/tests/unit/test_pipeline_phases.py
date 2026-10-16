@@ -22,9 +22,6 @@ from src.controller._pipeline import PipelineOrchestrator, WebhookNotifier
 STR_SEED_TITLE = "Hello from MVC ORM service!"
 
 
-# --------------------------
-# Helpers and fixtures
-# --------------------------
 @pytest.fixture
 def cls_engine(tmp_path: Path) -> Iterator[Engine]:
     """Provide an engine bound to a throwaway SQLite database file.
@@ -88,9 +85,6 @@ def _logged(mock_log: Mock) -> str:
     return "\n".join(call.args[1] for call in mock_log.call_args_list)
 
 
-# --------------------------
-# _log_context
-# --------------------------
 def test_log_context_logs_one_line_per_context_item(
     tmp_path: Path, cls_engine: Engine, mocker: MockerFixture
 ) -> None:
@@ -136,9 +130,6 @@ def test_log_context_reports_a_configured_webhook(
     assert "Webhook notifier: configured" in _logged(mock_log)
 
 
-# --------------------------
-# _open_engine and _read
-# --------------------------
 def test_open_engine_returns_what_the_factory_builds(tmp_path: Path, cls_engine: Engine) -> None:
     """``_open_engine`` hands back the engine the injected factory built."""
     assert _build_orchestrator(tmp_path, cls_engine)._open_engine() is cls_engine
@@ -151,9 +142,6 @@ def test_read_returns_the_seeded_row_through_the_model(tmp_path: Path, cls_engin
     assert df_report["title"].tolist() == [STR_SEED_TITLE]
 
 
-# --------------------------
-# _render and _write_summary
-# --------------------------
 def test_render_writes_the_report_at_the_resolved_path(tmp_path: Path, cls_engine: Engine) -> None:
     """``_render`` asks the resolver for ``xlsx_name`` and writes the workbook there."""
     cls_orchestrator = _build_orchestrator(tmp_path, cls_engine)
@@ -177,9 +165,6 @@ def test_write_summary_persists_the_summary_as_json(tmp_path: Path, cls_engine: 
     assert json.loads((tmp_path / "summary.json").read_text()) == dict_summary
 
 
-# --------------------------
-# The whole run
-# --------------------------
 def test_run_returns_the_summary_of_the_rows_read(tmp_path: Path, cls_engine: Engine) -> None:
     """``run()`` end to end reads the seeded row and reports it in the summary."""
     dict_summary = _build_orchestrator(tmp_path, cls_engine).run()

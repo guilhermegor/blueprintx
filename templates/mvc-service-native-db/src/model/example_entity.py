@@ -21,18 +21,8 @@ from utils.frames import from_cursor
 from utils.typing import TypeChecker
 
 
-# ``pandas`` is imported for real (not TYPE_CHECKING-only): ``ExampleEntity`` carries the
-# runtime ``TypeChecker``, whose beartype check resolves ``-> pd.DataFrame`` against this
-# module's globals at call time, and an unbound ``pd`` made ``fetch_all`` raise
-# ``BeartypeCallHintForwardRefException`` on every call (blueprintx#667). Still
-# annotation-only per .layer-policy.yaml: ``pd`` is never called, only used as a type.
-
-
-# Declare the column types on load — never trust pandas' inference (a zero-padded
-# code becomes an int, a mixed column becomes object). Adjust per entity.
 _DICT_DTYPES: dict[str, str] = {"id": "int64", "title": "str"}
 
-# A driver cannot bind a table name, so it goes into the SQL text; this proves it safe.
 RE_SQL_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
