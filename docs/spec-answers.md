@@ -83,7 +83,7 @@ are not edited by this mechanism — so when one of them gains a new prompt, upd
 one function is what keeps every spec-driven caller correct, instead of every stored
 answer string everywhere.
 
-Named-key support ships per skeleton. Today: the six Python tiers and `ts-lib`. Call
+Named-key support ships per skeleton. Today: the six Python tiers, `ts-lib` and `etcher-chromeos`. Call
 `spec_skeleton_supported <skeleton>` to check before relying on `spec_stdin_for_skeleton`.
 
 ### DDD and API tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `api-service-native-db`)
@@ -171,6 +171,17 @@ repo_visibility=public
 protect_branch=y
 human_reviewers=n
 ```
+
+### `etcher-chromeos`
+
+`bin/scaffold/etcher_chromeos.sh` reads, in this order: `default_os`, `review_bot_roster`, then
+the git remote prompt.
+
+| Key | Default | Notes |
+|---|---|---|
+| `default_os` | `chromeos-flex` | `chromeos-flex` or `fydeos`; stamped into the CLI as the `--os` default. Anything else stops the run naming the key. |
+| `review_bot_roster` | `n` | Same as the service tiers. |
+| `git_remote` | `n` | `y` adds `origin`. Creating the repo is not mapped for this tier. |
 
 ## Publish/registry keys are answer-only — they do not implement publishing
 

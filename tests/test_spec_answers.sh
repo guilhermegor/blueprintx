@@ -472,7 +472,32 @@ test_dry_run_prints_the_remote_answers_and_creates_nothing() {
     fi
 }
 
+etcher_stream() {
+    local file
+    file="$(SPEC_LANGUAGE=bash write_spec "etcher-$RANDOM" etcher-chromeos "$@")"
+    bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        spec_stdin_for_skeleton etcher-chromeos "$2"' _ "$REPO_ROOT" "$file" 2>&1 | paste -sd, -
+}
+
+test_etcher_chromeos_answer_stream_and_prompt_order() {
+    local str_def str_full str_bad str_got
+    str_def="$(etcher_stream)"
+    str_full="$(etcher_stream default_os=fydeos review_bot_roster=y git_remote=y)"
+    str_bad="$(etcher_stream default_os=windows)"
+    str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/etcher_chromeos.sh" \
+        | grep -E '^    (prompt_default_os|scaffold_prompt_review_bot_roster|prompt_git_remote_setup)( |$)' \
+        | awk '{print $1}' | paste -sd' ' -)"
+    if [ "$str_def" = "chromeos-flex,n,n" ] && [ "$str_full" = "fydeos,y,y" ] \
+        && [[ "$str_bad" == *"'default_os' must be chromeos-flex or fydeos"* ]] \
+        && [ "$str_got" = "prompt_default_os scaffold_prompt_review_bot_roster prompt_git_remote_setup" ]; then
+        pass "etcher-chromeos stream: default_os, roster, git_remote; bad default_os refused"
+    else
+        fail "etcher-chromeos stream" "default=$str_def full=$str_full bad=$str_bad main() asks: $str_got"
+    fi
+}
+
 main() {
+    test_etcher_chromeos_answer_stream_and_prompt_order
     test_ts_lib_answer_stream_order
     test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes
     test_ts_lib_remote_keys_defaults
