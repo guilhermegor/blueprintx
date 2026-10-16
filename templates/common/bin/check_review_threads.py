@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import functools
 import hashlib
 import json
 import os
@@ -114,7 +115,7 @@ _QUERY = """
 query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$number) {
-      author { login }
+      author { login __typename }
       headRefOid
       baseRefOid
       timelineItems(
@@ -133,6 +134,10 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
         nodes { author { login } commit { oid } state body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
+      allCommits: commits(first:100) {
+        pageInfo { hasNextPage }
+        nodes { commit { message author { email } signature { isValid wasSignedByGitHub } } }
+      }
       reviewThreads(first:100, after:$tc) {
         pageInfo { hasNextPage endCursor }
         nodes {
@@ -1824,12 +1829,107 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     return fn_fingerprint
 
 
+_RE_UPDATE_TYPE = re.compile(r"^\s*update-type:\s*version-update:semver-(\w+)\s*$", re.M)
+_RE_DEPENDENCY_NAME = re.compile(r"^\s*-?\s*dependency-name:", re.M)
+_SET_EXEMPT_UPDATES = frozenset({"patch", "minor"})
+_STR_DEPENDABOT_EMAIL = "+dependabot[bot]@users.noreply.github.com"
+
+
+def _is_dependabot_commit(dict_node: dict) -> bool:
+    """Return whether one commit is Dependabot's: its email AND a valid GitHub web-flow signature.
+
+    The author email alone is forgeable by any pusher; only GitHub's own signature is not.
+    """
+    dict_commit = dict_node.get("commit") or {}
+    str_email = (dict_commit.get("author") or {}).get("email") or ""
+    dict_sig = dict_commit.get("signature") or {}
+    return (
+        str_email.endswith(_STR_DEPENDABOT_EMAIL)
+        and dict_sig.get("isValid") is True
+        and dict_sig.get("wasSignedByGitHub") is True
+    )
+
+
+def _is_dependabot_bot(dict_author: dict) -> bool:
+    """Return whether a PR author node is the ``dependabot`` ``Bot`` actor."""
+    return (
+        dict_author.get("__typename") == "Bot"
+        and normalise_login(dict_author.get("login") or "") == "dependabot"
+    )
+
+
+def dependabot_pushed_head(str_repo_full: str, str_head_oid: str) -> bool:
+    """Return whether every ``pull_request`` run on the head commit was started by Dependabot.
+
+    Commit metadata can be forged by anyone with write access; the actor of the run is who
+    pushed. Unreadable, empty or truncated results fail closed.
+    """
+    if not str_head_oid:
+        return False
+    list_cmd = [
+        "gh",
+        "api",
+        f"repos/{str_repo_full}/actions/runs?head_sha={str_head_oid}&event=pull_request&per_page=100",
+    ]
+    try:
+        cls_run = subprocess.run(  # noqa: S603
+            list_cmd, capture_output=True, text=True, check=False, timeout=_INT_COMPARE_TIMEOUT_S
+        )
+        dict_out = json.loads(cls_run.stdout)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return False
+    if not isinstance(dict_out, dict):
+        return False
+    list_runs = dict_out.get("workflow_runs") or []
+    if cls_run.returncode != 0 or not list_runs or dict_out.get("total_count") != len(list_runs):
+        return False
+    return all(((d.get("actor") or {}).get("login") or "") == "dependabot[bot]" for d in list_runs)
+
+
+def dependabot_review_exempt(
+    dict_pr: dict, fn_pusher: Callable[[str], bool] | None = None
+) -> bool:
+    """Return whether a PR needs no review: a pure Dependabot patch/minor bump (fail-closed).
+
+    Parameters
+    ----------
+    dict_pr : dict
+        The fetched ``pullRequest`` node.
+    fn_pusher : Callable[[str], bool], optional
+        Maps the head oid to whether Dependabot itself pushed it; ``None`` fails closed.
+
+    Returns
+    -------
+    bool
+        ``True`` only for a ``Bot`` author ``dependabot``, pushed by Dependabot, with every
+        commit authored and signed by GitHub as Dependabot's and every ``update-type`` in the
+        commit metadata a patch or minor.
+    """
+    if not _is_dependabot_bot(dict_pr.get("author") or {}):
+        return False
+    if fn_pusher is None or not fn_pusher(dict_pr.get("headRefOid") or ""):
+        return False
+    dict_all = dict_pr.get("allCommits") or {}
+    list_nodes = dict_all.get("nodes") or []
+    if not list_nodes or (dict_all.get("pageInfo") or {}).get("hasNextPage") is not False:
+        return False
+    if not all(_is_dependabot_commit(dict_node) for dict_node in list_nodes):
+        return False
+    str_messages = "\n".join(d["commit"].get("message") or "" for d in list_nodes)
+    list_types = _RE_UPDATE_TYPE.findall(str_messages)
+    if len(list_types) != len(_RE_DEPENDENCY_NAME.findall(str_messages)):
+        return False
+    return bool(list_types) and set(list_types) <= _SET_EXEMPT_UPDATES
+
+
 def _missing_review(
     dict_pr: dict,
     str_repo_full: str,
     set_reviewers: set[str],
 ) -> tuple[str | None, str]:
     """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
+    if dependabot_review_exempt(dict_pr, functools.partial(dependabot_pushed_head, str_repo_full)):
+        return None, ""
     return check_missing_review(
         dict_pr.get("reviews", {}).get("nodes", []),
         set_reviewers,

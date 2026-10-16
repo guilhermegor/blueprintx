@@ -1,6 +1,6 @@
 # Repo policy workflows
 
-Scaffolded GitHub repos carry five server-side PR/issue policies in `.github/workflows/`
+Scaffolded GitHub repos carry six server-side PR/issue policies in `.github/workflows/`
 (blueprintx#604). Local hooks only guard one machine; these run for every contributor.
 Offline scaffolds (no GitHub remote) do not receive them.
 
@@ -11,6 +11,7 @@ Offline scaffolds (no GitHub remote) do not receive them.
 | `pr-title-conventional.yml` | Fails a PR title that is not a Conventional Commit; squash merges use it as the commit subject. |
 | `pr-body-template.yml` | Fails a PR body missing a `## ` section of `.github/PULL_REQUEST_TEMPLATE.md`. |
 | `pr-self-assign.yml` | Assigns the author when a same-repo PR is opened. |
+| `dependabot-auto-merge.yml` | Arms auto-merge for Dependabot patch/minor bumps; majors wait for a review. See [Dependabot auto-merge](dependabot-auto-merge.md). |
 
 The checks run `bin/check_pr_policy.sh`, copied into the project (never fetched at run time).
 Untrusted branch, title and body text reaches the scripts through `env:` only.
@@ -30,4 +31,4 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
 - `pr-self-assign.yml` skips fork PRs (read-only token) and needs only `pull-requests: write`.
 - The new check names are deliberately absent from each tier's `bin/required-checks.txt`, which
   allows a name only after a real PR has emitted it. Add them once they have reported.
-- Offline scaffolds drop `.github/` but keep the two `bin/` scripts (tracked in #727).
+- Offline scaffolds drop `.github/` but keep `close_linked_issues.sh` and `check_pr_policy.sh` in `bin/`, and drop `dependabot_auto_merge.sh` (tracked in #727).
