@@ -1165,6 +1165,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ventoy-usb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ventoy-usb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#etcher-chromeos" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1913,6 +1924,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../skeletons/ventoy-usb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ventoy USB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../skeletons/etcher-chromeos/" class="md-nav__link">
         
   
@@ -2167,6 +2206,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ventoy-usb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ventoy-usb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#etcher-chromeos" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2355,7 +2405,7 @@ themselves (<code>bin/scaffold/python_*.sh</code>) still read positional stdin a
 are not edited by this mechanism — so when one of them gains a new prompt, updating that
 one function is what keeps every spec-driven caller correct, instead of every stored
 answer string everywhere.</p>
-<p>Named-key support ships per skeleton. Today: the six Python tiers, <code>ts-lib</code> and <code>etcher-chromeos</code>. Call
+<p>Named-key support ships per skeleton. Today: the six Python tiers, <code>ts-lib</code>, <code>etcher-chromeos</code> and <code>ventoy-usb</code>. Call
 <code>spec_skeleton_supported &lt;skeleton&gt;</code> to check before relying on <code>spec_stdin_for_skeleton</code>.</p>
 <h3 id="ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db">DDD and API tiers (<code>ddd-service-native-db</code>, <code>ddd-service-orm-db</code>, <code>api-service-native-db</code>)<a class="headerlink" href="#ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db" title="Permanent link">&para;</a></h3>
 <p><code>api-service-native-db</code> asks the same prompts in the same order as the DDD tiers, so it shares
@@ -2567,6 +2617,67 @@ failure stops the run, names the cause and creates nothing. A missing
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>protect_branch=y
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>human_reviewers=n
 </span></code></pre></div>
+<h3 id="ventoy-usb"><code>ventoy-usb</code><a class="headerlink" href="#ventoy-usb" title="Permanent link">&para;</a></h3>
+<p><code>bin/scaffold/ventoy_usb.sh</code> reads, in this order: <code>include_windows</code>, <code>include_android</code>,
+<code>persistence_size_mb</code>, then <code>review_bot_roster</code> and the git remote block (the same one <code>ts-lib</code> uses).
+<code>tests/test_spec_answers.sh</code> pins that order and runs the whole scaffold from a spec.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>include_windows</code></td>
+<td><code>y</code></td>
+<td><code>n</code> skips the Windows ISOs and the <code>dotfiles/windows</code> installers.</td>
+</tr>
+<tr>
+<td><code>include_android</code></td>
+<td><code>y</code></td>
+<td><code>n</code> skips the Android ISOs.</td>
+</tr>
+<tr>
+<td><code>persistence_size_mb</code></td>
+<td><code>4096</code></td>
+<td>A multiple of 1024, at least 1024; anything else stops the run naming the key.</td>
+</tr>
+<tr>
+<td><code>review_bot_roster</code></td>
+<td><code>n</code></td>
+<td>Same as the service tiers.</td>
+</tr>
+<tr>
+<td><code>git_remote</code></td>
+<td><code>n</code></td>
+<td><code>y</code> adds <code>origin</code>. Alone it creates nothing on GitHub.</td>
+</tr>
+<tr>
+<td><code>create_repo</code></td>
+<td><code>n</code></td>
+<td><code>y</code> creates the repo on GitHub and pushes. Needs <code>git_remote=y</code>.</td>
+</tr>
+<tr>
+<td><code>repo_visibility</code></td>
+<td><code>private</code></td>
+<td><code>public</code> or <code>private</code>. Read only when <code>create_repo=y</code>. Defaults to <code>private</code>, as for <code>ts-lib</code>: a repo made public by omission cannot be taken back.</td>
+</tr>
+<tr>
+<td><code>kanban</code></td>
+<td><code>n</code></td>
+<td><code>y</code> also creates the linked GitHub Project.</td>
+</tr>
+<tr>
+<td><code>protect_branch</code></td>
+<td><code>n</code></td>
+<td><code>y</code> protects <code>main</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>The folder tree is the same either way: the two switches only decide what is downloaded.</p>
 <h3 id="etcher-chromeos"><code>etcher-chromeos</code><a class="headerlink" href="#etcher-chromeos" title="Permanent link">&para;</a></h3>
 <p><code>bin/scaffold/etcher_chromeos.sh</code> reads, in this order: <code>default_os</code>, <code>review_bot_roster</code>, then
 the git remote prompt.</p>
