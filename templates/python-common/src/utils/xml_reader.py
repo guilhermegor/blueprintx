@@ -43,9 +43,6 @@ import defusedxml.ElementTree as defused_et
 import pandas as pd
 
 from utils.dtypes import apply_dtypes
-
-# FileContract is imported purely for the type annotation on `cls_contract` below, never
-# constructed here — contracts are built in config/contracts/ (ruff TID251 banned-api).
 from utils.tabular_reader import (
     ContractError,
     FileContract,  # noqa: TID251
@@ -54,11 +51,6 @@ from utils.tabular_reader import (
 )
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -70,7 +62,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
@@ -152,9 +144,6 @@ def read_xml(  # noqa: PLR0913 — the public reader API; each argument is a rea
         for cls_row in list_rows
     ]
     df_raw = pd.DataFrame(list_records, columns=list(dict_column_paths))
-    # The shared contract + dtype tail (blueprintx#117): validate BEFORE typing, exactly as
-    # utils.tabular_reader.read_table does, so an XML and a tabular source cannot diverge on
-    # what "validated" or "typed" means.
     cls_report = find_contract_problems(df_raw, cls_contract)
     if cls_report.list_fatal or cls_report.list_warnings:
         raise ContractError(cls_report.list_fatal + cls_report.list_warnings)
@@ -194,7 +183,6 @@ def find_xml_row_problems(  # complexity-ok: two independent guards, missing fil
         element is found; otherwise ``list_fatal`` names the missing file or the missing
         anchor. A missing file is a **finding, not an exception** — see the note below.
     """
-    # ⚠️ Reported, NOT raised — see "Never raises includes a missing file" in utils/CLAUDE.md.
     if not path_file.exists():
         return ProblemReport(list_fatal=[f"File not found: {path_file}"], list_warnings=[])
     cls_root = defused_et.parse(str(path_file)).getroot()
@@ -417,9 +405,6 @@ def _resolve_segments(  # complexity-ok: leaf (attr vs text) vs intermediate (ba
         if cls_target is None:
             return None
         return (cls_target.text or "").strip() or None
-    # An intermediate segment tries every matching child, not just the first. A wildcard or a
-    # repeated tag name can have several candidates, and only some may complete the rest of the
-    # path. First one that resolves wins, same as the alternative-paths rule.
     for cls_child in _matching_children(cls_element, str_segment):
         str_value = _resolve_segments(cls_child, list_segments[1:])
         if str_value is not None:

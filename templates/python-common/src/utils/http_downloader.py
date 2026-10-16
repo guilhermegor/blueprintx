@@ -26,11 +26,6 @@ from urllib.parse import urlsplit
 from utils.retry import retry_with_backoff
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -45,7 +40,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import TypeChecker, type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import TypeChecker, type_checker
 
 
@@ -53,9 +48,6 @@ _TIMEOUT_SECONDS: int = 30
 _HTTP_OK_MIN: int = 200
 _HTTP_OK_MAX: int = 299
 _ALLOWED_SCHEMES: frozenset[str] = frozenset({"http", "https"})
-# Download retry/backoff: a transient network failure (timeout, dropped connection, 5xx)
-# is retried with an exponentially growing wait; a deterministic ValueError (bad URL /
-# SSRF-blocked host) is NOT retried, so a permanent error still fails fast.
 _DOWNLOAD_MAX_ATTEMPTS: int = 3
 _DOWNLOAD_BASE_WAIT_S: float = 2.0
 
@@ -102,8 +94,6 @@ class _NoRedirectHandler(request.HTTPRedirectHandler, metaclass=TypeChecker):
         raise error.HTTPError(req.full_url, code, f"redirect blocked to {newurl!r}", headers, fp)
 
 
-# A dedicated opener whose redirect handler refuses 3xx, so a download never silently
-# hops to a different (possibly internal) host than the one validated below.
 _OPENER: request.OpenerDirector = request.build_opener(_NoRedirectHandler)
 
 
@@ -143,8 +133,6 @@ def download_file(str_url: str, path_dest: Path, int_timeout_s: int = _TIMEOUT_S
     OSError
         If the download fails (network error, non-2xx status, redirect, timeout, write).
     """
-    # Three jobs, three functions. Validate the URL, fetch the bytes, write them down. They
-    # used to be one body, so a reader could not tell which failure belonged to which stage.
     _assert_url_allowed(str_url)
     path_dest.parent.mkdir(parents=True, exist_ok=True)
     path_dest.write_bytes(_fetch_bytes(str_url, int_timeout_s))

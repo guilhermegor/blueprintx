@@ -1104,6 +1104,205 @@ annotations that feed it are checker directives, so the comment gate allows them
 - **`tests/cli.bats`** is the smoke test for the entrypoint's `--version`, `--help` and
   unknown-argument cases.
 
+## Shared template notes (`templates/python-common/src` and `templates/common`)
+
+The Python utilities, the config templates and the shared shell scripts carry no comments, so
+the reasoning behind them lives here. A generated project gets the behavior, not the history.
+
+### Runtime type-checking import (every `src/` module that uses it)
+
+The runtime type-checking engine is always injected, but at a layout-dependent path:
+`utils.typing` in MVC and `chassis.typing` in DDD. Each module declares the decorator's shape
+under `TYPE_CHECKING` instead of importing it, then resolves the real engine with a
+`try/except ModuleNotFoundError` at runtime. mypy treats a `try/except` import as executed code
+and flags the redefinition once it actually checks the module, so that branch alone cannot pick
+either layout (blueprintx#360). A few modules stub the metaclass shape instead of the decorator.
+
+### Config (`src/config`)
+
+- **Startup order.** `startup.py` is an import-time singleton, so it builds its observability
+  before the first thing that can fail; otherwise a failure has nowhere to be written and the
+  process dies with no log file, no traceback and no run folder. Everything above the
+  fragility line must not be able to fail, and the read of `outputs.yaml` is captured rather
+  than raised. The shape check (an empty file loads as nothing, a non-mapping root loads as a
+  scalar or a list) sits inside that guard for the same reason. The guard catches `Exception`,
+  never `BaseException`, so the `SystemExit(2)` for an unknown `ENV` passes straight through.
+  Once the logger exists the failure goes to the log file and stderr, names the log's path and
+  exits 2, because running on fallback config would run the job against values nobody set.
+- **Env-wise config.** A plain `inputs.yaml` and `outputs.yaml` is the default; a project opts
+  into env-wise config by deleting the plain file and shipping `inputs_dev.yaml`,
+  `inputs_prd.yaml` and so on, after which `ENV` selects the file and an unknown value fails
+  loudly. Accepted `ENV` values are keyed in normalised form (lower-case, no diacritics,
+  spaces and hyphens folded to `_`) and the lookup normalises its input the same way, so
+  `PROD`, ` prd ` and `produção` all resolve.
+- **`inputs.yaml`.** One output root for logs and run artifacts; `~` expands, and absolute and
+  Windows UNC paths work. Output can be partitioned into `<base>/<YYYY-MM-DD>/`, while filenames
+  keep the compact date. A source's reference ("golden copy") override lists only the sources
+  whose reference lives elsewhere; the rest fall back to their real input through
+  `resolve_reference_spec`, so a `{dir, pattern}` is never declared twice (blueprintx#225).
+- **`outputs.yaml`** holds filename templates, with `environment`, `app_name`, `user`, `date`
+  and `time` substituted in `startup.py`.
+- **`contract_oracles.yaml`** is the registry read by `bin/check_contract_drift.py` in the
+  weekly, non-gating drift job. Each key must match a `FileContract.str_source_key`; `url` is
+  the live artifact to diff, `sep` defaults to `;` and `encoding` to `utf-8-sig`. It is empty
+  by default, the job then skips to success, and it must never gate a PR or a release.
+- **Contract construction.** Contracts are built only in `config/contracts/`; other modules
+  import the instance, and a module that needs the class for an annotation carries the
+  line-scoped TID251 exemption. `to_decimal`'s sentinel default is a value it can never produce
+  from parsable input, so "the fallback fired" differs from "the payload said zero".
+
+### Utilities (`src/utils`)
+
+- **dtypes.** pandas below 3 has no real `str` dtype: `astype("str")` turns a missing value
+  into the literal string `"nan"` and `.isna()` then reports `False`. A lockfile can ship both
+  majors, so the same declaration would produce different data on different CI legs. The
+  nullable `"string"` dtype behaves identically on 2 and 3. `tabular_reader` therefore coerces
+  with the NA-safe helper and never `astype(str)`.
+- **tabular_reader.** Stripped header names can collide when a source publishes one name both
+  padded and unpadded, which leaves two columns under one label and passes the required-column
+  check, so it fails at that point while the cause is visible. Format dispatch is a table keyed
+  by extension with Excel as the default, annotated with `Callable` because mypy otherwise
+  infers a value type that cannot be called, and only a generated project runs mypy over
+  `src/`. A missing file is reported, not raised ("Never raises includes a missing file" in
+  `utils/CLAUDE.md`), and `xml_reader` shares the same validate-then-type tail.
+- **decimals.** Truncation is the default, with commercial or regulatory rounding as a per-call
+  override. `bool` is listed explicitly because the runtime checker treats it as distinct from
+  `int` while `_parse` deliberately maps it to the default. `nan` and `inf` parse as `Decimal`,
+  so the finite check maps them to the default. A comma marks a Brazilian-formatted cell, whose
+  thousands dot is removed; without a comma the existing dot is the decimal point.
+- **br_identifiers.** The check digits use a weighted sum modulo 11, with a remainder below 2
+  giving 0. The validators are single conjunctions, so the definition sits in one place and the
+  check digits are computed only on a well-shaped value.
+- **logs.** Frame modules skipped when finding the caller are matched on the last dotted
+  component of the module name, since a prefix match failed for the nested, distributable layout
+  and misattributed the caller. Type is checked before emptiness, so a falsy non-string is not
+  described as an empty string. Reconfiguring closes the old handlers before clearing them,
+  because dropping the reference alone leaks one file descriptor per reconfiguration. The
+  parent-folder outcomes are a lookup table that doubles as the set of valid values.
+- **logs_emitter.** An unrecognised level degrades to `warning` so the emitter stays as
+  forgiving as the base class. `super()` swaps `None` for a module logger, so the original is
+  kept (blueprintx#597).
+- **http_downloader.** Transient failures (timeout, dropped connection, 5xx) retry with
+  exponential backoff, while a `ValueError` from a bad or SSRF-blocked URL does not. The opener
+  refuses 3xx so a download never hops to a host other than the one validated.
+- **retry.** Strategy dispatch is a dict whose keys are also the set of valid strategy names.
+  `RetryPolicy` validates the strategy and attempt count. Its `complexity-ok` hatches are
+  structural: a decorator factory is three nested scopes and mccabe folds each into the
+  enclosing one, and the policy checks two independent invariants that a frozen dataclass has
+  no per-field hook to split.
+- **outlook_gateway.** Outlook runs as its own process, so a relative or driveless path
+  re-anchors in its working directory, where our existence check then passes and the attachment
+  is silently dropped, or fails falsely on a file that saved. Paths are resolved first. The COM
+  helpers carry the complexity hatch because every branch is a platform guard, an optional COM
+  field, or a failure that must be logged and survived, and that non-fatal contract is the point
+  of the gateway.
+- **regime_registry and regime_window.** Ambiguity is rejected at construction, never at
+  lookup: `resolve` returns the first covering window, so overlapping windows would bind a
+  period to a schema by list order and silently read a real file against the wrong header. The
+  registry stores an immutable copy so a later append cannot slip a window past the check, and a
+  window validates its bounds but also the queried period (an open window must not report
+  month 13 as covered).
+- **raw_workspace.** `@contextmanager` must stay outermost; in the other order the return type
+  no longer matches the `Iterator[Path]` annotation the checker reads and every call raises.
+- **sidecar_metadata.** `Callable` is a runtime import because the type-checker resolves the
+  hint against the module globals at call time, even with postponed annotations.
+- **paths, dates, excel_sheet_names, provenance.** Month names are accent-folded to match
+  folders on disk. A drive prefix is two characters. A non-Windows host parses a Windows path
+  with `PureWindowsPath`. The business calendar is one shared instance and fetches nothing.
+  "History" is reserved in every Excel version and matched case-insensitively, and the control
+  and format Unicode categories (Cc, Cf) are rejected in sheet names. `provenance` hashes in
+  1 MiB blocks.
+- **Style choices.** Several bodies are expressions, dict dispatch, comprehensions or a
+  `Counter` rather than guard chains, loops with an exit in the middle or accumulators. That is
+  the house rule in `rules/python.md` and it keeps each function under the complexity ceiling
+  without changing behavior.
+
+### Shared shell scripts and hooks (`templates/common`)
+
+- **`lib/common.sh`** is the single source of truth and is byte-identical to
+  `templates/python-common/bin/lib/common.sh`, enforced in CI. Offline scaffolds copy the
+  `common/` version over the other, so both must carry `resolve_default_branch` and
+  `_read_env_var`. It is idempotent through `_BX_COMMON_LOADED`, refuses direct execution, and
+  tees to `LOG_FILE` when that is set. `print_status` reports an unknown level on stderr: 35
+  calls were spelled `warn`, and each printed an unmarked line that looked like neutral output.
+  `_read_env_var` does not strip an inline `#`, so passwords containing `#` or `$` survive.
+  `ensure_dir` checks for existence first because `mkdir -p` over an existing mapped or UNC
+  Windows path can fail with "Permission denied".
+- **Offline-only scripts** (`new_branch.sh`, `git_merge_to_main.sh`, `protect_branch.sh`, the
+  `git_diff_*` helpers and `poe_tasks.offline.toml`) ship only when a project is scaffolded
+  without a GitHub remote; online projects use GitHub flow and server-side protection.
+  `poe_tasks.offline.toml` is wired in by `add_poe_include` rather than declared, because poe
+  warns on every run about a missing include. `protect_branch.sh` is a guard rail, not a
+  security control (`--no-verify` bypasses it). `git_merge_to_main.sh` writes an append-only
+  checkpoints file because without a remote nothing answers "what was the target before this
+  merge"; it is anchored to the repo root (a run from `src/` would create a second, invisible
+  ledger), snapshots before appending so a rejected commit can be undone, and uses
+  `--no-verify` so the protect hook does not block the merge commit.
+- **`commit.sh`** retries a commit once, because auto-fixing hooks rewrite staged files and
+  abort the first attempt, leaving HEAD unmoved. It re-stages and then verifies HEAD advanced.
+- **`export_repo_content.sh`** honors `.gitignore` inside a work tree and otherwise walks and
+  prunes heavy directories. Real `.env` files, logs and the corporate CA are always skipped,
+  and so are binaries and the output file.
+- **`ship.sh`** archives the committed tree of the default branch, not the working tree, then
+  prunes heavy or secret paths committed by mistake. `git_diffs/` is bundled in because in
+  offline mode it is the branch-exchange payload. The staging directory is removed even if
+  zipping fails, with the path expanded into the trap at definition time.
+- **`close_linked_issues.sh`** (blueprintx#604) is strict because a wrong closure is worse than
+  a missed one: a number is taken only from a leading `<type>/<N>-<slug>` branch or from
+  `Closes|Fixes|Resolves #N`, with a date-like prefix (`2026-10`) not read as an issue, negated
+  uses skipped, fenced code, quotes, HTML comments and inline code ignored, and bot branches
+  skipped because their bodies quote another repository's notes. The workflow cannot close
+  anything from a fork PR (read-only token) or a PR merged into a non-default branch, and it
+  passes untrusted text through `env`, never interpolated into the script.
+- **`check_review_threads.py`** is the shared review-thread gate. Its design points:
+  - *Roster.* `posts:` decides who can satisfy the missing-review check: a `status` member posts
+    no answers and cannot review, and without the split `github-actions[bot]` would satisfy a
+    gate meant to prove a real reviewer looked. A roster deleted or emptied inside the PR it
+    polices fails loudly, since either is a one-line way to switch the gate off.
+  - *Logins.* REST reports `coderabbitai[bot]` while GraphQL returns `coderabbitai`; both sides
+    are normalised, because a literal comparison never matched and every reviewer comment
+    counted as an answer.
+  - *Reviews versus threads.* A reviewer that found nothing and one that never ran both produce
+    zero threads, so the gate also reads submitted reviews, filtered to submitted states to
+    exclude drafts (#216), and pinned to a commit, because a review is attached to the code it
+    was written against and a newer push leaves it stale (#220). Both connections paginate; a
+    silent cap on threads would print "all answered" over unfinished conversations.
+  - *Notices.* A reviewer's issue comment is shown but never trusted as a verdict: the standing
+    "does not re-review already reviewed commits" footnote is appended to every outcome. Only
+    phrases CodeRabbit emits solely when it reviewed and had nothing to attach count as
+    completion (#328), and rate-limit, file-cap and failure notices keep failing. `@coderabbitai
+    full review` is the command that clears an "already reviewed" refusal.
+  - *Quotas.* The review quota resets in hours and the chat quota in minutes, and posting a
+    review request spends the chat quota (blueprintx#364), so the declared wait is parsed in
+    seconds. A file-count cap ("N files exceed the limit of M") is a structural third state with
+    its own remedy, splitting the PR, and the pattern requires the whole sentence so the
+    unrelated "Bot user detected" skip is not misread.
+  - *Carry-forward.* A review carries over a merge when the compare API shows an identical
+    patch, within bounded calls (1 head plus 5, 20 s each, pinned by a test). A truncated file
+    list fails closed, a dismissed review is never revived, and any failure to compute the patch
+    means the PR is re-reviewed.
+  - *Findings in a review body* (#630) are read by structure, not prose: leading severity
+    markers, printed counts trusted only for the two named authors, quoted material ignored, and
+    answers recognised by their opening structure at any length.
+  - *Resolution.* The reply half and the resolve half are both asserted
+    (`REVIEW_THREADS_REQUIRE_RESOLVED=1`, #196). An outdated thread counts, because the merge
+    setting drops it and an author can manufacture that state by rewriting the commented lines.
+    The cost is that a resolve leaves the check red until it is re-run by hand (#263).
+  - *Misc.* `--json` exists because grepping the prose misreported 27 PRs (#364). The reply
+    length floor of 100 characters sits at or below the shortest real verdict measured and
+    excludes "done" and "fixed". Stdout is reconfigured so the status glyphs do not crash a
+    Windows cp1252 console, which would block every commit through the always-run hook.
+- **Config files.** `.editorconfig` pins tabs for Make, shell and SQL, 2 spaces for
+  TypeScript, JavaScript, HTML, CSS and YAML (the spec forbids tabs), 4 for Python, and keeps
+  Markdown trailing whitespace because it can be a hard line break. `.gitattributes` forces LF
+  on shell scripts so a CRLF checkout does not fail with `bash\r`, and collapses generated
+  files in diffs (see `docs/graphite-config.md`).
+- **`docs_version/docs.yaml`** builds MkDocs with `--strict` on every push and PR and does not
+  deploy: the release workflow deploys with `mike` after the tag, so the site only reflects
+  shipped versions. Pages is set once to deploy from `gh-pages` (`poe enable_pages`). The build
+  fetches full history so `cz changelog` sees the tags, and the changelog is never committed by
+  CI.
+
 ## Repository scripts under `bin/`
 
 The scripts under `bin/` carry no comments, so the reasoning lives here. Per-script rules,

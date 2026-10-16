@@ -18,8 +18,6 @@ from utils.logs import CreateLog, LogLevel
 from utils.retry import LogEmitter
 
 
-# The levels the rich printer accepts; an unrecognised level degrades to ``warning`` so the
-# emitter stays as forgiving as the bare base :class:`LogEmitter` (never raises on odd input).
 _VALID_LOG_LEVELS: frozenset[str] = frozenset({"info", "warning", "error", "critical"})
 
 
@@ -40,7 +38,6 @@ class LogsEmitter(LogEmitter):
             The standard-library logger to route to. When ``None`` (the default) the rich line
             is printed to the screen instead.
         """
-        # super() swaps None for a module logger; keep the original (blueprintx#597).
         self._cls_logger_or_none = cls_logger
         super().__init__(cls_logger)
         self._cls_create_log = CreateLog()

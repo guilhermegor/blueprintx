@@ -21,8 +21,8 @@ gate did not read until P0.
     writes into the generated `pyproject.toml` were removed (they are output, so they stay), and
     blank lines inside generated Python were collapsed. A line that starts inside a quoted
     string or a heredoc is now kept, and blank lines are dropped only outside those regions.
-- [~] chore/comment-strip-slice4-304 4 TypeScript and Bash families: `ts-common`, `ts-lib`, `react-spa-webpack`, `bash-cli` (49 files, 891 lines)
-- [ ] 5 `templates/python-common/src` and `templates/common` (55 files, 1027 lines)
+- [x] 4 (PR #814) TypeScript and Bash families: `ts-common`, `ts-lib`, `react-spa-webpack`, `bash-cli` (49 files, 891 lines)
+- [~] chore/comment-strip-slice5-304 5 `templates/python-common/src` and `templates/common` (55 files, 1027 lines)
 - [ ] 6 Python skeletons: `ddd-*`, `mvc-*`, `api-*`, `lib-minimal` (78 files, 1133 lines)
 - [ ] 7 `templates/python-common` config and workflows (35 files, 1401 lines)
 - [ ] 8 `templates/python-common/tests` (55 files, 931 lines)

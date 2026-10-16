@@ -47,11 +47,6 @@ from utils.dtypes import apply_dtypes
 from utils.text import safe_str
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from typing import TypeVar
 
@@ -65,7 +60,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import TypeChecker, type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import TypeChecker, type_checker
 
 
@@ -326,8 +321,6 @@ def find_file_problems(
         ``list_fatal`` and ``list_warnings``, both empty when the file is sound. A missing
         file is a **finding, not an exception** — see the note below.
     """
-    # ⚠️ Checked HERE, not left to the raising `_read_raw` — see "Never raises includes a
-    # missing file" in utils/CLAUDE.md.
     if not path_file.exists():
         return ProblemReport(list_fatal=[f"File not found: {path_file}"], list_warnings=[])
     df_raw = _read_raw(path_file, str_sheet, "str", str_csv_sep)
@@ -404,9 +397,6 @@ def _cnpj_column_problem(  # complexity-ok: two acceptance rules, empty-column o
     """
     if series_col.empty:
         return None
-    # Coerce with the NA-safe string helper rather than astype-to-str. Below pandas 3 the
-    # latter renders a missing value as the literal nan, and that string then fails
-    # validation for entirely the wrong reason.
     series_valid = series_col.map(lambda obj_cell: is_valid_cnpj(unmask_cnpj(safe_str(obj_cell))))
     if bool(series_valid.any()):
         return None
@@ -459,8 +449,6 @@ def decode_positional_payload(  # complexity-ok: two rejection rules, never inve
         )
 
     int_widest = max((len(seq_row) for seq_row in list_rows), default=int_declared)
-    # The first surplus position holding a real value, if any. A comprehension rather than a
-    # loop with a raise inside it, so the search and the rejection read as separate steps.
     list_populated_surplus = [
         int_pos
         for int_pos in range(int_declared, int_widest)
@@ -518,8 +506,6 @@ def resolve_sheet_name(  # complexity-ok: three documented resolution outcomes, 
     if len(list_sheets) == 1:
         return list_sheets[0]
     dict_by_lower = {s.casefold(): s for s in list_sheets}
-    # First known name present, in the caller's priority order — stated as a search rather
-    # than a loop that exits from the middle.
     str_match = next(
         (
             dict_by_lower[str_known.casefold()]
@@ -620,12 +606,6 @@ def _read_raw(
         int_csv_quoting,
     )
     list_normalised = [str(col).strip() for col in df_raw.columns]
-    # Stripping can COLLIDE. When a source publishes one name twice — once padded with
-    # spaces and once not — trimming leaves two columns under a single label. The
-    # required-column check still passes, since the label IS present, while the identifier
-    # check and the dtype step then work on an ambiguous schema. Fail here, while the cause
-    # is still visible; one line further down the duplicate can no longer be told apart from
-    # a source that genuinely repeats a label.
     list_duplicates = sorted({c for c in list_normalised if list_normalised.count(c) > 1})
     if list_duplicates:
         raise ContractError(
@@ -686,10 +666,6 @@ def _read_raw_dispatch(
     """
     if not path_file.exists():
         raise FileNotFoundError(f"File not found: {path_file}")
-    # Dict dispatch on the extension rather than an if-chain, which is the house rule for
-    # branching on a VALUE. Adding a format is adding a key, and each format's reader is a
-    # named function that can be read, tested and changed on its own. Excel is the DEFAULT
-    # rather than a key, because it covers several extensions.
     fn_reader = _DICT_RAW_READERS.get(path_file.suffix.lower(), _read_excel_raw)
     return fn_reader(
         path_file,
@@ -783,8 +759,6 @@ def _read_json_raw(
     obj_json = json.loads(
         path_file.read_text(encoding=str_encoding), parse_float=str, parse_int=str
     )
-    # A payload carrying BOTH a header and positional rows is unambiguous, so decode it
-    # rather than handing pandas a dict it would read as two unrelated columns.
     bool_positional = isinstance(obj_json, dict) and {"columns", "rows"} <= set(obj_json)
     df_json = (
         decode_positional_payload(obj_json["columns"], obj_json["rows"])
@@ -830,11 +804,6 @@ def _read_excel_raw(
     return pd.read_excel(path_file, sheet_name=sheet_excel, dtype=str_dtype, header=int_header_row)
 
 
-# The dispatch table IS the format policy: one entry per extension with a dedicated reader.
-# Anything not listed is read as Excel, which covers .xlsx/.xls/.xlsm without repeating them.
-# ⚠️ Annotated, not inferred. Without the explicit Callable type mypy infers the value type
-# from the two entries and then refuses the dispatched call — "Cannot call function of unknown
-# type" — which only shows up in a GENERATED project, since that is where mypy runs over src/.
 _DICT_RAW_READERS: dict[str, Callable[..., pd.DataFrame]] = {
     ".csv": _read_csv_raw,
     ".json": _read_json_raw,

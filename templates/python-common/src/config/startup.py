@@ -21,11 +21,6 @@ from utils.logs import CreateLog
 from utils.paths import is_windows_path
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -37,7 +32,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
@@ -57,29 +52,12 @@ _str_date = _dt_now.strftime("%Y%m%d")
 _str_date_folder = _dt_now.strftime("%Y-%m-%d")
 _str_time = _dt_now.strftime("%H%M%S")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# FRAGILITY GRADIENT — everything ABOVE this line must not be able to fail;
-# everything BELOW it may. An import-time singleton module has to build its
-# OBSERVABILITY before the first thing that can break, or a failure has nowhere
-# to be written: the process dies with no log file, no traceback and no run
-# folder, and the operator has nothing at all to read.
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Filename templates used only when outputs.yaml could not be read — enough to give the
-# failure a place to be recorded. They are never the normal path.
 _DICT_FALLBACK_OUTPUTS: dict[str, str] = {
     "log_name": "{app_name}_{environment}_{date}_{time}.log",
     "json_name": "{app_name}_{environment}_{date}_{time}.json",
     "txt_name": "{app_name}_{environment}_{date}_{time}.txt",
 }
 
-# Prefer a single plain inputs.yaml/outputs.yaml (default); a project opts into env-wise
-# config by deleting the plain file and shipping inputs_dev.yaml/inputs_prd.yaml (etc.),
-# after which ENV selects the file and an unknown ENV fails loud (see env_config).
-#
-# The read is FAILABLE (missing file, unreadable file, unknown ENV), so its failure is
-# captured rather than raised: the logger below is built either way, and the error is
-# reported through it at the end of this module.
 _str_config_error: str | None = None
 YAML_OUTPUTS: dict = {}
 YAML_INPUTS: dict = {}
@@ -91,33 +69,20 @@ try:
     YAML_INPUTS = yaml.safe_load(
         resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
     )
-    # Validate the SHAPE here, inside the guard. An empty YAML file loads as nothing at all,
-    # and a non-mapping root loads as a scalar or as a sequence. Each of those reaches the
-    # output directory resolver further down and raises there — that is, BELOW this block and
-    # before the logger exists, which is exactly the failure the fragility gradient was
-    # introduced to remove. Checking the type here routes a malformed config to the same
-    # reported, exit-2 path as a missing one.
     for str_label, dict_loaded in (("outputs", YAML_OUTPUTS), ("inputs", YAML_INPUTS)):
         if not isinstance(dict_loaded, dict):
             raise TypeError(
                 f"{str_label} config must be a YAML mapping, got {type(dict_loaded).__name__}"
             )
-    # The three filename templates are read unconditionally below; a non-string here would
-    # fail while being formatted, for the same reason, one line later.
     for str_key in ("log_name", "json_name", "txt_name"):
         if not isinstance(YAML_OUTPUTS.get(str_key), str):
             raise TypeError(f"outputs config must define {str_key!r} as a string")
-# Exception, never BaseException: the config helpers raise SystemExit(2) for an unknown ENV
-# and that must pass straight through rather than being reported as a config read failure.
 except Exception as cls_exc:  # noqa: BLE001
     _str_config_error = f"{type(cls_exc).__name__}: {cls_exc}"
     YAML_OUTPUTS = dict(_DICT_FALLBACK_OUTPUTS)
     YAML_INPUTS = {}
 
 
-# Single output root (inputs.yaml); optionally partitioned into <root>/<YYYY-MM-DD>/.
-# The partition uses the human-readable _str_date_folder; filenames keep the compact
-# _str_date (see output_path).
 @type_checker
 def _resolve_out_dir() -> Path:
     r"""Resolve the run's output directory with a temp-dir fallback.
@@ -136,9 +101,6 @@ def _resolve_out_dir() -> Path:
     bool_dated = bool(YAML_INPUTS.get("daily_infos_dated", False))
     path_temp_root = Path(tempfile.gettempdir()) / (APP_NAME or "app")
 
-    # The root is a value CHOICE, so it reads as one. A Windows-shaped path is unreachable
-    # off Windows, and the temp root stands in for it. What follows below stays a real
-    # handler, because that one is error handling rather than a choice.
     bool_unreachable = is_windows_path(str_base) and os.name != "nt"
     path_root = path_temp_root if bool_unreachable else Path(str_base).expanduser()
 
@@ -203,7 +165,6 @@ def resolve_reference_spec(dict_inputs: dict, str_source: str) -> dict | None:
     """
     dict_source = dict_inputs.get(str_source)
     dict_real = dict_source if isinstance(dict_source, dict) else None
-    # Both levels are isinstance-checked, never defaulted; see config/CLAUDE.md.
     dict_overrides = dict_inputs.get("reference_files")
     if not isinstance(dict_overrides, dict):
         return dict_real
@@ -218,10 +179,6 @@ PATH_TXT: Path = output_path("txt_name")
 DIR_PARENT: str = str(_out_dir)
 LOGGER = cls_create_log.basic_conf(complete_path=str(PATH_LOG), basic_level="info")
 
-# The logger now exists, so a failure from the block above finally has somewhere to go.
-# Report it to BOTH the log file and stderr, name the log's path (the operator has to be
-# told where to look), and exit 2 — continuing on fallback config would run the job against
-# values nobody configured.
 if _str_config_error is not None:
     LOGGER.critical("Configuration could not be read: %s", _str_config_error)
     LOGGER.critical("Falling back to default output names; the run is aborted.")

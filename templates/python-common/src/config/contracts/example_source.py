@@ -17,7 +17,6 @@ from __future__ import annotations
 from utils.tabular_reader import FileContract
 
 
-# str_name (human label), str_source_key (routes notifications), tuple_required, tuple_cnpj_cols.
 EXAMPLE_SOURCE = FileContract(
     "Example Source",
     "example_source",
