@@ -37,12 +37,18 @@ readable index. The CLI therefore takes a file you downloaded plus its published
 `dd conv=fsync status=progress`. `make tools_etcher` fetches the GUI, verified against
 Etcher's `SHA256SUMS.Linux.x64.txt`, for hand use.
 
-**Tool checksums.** No version is pinned. `bin/fetch_tools.sh` resolves the latest
-GitHub release of bmaptool at run time and verifies the `.tar.gz` asset against the
-`digest` field GitHub records for it. bmaptool's releases currently carry no assets (so no
-digest), and the fetch then fails with a message; install bmaptool from your distro or
-use `--tool dd`. The Etcher checksum comes from the same release as the file, so it
-detects corruption, not a compromised release.
+**Trust model for tools.** Whatever runs as root against a block device must be
+publisher-attested, so `make tools` never downloads bmaptool by default. It uses
+`command -v bmaptool` (a distro-signed package: `apt install bmap-tools`,
+`dnf install bmap-tools`) and otherwise leaves flashing to plain `dd`. Downloading from
+GitHub is opt-in only (`make tools ALLOW_UNSIGNED_DOWNLOAD=1` or `--allow-github-digest`),
+prints a warning, and is protected only by a same-origin digest: GitHub's `digest` field for
+the bmaptool asset, or Etcher's `SHA256SUMS.Linux.x64.txt`. Both detect corruption, not a
+tampered release. Nothing is pinned: the latest release is resolved at run time, the tag
+must match `^v?[0-9]+(\.[0-9]+)*$` and asset names `^[A-Za-z0-9._-]+$` before a URL is built,
+each run extracts into a fresh temporary directory, the checksum line must match the
+filename exactly, and `curl` is restricted to HTTPS with TLS 1.2 or later. bmaptool's
+releases currently carry no assets, so the opt-in fetch fails with a message.
 
 ## Docker
 

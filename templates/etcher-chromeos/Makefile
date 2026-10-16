@@ -29,8 +29,8 @@ repo_rules_verify:
 	@bash bin/enable_repo_rules.sh verify
 
 help:
-	@echo "make tools              - fetch bmaptool into .tools/ (checksum-verified)"
-	@echo "make tools_etcher       - fetch the balenaEtcher GUI into .tools/ (optional)"
+	@echo "make tools              - use the distro bmaptool (add ALLOW_UNSIGNED_DOWNLOAD=1 to download one)"
+	@echo "make tools_etcher       - balenaEtcher GUI into .tools/ (needs ALLOW_UNSIGNED_DOWNLOAD=1)"
 	@echo "make lint               - shellcheck + shfmt"
 	@echo "make test               - bats tests/ (network and devices stubbed)"
 	@echo "make install            - install to /usr/local/bin/${PROJECT_NAME} (stamps the git-tag version)"

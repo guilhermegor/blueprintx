@@ -9,7 +9,7 @@ The image defines the partition layout; this tool selects, verifies and flashes.
 ## Usage
 
 ```bash
-make tools                                  # bmaptool into .tools/ (checksum-verified)
+make tools                                  # uses the distro bmaptool, else tells you how to install it
 bin/${PROJECT_NAME} flash                   # asks for the pendrive path first
 bin/${PROJECT_NAME} flash --target /dev/sdb --os chromeos-flex --dry-run
 bin/${PROJECT_NAME} flash --target /dev/sdb --os fydeos \
@@ -25,10 +25,13 @@ bin/${PROJECT_NAME} flash --target /dev/sdb --os fydeos \
 - **FydeOS.** The download page publishes a SHA-256 per variant but no scriptable,
   unauthenticated "latest" URL, so you download the file and pass its published hash.
   The hash is checked against the archive before it is unpacked.
-- **Flashing.** `bmaptool` when available (`make tools`), else `dd conv=fsync
-  status=progress`. balenaEtcher has no maintained CLI; `make tools_etcher` fetches the
-  GUI into `.tools/` if you prefer it. Every flash shows the device's model, size and
-  partitions and requires typing the device name. `--dry-run` writes nothing.
+- **Flashing.** The distro's `bmaptool` when installed (`apt install bmap-tools`), else
+  `dd conv=fsync status=progress`, which needs no download. `make tools` never downloads.
+  `make tools ALLOW_UNSIGNED_DOWNLOAD=1` fetches the latest GitHub bmaptool release and
+  `make tools_etcher ALLOW_UNSIGNED_DOWNLOAD=1` the balenaEtcher GUI (no maintained CLI).
+  Both are verified only against a digest served by the same release, not publisher-attested.
+  Every flash shows the device's model, size and partitions and requires typing the device
+  name. `--dry-run` writes nothing.
 - **Docker.** The `Dockerfile` is for tests and resolvers only. It cannot flash: that would
   need `--privileged` and would lose the removable-device check.
 

@@ -45,12 +45,14 @@ STUB
     printf '{"tag_name": "v9.9.9", "assets": []}' >"$FIX/release.json"
     cat >"$STUBS/curl" <<'STUB'
 #!/usr/bin/env bash
+echo "curl $*" >>"$STUB_CURL_LOG"
 while [ "$#" -gt 0 ]; do
     case "$1" in -o) str_out="$2" && shift ;; esac
     str_url="$1"
     shift
 done
 case "$str_url" in
+    *SHA256SUMS*) cp "$STUB_FIX/sums.txt" "$str_out" ;;
     *latest*) cp "$STUB_FIX/release.json" "$str_out" ;;
     *.json) cp "$STUB_FIX/manifest.json" "$str_out" ;;
     *.zip) cp "$STUB_FIX/image.zip" "$str_out" ;;
@@ -58,6 +60,8 @@ case "$str_url" in
 esac
 STUB
     chmod +x "$STUBS"/*
+    export STUB_CURL_LOG="$BATS_TEST_TMPDIR/curl.log"
+    : >"$STUB_CURL_LOG"
     export STUB_FIX="$FIX" CROS_SUDO="" PATH="$STUBS:$PATH"
     export CROS_FLEX_MANIFEST_URL="https://dl.example.test/recovery2.json"
     export CROS_DOWNLOAD_DIR="$BATS_TEST_TMPDIR/dl"
@@ -176,10 +180,57 @@ STUB
     grep -q "if=$FIX/fyde.img of=$DEV" "$STUB_LOG"
 }
 
-@test "bmaptool is refused when the latest release has no digest to verify against" {
-    CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" CROS_BMAPTOOL_API="https://api.example.test/releases/latest" \
+@test "tools: etcher is refused without the explicit opt-in" {
+    CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" run "$BATS_TEST_DIRNAME/../bin/fetch_tools.sh" etcher
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ALLOW_UNSIGNED_DOWNLOAD=1"* ]]
+    [ ! -s "$STUB_CURL_LOG" ]
+}
+
+@test "tools: bmaptool is never downloaded by default" {
+    CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" run "$BATS_TEST_DIRNAME/../bin/fetch_tools.sh"
+    [ "$status" -eq 0 ]
+    [ ! -s "$STUB_CURL_LOG" ]
+    [ ! -e "$BATS_TEST_TMPDIR/tools/bin/bmaptool" ]
+}
+
+@test "tools: bmaptool opt-in refuses a release with no digest to verify against" {
+    command -v bmaptool >/dev/null && skip "bmaptool is installed"
+    ALLOW_UNSIGNED_DOWNLOAD=1 CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" \
+        CROS_BMAPTOOL_API="https://api.example.test/releases/latest" \
         run "$BATS_TEST_DIRNAME/../bin/fetch_tools.sh" bmaptool
     [ "$status" -ne 0 ]
-    [[ "$output" == *"no .tar.gz asset with a GitHub sha256 digest"* ]]
+    [[ "$output" == *"no usable .tar.gz asset"* ]]
     [ ! -e "$BATS_TEST_TMPDIR/tools/bin/bmaptool" ]
+}
+
+@test "tools: a malformed tag_name is rejected before any URL is built" {
+    printf '{"tag_name": "v1.0/../x", "assets": []}' >"$FIX/release.json"
+    ALLOW_UNSIGNED_DOWNLOAD=1 CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" \
+        CROS_ETCHER_API="https://api.example.test/releases/latest" \
+        run "$BATS_TEST_DIRNAME/../bin/fetch_tools.sh" etcher
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unexpected balenaEtcher tag"* ]]
+    [ "$(wc -l <"$STUB_CURL_LOG")" -eq 1 ]
+}
+
+@test "tools: only an exact SHA256SUMS line is accepted" {
+    printf '{"tag_name": "v2.0.0", "assets": []}' >"$FIX/release.json"
+    printf '%s  x-balenaEtcher-linux-x64-2.0.0.zip\n' "$(sha256sum "$FIX/image.zip" | cut -d' ' -f1)" >"$FIX/sums.txt"
+    ALLOW_UNSIGNED_DOWNLOAD=1 CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" \
+        CROS_ETCHER_API="https://api.example.test/releases/latest" \
+        run "$BATS_TEST_DIRNAME/../bin/fetch_tools.sh" etcher
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"no exact SHA256SUMS line"* ]]
+}
+
+@test "tools: etcher installs with the opt-in and an exact matching line" {
+    printf '{"tag_name": "v2.0.0", "assets": []}' >"$FIX/release.json"
+    printf '%s  balenaEtcher-linux-x64-2.0.0.zip\n' "$(sha256sum "$FIX/image.zip" | cut -d' ' -f1)" >"$FIX/sums.txt"
+    ALLOW_UNSIGNED_DOWNLOAD=1 CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" \
+        CROS_ETCHER_API="https://api.example.test/releases/latest" \
+        run "$BATS_TEST_DIRNAME/../bin/fetch_tools.sh" etcher
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"same-origin digest"* ]]
+    [ -f "$BATS_TEST_TMPDIR/tools/etcher/flex.bin" ]
 }
