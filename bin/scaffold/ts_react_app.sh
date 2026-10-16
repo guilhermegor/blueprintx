@@ -16,7 +16,6 @@ LICENSE_CHOICE="${LICENSE_CHOICE:-MIT}"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SKELETON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/react-spa-webpack"
 COMMON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/ts-common"
-# Language-agnostic assets shared by every skeleton (CODEOWNERS, PR template)
 SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
@@ -26,9 +25,6 @@ validate_inputs() {
     if [ -z "$PROJECT_ROOT" ] || [ -z "$PROJECT_NAME" ]; then
         exit_error "Usage: $0 <project_root_dir> <project_name>"
     fi
-    # The prompt validates too, but the scaffolds are also callable DIRECTLY
-    # (bin/ci/scaffold_lint_test.sh does exactly that), so a guard living only in
-    # prompt_project_name protects one of the two entry points. blueprintx#113.
     if ! is_valid_project_name "$PROJECT_NAME"; then
         exit_error "Invalid project name '$PROJECT_NAME'. Use a letter or underscore first, then letters, digits, '-' or '_'."
     fi
@@ -79,9 +75,6 @@ prompt_state_management() {
 }
 
 prompt_deploy_target() {
-    # ⚠️ ONE target, never both. Each workflow triggers on `push: branches: [main]`, so
-    # shipping both deploys twice on every merge, to two URLs, with nothing saying which is
-    # canonical. The choice is made here so only one workflow ever reaches the project.
     echo ""
     print_status "info" "Deploy target for the built SPA:"
     echo "  1) GitHub Pages  (no extra secrets; served under /<repo-name>/)"
@@ -92,8 +85,6 @@ prompt_deploy_target() {
     case "$DEPLOY_TARGET_CHOICE" in
         1) print_status "config" "Deploy target: GitHub Pages" ;;
         2) print_status "config" "Deploy target: Vercel"
-           # Stated at scaffold time, not in a doc read after the first red push: the
-           # Vercel project must already EXIST for those IDs to exist at all.
            print_status "warning" "Create the Vercel project first, then add the three repository secrets."
            print_status "info" "  gh secret set VERCEL_TOKEN; gh secret set VERCEL_ORG_ID; gh secret set VERCEL_PROJECT_ID" ;;
         3) print_status "config" "Deploy target: none" ;;
@@ -170,8 +161,6 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/webpack.config.js" "$project_path/webpack.config.js"
     cp "$SKELETON_TEMPLATE_ROOT/lint-staged.config.js" "$project_path/lint-staged.config.js"
 
-    # Ship both a working .env (git-ignored) and the committed .env.example
-    # template, so the project runs out of the box yet documents its vars.
     cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env"
     cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env.example"
     cp "$SKELETON_TEMPLATE_ROOT/docs/configuration.md" "$project_path/docs/configuration.md"
@@ -179,8 +168,6 @@ copy_skeleton_files() {
     print_status "success" "Skeleton files copied"
 }
 
-# Optional Docker setup (multi-stage build → nginx). Copied only when the user
-# opts in via prompt_docker; static-hosting users (GitHub Pages) skip it.
 apply_docker_files() {
     local project_path="$1"
 
@@ -195,14 +182,6 @@ apply_docker_files() {
     print_status "success" "Docker files added — build with: docker build --secret id=env,src=.env -t ${PROJECT_NAME} ."
 }
 
-# patch_package_json is defined in bin/lib/scaffold_package_json.sh (#397) — shared with
-# ts_lib.sh, which needs the exact same argv-not-source-interpolated write.
-
-# Optional plain-JavaScript delivery copy (course submission, client handoff,
-# a consumer with no TS toolchain). Copied only when prompt_js_copy_delivery
-# was accepted. Depends on package.json, .gitignore and eslint.config.js
-# already existing in the project (copy_skeleton_files + copy_common_templates
-# must have run first).
 apply_js_copy_delivery() {
     local project_path="$1"
     local js_copy_root="$SKELETON_TEMPLATE_ROOT/optional/js-copy"
@@ -221,16 +200,10 @@ apply_js_copy_delivery() {
         'js-copy:verify=node scripts/verify-js-copy.mjs' \
         'js-copy=npm run js-copy:build && npm run js-copy:verify'
 
-    # The generated js-copy/ tree is a build artifact — never committed —
-    # and must be excluded from lint, or every finding is reported twice
-    # (once on src/, once on a copy nobody can edit).
     printf '\n# js-copy delivery script output (npm run js-copy:build)\n/js-copy/\n' \
         >> "$project_path/.gitignore"
     sed_inplace "s#'\*\*/dist/\*\*',#'**/dist/**',\n      '**/js-copy/**',#" \
         "$project_path/eslint.config.js"
-    # scripts/*.mjs are Node CLI tooling, not app code — they fall outside every
-    # `files:` block that grants browser/node globals, so process/console read
-    # as undefined without this.
     sed_inplace "s#  // 9. Prettier config#  // 9. scripts/ (js-copy delivery tooling) — Node CLI, not app code\n  {\n    files: ['scripts/**/*.mjs'],\n    languageOptions: { globals: { ...globals.node } },\n  },\n\n  // 10. Prettier config#" \
         "$project_path/eslint.config.js"
 
@@ -309,9 +282,6 @@ apply_package_variants() {
     print_status "success" "Package variants applied"
 }
 
-# Ships exactly ONE deploy workflow, per prompt_deploy_target. The workflows live under
-# optional/deploy/ rather than .github/workflows/ precisely so the `.github` overlay above
-# cannot copy both unconditionally.
 copy_deploy_target() {
     local project_path="$1"
     local deploy_root="$SKELETON_TEMPLATE_ROOT/optional/deploy"
@@ -320,36 +290,18 @@ copy_deploy_target() {
         1) cp "$deploy_root/pages/deploy-spa.yml" "$project_path/.github/workflows/deploy-spa.yml"
            print_status "success" "GitHub Pages deploy workflow added" ;;
         2) cp "$deploy_root/vercel/deploy-vercel.yml" "$project_path/.github/workflows/deploy-vercel.yml"
-           # vercel.json is what `vercel build` reads for the SPA rewrites, so it belongs at
-           # the project root, not in .github/.
            cp "$deploy_root/vercel/vercel.json" "$project_path/vercel.json"
            print_status "success" "Vercel deploy workflow + vercel.json added" ;;
         *) print_status "info" "No deploy workflow added" ;;
     esac
 }
 
-# Shared TS source (blueprintx#436) — mirrors templates/python-common/src/utils/.
-# Lands under src/shared/, this skeleton's existing home for cross-capability code
-# (the eslint-plugin-boundaries "shared" element type already covers shared/**).
 copy_shared_ts_source() {
     local project_path="$1"
     mkdir -p "$project_path/src/shared/utils"
     cp -r "$COMMON_TEMPLATE_ROOT/src/." "$project_path/src/shared"
 }
 
-# OTLP log export (opt-in, blueprintx#504 — react-spa-webpack side of blueprintx#438, ts-lib
-# wired by PR #505): the emitter (imports @opentelemetry/* — the ONLY place it is imported),
-# its unit test, the pinned package.json dependencies (declared only here, so an opt-out never
-# installs them), and a local-dev collector compose fragment — one function, mirroring
-# ts_lib.sh's conditional_copy_otel. Unlike ts-lib, this skeleton ships a real .env (git-ignored)
-# alongside the committed .env.example (copy_skeleton_files), so the OTel vars are appended to
-# BOTH rather than only printed. Lands in src/shared/utils/ — copy_shared_ts_source's existing
-# home for log-emitter.ts, which this file wraps (see its own module docstring).
-# Wires the OTLP wrapper into the generated composition root. Printing "now go edit
-# context.tsx yourself" left the enabled scaffold exporting NOTHING until a human changed
-# application code by hand -- dependencies installed, env vars set, module present, and no
-# logs leaving the browser. An opt-in that ships inert is worse than one that is absent,
-# because everything visible says it is on (blueprintx#504 review).
 wire_otel_composition_root() {
     local project_path="$1"
     local context_file="$project_path/src/capabilities/example/context.tsx"
@@ -378,18 +330,12 @@ conditional_copy_otel() {
     cp "$COMMON_TEMPLATE_ROOT/optional/otel-log-emitter.test.ts" "$project_path/src/shared/utils/otel-log-emitter.test.ts"
     cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
     cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
-    # EXACT pins, deliberately against this repo's house style of ranges (^X.0.0) — see
-    # otel-log-emitter.ts's module docstring: the Logs signal is still "not yet stable"
-    # upstream, so a minor bump may change behaviour. Re-check that status before bumping.
     patch_package_json "$project_path/package.json" dependencies \
         '@opentelemetry/api=1.9.1' \
         '@opentelemetry/api-logs=0.222.0' \
         '@opentelemetry/sdk-logs=0.222.0' \
         '@opentelemetry/exporter-logs-otlp-http=0.222.0' \
         '@opentelemetry/resources=2.11.0'
-    # webpack.config.js's DefinePlugin inlines every .env key automatically (readEnvFile), so
-    # no webpack.config.js change is needed — the fragment appended here is enough for the vars
-    # to reach process.env.<KEY> in the bundle.
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env"
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.env.fragment" >> "$project_path/.env.example"
     cat "$COMMON_TEMPLATE_ROOT/optional/otel.config.md" >> "$project_path/docs/configuration.md"
@@ -398,9 +344,6 @@ conditional_copy_otel() {
     print_status "info" "Set OTEL_EXPORTER_OTLP_ENDPOINT (and optionally OTEL_SERVICE_NAME) in .env to enable export — leave OTEL_EXPORTER_OTLP_HEADERS blank (see the fragment's warning)"
 }
 
-# Static ts-common assets that need no envsubst rendering. Split out of
-# copy_common_templates() (#464) to keep that function under the 60-line
-# function-length gate once it grew a package-lock.json copy line.
 copy_static_ts_common_files() {
     local project_path="$1"
 
@@ -425,26 +368,15 @@ copy_static_ts_common_files() {
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$project_path/.github/ISSUE_TEMPLATE" && cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$project_path/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     copy_repo_policy_workflows "$project_path"
-    # Feature-spec skeleton (blueprintx#446) — a place for feature specs from the first
-    # commit, never templated principles. See .specs/CLAUDE.md for the layout and id conventions.
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
 }
 
-# Refresh the lockfile after apply_package_variants (blueprintx#468 review).
-# copy_common_templates ships the BASE lockfile, and apply_package_variants then adds the
-# variant's dependencies to package.json — so a zustand/redux project would carry a lockfile
-# that no longer matches its manifest. The generated project runs `npm ci` in five workflows,
-# and `npm ci` fails hard on exactly that mismatch: the pinning #464 introduced would have
-# turned into a red first push for two of the three supported variants.
 refresh_lockfile_for_variants() {
 	local project_path="$1"
-	# The base variant never diverges from the shipped lockfile.
 	if [[ "$STATE_MANAGEMENT" == "none" ]]; then
 		return
 	fi
 	if ! command -v npm >/dev/null 2>&1; then
-		# Ship no lockfile rather than a wrong one: `npm install` regenerates a correct one,
-		# while a stale file fails in CI, far from here, naming neither the variant nor this step.
 		rm -f "$project_path/package-lock.json"
 		print_status "warning" \
 			"npm not found: package-lock.json omitted for the '$STATE_MANAGEMENT' variant — run 'npm install' before the first push"
@@ -476,33 +408,23 @@ copy_common_templates() {
         < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" \
         > "$project_path/AGENTS.md"
     cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
-    # SRP/actor-cohesion + Clean Code function principles (blueprintx#540) — one shared
-    # file, language-agnostic, so it lives in templates/common not ts-common.
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME} ${STATE_MANAGEMENT_VARIANT}' \
         < "$SKELETON_TEMPLATE_ROOT/README.md" \
         > "$project_path/README.md"
 
     copy_static_ts_common_files "$project_path"
-    # Overlay react-spa-webpack-specific .github contents (e.g. deploy-spa.yml)
-    # on top of the universal ts-common .github. Skeleton overlays win on
-    # name collision; ts-common files survive when the skeleton is silent.
     if [ -d "$SKELETON_TEMPLATE_ROOT/.github" ]; then
         cp -r "$SKELETON_TEMPLATE_ROOT/.github/." "$project_path/.github"
     fi
     copy_deploy_target "$project_path"
     envsubst < "$LICENSES_TEMPLATE_ROOT/${LICENSE_CHOICE}" > "$project_path/LICENSE"
 
-    # Ship the repo→LLM context exporter (and its print_status helper) unconditionally,
-    # so `npm run context:export` works whether or not a GitHub remote is connected.
     mkdir -p "$project_path/bin/lib"
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
     chmod +x "$project_path/bin/export_repo_content.sh"
 
-    # The review-threads.yml gate's only dependency: the ONE shared implementation of the
-    # answered-review-thread predicate (blueprintx#175), same file the Python tiers ship, so
-    # the CI job above never fetches or vendors a copy of its own.
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
     copy_repo_rules_provisioner "$project_path" "$COMMON_TEMPLATE_ROOT/bin/required-checks.txt"
 
@@ -538,23 +460,16 @@ apply_branch_protection() {
         return
     fi
 
-    # A solo maintainer cannot satisfy a required-approving-review
-    # rule — GitHub forbids self-approval, so the first PR's merge
-    # would be permanently blocked. Ask whether human reviewers will
-    # gate merges, and build the protection payload accordingly.
     prompt_yes_no reviews_ans "$(prompt_sub "Will human reviewers gate merges to '$branch'? [y/N]: ")"
     if [ "$reviews_ans" = "true" ]; then
         reviews_approvals=1
     else
-        # Solo: keep status checks + linear history, drop required reviews.
         reviews_approvals=0
     fi
     (cd "$project_path" && RULESET_APPROVALS="$reviews_approvals" bash bin/enable_repo_rules.sh)
 }
 
 pages_prerequisites_met() {
-    # Everything that must be true before it is even worth asking. Each is a silent return
-    # rather than a warning: a user without gh has not done anything wrong.
     local repo="$1"
 
     command -v gh >/dev/null 2>&1 || return 1
@@ -563,12 +478,9 @@ pages_prerequisites_met() {
 }
 
 wait_for_gh_pages_branch() {
-    # Pages can only be pointed at the gh-pages branch once that branch EXISTS — and it is
-    # created by the deploy-spa workflow on the FIRST push to main, which takes ~1-3 min.
-    # Enabling before then fails with a 404 and leaves the user staring at "Site not found".
     local repo="$1" manual_cmd="$2"
     local attempts=0
-    local max_attempts=12 # ~3 min at 15s intervals
+    local max_attempts=12
     local wait_ans
 
     gh api "/repos/$repo/branches/gh-pages" >/dev/null 2>&1 && return 0
@@ -609,10 +521,6 @@ enable_gh_pages() {
 }
 
 prompt_pages_setup() {
-    # GitHub stopped auto-enabling Pages on gh-pages pushes (~2022). The deploy-spa workflow
-    # pushes the build to gh-pages, but the Pages service stays off — and a fresh deploy
-    # 404s — until it is enabled once. The default GITHUB_TOKEN lacks the permission to do it
-    # from the workflow, so it is offered here using the local gh token.
     local owner="${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}"
     local repo="$owner/${PROJECT_NAME}"
     local manual_cmd="gh api -X POST repos/$repo/pages -f 'source[branch]=gh-pages' -f 'source[path]=/'"
@@ -631,9 +539,6 @@ prompt_pages_setup() {
     enable_gh_pages "$repo" "$owner" "$manual_cmd"
 }
 
-# Always initialise a local git repo with a first commit, independent of any
-# remote setup, so every scaffold is a git repo even in non-interactive (--dev)
-# runs. Skips gracefully when git is unavailable or the repo already exists.
 initialize_git_repo() {
     local project_path="$1"
 
@@ -652,13 +557,8 @@ initialize_git_repo() {
 }
 
 prompt_git_remote_setup() {
-	# Branch protection and Pages both write to the remote, so they run only once that
-	# remote is verified to be the repository this scaffold names — not merely because
-	# the prompt returned (#212).
 	if scaffold_prompt_git_remote_setup "$1"; then
 		apply_branch_protection "$1"
-		# Only the Pages target needs the one-off Pages enablement; offering it on the
-		# Vercel or none path would wait on a gh-pages branch nothing ever pushes.
 		[ "$DEPLOY_TARGET_CHOICE" = "1" ] && prompt_pages_setup
 	fi
 }
@@ -667,14 +567,9 @@ apply_offline_mode() {
     local project_path="$1"
 
     print_status "info" "No GitHub remote connected — switching to offline mode"
-    # GitHub-only assets (Actions workflows, CODEOWNERS, PR template) are not useful
-    # without a GitHub remote; remove them and ship the offline git-diff workflow instead.
     rm -rf "$project_path/.github"
     remove_repo_policy_scripts "$project_path"
     print_status "info" "Removed .github (GitHub-only assets)"
-    # vercel.json lives at the project ROOT, so the .github sweep above does not reach it —
-    # and a Vercel config with no workflow to read it is dead configuration pointing at a
-    # deploy that cannot happen. It goes with its workflow.
     if [ -f "$project_path/vercel.json" ]; then
         rm -f "$project_path/vercel.json"
         print_status "info" "Removed vercel.json (its deploy workflow went with .github)"
@@ -731,17 +626,10 @@ main() {
     apply_package_variants "$PROJECT_PATH"
     refresh_lockfile_for_variants "$PROJECT_PATH"
     apply_js_copy_delivery "$PROJECT_PATH"
-    # Every `cp -r` above copies whatever sits in templates/, caches included (#205).
     scaffold_purge_caches "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
-    # When the project is not connected to a GitHub remote (no upstream tracking
-    # branch after setup), switch to offline mode: drop GitHub-only assets and
-    # ship the git-diff sync workflow instead.
-    # ⚠️ `@{u}` alone answers "is there an upstream?", never "is it OUR upstream?" — it is TRUE
-    # for a pre-existing clone whose origin points elsewhere. Offline is the safe default, so
-    # an unverified remote falls here too (#212, raised by review on #215).
     if [ "$SCAFFOLD_REMOTE_VERIFIED" != "1" ] \
         || ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         apply_offline_mode "$PROJECT_PATH"

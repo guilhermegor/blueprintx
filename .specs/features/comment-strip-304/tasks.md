@@ -13,10 +13,14 @@ gate did not read until P0.
 - [x] P0 (PR #785): gate reads every file type, `.env.example` keys-only with
   `docs/configuration.md` per tier and the key-sync gate
 - [x] 1 (PR #789) root `.github/`, root `tests/`, root dotfiles, `Makefile`, `mkdocs.yml`, root `.env.example` (38 files, 1205 lines)
-- [~] chore/comment-strip-slice2-304 2 root `bin/` excluding `bin/scaffold/` (36 files, 1537 lines); also fix the truncated step name
+- [x] 2 (PR #805) root `bin/` excluding `bin/scaffold/` (36 files, 1537 lines); also fix the truncated step name
   `Install npm dependencies (npm ci enforces the committed lockfile,` in `scaffold_checks.yml`
   (` #464` was parsed as a YAML comment)
-- [ ] 3 (after the heredoc gate fix) `bin/scaffold/*.sh`, with a before/after scaffold diff of all tiers as the oracle (10 files, 1427 lines)
+- [~] chore/comment-strip-slice3-304 3 (PR #810) `bin/scaffold/*.sh`, with a before/after scaffold diff of all tiers as the oracle (9 files, 1336 lines)
+  - The diff caught two defects in the first strip: `#` lines that a multi-line `sed` or `printf`
+    writes into the generated `pyproject.toml` were removed (they are output, so they stay), and
+    blank lines inside generated Python were collapsed. A line that starts inside a quoted
+    string or a heredoc is now kept, and blank lines are dropped only outside those regions.
 - [ ] 4 TypeScript and Bash families: `ts-common`, `ts-lib`, `react-spa-webpack`, `bash-cli` (49 files, 891 lines)
 - [ ] 5 `templates/python-common/src` and `templates/common` (55 files, 1027 lines)
 - [ ] 6 Python skeletons: `ddd-*`, `mvc-*`, `api-*`, `lib-minimal` (78 files, 1133 lines)
