@@ -921,9 +921,9 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
 
 The files under `templates/ts-common/`, `templates/ts-lib/`, `templates/react-spa-webpack/`
 and `templates/bash-cli/` carry no comments, so the reasoning behind them lives here. A
-generated project gets the behavior, not the history. Editor-only `@type` and `@ts-check`
-annotations in the JavaScript config files were removed with the comments: no tier sets
-`checkJs`, so nothing in CI depended on them.
+generated project gets the behavior, not the history. `@ts-check` and the `/** @type {...} */`
+annotations that feed it are checker directives, so the comment gate allows them; the other
+`@type` annotations were removed with the comments, since no tier sets `checkJs`.
 
 ### ESLint configs (`ts-lib`, `react-spa-webpack`)
 

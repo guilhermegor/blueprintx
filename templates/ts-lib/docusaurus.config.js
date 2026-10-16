@@ -1,5 +1,6 @@
 // @ts-check
 
+/** @type {import('@docusaurus/types').Config} */
 const config = {
   title: '${PROJECT_NAME}',
   tagline: '${PROJECT_DESCRIPTION}',
@@ -21,6 +22,7 @@ const config = {
   presets: [
     [
       'classic',
+      /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
           routeBasePath: '/',
@@ -33,6 +35,7 @@ const config = {
   ],
 
   themeConfig:
+    /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
         title: '${PROJECT_NAME}',
