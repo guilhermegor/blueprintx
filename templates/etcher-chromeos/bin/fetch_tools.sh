@@ -8,23 +8,37 @@ source "$PROJECT_ROOT/lib/common.sh"
 source "$PROJECT_ROOT/lib/verify.sh"
 TOOLS_DIR="${CROS_TOOLS_DIR:-$PROJECT_ROOT/.tools}"
 
-BMAPTOOL_VERSION="3.9.0"
-BMAPTOOL_SHA256="9940bb97fa0f2c11ee4625a2f620a4ae2b94c556f8d01c070aee08486a2a1812"
-BMAPTOOL_URL="https://github.com/yoctoproject/bmaptool/archive/refs/tags/v${BMAPTOOL_VERSION}.tar.gz"
+BMAPTOOL_API="${CROS_BMAPTOOL_API:-https://api.github.com/repos/yoctoproject/bmaptool/releases/latest}"
 ETCHER_API="${CROS_ETCHER_API:-https://api.github.com/repos/balena-io/etcher/releases/latest}"
 
+bmaptool_asset() {
+    python3 -I -c '
+import json, sys
+
+for a in json.load(open(sys.argv[1])).get("assets", []):
+    if a["name"].endswith(".tar.gz") and (a.get("digest") or "").startswith("sha256:"):
+        print(a["name"], a["browser_download_url"], a["digest"][7:])
+        break
+' "$1"
+}
+
 fetch_bmaptool() {
-    local str_tgz="$TOOLS_DIR/bmaptool-$BMAPTOOL_VERSION.tar.gz"
+    local str_json="$TOOLS_DIR/bmaptool-release.json" str_name str_url str_digest str_tgz str_src
     mkdir -p "$TOOLS_DIR/bin"
-    curl -fsSL --retry 3 -o "$str_tgz" "$BMAPTOOL_URL"
-    verify_hash sha256 "$BMAPTOOL_SHA256" "$str_tgz"
+    curl -fsSL --retry 3 -o "$str_json" "$BMAPTOOL_API"
+    read -r str_name str_url str_digest < <(bmaptool_asset "$str_json") || true
+    if [ -z "${str_digest:-}" ]; then
+        print_status "error" "latest bmaptool release has no .tar.gz asset with a GitHub sha256 digest; install bmaptool from your distro or use --tool dd"
+        return 1
+    fi
+    str_tgz="$TOOLS_DIR/$str_name"
+    curl -fsSL --retry 3 -o "$str_tgz" "$str_url"
+    verify_hash sha256 "$str_digest" "$str_tgz"
     tar -xzf "$str_tgz" -C "$TOOLS_DIR"
-    cat >"$TOOLS_DIR/bin/bmaptool" <<WRAP
-#!/usr/bin/env bash
-PYTHONPATH="$TOOLS_DIR/bmaptool-$BMAPTOOL_VERSION/src" exec python3 -m bmaptool "\$@"
-WRAP
+    str_src="$(ls -d "$TOOLS_DIR"/bmaptool-*/src | head -n1)"
+    printf '#!/usr/bin/env bash\nPYTHONPATH="%s" exec python3 -m bmaptool "$@"\n' "$str_src" >"$TOOLS_DIR/bin/bmaptool"
     chmod +x "$TOOLS_DIR/bin/bmaptool"
-    print_status "success" "bmaptool $BMAPTOOL_VERSION -> $TOOLS_DIR/bin/bmaptool"
+    print_status "success" "bmaptool ($str_name) -> $TOOLS_DIR/bin/bmaptool"
 }
 
 fetch_etcher() {

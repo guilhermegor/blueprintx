@@ -42,6 +42,7 @@ STUB
     cat >"$STUBS/sync" <<'STUB'
 #!/usr/bin/env bash
 STUB
+    printf '{"tag_name": "v9.9.9", "assets": []}' >"$FIX/release.json"
     cat >"$STUBS/curl" <<'STUB'
 #!/usr/bin/env bash
 while [ "$#" -gt 0 ]; do
@@ -50,6 +51,7 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 case "$str_url" in
+    *latest*) cp "$STUB_FIX/release.json" "$str_out" ;;
     *.json) cp "$STUB_FIX/manifest.json" "$str_out" ;;
     *.zip) cp "$STUB_FIX/image.zip" "$str_out" ;;
     *) exit 22 ;;
@@ -155,7 +157,7 @@ STUB
 @test "an image larger than the device is refused" {
     STUB_SIZE=5 run "$CLI" flash --target "$DEV" --os chromeos-flex --confirm fakedisk
     [ "$status" -ne 0 ]
-    [[ "$output" == *"larger than"* ]]
+    [[ "$output" == *"larger than"* && "$output" == *"at least 1 GB"* ]]
     [ ! -s "$STUB_LOG" ]
 }
 
@@ -172,4 +174,12 @@ STUB
     run "$CLI" flash --target "$DEV" --os fydeos --file "$FIX/fyde.img" --sha256 "$str_hash" --confirm fakedisk
     [ "$status" -eq 0 ]
     grep -q "if=$FIX/fyde.img of=$DEV" "$STUB_LOG"
+}
+
+@test "bmaptool is refused when the latest release has no digest to verify against" {
+    CROS_TOOLS_DIR="$BATS_TEST_TMPDIR/tools" CROS_BMAPTOOL_API="https://api.example.test/releases/latest" \
+        run "$BATS_TEST_DIRNAME/../bin/fetch_tools.sh" bmaptool
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"no .tar.gz asset with a GitHub sha256 digest"* ]]
+    [ ! -e "$BATS_TEST_TMPDIR/tools/bin/bmaptool" ]
 }

@@ -37,10 +37,12 @@ readable index. The CLI therefore takes a file you downloaded plus its published
 `dd conv=fsync status=progress`. `make tools_etcher` fetches the GUI, verified against
 Etcher's `SHA256SUMS.Linux.x64.txt`, for hand use.
 
-**Tool checksums.** bmaptool is not on PyPI and upstream publishes no checksum, so
-`bin/fetch_tools.sh` pins the tagged source tarball's SHA-256. A version bump re-pins it.
-The Etcher checksum comes from the same release as the file, so it detects corruption,
-not a compromised release.
+**Tool checksums.** No version is pinned. `bin/fetch_tools.sh` resolves the latest
+GitHub release of bmaptool at run time and verifies the `.tar.gz` asset against the
+`digest` field GitHub records for it. bmaptool's releases currently carry no assets (so no
+digest), and the fetch then fails with a message; install bmaptool from your distro or
+use `--tool dd`. The Etcher checksum comes from the same release as the file, so it
+detects corruption, not a compromised release.
 
 ## Docker
 

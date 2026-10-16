@@ -40,7 +40,7 @@ device_fits() {
     local int_image_size="$1" int_device_size
     int_device_size="$(device_size)"
     if [ "$int_image_size" -gt "$int_device_size" ]; then
-        print_status "error" "image ($int_image_size bytes) is larger than $DEVICE_PATH ($int_device_size bytes)"
+        print_status "error" "image ($int_image_size bytes) is larger than $DEVICE_PATH ($int_device_size bytes); use a pendrive of at least $(((int_image_size + 999999999) / 1000000000)) GB"
         return 1
     fi
 }
