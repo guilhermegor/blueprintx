@@ -1405,8 +1405,10 @@ single-sources the root file.
   Easy Connect DSN (`host:port/service`) with credentials passed separately, and pyodbc wants a
   `KEY=VALUE;` ODBC string, never a URL. Credentials in a URL-form DSN are percent-encoded because
   a password containing `@ : / ?` silently re-partitions it, but the ODBC and Easy Connect forms
-  are not URLs and are not encoded. ODBC Driver 18 encrypts by default, so the normalised TLS
-  settings are appended when those variables are set, to keep a self-signed server reachable.
+  are not URLs and are not encoded. In the MVC tiers' `connection_db.py`, ODBC Driver 18 encrypts
+  by default, so the normalised `Encrypt` and `TrustServerCertificate` settings are appended when
+  those variables are set, to keep a self-signed server reachable; the api and DDD factories
+  default to Driver 17 and append neither.
 - **Engine map.** The engine-name to builder map lives at module level so the engine names have
   one source, read by the factory, by `active_backend()` and by the `config/queries/<engine>/`
   layout. In `connection_db.py` it must follow the `_connect_*` functions, because the dict is
@@ -1470,7 +1472,7 @@ single-sources the root file.
   the real release (not in `release-test-pypi.yaml`), so a change there debuts in production; diff
   the two when editing. Release assets are named explicitly because a 0-byte `dist/.keep` makes
   the API reject the asset and leaves a draft release with no tag.
-- **Misc.** `alembic.ini` and the `.coveragerc` keep the vendored `_internal/` helpers out of the
+- **Misc.** `lib-minimal`'s `.coveragerc` keeps the vendored `_internal/` helpers out of the
   library's coverage number, since they are tested in `python-common`. `emails.yaml` send flags
   come from `.env` (`EMAIL_SEND__<BLOCK>`, blueprintx#121), because a flag in the tracked file
   would need a branch and merge to flip.

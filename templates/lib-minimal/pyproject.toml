@@ -61,7 +61,6 @@ pymdown-extensions = ">=10.0"
 mike = ">=2.1.0"
 
 [tool.deptry.per_rule_ignores]
-# DEP002 = declared but never imported. Every entry carries its reason, exactly as
 DEP002 = ["openpyxl"]
 
 [build-system]

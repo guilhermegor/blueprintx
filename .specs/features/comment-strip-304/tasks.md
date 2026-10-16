@@ -23,7 +23,7 @@ gate did not read until P0.
     string or a heredoc is now kept, and blank lines are dropped only outside those regions.
 - [x] 4 (PR #814) TypeScript and Bash families: `ts-common`, `ts-lib`, `react-spa-webpack`, `bash-cli` (49 files, 891 lines)
 - [x] 5 (PR #820) `templates/python-common/src` and `templates/common` (55 files, 1027 lines)
-- [~] chore/comment-strip-slice6-304 6 Python skeletons: `ddd-*`, `api-*`, `lib-minimal` (78 files, 1133 lines)
+- [~] chore/comment-strip-slice6-304 6 Python skeletons: `ddd-*`, `api-*`, `lib-minimal` (51 files, about 880 lines)
 - [ ] 6b Python skeletons: `mvc-service-native-db`, `mvc-service-orm-db` (split from 6 at the 90-file ceiling, 40 files)
 - [ ] 7 `templates/python-common` config and workflows (35 files, 1401 lines)
 - [ ] 8 `templates/python-common/tests` (55 files, 931 lines)

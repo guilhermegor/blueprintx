@@ -68,7 +68,6 @@ pymdown-extensions = ">=10.0"
 known_first_party = ["src"]
 
 [tool.deptry.package_module_name_map]
-# DEP001 win32com three times in utils/ms_office/outlook_gateway.py AND DEP002 on pywin32 itself.
 pywin32 = ["win32com", "win32api", "pythoncom", "pywintypes"]
 
 [build-system]
