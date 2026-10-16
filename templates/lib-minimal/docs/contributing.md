@@ -114,9 +114,9 @@ fails with an opaque `invalid-publisher`:
 | Owner / repository | your GitHub `<owner>` / `<repo>` |
 | Workflow filename | `release-pypi.yaml` (PyPI) / `release-test-pypi.yaml` (Test PyPI) |
 | Environment | `release-pypi` / `release-test-pypi` |
+| PyPI **Project Name** | must equal the distribution name (`name` in `pyproject.toml`) |
 
 The GitHub Release step exists only in `release-pypi.yaml`, not in the Test PyPI workflow, so a change there is never rehearsed; diff the two workflows when editing either.
-| PyPI **Project Name** | must equal the distribution name (`name` in `pyproject.toml`) |
 
 For the very first upload the project does not exist yet — register a **pending publisher** at the
 account level (not under an existing project's settings). Publishing from a laptop instead of CI is
