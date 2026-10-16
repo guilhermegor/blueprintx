@@ -29,11 +29,6 @@ from utils.retry.log_emitter import LogEmitter
 from utils.retry.policy import RetryPolicy
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     _F = TypeVar("_F", bound=Callable[..., object])
 
@@ -42,7 +37,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
@@ -117,12 +112,6 @@ def call_with_backoff(  # complexity-ok: the retry loop IS the work of this seam
 
 
 @type_checker
-# ⚠️ The hatch below is structural, and worth stating once: a decorator factory is three
-# nested scopes by construction — factory, decorator, wrapper — and mccabe folds a nested
-# function's body into the score of the one enclosing it. So the factory is charged for the
-# wrapper even though it contains no branch of its own, and no arrangement of a decorator
-# factory can score below the ceiling. That is the metric meeting the idiom, not this code;
-# flattening it would mean giving up the decorator form, which is the public API.
 def retry_with_backoff(  # complexity-ok: decorator factory, see the note above
     int_max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
     float_base_wait_s: float = _DEFAULT_BASE_WAIT_S,
@@ -174,7 +163,6 @@ def retry_with_backoff(  # complexity-ok: decorator factory, see the note above
         If ``int_max_attempts`` is less than 1, or ``str_strategy`` is not one of
         ``"exponential"``, ``"linear"``, ``"constant"``.
     """
-    # Constructing the policy validates the attempts count and the strategy name for us.
     cls_policy = RetryPolicy(
         int_max_attempts=int_max_attempts,
         float_base_wait_s=float_base_wait_s,
@@ -197,7 +185,6 @@ def retry_with_backoff(  # complexity-ok: decorator factory, see the note above
         Callable[_P, _R]
             The wrapped callable with the retry/backoff behaviour.
         """
-        # A plain function has __name__; a callable instance may not — fall back to its type.
         str_fn_name = getattr(fn, "__name__", type(fn).__name__)
 
         @functools.wraps(fn)

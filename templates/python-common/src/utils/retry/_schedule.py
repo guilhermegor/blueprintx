@@ -11,11 +11,6 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from typing import TypeVar
 
@@ -26,7 +21,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
@@ -34,10 +29,6 @@ _DEFAULT_MAX_ATTEMPTS: int = 3
 _DEFAULT_BASE_WAIT_S: float = 2.0
 _DEFAULT_FACTOR: float = 2.0
 _DEFAULT_STRATEGY: str = "exponential"
-# Wait-schedule dispatch: strategy name -> (base, factor, attempt) -> seconds before the retry.
-# The dict IS the branch — selecting a schedule is a lookup, not an if/elif/else chain — and it
-# is the single source of the valid strategy names (``_STRATEGIES`` is derived from its keys),
-# so a fourth strategy is one entry rather than a branch plus a divergent name set elsewhere.
 _STRATEGY_WAITS: dict[str, Callable[[float, float, int], float]] = {
     "exponential": lambda base, factor, attempt: base * factor ** (attempt - 1),
     "linear": lambda base, factor, attempt: base * attempt,
@@ -80,7 +71,6 @@ def _compute_backoff_wait(
     float
         The (optionally capped) number of seconds to wait before the next attempt.
     """
-    # str_strategy is validated by RetryPolicy, so the lookup always hits.
     float_wait = _STRATEGY_WAITS[str_strategy](float_base_wait_s, float_factor, int_attempt)
     if float_max_wait_s is None:
         return float_wait

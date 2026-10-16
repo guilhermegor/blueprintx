@@ -23,11 +23,6 @@ from typing import TYPE_CHECKING
 from utils.logs import log_message
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -39,14 +34,11 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
 _DISPATCH_DEFAULT_SUFFIX: str = "DEFAULTS"
-# One table mapping every recognised token to its value, rather than two sets consulted in
-# turn. A token can no longer appear in both by accident, and adding a spelling is adding an
-# entry. The frozensets remain as derived views for any caller that wants to ask membership.
 _DICT_ENV_BOOL: dict[str, bool] = {
     **dict.fromkeys(("1", "true", "yes", "on", "y", "t"), True),
     **dict.fromkeys(("0", "false", "no", "off", "n", "f"), False),
@@ -71,8 +63,6 @@ def _parse_env_bool(str_raw: str | None, bool_default: bool) -> bool:
     bool
         The parsed flag, or ``bool_default``.
     """
-    # An unset value and an unrecognised one mean the same thing here — fall back to the
-    # default — so both are one lookup with a default rather than three branches.
     str_norm = (str_raw or "").strip().casefold()
     return _DICT_ENV_BOOL.get(str_norm, bool_default)
 

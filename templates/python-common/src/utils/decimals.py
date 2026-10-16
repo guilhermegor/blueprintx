@@ -28,25 +28,17 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
-# import (no redefinition); at runtime the try/except picks whichever layout shipped.
 if TYPE_CHECKING:
     from utils.typing import type_checker
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
-# Truncation is the safe generic default; override per call when the domain
-# explicitly requires commercial / regulatory rounding.
 _DEFAULT_ROUNDING = ROUND_DOWN
 
-# ``bool`` is listed explicitly: it is a subclass of ``int`` but the runtime type-checker
-# treats it as a distinct type, and ``_parse`` deliberately accepts it (mapping True/False to
-# ``default`` rather than 1/0). Omitting it would make the checker reject a tolerated input.
 NumericLike = str | int | float | bool | Decimal | None
 
 
@@ -189,10 +181,6 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
     return _parse_by_type(value, default)
 
 
-# Dispatch on the value's TYPE rather than an isinstance chain — the house rule
-# (rules/python.md, "Composition Patterns"). Registration order does not matter: dispatch
-# follows the MRO, so the bool handler wins over the int one it would otherwise inherit,
-# which is the subtlety the chain had to encode as comment-plus-ordering.
 @functools.singledispatch
 @type_checker
 def _parse_by_type(value: object, default: Decimal) -> Decimal:
@@ -212,11 +200,8 @@ def _parse_by_type(value: object, default: Decimal) -> Decimal:
     """
     str_clean = _normalise_br_number(str(value))
     try:
-        # The strings nan and inf are valid Decimal literals that parse successfully, so
-        # the finite check — not the handler below — is what maps them to default.
         return _finite_or(Decimal(str_clean), default)
     except InvalidOperation:
-        # Covers the empty string too, which is not a Decimal literal.
         return default
 
 
@@ -368,8 +353,6 @@ def _normalise_br_number(str_value: str) -> str:
         A string Decimal can parse, or ``""`` when empty.
     """
     str_stripped = str_value.strip()
-    # No comma means nothing to normalise — which covers the empty string as well, so it
-    # needs no guard of its own.
     if "," not in str_stripped:
         return str_stripped
     return str_stripped.replace(".", "").replace(",", ".")
@@ -408,10 +391,7 @@ def parse_br_number_series(series_value: pd.Series) -> pd.Series:
 
     series_str = series_value.astype(str)
     series_has_comma = series_str.str.contains(",", regex=False)
-    # When a comma is present the cell is Brazilian-formatted, so the thousands dot is
-    # removed and the decimal comma becomes a dot.
     series_br = series_str.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
-    # When no comma is present the existing dot already marks the decimal place and is kept.
     series_clean = (
         series_str.where(~series_has_comma, series_br)
         .str.replace("(", "-", regex=False)

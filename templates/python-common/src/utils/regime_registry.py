@@ -13,10 +13,6 @@ from typing import TYPE_CHECKING
 from utils.regime_window import RegimeWindow
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). See src/utils/CLAUDE.md — TYPE_CHECKING
-# stubs the decorator/metaclass shape locally (no import), since mypy flags a bare
-# try/except import as a name redefinition once actually type-checked (blueprintx#360).
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -31,17 +27,10 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import TypeChecker, type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import TypeChecker, type_checker
 
 
-# ⚠️ AMBIGUITY IS RESOLVED AT CONSTRUCTION, NEVER AT LOOKUP.
-#
-# `resolve` returns the FIRST covering window, so with two overlapping windows the schema a
-# period binds to depends on list order — and the docstring promises "in any order". The
-# reader would then parse a real file against the wrong published header and produce numbers
-# nobody flags: the silent wrong answer this module exists to prevent. Rejecting here means a
-# registry that survives construction cannot answer ambiguously.
 @type_checker
 def _reject_ambiguous_windows(  # complexity-ok: pairwise overlap IS the check
     list_windows: list[RegimeWindow],
@@ -62,7 +51,6 @@ def _reject_ambiguous_windows(  # complexity-ok: pairwise overlap IS the check
     set_repeated = {str_name for str_name in list_names if list_names.count(str_name) > 1}
     if set_repeated:
         raise ValueError(f"regime names must be unique; repeated: {sorted(set_repeated)}")
-    # Sorting by start puts an open start first, so overlap can only occur between neighbours.
     list_sorted = sorted(
         list_windows,
         key=lambda cls_window: (
@@ -114,10 +102,6 @@ class RegimeRegistry(metaclass=TypeChecker):
 
     def __init__(self, list_windows: list[RegimeWindow]) -> None:
         _reject_ambiguous_windows(list_windows)
-        # ⚠️ A COPY, and immutable. Storing the caller's list by reference lets an append
-        # after construction slip a window past `_reject_ambiguous_windows` entirely —
-        # validation the caller can undo is not validation. `RegimeWindow` is frozen, so a
-        # shallow tuple is deep enough here.
         self.list_windows: tuple[RegimeWindow, ...] = tuple(list_windows)
 
     @type_checker

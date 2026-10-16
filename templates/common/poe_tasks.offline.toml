@@ -1,12 +1,3 @@
-# Offline-only tasks — present only when the project is scaffolded WITHOUT a GitHub remote.
-#
-# Wired into poe_tasks.toml by the scaffold's `add_poe_include`, never declared there: poe
-# prints a warning on every invocation for a missing include, unlike the Makefile's silent
-# `-include`, so the reference has to appear only when this file actually does.
-#
-# These wrap the local git workflow that substitutes for GitHub's branch + PR flow, plus the
-# git-diff helpers for sharing changes without a remote.
-
 [tool.poe.tasks.new_branch]
 cmd = "bash bin/new_branch.sh $name"
 help = "Create a feature branch off the default branch (CONTRIBUTING prefix enforced)"

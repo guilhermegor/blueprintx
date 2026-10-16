@@ -30,11 +30,6 @@ import unicodedata
 from utils.tabular_reader import ProblemReport
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the decorator's shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeVar
@@ -46,17 +41,13 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
 _INT_MAX_LEN = 31
 _SET_INVALID_CHARS = frozenset("[]:*?/\\")
-# "History" is a reserved worksheet name in every Excel version; matched case-insensitively,
-# like every other Excel name comparison.
 _SET_RESERVED_NAMES = frozenset({"history"})
-# Unicode categories that print as nothing or as a control action: Cc (control), Cf (format,
-# e.g. zero-width space). A sheet name built from scraped/OCR text can carry these invisibly.
 _SET_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf"})
 
 

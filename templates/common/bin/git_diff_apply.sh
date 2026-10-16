@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Apply a .diff to the current working tree after a clean-apply check. Does NOT
-# stage, commit, or archive — review and commit yourself.
-# Usage: git_diff_apply.sh <path-to.diff>
 
 set -euo pipefail
 
