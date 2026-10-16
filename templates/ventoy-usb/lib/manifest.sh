@@ -24,11 +24,22 @@ manifest_checksum_valid() {
     esac
 }
 
+manifest_trust_valid() {
+    local str_kind="$1" str_sum="$2" str_trust="$3"
+    case "$str_trust" in
+        gpg:[0-9A-F][0-9A-F]*:*:https://*) [ "$str_kind" = dirsums ] ;;
+        two-origin) [ "$str_kind" = github ] ;;
+        same-origin-digest) [[ "$str_sum" != none:* && "$str_kind" != manual ]] ;;
+        none) [[ "$str_sum" == none:* ]] ;;
+        *) return 1 ;;
+    esac
+}
+
 manifest_validate_line() {
     local str_line="$1" str_pipes
     str_pipes="${str_line//[^|]/}"
-    if [ "${#str_pipes}" -ne 8 ]; then
-        echo "manifest: expected 9 '|'-separated fields: $str_line" >&2
+    if [ "${#str_pipes}" -ne 9 ]; then
+        echo "manifest: expected 10 '|'-separated fields: $str_line" >&2
         return 1
     fi
     case "$(manifest_field "$str_line" 4)" in
@@ -40,6 +51,10 @@ manifest_validate_line() {
     esac
     if ! manifest_checksum_valid "$(manifest_field "$str_line" 4)" "$(manifest_field "$str_line" 7)"; then
         echo "manifest: missing or invalid checksum (fail closed) in: $str_line" >&2
+        return 1
+    fi
+    if ! manifest_trust_valid "$(manifest_field "$str_line" 4)" "$(manifest_field "$str_line" 7)" "$(manifest_field "$str_line" 10)"; then
+        echo "manifest: trust level missing or inconsistent with the checksum in: $str_line" >&2
         return 1
     fi
 }

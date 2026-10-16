@@ -19,7 +19,7 @@ STUB
     chmod +x "$TMP/lsblk" "$TMP/findmnt"
     export LSBLK="$TMP/lsblk" FINDMNT="$TMP/findmnt" VENTOY_DIR="$TMP/vt" DRIVE_MNT="$TMP/mnt"
     export STUB_TYPE_RM="disk 1" STUB_VENTOY=1
-    write_manifest 'u|core|isos/Linux/Desktop|latesturl|https://h/u.iso|^u-[0-9]+\.iso$|none:t||'
+    write_manifest 'u|core|isos/Linux/Desktop|latesturl|https://h/u.iso|^u-[0-9]+\.iso$|none:t|||none'
     echo new >"$BUILD_DIR/drive/isos/Linux/Desktop/u-2.iso"
     printf 'u\tisos/Linux/Desktop/u-2.iso\n' >"$BUILD_DIR/resolved.tsv"
 }

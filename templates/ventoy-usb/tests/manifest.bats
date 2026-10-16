@@ -9,14 +9,14 @@ load helpers/common
 }
 
 @test "an entry without a checksum fails closed" {
-    write_manifest "x|core|isos/Others|github|o/r|^x$|||"
+    write_manifest "x|core|isos/Others|github|o/r|^x$||||same-origin-digest"
     run "$CLI" layout
     [ "$status" -ne 0 ]
     [[ "$output" == *"fail closed"* ]]
 }
 
 @test "none: without a reason is rejected" {
-    write_manifest "x|core|isos/Others|latesturl|https://h/x.iso|^x\.iso$|none:||"
+    write_manifest "x|core|isos/Others|latesturl|https://h/x.iso|^x\.iso$|none:|||none"
     run "$CLI" layout
     [ "$status" -ne 0 ]
 }
@@ -25,7 +25,7 @@ load helpers/common
     write_manifest "x|core|isos/Others|latesturl"
     run "$CLI" layout
     [ "$status" -ne 0 ]
-    [[ "$output" == *"9 '|'-separated fields"* ]]
+    [[ "$output" == *"10 '|'-separated fields"* ]]
 }
 
 @test "windows and android groups follow the conf" {

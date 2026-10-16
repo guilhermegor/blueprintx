@@ -2,7 +2,7 @@
 
 load helpers/common
 
-ENTRY='u|core|isos/Linux/Desktop|latesturl|https://h/u.iso|^u\.iso$|none:test|casper-rw|'
+ENTRY='u|core|isos/Linux/Desktop|latesturl|https://h/u.iso|^u\.iso$|none:test|casper-rw||none'
 
 build_tree() {
     write_manifest "$ENTRY"
@@ -71,4 +71,48 @@ build_tree() {
     echo keep >"$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat"
     run "$CLI" persistence
     [ "$(cat "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat")" = keep ]
+}
+
+@test "persistence is downloaded from ventoy/backend and verified against the release notes" {
+    command -v 7z || skip "7z missing"
+    export GITHUB_API="https://api.test"
+    mkdir -p "$TMP/z/images" "$TMP/z/d"
+    printf 'blank-ext4' >"$TMP/z/d/persistence_ext4_4GB_casper-rw.dat"
+    (cd "$TMP/z/d" && 7z a -bso0 -bsp0 ../images/persistence_ext4_4GB_casper-rw.dat.7z persistence_ext4_4GB_casper-rw.dat)
+    (cd "$TMP/z" && 7z a -bso0 -bsp0 images.zip images)
+    fixture_file "https://github.com/ventoy/backend/images.zip" "$TMP/z/images.zip"
+    sum="$(sha256sum "$TMP/z/images/persistence_ext4_4GB_casper-rw.dat.7z" | cut -d' ' -f1)"
+    jq -n --arg b "$sum  persistence_ext4_4GB_casper-rw.dat.7z" \
+        '{body: $b, assets: [{name: "images.zip", browser_download_url: "https://github.com/ventoy/backend/images.zip"}]}' \
+        >"$TMP/rel.json"
+    fixture_file "https://api.test/repos/ventoy/backend/releases/latest" "$TMP/rel.json"
+    fixture_file "https://github.com/ventoy/backend/images.zip" "$TMP/z/images.zip"
+    write_manifest "$ENTRY"
+    mkdir -p "$BUILD_DIR/drive/persistance"
+    export SUDO="false"
+    run "$CLI" persistence
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"downloaded from ventoy/backend"* ]]
+    [ "$(cat "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat")" = blank-ext4 ]
+}
+
+@test "a tampered persistence archive falls back to CreatePersistentImg.sh" {
+    command -v 7z || skip "7z missing"
+    export GITHUB_API="https://api.test"
+    mkdir -p "$TMP/z/images" "$TMP/vt"
+    printf 'x' >"$TMP/z/images/persistence_ext4_4GB_casper-rw.dat.7z"
+    (cd "$TMP/z" && 7z a -bso0 -bsp0 images.zip images)
+    fixture_file "https://github.com/ventoy/backend/images.zip" "$TMP/z/images.zip"
+    jq -n --arg b "$(printf '%064d' 1)  persistence_ext4_4GB_casper-rw.dat.7z" \
+        '{body: $b, assets: [{name: "images.zip", browser_download_url: "https://github.com/ventoy/backend/images.zip"}]}' \
+        >"$TMP/rel.json"
+    fixture_file "https://api.test/repos/ventoy/backend/releases/latest" "$TMP/rel.json"
+    printf '#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && echo fallback >"$2"; shift; done\n' >"$TMP/vt/CreatePersistentImg.sh"
+    export VENTOY_DIR="$TMP/vt"
+    write_manifest "$ENTRY"
+    mkdir -p "$BUILD_DIR/drive/persistance"
+    run "$CLI" persistence
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"CreatePersistentImg.sh"* ]]
+    [ "$(cat "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat")" = fallback ]
 }

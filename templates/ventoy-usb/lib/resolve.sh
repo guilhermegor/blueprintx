@@ -5,11 +5,11 @@ MS_UA="Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0"
 HASH_RE='[0-9a-fA-F]{64}|[0-9a-fA-F]{40}|[0-9a-fA-F]{32}'
 
 net_get() {
-    "${CURL:-curl}" -fsSL --retry 3 --connect-timeout 20 --max-time 3600 ${NET_UA:+-A "$NET_UA"} -o "$2" "$1"
+    "${CURL:-curl}" -fsSL --retry 3 --proto =https --proto-redir =https --tlsv1.2 --connect-timeout 20 --max-time 3600 ${NET_UA:+-A "$NET_UA"} -o "$2" "$1"
 }
 
 net_size() {
-    "${CURL:-curl}" -fsSIL "$1" | tr -d '\r' | awk 'tolower($1) == "content-length:" { n = $2 } END { print n }'
+    "${CURL:-curl}" -fsSIL --proto =https --proto-redir =https --tlsv1.2 "$1" | tr -d '\r' | awk 'tolower($1) == "content-length:" { n = $2 } END { print n }'
 }
 
 sums_parse() {
@@ -30,17 +30,50 @@ sidecar_hash() {
         rm -f "$path_tmp"
         return 1
     }
-    grep -oE "$HASH_RE" "$path_tmp" | head -n1 || true
+    sed -nE 's/^('"$HASH_RE"')([ *].*)?\r?$/\1/p' "$path_tmp" | head -n1
     rm -f "$path_tmp"
 }
 
+gpg_verify_sums() {
+    local path_sums="$1" str_url="$2" str_trust="$3" str_fpr str_suffix str_keyurl path_home int_rc=1
+    IFS=: read -r _ str_fpr str_suffix str_keyurl <<<"$str_trust"
+    command -v gpg >/dev/null 2>&1 || {
+        echo "gpg: not installed, cannot verify $str_url (fail closed)" >&2
+        return 1
+    }
+    path_home="$(mktemp -d)"
+    chmod 700 "$path_home"
+    if net_get "$str_url$str_suffix" "$path_home/sig" && net_get "$str_keyurl" "$path_home/key.asc" &&
+        gpg --homedir "$path_home" --batch --show-keys --with-colons "$path_home/key.asc" 2>/dev/null |
+        awk -F: '$1 == "fpr" { print $10 }' | grep -qx "$str_fpr" &&
+        gpg --homedir "$path_home" --batch -q --import "$path_home/key.asc" 2>/dev/null &&
+        gpg --homedir "$path_home" --batch --status-fd 1 --verify "$path_home/sig" "$path_sums" 2>/dev/null |
+        awk -v f="$str_fpr" '$1 == "[GNUPG:]" && $2 == "VALIDSIG" && $NF == f { ok = 1 } END { exit !ok }'; then
+        int_rc=0
+    else
+        echo "gpg: signature of $str_url not verified against key $str_fpr (fail closed)" >&2
+    fi
+    rm -rf "$path_home"
+    return "$int_rc"
+}
+
+valid_name() {
+    [[ "$1" =~ ^[A-Za-z0-9._+-]+$ ]] && [[ "$1" != *..* ]]
+}
+
 resolve_dirsums() {
-    local str_base="$1" str_re="$2" str_sums="$3" path_tmp str_name str_hash
+    local str_base="$1" str_re="$2" str_sums="$3" str_trust="${4:-}" path_tmp str_name str_hash
     path_tmp="$(mktemp)"
     net_get "$str_base$str_sums" "$path_tmp" || {
         rm -f "$path_tmp"
         return 1
     }
+    if [[ "$str_trust" == gpg:* ]]; then
+        gpg_verify_sums "$path_tmp" "$str_base$str_sums" "$str_trust" || {
+            rm -f "$path_tmp"
+            return 1
+        }
+    fi
     str_name="$(sums_parse "$path_tmp" | cut -f2 | grep -E "$str_re" | sort -V | tail -n1)" || true
     if [ -z "$str_name" ]; then
         rm -f "$path_tmp"
@@ -177,14 +210,35 @@ resolve_windows() {
     printf '%s\t%s\t\n' "$(basename "${str_url%%\?*}")" "$str_url"
 }
 
+second_origin_check() {
+    local str_name="$1" str_hash="$2" path_tmp str_other
+    path_tmp="$(mktemp)"
+    if ! net_get "https://www.ventoy.net/en/download.html" "$path_tmp"; then
+        rm -f "$path_tmp"
+        print_status "warning" "second origin (ventoy.net) unreachable: $str_name checked against one origin only" >&2
+        return 0
+    fi
+    str_other="$(sed -nE 's/.*"linsha" *: *"([0-9a-f]{64})".*/\1/p' "$path_tmp" | head -n1)"
+    rm -f "$path_tmp"
+    if [ -z "$str_other" ]; then
+        print_status "warning" "second origin (ventoy.net) lists no checksum: $str_name checked against one origin only" >&2
+        return 0
+    fi
+    if [ "$str_other" != "${str_hash,,}" ]; then
+        echo "resolve: GitHub digest and ventoy.net disagree for $str_name (fail closed)" >&2
+        return 1
+    fi
+}
+
 resolve_entry() {
-    local str_line="$1" str_kind str_src str_re str_sum str_row str_name str_url str_hash
+    local str_line="$1" str_kind str_src str_re str_sum str_trust str_row str_name str_url str_hash
+    str_trust="$(manifest_field "$str_line" 10)"
     str_kind="$(manifest_field "$str_line" 4)"
     str_src="$(manifest_field "$str_line" 5)"
     str_re="$(manifest_field "$str_line" 6)"
     str_sum="$(manifest_field "$str_line" 7)"
     case "$str_kind" in
-        dirsums) str_row="$(resolve_dirsums "$str_src" "$str_re" "${str_sum#sums:}")" || return 1 ;;
+        dirsums) str_row="$(resolve_dirsums "$str_src" "$str_re" "${str_sum#sums:}" "$str_trust")" || return 1 ;;
         github) str_row="$(resolve_github "$str_src" "$str_re")" || return 1 ;;
         dirindex) str_row="$(resolve_dirindex "$str_src" "$str_re" "$str_sum")" || return 1 ;;
         sfrss) str_row="$(resolve_sfrss "$str_src" "$str_re" "$str_sum")" || return 1 ;;
@@ -193,6 +247,17 @@ resolve_entry() {
         windows) str_row="$(resolve_windows "$str_src")" || return 1 ;;
     esac
     IFS=$'\t' read -r str_name str_url str_hash <<<"$str_row"
+    if [ "$str_kind" != latesturl ] && ! valid_name "$str_name"; then
+        echo "resolve: refusing unexpected file name '$str_name'" >&2
+        return 1
+    fi
+    if [[ "$str_url" != https://* ]] || { [ "$str_kind" = github ] && [[ "$str_url" != https://github.com/* ]]; }; then
+        echo "resolve: refusing a non-https or off-host URL for $str_name" >&2
+        return 1
+    fi
+    if [ "$str_trust" = two-origin ]; then
+        second_origin_check "$str_name" "$str_hash" || return 1
+    fi
     if [ -z "$str_hash" ] && [[ "$str_sum" != none:* ]]; then
         echo "resolve: no upstream checksum for $str_name (fail closed)" >&2
         return 1
@@ -233,9 +298,13 @@ extract_member() {
         print_status "error" "7z is required to extract $(basename "$path_archive")"
         return 1
     }
+    local path_tmp
     str_member="$(7z l -ba -slt "$path_archive" | sed -n 's/^Path = //p' | grep -E "$str_re" | head -n1)"
     [ -n "$str_member" ] || return 1
-    7z e -y -bso0 -bsp0 -o"$path_dir" "$path_archive" "$str_member"
+    path_tmp="$(mktemp -d "$path_dir/.x.XXXXXX")"
+    7z e -y -bso0 -bsp0 -o"$path_tmp" "$path_archive" "$str_member"
+    mv "$path_tmp/$(basename "$str_member")" "$path_dir/"
+    rm -rf "$path_tmp"
     basename "$str_member"
 }
 
@@ -265,7 +334,7 @@ fetch_entry() {
         [ -n "$str_final" ] && [ -f "$path_dir/$str_final" ]; then
         :
     else
-        print_status "info" "download: $str_id -> $str_name"
+        print_status "info" "download: $str_id -> $str_name [trust: $(manifest_field "$str_line" 10 | cut -d: -f1)]"
         net_get "$str_url" "$path_dest.part" || {
             rm -f "$path_dest.part"
             print_status "error" "$str_id: download failed"

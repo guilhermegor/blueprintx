@@ -9,7 +9,7 @@ while [ "$#" -gt 0 ]; do
             str_dest="$2"
             shift
             ;;
-        --retry | -A | --connect-timeout | --max-time)
+        --retry | -A | --connect-timeout | --max-time | --proto | --proto-redir)
             shift
             ;;
         -*I*) int_head=1 ;;

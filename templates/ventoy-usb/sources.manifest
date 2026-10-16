@@ -1,5 +1,5 @@
-# One entry per line, 9 fields separated by '|':
-#   id|group|folder|kind|source|pattern|checksum|persist|extract
+# One entry per line, 10 fields separated by '|':
+#   id|group|folder|kind|source|pattern|checksum|persist|extract|trust
 # group:    core | windows | android | tool   (windows/android follow ventoy-usb.conf)
 # folder:   path on the drive; '@tools' is cached under .tools/ and never copied to the drive
 # kind:     dirsums | github | dirindex | sfrss | archive | latesturl | windows | manual
@@ -9,31 +9,34 @@
 #           A missing checksum fails that entry. Only none:<reason> skips verification.
 # persist:  Ventoy persistence label; the entry gets a ventoy.json persistence block.
 # extract:  ERE of the archive member to extract after download (needs 7z).
-android-x86|android|isos/Android|sfrss|android-x86/|^android-x86_64-[0-9.]+-r[0-9]+\.iso$|rss-hash||
-lineage-x86|android|isos/Android|sfrss|lineageos-tv-x86/|^lineage-[0-9.]+-[0-9]+-UNOFFICIAL-x86_64_tv-signed\.iso$|sidecar:.sha256sum||
-primeos|android|isos/Android|sfrss|primeos/64-bit|^PrimeOS-[0-9.]+-64-bit-[0-9]+-BETA\.iso$|rss-hash||
-ubuntu-desktop|core|isos/Linux/Desktop|dirsums|https://releases.ubuntu.com/24.04/|^ubuntu-24\.04(\.[0-9]+)*-desktop-amd64\.iso$|sums:SHA256SUMS|casper-rw|
-lubuntu-desktop|core|isos/Linux/Desktop|dirsums|https://cdimage.ubuntu.com/lubuntu/releases/26.04/release/|^lubuntu-26\.04(\.[0-9]+)*-desktop-amd64\.iso$|sums:SHA256SUMS||
-clonezilla|core|isos/Linux/Rescue and Maintenance|dirsums|https://free.nchc.org.tw/clonezilla-live/stable/|^clonezilla-live-[0-9.-]+-amd64\.iso$|sums:CHECKSUMS.TXT||
-hdt|core|isos/Linux/Rescue and Maintenance|manual|https://www.kernel.org/pub/linux/utils/boot/syslinux/Testing/|^hdt-.*\.iso$|none:manual||
-minios-standard|core|isos/Linux/Rescue and Maintenance|github|minios-linux/minios-live|^minios-trixie-xfce-standard-amd64-.*\.iso$|gh-digest||
-minios-ultra|core|isos/Linux/Rescue and Maintenance|github|minios-linux/minios-live|^minios-trixie-xfce-ultra-amd64-.*\.iso$|gh-digest||
-systemrescue|core|isos/Linux/Rescue and Maintenance|sfrss|systemrescuecd/sysresccd-x86|^systemrescue-[0-9.]+-amd64\.iso$|sidecar:.sha256||
-kali-installer|core|isos/Linux/Security and Pentest|dirsums|https://cdimage.kali.org/current/|^kali-linux-[0-9.]+-installer-amd64\.iso$|sums:SHA256SUMS||
-talos-metal|core|isos/Linux/Servers|github|siderolabs/talos|^metal-amd64\.iso$|gh-digest||
-proxmox-ve|core|isos/Linux/Servers|dirsums|https://enterprise.proxmox.com/iso/|^proxmox-ve_[0-9.-]+\.iso$|sums:SHA256SUMS||
-rocky-boot|core|isos/Linux/Servers|dirsums|https://download.rockylinux.org/pub/rocky/10/isos/x86_64/|^Rocky-10\.[0-9]+-x86_64-boot\.iso$|sums:CHECKSUM||
-truenas-scale|core|isos/Linux/Servers|dirindex|https://download.truenas.com/|^TrueNAS-SCALE-[A-Za-z]+/[0-9.]+/TrueNAS-SCALE-[0-9.]+\.iso$|sidecar:.sha256||
-ubuntu-server|core|isos/Linux/Servers|dirsums|https://releases.ubuntu.com/24.04/|^ubuntu-24\.04(\.[0-9]+)*-live-server-amd64\.iso$|sums:SHA256SUMS||
-kolibrios|core|isos/Others|dirsums|https://builds.kolibrios.org/en_US/|^kolibrios-[0-9.+]+-[0-9a-f]+-iso\.7z$|sums:sha256sums.txt||\.iso$
-windows11|windows|isos/Windows|windows|Brazilian Portuguese|\.iso$|none:Microsoft publishes the SHA-256 only on a separate per-language page||
-tiny11|windows|isos/Windows|archive|tiny11_latest|^tiny11_latest\.iso$|archive-hash||
-anydesk|windows|dotfiles/windows|latesturl|https://download.anydesk.com/AnyDesk.exe|^AnyDesk\.exe$|none:AnyDesk publishes no checksum; the binary is code-signed||
-firefox|windows|dotfiles/windows|latesturl|https://download.mozilla.org/?product=firefox-stub&os=win&lang=en-US|^Firefox Installer\.exe$|none:Mozilla publishes no checksum for the stub installer||
-office|windows|dotfiles/windows|latesturl|https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=en-us&version=O16GA|^OfficeSetup\.exe$|none:Microsoft publishes no checksum for the click-to-run bootstrapper||
-powerbi|windows|dotfiles/windows|latesturl|https://download.microsoft.com/download/8/8/0/880BCA75-79DD-466A-927D-1ABF1F5454B0/PBIDesktopSetup_x64.exe|^PBIDesktopSetup_x64\.exe$|none:Microsoft publishes no checksum for the installer||
-revo|windows|dotfiles/windows|latesturl|https://download.revouninstaller.com/download/revosetup.exe|^revosetup\.exe$|none:VS Revo publishes no checksum||
-revo-portable|windows|dotfiles/windows|latesturl|https://download.revouninstaller.com/download/RevoUninstaller_Portable.zip|^RevoUninstaller_Portable\.zip$|none:VS Revo publishes no checksum||
-rufus|windows|dotfiles/windows|github|pbatard/rufus|^rufus-[0-9.]+\.exe$|gh-digest||
-rustdesk|windows|dotfiles/windows|github|rustdesk/rustdesk|^rustdesk-[0-9.]+-x86_64\.exe$|gh-digest||
-ventoy|tool|@tools|github|ventoy/Ventoy|^ventoy-[0-9.]+-linux\.tar\.gz$|gh-digest||
+# trust:    gpg:<fingerprint>:<signature suffix>:<key url> | two-origin | same-origin-digest | none
+#           gpg verifies the checksum file against the vendor key; two-origin checks a second site;
+#           same-origin-digest only detects corruption; none follows an explicit none:<reason>.
+android-x86|android|isos/Android|sfrss|android-x86/|^android-x86_64-[0-9.]+-r[0-9]+\.iso$|rss-hash|||same-origin-digest
+lineage-x86|android|isos/Android|sfrss|lineageos-tv-x86/|^lineage-[0-9.]+-[0-9]+-UNOFFICIAL-x86_64_tv-signed\.iso$|sidecar:.sha256sum|||same-origin-digest
+primeos|android|isos/Android|sfrss|primeos/64-bit|^PrimeOS-[0-9.]+-64-bit-[0-9]+-BETA\.iso$|rss-hash|||same-origin-digest
+ubuntu-desktop|core|isos/Linux/Desktop|dirsums|https://releases.ubuntu.com/24.04/|^ubuntu-24\.04(\.[0-9]+)*-desktop-amd64\.iso$|sums:SHA256SUMS|casper-rw||gpg:843938DF228D22F7B3742BC0D94AA3F0EFE21092:.gpg:https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x843938DF228D22F7B3742BC0D94AA3F0EFE21092
+lubuntu-desktop|core|isos/Linux/Desktop|dirsums|https://cdimage.ubuntu.com/lubuntu/releases/26.04/release/|^lubuntu-26\.04(\.[0-9]+)*-desktop-amd64\.iso$|sums:SHA256SUMS|||gpg:843938DF228D22F7B3742BC0D94AA3F0EFE21092:.gpg:https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x843938DF228D22F7B3742BC0D94AA3F0EFE21092
+clonezilla|core|isos/Linux/Rescue and Maintenance|dirsums|https://free.nchc.org.tw/clonezilla-live/stable/|^clonezilla-live-[0-9.-]+-amd64\.iso$|sums:CHECKSUMS.TXT|||same-origin-digest
+hdt|core|isos/Linux/Rescue and Maintenance|manual|https://www.kernel.org/pub/linux/utils/boot/syslinux/Testing/|^hdt-.*\.iso$|none:manual|||none
+minios-standard|core|isos/Linux/Rescue and Maintenance|github|minios-linux/minios-live|^minios-trixie-xfce-standard-amd64-.*\.iso$|gh-digest|||same-origin-digest
+minios-ultra|core|isos/Linux/Rescue and Maintenance|github|minios-linux/minios-live|^minios-trixie-xfce-ultra-amd64-.*\.iso$|gh-digest|||same-origin-digest
+systemrescue|core|isos/Linux/Rescue and Maintenance|sfrss|systemrescuecd/sysresccd-x86|^systemrescue-[0-9.]+-amd64\.iso$|sidecar:.sha256|||same-origin-digest
+kali-installer|core|isos/Linux/Security and Pentest|dirsums|https://cdimage.kali.org/current/|^kali-linux-[0-9.]+-installer-amd64\.iso$|sums:SHA256SUMS|||gpg:827C8569F2518CC677FECA1AED65462EC8D5E4C5:.gpg:https://archive.kali.org/archive-key.asc
+talos-metal|core|isos/Linux/Servers|github|siderolabs/talos|^metal-amd64\.iso$|gh-digest|||same-origin-digest
+proxmox-ve|core|isos/Linux/Servers|dirsums|https://enterprise.proxmox.com/iso/|^proxmox-ve_[0-9.-]+\.iso$|sums:SHA256SUMS|||same-origin-digest
+rocky-boot|core|isos/Linux/Servers|dirsums|https://download.rockylinux.org/pub/rocky/10/isos/x86_64/|^Rocky-10\.[0-9]+-x86_64-boot\.iso$|sums:CHECKSUM|||same-origin-digest
+truenas-scale|core|isos/Linux/Servers|dirindex|https://download.truenas.com/|^TrueNAS-SCALE-[A-Za-z]+/[0-9.]+/TrueNAS-SCALE-[0-9.]+\.iso$|sidecar:.sha256|||same-origin-digest
+ubuntu-server|core|isos/Linux/Servers|dirsums|https://releases.ubuntu.com/24.04/|^ubuntu-24\.04(\.[0-9]+)*-live-server-amd64\.iso$|sums:SHA256SUMS|||gpg:843938DF228D22F7B3742BC0D94AA3F0EFE21092:.gpg:https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x843938DF228D22F7B3742BC0D94AA3F0EFE21092
+kolibrios|core|isos/Others|dirsums|https://builds.kolibrios.org/en_US/|^kolibrios-[0-9.+]+-[0-9a-f]+-iso\.7z$|sums:sha256sums.txt||\.iso$|same-origin-digest
+windows11|windows|isos/Windows|windows|Brazilian Portuguese|\.iso$|none:Microsoft publishes the SHA-256 only on a separate per-language page|||none
+tiny11|windows|isos/Windows|archive|tiny11_latest|^tiny11_latest\.iso$|archive-hash|||same-origin-digest
+anydesk|windows|dotfiles/windows|latesturl|https://download.anydesk.com/AnyDesk.exe|^AnyDesk\.exe$|none:AnyDesk publishes no checksum; the binary is code-signed|||none
+firefox|windows|dotfiles/windows|latesturl|https://download.mozilla.org/?product=firefox-stub&os=win&lang=en-US|^Firefox Installer\.exe$|none:Mozilla publishes no checksum for the stub installer|||none
+office|windows|dotfiles/windows|latesturl|https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=en-us&version=O16GA|^OfficeSetup\.exe$|none:Microsoft publishes no checksum for the click-to-run bootstrapper|||none
+powerbi|windows|dotfiles/windows|latesturl|https://download.microsoft.com/download/8/8/0/880BCA75-79DD-466A-927D-1ABF1F5454B0/PBIDesktopSetup_x64.exe|^PBIDesktopSetup_x64\.exe$|none:Microsoft publishes no checksum for the installer|||none
+revo|windows|dotfiles/windows|latesturl|https://download.revouninstaller.com/download/revosetup.exe|^revosetup\.exe$|none:VS Revo publishes no checksum|||none
+revo-portable|windows|dotfiles/windows|latesturl|https://download.revouninstaller.com/download/RevoUninstaller_Portable.zip|^RevoUninstaller_Portable\.zip$|none:VS Revo publishes no checksum|||none
+rufus|windows|dotfiles/windows|github|pbatard/rufus|^rufus-[0-9.]+\.exe$|gh-digest|||same-origin-digest
+rustdesk|windows|dotfiles/windows|github|rustdesk/rustdesk|^rustdesk-[0-9.]+-x86_64\.exe$|gh-digest|||same-origin-digest
+ventoy|tool|@tools|github|ventoy/Ventoy|^ventoy-[0-9.]+-linux\.tar\.gz$|gh-digest|||two-origin

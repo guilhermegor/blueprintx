@@ -4,7 +4,7 @@ ${PROJECT_DESCRIPTION}
 
 This repo replaces a roughly 50 GB backup of a Ventoy multiboot drive. The repo plus
 `sources.manifest` is the backup: every ISO and installer is re-fetched at its latest version,
-the persistence image is recreated empty, and the small files that cannot be downloaded live in
+the persistence image is downloaded, and the small files that cannot be downloaded live in
 `payload/`. On a new machine, `git clone` and `make` rebuild the whole drive tree.
 
 ## Usage
@@ -17,7 +17,7 @@ make drive                       # asks for the pendrive path, then installs or 
 make drive TARGET=/media/me/Ventoy
 ```
 
-Requirements: `bash` >= 4, `curl`, `jq`, `rsync`, `7z`, `sha256sum`, `sudo` (persistence image,
+Requirements: `bash` >= 4, `curl`, `jq`, `rsync`, `7z`, `gpg`, `sha256sum`, `sudo` (persistence image,
 Ventoy install, mounting).
 
 ## What `make drive` does
@@ -38,7 +38,7 @@ removable-device detection and partition re-reads, and Ventoy ships no official 
 ## The manifest
 
 `sources.manifest` has one entry per line:
-`id|group|folder|kind|source|pattern|checksum|persist|extract`. Nothing is pinned: each kind
+`id|group|folder|kind|source|pattern|checksum|persist|extract|trust`. Nothing is pinned: each kind
 resolves the newest upstream version on every run.
 
 | kind | newest version comes from | checksum |
@@ -64,11 +64,19 @@ git-ignored; PDFs and scripts are not, so keep this repo private if they are not
 
 ## Persistence and ventoy.json
 
-The persistence image is created empty by Ventoy's `CreatePersistentImg.sh` (Ventoy publishes no
-prebuilt images). It is replaced only when missing or when the configured size changes, and the
+The persistence image is downloaded from Ventoy's `ventoy/backend` releases and verified against
+the sha256 in the release notes; `CreatePersistentImg.sh` (root) is only the fallback for sizes
+nobody publishes. It is replaced only when missing or when the configured size changes, and the
 sync prints a warning because its saved session data is lost. `ventoy.json` is generated from the
 manifest, so the persistence `image` is the path the ISO landed at; `check` fails the build if
 any path in it is missing from the tree.
+
+## Trust
+
+Each manifest entry has a trust level, printed at download time: `gpg` (checksum file signed by a
+key whose fingerprint is in the manifest), `two-origin` (Ventoy: GitHub digest and ventoy.net must
+agree), `same-origin-digest` (detects corruption only) or `none`. See the BlueprintX docs page for
+the table.
 
 ## Development
 

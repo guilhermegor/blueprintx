@@ -38,7 +38,7 @@ A missing or unparsable checksum fails the entry (fail closed). The only opt-out
 `none:<reason>`. Hashes are matched by length (sha256, sha1, md5); md5 and sha1 come from the
 upstream's own feed and are weaker.
 
-Measured 2026-10-16:
+Measured 2026-10-16 (every kind returned its entry live except Windows, which Microsoft rejected, and Clonezilla, whose mirror was down):
 
 | Source | Kind | Newest comes from |
 |---|---|---|
@@ -64,16 +64,41 @@ compromised publisher.
 
 ## Persistence and `ventoy.json`
 
-Ventoy publishes no prebuilt persistence images (checked: its 100 newest GitHub releases, the
-`ventoy.net` pages and its SourceForge feed). The image is created empty by Ventoy's own
-`CreatePersistentImg.sh -s <MB> -t ext4 -l casper-rw -o <path>` (root: it uses a loop device).
-It is replaced only when missing or when the configured size changes, with a warning that the
-saved session data is lost. The folder is spelled `persistance`, as on the original drive.
+Ventoy publishes prebuilt persistence images in the `ventoy/backend` releases
+(`images.zip` holding `persistence_ext4_<N>GB_<label>.dat.7z`; the release notes list their
+sha256). The build downloads the one matching the configured size and label, verifies the 7z
+against the release notes and extracts it. Only when no published image matches (for example a
+size that is not 1, 2 or 4 GB) does it fall back to Ventoy's `CreatePersistentImg.sh -s <MB> -t
+ext4 -l <label> -o <path>`, which needs root for a loop device.
+
+The image is replaced only when missing or when the configured size or label changes (the file
+name encodes both), with a warning that the saved session data is lost. A newer `ventoy/backend`
+release does not replace it: the images are blank templates, and replacing one would wipe the
+session for nothing. The folder is spelled `persistance`, as on the original drive.
 
 `ventoy.json` is generated from the manifest, so a persistence `image` is the path the ISO
 actually landed at (`/isos/Linux/Desktop/ubuntu-...iso`). `check`, also run by `build`, fails if
 any absolute path in the file is missing from the tree. The drive this was measured from had
 exactly that defect.
+
+## Trust levels
+
+Each manifest entry names how its download is authenticated, and the build prints the level.
+
+| level | meaning | entries |
+|---|---|---|
+| `gpg:<fingerprint>:<suffix>:<key url>` | the checksum file's detached signature is verified with `gpg` against a key whose fingerprint is written in the manifest; a missing `gpg`, key or valid signature fails the entry | Ubuntu desktop and server, Lubuntu (Ubuntu CD signing key), Kali |
+| `two-origin` | the GitHub digest must equal the sha256 listed on `ventoy.net`; a disagreement fails, an unreachable second origin warns | Ventoy |
+| `same-origin-digest` | the checksum comes from the same place as the file: it detects corruption, not a tampered upstream | the other checksum-bearing entries (Rocky, Proxmox, Clonezilla, KolibriOS, TrueNAS, SystemRescue, MiniOS, Talos, Rufus, RustDesk, SourceForge and archive.org entries, the persistence image) |
+| `none` | the vendor publishes nothing; explicit `none:<reason>` in the checksum field | vendor installers, Windows 11 |
+
+Rocky's `CHECKSUM` and Proxmox's and Clonezilla's checksum files have no signature or key I could
+verify here, so they stay `same-origin-digest`. Ventoy2Disk runs as root on a block device, so
+the tarball's two-origin check matters most.
+
+Hardening: every request uses `--proto =https --tlsv1.2`; names taken from upstream must match
+`^[A-Za-z0-9._+-]+$` without `..`, and a GitHub download URL must be on `github.com`; archives
+extract into a fresh temp dir; checksum lines are matched exactly.
 
 ## Tools
 
