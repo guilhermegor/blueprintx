@@ -19,9 +19,6 @@ from utils.typing import type_checker
 
 
 @type_checker
-# ⚠️ The two helpers below carry the complexity hatch. Each branch is one documented
-# backend/auth option in a DSN, and the branching IS the assembly: collapsing it would
-# hide which option produced which connection string.
 def _normalize_odbc_bool(str_value: str) -> str:  # complexity-ok: DSN option mapping
     """Map a ``.env`` boolean to the ``yes``/``no`` an ODBC keyword expects.
 
@@ -100,8 +97,6 @@ def _compose_url(str_backend: str) -> str:  # complexity-ok: DSN assembly per ba
                 f"{str_scheme}://{str_user}:{str_password}@{str_host}:{str_port}/{str_name}"
                 f"?driver={str_driver}"
             )
-        # ODBC Driver 18 encrypts by default; append the normalised TLS settings when these
-        # env vars are set so a server with a self-signed certificate stays reachable.
         str_encrypt = os.getenv("DB_ENCRYPT")
         if str_encrypt:
             str_url += f"&Encrypt={_normalize_odbc_bool(str_encrypt)}"

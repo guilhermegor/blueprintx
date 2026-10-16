@@ -20,16 +20,6 @@ from utils.logs import log_message
 from utils.typing import TypeChecker, type_checker
 
 
-# ``pandas`` is imported for real (not TYPE_CHECKING-only) because beartype's runtime check
-# resolves ``pd.DataFrame`` against this module's globals at call time — a TYPE_CHECKING-only
-# alias leaves ``pd`` unbound at runtime and the check fails. Still annotation-only per
-# .layer-policy.yaml: ``pd`` is never called, only used as a type.
-
-
-# One table mapping every recognised env token to bool, mirroring
-# utils/email/dispatch.py's _DICT_ENV_BOOL. Kept local (not imported from utils/) because a
-# model-layer convention file must stay self-contained — utils/ is a seam for vendors, not a
-# place model/ borrows business rules from.
 _DICT_ENV_BOOL: dict[str, bool] = {
     **dict.fromkeys(("1", "true", "yes", "on", "y", "t"), True),
     **dict.fromkeys(("0", "false", "no", "off", "n", "f"), False),

@@ -15,9 +15,6 @@ from pytest_mock import MockerFixture
 from src.controller._pipeline import PipelineOrchestrator, WebhookNotifier
 
 
-# --------------------------
-# Helpers
-# --------------------------
 def _build_orchestrator(
     tmp_path: Path, cls_webhook: WebhookNotifier | None
 ) -> PipelineOrchestrator:
@@ -46,9 +43,6 @@ def _build_orchestrator(
     )
 
 
-# --------------------------
-# Tests
-# --------------------------
 def test_notify_logs_payload_composition_when_gate_short_circuits(
     tmp_path: Path, mocker: MockerFixture
 ) -> None:

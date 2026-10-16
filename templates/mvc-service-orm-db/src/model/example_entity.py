@@ -21,17 +21,9 @@ from utils.frames import from_records
 from utils.typing import TypeChecker
 
 
-# Runtime import on purpose, not TYPE_CHECKING: see docs/coverage-floor.md (blueprintx#617).
-
-
-# Declare the column types on load — never trust pandas' inference (a zero-padded
-# code becomes an int, a mixed column becomes object). Adjust per entity.
 _DICT_DTYPES: dict[str, str] = {"id": "int64", "title": "str"}
 
 
-# NB: SQLAlchemy declarative classes (Base, ExampleRecord) carry their own metaclass, so
-# ``metaclass=TypeChecker`` would raise a metaclass conflict — only the plain service class
-# below takes the runtime checker.
 class Base(DeclarativeBase):
     """Declarative base for the example model."""
 

@@ -95,9 +95,6 @@ def _connect_mysql() -> Any:
 
 
 @type_checker
-# ⚠️ The two helpers below carry the complexity hatch. Each branch is one documented
-# backend/auth option in a DSN, and the branching IS the assembly: collapsing it would
-# hide which option produced which connection string.
 def _normalize_odbc_bool(str_value: str) -> str:  # complexity-ok: DSN option mapping
     """Map a ``.env`` boolean to the ``yes``/``no`` an ODBC keyword expects.
 
@@ -178,13 +175,6 @@ def _connect_oracle() -> Any:
     )
 
 
-# Engine name -> connection builder. Module-level so the engine NAMES have exactly ONE
-# source — the factory below and the `config/queries/<engine>/` directory layout both read
-# these names instead of re-spelling the list.
-#
-# ⚠️ It must FOLLOW the `_connect_*` functions it maps to — the dict is evaluated at import,
-# so those names have to exist by then. The placement is a language constraint, not
-# disorganisation; signposted here so nobody "tidies" it to the top of the file.
 _DICT_BUILDERS: dict[str, Callable[[], Any]] = {
     "sqlite": _connect_sqlite,
     "postgresql": _connect_postgresql,
@@ -194,7 +184,6 @@ _DICT_BUILDERS: dict[str, Callable[[], Any]] = {
     "oracle": _connect_oracle,
 }
 
-# The supported engine names, derived from the dispatch map so the two cannot drift.
 SET_BACKENDS: frozenset[str] = frozenset(_DICT_BUILDERS)
 
 _STR_DEFAULT_BACKEND = "sqlite"
