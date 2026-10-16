@@ -175,7 +175,7 @@ human_reviewers=n
 ### `ventoy-usb`
 
 `bin/scaffold/ventoy_usb.sh` reads, in this order: `include_windows`, `include_android`,
-`persistence_size_mb`, then `review_bot_roster` and the git remote prompt.
+`persistence_size_mb`, then `review_bot_roster` and the git remote block (the same one `ts-lib` uses).
 `tests/test_spec_answers.sh` pins that order and runs the whole scaffold from a spec.
 
 | Key | Default | Notes |
@@ -185,6 +185,10 @@ human_reviewers=n
 | `persistence_size_mb` | `4096` | A multiple of 1024, at least 1024; anything else stops the run naming the key. |
 | `review_bot_roster` | `n` | Same as the service tiers. |
 | `git_remote` | `n` | `y` adds `origin`. Alone it creates nothing on GitHub. |
+| `create_repo` | `n` | `y` creates the repo on GitHub and pushes. Needs `git_remote=y`. |
+| `repo_visibility` | `private` | `public` or `private`. Read only when `create_repo=y`. Defaults to `private`, as for `ts-lib`: a repo made public by omission cannot be taken back. |
+| `kanban` | `n` | `y` also creates the linked GitHub Project. |
+| `protect_branch` | `n` | `y` protects `main`. |
 
 The folder tree is the same either way: the two switches only decide what is downloaded.
 

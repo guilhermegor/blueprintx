@@ -19,23 +19,26 @@ PERSISTENCE_SIZE_MB="${PERSISTENCE_SIZE_MB:-4096}"
 MANIFEST_FILE="${MANIFEST_FILE:-$PROJECT_ROOT/sources.manifest}"
 BUILD_DIR="${BUILD_DIR:-$PROJECT_ROOT/build}"
 DRIVE_DIR="$BUILD_DIR/drive"
-CACHE_DIR="$BUILD_DIR/cache"
+TOOLS_DIR="${TOOLS_DIR:-$PROJECT_ROOT/.tools}"
+export BUILD_DIR TOOLS_DIR
 
 print_usage() {
     echo "Usage: ${PROJECT_NAME} [options] <command>"
     echo
     echo "Commands:"
     echo "  layout       Create the empty drive tree under build/drive"
-    echo "  fetch        Download and verify every manifest entry"
+    echo "  tools        Download the latest Ventoy release into .tools/ (checksum-verified)"
+    echo "  fetch        Download and verify the latest version of every manifest entry"
     echo "  persistence  Create the empty persistence image (needs root)"
     echo "  config       Generate ventoy/ventoy.json from the manifest"
     echo "  check        Fail if ventoy.json points at a path missing from the tree"
-    echo "  build        layout + fetch + manual overlay + persistence + config + check"
-    echo "  drive        Write the tree to --device /dev/sdX (destructive)"
+    echo "  build        layout + fetch + payload overlay + persistence + config + check"
+    echo "  drive        Sync the tree to the pendrive; installs Ventoy first if it is absent"
     echo
     echo "Options:"
-    echo "  --device DEV   Target for 'drive'; never inferred"
+    echo "  --target PATH  Pendrive mount point or /dev/sdX; asked for when omitted"
     echo "  --dry-run      Print what 'drive' would do and touch nothing"
+    echo "  --yes-delete-extras  Delete drive items outside the layout without asking"
     echo "  -V, --version  Print version and exit"
     echo "  -h, --help     Show this help"
 }
@@ -50,23 +53,28 @@ print_version() {
     fi
 }
 
-overlay_manual() {
-    [ -d "$PROJECT_ROOT/manual" ] || return 0
-    rsync -a "$PROJECT_ROOT/manual/" "$DRIVE_DIR/"
+overlay_payload() {
+    [ -d "$PROJECT_ROOT/payload" ] || return 0
+    rsync -a --exclude=.gitkeep "$PROJECT_ROOT/payload/" "$DRIVE_DIR/"
+}
+
+cmd_fetch() {
+    fetch_all "$MANIFEST_FILE" "$DRIVE_DIR" "$BUILD_DIR/resolved.tsv"
 }
 
 cmd_build() {
+    local int_rc=0
     layout_create "$MANIFEST_FILE" "$DRIVE_DIR"
-    mkdir -p "$CACHE_DIR"
-    fetch_all "$MANIFEST_FILE" "$DRIVE_DIR" "$CACHE_DIR" "$BUILD_DIR/resolved.tsv"
-    overlay_manual
-    persistence_create "$MANIFEST_FILE" "$DRIVE_DIR" "$PERSISTENCE_SIZE_MB" "$CACHE_DIR"
+    cmd_fetch || int_rc=1
+    overlay_payload
+    persistence_create "$MANIFEST_FILE" "$DRIVE_DIR" "$PERSISTENCE_SIZE_MB"
     ventoy_json_generate "$MANIFEST_FILE" "$DRIVE_DIR" "$BUILD_DIR/resolved.tsv" "$PERSISTENCE_SIZE_MB"
     ventoy_json_check "$DRIVE_DIR"
+    return "$int_rc"
 }
 
 main() {
-    local str_cmd="" str_device="" int_dry=0
+    local str_cmd="" str_target="" int_dry=0 int_yes=0
     while [ "$#" -gt 0 ]; do
         case "$1" in
             -V | --version)
@@ -77,11 +85,12 @@ main() {
                 print_usage
                 return 0
                 ;;
-            --device)
-                str_device="${2:-}"
+            --target)
+                str_target="${2:-}"
                 shift
                 ;;
             --dry-run) int_dry=1 ;;
+            --yes-delete-extras) int_yes=1 ;;
             -*)
                 print_status "error" "Unknown option: $1"
                 print_usage
@@ -94,15 +103,17 @@ main() {
     case "$str_cmd" in
         "") print_usage ;;
         layout) layout_create "$MANIFEST_FILE" "$DRIVE_DIR" ;;
-        fetch)
-            mkdir -p "$CACHE_DIR"
-            fetch_all "$MANIFEST_FILE" "$DRIVE_DIR" "$CACHE_DIR" "$BUILD_DIR/resolved.tsv"
-            ;;
-        persistence) persistence_create "$MANIFEST_FILE" "$DRIVE_DIR" "$PERSISTENCE_SIZE_MB" "$CACHE_DIR" ;;
+        tools) tools_ensure "$MANIFEST_FILE" ;;
+        fetch) cmd_fetch ;;
+        persistence) persistence_create "$MANIFEST_FILE" "$DRIVE_DIR" "$PERSISTENCE_SIZE_MB" ;;
         config) ventoy_json_generate "$MANIFEST_FILE" "$DRIVE_DIR" "$BUILD_DIR/resolved.tsv" "$PERSISTENCE_SIZE_MB" ;;
         check) ventoy_json_check "$DRIVE_DIR" ;;
         build) cmd_build ;;
-        drive) drive_write "$str_device" "$DRIVE_DIR" "$CACHE_DIR" "$int_dry" ;;
+        drive)
+            DRY_RUN="$int_dry"
+            export DRY_RUN
+            drive_write "$str_target" "$MANIFEST_FILE" "$DRIVE_DIR" "$BUILD_DIR/resolved.tsv" "$int_yes"
+            ;;
         *)
             print_status "error" "Unknown command: $str_cmd"
             print_usage

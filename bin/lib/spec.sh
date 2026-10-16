@@ -197,6 +197,7 @@ spec_stdin_for_skeleton() {
             _spec_answer_ventoy_options "$file"
             _spec_answer_review_bot "$file"
             _spec_answer_git_remote "$file"
+            _spec_answer_create_repo "$file"
             ;;
         *)
             return 1
@@ -233,7 +234,8 @@ _spec_key_map() {
             ;;
         ventoy-usb)
             keys=(include_windows:y include_android:y persistence_size_mb:4096 \
-                review_bot_roster:n git_remote:n)
+                review_bot_roster:n git_remote:n create_repo:n repo_visibility:private \
+                kanban:n protect_branch:n)
             ;;
         *)
             echo "no named-key prompt map for '$skeleton' yet" >&2

@@ -1,4 +1,6 @@
-.PHONY: lint test build drive repo_rules repo_rules_verify help
+.PHONY: all lint test tools build drive repo_rules repo_rules_verify help
+
+all: build
 
 lint:
 	@shellcheck --severity=warning --exclude=SC1091 bin/${PROJECT_NAME} lib/*.sh
@@ -7,11 +9,14 @@ lint:
 test:
 	@bats tests/
 
+tools:
+	@bin/${PROJECT_NAME} tools
+
 build:
 	@bin/${PROJECT_NAME} build
 
 drive:
-	@bin/${PROJECT_NAME} drive --device "$(DEVICE)" $(if $(DRY_RUN),--dry-run)
+	@bin/${PROJECT_NAME} drive $(if $(TARGET),--target "$(TARGET)") $(if $(DRY_RUN),--dry-run) $(if $(YES_DELETE_EXTRAS),--yes-delete-extras)
 
 repo_rules:
 	@bash bin/enable_repo_rules.sh
@@ -22,7 +27,9 @@ repo_rules_verify:
 help:
 	@echo "make lint                    - shellcheck + shfmt"
 	@echo "make test                    - bats tests/ (network stubbed)"
+	@echo "make tools                   - download the latest Ventoy into .tools/"
+	@echo "make                         - same as make build"
 	@echo "make build                   - download, verify and assemble build/drive"
-	@echo "make drive DEVICE=/dev/sdX   - write build/drive to a removable drive (add DRY_RUN=1 to preview)"
+	@echo "make drive [TARGET=path]     - sync build/drive to the pendrive (asks for the path; DRY_RUN=1 previews)"
 	@echo "make repo_rules              - provision the pr-quality-gate ruleset + merge settings"
 	@echo "make repo_rules_verify       - assert required checks are strict (read-only, fails loud)"

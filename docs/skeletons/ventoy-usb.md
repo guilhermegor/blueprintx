@@ -2,75 +2,103 @@
 
 Generates a repo that rebuilds a [Ventoy](https://www.ventoy.net) multiboot drive with a fixed
 folder layout, downloading the payload at build time. Nothing is copied from an existing drive and
-no payload is committed (`.gitignore` excludes `*.iso *.exe *.zip *.dat` and `build/`).
+no ISO, installer or persistence image is committed (`.gitignore` excludes `*.iso *.exe *.zip *.dat *.7z`,
+`build/` and `.tools/`). The repo plus the manifest replaces a ~50 GB backup of the drive.
 Source: `templates/ventoy-usb/`, `bin/scaffold/ventoy_usb.sh` (blueprintx#817, parent #816).
 
 ## What it ships
 
 - `sources.manifest`: one line per payload (`id|group|folder|kind|source|pattern|checksum|persist`).
   The drive tree, the downloads and `ventoy/ventoy.json` are all derived from it.
-- `bin/<project>`: `layout`, `fetch`, `persistence`, `config`, `check`, `build`, `drive`.
+- `bin/<project>`: `layout`, `tools`, `fetch`, `persistence`, `config`, `check`, `build`, `drive`.
 - `lib/`: `manifest.sh` (parse and validate), `resolve.sh` (resolvers, download, verify),
   `layout.sh`, `ventoy_config.sh` (`ventoy.json`, persistence image), `drive.sh` (device guard).
 - `ventoy-usb.conf`: the scaffold answers (`INCLUDE_WINDOWS`, `INCLUDE_ANDROID`, `PERSISTENCE_SIZE_MB`).
-- `manual/`: overlay for payloads that cannot be fetched; `build` copies it onto the tree.
+- `payload/`: files copied verbatim onto the tree (owner scripts, small PDFs).
 - `tests/*.bats`: layout diff, manifest parsing, resolvers, `ventoy.json` path check, device guard.
   Network is stubbed through `CURL=tests/helpers/curl_stub.sh`.
 
 ## Resolvers
 
-| kind | "latest" comes from | checksum |
+No version is ever pinned: each entry resolves the newest upstream version at run time, and an
+entry that cannot be resolved fails alone with a message while the rest continue.
+
+| kind | newest version comes from | checksum |
 |---|---|---|
-| `dirsums` | the newest name matching `pattern` (`sort -V`) in a published checksum file | the same file (GNU, BSD and multi-section `CHECKSUMS.TXT` formats) |
-| `github` | the newest release asset matching `pattern` | the asset `digest` the GitHub API reports (`sha256:...`) |
-| `pinned` | none: a fixed URL, with a `# no stable latest` note above it | `sidecar:<suffix>` file or `sha256:<hex>` |
-| `manual` | never downloaded; the build prints where to put the file | n/a |
+| `dirsums` | the newest name matching `pattern` in a published checksum file (GNU, BSD and multi-section formats) | the same file |
+| `github` | latest release asset | the asset `digest` the GitHub API reports |
+| `dirindex` | newest link matching `pattern` in an HTML directory index | `sidecar:<suffix>` file |
+| `sfrss` | SourceForge file feed (`rss?path=`, 100 newest items) | sidecar, or the md5 in the feed |
+| `archive` | archive.org item metadata | the sha1 in the metadata |
+| `latesturl` | a vendor URL that always serves the latest installer | none published; re-downloaded when `Content-Length` changes |
+| `windows` | Microsoft's software-download-connector API (the Fido/Mido flow): a fresh time-limited link per run | none via the API |
+| `manual` | nothing resolvable | n/a |
 
-A missing or unparsable checksum fails the build (fail closed). The only opt-out is an explicit
-`none:<reason>`. `dirsums` and `github` entries cannot opt out.
+A missing or unparsable checksum fails the entry (fail closed). The only opt-out is an explicit
+`none:<reason>`. Hashes are matched by length (sha256, sha1, md5); md5 and sha1 come from the
+upstream's own feed and are weaker.
 
-Measured sources (2026-10-15):
+Measured 2026-10-16:
 
-| Source | Kind | Latest-ness | Checksum |
-|---|---|---|---|
-| Ubuntu desktop / server 24.04.x | `dirsums` | newest point release | `SHA256SUMS` |
-| Lubuntu 26.04.x | `dirsums` | newest point release (series pinned in the URL) | `SHA256SUMS` |
-| Kali installer | `dirsums` | `current/` always the newest | `SHA256SUMS` |
-| Clonezilla stable | `dirsums` | newest in `clonezilla-live/stable/` | `CHECKSUMS.TXT` |
-| Rocky 10 boot | `dirsums` | newest 10.x | `CHECKSUM` (BSD format) |
-| Proxmox VE (x86_64) | `dirsums` | newest | `SHA256SUMS` |
-| Talos `metal-amd64.iso` | `github` | latest release | asset `digest` |
-| MiniOS standard and ultra | `github` | latest release | asset `digest` |
-| Ventoy (installer + persistence script) | `github` | latest release | asset `digest` |
-| Rufus, RustDesk (Windows) | `github` | latest release | asset `digest` |
-| SystemRescue 13.02 | `pinned` | no machine-readable newest feed | `.sha256` sidecar |
-| TrueNAS SCALE 25.10.7 | `pinned` | one listing mixes every train and beta | `.sha256` sidecar |
-| Windows 11, tiny11, Android-x86, Lineage x86, PrimeOS | `manual` | no stable URL or no checksum | n/a |
-| HDT, KolibriOS (nightly is a `.7z`) | `manual` | unmaintained or archive-only | n/a |
-| AnyDesk, Firefox, Office, Power BI, Revo | `manual` | per-session or checksum-less downloads | n/a |
-| Owner scripts (`dotfiles`, `disk-rescue.sh`) | `manual` | not public artifacts | n/a |
+| Source | Kind | Newest comes from |
+|---|---|---|
+| Ubuntu desktop and server 24.04.x, Lubuntu 26.04.x, Kali, Rocky 10, Proxmox VE, Clonezilla, KolibriOS | `dirsums` | checksum file listing |
+| Talos, MiniOS, Ventoy, Rufus, RustDesk | `github` | latest release |
+| TrueNAS SCALE | `dirindex` | root index, stable releases of any train |
+| SystemRescue, Android-x86, PrimeOS, Lineage x86 TV (`lineageos-tv-x86`) | `sfrss` | SourceForge feed |
+| tiny11 | `archive` | the maintainer's `tiny11_latest` item |
+| AnyDesk, Firefox, Office, Power BI, Revo (and portable) | `latesturl` | vendor URL |
+| Windows 11 pt-BR | `windows` | Microsoft API |
+| HDT | `manual` | unmaintained, no feed |
 
-tiny11 is a third-party rebuild of Windows with no signed checksum, so it is never fetched.
-The Proxmox entry selects the x86_64 ISO; the drive this was measured from carried the arm64 one.
+Series that are part of an upstream path (Ubuntu 24.04, Lubuntu 26.04, Rocky 10) are the
+release line the drive tracks, not a pinned point release.
 
-A `github` `digest` is computed by GitHub, so it detects a corrupted or swapped download but
-does not attest the publisher. Where a project also signs its release, verifying that signature
-is a stronger follow-up.
+Windows 11: Microsoft's API sometimes answers `Sentinel marked this request as rejected`. That
+is a per-entry failure with a message to download the ISO into `payload/isos/Windows/`. The API
+publishes no SHA-256, so the entry carries an explicit `none:<reason>`; TLS to microsoft.com is the
+only integrity check.
+
+A `github` `digest` is computed by GitHub: it detects corruption or a swapped download, not a
+compromised publisher.
 
 ## Persistence and `ventoy.json`
 
-The persistence image is created empty by Ventoy's own `CreatePersistentImg.sh -s <MB> -t ext4
--l casper-rw -o <path>` (root is required: it uses a loop device). It is never downloaded.
-The folder is spelled `persistance`, as on the original drive.
+Ventoy publishes no prebuilt persistence images (checked: its 100 newest GitHub releases, the
+`ventoy.net` pages and its SourceForge feed). The image is created empty by Ventoy's own
+`CreatePersistentImg.sh -s <MB> -t ext4 -l casper-rw -o <path>` (root: it uses a loop device).
+It is replaced only when missing or when the configured size changes, with a warning that the
+saved session data is lost. The folder is spelled `persistance`, as on the original drive.
 
 `ventoy.json` is generated from the manifest, so a persistence `image` is the path the ISO
-actually landed at. `check` (also run by `build`) fails if any absolute path in the file is
-missing from the tree. The drive this skeleton was measured from had exactly that defect: its
-persistence entry pointed at `/isos/Linux/ubuntu-...iso` while the ISO lived in `Desktop/`.
+actually landed at (`/isos/Linux/Desktop/ubuntu-...iso`). `check`, also run by `build`, fails if
+any absolute path in the file is missing from the tree. The drive this was measured from had
+exactly that defect.
+
+## Tools
+
+`make tools` (also run when Ventoy is missing) downloads the latest Ventoy Linux release into
+the git-ignored `.tools/` and verifies the sha256 GitHub publishes for it.
 
 ## Writing a drive
 
-`make drive DEVICE=/dev/sdX` (add `DRY_RUN=1` to preview). It refuses an empty device, a path
-outside `/dev`, and anything `lsblk` does not report as a removable disk (`TYPE=disk RM=1`), then
-requires the device path to be typed back before it runs `Ventoy2Disk.sh -I` and syncs the tree.
-The guard is tested with a stubbed `lsblk`; the write path is never run in tests.
+`make drive` asks for the pendrive path (or takes `TARGET=`), resolves it to the block device
+and refuses anything `lsblk` does not report as a removable disk (`TYPE=disk RM=1`).
+
+- Ventoy present (a `VTOYEFI` partition): **sync**. New and changed files are copied; an older
+  version of a manifest entry is deleted automatically once the newer one is in place; every
+  other item outside the layout asks `delete <path>? [y/N]` (default no, `YES_DELETE_EXTRAS=1`
+  answers yes to all).
+- Ventoy absent: **install**. Warns that the whole device is erased, shows model, size and
+  partitions, requires the device name to be typed, runs `Ventoy2Disk.sh -I`, then syncs.
+
+Both paths are tested with stubbed `lsblk`, `findmnt` and `Ventoy2Disk.sh`; no test touches a
+device. Docker is deliberately not used for this path: it needs `--privileged` or `--device`,
+which breaks removable-device detection and the partition re-read, and Ventoy has no official
+image.
+
+## Payload
+
+Anything under `payload/` is copied verbatim onto the tree (owner scripts, small PDFs).
+`.gitignore` excludes `*.iso *.exe *.zip *.dat *.7z`, not `*.pdf`, so keep a repo that commits
+third-party PDFs private.

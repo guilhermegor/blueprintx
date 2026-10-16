@@ -47,19 +47,35 @@ ventoy_json_check() {
     return "$int_bad"
 }
 
+tools_ventoy_dir() {
+    ls -d "$TOOLS_DIR"/ventoy-[0-9]*/ 2>/dev/null | sort -V | tail -n1
+}
+
+tools_ensure() {
+    local path_manifest="$1" str_line
+    [ -z "${VENTOY_DIR:-}" ] || return 0
+    if [ -z "$(tools_ventoy_dir)" ]; then
+        str_line="$(manifest_entries "$path_manifest" | grep '^ventoy|')" || return 1
+        fetch_entry "$str_line" "" "/dev/null" "${BUILD_DIR:-build}/state" || return 1
+        tar -xzf "$(ls "$TOOLS_DIR"/ventoy-*-linux.tar.gz | sort -V | tail -n1)" -C "$TOOLS_DIR"
+    fi
+}
+
 persistence_create() {
-    local path_manifest="$1" path_drive="$2" int_size_mb="$3" path_cache="$4"
-    local str_line str_label path_img path_tool
+    local path_manifest="$1" path_drive="$2" int_size_mb="$3"
+    local str_line str_label path_img path_tool str_name
     manifest_entries "$path_manifest" >/dev/null || return 1
     while IFS= read -r str_line; do
         str_label="$(manifest_field "$str_line" 8)"
         [ -n "$str_label" ] || continue
-        path_img="$path_drive/persistance/$(persistence_file_name "$int_size_mb" "$str_label")"
+        str_name="$(persistence_file_name "$int_size_mb" "$str_label")"
+        path_img="$path_drive/persistance/$str_name"
         [ ! -f "$path_img" ] || continue
-        path_tool="${VENTOY_DIR:-}"
-        if [ -z "$path_tool" ]; then
-            tar -xzf "$path_cache"/ventoy-*-linux.tar.gz -C "$path_cache"
-            path_tool="$(dirname "$(ls "$path_cache"/ventoy-*/CreatePersistentImg.sh)")"
+        tools_ensure "$path_manifest" || return 1
+        path_tool="${VENTOY_DIR:-$(tools_ventoy_dir)}"
+        if compgen -G "$path_drive/persistance/persistence_ext4_*_${str_label}.dat" >/dev/null; then
+            print_status "warning" "persistence size changed: the saved session data in the old image is lost"
+            rm -f "$path_drive"/persistance/persistence_ext4_*_"${str_label}".dat
         fi
         print_status "info" "creating empty ${int_size_mb} MB persistence image (needs root: losetup)"
         ${SUDO-sudo} bash "$path_tool/CreatePersistentImg.sh" -s "$int_size_mb" -t ext4 -l "$str_label" -o "$path_img"

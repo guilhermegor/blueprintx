@@ -16,11 +16,9 @@ manifest_group_enabled() {
 manifest_checksum_valid() {
     local str_kind="$1" str_sum="$2"
     case "$str_kind:$str_sum" in
-        dirsums:sums:?*) ;;
-        github:gh-digest) ;;
-        pinned:sidecar:?*) ;;
-        pinned:sha256:*) [[ "$str_sum" =~ ^sha256:[0-9a-f]{64}$ ]] ;;
-        pinned:none:?* | github:none:?*) ;;
+        dirsums:sums:?* | github:gh-digest | dirindex:sidecar:?* | sfrss:sidecar:?*) ;;
+        sfrss:rss-hash | archive:archive-hash | latesturl:sidecar:?*) ;;
+        github:none:?* | dirindex:none:?* | latesturl:none:?* | windows:none:?*) ;;
         manual:*) ;;
         *) return 1 ;;
     esac
@@ -29,12 +27,12 @@ manifest_checksum_valid() {
 manifest_validate_line() {
     local str_line="$1" str_pipes
     str_pipes="${str_line//[^|]/}"
-    if [ "${#str_pipes}" -ne 7 ]; then
-        echo "manifest: expected 8 '|'-separated fields: $str_line" >&2
+    if [ "${#str_pipes}" -ne 8 ]; then
+        echo "manifest: expected 9 '|'-separated fields: $str_line" >&2
         return 1
     fi
     case "$(manifest_field "$str_line" 4)" in
-        dirsums | github | pinned | manual) ;;
+        dirsums | github | dirindex | sfrss | archive | latesturl | windows | manual) ;;
         *)
             echo "manifest: unknown kind in: $str_line" >&2
             return 1

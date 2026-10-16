@@ -2,48 +2,124 @@
 
 load helpers/common
 
-lsblk_stub() {
-    printf '#!/bin/sh\necho "%s"\n' "$1" >"$TMP/lsblk"
-    chmod +x "$TMP/lsblk"
-    export LSBLK="$TMP/lsblk"
+make_stubs() {
+    mkdir -p "$TMP/vt" "$BUILD_DIR/drive/isos/Linux/Desktop" "$BUILD_DIR/drive/ventoy" "$TMP/mnt"
+    printf '#!/bin/sh\necho "$@" >>"%s/ventoy.log"\n' "$TMP" >"$TMP/vt/Ventoy2Disk.sh"
+    cat >"$TMP/lsblk" <<STUB
+#!/bin/sh
+case "\$*" in
+    *PKNAME*) [ "\$LAST" = "/dev/sdb1" ] && echo sdb ;;
+    *TYPE,RM*) echo "\$STUB_TYPE_RM" ;;
+    *LABEL*) printf 'Ventoy\nVTOYEFI\n' | { [ "\$STUB_VENTOY" = 1 ] && cat; } ;;
+    *) echo "sdb  Stub Disk 16G" ;;
+esac
+STUB
+    sed -i '2i for LAST in "$@"; do :; done' "$TMP/lsblk"
+    printf '#!/bin/sh\necho /dev/sdb1\n' >"$TMP/findmnt"
+    chmod +x "$TMP/lsblk" "$TMP/findmnt"
+    export LSBLK="$TMP/lsblk" FINDMNT="$TMP/findmnt" VENTOY_DIR="$TMP/vt" DRIVE_MNT="$TMP/mnt"
+    export STUB_TYPE_RM="disk 1" STUB_VENTOY=1
+    write_manifest 'u|core|isos/Linux/Desktop|latesturl|https://h/u.iso|^u-[0-9]+\.iso$|none:t||'
+    echo new >"$BUILD_DIR/drive/isos/Linux/Desktop/u-2.iso"
+    printf 'u\tisos/Linux/Desktop/u-2.iso\n' >"$BUILD_DIR/resolved.tsv"
 }
 
-@test "drive refuses an implicit device" {
-    run "$CLI" drive --dry-run
+@test "drive without --target and without a terminal refuses" {
+    make_stubs
+    run "$CLI" drive --dry-run </dev/null
     [ "$status" -ne 0 ]
-    [[ "$output" == *"no device given"* ]]
-}
-
-@test "drive refuses a path outside /dev" {
-    run "$CLI" drive --device ./sdb --dry-run
-    [ "$status" -ne 0 ]
+    [[ "$output" == *"no target given"* ]]
 }
 
 @test "drive refuses a non-removable device" {
-    lsblk_stub "disk 0"
-    run "$CLI" drive --device /dev/sda --dry-run
+    make_stubs
+    STUB_TYPE_RM="disk 0" run "$CLI" drive --target /dev/sda --dry-run
     [ "$status" -ne 0 ]
     [[ "$output" == *"not a removable disk"* ]]
 }
 
-@test "drive refuses a partition even when removable" {
-    lsblk_stub "part 1"
-    run "$CLI" drive --device /dev/sdb1 --dry-run
+@test "drive refuses a partition-typed device" {
+    make_stubs
+    STUB_TYPE_RM="part 1" run "$CLI" drive --target /dev/sdb --dry-run
     [ "$status" -ne 0 ]
 }
 
-@test "dry-run on a removable disk prints the plan and writes nothing" {
-    lsblk_stub "disk 1"
-    export SUDO="false"
-    run "$CLI" drive --device /dev/sdb --dry-run
+@test "a mount-point target resolves to its parent device" {
+    make_stubs
+    STUB_TYPE_RM="disk 0" run "$CLI" drive --target /media/x
+    [[ "$output" == *"/dev/sdb is not a removable disk"* ]]
+}
+
+@test "sync mode never runs Ventoy2Disk, copies new files and replaces the older version" {
+    make_stubs
+    mkdir -p "$TMP/mnt/isos/Linux/Desktop"
+    echo old >"$TMP/mnt/isos/Linux/Desktop/u-1.iso"
+    run "$CLI" drive --target /dev/sdb </dev/null
     [ "$status" -eq 0 ]
-    [[ "$output" == *"dry-run: would ERASE /dev/sdb"* ]]
+    [[ "$output" == *"sync mode"* ]]
+    [ ! -e "$TMP/ventoy.log" ]
+    [ -f "$TMP/mnt/isos/Linux/Desktop/u-2.iso" ]
+    [ ! -e "$TMP/mnt/isos/Linux/Desktop/u-1.iso" ]
 }
 
-@test "a wrong confirmation aborts before anything runs" {
-    lsblk_stub "disk 1"
-    export SUDO="false"
-    run "$CLI" drive --device /dev/sdb <<<"/dev/other"
+@test "an extra item is kept by default and deleted only on an explicit yes" {
+    make_stubs
+    mkdir -p "$TMP/mnt/.Trash-1000"
+    echo x >"$TMP/mnt/stray.txt"
+    run "$CLI" drive --target /dev/sdb </dev/null
+    [ -e "$TMP/mnt/stray.txt" ]
+    [ -d "$TMP/mnt/.Trash-1000" ]
+    run "$CLI" drive --target /dev/sdb <<<$'y\nn'
+    [ ! -e "$TMP/mnt/stray.txt" ]
+    [ -d "$TMP/mnt/.Trash-1000" ]
+}
+
+@test "--yes-delete-extras deletes extras without asking" {
+    make_stubs
+    echo x >"$TMP/mnt/stray.txt"
+    run "$CLI" drive --target /dev/sdb --yes-delete-extras </dev/null
+    [ ! -e "$TMP/mnt/stray.txt" ]
+}
+
+@test "install mode aborts on a wrong confirmation and never runs Ventoy2Disk" {
+    make_stubs
+    STUB_VENTOY=0 run "$CLI" drive --target /dev/sdb <<<"/dev/other"
     [ "$status" -ne 0 ]
+    [[ "$output" == *"ERASED"* ]]
     [[ "$output" == *"confirmation did not match"* ]]
+    [ ! -e "$TMP/ventoy.log" ]
+}
+
+@test "install mode runs Ventoy2Disk -I after the typed confirmation, then syncs" {
+    make_stubs
+    STUB_VENTOY=0 run "$CLI" drive --target /dev/sdb <<<"/dev/sdb"
+    [ "$status" -eq 0 ]
+    grep -q -- "-I /dev/sdb" "$TMP/ventoy.log"
+    [ -f "$TMP/mnt/isos/Linux/Desktop/u-2.iso" ]
+}
+
+@test "dry-run changes nothing in either mode" {
+    make_stubs
+    echo old >"$TMP/mnt/stray.txt"
+    run "$CLI" drive --target /dev/sdb --dry-run
+    [ "$status" -eq 0 ]
+    [ ! -e "$TMP/mnt/isos/Linux/Desktop/u-2.iso" ]
+    [ -e "$TMP/mnt/stray.txt" ]
+    STUB_VENTOY=0 run "$CLI" drive --target /dev/sdb --dry-run
+    [ "$status" -eq 0 ]
+    [ ! -e "$TMP/ventoy.log" ]
+}
+
+@test "persistence is copied only when missing and a changed one warns" {
+    make_stubs
+    mkdir -p "$BUILD_DIR/drive/persistance" "$TMP/mnt/persistance"
+    echo new >"$BUILD_DIR/drive/persistance/persistence_ext4_8GB_casper-rw.dat"
+    echo old >"$TMP/mnt/persistance/persistence_ext4_4GB_casper-rw.dat"
+    run "$CLI" drive --target /dev/sdb </dev/null
+    [[ "$output" == *"saved session data"* ]]
+    [ -f "$TMP/mnt/persistance/persistence_ext4_8GB_casper-rw.dat" ]
+    [ ! -e "$TMP/mnt/persistance/persistence_ext4_4GB_casper-rw.dat" ]
+    echo keep >"$TMP/mnt/persistance/persistence_ext4_8GB_casper-rw.dat"
+    run "$CLI" drive --target /dev/sdb </dev/null
+    [ "$(cat "$TMP/mnt/persistance/persistence_ext4_8GB_casper-rw.dat")" = keep ]
 }

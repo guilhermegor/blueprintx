@@ -1,13 +1,37 @@
 #!/usr/bin/env bash
 
+TOOLS_DIR="${TOOLS_DIR:-${PROJECT_ROOT:-.}/.tools}"
+MS_UA="Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0"
+HASH_RE='[0-9a-fA-F]{64}|[0-9a-fA-F]{40}|[0-9a-fA-F]{32}'
+
 net_get() {
-    "${CURL:-curl}" -fsSL --retry 3 -o "$2" "$1"
+    "${CURL:-curl}" -fsSL --retry 3 --connect-timeout 20 --max-time 3600 ${NET_UA:+-A "$NET_UA"} -o "$2" "$1"
+}
+
+net_size() {
+    "${CURL:-curl}" -fsSIL "$1" | tr -d '\r' | awk 'tolower($1) == "content-length:" { n = $2 } END { print n }'
 }
 
 sums_parse() {
     sed -nE \
         -e 's/^([0-9a-fA-F]{64}) [ *](.+)$/\1\t\2/p' \
         -e 's/^SHA256 \((.+)\) = ([0-9a-fA-F]{64})$/\2\t\1/p' "$1"
+}
+
+pick_newest() {
+    awk -F'\t' -v re="$1" '{ n = $1; sub(/.*\//, "", n); if (n ~ re || $1 ~ re) print n "\t" $0 }' |
+        sort -V -t$'\t' -k1,1 | tail -n1 | cut -f2-
+}
+
+sidecar_hash() {
+    local path_tmp
+    path_tmp="$(mktemp)"
+    net_get "$1" "$path_tmp" || {
+        rm -f "$path_tmp"
+        return 1
+    }
+    grep -oE "$HASH_RE" "$path_tmp" | head -n1 || true
+    rm -f "$path_tmp"
 }
 
 resolve_dirsums() {
@@ -46,21 +70,111 @@ resolve_github() {
     printf '%s\n' "$str_row"
 }
 
-resolve_pinned() {
-    local str_url="$1" str_sum="$2" path_tmp str_hash=""
-    case "$str_sum" in
-        sha256:*) str_hash="${str_sum#sha256:}" ;;
-        sidecar:*)
-            path_tmp="$(mktemp)"
-            net_get "$str_url${str_sum#sidecar:}" "$path_tmp" || {
-                rm -f "$path_tmp"
-                return 1
-            }
-            str_hash="$(grep -oE '[0-9a-fA-F]{64}' "$path_tmp" | head -n1)" || true
-            rm -f "$path_tmp"
-            ;;
-    esac
-    printf '%s\t%s\t%s\n' "$(basename "$str_url")" "$str_url" "$str_hash"
+resolve_dirindex() {
+    local str_base="$1" str_re="$2" str_sum="$3" path_tmp str_href str_hash=""
+    path_tmp="$(mktemp)"
+    net_get "$str_base" "$path_tmp" || {
+        rm -f "$path_tmp"
+        return 1
+    }
+    str_href="$(grep -oE 'href="[^"]+"' "$path_tmp" | sed -E 's/^href="//; s/"$//' | grep -E "$str_re" |
+        awk '{ n = $0; sub(/.*\//, "", n); print n "\t" $0 }' | sort -V -t$'\t' -k1,1 | tail -n1 | cut -f2)" || true
+    rm -f "$path_tmp"
+    if [ -z "$str_href" ]; then
+        echo "resolve: no link matching $str_re in $str_base" >&2
+        return 1
+    fi
+    [[ "$str_sum" != sidecar:* ]] || str_hash="$(sidecar_hash "$str_base$str_href${str_sum#sidecar:}")" || return 1
+    printf '%s\t%s\t%s\n' "$(basename "$str_href")" "$str_base$str_href" "$str_hash"
+}
+
+resolve_sfrss() {
+    local str_src="$1" str_re="$2" str_sum="$3" str_proj str_path path_tmp str_row str_file str_hash str_url
+    str_proj="${str_src%%/*}"
+    str_path="${str_src#*/}"
+    path_tmp="$(mktemp)"
+    net_get "https://sourceforge.net/projects/$str_proj/rss?path=/${str_path// /%20}&limit=100" "$path_tmp" || {
+        rm -f "$path_tmp"
+        return 1
+    }
+    str_row="$(awk '
+        /<title><!\[CDATA\[/ { t = $0; sub(/.*CDATA\[/, "", t); sub(/\]\].*/, "", t); h = "" }
+        /<media:hash/ { h = $0; sub(/.*algo="[a-z0-9]+">/, "", h); sub(/<.*/, "", h); print t "\t" h }
+    ' "$path_tmp" | pick_newest "$str_re")"
+    rm -f "$path_tmp"
+    if [ -z "$str_row" ]; then
+        echo "resolve: no SourceForge file matching $str_re in $str_src" >&2
+        return 1
+    fi
+    IFS=$'\t' read -r str_file str_hash <<<"$str_row"
+    str_url="https://downloads.sourceforge.net/project/$str_proj$str_file"
+    [[ "$str_sum" != sidecar:* ]] || str_hash="$(sidecar_hash "$str_url${str_sum#sidecar:}")" || return 1
+    printf '%s\t%s\t%s\n' "$(basename "$str_file")" "$str_url" "$str_hash"
+}
+
+resolve_archive() {
+    local str_id="$1" str_re="$2" path_tmp str_row
+    path_tmp="$(mktemp)"
+    net_get "https://archive.org/metadata/$str_id" "$path_tmp" || {
+        rm -f "$path_tmp"
+        return 1
+    }
+    str_row="$(jq -r --arg re "$str_re" --arg id "$str_id" \
+        '[.files[] | select(.name | test($re))] | sort_by(.mtime | tonumber) | last // empty | [.name, "https://archive.org/download/\($id)/\(.name)", (.sha1 // "")] | @tsv' \
+        "$path_tmp")"
+    rm -f "$path_tmp"
+    if [ -z "$str_row" ]; then
+        echo "resolve: no archive.org file matching $str_re in $str_id" >&2
+        return 1
+    fi
+    printf '%s\n' "$str_row"
+}
+
+resolve_latesturl() {
+    local str_url="$1" str_re="$2" str_sum="$3" str_name str_hash=""
+    str_name="$(sed -E 's/^\^//; s/\$$//; s/\\//g' <<<"$str_re")"
+    if [[ "$str_sum" == sidecar:* ]]; then
+        str_hash="$(sidecar_hash "$str_url${str_sum#sidecar:}")" || return 1
+    else
+        str_hash="size:$(net_size "$str_url")"
+    fi
+    printf '%s\t%s\t%s\n' "$str_name" "$str_url" "$str_hash"
+}
+
+resolve_windows() {
+    local NET_UA="$MS_UA" str_lang="$1" str_sid str_edition str_sku path_tmp str_url str_err
+    str_sid="$(cat /proc/sys/kernel/random/uuid)"
+    path_tmp="$(mktemp)"
+    local str_api="https://www.microsoft.com/software-download-connector/api"
+    local str_q="profile=606624d44113&friendlyFileName=undefined&Locale=en-US&sessionID=$str_sid"
+    net_get "https://www.microsoft.com/en-us/software-download/windows11" "$path_tmp" || {
+        rm -f "$path_tmp"
+        return 1
+    }
+    str_edition="$(grep -oE 'value="[0-9]{4,5}"' "$path_tmp" | head -n1 | tr -dc 0-9)"
+    net_get "https://vlscppe.microsoft.com/tags?org_id=y6jn8c31&session_id=$str_sid" "$path_tmp" || true
+    net_get "$str_api/getskuinformationbyproductedition?$str_q&productEditionId=$str_edition&SKU=undefined" "$path_tmp" || {
+        rm -f "$path_tmp"
+        return 1
+    }
+    str_sku="$(jq -r --arg l "$str_lang" '[.Skus[]? | select(.Language == $l)][0].Id // empty' "$path_tmp")"
+    if [ -z "$str_sku" ]; then
+        rm -f "$path_tmp"
+        echo "resolve: Microsoft offers no '$str_lang' ISO; download it manually into payload/" >&2
+        return 1
+    fi
+    net_get "$str_api/GetProductDownloadLinksBySku?$str_q&productEditionId=undefined&SKU=$str_sku" "$path_tmp" || {
+        rm -f "$path_tmp"
+        return 1
+    }
+    str_url="$(jq -r '[.ProductDownloadOptions[]? | select(.Uri | test("x64"))][0].Uri // empty' "$path_tmp")"
+    str_err="$(jq -r '[.Errors[]?.Value] | join("; ")' "$path_tmp")"
+    rm -f "$path_tmp"
+    if [ -z "$str_url" ]; then
+        echo "resolve: Microsoft refused the automated request (${str_err:-no link}); download the ISO manually into payload/isos/Windows/" >&2
+        return 1
+    fi
+    printf '%s\t%s\t\n' "$(basename "${str_url%%\?*}")" "$str_url"
 }
 
 resolve_entry() {
@@ -72,7 +186,11 @@ resolve_entry() {
     case "$str_kind" in
         dirsums) str_row="$(resolve_dirsums "$str_src" "$str_re" "${str_sum#sums:}")" || return 1 ;;
         github) str_row="$(resolve_github "$str_src" "$str_re")" || return 1 ;;
-        pinned) str_row="$(resolve_pinned "$str_src" "$str_sum")" || return 1 ;;
+        dirindex) str_row="$(resolve_dirindex "$str_src" "$str_re" "$str_sum")" || return 1 ;;
+        sfrss) str_row="$(resolve_sfrss "$str_src" "$str_re" "$str_sum")" || return 1 ;;
+        archive) str_row="$(resolve_archive "$str_src" "$str_re")" || return 1 ;;
+        latesturl) str_row="$(resolve_latesturl "$str_src" "$str_re" "$str_sum")" || return 1 ;;
+        windows) str_row="$(resolve_windows "$str_src")" || return 1 ;;
     esac
     IFS=$'\t' read -r str_name str_url str_hash <<<"$str_row"
     if [ -z "$str_hash" ] && [[ "$str_sum" != none:* ]]; then
@@ -82,51 +200,103 @@ resolve_entry() {
     printf '%s\t%s\t%s\n' "$str_name" "$str_url" "$str_hash"
 }
 
+hash_matches() {
+    local path_file="$1" str_want="${2,,}" str_cmd
+    case "${#str_want}" in
+        64) str_cmd=sha256sum ;;
+        40) str_cmd=sha1sum ;;
+        32) str_cmd=md5sum ;;
+        *) return 1 ;;
+    esac
+    [ "$("$str_cmd" "$path_file" | cut -d' ' -f1)" = "$str_want" ]
+}
+
+remove_older_versions() {
+    local path_dir="$1" str_re="$2" str_keep="$3" path_old str_base
+    for path_old in "$path_dir"/*; do
+        [ -f "$path_old" ] || continue
+        str_base="$(basename "$path_old")"
+        if [ "$str_base" != "$str_keep" ] && [[ "$str_base" =~ $str_re ]]; then
+            if [ "${DRY_RUN:-0}" = 1 ]; then
+                print_status "info" "dry-run: would replace older version: $str_base"
+            else
+                print_status "info" "replacing older version: $str_base"
+                ${DRIVE_RUN-} rm -f "$path_old"
+            fi
+        fi
+    done
+}
+
+extract_member() {
+    local path_archive="$1" path_dir="$2" str_re="$3" str_member
+    command -v 7z >/dev/null 2>&1 || {
+        print_status "error" "7z is required to extract $(basename "$path_archive")"
+        return 1
+    }
+    str_member="$(7z l -ba -slt "$path_archive" | sed -n 's/^Path = //p' | grep -E "$str_re" | head -n1)"
+    [ -n "$str_member" ] || return 1
+    7z e -y -bso0 -bsp0 -o"$path_dir" "$path_archive" "$str_member"
+    basename "$str_member"
+}
+
 fetch_entry() {
-    local str_line="$1" path_drive="$2" path_cache="$3" path_resolved="$4"
-    local str_id str_folder str_row str_name str_url str_hash path_dir path_dest str_got
+    local str_line="$1" path_drive="$2" path_resolved="$3" path_state="$4"
+    local str_id str_folder str_re str_row str_name str_url str_hash path_dir path_dest str_final str_extract
     str_id="$(manifest_field "$str_line" 1)"
     str_folder="$(manifest_field "$str_line" 3)"
+    str_re="$(manifest_field "$str_line" 6)"
+    str_extract="$(manifest_field "$str_line" 9)"
     if [ "$(manifest_field "$str_line" 4)" = manual ]; then
-        print_status "warning" "manual: $str_id -> put $(manifest_field "$str_line" 6) in manual/$str_folder/ ($(manifest_field "$str_line" 5))"
+        print_status "warning" "manual: $str_id has no machine-readable upstream; put the file in payload/$str_folder/"
         return 0
     fi
     str_row="$(resolve_entry "$str_line")" || {
-        print_status "error" "resolve failed: $str_id"
+        print_status "error" "$str_id: could not resolve the latest version (skipped)"
         return 1
     }
     IFS=$'\t' read -r str_name str_url str_hash <<<"$str_row"
     path_dir="$path_drive/$str_folder"
-    [ "$str_folder" = "@tools" ] && path_dir="$path_cache"
-    mkdir -p "$path_dir"
+    [ "$str_folder" = "@tools" ] && path_dir="$TOOLS_DIR"
+    mkdir -p "$path_dir" "$path_state"
     path_dest="$path_dir/$str_name"
-    if [ ! -f "$path_dest" ]; then
+    str_final="$str_name"
+    [ -z "$str_extract" ] || str_final="$(cat "$path_state/$str_id.final" 2>/dev/null || true)"
+    if [ -f "$path_state/$str_id" ] && [ "$(cat "$path_state/$str_id")" = "$str_name $str_hash" ] &&
+        [ -n "$str_final" ] && [ -f "$path_dir/$str_final" ]; then
+        :
+    else
         print_status "info" "download: $str_id -> $str_name"
         net_get "$str_url" "$path_dest.part" || {
             rm -f "$path_dest.part"
+            print_status "error" "$str_id: download failed"
             return 1
         }
-        if [ -n "$str_hash" ]; then
-            str_got="$(sha256sum "$path_dest.part" | cut -d' ' -f1)"
-            if [ "$str_got" != "${str_hash,,}" ]; then
-                rm -f "$path_dest.part"
-                print_status "error" "checksum mismatch: $str_id ($str_name)"
-                return 1
-            fi
-        else
-            print_status "warning" "unverified ($(manifest_field "$str_line" 7)): $str_id"
+        if [[ "$str_hash" == size:* ]] || [ -z "$str_hash" ]; then
+            print_status "warning" "unverified: $str_id (explicit none: in the manifest)"
+        elif ! hash_matches "$path_dest.part" "$str_hash"; then
+            rm -f "$path_dest.part"
+            print_status "error" "checksum mismatch: $str_id ($str_name)"
+            return 1
         fi
         mv "$path_dest.part" "$path_dest"
+        if [ -n "$str_extract" ]; then
+            str_final="$(extract_member "$path_dest" "$path_dir" "$str_extract")" || return 1
+            rm -f "$path_dest"
+            printf '%s' "$str_final" >"$path_state/$str_id.final"
+        fi
+        printf '%s' "$str_name $str_hash" >"$path_state/$str_id"
     fi
-    [ "$str_folder" = "@tools" ] || printf '%s\t%s\n' "$str_id" "$str_folder/$str_name" >>"$path_resolved"
+    remove_older_versions "$path_dir" "${str_extract:-$str_re}" "$str_final"
+    [ "$str_folder" = "@tools" ] || printf '%s\t%s\n' "$str_id" "$str_folder/$str_final" >>"$path_resolved"
 }
 
 fetch_all() {
-    local path_manifest="$1" path_drive="$2" path_cache="$3" path_resolved="$4" str_line int_bad=0
+    local path_manifest="$1" path_drive="$2" path_resolved="$3" str_line int_bad=0
     manifest_entries "$path_manifest" >/dev/null || return 1
+    mkdir -p "$(dirname "$path_resolved")"
     : >"$path_resolved"
     while IFS= read -r str_line; do
-        fetch_entry "$str_line" "$path_drive" "$path_cache" "$path_resolved" || int_bad=1
+        fetch_entry "$str_line" "$path_drive" "$path_resolved" "$(dirname "$path_resolved")/state" || int_bad=1
     done < <(manifest_entries "$path_manifest")
     return "$int_bad"
 }

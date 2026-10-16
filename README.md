@@ -331,7 +331,7 @@ project/
 After scaffolding, run `npm install && npm run build && npm test` to build all three targets (`dist/esm`, `dist/cjs`, `dist/types`) and run the test suite.
 
 ### Ventoy USB (templates/ventoy-usb)
-Rebuilds a [Ventoy](https://www.ventoy.net) multiboot drive with a fixed folder layout. A source manifest drives everything: latest ISOs are resolved and downloaded at build time, each verified against an upstream checksum (the build fails closed without one), an empty persistence image is created the way Ventoy does it, and `ventoy.json` is generated and path-checked. `make drive DEVICE=/dev/sdX` writes a removable device, with `DRY_RUN=1` to preview. Payloads are never committed. See `docs/skeletons/ventoy-usb.md`.
+Rebuilds a [Ventoy](https://www.ventoy.net) multiboot drive with a fixed folder layout. A source manifest drives everything: latest ISOs are resolved and downloaded at build time, each verified against an upstream checksum (the build fails closed without one), an empty persistence image is created the way Ventoy does it, and `ventoy.json` is generated and path-checked. `make drive` asks for the pendrive, then installs Ventoy (after a typed confirmation) or syncs an existing one, asking before deleting anything outside the layout; `DRY_RUN=1` previews. ISOs, installers and persistence images are never committed; small own files go in `payload/`. Replaces a ~50 GB drive backup. See `docs/skeletons/ventoy-usb.md`.
 
 ## 🔁 Offline git-diff sync
 

@@ -2,7 +2,7 @@
 
 load helpers/common
 
-ENTRY='u|core|isos/Linux/Desktop|pinned|https://h/u.iso|-|none:test|casper-rw'
+ENTRY='u|core|isos/Linux/Desktop|latesturl|https://h/u.iso|^u\.iso$|none:test|casper-rw|'
 
 build_tree() {
     write_manifest "$ENTRY"
@@ -54,4 +54,21 @@ build_tree() {
     export VENTOY_USB_CONF="$TMP/size.conf"
     build_tree
     [ -f "$BUILD_DIR/drive/persistance/persistence_ext4_8GB_casper-rw.dat" ]
+}
+
+@test "a changed persistence size replaces the old image and warns" {
+    build_tree
+    printf 'PERSISTENCE_SIZE_MB=8192\n' >"$TMP/size.conf"
+    export VENTOY_USB_CONF="$TMP/size.conf"
+    run "$CLI" persistence
+    [[ "$output" == *"saved session data"* ]]
+    [ ! -e "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat" ]
+    [ -f "$BUILD_DIR/drive/persistance/persistence_ext4_8GB_casper-rw.dat" ]
+}
+
+@test "persistence is left alone when the image already exists" {
+    build_tree
+    echo keep >"$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat"
+    run "$CLI" persistence
+    [ "$(cat "$BUILD_DIR/drive/persistance/persistence_ext4_4GB_casper-rw.dat")" = keep ]
 }

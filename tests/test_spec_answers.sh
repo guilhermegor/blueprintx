@@ -480,14 +480,16 @@ ventoy_stream() {
 }
 
 test_ventoy_usb_answer_stream_order() {
-    local str_def str_full
+    local str_def str_full str_repo
     str_def="$(ventoy_stream)"
     str_full="$(ventoy_stream include_windows=n include_android=n persistence_size_mb=8192 \
         review_bot_roster=y git_remote=y)"
-    if [ "$str_def" = "y,y,4096,n,n" ] && [ "$str_full" = "n,n,8192,y,y" ]; then
+    str_repo="$(ventoy_stream git_remote=y create_repo=y repo_visibility=public)"
+    if [ "$str_def" = "y,y,4096,n,n" ] && [ "$str_full" = "n,n,8192,y,y,n" ] \
+        && [ "$str_repo" = "y,y,4096,n,y,y,1,n,n" ]; then
         pass "ventoy-usb answer stream: windows, android, size, roster, git_remote"
     else
-        fail "ventoy-usb stream" "default=$str_def full=$str_full"
+        fail "ventoy-usb stream" "default=$str_def full=$str_full repo=$str_repo"
     fi
 }
 

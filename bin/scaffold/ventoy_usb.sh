@@ -71,7 +71,7 @@ create_directory_structure() {
     mkdir -p "$project_path"/bin
     mkdir -p "$project_path"/lib
     mkdir -p "$project_path"/tests/helpers
-    mkdir -p "$project_path"/manual
+    mkdir -p "$project_path"/payload
     mkdir -p "$project_path"/.github/workflows
     print_status "success" "Directory structure created"
 }
@@ -90,7 +90,7 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/sources.manifest" "$project_path/sources.manifest"
     printf 'INCLUDE_WINDOWS=%s\nINCLUDE_ANDROID=%s\nPERSISTENCE_SIZE_MB=%s\n' \
         "$INCLUDE_WINDOWS" "$INCLUDE_ANDROID" "$PERSISTENCE_SIZE_MB" > "$project_path/ventoy-usb.conf"
-    touch "$project_path/manual/.gitkeep"
+    touch "$project_path/payload/.gitkeep"
 
     for str_file in "$SKELETON_TEMPLATE_ROOT"/tests/*.bats "$SKELETON_TEMPLATE_ROOT"/tests/helpers/curl_stub.sh; do
         cp "$str_file" "$project_path/tests/${str_file#"$SKELETON_TEMPLATE_ROOT"/tests/}"
