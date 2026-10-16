@@ -1,19 +1,5 @@
-# Status-check names bin/enable_repo_rules.sh makes merge-blocking on the default branch.
-# One name per line, verbatim as GitHub reports it; blank lines and `#` comments ignored.
-#
-# Add a name only after confirming a real PR emits it:
-#   gh api repos/:owner/:repo/commits/<pr-head-sha>/check-runs --jq '.check_runs[].name' | sort -u
-#
-# A name nothing emits blocks every PR forever — GitHub cannot tell "has not reported yet"
-# from "will never report". Deleting a line is always safe; adding an unverified one is not.
-
-# review-threads.yml — `on: pull_request` with no filter, the one workflow in this family that
-# reports on every PR regardless of base branch.
 Review threads answered
 
-# build.yml, lint.yml, test.yml, type-check.yml, secret-scan.yml — `on: pull_request` with no
-# filter and no job-level `if:`, so each reports on every PR whatever its base branch.
-# bin/check_required_checks_sync.py refuses a name here that stops being unconditional.
 webpack
 eslint
 stylelint

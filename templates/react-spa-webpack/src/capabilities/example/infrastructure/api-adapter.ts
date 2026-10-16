@@ -1,11 +1,6 @@
 import type { Note } from '../domain/entities';
 import type { NoteRepository } from '../domain/ports';
 
-// Local constant, not the `http-status-codes` package (blueprintx#453): this is the only
-// bare status-code literal in the scaffold, and the template ships no runtime dependency
-// on that package today — adding one for a single named value isn't worth it yet. Promote
-// to `http-status-codes` (or a shared `shared/http-status.ts`) the day a second call site
-// needs a status code.
 const HTTP_STATUS_NOT_FOUND = 404;
 
 export class ApiNoteRepository implements NoteRepository {
