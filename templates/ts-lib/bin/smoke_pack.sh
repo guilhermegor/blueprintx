@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-# npm pack -> install the tarball into a throwaway consumer project -> require()
-# the CJS build and import() the ESM build BY PACKAGE NAME. Installing into a
-# separate node_modules/ (instead of reading dist/ paths directly) is the only
-# way to exercise the package's own "exports" map and "files" allowlist — the
-# path a real consumer takes; a deep import bypasses both. ⚠️ Update the
-# require/import checks below if you change the public API in src/index.ts —
-# this smoke test is scaffolded against the example `greet` export.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

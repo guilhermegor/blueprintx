@@ -8,8 +8,6 @@ declare module '*.css' {
   export default content;
 }
 
-// Injected by webpack's DefinePlugin. The deploy workflow sets PUBLIC_PATH
-// to `/<repo-name>/`; local dev leaves it undefined and defaults to '/'.
 declare namespace NodeJS {
   interface ProcessEnv {
     PUBLIC_PATH?: string;

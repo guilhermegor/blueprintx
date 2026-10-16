@@ -91,6 +91,7 @@ prettier-ignore
 @ts-expect-error
 @ts-nocheck
 @ts-check
+@type {import(
 @ts-ignore
 eslint-disable
 stylelint-disable

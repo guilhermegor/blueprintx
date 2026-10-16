@@ -1,18 +1,5 @@
 name: Pack Smoke + Verdaccio Rehearsal
 
-# npm's analogue of Test PyPI: no hosted "test npm" exists, and versions are
-# immutable once published, so both jobs rehearse a publish without touching the
-# real registry or burning a version number.
-#
-# - pack-smoke: `npm pack` -> install the tarball into a throwaway consumer ->
-#   require()/import() it by package name. Catches a broken `exports` map, a
-#   missing `files` entry, or a forgotten dependency — ~90% of what Test PyPI
-#   catches, with zero infrastructure. Runs on every PR (bin/smoke_pack.sh).
-# - verdaccio-rehearsal: a real publish -> install round-trip against a
-#   self-hosted Verdaccio registry (service container), exercising actual
-#   registry semantics (dist-tags, tarball fetch) that installing a local
-#   tarball does not.
-
 on:
   push:
     branches: [main]
@@ -58,8 +45,6 @@ jobs:
           done
           echo "::error::Verdaccio did not become ready in time" && exit 1
 
-      # Verdaccio's default config allows any client to register a user and
-      # publish — no external account needed for this rehearsal.
       - name: Create a throwaway Verdaccio user token
         run: |
           response=$(curl -s -X PUT http://localhost:4873/-/user/org.couchdb.user:rehearsal \

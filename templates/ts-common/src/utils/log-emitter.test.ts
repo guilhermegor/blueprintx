@@ -1,8 +1,5 @@
 import { CONSOLE_EMITTER, NULL_EMITTER } from './log-emitter';
 
-// Witnesses BOTH directions (blueprintx#436): NULL_EMITTER must produce zero
-// console output, and CONSOLE_EMITTER must produce it. A test asserting only
-// the second cannot tell the port from a direct `console` call.
 describe('LogEmitter defaults', () => {
   const LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 

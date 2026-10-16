@@ -1,7 +1,4 @@
 // @ts-check
-// Docusaurus site config for ${PROJECT_NAME}. `${...}` placeholders are rendered via
-// envsubst at scaffold time (see bin/scaffold/ts_lib.sh) — do not replace them with
-// literal values here. Docs-only mode: blog disabled, docs served at the site root.
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
