@@ -330,6 +330,9 @@ project/
 
 After scaffolding, run `npm install && npm run build && npm test` to build all three targets (`dist/esm`, `dist/cjs`, `dist/types`) and run the test suite.
 
+### Ventoy USB (templates/ventoy-usb)
+Rebuilds a [Ventoy](https://www.ventoy.net) multiboot drive with a fixed folder layout. A source manifest drives everything: latest ISOs are resolved and downloaded at build time, each verified against an upstream checksum (the build fails closed without one), an empty persistence image is created the way Ventoy does it, and `ventoy.json` is generated and path-checked. `make drive DEVICE=/dev/sdX` writes a removable device, with `DRY_RUN=1` to preview. Payloads are never committed. See `docs/skeletons/ventoy-usb.md`.
+
 ## 🔁 Offline git-diff sync
 
 When you scaffold a project and **decline** connecting it to a GitHub remote, BlueprintX adds a small offline-sync workflow so you can move changes between machines as patch files (e.g. attach to an email) — useful in restricted/air-gapped environments. It is **only** added in this no-GitHub case; projects pushed to GitHub stay clean.
@@ -372,7 +375,8 @@ BlueprintX/
 │       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold
 │       ├── python_lib_minimal.sh      # lib-minimal scaffold
 │       ├── ts_react_app.sh            # React SPA (Webpack) scaffold
-│       └── ts_lib.sh                  # publishable TS library scaffold
+│       ├── ts_lib.sh                  # publishable TS library scaffold
+│       └── ventoy_usb.sh              # Ventoy drive builder scaffold
 ├── templates/               # skeleton contents + discovery metadata
 │   ├── common/                 # language-agnostic shared assets (CODEOWNERS, PR template,
 │   │   │                       #   bin/ git-diff scripts + lib/common.sh, make/git_diff.mk)
@@ -393,6 +397,8 @@ BlueprintX/
 │   ├── react-spa-webpack/      # React 19 + TypeScript + Webpack 5 SPA
 │   │   └── skeleton.meta
 │   ├── ts-lib/                 # publishable TypeScript library
+│   │   └── skeleton.meta
+│   ├── ventoy-usb/             # Ventoy drive builder (manifest, verified downloads)
 │   │   └── skeleton.meta
 │   └── licenses/               # license text files
 ├── docs/                    # mkdocs sources

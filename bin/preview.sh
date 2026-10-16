@@ -24,7 +24,13 @@ show_languages() {
     print_status "config" "  * .github/workflows (PR + tests), CODEOWNERS, PULL_REQUEST_TEMPLATE"
     print_status "config" "  * tests/{integration,performance,unit}"
     echo
-    print_status "info" "2) cancel"
+    print_status "info" "2) bash"
+    print_status "config" "Status: supported"
+    print_status "config" "Skeletons:"
+    print_status "config" "  * bash-cli (standalone CLI, git-tag versioned)"
+    print_status "config" "  * ventoy-usb (rebuild a Ventoy drive, latest ISOs, verified downloads)"
+    echo
+    print_status "info" "3) cancel"
     print_status "config" "Exit without creating a project"
 }
 
@@ -276,6 +282,31 @@ show_lib_minimal() {
 EOF
 }
 
+show_ventoy_usb() {
+    echo
+    print_section "ventoy-usb skeleton"
+
+    print_status "info" "Description:"
+    print_status "config" "Rebuilds a Ventoy multiboot drive from a source manifest: latest ISOs"
+    print_status "config" "downloaded and checksum-verified at build time, never committed."
+    echo
+    print_status "info" "Example structure:"
+    cat << 'EOF'
+  project/
+    bin/project
+    lib/{manifest,resolve,layout,ventoy_config,drive}.sh
+    sources.manifest
+    ventoy-usb.conf
+    manual/
+    tests/*.bats
+  build/drive/            (generated, git-ignored)
+    isos/{Android,Linux/{Desktop,Rescue and Maintenance,
+          Security and Pentest,Servers},Others,Windows}
+    dotfiles/windows/  persistance/  recovery_tools/
+    dynfileos/  temp/  ventoy/ventoy.json
+EOF
+}
+
 main() {
     show_languages
     show_api_service
@@ -284,6 +315,7 @@ main() {
     show_mvc_native
     show_mvc_orm
     show_lib_minimal
+    show_ventoy_usb
     echo
     print_status "success" "Preview complete."
 }
