@@ -276,6 +276,30 @@ show_lib_minimal() {
 EOF
 }
 
+show_etcher_chromeos() {
+    echo
+    print_section "etcher-chromeos skeleton (bash)"
+
+    print_status "info" "Description:"
+    print_status "config" "Bash CLI that asks for the pendrive path first, then downloads the latest"
+    print_status "config" "ChromeOS Flex image (or verifies a FydeOS download) and flashes it."
+    echo
+    print_status "info" "Example structure:"
+    cat << 'EOF'
+  project/
+    bin/
+      project_name         # flash --target --os --dry-run
+      fetch_tools.sh       # make tools: bmaptool into .tools/
+    lib/
+      device.sh flex.sh fydeos.sh flash.sh verify.sh
+    tests/
+      cli.bats
+      fixtures/
+    Dockerfile             # tests and resolvers only, never writes a device
+    Makefile
+EOF
+}
+
 main() {
     show_languages
     show_api_service
@@ -284,6 +308,7 @@ main() {
     show_mvc_native
     show_mvc_orm
     show_lib_minimal
+    show_etcher_chromeos
     echo
     print_status "success" "Preview complete."
 }
