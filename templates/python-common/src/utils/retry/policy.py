@@ -15,11 +15,6 @@ from utils.retry._schedule import (
 )
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). TYPE_CHECKING stubs the metaclass shape
-# locally instead of importing: mypy treats a try/except import as executed code and flags
-# the redefinition once actually checked, so this branch can't pick either layout
-# (blueprintx#360). Runtime still resolves the real engine via try/except below.
 if TYPE_CHECKING:
 
     class TypeChecker(type):
@@ -27,7 +22,7 @@ if TYPE_CHECKING:
 else:
     try:
         from utils.typing import TypeChecker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import TypeChecker
 
 
@@ -64,10 +59,6 @@ class RetryPolicy(metaclass=TypeChecker):
     float_max_wait_s: float | None = None
     tuple_exceptions: tuple[type[Exception], ...] = (OSError,)
 
-    # ⚠️ The hatch on the next line is deliberate. Two INDEPENDENT field invariants are
-    # checked here, and a frozen dataclass offers no per-field validator hook to split them
-    # into without taking a dependency. Folding them to fit the ceiling would mean dropping
-    # one of the two checks, which is a worse value object for a better number.
     def __post_init__(self) -> None:  # complexity-ok: two independent field invariants
         """Validate the schedule at construction so a bad policy fails fast, not mid-retry.
 
