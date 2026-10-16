@@ -1164,6 +1164,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#etcher-chromeos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        etcher-chromeos
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1895,6 +1906,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skeletons/etcher-chromeos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Etcher ChromeOS flasher
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2127,6 +2166,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#etcher-chromeos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        etcher-chromeos
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2305,7 +2355,7 @@ themselves (<code>bin/scaffold/python_*.sh</code>) still read positional stdin a
 are not edited by this mechanism — so when one of them gains a new prompt, updating that
 one function is what keeps every spec-driven caller correct, instead of every stored
 answer string everywhere.</p>
-<p>Named-key support ships per skeleton. Today: the six Python tiers and <code>ts-lib</code>. Call
+<p>Named-key support ships per skeleton. Today: the six Python tiers, <code>ts-lib</code> and <code>etcher-chromeos</code>. Call
 <code>spec_skeleton_supported &lt;skeleton&gt;</code> to check before relying on <code>spec_stdin_for_skeleton</code>.</p>
 <h3 id="ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db">DDD and API tiers (<code>ddd-service-native-db</code>, <code>ddd-service-orm-db</code>, <code>api-service-native-db</code>)<a class="headerlink" href="#ddd-and-api-tiers-ddd-service-native-db-ddd-service-orm-db-api-service-native-db" title="Permanent link">&para;</a></h3>
 <p><code>api-service-native-db</code> asks the same prompts in the same order as the DDD tiers, so it shares
@@ -2517,6 +2567,35 @@ failure stops the run, names the cause and creates nothing. A missing
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>protect_branch=y
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>human_reviewers=n
 </span></code></pre></div>
+<h3 id="etcher-chromeos"><code>etcher-chromeos</code><a class="headerlink" href="#etcher-chromeos" title="Permanent link">&para;</a></h3>
+<p><code>bin/scaffold/etcher_chromeos.sh</code> reads, in this order: <code>default_os</code>, <code>review_bot_roster</code>, then
+the git remote prompt.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>default_os</code></td>
+<td><code>chromeos-flex</code></td>
+<td><code>chromeos-flex</code> or <code>fydeos</code>; stamped into the CLI as the <code>--os</code> default. Anything else stops the run naming the key.</td>
+</tr>
+<tr>
+<td><code>review_bot_roster</code></td>
+<td><code>n</code></td>
+<td>Same as the service tiers.</td>
+</tr>
+<tr>
+<td><code>git_remote</code></td>
+<td><code>n</code></td>
+<td><code>y</code> adds <code>origin</code>. Creating the repo is not mapped for this tier.</td>
+</tr>
+</tbody>
+</table>
 <h2 id="publishregistry-keys-are-answer-only-they-do-not-implement-publishing">Publish/registry keys are answer-only — they do not implement publishing<a class="headerlink" href="#publishregistry-keys-are-answer-only-they-do-not-implement-publishing" title="Permanent link">&para;</a></h2>
 <p><code>publish_pypi</code>, <code>publish_test_pypi</code>, and <code>consume_private</code> answer <code>lib-minimal</code>'s
 <strong>existing</strong> yes/no gate for which release workflow file the scaffold ships — nothing in
