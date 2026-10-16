@@ -1,0 +1,75 @@
+# One entry per line, 8 fields separated by '|':
+#   id|group|folder|kind|source|pattern|checksum|persist
+# group:    core | windows | android | tool   (windows/android follow ventoy-usb.conf)
+# folder:   path on the drive; '@tools' is cached locally and never copied to the drive
+# kind:     dirsums (newest name matching pattern in a checksum file) | github (latest release
+#           asset) | pinned (fixed URL) | manual (never downloaded; see manual/ in the README)
+# checksum: sums:<file> | gh-digest | sidecar:<suffix> | sha256:<hex> | none:<reason>
+#           A missing checksum fails the build. Only an explicit none:<reason> skips verification.
+# persist:  Ventoy persistence label; the entry gets a ventoy.json persistence block.
+#
+# Android
+# no stable latest: android-x86 stopped at 9.0-r2 and publishes no checksum file
+android-x86|android|isos/Android|manual|https://www.android-x86.org/download.html|android-x86_64-9.0-r2.iso|none:manual|
+# no stable latest: community x86_64 builds, one release thread per build
+lineage-x86|android|isos/Android|manual|https://sourceforge.net/projects/lineageos-x86-community/|lineage-*-x86_64_tv-signed.iso|none:manual|
+# no stable latest: PrimeOS is a community build without an API or checksum
+primeos|android|isos/Android|manual|https://primeos.in/download/|PrimeOS-*.iso|none:manual|
+#
+# Linux / Desktop (series pinned in the URL; bump the series for a new LTS)
+ubuntu-desktop|core|isos/Linux/Desktop|dirsums|https://releases.ubuntu.com/24.04/|^ubuntu-24\.04(\.[0-9]+)*-desktop-amd64\.iso$|sums:SHA256SUMS|casper-rw
+lubuntu-desktop|core|isos/Linux/Desktop|dirsums|https://cdimage.ubuntu.com/lubuntu/releases/26.04/release/|^lubuntu-26\.04(\.[0-9]+)*-desktop-amd64\.iso$|sums:SHA256SUMS|
+#
+# Linux / Rescue and Maintenance
+clonezilla|core|isos/Linux/Rescue and Maintenance|dirsums|https://free.nchc.org.tw/clonezilla-live/stable/|^clonezilla-live-[0-9.-]+-amd64\.iso$|sums:CHECKSUMS.TXT|
+# no stable latest: HDT is unmaintained, there is no release feed or checksum
+hdt|core|isos/Linux/Rescue and Maintenance|manual|https://www.kernel.org/pub/linux/utils/boot/syslinux/Testing/|hdt-*.iso|none:manual|
+minios-standard|core|isos/Linux/Rescue and Maintenance|github|minios-linux/minios-live|^minios-trixie-xfce-standard-amd64-.*\.iso$|gh-digest|
+minios-ultra|core|isos/Linux/Rescue and Maintenance|github|minios-linux/minios-live|^minios-trixie-xfce-ultra-amd64-.*\.iso$|gh-digest|
+# no stable latest: SourceForge exposes no machine-readable newest-version feed
+systemrescue|core|isos/Linux/Rescue and Maintenance|pinned|https://downloads.sourceforge.net/project/systemrescuecd/sysresccd-x86/13.02/systemrescue-13.02-amd64.iso|-|sidecar:.sha256|
+#
+# Linux / Security and Pentest
+kali-installer|core|isos/Linux/Security and Pentest|dirsums|https://cdimage.kali.org/current/|^kali-linux-[0-9.]+-installer-amd64\.iso$|sums:SHA256SUMS|
+#
+# Linux / Servers
+talos-metal|core|isos/Linux/Servers|github|siderolabs/talos|^metal-amd64\.iso$|gh-digest|
+proxmox-ve|core|isos/Linux/Servers|dirsums|https://enterprise.proxmox.com/iso/|^proxmox-ve_[0-9.-]+\.iso$|sums:SHA256SUMS|
+rocky-boot|core|isos/Linux/Servers|dirsums|https://download.rockylinux.org/pub/rocky/10/isos/x86_64/|^Rocky-10\.[0-9]+-x86_64-boot\.iso$|sums:CHECKSUM|
+# no stable latest: download.truenas.com lists every train and beta together
+truenas-scale|core|isos/Linux/Servers|pinned|https://download.truenas.com/TrueNAS-SCALE-Goldeye/25.10.7/TrueNAS-SCALE-25.10.7.iso|-|sidecar:.sha256|
+ubuntu-server|core|isos/Linux/Servers|dirsums|https://releases.ubuntu.com/24.04/|^ubuntu-24\.04(\.[0-9]+)*-live-server-amd64\.iso$|sums:SHA256SUMS|
+#
+# Others
+# no stable latest: KolibriOS nightlies ship a .7z, not an .iso
+kolibrios|core|isos/Others|manual|https://builds.kolibrios.org/en_US/|kolibrios-*.iso|none:manual|
+#
+# Windows
+# no stable latest: Microsoft issues Windows 11 ISO links per session; fetch it by hand
+windows11|windows|isos/Windows|manual|https://www.microsoft.com/software-download/windows11|Windows11_*.iso|none:manual|
+# no stable latest: tiny11 is a third-party rebuild with no signed checksum; never fetched
+tiny11|windows|isos/Windows|manual|https://archive.org/details/tiny11-2311|tiny11_*.iso|none:manual|
+#
+# Dotfiles
+# no stable latest: owner script, copy it into manual/dotfiles/
+dotfiles-desktop|core|dotfiles|manual|https://github.com/|dotfiles-linux-dev-desktop.sh|none:manual|
+# no stable latest: AnyDesk publishes no checksum
+anydesk|windows|dotfiles/windows|manual|https://anydesk.com/en/downloads/windows|AnyDesk.exe|none:manual|
+# no stable latest: the Firefox installer URL redirects and has no stable checksum file
+firefox|windows|dotfiles/windows|manual|https://www.mozilla.org/firefox/windows/|Firefox Installer.exe|none:manual|
+# no stable latest: Office setup is account-bound
+office|windows|dotfiles/windows|manual|https://www.office.com/|OfficeSetup.exe|none:manual|
+# no stable latest: Power BI Desktop is served from the Microsoft download center
+powerbi|windows|dotfiles/windows|manual|https://www.microsoft.com/download/details.aspx?id=58494|PBIDesktopSetup_x64.exe|none:manual|
+# no stable latest: Revo publishes no checksum
+revo|windows|dotfiles/windows|manual|https://www.revouninstaller.com/revo-uninstaller-free-download/|revosetup.exe|none:manual|
+revo-portable|windows|dotfiles/windows|manual|https://www.revouninstaller.com/revo-uninstaller-free-download/|RevoUninstaller_Portable.zip|none:manual|
+rufus|windows|dotfiles/windows|github|pbatard/rufus|^rufus-[0-9.]+\.exe$|gh-digest|
+rustdesk|windows|dotfiles/windows|github|rustdesk/rustdesk|^rustdesk-[0-9.]+-x86_64\.exe$|gh-digest|
+#
+# Recovery tools
+# no stable latest: owner script, copy it into manual/recovery_tools/
+disk-rescue|core|recovery_tools|manual|https://github.com/|disk-rescue.sh|none:manual|
+#
+# Ventoy itself: the installer and CreatePersistentImg.sh, cached locally only
+ventoy|tool|@tools|github|ventoy/Ventoy|^ventoy-[0-9.]+-linux\.tar\.gz$|gh-digest|
