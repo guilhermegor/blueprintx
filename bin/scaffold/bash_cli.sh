@@ -156,14 +156,7 @@ initialize_git_repo() {
         print_status "info" "Git repo already initialized; skipping"
         return
     fi
-    if ! (
-        cd "$project_path" || exit 1
-        git init -q -b main &&
-            git add . &&
-            git commit -q -m "feat: first commit"
-    ); then
-        exit_error "Could not create the initial commit in '$project_path'. Set git user.name and user.email, then re-run."
-    fi
+    scaffold_initial_commit "$project_path"
     print_status "success" "Initialized git repo (branch main) with first commit"
 }
 

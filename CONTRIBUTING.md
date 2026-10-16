@@ -726,7 +726,7 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   also under `--dev`, and skips gracefully when git is missing or the repo exists. Every
   scaffold stops on a failed first commit through `scaffold_initial_commit` in
   `bin/lib/scaffold_git_remote.sh`, and on a failed later artifact commit through
-  `scaffold_commit_artifacts` (#812; `tests/test_scaffold_first_commit.sh` covers all nine). The reason it must not be swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
+  `scaffold_commit_artifacts` (#812; `tests/test_scaffold_first_commit.sh` covers all nine). The first commit deliberately runs the user's commit hooks (the artifact commits use `--no-verify`), so a global hook that rejects it stops the scaffold with a message naming the hook; the half-created `.git` is removed so a re-run starts clean. The reason it must not be swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
   a repo with a branch, a staged tree and no commit, which resurfaces as an inexplicable push
   failure later, and `exit_error` inside a subshell only ends the subshell, so the caller reads
   the status and the success line never prints for a repo with no commit. A non-zero from the

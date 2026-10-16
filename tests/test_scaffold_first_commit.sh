@@ -45,6 +45,7 @@ for str_name in python_ddd_service python_ddd_service_orm python_api_service pyt
     for str_mode in hook identity; do
         int_rc="$(run_first_commit "$str_name" "$str_mode")"
         check "$str_name exits non-zero on failed first commit ($str_mode)" 1 "$int_rc"
+        check "$str_name leaves no half-initialized .git ($str_mode)" no "$([ -e "$WORK_DIR/proj-$str_name-$str_mode/.git" ] && echo yes || echo no)"
         check "$str_name prints no success line ($str_mode)" 0 \
             "$(grep -c 'with first commit' "$WORK_DIR/$str_name-$str_mode.out")"
     done
