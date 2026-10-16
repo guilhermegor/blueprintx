@@ -723,11 +723,10 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   as `>=1.27,<2.0` lets a behaviour change land silently on the next `poetry update`. Re-check
   that status before bumping.
 - **Git steps.** The first commit is made on every scaffold, independent of any remote and
-  also under `--dev`, and skips gracefully when git is missing or the repo exists. Only
-  `bash_cli.sh` refuses to swallow a failed first commit; the Python scaffolds, `ts_lib.sh` and
-  `ts_react_app.sh` still end `git init`, `git add` and the first commit with `|| true`, so a
-  missing identity there is silent (a known gap: fixing it changes scaffold behaviour and is out
-  of scope for the comment strip). The reason it must not be swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
+  also under `--dev`, and skips gracefully when git is missing or the repo exists. Every
+  scaffold stops on a failed first commit through `scaffold_initial_commit` in
+  `bin/lib/scaffold_git_remote.sh`, and on a failed later artifact commit through
+  `scaffold_commit_artifacts` (#812; `tests/test_scaffold_first_commit.sh` covers all nine). The reason it must not be swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
   a repo with a branch, a staged tree and no commit, which resurfaces as an inexplicable push
   failure later, and `exit_error` inside a subshell only ends the subshell, so the caller reads
   the status and the success line never prints for a repo with no commit. A non-zero from the
