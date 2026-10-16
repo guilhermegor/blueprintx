@@ -1,0 +1,29 @@
+[
+  {
+    "channel": "STABLE",
+    "file": "chromeos_16700.1.0_reven_recovery_stable-channel_RevenMPKeys-v11.bin",
+    "filesize": 100,
+    "sha1": "1111111111111111111111111111111111111111",
+    "url": "https://dl.example.test/old.bin.zip",
+    "version": "16700.1.0",
+    "zipfilesize": 50
+  },
+  {
+    "channel": "STABLE",
+    "file": "chromeos_16805.33.0_reven_recovery_stable-channel_RevenMPKeys-v11.bin",
+    "filesize": 9523261952,
+    "sha1": "b7215251a8bfca5a9098402e076b7e5288a7b461",
+    "url": "https://dl.example.test/new.bin.zip",
+    "version": "16805.33.0",
+    "zipfilesize": 1371591923
+  },
+  {
+    "channel": "BETA",
+    "file": "chromeos_16836.9.0_reven_recovery_beta-channel_RevenMPKeys-v11.bin",
+    "filesize": 9523261952,
+    "sha1": "2222222222222222222222222222222222222222",
+    "url": "https://dl.example.test/beta.bin.zip",
+    "version": "16836.9.0",
+    "zipfilesize": 1371591923
+  }
+]

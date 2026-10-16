@@ -723,11 +723,10 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   as `>=1.27,<2.0` lets a behaviour change land silently on the next `poetry update`. Re-check
   that status before bumping.
 - **Git steps.** The first commit is made on every scaffold, independent of any remote and
-  also under `--dev`, and skips gracefully when git is missing or the repo exists. Only
-  `bash_cli.sh` refuses to swallow a failed first commit; the Python scaffolds, `ts_lib.sh` and
-  `ts_react_app.sh` still end `git init`, `git add` and the first commit with `|| true`, so a
-  missing identity there is silent (a known gap: fixing it changes scaffold behaviour and is out
-  of scope for the comment strip). The reason it must not be swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
+  also under `--dev`, and skips gracefully when git is missing or the repo exists. Every
+  scaffold stops on a failed first commit through `scaffold_initial_commit` in
+  `bin/lib/scaffold_git_remote.sh`, and on a failed later artifact commit through
+  `scaffold_commit_artifacts` (#812; `tests/test_scaffold_first_commit.sh` covers all nine). The first commit deliberately runs the user's commit hooks (the artifact commits use `--no-verify`), so a global hook that rejects it stops the scaffold with a message naming the hook; the half-created `.git` is removed so a re-run starts clean. The reason it must not be swallowed: with an unconfigured `user.name` or `user.email` a swallowed failure leaves
   a repo with a branch, a staged tree and no commit, which resurfaces as an inexplicable push
   failure later, and `exit_error` inside a subshell only ends the subshell, so the caller reads
   the status and the success line never prints for a repo with no commit. A non-zero from the
@@ -740,9 +739,8 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   pushed after the first commit, before the ruleset is applied, so that direct push is never
   blocked by the rules about to be set. Offline artifacts are committed with `--no-verify`
   (HEAD is the default branch and the protect-branch hook is already installed), so a fresh
-  offline project starts clean for bash-cli, ts-lib and the Python scaffolds; the React scaffold makes its first
-  commit before `apply_offline_mode` and does not commit the offline rewrites, so an offline
-  React project starts with them uncommitted. The swapped `protect-branch` pre-commit hook replaces the stock
+  offline project starts clean for every scaffold, React included: its first commit precedes
+  `apply_offline_mode`, which then commits the rewrites through `scaffold_commit_artifacts` (#812). The swapped `protect-branch` pre-commit hook replaces the stock
   `no-commit-to-branch`, and `add_poe_include` adds the offline task fragment only when copied.
   Online, releases are cut by tagging and `strip_bump_version` runs before the assets commit so
   its edits ride the same commit and push.

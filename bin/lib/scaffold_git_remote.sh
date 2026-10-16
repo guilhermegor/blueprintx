@@ -219,3 +219,26 @@ scaffold_prompt_git_remote_setup() {
 	git -C "$str_project_path" rev-parse '@{u}' >/dev/null 2>&1 || return 1
 	print_status "success" "Git repo initialized."
 }
+
+scaffold_initial_commit() {
+	local str_project_path="$1"
+	if ! (
+		cd "$str_project_path" || exit 1
+		git init -q -b main &&
+			git add . &&
+			git commit -q -m "feat: first commit"
+	); then
+		rm -rf "$str_project_path/.git"
+		exit_error "Could not create the initial commit in '$str_project_path'. Either git user.name/user.email is unset (git config --global user.email you@example.com; git config --global user.name 'Your Name') or a commit hook rejected the commit (or git is older than 2.28 and lacks 'git init -b'). Fix that, then re-run."
+	fi
+}
+
+scaffold_commit_artifacts() {
+	local str_project_path="$1" str_message="$2"
+	[ "$(git -C "$str_project_path" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$str_project_path" && pwd -P)" ] || return 0
+	git -C "$str_project_path" add -A ||
+		exit_error "Could not stage files in '$str_project_path'; see the git error above."
+	git -C "$str_project_path" diff --cached --quiet && return 0
+	git -C "$str_project_path" commit -q --no-verify -m "$str_message" ||
+		exit_error "Could not commit '$str_message' in '$str_project_path'; see the git error above. A GitHub repo may already exist; finish with git add, commit and push by hand."
+}
