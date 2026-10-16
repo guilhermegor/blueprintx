@@ -171,6 +171,20 @@ happening silently:
    Heredoc bodies (`<<EOF`, `<<'EOF'`, `<<-EOF`, Ruby `<<~EOS`) are data a script writes out,
    so the gate never counts their lines as comments; a shebang inside one is output.
 
+   **Every generated project ships the ratchet, in every language family** (blueprintx#826).
+   The shared `check_comment_budget.py`, its allowlist and `comment_budget_routing.txt` are
+   copied into each project's `bin/` (one implementation, never a second), and
+   `scaffold_comment_budget` in `bin/lib/` writes that project's `comment_budget_baseline.txt`
+   with `--write-baseline` over the files it actually ships. The baseline starts at whatever
+   the templates still carry and only goes down: a new file carries 0 comments and a grown
+   file fails. The gate runs with `--require-baseline` in pre-commit (`.husky/pre-commit` for
+   the TypeScript tiers) and in the generated CI workflow, because a pre-commit-only gate is
+   bypassed by `--no-verify`. It needs `python3` on the path, which every tier already
+   requires. The failure message prints the routing table from `comment_budget_routing.txt`
+   (security to `SECURITY.md`, setup and usage to `README.md`, rationale and conventions to
+   `CONTRIBUTING.md`, user-facing behaviour to `docs/`); a project retunes the table by
+   editing its own copy, and the gate never edits a file.
+
    `.env.example` carries keys and example values only. Each tier documents its variables in
    `docs/configuration.md`, one table row per variable, and
    `templates/python-common/bin/check_env_docs_sync.py` fails when the file's keys and the

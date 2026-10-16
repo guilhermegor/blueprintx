@@ -13,3 +13,9 @@ scaffold_comment_budget() {
     python3 "$project_path/bin/check_comment_budget.py" --root "$project_path" --write-baseline ||
         exit_error "Could not write comment_budget_baseline.txt for $project_path"
 }
+
+scaffold_comment_budget_refresh() {
+    [ -f "$1/comment_budget_baseline.txt" ] || return 0
+    [ ! -e "$1/.git" ] || git -C "$1" add -A
+    scaffold_comment_budget "$1"
+}

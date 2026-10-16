@@ -47,6 +47,25 @@ fixture js js '//'
 fixture mjs mjs '//'
 fixture py py '#'
 
+proj="$WORK_DIR/refresh"
+mkdir -p "$proj/src" "$proj/.github"
+printf 'x=1\n' >"$proj/src/a.sh"
+printf '# only comment\n' >"$proj/.github/w.yml"
+scaffold_comment_budget "$proj" >/dev/null 2>&1
+rm -rf "$proj/.github"
+gate "$proj" >/dev/null 2>&1
+check "a file removed after the baseline makes it stale" 1 "$?"
+scaffold_comment_budget_refresh "$proj" >/dev/null 2>&1
+gate "$proj" >/dev/null 2>&1
+check "the refresh before a scaffold commit re-bases it" 0 "$?"
+
+git -C "$proj" init -q -b main
+git -C "$proj" add -A
+printf '# late comment\n' >"$proj/src/late.sh"
+scaffold_comment_budget_refresh "$proj" >/dev/null 2>&1
+gate "$proj" >/dev/null 2>&1
+check "the refresh counts a file added after the first commit" 0 "$?"
+
 for str_name in python_ddd_service python_ddd_service_orm python_api_service python_mvc_service \
     python_mvc_service_orm python_lib_minimal ts_lib ts_react_app bash_cli ventoy_usb etcher_chromeos; do
     check "$str_name calls the baseline helper" 1 "$(grep -c '^    scaffold_comment_budget "\$PROJECT_PATH"$' "$REPO_ROOT/bin/scaffold/$str_name.sh")"
