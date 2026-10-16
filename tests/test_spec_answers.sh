@@ -498,6 +498,10 @@ test_etcher_chromeos_answer_stream_and_prompt_order() {
 }
 
 main() {
+    test_ventoy_usb_answer_stream_order
+    test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
+    test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created
+    test_ventoy_usb_spec_reaches_the_generated_conf
     test_etcher_chromeos_answer_stream_and_prompt_order
     test_ts_lib_answer_stream_order
     test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes

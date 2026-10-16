@@ -36,6 +36,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `coderabbit-config.md` | Utility page | Why every scaffold ships `.coderabbit.yaml` and what its one key does (blueprintx#739) |
 | `graphite-config.md` | Utility page | What Graphite config the repo versions (`.gitattributes` `linguist-generated`), the dashboard-only steps, and the label-gated never-auto-review rule (blueprintx#738) |
 | `skeletons.md` | Skeleton overview | API Service (Native DB) — hexagonal HTTP service with a transport layer |
+| `skeletons/ventoy-usb.md` | Skeleton overview | Ventoy drive builder (`ventoy-usb`): manifest-driven latest ISOs, resolver and checksum research, persistence, device guard |
 | `skeletons/bash-cli.md` | Skeleton overview | Standalone Bash CLI starter (`bash-cli`), git-tag versioned, bats + shellcheck |
 | `skeletons/etcher-chromeos.md` | Skeleton overview | Bash CLI that flashes ChromeOS Flex or FydeOS to a USB pendrive (`etcher-chromeos`) |
 | `sonarqube-evaluation.md` | Utility page | Decision record — SonarQube audited against the gates already running here (ruff, `check_*` family, ESLint, gitleaks, Dependabot, CodeQL); recommendation and why |
@@ -71,7 +72,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 |-----------|----------|
 | `py-examples/` | Example walkthroughs for the **native-DB** DDD skeleton |
 | `py-examples-orm/` | Example walkthroughs for the **ORM** DDD skeleton |
-| `skeletons/` | Skeleton overviews that live in a subfolder (`bash-cli.md`, `etcher-chromeos.md`) |
+| `skeletons/` | Skeleton overviews that live in a subfolder (`bash-cli.md`, `etcher-chromeos.md`, `ventoy-usb.md`) |
 | `superpowers/` | **Non-published** internal specs and plans. Excluded from the built site — see below. |
 
 Future skeletons follow the same pattern: `<lang>-examples-<skeleton-name>/`.
