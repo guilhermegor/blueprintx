@@ -3,7 +3,8 @@ import { builtinModules } from 'node:module';
 
 import js from '@eslint/js';
 import prettierConfig from 'eslint-config-prettier';
-import importPlugin from 'eslint-plugin-import';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
+import importPlugin from 'eslint-plugin-import-x';
 import jest from 'eslint-plugin-jest';
 import tseslint from 'typescript-eslint';
 
@@ -197,23 +198,17 @@ export default [
 
   {
     files: ['src/**/*.ts'],
-    plugins: { import: importPlugin },
+    plugins: { 'import-x': importPlugin },
     settings: {
-      'import/resolver': {
-        typescript: {
-          alwaysTryTypes: true,
-          project: './tsconfig.json',
-        },
-        node: {
-          extensions: ['.js', '.ts', '.json'],
-        },
-      },
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({ alwaysTryTypes: true, project: './tsconfig.json' }),
+      ],
     },
     rules: {
-      'import/no-unresolved': 'error',
-      'import/no-duplicates': 'error',
-      'import/no-cycle': ['error', { maxDepth: 10 }],
-      'import/order': [
+      'import-x/no-unresolved': 'error',
+      'import-x/no-duplicates': 'error',
+      'import-x/no-cycle': ['error', { maxDepth: 10 }],
+      'import-x/order': [
         'error',
         {
           groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
