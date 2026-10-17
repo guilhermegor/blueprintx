@@ -339,3 +339,16 @@ remove_repo_policy_scripts() {
 
 # shellcheck source=bin/lib/scaffold_comment_budget.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_comment_budget.sh"
+
+scaffold_git_commit() {
+    local str_dir="$1" str_message="$2"
+    shift 2
+    if git -C "$str_dir" var GIT_AUTHOR_IDENT >/dev/null 2>&1 &&
+        git -C "$str_dir" var GIT_COMMITTER_IDENT >/dev/null 2>&1; then
+        git -C "$str_dir" commit -q "$@" -m "$str_message"
+        return
+    fi
+    print_status "info" "No git identity set; committing as 'BlueprintX Scaffold'. Set yours: git config --global user.name/user.email" >&2
+    git -C "$str_dir" -c user.name="BlueprintX Scaffold" -c user.email="scaffold@blueprintx.invalid" \
+        commit -q "$@" -m "$str_message"
+}
