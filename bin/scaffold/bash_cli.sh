@@ -203,6 +203,7 @@ main() {
     copy_skeleton_files "$PROJECT_PATH"
     copy_common_templates "$PROJECT_PATH"
     scaffold_purge_caches "$PROJECT_PATH"
+    scaffold_comment_budget "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 

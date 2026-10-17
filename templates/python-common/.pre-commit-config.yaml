@@ -394,7 +394,7 @@ repos:
       # hatch: `# comment-budget-ok: <reason>`.
       - id: check-comment-budget
         name: comment budget (long runs + decorative banners)
-        entry: bash bin/poetry_exec.sh run python bin/check_comment_budget.py
+        entry: bash bin/poetry_exec.sh run python bin/check_comment_budget.py --require-baseline
         language: system
         pass_filenames: false
 

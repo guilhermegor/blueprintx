@@ -213,6 +213,7 @@ apply_offline_mode() {
 commit_offline_artifacts() {
     local project_path="$1"
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    scaffold_comment_budget_refresh "$project_path"
     git -C "$project_path" add -A
     git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
 }
@@ -232,6 +233,7 @@ main() {
     copy_common_templates "$PROJECT_PATH"
     scaffold_prune_review_bot_roster "$PROJECT_PATH"
     scaffold_purge_caches "$PROJECT_PATH"
+    scaffold_comment_budget "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 
